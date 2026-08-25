@@ -1,0 +1,56 @@
+import "server-only";
+
+import * as sqlite from "../db";
+import type { EvaOrbitRepository } from "./types";
+
+/**
+ * Local development and migration fallback. Production selects the Supabase
+ * repository and never writes durable data to Vercel's filesystem.
+ */
+export const sqliteRepository: EvaOrbitRepository = {
+  async listTasks(filter) { return sqlite.listTasks(filter); },
+  async getTask(id) { return sqlite.getTask(id); },
+  async createTask(input) { return sqlite.createTask(input); },
+  async updateTask(id, input) { return sqlite.updateTask(id, input); },
+  async deleteTask(id) { return sqlite.deleteTask(id); },
+  async listMemories(query, category) { return sqlite.listMemories(query, category); },
+  async getMemory(id) { return sqlite.getMemory(id); },
+  async createMemory(input) { return sqlite.createMemory(input); },
+  async updateMemory(id, input) { return sqlite.updateMemory(id, input); },
+  async deleteMemory(id) { return sqlite.deleteMemory(id); },
+  async getDashboardSummary() { return sqlite.getDashboardSummary(); },
+  async getAiSettings() { return sqlite.getAiSettings(); },
+  async updateAiSettings(input) { return sqlite.updateAiSettings(input); },
+  async updateChatPreferences(input) { return sqlite.updateChatPreferences(input); },
+  async listChatSessions() { return sqlite.listChatSessions(); },
+  async getChatSession(id) { return sqlite.getChatSession(id); },
+  async createChatSession(title) { return sqlite.createChatSession(title); },
+  async updateChatSession(id, title) { return sqlite.updateChatSession(id, title); },
+  async deleteChatSession(id) { return sqlite.deleteChatSession(id); },
+  async listChatMessages(sessionId) { return sqlite.listChatMessages(sessionId); },
+  async addChatMessage(sessionId, role, content, model) { return sqlite.addChatMessage(sessionId, role, content, model); },
+  async autoTitleChatSession(id, content) { sqlite.autoTitleChatSession(id, content); },
+  async listInbox(status) { return sqlite.listInbox(status); },
+  async getInboxItem(id) { return sqlite.getInboxItem(id); },
+  async createInboxItem(input) { return sqlite.createInboxItem(input); },
+  async updateInboxItem(id, input) { return sqlite.updateInboxItem(id, input); },
+  async deleteInboxItem(id) { return sqlite.deleteInboxItem(id); },
+  async listFoodLogs(input) { return sqlite.listFoodLogs(input); },
+  async getFoodLog(id) { return sqlite.getFoodLog(id); },
+  async createFoodLog(input) { return sqlite.createFoodLog(input); },
+  async updateFoodLog(id, input) { return sqlite.updateFoodLog(id, input); },
+  async deleteFoodLog(id) { return sqlite.deleteFoodLog(id); },
+  async searchFoodLibrary(query, brand) { return sqlite.searchFoodLibrary(query, brand); },
+  async upsertFoodLibraryItem(input) { return sqlite.upsertFoodLibraryItem(input); },
+  async listDrinkLogs(input) { return sqlite.listDrinkLogs(input); },
+  async getDrinkLog(id) { return sqlite.getDrinkLog(id); },
+  async createDrinkLog(input) { return sqlite.createDrinkLog(input); },
+  async updateDrinkLog(id, input) { return sqlite.updateDrinkLog(id, input); },
+  async deleteDrinkLog(id) { return sqlite.deleteDrinkLog(id); },
+  async listDrinkLimits() { return sqlite.listDrinkLimits(); },
+  async createDrinkLimit(input) { return sqlite.createDrinkLimit(input); },
+  async updateDrinkLimit(id, input) { return sqlite.updateDrinkLimit(id, input); },
+  async deleteDrinkLimit(id) { return sqlite.deleteDrinkLimit(id); },
+  async getNutritionSettings(date) { return sqlite.getNutritionSettings(date); },
+  async updateNutritionSettings(date, input) { sqlite.updateNutritionSettings(date, input); },
+};

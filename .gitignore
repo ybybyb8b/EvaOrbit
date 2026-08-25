@@ -1,0 +1,39 @@
+# Dependencies and package-manager caches
+node_modules/
+.npm-cache/
+work/npm-cache/
+
+# Next.js, deployment and test output
+.next/
+.next-verify/
+out/
+coverage/
+.vercel/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env*
+!.env.example
+
+# Local databases and private runtime uploads
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+data/avatars/
+*.uploading
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
+
+# OS metadata
+.DS_Store
+Thumbs.db

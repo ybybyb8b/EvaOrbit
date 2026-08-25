@@ -1,0 +1,4 @@
+import { NextRequest,NextResponse } from "next/server";import{apiError,parseId}from"@/lib/api";import{deleteDrinkLimit,updateDrinkLimit}from"@/lib/services/drink";import{parseDrinkLimit}from"@/lib/validation";
+export const runtime="nodejs";type Context={params:Promise<{id:string}>};
+export async function PATCH(request:NextRequest,{params}:Context){try{const item=await updateDrinkLimit(parseId((await params).id),parseDrinkLimit(await request.json()));return item?NextResponse.json(item):NextResponse.json({error:"限制不存在"},{status:404});}catch(error){return apiError(error);}}
+export async function DELETE(_:NextRequest,{params}:Context){try{return await deleteDrinkLimit(parseId((await params).id))?new NextResponse(null,{status:204}):NextResponse.json({error:"限制不存在"},{status:404});}catch(error){return apiError(error);}}

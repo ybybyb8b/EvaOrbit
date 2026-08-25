@@ -1,0 +1,4 @@
+import { NextRequest,NextResponse } from "next/server";import{apiError,parseId}from"@/lib/api";import{deleteFoodLog,updateFoodLog}from"@/lib/services/food";import{parseFoodLogPatch}from"@/lib/validation";
+export const runtime="nodejs";type Context={params:Promise<{id:string}>};
+export async function PATCH(request:NextRequest,{params}:Context){try{const item=await updateFoodLog(parseId((await params).id),parseFoodLogPatch(await request.json()));return item?NextResponse.json(item):NextResponse.json({error:"饮食记录不存在"},{status:404});}catch(error){return apiError(error);}}
+export async function DELETE(_:NextRequest,{params}:Context){try{return await deleteFoodLog(parseId((await params).id))?new NextResponse(null,{status:204}):NextResponse.json({error:"饮食记录不存在"},{status:404});}catch(error){return apiError(error);}}
