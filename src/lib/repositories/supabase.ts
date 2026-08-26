@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { allowedEmail } from "../config";
 import { createSupabaseServerClient } from "../supabase/server";
 import type { ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority } from "../types";
@@ -55,11 +56,15 @@ const defaultAiSettings: Omit<InternalAiSettings, "apiKey" | "hasApiKey" | "upda
   userDisplayName: "我", userAvatarType: "default", userAvatarValue: "",
   assistantDisplayName: "Eva", assistantAvatarType: "default", assistantAvatarValue: "",
   showUserName: true, showAssistantName: true, showAvatars: true,
-  apiKeyManagedByEnvironment: true,
+  maskedApiKey: null,
 };
 
 function settingsFromRow(row: Row | null): InternalAiSettings {
-  const apiKey = process.env.AI_API_KEY?.trim() ?? "";
+  const apiKey = resolveAiApiKey({
+    ciphertext: row?.api_key_ciphertext ? String(row.api_key_ciphertext) : null,
+    iv: row?.api_key_iv ? String(row.api_key_iv) : null,
+    authTag: row?.api_key_auth_tag ? String(row.api_key_auth_tag) : null,
+  });
   return {
     providerPreset: row ? String(row.provider_preset) : defaultAiSettings.providerPreset,
     providerName: row ? String(row.provider_name) : defaultAiSettings.providerName,
@@ -84,7 +89,7 @@ function settingsFromRow(row: Row | null): InternalAiSettings {
     showUserName: row ? Boolean(row.show_user_name) : defaultAiSettings.showUserName,
     showAssistantName: row ? Boolean(row.show_assistant_name) : defaultAiSettings.showAssistantName,
     showAvatars: row ? Boolean(row.show_avatars) : defaultAiSettings.showAvatars,
-    apiKey, hasApiKey: Boolean(apiKey), apiKeyManagedByEnvironment: true,
+    apiKey, hasApiKey: Boolean(apiKey), maskedApiKey: null,
     updatedAt: row ? String(row.updated_at) : "",
   };
 }
@@ -184,7 +189,14 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
       fail(error, "读取 AI 设置"); return settingsFromRow(data);
     },
     async updateAiSettings(input: AiSettingsInput) {
-      if (input.apiKey !== undefined) throw new Error("Supabase 模式的 AI API Key 只能通过服务器 AI_API_KEY 环境变量配置");
+      const secretValues: Row = input.clearApiKey
+        ? { api_key_ciphertext: null, api_key_iv: null, api_key_auth_tag: null }
+        : input.apiKey !== undefined
+          ? (() => {
+              const encrypted = encryptAiApiKey(input.apiKey!);
+              return { api_key_ciphertext: encrypted.ciphertext, api_key_iv: encrypted.iv, api_key_auth_tag: encrypted.authTag };
+            })()
+          : {};
       const values: Row = {
         user_id: userId, provider_preset: input.providerPreset, provider_name: input.providerName, base_url: input.baseUrl,
         model: input.model, enabled: input.enabled, temperature: input.temperature, system_prompt: input.systemPrompt,
@@ -194,6 +206,7 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
         user_display_name: input.userDisplayName, user_avatar_type: input.userAvatarType, user_avatar_value: input.userAvatarValue,
         assistant_display_name: input.assistantDisplayName, assistant_avatar_type: input.assistantAvatarType, assistant_avatar_value: input.assistantAvatarValue,
         show_user_name: input.showUserName, show_assistant_name: input.showAssistantName, show_avatars: input.showAvatars,
+        ...secretValues,
       };
       const { data, error } = await client.from("ai_settings").upsert(values, { onConflict: "user_id" }).select().single();
       fail(error, "保存 AI 设置");

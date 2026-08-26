@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
+import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import type { AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "./types";
 import type { AiSettingsInput } from "./repositories/types";
 
@@ -29,7 +30,9 @@ type AiSettingsRow = {
   provider_preset: string;
   provider_name: string;
   base_url: string;
-  api_key: string;
+  api_key_ciphertext: string | null;
+  api_key_iv: string | null;
+  api_key_auth_tag: string | null;
   model: string;
   enabled: number;
   temperature: number;
@@ -230,6 +233,28 @@ if (!hasV6) {
   `);
 }
 
+const hasV7 = database.prepare("SELECT 1 FROM migrations WHERE version = 7").get();
+if (!hasV7) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.exec(`
+      ALTER TABLE ai_settings ADD COLUMN api_key_ciphertext TEXT;
+      ALTER TABLE ai_settings ADD COLUMN api_key_iv TEXT;
+      ALTER TABLE ai_settings ADD COLUMN api_key_auth_tag TEXT;
+    `);
+    const legacy = database.prepare("SELECT api_key FROM ai_settings WHERE id = 1").get() as { api_key?: string } | undefined;
+    if (legacy?.api_key) {
+      const encrypted = encryptAiApiKey(legacy.api_key);
+      database.prepare("UPDATE ai_settings SET api_key_ciphertext=?, api_key_iv=?, api_key_auth_tag=? WHERE id=1")
+        .run(encrypted.ciphertext, encrypted.iv, encrypted.authTag);
+    }
+    database.exec("ALTER TABLE ai_settings DROP COLUMN api_key; INSERT INTO migrations(version) VALUES (7); COMMIT");
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -375,13 +400,18 @@ export function getDashboardSummary(): DashboardSummary {
 
 export function getAiSettings(): InternalAiSettings {
   const row = database.prepare("SELECT * FROM ai_settings WHERE id = 1").get() as AiSettingsRow;
+  const apiKey = resolveAiApiKey({
+    ciphertext: row.api_key_ciphertext,
+    iv: row.api_key_iv,
+    authTag: row.api_key_auth_tag,
+  });
   return {
     providerPreset: row.provider_preset,
     providerName: row.provider_name,
     baseUrl: row.base_url,
-    apiKey: row.api_key,
-    hasApiKey: Boolean(row.api_key),
-    apiKeyManagedByEnvironment: false,
+    apiKey,
+    hasApiKey: Boolean(apiKey),
+    maskedApiKey: null,
     model: row.model,
     enabled: Boolean(row.enabled),
     temperature: row.temperature,
@@ -407,9 +437,16 @@ export function getAiSettings(): InternalAiSettings {
 }
 
 export function updateAiSettings(input: AiSettingsInput) {
-  const current = getAiSettings();
+  const stored = database.prepare("SELECT api_key_ciphertext, api_key_iv, api_key_auth_tag FROM ai_settings WHERE id=1").get() as AiSettingsRow;
+  let encrypted = {
+    ciphertext: stored.api_key_ciphertext,
+    iv: stored.api_key_iv,
+    authTag: stored.api_key_auth_tag,
+  };
+  if (input.clearApiKey) encrypted = { ciphertext: null, iv: null, authTag: null };
+  else if (input.apiKey !== undefined) encrypted = encryptAiApiKey(input.apiKey);
   database.prepare(`UPDATE ai_settings SET
-    provider_preset = ?, provider_name = ?, base_url = ?, api_key = ?, model = ?, enabled = ?,
+    provider_preset = ?, provider_name = ?, base_url = ?, api_key_ciphertext = ?, api_key_iv = ?, api_key_auth_tag = ?, model = ?, enabled = ?,
     temperature = ?, system_prompt = ?, response_length = ?, initiative = ?, allow_suggestions = ?, allow_teasing = ?,
     include_tasks = ?, include_memories = ?, allow_write_actions = ?,
     user_display_name = ?, user_avatar_type = ?, user_avatar_value = ?, assistant_display_name = ?, assistant_avatar_type = ?, assistant_avatar_value = ?,
@@ -418,7 +455,9 @@ export function updateAiSettings(input: AiSettingsInput) {
       input.providerPreset,
       input.providerName,
       input.baseUrl,
-      input.apiKey === undefined ? current.apiKey : input.apiKey,
+      encrypted.ciphertext,
+      encrypted.iv,
+      encrypted.authTag,
       input.model,
       Number(input.enabled),
       input.temperature,

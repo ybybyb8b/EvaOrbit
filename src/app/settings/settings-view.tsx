@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
 
-type Draft = Omit<AiSettings, "hasApiKey" | "apiKeyManagedByEnvironment" | "updatedAt"> & { apiKey: string };
+type Draft = Omit<AiSettings, "hasApiKey" | "maskedApiKey" | "updatedAt"> & { apiKey: string };
 
 const presets: Record<string, Pick<Draft, "providerName" | "baseUrl" | "model">> = {
   openai: { providerName: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
@@ -27,8 +27,9 @@ const emptyDraft: Draft = {
 export function SettingsView() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [hasApiKey, setHasApiKey] = useState(false);
-  const [keyManagedByEnvironment, setKeyManagedByEnvironment] = useState(false);
-  const [keyTouched, setKeyTouched] = useState(false);
+  const [maskedApiKey, setMaskedApiKey] = useState<string | null>(null);
+  const [editingApiKey, setEditingApiKey] = useState(true);
+  const [clearApiKey, setClearApiKey] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -53,7 +54,8 @@ export function SettingsView() {
         showUserName: settings.showUserName, showAssistantName: settings.showAssistantName, showAvatars: settings.showAvatars,
       });
       setHasApiKey(settings.hasApiKey);
-      setKeyManagedByEnvironment(settings.apiKeyManagedByEnvironment);
+      setMaskedApiKey(settings.maskedApiKey);
+      setEditingApiKey(!settings.hasApiKey);
     }).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
   }, []);
 
@@ -64,7 +66,8 @@ export function SettingsView() {
 
   function requestBody() {
     const { apiKey, ...values } = draft;
-    return keyTouched ? { ...values, apiKey } : values;
+    if (clearApiKey) return { ...values, clearApiKey: true };
+    return editingApiKey && apiKey.trim() ? { ...values, apiKey } : values;
   }
 
   async function uploadAvatar(subject: "user" | "assistant", file: File) {
@@ -113,7 +116,8 @@ export function SettingsView() {
       const response = await fetch("/api/ai/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody()) });
       const result = await response.json() as AiSettings & ApiError;
       if (!response.ok) throw new Error(result.error);
-      setHasApiKey(result.hasApiKey); setKeyTouched(false); setDraft({ ...draft, apiKey: "" });
+      setHasApiKey(result.hasApiKey); setMaskedApiKey(result.maskedApiKey); setEditingApiKey(!result.hasApiKey); setClearApiKey(false);
+      setDraft((current) => ({ ...current, apiKey: "" }));
       setNotice("设置留下了。现在去“想想”就会按这套方式说话。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
     finally { setWorking(false); }
@@ -126,7 +130,7 @@ export function SettingsView() {
     <div className="settings-summary">
       <section><span>生产数据</span><strong>Supabase Postgres</strong></section>
       <section><span>访问方式</span><strong>私人账户 · RLS</strong></section>
-      <section><span>本地后备</span><strong>SQLite schema v6</strong></section>
+      <section><span>本地后备</span><strong>SQLite schema v7</strong></section>
     </div>
 
     <form className="provider-card" onSubmit={save}>
@@ -135,9 +139,9 @@ export function SettingsView() {
         {Object.keys(presets).map((key) => <button type="button" className={draft.providerPreset === key ? "active" : ""} key={key} onClick={() => changePreset(key)}>{key === "custom" ? "自定义" : presets[key].providerName}</button>)}
       </div>
       <div className="form-grid provider-form">
-        <label className="field"><span>显示名称</span><input required maxLength={80} value={draft.providerName} onChange={(event) => setDraft({ ...draft, providerName: event.target.value })} /></label>
+        <label className="field"><span>Provider 名称</span><input required maxLength={80} value={draft.providerName} onChange={(event) => setDraft({ ...draft, providerName: event.target.value })} /></label>
         <label className="field"><span>接口地址</span><input required type="url" maxLength={500} value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label>
-        <label className="field"><span>API Key <small>{keyManagedByEnvironment ? hasApiKey ? "已由服务器环境变量配置" : "请在服务器配置 AI_API_KEY" : hasApiKey && !keyTouched ? "已存于本地服务端；留空保持不变" : draft.providerPreset === "ollama" ? "本地服务可留空" : "仅经 EvaOrbit 服务端发送"}</small></span><input type="password" autoComplete="off" maxLength={1000} disabled={keyManagedByEnvironment} value={draft.apiKey} onChange={(event) => { setKeyTouched(true); setDraft({ ...draft, apiKey: event.target.value }); }} placeholder={keyManagedByEnvironment ? "由服务器环境管理" : hasApiKey && !keyTouched ? "••••••••••••" : "sk-…"} /></label>
+        <label className="field"><span>API Key <small>{clearApiKey ? "保存后将移除" : hasApiKey && !editingApiKey ? `当前 ${maskedApiKey ?? "••••••••••••"}` : draft.providerPreset === "ollama" ? "本地服务可留空" : "只在服务端加密保存"}</small></span><div className="api-key-control"><input type="password" autoComplete="new-password" maxLength={1000} disabled={hasApiKey && !editingApiKey || clearApiKey} value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={hasApiKey && !editingApiKey ? maskedApiKey ?? "••••••••••••" : "输入新的 API Key"} />{hasApiKey && !editingApiKey && !clearApiKey && <button type="button" className="text-button" onClick={() => { setEditingApiKey(true); setDraft({ ...draft, apiKey: "" }); }}>更换 API Key</button>}{hasApiKey && editingApiKey && <button type="button" className="text-button" onClick={() => { setEditingApiKey(false); setDraft({ ...draft, apiKey: "" }); }}>取消更换</button>}</div></label>
         <label className="field"><span>模型</span><input required list="provider-models" maxLength={160} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /><datalist id="provider-models">{models.map((model) => <option value={model} key={model} />)}</datalist></label>
         <label className="field"><span>温度 <small>{draft.temperature.toFixed(1)} · 越低越稳定</small></span><input className="range-input" type="range" min="0" max="2" step="0.1" value={draft.temperature} onChange={(event) => setDraft({ ...draft, temperature: Number(event.target.value) })} /></label>
       </div>
@@ -179,7 +183,8 @@ export function SettingsView() {
       </div>
       {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
       <div className="provider-actions">
-        {hasApiKey && !keyManagedByEnvironment && <button type="button" className="text-button danger-text" onClick={() => { setKeyTouched(true); setDraft({ ...draft, apiKey: "" }); setNotice("保存后将清除当前 API Key。"); }}>清除已保存 Key</button>}
+        {hasApiKey && !clearApiKey && <button type="button" className="text-button danger-text" onClick={() => { setClearApiKey(true); setEditingApiKey(false); setDraft({ ...draft, apiKey: "" }); setNotice("保存后将移除当前 API Key。"); }}>移除已保存 Key</button>}
+        {clearApiKey && <button type="button" className="text-button" onClick={() => { setClearApiKey(false); setEditingApiKey(false); setNotice(""); }}>取消移除</button>}
         <button type="button" className="button secondary" disabled={working} onClick={discover}>{working ? "连接中…" : "测试并读取模型"}</button>
         <button className="button primary" disabled={working} type="submit">留下设置</button>
       </div>

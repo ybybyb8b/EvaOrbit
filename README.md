@@ -53,9 +53,11 @@ EVAORBIT_SQLITE_PATH=./data/eva-orbit.db
 
 若旧 `data/personal-hub.db` 存在且未指定新路径，代码会继续使用它，避免无意创建空库。`PERSONAL_HUB_DB_PATH` 仅作为旧环境变量兼容入口保留。
 
+SQLite schema v7 会在首次启动时把旧 `api_key` 明文加密到 ciphertext / IV / auth tag，并删除明文列。若旧库已经保存过 API Key，请先在 `.env.local` 配置稳定的 `EVAORBIT_ENCRYPTION_KEY` 再启动；没有旧 Key 的本地库可正常直接升级。
+
 ## 生产配置
 
-生产环境设置 `EVAORBIT_DATA_BACKEND=supabase`，并配置 Supabase、授权邮箱和服务器端 `AI_API_KEY`。AI 请求始终走 `Browser → EvaOrbit server → Provider`；生产 API Key 不写 PostgreSQL、不进入客户端响应，也不使用 `NEXT_PUBLIC_*` 变量。Supabase 只保存 Base URL、模型和 Persona 等非敏感设置。
+生产环境设置 `EVAORBIT_DATA_BACKEND=supabase`，并配置 Supabase、授权邮箱和服务器端 `EVAORBIT_ENCRYPTION_KEY`。Provider 名称、Base URL、API Key 与 Model 可在网页 Settings 修改；API Key 只会在 EvaOrbit server 使用 AES-256-GCM 加密/解密，PostgreSQL 仅保存 ciphertext、IV 与 auth tag，客户端只收到掩码。所有 Secret 都不得使用 `NEXT_PUBLIC_*` 变量。
 
 完整步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。项目不会自动创建 Supabase / Vercel 项目，也不会自动上传现有 SQLite 数据。
 
@@ -69,10 +71,10 @@ npm run db:migrate
 npm run db:import-sqlite -- --dry-run
 
 # 明确确认后正式导入
-npm run db:import-sqlite -- --apply --acknowledge-ai-key-env
+npm run db:import-sqlite -- --apply
 ```
 
-SQLite schema 为 v6；PostgreSQL schema 由 `supabase/migrations/` 管理。导入脚本会迁移原有数据以及 Inbox / Food / Drinks / Conversation UI Preferences，保留合理的 ID、时间戳、会话关系与 UTF-8 文本，并在事务提交前核对各表计数。
+SQLite schema 为 v7；PostgreSQL schema 由 `supabase/migrations/` 管理。导入脚本会迁移原有数据以及 Inbox / Food / Drinks / Conversation UI Preferences，保留合理的 ID、时间戳、会话关系与 UTF-8 文本，并在事务提交前核对各表计数。AI Key 不随 SQLite 数据导入，部署后从网页 Settings 重新保存。
 
 本地图片头像保存在 `EVAORBIT_AVATAR_DIR`（默认 `data/avatars`），不会转成 base64 写入数据库。Supabase 使用私有 `avatars` bucket；浏览器通过登录保护的 `/api/avatars/user` 与 `/api/avatars/assistant` 读取，数据库只保存头像类型和扩展名。
 

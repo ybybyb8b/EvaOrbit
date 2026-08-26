@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { startChatCompletion } from "./ai-provider.ts";
+import { maskApiKey, startChatCompletion } from "./ai-provider.ts";
 import type { InternalAiSettings } from "./repositories/types.ts";
 
 const settings: InternalAiSettings = {
@@ -9,7 +9,7 @@ const settings: InternalAiSettings = {
   baseUrl: "https://mock.example/v1",
   apiKey: "test-key",
   hasApiKey: true,
-  apiKeyManagedByEnvironment: true,
+  maskedApiKey: null,
   model: "mock-model",
   enabled: true,
   temperature: 0.4,
@@ -32,6 +32,11 @@ const settings: InternalAiSettings = {
   showAvatars: true,
   updatedAt: "",
 };
+
+test("only exposes a stable API Key mask", () => {
+  assert.equal(maskApiKey("sk-example-x9K2"), "••••••••••••x9K2");
+  assert.equal(maskApiKey(""), null);
+});
 
 test("sends standard OpenAI tool definitions to the configured provider", async () => {
   const originalFetch = globalThis.fetch;

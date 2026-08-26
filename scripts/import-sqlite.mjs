@@ -4,7 +4,6 @@ import { DatabaseSync } from "node:sqlite";
 import postgres from "postgres";
 
 const apply = process.argv.includes("--apply");
-const acknowledgeAiKeyEnv = process.argv.includes("--acknowledge-ai-key-env");
 const source = path.resolve(process.env.SQLITE_SOURCE_PATH || process.env.EVAORBIT_SQLITE_PATH || "data/personal-hub.db");
 const userId = process.env.MIGRATION_USER_ID?.trim() ?? "";
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? "";
@@ -54,17 +53,16 @@ function tags(value) {
   return parsed;
 }
 
-const hasLocalAiKey = Boolean(settings?.api_key);
+const hasLocalAiKey = Boolean(settings?.api_key || settings?.api_key_ciphertext);
 console.log("SQLite source:", source);
 console.table({ tasks: tasks.length, memories: memories.length, conversations: sessions.length, messages: messages.length, inbox: inboxItems.length, food_logs: foodLogs.length, food_library: foodLibrary.length, drink_logs: drinkLogs.length, drink_limits: drinkLimits.length, daily_summaries: nutritionSummaries.length, ai_settings: settings ? 1 : 0 });
-if (hasLocalAiKey) console.log("AI API Key: 不写入 PostgreSQL；生产环境必须单独配置 AI_API_KEY。正式导入需追加 --acknowledge-ai-key-env。" );
+if (hasLocalAiKey) console.log("AI API Key: 不随数据导入；部署后请在网页 Settings 中重新保存。" );
 if (!apply) {
   console.log("Dry run only. 检查通过；确认目标库为空或可覆盖后，追加 --apply 执行正式导入。");
   sqlite.close();
   process.exit(0);
 }
 if (!databaseUrl) throw new Error("正式导入需要 DATABASE_URL。");
-if (hasLocalAiKey && !acknowledgeAiKeyEnv) throw new Error("本地存在 AI Key。请先安全配置生产 AI_API_KEY，再显式追加 --acknowledge-ai-key-env。");
 
 const sql = postgres(databaseUrl, { max: 1, prepare: false, connect_timeout: 15 });
 try {

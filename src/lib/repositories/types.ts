@@ -15,6 +15,7 @@ export type AiSettingsInput = ChatPreferences & {
   providerName: string;
   baseUrl: string;
   apiKey?: string;
+  clearApiKey: boolean;
   model: string;
   enabled: boolean;
   temperature: number;

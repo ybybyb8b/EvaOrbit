@@ -32,7 +32,7 @@ function providerHeaders(settings: InternalAiSettings) {
 export function publicAiSettings(settings: InternalAiSettings) {
   return {
     providerPreset: settings.providerPreset, providerName: settings.providerName, baseUrl: settings.baseUrl,
-    model: settings.model, hasApiKey: settings.hasApiKey, apiKeyManagedByEnvironment: settings.apiKeyManagedByEnvironment,
+    model: settings.model, hasApiKey: settings.hasApiKey, maskedApiKey: maskApiKey(settings.apiKey),
     enabled: settings.enabled, temperature: settings.temperature,
     systemPrompt: settings.systemPrompt, responseLength: settings.responseLength, initiative: settings.initiative,
     allowSuggestions: settings.allowSuggestions, allowTeasing: settings.allowTeasing,
@@ -42,6 +42,11 @@ export function publicAiSettings(settings: InternalAiSettings) {
     assistantDisplayName: settings.assistantDisplayName, assistantAvatarType: settings.assistantAvatarType, assistantAvatarValue: settings.assistantAvatarValue,
     showUserName: settings.showUserName, showAssistantName: settings.showAssistantName, showAvatars: settings.showAvatars,
   };
+}
+
+export function maskApiKey(apiKey: string) {
+  if (!apiKey) return null;
+  return `${"•".repeat(12)}${apiKey.slice(-4)}`;
 }
 
 export async function discoverModels(settings: InternalAiSettings, signal?: AbortSignal) {
@@ -153,15 +158,10 @@ export async function startChatCompletion(settings: InternalAiSettings, messages
 }
 
 export async function providerError(response: Response, fallback: string) {
-  let detail = "";
-  try {
-    const raw = await response.text();
-    const payload = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
-    detail = typeof payload.error === "string" ? payload.error : payload.error?.message ?? payload.message ?? "";
-  } catch {
-    detail = "";
-  }
-  return new ExternalApiError(detail ? `${fallback}：${detail.slice(0, 500)}` : `${fallback}（HTTP ${response.status}）`);
+  // Provider bodies can echo request data. Never forward or log them because
+  // that could expose the Authorization credential in an API response.
+  await response.body?.cancel().catch(() => undefined);
+  return new ExternalApiError(`${fallback}（Provider HTTP ${response.status}）`);
 }
 
 export function extractDelta(payload: unknown) {

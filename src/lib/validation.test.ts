@@ -24,8 +24,12 @@ test("normalizes AI settings and checks URL", () => {
   assert.equal(settings.providerName, "Local");
   assert.equal(settings.responseLength, "balanced");
   assert.equal(settings.initiative, "quiet");
+  assert.equal(settings.clearApiKey, false);
+  assert.equal(parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", apiKey: " new-key " }).apiKey, "new-key");
   assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "file:///tmp/key", model: "x" }), ValidationError);
   assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", responseLength: "endless" }), ValidationError);
+  assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", apiKey: "" }), ValidationError);
+  assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", apiKey: "new-key", clearApiKey: true }), ValidationError);
 });
 
 test("checks chat request identifiers and content", () => {

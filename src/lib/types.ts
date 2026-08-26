@@ -54,7 +54,7 @@ export interface AiSettings extends ChatPreferences {
   baseUrl: string;
   model: string;
   hasApiKey: boolean;
-  apiKeyManagedByEnvironment: boolean;
+  maskedApiKey: string | null;
   enabled: boolean;
   temperature: number;
   systemPrompt: string;

@@ -37,11 +37,11 @@ SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 EVAORBIT_ALLOWED_EMAIL=<private-account-email>
 EVAORBIT_TIME_ZONE=Asia/Shanghai
 DATABASE_URL=postgresql://...
-# 非 Ollama Provider 必填：只放在服务器环境中
-AI_API_KEY=<provider-key>
+# 用于加密 Settings 中提交的 Provider API Key，必须稳定且只存在服务端
+EVAORBIT_ENCRYPTION_KEY=<32-byte-base64-or-64-char-hex>
 ```
 
-`SUPABASE_PUBLISHABLE_KEY` 本身可公开，但本项目仍只从服务器读取。`DATABASE_URL` 和 `AI_API_KEY` 都是 server-only；绝不能添加 `NEXT_PUBLIC_` 前缀。
+`SUPABASE_PUBLISHABLE_KEY` 本身可公开，但本项目仍只从服务器读取。`DATABASE_URL` 和 `EVAORBIT_ENCRYPTION_KEY` 都是 server-only；绝不能添加 `NEXT_PUBLIC_` 前缀。可用 `openssl rand -base64 32` 生成加密密钥。密钥一旦用于保存 Provider API Key 就必须保持稳定，更换后旧密文将无法解密。
 
 ## 4. 执行 migrations
 
@@ -56,6 +56,7 @@ npm run db:migrate
 - `202608250001_evaorbit_initial.sql`：原有私人数据、会话与 AI 设置。
 - `202608250002_core_life_food.sql`：Inbox、Food、Drinks、Daily Summary 和 Push 预留。
 - `202608250003_conversation_identity.sql`：Conversation UI Preferences 与私有头像 Storage bucket/policies。
+- `202608250004_encrypted_ai_api_key.sql`：AI Provider API Key 的 AES-256-GCM 密文字段与完整性约束。
 
 完整 private tables：
 
@@ -127,10 +128,10 @@ npm run db:import-sqlite -- --dry-run
 确认输出计数后才正式导入：
 
 ```bash
-npm run db:import-sqlite -- --apply --acknowledge-ai-key-env
+npm run db:import-sqlite -- --apply
 ```
 
-脚本处理 Tasks、Memory、Conversations、Messages、Inbox、Food、Food Library、Drinks、Limits、Daily Energy 设置、Conversation UI Preferences 和 AI / Persona 的非敏感设置；旧 SQLite 还没有新表时会按空数据处理。脚本保留 ID 与时间戳，验证 tags JSON、孤立消息和最终计数，并在同一 PostgreSQL transaction 中提交。SQLite `CURRENT_TIMESTAMP` 被按 UTC 转换。AI Key 不会写入 PostgreSQL；若检测到旧 Key，正式导入前必须先在生产环境安全配置 `AI_API_KEY`，并用 `--acknowledge-ai-key-env` 明确确认。
+脚本处理 Tasks、Memory、Conversations、Messages、Inbox、Food、Food Library、Drinks、Limits、Daily Energy 设置、Conversation UI Preferences 和 AI / Persona 的非敏感设置；旧 SQLite 还没有新表时会按空数据处理。脚本保留 ID 与时间戳，验证 tags JSON、孤立消息和最终计数，并在同一 PostgreSQL transaction 中提交。SQLite `CURRENT_TIMESTAMP` 被按 UTC 转换。AI Key 不随 SQLite 数据导入；部署后在网页 Settings 中重新保存，服务端会用 `EVAORBIT_ENCRYPTION_KEY` 加密后写入 PostgreSQL。
 
 SQLite 导入只迁移名称、Emoji 与显示开关；本地图片文件不会假装成为云端对象，图片类型会安全回退为默认头像。云端登录后在 Settings 重新上传一次即可进入私有 `avatars` bucket。
 
@@ -145,9 +146,9 @@ SQLite 导入只迁移名称、Emoji 与显示开关；本地图片文件不会�
 - `SUPABASE_PUBLISHABLE_KEY`
 - `EVAORBIT_ALLOWED_EMAIL`
 - `EVAORBIT_TIME_ZONE=Asia/Shanghai`
-- `AI_API_KEY`（非 Ollama Provider 必填；设置页不会保存生产 Key）
+- `EVAORBIT_ENCRYPTION_KEY`（必填；32 字节 Base64 或 64 位十六进制，供 Settings 加密 Provider API Key）
 
-当前运行时通过带用户 Session 的 Supabase Data API 工作，因此 `DATABASE_URL` 只用于本机 migration / import，不需要放进 Vercel。这样生产函数不持有数据库管理员密码。所有变量都不要使用 `NEXT_PUBLIC_`。Vercel 环境变量可按 Production / Preview / Development 分开配置，见[官方文档](https://vercel.com/docs/environment-variables)。
+当前运行时通过带用户 Session 的 Supabase Data API 工作，因此 `DATABASE_URL` 只用于本机 migration / import，不需要放进 Vercel。这样生产函数不持有数据库管理员密码。Provider 名称、Base URL、Model 与加密后的 API Key 均由网页 Settings 管理；生产环境不会读取 `AI_API_KEY`。所有变量都不要使用 `NEXT_PUBLIC_`。Vercel 环境变量可按 Production / Preview / Development 分开配置，见[官方文档](https://vercel.com/docs/environment-variables)。
 
 ## 8. 部署 Vercel
 

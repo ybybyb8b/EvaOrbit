@@ -10,11 +10,13 @@ export async function POST(request: NextRequest) {
   try {
     const draft = parseAiSettings(await request.json());
     const current = await getAiSettings();
+    const apiKey = draft.clearApiKey ? "" : draft.apiKey === undefined ? current.apiKey : draft.apiKey;
     const models = await discoverModels({
       ...current,
       ...draft,
-      apiKey: draft.apiKey === undefined ? current.apiKey : draft.apiKey,
-      hasApiKey: Boolean(draft.apiKey === undefined ? current.apiKey : draft.apiKey),
+      apiKey,
+      hasApiKey: Boolean(apiKey),
+      maskedApiKey: null,
     }, request.signal);
     return NextResponse.json({ models });
   } catch (error) {

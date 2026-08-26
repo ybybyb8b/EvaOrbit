@@ -157,12 +157,19 @@ export function parseAiSettings(value: unknown) {
   };
   const userAvatar = avatar("user");
   const assistantAvatar = avatar("assistant");
+  const apiKey = body.apiKey === undefined ? undefined : text(body.apiKey, "API Key", 1000, false);
+  const clearApiKey = booleanValue(body.clearApiKey, "移除 API Key", false);
+  if (apiKey !== undefined && !apiKey && !clearApiKey) {
+    throw new ValidationError("更换 API Key 时请输入新值；如需移除，请使用移除操作");
+  }
+  if (apiKey && clearApiKey) throw new ValidationError("不能同时更换和移除 API Key");
   return {
     providerPreset: text(body.providerPreset ?? "custom", "Provider 类型", 40)!,
     providerName: text(body.providerName, "Provider 名称", 80)!,
     baseUrl: httpUrl(body.baseUrl),
     model: text(body.model, "模型", 160)!,
-    apiKey: body.apiKey === undefined ? undefined : text(body.apiKey, "API Key", 1000, false),
+    apiKey,
+    clearApiKey,
     enabled: booleanValue(body.enabled, "启用状态", true),
     temperature: numberValue(body.temperature, "温度", 0, 2, 0.6),
     systemPrompt: text(body.systemPrompt ?? "", "系统提示词", 5000, false) ?? "",
