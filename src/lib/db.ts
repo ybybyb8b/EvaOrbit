@@ -2,8 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
-import type { AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "./types";
-import type { AiSettingsInput } from "./repositories/types";
+import { ConflictError } from "./errors";
+import { maskApiKey } from "./ai-provider";
+import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "./types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -60,6 +62,10 @@ type ChatSessionRow = {
   id: number;
   title: string;
   model: string | null;
+  provider_id: number | null;
+  model_config_id: number | null;
+  provider_name?: string | null;
+  model_display_name?: string | null;
   created_at: string;
   updated_at: string;
   preview?: string | null;
@@ -72,10 +78,15 @@ type ChatMessageRow = {
   role: ChatRole;
   content: string;
   model: string | null;
+  provider_id: number | null;
+  model_config_id: number | null;
   created_at: string;
 };
 
-export type InternalAiSettings = AiSettings & { apiKey: string };
+type AiProviderRow = { id: number; name: string; provider_type: string; base_url: string; api_key_ciphertext: string | null; api_key_iv: string | null; api_key_auth_tag: string | null; enabled: number; created_at: string; updated_at: string };
+type AiModelConfigRow = { id: number; provider_id: number; model_id: string; display_name: string; enabled: number; is_default: number; capabilities: string; created_at: string; updated_at: string };
+
+export type InternalAiSettings = AiSettings & { apiKey: string; providerId: number | null; modelConfigId: number | null };
 
 const legacyDbPath = path.join(process.cwd(), "data", "personal-hub.db");
 const defaultDbPath = fs.existsSync(legacyDbPath) ? legacyDbPath : path.join(process.cwd(), "data", "eva-orbit.db");
@@ -255,6 +266,57 @@ if (!hasV7) {
   }
 }
 
+const hasV8 = database.prepare("SELECT 1 FROM migrations WHERE version = 8").get();
+if (!hasV8) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.exec(`
+      CREATE TABLE ai_providers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        provider_type TEXT NOT NULL DEFAULT 'openai-compatible',
+        base_url TEXT NOT NULL,
+        api_key_ciphertext TEXT,
+        api_key_iv TEXT,
+        api_key_auth_tag TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CHECK ((api_key_ciphertext IS NULL AND api_key_iv IS NULL AND api_key_auth_tag IS NULL) OR (api_key_ciphertext IS NOT NULL AND api_key_iv IS NOT NULL AND api_key_auth_tag IS NOT NULL))
+      );
+      CREATE TABLE ai_model_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider_id INTEGER NOT NULL REFERENCES ai_providers(id) ON DELETE CASCADE,
+        model_id TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+        is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0,1)),
+        capabilities TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider_id, model_id)
+      );
+      CREATE UNIQUE INDEX idx_ai_model_configs_one_default ON ai_model_configs(is_default) WHERE is_default = 1;
+      INSERT INTO ai_providers(name, provider_type, base_url, api_key_ciphertext, api_key_iv, api_key_auth_tag, enabled)
+        SELECT provider_name, provider_preset, base_url, api_key_ciphertext, api_key_iv, api_key_auth_tag, enabled FROM ai_settings WHERE id=1;
+      INSERT INTO ai_model_configs(provider_id, model_id, display_name, enabled, is_default)
+        SELECT p.id, s.model, s.model, s.enabled, 1 FROM ai_settings s CROSS JOIN ai_providers p WHERE s.id=1 ORDER BY p.id LIMIT 1;
+      ALTER TABLE chat_sessions ADD COLUMN provider_id INTEGER;
+      ALTER TABLE chat_sessions ADD COLUMN model_config_id INTEGER;
+      ALTER TABLE chat_messages ADD COLUMN provider_id INTEGER;
+      ALTER TABLE chat_messages ADD COLUMN model_config_id INTEGER;
+      UPDATE chat_sessions SET provider_id=(SELECT provider_id FROM ai_model_configs WHERE is_default=1), model_config_id=(SELECT id FROM ai_model_configs WHERE is_default=1);
+      UPDATE chat_messages SET provider_id=(SELECT provider_id FROM ai_model_configs WHERE is_default=1), model_config_id=(SELECT id FROM ai_model_configs WHERE is_default=1) WHERE role='assistant';
+      UPDATE ai_settings SET api_key_ciphertext=NULL, api_key_iv=NULL, api_key_auth_tag=NULL WHERE id=1;
+      INSERT INTO migrations(version) VALUES (8);
+      COMMIT;
+    `);
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -285,6 +347,10 @@ function chatSessionFromRow(row: ChatSessionRow): ChatSession {
     id: row.id,
     title: row.title,
     model: row.model,
+    providerId: row.provider_id,
+    modelConfigId: row.model_config_id,
+    providerName: row.provider_name ?? null,
+    modelDisplayName: row.model_display_name ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     preview: row.preview ?? "",
@@ -299,8 +365,21 @@ function chatMessageFromRow(row: ChatMessageRow): ChatMessage {
     role: row.role,
     content: row.content,
     model: row.model,
+    providerId: row.provider_id,
+    modelConfigId: row.model_config_id,
     createdAt: row.created_at,
   };
+}
+
+function aiModelFromRow(row: AiModelConfigRow): AiModelConfig {
+  let capabilities: Record<string, unknown> = {};
+  try { capabilities = JSON.parse(row.capabilities) as Record<string, unknown>; } catch { capabilities = {}; }
+  return { id: row.id, providerId: row.provider_id, modelId: row.model_id, displayName: row.display_name, enabled: Boolean(row.enabled), isDefault: Boolean(row.is_default), capabilities, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+
+function aiProviderFromRow(row: AiProviderRow, models: AiModelConfig[] = []): AiProvider {
+  const apiKey = resolveAiApiKey({ ciphertext: row.api_key_ciphertext, iv: row.api_key_iv, authTag: row.api_key_auth_tag });
+  return { id: row.id, name: row.name, providerType: row.provider_type, baseUrl: row.base_url, enabled: Boolean(row.enabled), hasApiKey: Boolean(apiKey), maskedApiKey: maskApiKey(apiKey), models, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
 export function listTasks(filter: "all" | "open" | "done" = "all") {
@@ -399,21 +478,27 @@ export function getDashboardSummary(): DashboardSummary {
 }
 
 export function getAiSettings(): InternalAiSettings {
+  return getAiRuntimeSettings(null);
+}
+
+export function getAiRuntimeSettings(modelConfigId: number | null = null): InternalAiSettings {
   const row = database.prepare("SELECT * FROM ai_settings WHERE id = 1").get() as AiSettingsRow;
-  const apiKey = resolveAiApiKey({
-    ciphertext: row.api_key_ciphertext,
-    iv: row.api_key_iv,
-    authTag: row.api_key_auth_tag,
-  });
+  const model = (modelConfigId
+    ? database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(modelConfigId)
+    : database.prepare("SELECT * FROM ai_model_configs WHERE is_default=1").get()) as AiModelConfigRow | undefined;
+  const provider = model ? database.prepare("SELECT * FROM ai_providers WHERE id=?").get(model.provider_id) as AiProviderRow | undefined : undefined;
+  const apiKey = provider ? resolveAiApiKey({ ciphertext: provider.api_key_ciphertext, iv: provider.api_key_iv, authTag: provider.api_key_auth_tag }) : "";
   return {
-    providerPreset: row.provider_preset,
-    providerName: row.provider_name,
-    baseUrl: row.base_url,
+    providerPreset: provider?.provider_type ?? row.provider_preset,
+    providerName: provider?.name ?? row.provider_name,
+    baseUrl: provider?.base_url ?? row.base_url,
     apiKey,
     hasApiKey: Boolean(apiKey),
     maskedApiKey: null,
-    model: row.model,
-    enabled: Boolean(row.enabled),
+    model: model?.model_id ?? row.model,
+    enabled: Boolean(provider?.enabled && model?.enabled),
+    providerId: provider?.id ?? null,
+    modelConfigId: model?.id ?? null,
     temperature: row.temperature,
     systemPrompt: row.system_prompt,
     responseLength: row.response_length,
@@ -437,29 +522,12 @@ export function getAiSettings(): InternalAiSettings {
 }
 
 export function updateAiSettings(input: AiSettingsInput) {
-  const stored = database.prepare("SELECT api_key_ciphertext, api_key_iv, api_key_auth_tag FROM ai_settings WHERE id=1").get() as AiSettingsRow;
-  let encrypted = {
-    ciphertext: stored.api_key_ciphertext,
-    iv: stored.api_key_iv,
-    authTag: stored.api_key_auth_tag,
-  };
-  if (input.clearApiKey) encrypted = { ciphertext: null, iv: null, authTag: null };
-  else if (input.apiKey !== undefined) encrypted = encryptAiApiKey(input.apiKey);
   database.prepare(`UPDATE ai_settings SET
-    provider_preset = ?, provider_name = ?, base_url = ?, api_key_ciphertext = ?, api_key_iv = ?, api_key_auth_tag = ?, model = ?, enabled = ?,
     temperature = ?, system_prompt = ?, response_length = ?, initiative = ?, allow_suggestions = ?, allow_teasing = ?,
     include_tasks = ?, include_memories = ?, allow_write_actions = ?,
     user_display_name = ?, user_avatar_type = ?, user_avatar_value = ?, assistant_display_name = ?, assistant_avatar_type = ?, assistant_avatar_value = ?,
     show_user_name = ?, show_assistant_name = ?, show_avatars = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = 1`).run(
-      input.providerPreset,
-      input.providerName,
-      input.baseUrl,
-      encrypted.ciphertext,
-      encrypted.iv,
-      encrypted.authTag,
-      input.model,
-      Number(input.enabled),
       input.temperature,
       input.systemPrompt,
       input.responseLength,
@@ -482,6 +550,96 @@ export function updateAiSettings(input: AiSettingsInput) {
   return getAiSettings();
 }
 
+export function listAiProviders() {
+  const models = (database.prepare("SELECT * FROM ai_model_configs ORDER BY is_default DESC, display_name, id").all() as AiModelConfigRow[]).map(aiModelFromRow);
+  return (database.prepare("SELECT * FROM ai_providers ORDER BY enabled DESC, updated_at DESC, id").all() as AiProviderRow[])
+    .map((row) => aiProviderFromRow(row, models.filter((model) => model.providerId === row.id)));
+}
+
+export function getAiProvider(id: number) {
+  const row = database.prepare("SELECT * FROM ai_providers WHERE id=?").get(id) as AiProviderRow | undefined;
+  if (!row) return null;
+  const apiKey = resolveAiApiKey({ ciphertext: row.api_key_ciphertext, iv: row.api_key_iv, authTag: row.api_key_auth_tag });
+  return { id: row.id, name: row.name, providerType: row.provider_type, baseUrl: row.base_url, enabled: Boolean(row.enabled), apiKey, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+
+export function createAiProvider(input: AiProviderInput) {
+  const encrypted = input.apiKey ? encryptAiApiKey(input.apiKey) : { ciphertext: null, iv: null, authTag: null };
+  const result = database.prepare("INSERT INTO ai_providers(name,provider_type,base_url,api_key_ciphertext,api_key_iv,api_key_auth_tag,enabled) VALUES(?,?,?,?,?,?,?)")
+    .run(input.name, input.providerType, input.baseUrl, encrypted.ciphertext, encrypted.iv, encrypted.authTag, Number(input.enabled));
+  return listAiProviders().find((provider) => provider.id === Number(result.lastInsertRowid))!;
+}
+
+export function updateAiProvider(id: number, input: AiProviderInput) {
+  const row = database.prepare("SELECT * FROM ai_providers WHERE id=?").get(id) as AiProviderRow | undefined;
+  if (!row) return null;
+  let encrypted = { ciphertext: row.api_key_ciphertext, iv: row.api_key_iv, authTag: row.api_key_auth_tag };
+  if (input.clearApiKey) encrypted = { ciphertext: null, iv: null, authTag: null };
+  else if (input.apiKey !== undefined) encrypted = encryptAiApiKey(input.apiKey);
+  if (!input.enabled && database.prepare("SELECT 1 FROM ai_model_configs WHERE provider_id=? AND is_default=1").get(id)) throw new ConflictError("这个 Provider 正在承载全局默认模型，请先更换默认模型");
+  database.prepare("UPDATE ai_providers SET name=?,provider_type=?,base_url=?,api_key_ciphertext=?,api_key_iv=?,api_key_auth_tag=?,enabled=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+    .run(input.name, input.providerType, input.baseUrl, encrypted.ciphertext, encrypted.iv, encrypted.authTag, Number(input.enabled), id);
+  return listAiProviders().find((provider) => provider.id === id) ?? null;
+}
+
+function promoteDefaultModel() {
+  if (database.prepare("SELECT 1 FROM ai_model_configs WHERE is_default=1").get()) return;
+  const replacement = database.prepare("SELECT m.id FROM ai_model_configs m JOIN ai_providers p ON p.id=m.provider_id WHERE m.enabled=1 AND p.enabled=1 ORDER BY m.id LIMIT 1").get() as { id: number } | undefined;
+  if (replacement) database.prepare("UPDATE ai_model_configs SET is_default=1,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(replacement.id);
+}
+
+export function deleteAiProvider(id: number) {
+  if (!database.prepare("SELECT 1 FROM ai_providers WHERE id=?").get(id)) return false;
+  if (database.prepare("SELECT 1 FROM ai_model_configs WHERE provider_id=? AND is_default=1").get(id)) throw new ConflictError("这个 Provider 正在承载全局默认模型，请先把另一个模型设为默认");
+  const usage = database.prepare("SELECT (SELECT COUNT(*) FROM chat_sessions WHERE provider_id=?) + (SELECT COUNT(*) FROM chat_messages WHERE provider_id=?) count").get(id, id) as { count: number };
+  if (usage.count) throw new ConflictError(`这个 Provider 仍被 ${usage.count} 条会话或消息使用，不能删除；可以先停用`);
+  database.prepare("DELETE FROM ai_providers WHERE id=?").run(id);
+  promoteDefaultModel();
+  return true;
+}
+
+export function createAiModelConfig(providerId: number, input: AiModelConfigInput) {
+  const provider = database.prepare("SELECT enabled FROM ai_providers WHERE id=?").get(providerId) as { enabled: number } | undefined;
+  if (!provider) throw new ConflictError("Provider 不存在");
+  const hasDefault = Boolean(database.prepare("SELECT 1 FROM ai_model_configs WHERE is_default=1").get());
+  const makeDefault = input.isDefault || (!hasDefault && input.enabled && Boolean(provider.enabled));
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    if (makeDefault) database.prepare("UPDATE ai_model_configs SET is_default=0").run();
+    const result = database.prepare("INSERT INTO ai_model_configs(provider_id,model_id,display_name,enabled,is_default,capabilities) VALUES(?,?,?,?,?,?)")
+      .run(providerId, input.modelId, input.displayName, Number(input.enabled), Number(makeDefault), JSON.stringify(input.capabilities));
+    database.exec("COMMIT");
+    return aiModelFromRow(database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(Number(result.lastInsertRowid)) as AiModelConfigRow);
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
+
+export function updateAiModelConfig(id: number, input: AiModelConfigInput) {
+  const current = database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(id) as AiModelConfigRow | undefined;
+  if (!current) return null;
+  if (current.is_default && (!input.isDefault || !input.enabled)) throw new ConflictError("请先把另一个已启用模型设为全局默认，再停用或取消当前默认模型");
+  const provider = database.prepare("SELECT enabled FROM ai_providers WHERE id=?").get(current.provider_id) as { enabled: number };
+  if (input.isDefault && (!input.enabled || !provider.enabled)) throw new ConflictError("只有已启用 Provider 下的已启用模型可以设为默认");
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    if (input.isDefault) database.prepare("UPDATE ai_model_configs SET is_default=0 WHERE id<>?").run(id);
+    database.prepare("UPDATE ai_model_configs SET model_id=?,display_name=?,enabled=?,is_default=?,capabilities=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+      .run(input.modelId, input.displayName, Number(input.enabled), Number(input.isDefault), JSON.stringify(input.capabilities), id);
+    database.exec("COMMIT");
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+  return aiModelFromRow(database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(id) as AiModelConfigRow);
+}
+
+export function deleteAiModelConfig(id: number) {
+  const model = database.prepare("SELECT is_default FROM ai_model_configs WHERE id=?").get(id) as { is_default: number } | undefined;
+  if (!model) return false;
+  if (model.is_default) throw new ConflictError("这是全局默认模型，请先把另一个模型设为默认");
+  const usage = database.prepare("SELECT (SELECT COUNT(*) FROM chat_sessions WHERE model_config_id=?) + (SELECT COUNT(*) FROM chat_messages WHERE model_config_id=?) count").get(id, id) as { count: number };
+  if (usage.count) throw new ConflictError(`这个模型仍被 ${usage.count} 条会话或消息使用，不能删除；可以先停用`);
+  database.prepare("DELETE FROM ai_model_configs WHERE id=?").run(id);
+  promoteDefaultModel();
+  return true;
+}
+
 export function updateChatPreferences(input: ChatPreferences) {
   database.prepare(`UPDATE ai_settings SET
     user_display_name=?, user_avatar_type=?, user_avatar_value=?, assistant_display_name=?, assistant_avatar_type=?, assistant_avatar_value=?,
@@ -496,26 +654,45 @@ export function updateChatPreferences(input: ChatPreferences) {
 export function listChatSessions() {
   const rows = database.prepare(`SELECT s.*,
     COALESCE((SELECT content FROM chat_messages WHERE session_id = s.id ORDER BY id DESC LIMIT 1), '') AS preview,
-    (SELECT COUNT(*) FROM chat_messages WHERE session_id = s.id) AS message_count
-    FROM chat_sessions s ORDER BY s.updated_at DESC, s.id DESC`).all() as ChatSessionRow[];
+    (SELECT COUNT(*) FROM chat_messages WHERE session_id = s.id) AS message_count,
+    p.name AS provider_name, m.display_name AS model_display_name
+    FROM chat_sessions s LEFT JOIN ai_providers p ON p.id=s.provider_id LEFT JOIN ai_model_configs m ON m.id=s.model_config_id
+    ORDER BY s.updated_at DESC, s.id DESC`).all() as ChatSessionRow[];
   return rows.map(chatSessionFromRow);
 }
 
 export function getChatSession(id: number) {
   const row = database.prepare(`SELECT s.*,
     COALESCE((SELECT content FROM chat_messages WHERE session_id = s.id ORDER BY id DESC LIMIT 1), '') AS preview,
-    (SELECT COUNT(*) FROM chat_messages WHERE session_id = s.id) AS message_count
-    FROM chat_sessions s WHERE s.id = ?`).get(id) as ChatSessionRow | undefined;
+    (SELECT COUNT(*) FROM chat_messages WHERE session_id = s.id) AS message_count,
+    p.name AS provider_name, m.display_name AS model_display_name
+    FROM chat_sessions s LEFT JOIN ai_providers p ON p.id=s.provider_id LEFT JOIN ai_model_configs m ON m.id=s.model_config_id
+    WHERE s.id = ?`).get(id) as ChatSessionRow | undefined;
   return row ? chatSessionFromRow(row) : null;
 }
 
-export function createChatSession(title = "新对话") {
-  const result = database.prepare("INSERT INTO chat_sessions(title) VALUES (?)").run(title);
+export function createChatSession(title = "新对话", requestedModelConfigId?: number | null) {
+  const model = (requestedModelConfigId
+    ? database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(requestedModelConfigId)
+    : database.prepare("SELECT * FROM ai_model_configs WHERE is_default=1").get()) as AiModelConfigRow | undefined;
+  if (requestedModelConfigId && (!model || !model.enabled)) throw new ConflictError("选择的模型不存在或已停用");
+  if (model) {
+    const provider = database.prepare("SELECT enabled FROM ai_providers WHERE id=?").get(model.provider_id) as { enabled: number } | undefined;
+    if (!provider?.enabled) throw new ConflictError("这个模型所属的 Provider 已停用");
+  }
+  const result = database.prepare("INSERT INTO chat_sessions(title,provider_id,model_config_id,model) VALUES (?,?,?,?)").run(title, model?.provider_id ?? null, model?.id ?? null, model?.model_id ?? null);
   return getChatSession(Number(result.lastInsertRowid))!;
 }
 
-export function updateChatSession(id: number, title: string) {
-  database.prepare("UPDATE chat_sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(title, id);
+export function updateChatSession(id: number, input: { title?: string; modelConfigId?: number | null }) {
+  if (input.title !== undefined) database.prepare("UPDATE chat_sessions SET title=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.title, id);
+  if (input.modelConfigId !== undefined) {
+    const model = input.modelConfigId ? database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(input.modelConfigId) as AiModelConfigRow | undefined : undefined;
+    if (!model || !model.enabled) throw new ConflictError("选择的模型不存在或已停用");
+    const provider = database.prepare("SELECT enabled FROM ai_providers WHERE id=?").get(model.provider_id) as { enabled: number } | undefined;
+    if (!provider?.enabled) throw new ConflictError("这个模型所属的 Provider 已停用");
+    database.prepare("UPDATE chat_sessions SET provider_id=?,model_config_id=?,model=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(model.provider_id, model.id, model.model_id, id);
+  }
   return getChatSession(id);
 }
 
@@ -527,8 +704,8 @@ export function listChatMessages(sessionId: number) {
   return (database.prepare("SELECT * FROM chat_messages WHERE session_id = ? ORDER BY id").all(sessionId) as ChatMessageRow[]).map(chatMessageFromRow);
 }
 
-export function addChatMessage(sessionId: number, role: ChatRole, content: string, model: string | null = null) {
-  const result = database.prepare("INSERT INTO chat_messages(session_id, role, content, model) VALUES (?, ?, ?, ?)").run(sessionId, role, content, model);
+export function addChatMessage(sessionId: number, role: ChatRole, content: string, model: string | null = null, providerId: number | null = null, modelConfigId: number | null = null) {
+  const result = database.prepare("INSERT INTO chat_messages(session_id, role, content, model, provider_id, model_config_id) VALUES (?, ?, ?, ?, ?, ?)").run(sessionId, role, content, model, providerId, modelConfigId);
   database.prepare("UPDATE chat_sessions SET model = COALESCE(?, model), updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(model, sessionId);
   const row = database.prepare("SELECT * FROM chat_messages WHERE id = ?").get(Number(result.lastInsertRowid)) as ChatMessageRow;
   return chatMessageFromRow(row);

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError } from "@/lib/api";
 import { extractDelta, selectConversationHistory, startChatCompletion, type ProviderMessage } from "@/lib/ai-provider";
 import { executeAiTool } from "@/lib/ai-tools";
-import { addChatMessage, autoTitleChatSession, getAiContext, getAiSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
+import { addChatMessage, autoTitleChatSession, getAiContext, getAiRuntimeSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
 import { ValidationError, parseChatRequest } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -64,11 +64,11 @@ export async function POST(request: NextRequest) {
     const input = parseChatRequest(await request.json());
     const session = await getChatSession(input.sessionId);
     if (!session) throw new ValidationError("会话不存在");
-    const settings = await getAiSettings();
+    const settings = await getAiRuntimeSettings(session.modelConfigId);
     if (!settings.enabled) throw new ValidationError("请先在设置中启用 AI Provider");
     if (!settings.apiKey && settings.providerPreset !== "ollama") throw new ValidationError("请先配置 API Key");
 
-    await addChatMessage(input.sessionId, "user", input.content);
+    await addChatMessage(input.sessionId, "user", input.content, null, settings.providerId, settings.modelConfigId);
     await autoTitleChatSession(input.sessionId, input.content);
     const [messages, resources] = await Promise.all([listChatMessages(input.sessionId), getAiContext()]);
     const selectedHistory = selectConversationHistory(messages);
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
             }
           }
           if (!answer.trim()) throw new Error("Provider 未返回文本内容");
-          const message = await addChatMessage(input.sessionId, "assistant", answer, settings.model);
+          const message = await addChatMessage(input.sessionId, "assistant", answer, settings.model, settings.providerId, settings.modelConfigId);
           controller.enqueue(event({ done: true, message }));
         } catch (error) {
           controller.enqueue(event({ error: error instanceof Error ? error.message : "生成回复失败" }));

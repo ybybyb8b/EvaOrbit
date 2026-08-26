@@ -68,10 +68,39 @@ export interface AiSettings extends ChatPreferences {
   updatedAt: string;
 }
 
+export interface AiModelConfig {
+  id: number;
+  providerId: number;
+  modelId: string;
+  displayName: string;
+  enabled: boolean;
+  isDefault: boolean;
+  capabilities: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiProvider {
+  id: number;
+  name: string;
+  providerType: string;
+  baseUrl: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  maskedApiKey: string | null;
+  models: AiModelConfig[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ChatSession {
   id: number;
   title: string;
   model: string | null;
+  providerId: number | null;
+  modelConfigId: number | null;
+  providerName: string | null;
+  modelDisplayName: string | null;
   createdAt: string;
   updatedAt: string;
   preview: string;
@@ -84,6 +113,8 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   model: string | null;
+  providerId: number | null;
+  modelConfigId: number | null;
   createdAt: string;
 }
 

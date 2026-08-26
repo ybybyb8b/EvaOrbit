@@ -2,10 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
+import { maskApiKey } from "../ai-provider";
 import { allowedEmail } from "../config";
+import { ConflictError } from "../errors";
 import { createSupabaseServerClient } from "../supabase/server";
-import type { ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority } from "../types";
-import type { AiSettingsInput, EvaOrbitRepository, InternalAiSettings, NewTask, TaskFilter } from "./types";
+import type { AiModelConfig, AiProvider, ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority } from "../types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, EvaOrbitRepository, InternalAiProvider, InternalAiSettings, NewTask, TaskFilter } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -31,13 +33,20 @@ function memoryFromRow(row: Row): Memory {
 function messageFromRow(row: Row): ChatMessage {
   return {
     id: Number(row.id), sessionId: Number(row.session_id), role: row.role as ChatRole,
-    content: String(row.content), model: row.model ? String(row.model) : null, createdAt: String(row.created_at),
+    content: String(row.content), model: row.model ? String(row.model) : null,
+    providerId: row.provider_id ? Number(row.provider_id) : null, modelConfigId: row.model_config_id ? Number(row.model_config_id) : null,
+    createdAt: String(row.created_at),
   };
 }
 
 function sessionFromRow(row: Row, preview = "", messageCount = 0): ChatSession {
+  const providerRelation = row.ai_providers as Row | null | undefined;
+  const modelRelation = row.ai_model_configs as Row | null | undefined;
   return {
     id: Number(row.id), title: String(row.title), model: row.model ? String(row.model) : null,
+    providerId: row.provider_id ? Number(row.provider_id) : null, modelConfigId: row.model_config_id ? Number(row.model_config_id) : null,
+    providerName: providerRelation?.name ? String(providerRelation.name) : null,
+    modelDisplayName: modelRelation?.display_name ? String(modelRelation.display_name) : null,
     createdAt: String(row.created_at), updatedAt: String(row.updated_at), preview, messageCount,
   };
 }
@@ -57,20 +66,23 @@ const defaultAiSettings: Omit<InternalAiSettings, "apiKey" | "hasApiKey" | "upda
   assistantDisplayName: "Eva", assistantAvatarType: "default", assistantAvatarValue: "",
   showUserName: true, showAssistantName: true, showAvatars: true,
   maskedApiKey: null,
+  providerId: null, modelConfigId: null,
 };
 
-function settingsFromRow(row: Row | null): InternalAiSettings {
-  const apiKey = resolveAiApiKey({
-    ciphertext: row?.api_key_ciphertext ? String(row.api_key_ciphertext) : null,
-    iv: row?.api_key_iv ? String(row.api_key_iv) : null,
-    authTag: row?.api_key_auth_tag ? String(row.api_key_auth_tag) : null,
-  });
+function settingsFromRows(row: Row | null, provider: Row | null, model: Row | null): InternalAiSettings {
+  const apiKey = provider ? resolveAiApiKey({
+    ciphertext: provider.api_key_ciphertext ? String(provider.api_key_ciphertext) : null,
+    iv: provider.api_key_iv ? String(provider.api_key_iv) : null,
+    authTag: provider.api_key_auth_tag ? String(provider.api_key_auth_tag) : null,
+  }) : "";
   return {
-    providerPreset: row ? String(row.provider_preset) : defaultAiSettings.providerPreset,
-    providerName: row ? String(row.provider_name) : defaultAiSettings.providerName,
-    baseUrl: row ? String(row.base_url) : defaultAiSettings.baseUrl,
-    model: row ? String(row.model) : defaultAiSettings.model,
-    enabled: row ? Boolean(row.enabled) : defaultAiSettings.enabled,
+    providerPreset: provider ? String(provider.provider_type) : row ? String(row.provider_preset) : defaultAiSettings.providerPreset,
+    providerName: provider ? String(provider.name) : row ? String(row.provider_name) : defaultAiSettings.providerName,
+    baseUrl: provider ? String(provider.base_url) : row ? String(row.base_url) : defaultAiSettings.baseUrl,
+    model: model ? String(model.model_id) : row ? String(row.model) : defaultAiSettings.model,
+    enabled: Boolean(provider?.enabled && model?.enabled),
+    providerId: provider ? Number(provider.id) : null,
+    modelConfigId: model ? Number(model.id) : null,
     temperature: row ? Number(row.temperature) : defaultAiSettings.temperature,
     systemPrompt: row ? String(row.system_prompt) : defaultAiSettings.systemPrompt,
     responseLength: row ? row.response_length as InternalAiSettings["responseLength"] : defaultAiSettings.responseLength,
@@ -92,6 +104,21 @@ function settingsFromRow(row: Row | null): InternalAiSettings {
     apiKey, hasApiKey: Boolean(apiKey), maskedApiKey: null,
     updatedAt: row ? String(row.updated_at) : "",
   };
+}
+
+function modelFromRow(row: Row): AiModelConfig {
+  const capabilities = row.capabilities && typeof row.capabilities === "object" ? row.capabilities as Record<string, unknown> : {};
+  return { id:Number(row.id),providerId:Number(row.provider_id),modelId:String(row.model_id),displayName:String(row.display_name),enabled:Boolean(row.enabled),isDefault:Boolean(row.is_default),capabilities,createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
+}
+
+function providerFromRow(row: Row, models: AiModelConfig[] = []): AiProvider {
+  const apiKey = resolveAiApiKey({ ciphertext: row.api_key_ciphertext ? String(row.api_key_ciphertext) : null, iv: row.api_key_iv ? String(row.api_key_iv) : null, authTag: row.api_key_auth_tag ? String(row.api_key_auth_tag) : null });
+  return { id:Number(row.id),name:String(row.name),providerType:String(row.provider_type),baseUrl:String(row.base_url),enabled:Boolean(row.enabled),hasApiKey:Boolean(apiKey),maskedApiKey:maskApiKey(apiKey),models,createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
+}
+
+function internalProviderFromRow(row: Row): InternalAiProvider {
+  const apiKey = resolveAiApiKey({ ciphertext: row.api_key_ciphertext ? String(row.api_key_ciphertext) : null, iv: row.api_key_iv ? String(row.api_key_iv) : null, authTag: row.api_key_auth_tag ? String(row.api_key_auth_tag) : null });
+  return { id:Number(row.id),name:String(row.name),providerType:String(row.provider_type),baseUrl:String(row.base_url),enabled:Boolean(row.enabled),apiKey,createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
 }
 
 async function identity(client: SupabaseClient) {
@@ -118,6 +145,23 @@ async function oneSession(client: SupabaseClient, row: Row) {
 export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
   const client = await createSupabaseServerClient();
   const userId = await identity(client);
+
+  const runtimeSettings = async (modelConfigId: number | null = null) => {
+    const [settingsResult, modelResult] = await Promise.all([
+      client.from("ai_settings").select("*").maybeSingle(),
+      modelConfigId
+        ? client.from("ai_model_configs").select("*").eq("id", modelConfigId).maybeSingle()
+        : client.from("ai_model_configs").select("*").eq("is_default", true).maybeSingle(),
+    ]);
+    fail(settingsResult.error, "读取 AI 设置"); fail(modelResult.error, "读取模型配置");
+    if (modelConfigId && !modelResult.data) throw new ConflictError("当前会话选择的模型不存在");
+    const model = modelResult.data as Row | null;
+    const providerResult = model
+      ? await client.from("ai_providers").select("*").eq("id", model.provider_id).maybeSingle()
+      : { data: null, error: null };
+    fail(providerResult.error, "读取 Provider");
+    return settingsFromRows(settingsResult.data, providerResult.data as Row | null, model);
+  };
 
   const repository: EvaOrbitRepository = {
     async listTasks(filter: TaskFilter = "all") {
@@ -185,57 +229,111 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
       };
     },
     async getAiSettings() {
-      const { data, error } = await client.from("ai_settings").select("*").maybeSingle();
-      fail(error, "读取 AI 设置"); return settingsFromRow(data);
+      return runtimeSettings();
     },
     async updateAiSettings(input: AiSettingsInput) {
-      const secretValues: Row = input.clearApiKey
-        ? { api_key_ciphertext: null, api_key_iv: null, api_key_auth_tag: null }
-        : input.apiKey !== undefined
-          ? (() => {
-              const encrypted = encryptAiApiKey(input.apiKey!);
-              return { api_key_ciphertext: encrypted.ciphertext, api_key_iv: encrypted.iv, api_key_auth_tag: encrypted.authTag };
-            })()
-          : {};
       const values: Row = {
-        user_id: userId, provider_preset: input.providerPreset, provider_name: input.providerName, base_url: input.baseUrl,
-        model: input.model, enabled: input.enabled, temperature: input.temperature, system_prompt: input.systemPrompt,
+        user_id: userId, temperature: input.temperature, system_prompt: input.systemPrompt,
         response_length: input.responseLength, initiative: input.initiative, allow_suggestions: input.allowSuggestions,
         allow_teasing: input.allowTeasing, include_tasks: input.includeTasks, include_memories: input.includeMemories,
         allow_write_actions: input.allowWriteActions,
         user_display_name: input.userDisplayName, user_avatar_type: input.userAvatarType, user_avatar_value: input.userAvatarValue,
         assistant_display_name: input.assistantDisplayName, assistant_avatar_type: input.assistantAvatarType, assistant_avatar_value: input.assistantAvatarValue,
         show_user_name: input.showUserName, show_assistant_name: input.showAssistantName, show_avatars: input.showAvatars,
-        ...secretValues,
       };
-      const { data, error } = await client.from("ai_settings").upsert(values, { onConflict: "user_id" }).select().single();
+      const { error } = await client.from("ai_settings").upsert(values, { onConflict: "user_id" });
       fail(error, "保存 AI 设置");
-      return settingsFromRow(data);
+      return runtimeSettings();
     },
     async updateChatPreferences(input) {
-      const { data, error } = await client.from("ai_settings").upsert({
+      const { error } = await client.from("ai_settings").upsert({
         user_id: userId,
         user_display_name: input.userDisplayName, user_avatar_type: input.userAvatarType, user_avatar_value: input.userAvatarValue,
         assistant_display_name: input.assistantDisplayName, assistant_avatar_type: input.assistantAvatarType, assistant_avatar_value: input.assistantAvatarValue,
         show_user_name: input.showUserName, show_assistant_name: input.showAssistantName, show_avatars: input.showAvatars,
-      }, { onConflict: "user_id" }).select().single();
+      }, { onConflict: "user_id" });
       fail(error, "保存对话身份");
-      return settingsFromRow(data);
+      return runtimeSettings();
+    },
+    async getAiRuntimeSettings(modelConfigId) { return runtimeSettings(modelConfigId ?? null); },
+    async listAiProviders() {
+      const [{ data: providers, error: providerError }, { data: models, error: modelError }] = await Promise.all([
+        client.from("ai_providers").select("*").order("enabled", { ascending: false }).order("updated_at", { ascending: false }),
+        client.from("ai_model_configs").select("*").order("is_default", { ascending: false }).order("display_name"),
+      ]);
+      fail(providerError, "读取 Providers"); fail(modelError, "读取模型配置");
+      const parsedModels = (models as Row[]).map(modelFromRow);
+      return (providers as Row[]).map((row) => providerFromRow(row, parsedModels.filter((model) => model.providerId === Number(row.id))));
+    },
+    async getAiProvider(id) {
+      const { data, error } = await client.from("ai_providers").select("*").eq("id", id).maybeSingle();
+      fail(error, "读取 Provider"); return data ? internalProviderFromRow(data) : null;
+    },
+    async createAiProvider(input: AiProviderInput) {
+      const encrypted = input.apiKey ? encryptAiApiKey(input.apiKey) : { ciphertext: null, iv: null, authTag: null };
+      const { data, error } = await client.from("ai_providers").insert({ user_id:userId,name:input.name,provider_type:input.providerType,base_url:input.baseUrl,enabled:input.enabled,api_key_ciphertext:encrypted.ciphertext,api_key_iv:encrypted.iv,api_key_auth_tag:encrypted.authTag }).select().single();
+      fail(error, "创建 Provider"); return providerFromRow(data);
+    },
+    async updateAiProvider(id, input: AiProviderInput) {
+      const current = await repository.getAiProvider(id); if (!current) return null;
+      if (!input.enabled) {
+        const { count, error } = await client.from("ai_model_configs").select("id", { count:"exact", head:true }).eq("provider_id", id).eq("is_default", true);
+        fail(error, "检查默认模型"); if (count) throw new ConflictError("这个 Provider 正在承载全局默认模型，请先更换默认模型");
+      }
+      const secret = input.clearApiKey ? {api_key_ciphertext:null,api_key_iv:null,api_key_auth_tag:null} : input.apiKey !== undefined ? (()=>{const encrypted=encryptAiApiKey(input.apiKey!);return{api_key_ciphertext:encrypted.ciphertext,api_key_iv:encrypted.iv,api_key_auth_tag:encrypted.authTag};})() : {};
+      const { data, error } = await client.from("ai_providers").update({name:input.name,provider_type:input.providerType,base_url:input.baseUrl,enabled:input.enabled,...secret}).eq("id",id).select().maybeSingle();
+      fail(error,"保存 Provider"); return data ? providerFromRow(data,(await repository.listAiProviders()).find((provider)=>provider.id===id)?.models ?? []) : null;
+    },
+    async deleteAiProvider(id) {
+      const [{count:sessions,error:sessionError},{count:messages,error:messageError},{count:defaults,error:defaultError}] = await Promise.all([
+        client.from("chat_sessions").select("id",{count:"exact",head:true}).eq("provider_id",id),
+        client.from("chat_messages").select("id",{count:"exact",head:true}).eq("provider_id",id),
+        client.from("ai_model_configs").select("id",{count:"exact",head:true}).eq("provider_id",id).eq("is_default",true),
+      ]); fail(sessionError,"检查会话引用");fail(messageError,"检查消息引用");fail(defaultError,"检查默认模型");
+      if(defaults)throw new ConflictError("这个 Provider 正在承载全局默认模型，请先把另一个模型设为默认");
+      if ((sessions??0)+(messages??0)>0) throw new ConflictError(`这个 Provider 仍被 ${(sessions??0)+(messages??0)} 条会话或消息使用，不能删除；可以先停用`);
+      const {data,error}=await client.from("ai_providers").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Provider");return Boolean(data);
+    },
+    async createAiModelConfig(providerId, input: AiModelConfigInput) {
+      const providers=await repository.listAiProviders(); const provider=providers.find((item)=>item.id===providerId); if(!provider) throw new ConflictError("Provider 不存在");
+      const makeDefault=input.isDefault || (!providers.some((item)=>item.models.some((model)=>model.isDefault)) && input.enabled && provider.enabled);
+      const {data,error}=await client.from("ai_model_configs").insert({user_id:userId,provider_id:providerId,model_id:input.modelId,display_name:input.displayName,enabled:input.enabled,is_default:false,capabilities:input.capabilities}).select().single();fail(error,"添加模型");
+      if(makeDefault){const{error:defaultError}=await client.rpc("set_ai_default_model",{p_model_id:Number(data.id)});fail(defaultError,"设置默认模型");data.is_default=true;}
+      return modelFromRow(data);
+    },
+    async updateAiModelConfig(id, input: AiModelConfigInput) {
+      const {data:current,error:currentError}=await client.from("ai_model_configs").select("*").eq("id",id).maybeSingle();fail(currentError,"读取模型配置");if(!current)return null;
+      if(Boolean(current.is_default)&&(!input.isDefault||!input.enabled)) throw new ConflictError("请先把另一个已启用模型设为全局默认，再停用或取消当前默认模型");
+      if(input.isDefault){const provider=await repository.getAiProvider(Number(current.provider_id));if(!provider?.enabled||!input.enabled)throw new ConflictError("只有已启用 Provider 下的已启用模型可以设为默认");const{error}=await client.rpc("set_ai_default_model",{p_model_id:id});fail(error,"更新默认模型");}
+      const{data,error}=await client.from("ai_model_configs").update({model_id:input.modelId,display_name:input.displayName,enabled:input.enabled,is_default:input.isDefault,capabilities:input.capabilities}).eq("id",id).select().maybeSingle();fail(error,"保存模型");return data?modelFromRow(data):null;
+    },
+    async deleteAiModelConfig(id) {
+      const [{count:sessions,error:sessionError},{count:messages,error:messageError},{data:current,error:currentError}] = await Promise.all([client.from("chat_sessions").select("id",{count:"exact",head:true}).eq("model_config_id",id),client.from("chat_messages").select("id",{count:"exact",head:true}).eq("model_config_id",id),client.from("ai_model_configs").select("is_default").eq("id",id).maybeSingle()]);fail(sessionError,"检查会话引用");fail(messageError,"检查消息引用");fail(currentError,"读取模型配置");if(!current)return false;if(current.is_default)throw new ConflictError("这是全局默认模型，请先把另一个模型设为默认");if((sessions??0)+(messages??0)>0)throw new ConflictError(`这个模型仍被 ${(sessions??0)+(messages??0)} 条会话或消息使用，不能删除；可以先停用`);
+      const{data,error}=await client.from("ai_model_configs").delete().eq("id",id).select("id,is_default").maybeSingle();fail(error,"删除模型");
+      if(data?.is_default){const{data:replacement,error:replacementError}=await client.from("ai_model_configs").select("id,ai_providers!inner(enabled)").eq("enabled",true).eq("ai_providers.enabled",true).order("id").limit(1).maybeSingle();fail(replacementError,"选择默认模型");if(replacement)await client.from("ai_model_configs").update({is_default:true}).eq("id",replacement.id);}
+      return Boolean(data);
     },
     async listChatSessions() {
-      const { data, error } = await client.from("chat_sessions").select("*").order("updated_at", { ascending: false }).order("id", { ascending: false });
+      const { data, error } = await client.from("chat_sessions").select("*,ai_providers(name),ai_model_configs(display_name)").order("updated_at", { ascending: false }).order("id", { ascending: false });
       fail(error, "读取会话"); return Promise.all((data as Row[]).map((row) => oneSession(client, row)));
     },
     async getChatSession(id) {
-      const { data, error } = await client.from("chat_sessions").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await client.from("chat_sessions").select("*,ai_providers(name),ai_model_configs(display_name)").eq("id", id).maybeSingle();
       fail(error, "读取会话"); return data ? oneSession(client, data) : null;
     },
-    async createChatSession(title = "新对话") {
-      const { data, error } = await client.from("chat_sessions").insert({ user_id: userId, title }).select().single();
+    async createChatSession(title = "新对话", requestedModelConfigId) {
+      const {data:model,error:modelError}=requestedModelConfigId
+        ? await client.from("ai_model_configs").select("*").eq("id",requestedModelConfigId).maybeSingle()
+        : await client.from("ai_model_configs").select("*").eq("is_default",true).maybeSingle();
+      fail(modelError,"读取默认模型");if(requestedModelConfigId&&(!model||!model.enabled))throw new ConflictError("选择的模型不存在或已停用");
+      if(model){const{data:provider,error:providerError}=await client.from("ai_providers").select("enabled").eq("id",model.provider_id).maybeSingle();fail(providerError,"读取 Provider");if(!provider?.enabled)throw new ConflictError("这个模型所属的 Provider 已停用");}
+      const { data, error } = await client.from("chat_sessions").insert({ user_id: userId, title, provider_id:model?.provider_id??null,model_config_id:model?.id??null,model:model?.model_id??null }).select("*,ai_providers(name),ai_model_configs(display_name)").single();
       fail(error, "创建会话"); return sessionFromRow(data);
     },
-    async updateChatSession(id, title) {
-      const { data, error } = await client.from("chat_sessions").update({ title }).eq("id", id).select().maybeSingle();
+    async updateChatSession(id, input) {
+      const patch:Row={};if(input.title!==undefined)patch.title=input.title;
+      if(input.modelConfigId!==undefined){const{data:model,error:modelError}=await client.from("ai_model_configs").select("*,ai_providers(enabled)").eq("id",input.modelConfigId).maybeSingle();fail(modelError,"读取模型配置");const provider=model?.ai_providers as Row|undefined;if(!model||!model.enabled||!provider?.enabled)throw new ConflictError("选择的模型不存在或已停用");patch.provider_id=model.provider_id;patch.model_config_id=model.id;patch.model=model.model_id;}
+      const { data, error } = await client.from("chat_sessions").update(patch).eq("id", id).select("*,ai_providers(name),ai_model_configs(display_name)").maybeSingle();
       fail(error, "更新会话"); return data ? oneSession(client, data) : null;
     },
     async deleteChatSession(id) {
@@ -246,8 +344,8 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
       const { data, error } = await client.from("chat_messages").select("*").eq("session_id", sessionId).order("id");
       fail(error, "读取消息"); return (data as Row[]).map(messageFromRow);
     },
-    async addChatMessage(sessionId, role, content, model = null) {
-      const { data, error } = await client.from("chat_messages").insert({ user_id: userId, session_id: sessionId, role, content, model }).select().single();
+    async addChatMessage(sessionId, role, content, model = null, providerId = null, modelConfigId = null) {
+      const { data, error } = await client.from("chat_messages").insert({ user_id: userId, session_id: sessionId, role, content, model, provider_id:providerId, model_config_id:modelConfigId }).select().single();
       fail(error, "保存消息");
       const sessionPatch = model ? { model } : { updated_at: new Date().toISOString() };
       const { error: sessionError } = await client.from("chat_sessions").update(sessionPatch).eq("id", sessionId);

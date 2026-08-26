@@ -192,6 +192,40 @@ export function parseAiSettings(value: unknown) {
   };
 }
 
+export function parseAiProvider(value: unknown) {
+  const body = objectValue(value);
+  const apiKey = body.apiKey === undefined ? undefined : text(body.apiKey, "API Key", 1000, false);
+  const clearApiKey = booleanValue(body.clearApiKey, "移除 API Key", false);
+  if (apiKey !== undefined && !apiKey && !clearApiKey) throw new ValidationError("更换 API Key 时请输入新值");
+  if (apiKey && clearApiKey) throw new ValidationError("不能同时更换和移除 API Key");
+  return {
+    name: text(body.name, "Provider 名称", 80)!,
+    providerType: text(body.providerType ?? "openai-compatible", "Provider 协议", 40)!,
+    baseUrl: httpUrl(body.baseUrl),
+    enabled: booleanValue(body.enabled, "Provider 启用状态", true),
+    apiKey,
+    clearApiKey,
+  };
+}
+
+export function parseAiModelConfig(value: unknown) {
+  const body = objectValue(value);
+  const capabilities = body.capabilities === undefined ? {} : objectValue(body.capabilities);
+  return {
+    modelId: text(body.modelId, "Model ID", 200)!,
+    displayName: text(body.displayName ?? body.modelId, "模型名称", 120)!,
+    enabled: booleanValue(body.enabled, "模型启用状态", true),
+    isDefault: booleanValue(body.isDefault, "默认模型", false),
+    capabilities,
+  };
+}
+
+function optionalPositiveId(value: unknown, label: string) {
+  if (value === undefined || value === null) return null;
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) throw new ValidationError(`${label}格式不正确`);
+  return Number(value);
+}
+
 export function parseChatPreferences(value: unknown) {
   const body = objectValue(value);
   const parsed = parseAiSettings({
@@ -209,12 +243,17 @@ export function parseChatPreferences(value: unknown) {
 
 export function parseNewChatSession(value: unknown) {
   const body = objectValue(value);
-  return { title: text(body.title ?? "新对话", "会话标题", 120)! };
+  return { title: text(body.title ?? "新对话", "会话标题", 120)!, modelConfigId: body.modelConfigId === undefined ? undefined : optionalPositiveId(body.modelConfigId, "模型 ID") };
 }
 
 export function parseChatSessionPatch(value: unknown) {
   const body = objectValue(value);
-  return { title: text(body.title, "会话标题", 120)! };
+  const result = {
+    title: body.title === undefined ? undefined : text(body.title, "会话标题", 120),
+    modelConfigId: body.modelConfigId === undefined ? undefined : optionalPositiveId(body.modelConfigId, "模型 ID"),
+  };
+  if (result.title === undefined && result.modelConfigId === undefined) throw new ValidationError("没有可更新的会话字段");
+  return result;
 }
 
 export function parseChatRequest(value: unknown) {

@@ -16,8 +16,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   try {
     const id = parseId((await context.params).id);
     if (!await getChatSession(id)) return NextResponse.json({ error: "会话不存在" }, { status: 404 });
-    const { title } = parseChatSessionPatch(await request.json());
-    return NextResponse.json(await updateChatSession(id, title));
+    const patch = parseChatSessionPatch(await request.json());
+    return NextResponse.json(await updateChatSession(id, patch));
   } catch (error) { return apiError(error); }
 }
 

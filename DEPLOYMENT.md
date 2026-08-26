@@ -57,12 +57,15 @@ npm run db:migrate
 - `202608250002_core_life_food.sql`：Inbox、Food、Drinks、Daily Summary 和 Push 预留。
 - `202608250003_conversation_identity.sql`：Conversation UI Preferences 与私有头像 Storage bucket/policies。
 - `202608250004_encrypted_ai_api_key.sql`：AI Provider API Key 的 AES-256-GCM 密文字段与完整性约束。
+- `202608260001_multi_provider_models.sql`：多 Provider / 多 Model 表、全局默认模型、Conversation 模型引用，以及旧单一配置的事务迁移。
 
 完整 private tables：
 
 - `tasks`
 - `memories`
 - `ai_settings`
+- `ai_providers`
+- `ai_model_configs`
 - `chat_sessions`
 - `chat_messages`
 - `inbox_items`
@@ -148,7 +151,7 @@ SQLite 导入只迁移名称、Emoji 与显示开关；本地图片文件不会�
 - `EVAORBIT_TIME_ZONE=Asia/Shanghai`
 - `EVAORBIT_ENCRYPTION_KEY`（必填；32 字节 Base64 或 64 位十六进制，供 Settings 加密 Provider API Key）
 
-当前运行时通过带用户 Session 的 Supabase Data API 工作，因此 `DATABASE_URL` 只用于本机 migration / import，不需要放进 Vercel。这样生产函数不持有数据库管理员密码。Provider 名称、Base URL、Model 与加密后的 API Key 均由网页 Settings 管理；生产环境不会读取 `AI_API_KEY`。所有变量都不要使用 `NEXT_PUBLIC_`。Vercel 环境变量可按 Production / Preview / Development 分开配置，见[官方文档](https://vercel.com/docs/environment-variables)。
+当前运行时通过带用户 Session 的 Supabase Data API 工作，因此 `DATABASE_URL` 只用于本机 migration / import，不需要放进 Vercel。这样生产函数不持有数据库管理员密码。多个 Provider、各自的 Base URL 与模型列表均由网页 Settings 管理；每个 Provider 只保存一份加密 API Key，生产环境不会读取 `AI_API_KEY`。所有变量都不要使用 `NEXT_PUBLIC_`。Vercel 环境变量可按 Production / Preview / Development 分开配置，见[官方文档](https://vercel.com/docs/environment-variables)。
 
 ## 8. 部署 Vercel
 

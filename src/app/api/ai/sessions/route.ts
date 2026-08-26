@@ -11,8 +11,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title } = parseNewChatSession(await request.json());
-    return NextResponse.json(await createChatSession(title), { status: 201 });
+    const { title, modelConfigId } = parseNewChatSession(await request.json());
+    return NextResponse.json(await createChatSession(title, modelConfigId), { status: 201 });
   } catch (error) {
     return apiError(error);
   }

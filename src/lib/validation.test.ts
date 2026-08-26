@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -30,6 +30,15 @@ test("normalizes AI settings and checks URL", () => {
   assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", responseLength: "endless" }), ValidationError);
   assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", apiKey: "" }), ValidationError);
   assert.throws(() => parseAiSettings({ providerName: "x", baseUrl: "https://example.com", model: "x", apiKey: "new-key", clearApiKey: true }), ValidationError);
+});
+
+test("normalizes provider and model configuration", () => {
+  const provider = parseAiProvider({ name: "My Provider", providerType: "openai-compatible", baseUrl: "https://example.com/v1", enabled: true, apiKey: "server-secret" });
+  const model = parseAiModelConfig({ modelId: "model-1", displayName: "Model One", enabled: true, isDefault: true, capabilities: { tools: true } });
+  assert.equal(provider.apiKey, "server-secret");
+  assert.equal(provider.baseUrl, "https://example.com/v1");
+  assert.deepEqual(model.capabilities, { tools: true });
+  assert.equal(model.isDefault, true);
 });
 
 test("checks chat request identifiers and content", () => {

@@ -8,6 +8,8 @@ const settings: InternalAiSettings = {
   providerName: "Mock",
   baseUrl: "https://mock.example/v1",
   apiKey: "test-key",
+  providerId: 1,
+  modelConfigId: 1,
   hasApiKey: true,
   maskedApiKey: null,
   model: "mock-model",

@@ -3,20 +3,13 @@
 import { FormEvent, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
+import { AiProvidersSettings } from "./ai-providers-settings";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
 
 type Draft = Omit<AiSettings, "hasApiKey" | "maskedApiKey" | "updatedAt"> & { apiKey: string };
 
-const presets: Record<string, Pick<Draft, "providerName" | "baseUrl" | "model">> = {
-  openai: { providerName: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  deepseek: { providerName: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-  openrouter: { providerName: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
-  ollama: { providerName: "Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen3" },
-  custom: { providerName: "自定义 Provider", baseUrl: "https://example.com/v1", model: "model-name" },
-};
-
 const emptyDraft: Draft = {
-  providerPreset: "openai", ...presets.openai, apiKey: "", enabled: false,
+  providerPreset: "custom", providerName: "AI Provider", baseUrl: "https://example.com/v1", model: "model-name", apiKey: "", enabled: false,
   temperature: 0.6, systemPrompt: "", responseLength: "balanced", initiative: "quiet",
   allowSuggestions: true, allowTeasing: true, includeTasks: true, includeMemories: true, allowWriteActions: false,
   userDisplayName: "我", userAvatarType: "default", userAvatarValue: "",
@@ -26,11 +19,6 @@ const emptyDraft: Draft = {
 
 export function SettingsView() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [maskedApiKey, setMaskedApiKey] = useState<string | null>(null);
-  const [editingApiKey, setEditingApiKey] = useState(true);
-  const [clearApiKey, setClearApiKey] = useState(false);
-  const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState("");
@@ -53,22 +41,8 @@ export function SettingsView() {
         assistantDisplayName: settings.assistantDisplayName, assistantAvatarType: settings.assistantAvatarType, assistantAvatarValue: settings.assistantAvatarValue,
         showUserName: settings.showUserName, showAssistantName: settings.showAssistantName, showAvatars: settings.showAvatars,
       });
-      setHasApiKey(settings.hasApiKey);
-      setMaskedApiKey(settings.maskedApiKey);
-      setEditingApiKey(!settings.hasApiKey);
     }).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
   }, []);
-
-  function changePreset(providerPreset: string) {
-    setDraft({ ...draft, providerPreset, ...presets[providerPreset] });
-    setModels([]); setNotice(""); setError("");
-  }
-
-  function requestBody() {
-    const { apiKey, ...values } = draft;
-    if (clearApiKey) return { ...values, clearApiKey: true };
-    return editingApiKey && apiKey.trim() ? { ...values, apiKey } : values;
-  }
 
   async function uploadAvatar(subject: "user" | "assistant", file: File) {
     if (file.size > 4 * 1024 * 1024) { setError("头像文件必须小于 4 MB"); return; }
@@ -98,26 +72,12 @@ export function SettingsView() {
     setAvatarVersion(Date.now().toString());
   }
 
-  async function discover() {
-    setWorking(true); setError(""); setNotice("");
-    try {
-      const response = await fetch("/api/ai/models", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody()) });
-      const result = await response.json() as { models?: string[] } & ApiError;
-      if (!response.ok) throw new Error(result.error);
-      setModels(result.models ?? []);
-      setNotice(result.models?.length ? `连接成功，发现 ${result.models.length} 个模型。` : "连接成功，但 Provider 没有返回模型列表；仍可手动填写模型。");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "连接失败"); }
-    finally { setWorking(false); }
-  }
-
   async function save(event: FormEvent) {
     event.preventDefault(); setWorking(true); setError(""); setNotice("");
     try {
-      const response = await fetch("/api/ai/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody()) });
+      const response = await fetch("/api/ai/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft, (key, value) => key === "apiKey" ? undefined : value) });
       const result = await response.json() as AiSettings & ApiError;
       if (!response.ok) throw new Error(result.error);
-      setHasApiKey(result.hasApiKey); setMaskedApiKey(result.maskedApiKey); setEditingApiKey(!result.hasApiKey); setClearApiKey(false);
-      setDraft((current) => ({ ...current, apiKey: "" }));
       setNotice("设置留下了。现在去“想想”就会按这套方式说话。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
     finally { setWorking(false); }
@@ -130,22 +90,12 @@ export function SettingsView() {
     <div className="settings-summary">
       <section><span>生产数据</span><strong>Supabase Postgres</strong></section>
       <section><span>访问方式</span><strong>私人账户 · RLS</strong></section>
-      <section><span>本地后备</span><strong>SQLite schema v7</strong></section>
+      <section><span>本地后备</span><strong>SQLite schema v8</strong></section>
     </div>
 
-    <form className="provider-card" onSubmit={save}>
-      <div className="provider-heading"><div><span className="eyebrow">MODEL CONNECTION</span><h2>模型接口</h2><p>兼容 OpenAI Chat Completions，也可以接本地 Ollama。</p></div><label className="switch-row"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /><span>接上模型</span></label></div>
-      <div className="provider-presets" role="group" aria-label="Provider 预设">
-        {Object.keys(presets).map((key) => <button type="button" className={draft.providerPreset === key ? "active" : ""} key={key} onClick={() => changePreset(key)}>{key === "custom" ? "自定义" : presets[key].providerName}</button>)}
-      </div>
-      <div className="form-grid provider-form">
-        <label className="field"><span>Provider 名称</span><input required maxLength={80} value={draft.providerName} onChange={(event) => setDraft({ ...draft, providerName: event.target.value })} /></label>
-        <label className="field"><span>接口地址</span><input required type="url" maxLength={500} value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label>
-        <label className="field"><span>API Key <small>{clearApiKey ? "保存后将移除" : hasApiKey && !editingApiKey ? `当前 ${maskedApiKey ?? "••••••••••••"}` : draft.providerPreset === "ollama" ? "本地服务可留空" : "只在服务端加密保存"}</small></span><div className="api-key-control"><input type="password" autoComplete="new-password" maxLength={1000} disabled={hasApiKey && !editingApiKey || clearApiKey} value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={hasApiKey && !editingApiKey ? maskedApiKey ?? "••••••••••••" : "输入新的 API Key"} />{hasApiKey && !editingApiKey && !clearApiKey && <button type="button" className="text-button" onClick={() => { setEditingApiKey(true); setDraft({ ...draft, apiKey: "" }); }}>更换 API Key</button>}{hasApiKey && editingApiKey && <button type="button" className="text-button" onClick={() => { setEditingApiKey(false); setDraft({ ...draft, apiKey: "" }); }}>取消更换</button>}</div></label>
-        <label className="field"><span>模型</span><input required list="provider-models" maxLength={160} value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} /><datalist id="provider-models">{models.map((model) => <option value={model} key={model} />)}</datalist></label>
-        <label className="field"><span>温度 <small>{draft.temperature.toFixed(1)} · 越低越稳定</small></span><input className="range-input" type="range" min="0" max="2" step="0.1" value={draft.temperature} onChange={(event) => setDraft({ ...draft, temperature: Number(event.target.value) })} /></label>
-      </div>
+    <AiProvidersSettings />
 
+    <form className="provider-card" onSubmit={save}>
       <section className="conversation-appearance-settings">
         <div className="persona-heading"><span className="eyebrow">CONVERSATION APPEARANCE</span><h2>对话里的我们</h2><p>这里只改变聊天界面的称呼和头像，不改变 Persona、Memory、消息角色或数据归属。</p></div>
         <div className="identity-editor-grid">
@@ -183,10 +133,7 @@ export function SettingsView() {
       </div>
       {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
       <div className="provider-actions">
-        {hasApiKey && !clearApiKey && <button type="button" className="text-button danger-text" onClick={() => { setClearApiKey(true); setEditingApiKey(false); setDraft({ ...draft, apiKey: "" }); setNotice("保存后将移除当前 API Key。"); }}>移除已保存 Key</button>}
-        {clearApiKey && <button type="button" className="text-button" onClick={() => { setClearApiKey(false); setEditingApiKey(false); setNotice(""); }}>取消移除</button>}
-        <button type="button" className="button secondary" disabled={working} onClick={discover}>{working ? "连接中…" : "测试并读取模型"}</button>
-        <button className="button primary" disabled={working} type="submit">留下设置</button>
+        <button className="button primary" disabled={working} type="submit">留下偏好</button>
       </div>
     </form>
   </div>;

@@ -53,11 +53,11 @@ EVAORBIT_SQLITE_PATH=./data/eva-orbit.db
 
 若旧 `data/personal-hub.db` 存在且未指定新路径，代码会继续使用它，避免无意创建空库。`PERSONAL_HUB_DB_PATH` 仅作为旧环境变量兼容入口保留。
 
-SQLite schema v7 会在首次启动时把旧 `api_key` 明文加密到 ciphertext / IV / auth tag，并删除明文列。若旧库已经保存过 API Key，请先在 `.env.local` 配置稳定的 `EVAORBIT_ENCRYPTION_KEY` 再启动；没有旧 Key 的本地库可正常直接升级。
+SQLite schema v7 会先把旧 `api_key` 明文加密并删除明文列；schema v8 再把原单一连接无损迁成一条 `ai_providers` 与一条默认 `ai_model_configs`，并为 Conversation / Message 补上对应引用。若旧库已经保存过 API Key，请先在 `.env.local` 配置稳定的 `EVAORBIT_ENCRYPTION_KEY` 再启动。
 
 ## 生产配置
 
-生产环境设置 `EVAORBIT_DATA_BACKEND=supabase`，并配置 Supabase、授权邮箱和服务器端 `EVAORBIT_ENCRYPTION_KEY`。Provider 名称、Base URL、API Key 与 Model 可在网页 Settings 修改；API Key 只会在 EvaOrbit server 使用 AES-256-GCM 加密/解密，PostgreSQL 仅保存 ciphertext、IV 与 auth tag，客户端只收到掩码。所有 Secret 都不得使用 `NEXT_PUBLIC_*` 变量。
+生产环境设置 `EVAORBIT_DATA_BACKEND=supabase`，并配置 Supabase、授权邮箱和服务器端 `EVAORBIT_ENCRYPTION_KEY`。Settings 可管理多个 Provider，并在每个 Provider 下管理多个 Model；API Key 仅保存在 Provider 层，只会在 EvaOrbit server 使用 AES-256-GCM 加密/解密，PostgreSQL 仅保存 ciphertext、IV 与 auth tag，客户端只收到掩码。所有 Secret 都不得使用 `NEXT_PUBLIC_*` 变量。
 
 完整步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。项目不会自动创建 Supabase / Vercel 项目，也不会自动上传现有 SQLite 数据。
 

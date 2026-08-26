@@ -1,4 +1,4 @@
-import type { AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "../types";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -29,7 +29,10 @@ export type AiSettingsInput = ChatPreferences & {
   allowWriteActions: boolean;
 };
 
-export type InternalAiSettings = AiSettings & { apiKey: string };
+export type InternalAiSettings = AiSettings & { apiKey: string; providerId: number | null; modelConfigId: number | null };
+export type InternalAiProvider = Omit<AiProvider, "models" | "hasApiKey" | "maskedApiKey"> & { apiKey: string };
+export type AiProviderInput = { name: string; providerType: string; baseUrl: string; enabled: boolean; apiKey?: string; clearApiKey: boolean };
+export type AiModelConfigInput = { modelId: string; displayName: string; enabled: boolean; isDefault: boolean; capabilities: Record<string, unknown> };
 
 export type NewInboxItem = Pick<InboxItem, "content" | "source">;
 export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt">;
@@ -54,14 +57,23 @@ export interface EvaOrbitRepository {
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;
+  getAiRuntimeSettings(modelConfigId?: number | null): Promise<InternalAiSettings>;
+  listAiProviders(): Promise<AiProvider[]>;
+  getAiProvider(id: number): Promise<InternalAiProvider | null>;
+  createAiProvider(input: AiProviderInput): Promise<AiProvider>;
+  updateAiProvider(id: number, input: AiProviderInput): Promise<AiProvider | null>;
+  deleteAiProvider(id: number): Promise<boolean>;
+  createAiModelConfig(providerId: number, input: AiModelConfigInput): Promise<AiModelConfig>;
+  updateAiModelConfig(id: number, input: AiModelConfigInput): Promise<AiModelConfig | null>;
+  deleteAiModelConfig(id: number): Promise<boolean>;
 
   listChatSessions(): Promise<ChatSession[]>;
   getChatSession(id: number): Promise<ChatSession | null>;
-  createChatSession(title?: string): Promise<ChatSession>;
-  updateChatSession(id: number, title: string): Promise<ChatSession | null>;
+  createChatSession(title?: string, modelConfigId?: number | null): Promise<ChatSession>;
+  updateChatSession(id: number, input: { title?: string; modelConfigId?: number | null }): Promise<ChatSession | null>;
   deleteChatSession(id: number): Promise<boolean>;
   listChatMessages(sessionId: number): Promise<ChatMessage[]>;
-  addChatMessage(sessionId: number, role: ChatRole, content: string, model?: string | null): Promise<ChatMessage>;
+  addChatMessage(sessionId: number, role: ChatRole, content: string, model?: string | null, providerId?: number | null, modelConfigId?: number | null): Promise<ChatMessage>;
   autoTitleChatSession(id: number, content: string): Promise<void>;
 
   listInbox(status?: string): Promise<InboxItem[]>;

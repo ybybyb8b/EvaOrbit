@@ -5,7 +5,7 @@ import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { MarkdownMessage } from "@/components/markdown-message";
 import { ConversationAvatar } from "@/components/conversation-avatar";
-import type { AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
+import type { AiProvider, AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
 
 const starters = [
   "翻一下待办 看看今天哪个真得先弄",
@@ -16,6 +16,7 @@ const starters = [
 
 export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt: string; initialSessionId: number | null }) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
+  const [providers, setProviders] = useState<AiProvider[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,8 +39,9 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     Promise.all([
       fetch("/api/ai/settings").then((response) => response.json() as Promise<AiSettings>),
       fetch("/api/ai/sessions").then((response) => response.json() as Promise<ChatSession[]>),
-    ]).then(([aiSettings, chatSessions]) => {
-      setSettings(aiSettings); setSessions(chatSessions);
+      fetch("/api/ai/providers").then((response) => response.json() as Promise<AiProvider[]>),
+    ]).then(([aiSettings, chatSessions, aiProviders]) => {
+      setSettings(aiSettings); setSessions(chatSessions); setProviders(aiProviders);
       const requested = chatSessions.find((session) => session.id === initialSessionId);
       if (requested || chatSessions[0]) setActiveId((requested ?? chatSessions[0]).id);
     }).catch(() => setError("暂时翻不到这些数据")).finally(() => setLoading(false));
@@ -81,16 +83,30 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     if (response.ok) await refreshSessions();
   }
 
+  async function changeSessionModel(modelConfigId: number) {
+    if (!activeId || streaming) return;
+    setError("");
+    const response = await fetch(`/api/ai/sessions/${activeId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelConfigId }),
+    });
+    const result = await response.json() as ChatSession & ApiError;
+    if (!response.ok) { setError(result.error); return; }
+    setSessions((current) => current.map((session) => session.id === result.id ? result : session));
+  }
+
   async function send(content = draft) {
     const text = content.trim();
-    if (!text || streaming || !settings?.enabled) return;
+    const selectedModel = providers.flatMap((provider) => provider.enabled ? provider.models.filter((model) => model.enabled).map((model) => ({ provider, model })) : []).find(({ model }) => model.id === activeSession?.modelConfigId);
+    if (!text || streaming || !settings?.enabled || (activeSession && !selectedModel)) return;
     setError(""); setToolActivity([]); setDraft("");
     let sessionId = activeId;
     try {
       if (!sessionId) sessionId = await createSession();
       const optimisticId = optimisticIdRef.current--;
-      const optimisticUser: ChatMessage = { id: optimisticId, sessionId, role: "user", content: text, model: null, createdAt: "" };
-      const optimisticAssistant: ChatMessage = { id: optimisticIdRef.current--, sessionId, role: "assistant", content: "", model: settings.model, createdAt: "" };
+      const providerId = selectedModel?.provider.id ?? null;
+      const modelConfigId = selectedModel?.model.id ?? null;
+      const optimisticUser: ChatMessage = { id: optimisticId, sessionId, role: "user", content: text, model: null, providerId, modelConfigId, createdAt: "" };
+      const optimisticAssistant: ChatMessage = { id: optimisticIdRef.current--, sessionId, role: "assistant", content: "", model: selectedModel?.model.modelId ?? settings.model, providerId, modelConfigId, createdAt: "" };
       setMessages((current) => [...current, optimisticUser, optimisticAssistant]); setStreaming(true);
       const controller = new AbortController(); abortRef.current = controller;
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, content: text }), signal: controller.signal });
@@ -127,6 +143,9 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
   if (loading) return <div className="page ai-page"><div className="loading-state">在翻本地数据…</div></div>;
 
   const activeSession = sessions.find((session) => session.id === activeId);
+  const selectableModels = providers.flatMap((provider) => provider.enabled
+    ? provider.models.filter((model) => model.enabled).map((model) => ({ provider, model, label: `${provider.name} · ${model.displayName}` }))
+    : []);
   return <div className="ai-workspace">
     {historyOpen && <button className="drawer-backdrop" onClick={() => setHistoryOpen(false)} aria-label="关闭会话列表" />}
     {historyOpen && <aside className="chat-history open">
@@ -141,7 +160,7 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     <main className="chat-main">
       <header className="chat-topbar">
         <div className="chat-title-group"><button className="icon-button" onClick={() => setHistoryOpen(true)} aria-label="翻以前聊过的"><Icon name="history" /></button><div><span className="eyebrow">SELF</span><h1>{activeSession?.title ?? "随便想点什么"}</h1></div></div>
-        <div className="chat-topbar-tools"><div className="model-badge"><span className={settings?.enabled ? "online" : ""} />{settings?.model}</div><button className="icon-button" onClick={() => void createSession()} aria-label="新建对话"><Icon name="plus" /></button></div>
+        <div className="chat-topbar-tools"><label className="chat-model-control"><span className={settings?.enabled ? "online" : ""} /><span className="sr-only">当前会话模型</span><select className="chat-model-selector" value={activeSession?.modelConfigId ?? ""} disabled={!activeSession || streaming || !selectableModels.length} onChange={(event) => void changeSessionModel(Number(event.target.value))}>{!activeSession && <option value="">新对话使用默认模型</option>}{activeSession && !selectableModels.some(({ model }) => model.id === activeSession.modelConfigId) && <option value={activeSession.modelConfigId ?? ""}>{activeSession.modelDisplayName ? `${activeSession.providerName ?? "Provider"} · ${activeSession.modelDisplayName}（已停用）` : "模型不可用"}</option>}{selectableModels.map(({ model, label }) => <option key={model.id} value={model.id}>{label}</option>)}</select></label><button className="icon-button" onClick={() => void createSession()} aria-label="新建对话"><Icon name="plus" /></button></div>
       </header>
       {!settings?.enabled ? <div className="ai-setup-state"><span className="coming-icon"><Icon name="spark" /></span><h2>先接一个模型</h2><p>OpenAI、DeepSeek、OpenRouter、Ollama 或兼容接口都行。没接也不影响待办和 Memory。</p><Link href="/settings" className="button primary">去设置里接上</Link></div>
       : <>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ValidationError } from "./validation.ts";
-import { ExternalApiError } from "./errors.ts";
+import { ConflictError, ExternalApiError } from "./errors.ts";
 
 export function apiError(error: unknown) {
   if (error instanceof ValidationError) {
@@ -8,6 +8,9 @@ export function apiError(error: unknown) {
   }
   if (error instanceof ExternalApiError) {
     return NextResponse.json({ error: error.message }, { status: 502 });
+  }
+  if (error instanceof ConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
   console.error(error);
   return NextResponse.json({ error: "服务器暂时无法处理请求" }, { status: 500 });
