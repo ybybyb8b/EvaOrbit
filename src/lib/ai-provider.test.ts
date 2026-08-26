@@ -60,9 +60,16 @@ test("sends standard OpenAI tool definitions to the configured provider", async 
     assert.match(systemPrompt, /\[CURRENT TIME\]/);
     assert.match(systemPrompt, /本人补充的 Persona 说明：Test/);
     const toolNames = payload.tools?.map((tool) => tool.function?.name) ?? [];
-    for (const name of ["list_tasks", "search_memories", "create_task", "create_memory", "create_inbox", "convert_inbox_item", "get_today_food", "search_food_library", "create_food_log", "get_today_drinks", "create_drink_log", "check_drink_limit", "get_daily_nutrition_summary"]) {
+    for (const name of ["create_inbox", "get_timeline", "get_today_food", "search_food_library", "create_food_log", "get_today_drinks", "create_drink_log", "check_drink_limit", "get_daily_nutrition_summary"]) {
       assert.ok(toolNames.includes(name), `missing AI tool: ${name}`);
     }
+    for (const name of ["list_trackers", "get_tracker_entries", "create_tracker", "create_tracker_entry"]) {
+      assert.ok(toolNames.includes(name), `missing Tracker AI tool: ${name}`);
+    }
+    for (const retired of ["list_tasks", "search_memories", "create_task", "complete_task", "create_memory", "convert_inbox_item"]) {
+      assert.equal(toolNames.includes(retired), false, `retired AI tool leaked: ${retired}`);
+    }
+    assert.match(systemPrompt, /不再维护活跃的 Task \/ Memory 能力/);
     assert.match(systemPrompt, /品牌已知时必须匹配品牌/);
     assert.match(systemPrompt, /饮品限制只报告数量和状态/);
   } finally {

@@ -8,13 +8,13 @@ import { ConversationAvatar } from "@/components/conversation-avatar";
 import type { AiProvider, AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
 
 const starters = [
-  "翻一下待办 看看今天哪个真得先弄",
-  "找找我最近记过的东西",
-  "我是不是漏了什么 翻一下",
-  "最近有点乱 先看看都堆了些什么",
+  "看看我今天吃喝了什么",
+  "最近一次喝咖啡是什么时候",
+  "帮我记下刚刚吃的东西",
+  "先把这句话放进 Inbox：",
 ];
 
-export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt: string; initialSessionId: number | null }) {
+export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { initialPrompt: string; initialSessionId: number | null; autoSend: boolean }) {
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -29,6 +29,9 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const optimisticIdRef = useRef(-1);
+  const autoSendStartedRef = useRef(false);
+  const skipNextHistoryLoadRef = useRef(false);
+  const sendRef = useRef<(content?: string) => Promise<void>>(async () => undefined);
 
   const refreshSessions = useCallback(async () => {
     const response = await fetch("/api/ai/sessions", { cache: "no-store" });
@@ -43,12 +46,13 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     ]).then(([aiSettings, chatSessions, aiProviders]) => {
       setSettings(aiSettings); setSessions(chatSessions); setProviders(aiProviders);
       const requested = chatSessions.find((session) => session.id === initialSessionId);
-      if (requested || chatSessions[0]) setActiveId((requested ?? chatSessions[0]).id);
+      if (!autoSend && (requested || chatSessions[0])) setActiveId((requested ?? chatSessions[0]).id);
     }).catch(() => setError("暂时翻不到这些数据")).finally(() => setLoading(false));
-  }, [initialSessionId]);
+  }, [autoSend, initialSessionId]);
 
   useEffect(() => {
     if (!activeId) return;
+    if (skipNextHistoryLoadRef.current) { skipNextHistoryLoadRef.current = false; return; }
     let cancelled = false;
     fetch(`/api/ai/sessions/${activeId}/messages`).then((response) => response.json()).then((result: ChatMessage[]) => { if (!cancelled) setMessages(result); });
     return () => { cancelled = true; };
@@ -56,10 +60,16 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" }); }, [messages, streaming, toolActivity]);
 
+  const activeSession = sessions.find((session) => session.id === activeId);
+  const selectableModels = providers.flatMap((provider) => provider.enabled
+    ? provider.models.filter((model) => model.enabled).map((model) => ({ provider, model, label: `${provider.name} · ${model.displayName}` }))
+    : []);
+
   async function createSession() {
-    const response = await fetch("/api/ai/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "新对话" }) });
+    const response = await fetch("/api/ai/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "New conversation" }) });
     if (!response.ok) throw new Error("创建会话失败");
     const session = await response.json() as ChatSession;
+    skipNextHistoryLoadRef.current = true;
     setSessions((current) => [session, ...current]); setActiveId(session.id); setMessages([]);
     setHistoryOpen(false);
     return session.id;
@@ -101,7 +111,10 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     setError(""); setToolActivity([]); setDraft("");
     let sessionId = activeId;
     try {
-      if (!sessionId) sessionId = await createSession();
+      if (!sessionId) {
+        sessionId = await createSession();
+        window.history.replaceState(null, "", `/ai?session=${sessionId}`);
+      }
       const optimisticId = optimisticIdRef.current--;
       const providerId = selectedModel?.provider.id ?? null;
       const modelConfigId = selectedModel?.model.id ?? null;
@@ -136,16 +149,19 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
     } finally { setStreaming(false); abortRef.current = null; }
   }
 
+  useEffect(() => { sendRef.current = send; });
+  useEffect(() => {
+    if (loading || !autoSend || !initialPrompt.trim() || !settings?.enabled || autoSendStartedRef.current) return;
+    autoSendStartedRef.current = true;
+    void sendRef.current(initialPrompt);
+  }, [autoSend, initialPrompt, loading, settings?.enabled]);
+
   function keyboardSend(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   }
 
-  if (loading) return <div className="page ai-page"><div className="loading-state">在翻本地数据…</div></div>;
+  if (loading) return <div className="page ai-page"><div className="loading-state">{autoSend && initialPrompt.trim() ? "正在接住你刚才的话…" : "在翻本地数据…"}</div></div>;
 
-  const activeSession = sessions.find((session) => session.id === activeId);
-  const selectableModels = providers.flatMap((provider) => provider.enabled
-    ? provider.models.filter((model) => model.enabled).map((model) => ({ provider, model, label: `${provider.name} · ${model.displayName}` }))
-    : []);
   return <div className="ai-workspace">
     {historyOpen && <button className="drawer-backdrop" onClick={() => setHistoryOpen(false)} aria-label="关闭会话列表" />}
     {historyOpen && <aside className="chat-history open">
@@ -162,10 +178,10 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
         <div className="chat-title-group"><button className="icon-button" onClick={() => setHistoryOpen(true)} aria-label="翻以前聊过的"><Icon name="history" /></button><div><span className="eyebrow">SELF</span><h1>{activeSession?.title ?? "随便想点什么"}</h1></div></div>
         <div className="chat-topbar-tools"><label className="chat-model-control"><span className={settings?.enabled ? "online" : ""} /><span className="sr-only">当前会话模型</span><select className="chat-model-selector" value={activeSession?.modelConfigId ?? ""} disabled={!activeSession || streaming || !selectableModels.length} onChange={(event) => void changeSessionModel(Number(event.target.value))}>{!activeSession && <option value="">新对话使用默认模型</option>}{activeSession && !selectableModels.some(({ model }) => model.id === activeSession.modelConfigId) && <option value={activeSession.modelConfigId ?? ""}>{activeSession.modelDisplayName ? `${activeSession.providerName ?? "Provider"} · ${activeSession.modelDisplayName}（已停用）` : "模型不可用"}</option>}{selectableModels.map(({ model, label }) => <option key={model.id} value={model.id}>{label}</option>)}</select></label><button className="icon-button" onClick={() => void createSession()} aria-label="新建对话"><Icon name="plus" /></button></div>
       </header>
-      {!settings?.enabled ? <div className="ai-setup-state"><span className="coming-icon"><Icon name="spark" /></span><h2>先接一个模型</h2><p>OpenAI、DeepSeek、OpenRouter、Ollama 或兼容接口都行。没接也不影响待办和 Memory。</p><Link href="/settings" className="button primary">去设置里接上</Link></div>
+      {!settings?.enabled ? <div className="ai-setup-state"><span className="coming-icon"><Icon name="spark" /></span><h2>先接一个模型</h2><p>OpenAI、DeepSeek、OpenRouter、Ollama 或兼容接口都行。没接也不影响其他生活记录。</p><Link href="/settings" className="button primary">去设置里接上</Link></div>
       : <>
         <section className="message-scroll">
-          {!messages.length ? <div className="chat-welcome"><span className="ai-orb"><Icon name="spark" /></span><span className="eyebrow">THINKING SPACE</span><h2>有什么先丢这里</h2><p>可以翻待办、找以前记过的，也可以只是把一个模糊念头说出来。</p><div className="starter-grid">{starters.map((starter) => <button key={starter} onClick={() => void send(starter)}>{starter}<Icon name="arrow" /></button>)}</div></div>
+          {!messages.length ? <div className="chat-welcome"><span className="ai-orb"><Icon name="spark" /></span><span className="eyebrow">EVA</span><h2>记、查、分析生活数据</h2><p>Eva 负责 EvaOrbit 里的结构化记录和查询；日常聊天、提醒与待办继续留给更合适的工具。</p><div className="starter-grid">{starters.map((starter) => <button key={starter} onClick={() => void send(starter)}>{starter}<Icon name="arrow" /></button>)}</div></div>
           : <div className="message-list">{messages.map((message, index) => { const groupStart = index === 0 || messages[index - 1].role !== message.role; const user = message.role === "user"; const showName = user ? settings.showUserName : settings.showAssistantName; const name = user ? settings.userDisplayName : settings.assistantDisplayName; const avatarType = user ? settings.userAvatarType : settings.assistantAvatarType; const avatarValue = user ? settings.userAvatarValue : settings.assistantAvatarValue; return <article className={`chat-message ${message.role} ${groupStart ? "group-start" : "group-continuation"}`} key={message.id}>
             <div className="message-body">{groupStart && (showName || settings.showAvatars) && <div className="message-identity">{!user && settings.showAvatars && <ConversationAvatar subject="assistant" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}{showName && <span>{name}</span>}{user && settings.showAvatars && <ConversationAvatar subject="user" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}</div>}<div className="message-content">{message.content ? user ? <div className="user-message-text">{message.content}</div> : <MarkdownMessage content={message.content} /> : <span className="typing"><i /><i /><i /></span>}</div>
               {message.content && <div className="message-actions"><button onClick={() => void navigator.clipboard.writeText(message.content)}>复制</button>{message.role === "assistant" && <button onClick={() => { const previous = messages.slice(0, index).reverse().find((item) => item.role === "user"); if (previous) void send(previous.content); }}>再次提问</button>}</div>}
@@ -174,9 +190,9 @@ export function AiChatView({ initialPrompt, initialSessionId }: { initialPrompt:
         </section>
         <footer className="composer-wrap">
           {error && <div className="chat-error">{error}<button onClick={() => setError("")}>×</button></div>}
-          <div className="composer-shortcuts"><button onClick={() => setDraft("翻一下待办 看看现在先弄什么")}>翻待办</button><button onClick={() => setDraft("找找以前记过的：")}>找找以前</button><button onClick={() => setDraft("先记一下：")}>先记一下</button><span>{settings.allowWriteActions ? "可以写入" : "只翻不改"}</span></div>
+          <div className="composer-shortcuts"><button onClick={() => setDraft("看看今天的吃喝记录")}>看今天</button><button onClick={() => setDraft("帮我记下刚刚喝的：")}>记饮品</button><button onClick={() => setDraft("先放进 Inbox：")}>放 Inbox</button><span>{settings.allowWriteActions ? "可以写入" : "只看不改"}</span></div>
           <div className="composer"><textarea rows={1} maxLength={20000} value={draft} disabled={streaming} onKeyDown={keyboardSend} onChange={(event) => setDraft(event.target.value)} placeholder="想到什么就写…" />{streaming ? <button className="send-button stop" onClick={() => abortRef.current?.abort()} aria-label="停一下">■</button> : <button className="send-button" disabled={!draft.trim()} onClick={() => void send()} aria-label="发出去"><Icon name="arrow" /></button>}</div>
-          <div className="composer-foot"><span>{settings.includeTasks && "待办"}{settings.includeTasks && settings.includeMemories && " · "}{settings.includeMemories && "Memory"}可按需翻</span><small>重要的还是自己确认一下</small></div>
+          <div className="composer-foot"><span>Timeline 与生活数据按需读取</span><small>重要的还是自己确认一下</small></div>
         </footer>
       </>}
     </main>

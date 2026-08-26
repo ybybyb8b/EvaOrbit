@@ -33,6 +33,11 @@ export interface ApiError {
   error: string;
 }
 
+export interface UiPreferences {
+  homeModuleOrder: import("./home-modules").HomeModuleId[];
+  updatedAt: string;
+}
+
 export type ChatRole = "user" | "assistant";
 export type AvatarType = "default" | "emoji" | "image";
 
@@ -129,6 +134,155 @@ export interface InboxItem {
   convertedId: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "person" | "media" | "chronicle";
+
+export interface TimelineEvent {
+  id: string;
+  eventType: string;
+  sourceType: TimelineSourceType;
+  sourceId: number | string;
+  title: string;
+  detail: string;
+  occurredAt: string;
+  endAt: string | null;
+  href: string;
+  relatedPeople: Array<number | string>;
+  relatedPets: Array<number | string>;
+  metadata: Record<string, unknown>;
+}
+
+export type TrackerTimeType = "point" | "range";
+export type TrackerDataSourceType = "native_tracker" | "linked_source";
+export type TrackerIconType = "default" | "image";
+export type TrackerFieldType = "number" | "single_select" | "multi_select" | "text" | "boolean" | "rating";
+export type TrackerGoalOperator = "<=" | ">=" | "=";
+export type TrackerPeriodType = "daily" | "weekly" | "monthly" | "yearly" | "custom";
+export type TrackerReminderType = "scheduled" | "interval";
+
+export interface Tracker {
+  id: number;
+  name: string;
+  icon: string;
+  iconType: TrackerIconType;
+  iconValue: string;
+  groupName: string;
+  timeType: TrackerTimeType;
+  quickCaptureEnabled: boolean;
+  dataSourceType: TrackerDataSourceType;
+  sourceConfig: Record<string, unknown>;
+  statsConfig: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerField {
+  id: number;
+  trackerId: number;
+  key: string;
+  name: string;
+  type: TrackerFieldType;
+  required: boolean;
+  defaultValue: unknown;
+  options: string[];
+  showAfterQuickCapture: boolean;
+  includeInStats: boolean;
+  sortOrder: number;
+  unit: string;
+  precision: number;
+  config: Record<string, unknown>;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerEntry {
+  id: number;
+  trackerId: number;
+  occurredAt: string;
+  endAt: string | null;
+  values: Record<string, unknown>;
+  note: string;
+  sourceType: "native_tracker" | "drink";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerGoal {
+  id: number;
+  trackerId: number;
+  operator: TrackerGoalOperator;
+  targetValue: number;
+  periodType: TrackerPeriodType;
+  customPeriod: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerReminder {
+  id: number;
+  trackerId: number;
+  reminderType: TrackerReminderType;
+  scheduleRule: string;
+  intervalDays: number | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrackerStats {
+  today: number;
+  week: number;
+  month: number;
+  year: number;
+  total: number;
+  lastOccurredAt: string | null;
+  reminderDue: boolean;
+}
+
+export interface TrackerHeatmapDay {
+  date: string;
+  count: number;
+}
+
+export interface TrackerDistributionItem {
+  key: string;
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface TrackerNumericInsight {
+  fieldKey: string;
+  name: string;
+  unit: string;
+  count: number;
+  average: number;
+  minimum: number;
+  maximum: number;
+  latest: number;
+}
+
+export interface TrackerChoiceInsight {
+  fieldKey: string;
+  name: string;
+  values: TrackerDistributionItem[];
+}
+
+export interface TrackerInsights {
+  heatmap: TrackerHeatmapDay[];
+  monthly: TrackerDistributionItem[];
+  weekdays: TrackerDistributionItem[];
+  dayParts: TrackerDistributionItem[];
+  activeDays: number;
+  numericFields: TrackerNumericInsight[];
+  choiceFields: TrackerChoiceInsight[];
+}
+
+export interface TrackerSummary extends Tracker {
+  stats: TrackerStats;
 }
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "late_night";

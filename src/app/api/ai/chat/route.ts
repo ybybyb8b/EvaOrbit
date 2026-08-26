@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError } from "@/lib/api";
 import { extractDelta, selectConversationHistory, startChatCompletion, type ProviderMessage } from "@/lib/ai-provider";
 import { executeAiTool } from "@/lib/ai-tools";
-import { addChatMessage, autoTitleChatSession, getAiContext, getAiRuntimeSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
+import { addChatMessage, autoTitleChatSession, getAiRuntimeSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
 import { ValidationError, parseChatRequest } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     await addChatMessage(input.sessionId, "user", input.content, null, settings.providerId, settings.modelConfigId);
     await autoTitleChatSession(input.sessionId, input.content);
-    const [messages, resources] = await Promise.all([listChatMessages(input.sessionId), getAiContext()]);
+    const messages = await listChatMessages(input.sessionId);
     const selectedHistory = selectConversationHistory(messages);
     const history: ProviderMessage[] = selectedHistory.messages.map(({ role, content }) => ({ role, content }));
 
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
               module: "想想 / 对话",
               sessionTitle: session.title,
               omittedMessages: selectedHistory.omittedMessages,
-            }, resources);
+            });
             const completion = await readCompletion(upstream);
             if (!completion.toolCalls.length) {
               answer = completion.content;

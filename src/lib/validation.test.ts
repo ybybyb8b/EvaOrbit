@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -77,4 +77,23 @@ test("keeps conversation identity as a validated UI preference", () => {
   });
   assert.throws(() => parseChatPreferences({ userDisplayName: "我", userAvatarType: "image", userAvatarValue: "svg", assistantDisplayName: "Eva" }), ValidationError);
   assert.throws(() => parseChatPreferences({ userDisplayName: "我", userAvatarType: "emoji", userAvatarValue: "", assistantDisplayName: "Eva" }), ValidationError);
+});
+
+test("normalizes tracker configuration and validates linked sources", () => {
+  assert.deepEqual(parseNewTracker({ name: "  吃药  ", icon: "💊", groupName: "健康" }), {
+    name: "吃药", icon: "◉", iconType: "default", iconValue: "", groupName: "健康", timeType: "point", quickCaptureEnabled: true, dataSourceType: "native_tracker", sourceConfig: {}, statsConfig: {},
+  });
+  assert.equal(parseNewTracker({ name: "咖啡", dataSourceType: "linked_source", sourceConfig: { module: "drink", drinkType: "coffee" } }).dataSourceType, "linked_source");
+  assert.throws(() => parseNewTracker({ name: "错误联动", dataSourceType: "linked_source", sourceConfig: { module: "food" } }), /只支持 Drink/);
+});
+
+test("validates tracker fields and keeps entries as point events", () => {
+  const field = parseNewTrackerField({ name: "状态", type: "single_select", options: [" 好 ", "好", "一般"] }, 3);
+  assert.deepEqual(field.options, ["好", "一般"]);
+  assert.equal(field.trackerId, 3);
+  assert.match(field.key, /^[0-9a-f-]{36}$/);
+  assert.throws(() => parseNewTrackerField({ name: "状态", type: "single_select", options: [] }, 3), /至少需要一个选项/);
+  const entry = parseNewTrackerEntry({ occurredAt: "2026-08-26T08:00:00+08:00", endAt: "2026-08-26T09:00:00+08:00", note: "完成" }, 3);
+  assert.equal(entry.occurredAt, "2026-08-26T00:00:00.000Z");
+  assert.equal(entry.endAt, null);
 });

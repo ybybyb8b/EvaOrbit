@@ -3,6 +3,7 @@ import "server-only";
 import { getRepository } from "../repositories";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, NewTask, TaskFilter } from "../repositories/types";
 import type { ChatRole } from "../types";
+import type { HomeModuleId } from "../home-modules";
 
 export async function listTasks(filter: TaskFilter = "all") { return (await getRepository()).listTasks(filter); }
 export async function getTask(id: number) { return (await getRepository()).getTask(id); }
@@ -17,6 +18,8 @@ export async function updateMemory(id: number, input: Record<string, unknown>) {
 export async function deleteMemory(id: number) { return (await getRepository()).deleteMemory(id); }
 
 export async function getDashboardSummary() { return (await getRepository()).getDashboardSummary(); }
+export async function getUiPreferences() { return (await getRepository()).getUiPreferences(); }
+export async function updateHomeModuleOrder(order: HomeModuleId[]) { return (await getRepository()).updateHomeModuleOrder(order); }
 export async function getAiSettings() { return (await getRepository()).getAiSettings(); }
 export async function updateAiSettings(input: AiSettingsInput) { return (await getRepository()).updateAiSettings(input); }
 export async function getAiRuntimeSettings(modelConfigId?: number | null) { return (await getRepository()).getAiRuntimeSettings(modelConfigId); }
@@ -37,9 +40,3 @@ export async function deleteChatSession(id: number) { return (await getRepositor
 export async function listChatMessages(sessionId: number) { return (await getRepository()).listChatMessages(sessionId); }
 export async function addChatMessage(sessionId: number, role: ChatRole, content: string, model?: string | null, providerId?: number | null, modelConfigId?: number | null) { return (await getRepository()).addChatMessage(sessionId, role, content, model, providerId, modelConfigId); }
 export async function autoTitleChatSession(id: number, content: string) { return (await getRepository()).autoTitleChatSession(id, content); }
-
-export async function getAiContext() {
-  const repository = await getRepository();
-  const [tasks, memories] = await Promise.all([repository.listTasks("open"), repository.listMemories()]);
-  return { tasks: tasks.slice(0, 30), memories: memories.slice(0, 30) };
-}

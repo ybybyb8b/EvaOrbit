@@ -4,7 +4,8 @@ import path from "node:path";
 import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
-import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "./types";
+import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
+import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput } from "./repositories/types";
 
 type TaskRow = {
@@ -149,7 +150,7 @@ database.exec(`
 
   CREATE TABLE IF NOT EXISTS chat_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL DEFAULT '新对话',
+    title TEXT NOT NULL DEFAULT 'New conversation',
     model TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -317,6 +318,75 @@ if (!hasV8) {
   }
 }
 
+const hasV9 = database.prepare("SELECT 1 FROM migrations WHERE version = 9").get();
+if (!hasV9) {
+  database.exec(`
+    CREATE TABLE trackers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, icon TEXT NOT NULL DEFAULT '◉', group_name TEXT NOT NULL DEFAULT '日常',
+      time_type TEXT NOT NULL DEFAULT 'point' CHECK(time_type IN ('point','range')), quick_capture_enabled INTEGER NOT NULL DEFAULT 1 CHECK(quick_capture_enabled IN (0,1)),
+      data_source_type TEXT NOT NULL DEFAULT 'native_tracker' CHECK(data_source_type IN ('native_tracker','linked_source')), source_config TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE tracker_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE, name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('number','single_select','multi_select','text','boolean','rating')), required INTEGER NOT NULL DEFAULT 0 CHECK(required IN (0,1)),
+      default_value TEXT, options_json TEXT NOT NULL DEFAULT '[]', show_after_quick_capture INTEGER NOT NULL DEFAULT 0 CHECK(show_after_quick_capture IN (0,1)),
+      include_in_stats INTEGER NOT NULL DEFAULT 0 CHECK(include_in_stats IN (0,1)), sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE tracker_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE, occurred_at TEXT NOT NULL, end_at TEXT,
+      values_json TEXT NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE tracker_goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE, operator TEXT NOT NULL CHECK(operator IN ('<=','>=','=')),
+      target_value REAL NOT NULL CHECK(target_value > 0), period_type TEXT NOT NULL CHECK(period_type IN ('daily','weekly','monthly','yearly','custom')),
+      custom_period TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE tracker_reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE,
+      reminder_type TEXT NOT NULL CHECK(reminder_type IN ('scheduled','interval')), schedule_rule TEXT NOT NULL DEFAULT '', interval_days INTEGER,
+      enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_trackers_group ON trackers(group_name, updated_at DESC);
+    CREATE INDEX idx_tracker_fields_tracker ON tracker_fields(tracker_id, sort_order, id);
+    CREATE INDEX idx_tracker_entries_tracker_time ON tracker_entries(tracker_id, occurred_at DESC);
+    CREATE INDEX idx_tracker_entries_time ON tracker_entries(occurred_at DESC);
+    INSERT INTO migrations(version) VALUES (9);
+  `);
+}
+
+const hasV10 = database.prepare("SELECT 1 FROM migrations WHERE version = 10").get();
+if (!hasV10) {
+  database.exec(`
+    CREATE TABLE ui_preferences (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      home_module_order TEXT NOT NULL DEFAULT '${JSON.stringify(HOME_MODULE_IDS)}',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO ui_preferences(id) VALUES (1);
+    INSERT INTO migrations(version) VALUES (10);
+  `);
+}
+
+const hasV11 = database.prepare("SELECT 1 FROM migrations WHERE version = 11").get();
+if (!hasV11) {
+  database.exec(`
+    ALTER TABLE trackers ADD COLUMN icon_type TEXT NOT NULL DEFAULT 'default' CHECK(icon_type IN ('default','image'));
+    ALTER TABLE trackers ADD COLUMN icon_value TEXT NOT NULL DEFAULT '';
+    ALTER TABLE trackers ADD COLUMN stats_config TEXT NOT NULL DEFAULT '{}';
+    UPDATE trackers SET time_type='point';
+    ALTER TABLE tracker_fields ADD COLUMN field_key TEXT;
+    ALTER TABLE tracker_fields ADD COLUMN unit TEXT NOT NULL DEFAULT '';
+    ALTER TABLE tracker_fields ADD COLUMN precision INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE tracker_fields ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE tracker_fields ADD COLUMN archived_at TEXT;
+    UPDATE tracker_fields SET field_key='field_' || id WHERE field_key IS NULL OR field_key='';
+    CREATE UNIQUE INDEX idx_tracker_fields_key ON tracker_fields(tracker_id,field_key);
+    INSERT INTO migrations(version) VALUES (11);
+  `);
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -475,6 +545,18 @@ export function getDashboardSummary(): DashboardSummary {
     recentTasks: (database.prepare("SELECT * FROM tasks ORDER BY created_at DESC, id DESC LIMIT 4").all() as TaskRow[]).map(taskFromRow),
     recentMemories: (database.prepare("SELECT * FROM memories ORDER BY updated_at DESC, id DESC LIMIT 3").all() as MemoryRow[]).map(memoryFromRow),
   };
+}
+
+export function getUiPreferences() {
+  const row = database.prepare("SELECT home_module_order, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; updated_at: string };
+  let order: unknown = [];
+  try { order = JSON.parse(row.home_module_order); } catch { order = []; }
+  return { homeModuleOrder: normalizeHomeModuleOrder(order), updatedAt: row.updated_at };
+}
+
+export function updateHomeModuleOrder(order: HomeModuleId[]) {
+  database.prepare("UPDATE ui_preferences SET home_module_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(JSON.stringify(normalizeHomeModuleOrder(order)));
+  return getUiPreferences();
 }
 
 export function getAiSettings(): InternalAiSettings {
@@ -671,7 +753,7 @@ export function getChatSession(id: number) {
   return row ? chatSessionFromRow(row) : null;
 }
 
-export function createChatSession(title = "新对话", requestedModelConfigId?: number | null) {
+export function createChatSession(title = "New conversation", requestedModelConfigId?: number | null) {
   const model = (requestedModelConfigId
     ? database.prepare("SELECT * FROM ai_model_configs WHERE id=?").get(requestedModelConfigId)
     : database.prepare("SELECT * FROM ai_model_configs WHERE is_default=1").get()) as AiModelConfigRow | undefined;
@@ -713,17 +795,10 @@ export function addChatMessage(sessionId: number, role: ChatRole, content: strin
 
 export function autoTitleChatSession(id: number, content: string) {
   const session = getChatSession(id);
-  if (!session || session.messageCount > 1 || session.title !== "新对话") return;
+  if (!session || session.messageCount > 1 || !["新对话", "New conversation"].includes(session.title)) return;
   const compact = content.replace(/\s+/g, " ").trim();
   const title = compact.length > 28 ? `${compact.slice(0, 28)}…` : compact;
   database.prepare("UPDATE chat_sessions SET title = ? WHERE id = ?").run(title, id);
-}
-
-export function getAiContext() {
-  return {
-    tasks: listTasks("open").slice(0, 30),
-    memories: listMemories().slice(0, 30),
-  };
 }
 
 function inboxFromRow(row: Record<string, unknown>): InboxItem {
@@ -773,5 +848,36 @@ export function listDrinkLimits(){return(database.prepare("SELECT * FROM drink_l
 export function createDrinkLimit(input:Omit<DrinkLimit,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO drink_limits(name,target_type,period,limit_value,enabled) VALUES(?,?,?,?,?)").run(input.name,input.targetType,input.period,input.limitValue,Number(input.enabled));return limitFromRow(database.prepare("SELECT * FROM drink_limits WHERE id=?").get(Number(result.lastInsertRowid)) as Record<string,unknown>);}
 export function updateDrinkLimit(id:number,input:Record<string,unknown>){const map:Record<string,string>={name:"name",targetType:"target_type",period:"period",limitValue:"limit_value",enabled:"enabled"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return null;database.prepare(`UPDATE drink_limits SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="enabled"?Number(input[key]):input[key] as string|number),id);const row=database.prepare("SELECT * FROM drink_limits WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?limitFromRow(row):null;}
 export function deleteDrinkLimit(id:number){return database.prepare("DELETE FROM drink_limits WHERE id=?").run(id).changes>0;}
+
+function jsonValue<T>(value: unknown, fallback: T): T { try { return typeof value === "string" ? JSON.parse(value) as T : fallback; } catch { return fallback; } }
+function trackerFromRow(row:Record<string,unknown>):Tracker{return{id:Number(row.id),name:String(row.name),icon:String(row.icon),iconType:(row.icon_type??"default") as Tracker["iconType"],iconValue:String(row.icon_value??""),groupName:String(row.group_name),timeType:row.time_type as Tracker["timeType"],quickCaptureEnabled:Boolean(row.quick_capture_enabled),dataSourceType:row.data_source_type as Tracker["dataSourceType"],sourceConfig:jsonValue(row.source_config,{}),statsConfig:jsonValue(row.stats_config,{}),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrackers(){return(database.prepare("SELECT * FROM trackers ORDER BY group_name,name,id").all() as Record<string,unknown>[]).map(trackerFromRow);}
+export function getTracker(id:number){const row=database.prepare("SELECT * FROM trackers WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?trackerFromRow(row):null;}
+export function createTracker(input:Omit<Tracker,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO trackers(name,icon,icon_type,icon_value,group_name,time_type,quick_capture_enabled,data_source_type,source_config,stats_config) VALUES(?,?,?,?,?,?,?,?,?,?)").run(input.name,input.icon,input.iconType,input.iconValue,input.groupName,"point",Number(input.quickCaptureEnabled),input.dataSourceType,JSON.stringify(input.sourceConfig),JSON.stringify(input.statsConfig));return getTracker(Number(result.lastInsertRowid))!;}
+export function updateTracker(id:number,input:Record<string,unknown>){const map:Record<string,string>={name:"name",icon:"icon",iconType:"icon_type",iconValue:"icon_value",groupName:"group_name",quickCaptureEnabled:"quick_capture_enabled",dataSourceType:"data_source_type",sourceConfig:"source_config",statsConfig:"stats_config"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getTracker(id);const value=(key:string)=>key==="quickCaptureEnabled"?Number(input[key]):key==="sourceConfig"||key==="statsConfig"?JSON.stringify(input[key]):input[key] as string|number;database.prepare(`UPDATE trackers SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>value(key)),id);return getTracker(id);}
+export function deleteTracker(id:number){return database.prepare("DELETE FROM trackers WHERE id=?").run(id).changes>0;}
+
+function trackerFieldFromRow(row:Record<string,unknown>):TrackerField{return{id:Number(row.id),trackerId:Number(row.tracker_id),key:String(row.field_key??`field_${row.id}`),name:String(row.name),type:row.type as TrackerField["type"],required:Boolean(row.required),defaultValue:row.default_value===null?null:jsonValue(row.default_value,null),options:jsonValue(row.options_json,[]),showAfterQuickCapture:Boolean(row.show_after_quick_capture),includeInStats:Boolean(row.include_in_stats),sortOrder:Number(row.sort_order),unit:String(row.unit??""),precision:Number(row.precision??0),config:jsonValue(row.config_json,{}),archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrackerFields(trackerId:number){return(database.prepare("SELECT * FROM tracker_fields WHERE tracker_id=? ORDER BY sort_order,id").all(trackerId) as Record<string,unknown>[]).map(trackerFieldFromRow);}
+export function createTrackerField(input:Omit<TrackerField,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_fields(tracker_id,field_key,name,type,required,default_value,options_json,show_after_quick_capture,include_in_stats,sort_order,unit,precision,config_json,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.trackerId,input.key,input.name,input.type,Number(input.required),input.defaultValue===null?null:JSON.stringify(input.defaultValue),JSON.stringify(input.options),Number(input.showAfterQuickCapture),Number(input.includeInStats),input.sortOrder,input.unit,input.precision,JSON.stringify(input.config),input.archivedAt);return trackerFieldFromRow(database.prepare("SELECT * FROM tracker_fields WHERE id=?").get(Number(result.lastInsertRowid)) as Record<string,unknown>);}
+export function deleteTrackerField(id:number){return database.prepare("UPDATE tracker_fields SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL").run(id).changes>0;}
+
+function trackerEntryFromRow(row:Record<string,unknown>):TrackerEntry{return{id:Number(row.id),trackerId:Number(row.tracker_id),occurredAt:String(row.occurred_at),endAt:row.end_at?String(row.end_at):null,values:jsonValue(row.values_json,{}),note:String(row.note),sourceType:"native_tracker",createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrackerEntries(trackerId?:number,input:{from?:string;to?:string;query?:string}={}){const conditions:string[]=[],values:Array<string|number>=[];if(trackerId!==undefined){conditions.push("tracker_id=?");values.push(trackerId);}if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}if(input.query){conditions.push("(note LIKE ? OR values_json LIKE ?)");values.push(`%${input.query}%`,`%${input.query}%`);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM tracker_entries ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(trackerEntryFromRow);}
+export function getTrackerEntry(id:number){const row=database.prepare("SELECT * FROM tracker_entries WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?trackerEntryFromRow(row):null;}
+export function createTrackerEntry(input:Omit<TrackerEntry,"id"|"sourceType"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_entries(tracker_id,occurred_at,end_at,values_json,note) VALUES(?,?,?,?,?)").run(input.trackerId,input.occurredAt,input.endAt,JSON.stringify(input.values),input.note);return getTrackerEntry(Number(result.lastInsertRowid))!;}
+export function updateTrackerEntry(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",endAt:"end_at",values:"values_json",note:"note"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getTrackerEntry(id);database.prepare(`UPDATE tracker_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="values"?JSON.stringify(input[key]):input[key] as string|null),id);return getTrackerEntry(id);}
+export function deleteTrackerEntry(id:number){return database.prepare("DELETE FROM tracker_entries WHERE id=?").run(id).changes>0;}
+
+function trackerGoalFromRow(row:Record<string,unknown>):TrackerGoal{return{id:Number(row.id),trackerId:Number(row.tracker_id),operator:row.operator as TrackerGoal["operator"],targetValue:Number(row.target_value),periodType:row.period_type as TrackerGoal["periodType"],customPeriod:String(row.custom_period),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrackerGoals(trackerId:number){return(database.prepare("SELECT * FROM tracker_goals WHERE tracker_id=? ORDER BY enabled DESC,id").all(trackerId) as Record<string,unknown>[]).map(trackerGoalFromRow);}
+export function createTrackerGoal(input:Omit<TrackerGoal,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_goals(tracker_id,operator,target_value,period_type,custom_period,enabled) VALUES(?,?,?,?,?,?)").run(input.trackerId,input.operator,input.targetValue,input.periodType,input.customPeriod,Number(input.enabled));return trackerGoalFromRow(database.prepare("SELECT * FROM tracker_goals WHERE id=?").get(Number(result.lastInsertRowid)) as Record<string,unknown>);}
+export function deleteTrackerGoal(id:number){return database.prepare("DELETE FROM tracker_goals WHERE id=?").run(id).changes>0;}
+
+function trackerReminderFromRow(row:Record<string,unknown>):TrackerReminder{return{id:Number(row.id),trackerId:Number(row.tracker_id),reminderType:row.reminder_type as TrackerReminder["reminderType"],scheduleRule:String(row.schedule_rule),intervalDays:row.interval_days===null?null:Number(row.interval_days),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrackerReminders(trackerId:number){return(database.prepare("SELECT * FROM tracker_reminders WHERE tracker_id=? ORDER BY enabled DESC,id").all(trackerId) as Record<string,unknown>[]).map(trackerReminderFromRow);}
+export function createTrackerReminder(input:Omit<TrackerReminder,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_reminders(tracker_id,reminder_type,schedule_rule,interval_days,enabled) VALUES(?,?,?,?,?)").run(input.trackerId,input.reminderType,input.scheduleRule,input.intervalDays,Number(input.enabled));return trackerReminderFromRow(database.prepare("SELECT * FROM tracker_reminders WHERE id=?").get(Number(result.lastInsertRowid)) as Record<string,unknown>);}
+export function deleteTrackerReminder(id:number){return database.prepare("DELETE FROM tracker_reminders WHERE id=?").run(id).changes>0;}
+
 export function getNutritionSettings(date:string){const row=database.prepare("SELECT * FROM daily_nutrition_summaries WHERE date=?").get(date) as Record<string,unknown>|undefined;return{restingEnergyKcal:row?.resting_energy_kcal===null||row?.resting_energy_kcal===undefined?null:Number(row.resting_energy_kcal),activeEnergyKcal:row?.active_energy_kcal===null||row?.active_energy_kcal===undefined?null:Number(row.active_energy_kcal),notes:row?String(row.notes):""};}
 export function updateNutritionSettings(date:string,input:{restingEnergyKcal:number|null;activeEnergyKcal:number|null;notes:string}){database.prepare("INSERT INTO daily_nutrition_summaries(date,resting_energy_kcal,active_energy_kcal,notes) VALUES(?,?,?,?) ON CONFLICT(date) DO UPDATE SET resting_energy_kcal=excluded.resting_energy_kcal,active_energy_kcal=excluded.active_energy_kcal,notes=excluded.notes,updated_at=CURRENT_TIMESTAMP").run(date,input.restingEnergyKcal,input.activeEnergyKcal,input.notes);}

@@ -1,10 +1,10 @@
 import type { IconName } from "@/components/icons";
 export type QuickAction={id:string;href:string;label:string;description:string;icon:IconName};
 export const defaultQuickActions:QuickAction[]=[
-  {id:"think",href:"/ai",label:"想想",description:"聊、查、记、分析",icon:"spark"},
-  {id:"task",href:"/tasks?new=1",label:"记个待办",description:"只写事情和时间",icon:"tasks"},
-  {id:"memory",href:"/memory?new=1",label:"留下来",description:"以后还找得回来",icon:"memory"},
   {id:"inbox",href:"/inbox",label:"先记一下",description:"不用整理，先丢进去",icon:"inbox"},
-  {id:"food",href:"/food",label:"饮食",description:"看看今天吃过什么",icon:"food"},
-  {id:"drink",href:"/drinks",label:"饮品",description:"喝过的和当前限制",icon:"drink"},
+  {id:"food",href:"/food",label:"记饮食",description:"吃过什么，先留下",icon:"food"},
+  {id:"drink",href:"/drinks",label:"记饮品",description:"咖啡奶茶和其他",icon:"drink"},
+  {id:"tracker",href:"/trackers",label:"Trackers",description:"低摩擦记录生活事件",icon:"tracker"},
+  {id:"cats",href:"/cats",label:"猫咪",description:"健康与家庭照护",icon:"cats"},
+  {id:"media",href:"/media",label:"Media",description:"已经看完的作品",icon:"media"},
 ];

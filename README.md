@@ -78,6 +78,8 @@ SQLite schema 为 v7；PostgreSQL schema 由 `supabase/migrations/` 管理。导
 
 本地图片头像保存在 `EVAORBIT_AVATAR_DIR`（默认 `data/avatars`），不会转成 base64 写入数据库。Supabase 使用私有 `avatars` bucket；浏览器通过登录保护的 `/api/avatars/user` 与 `/api/avatars/assistant` 读取，数据库只保存头像类型和扩展名。
 
+Tracker 图片使用同样的安全规则：本地保存在 `EVAORBIT_TRACKER_ICON_DIR`（默认 `data/tracker-icons`），Supabase 使用私有 `tracker-icons` bucket。只接受真实的 JPG、PNG 或 WebP，最大 4 MB；数据库仅保存图片类型和扩展名。
+
 ## 验证
 
 ```bash

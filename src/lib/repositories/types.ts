@@ -1,4 +1,5 @@
-import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -39,6 +40,11 @@ export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt">;
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "updatedAt">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
+export type NewTracker = Omit<Tracker, "id" | "createdAt" | "updatedAt">;
+export type NewTrackerField = Omit<TrackerField, "id" | "createdAt" | "updatedAt">;
+export type NewTrackerEntry = Omit<TrackerEntry, "id" | "sourceType" | "createdAt" | "updatedAt">;
+export type NewTrackerGoal = Omit<TrackerGoal, "id" | "createdAt" | "updatedAt">;
+export type NewTrackerReminder = Omit<TrackerReminder, "id" | "createdAt" | "updatedAt">;
 
 export interface EvaOrbitRepository {
   listTasks(filter?: TaskFilter): Promise<Task[]>;
@@ -54,6 +60,8 @@ export interface EvaOrbitRepository {
   deleteMemory(id: number): Promise<boolean>;
 
   getDashboardSummary(): Promise<DashboardSummary>;
+  getUiPreferences(): Promise<UiPreferences>;
+  updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;
@@ -99,6 +107,26 @@ export interface EvaOrbitRepository {
   createDrinkLimit(input: NewDrinkLimit): Promise<DrinkLimit>;
   updateDrinkLimit(id: number, input: Record<string, unknown>): Promise<DrinkLimit | null>;
   deleteDrinkLimit(id: number): Promise<boolean>;
+
+  listTrackers(): Promise<Tracker[]>;
+  getTracker(id: number): Promise<Tracker | null>;
+  createTracker(input: NewTracker): Promise<Tracker>;
+  updateTracker(id: number, input: Record<string, unknown>): Promise<Tracker | null>;
+  deleteTracker(id: number): Promise<boolean>;
+  listTrackerFields(trackerId: number): Promise<TrackerField[]>;
+  createTrackerField(input: NewTrackerField): Promise<TrackerField>;
+  deleteTrackerField(id: number): Promise<boolean>;
+  listTrackerEntries(trackerId?: number, input?: { from?: string; to?: string; query?: string }): Promise<TrackerEntry[]>;
+  getTrackerEntry(id: number): Promise<TrackerEntry | null>;
+  createTrackerEntry(input: NewTrackerEntry): Promise<TrackerEntry>;
+  updateTrackerEntry(id: number, input: Record<string, unknown>): Promise<TrackerEntry | null>;
+  deleteTrackerEntry(id: number): Promise<boolean>;
+  listTrackerGoals(trackerId: number): Promise<TrackerGoal[]>;
+  createTrackerGoal(input: NewTrackerGoal): Promise<TrackerGoal>;
+  deleteTrackerGoal(id: number): Promise<boolean>;
+  listTrackerReminders(trackerId: number): Promise<TrackerReminder[]>;
+  createTrackerReminder(input: NewTrackerReminder): Promise<TrackerReminder>;
+  deleteTrackerReminder(id: number): Promise<boolean>;
 
   getNutritionSettings(date: string): Promise<Pick<DailyNutritionSummary, "restingEnergyKcal" | "activeEnergyKcal" | "notes">>;
   updateNutritionSettings(date: string, input: { restingEnergyKcal: number | null; activeEnergyKcal: number | null; notes: string }): Promise<void>;

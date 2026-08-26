@@ -21,6 +21,7 @@ coverage/
 *.db-wal
 *.db-journal
 data/avatars/
+data/tracker-icons/
 *.uploading
 
 # Logs

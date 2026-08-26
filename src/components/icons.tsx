@@ -1,4 +1,4 @@
-export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink";
+export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more";
 type IconProps = { name: IconName };
 
 const paths: Record<IconProps["name"], React.ReactNode> = {
@@ -19,6 +19,12 @@ const paths: Record<IconProps["name"], React.ReactNode> = {
   inbox: <><path d="M4 5h16l-1 14H5z"/><path d="M4.5 13h4l2 3h3l2-3h4"/></>,
   food: <><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10"/><path d="M16 3c3 2 3 7 0 9v9M16 3v9"/></>,
   drink: <><path d="M5 4h14l-2 17H7z"/><path d="M8 9h8M14 4l2-3"/></>,
+  tracker: <><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/><path d="M12 2v2M22 12h-2M12 22v-2M2 12h2"/></>,
+  cats: <><path d="M5 9 4 3l5 3a9 9 0 0 1 6 0l5-3-1 6a8 8 0 1 1-14 0Z"/><path d="M9 12h.01M15 12h.01M10 16c1.3.8 2.7.8 4 0"/></>,
+  people: <><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 14.5A4.5 4.5 0 0 1 21 19"/></>,
+  media: <><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3Z"/></>,
+  chronicle: <><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v18H7.5A2.5 2.5 0 0 0 5 22.5Z"/><path d="M5 4.5v18M9 7h6M9 11h6M9 15h4"/></>,
+  more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
 };
 
 export function Icon({ name }: IconProps) {

@@ -3,10 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { maskApiKey } from "../ai-provider";
+import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
 import { allowedEmail } from "../config";
 import { ConflictError } from "../errors";
 import { createSupabaseServerClient } from "../supabase/server";
-import type { AiModelConfig, AiProvider, ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority } from "../types";
+import type { AiModelConfig, AiProvider, ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "../types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, EvaOrbitRepository, InternalAiProvider, InternalAiSettings, NewTask, TaskFilter } from "./types";
 
 type Row = Record<string, unknown>;
@@ -56,6 +57,11 @@ function foodFromRow(row: Row): FoodLog { return { id:Number(row.id),occurredAt:
 function libraryFromRow(row: Row): FoodLibraryItem { return {id:Number(row.id),name:String(row.name),brand:String(row.brand),category:row.category as FoodLibraryItem["category"],defaultPortion:String(row.default_portion),referenceType:row.reference_type as FoodLibraryItem["referenceType"],referenceEnergyKj:row.reference_energy_kj===null?null:Number(row.reference_energy_kj),referenceKcal:row.reference_kcal===null?null:Number(row.reference_kcal),servingWeight:row.serving_weight===null?null:Number(row.serving_weight),servingKcal:row.serving_kcal===null?null:Number(row.serving_kcal),dataSource:row.data_source as FoodLibraryItem["dataSource"],notes:String(row.notes),updatedAt:String(row.updated_at)}; }
 function drinkFromRow(row: Row): DrinkLog { return {id:Number(row.id),occurredAt:String(row.occurred_at),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)}; }
 function limitFromRow(row: Row): DrinkLimit { return {id:Number(row.id),name:String(row.name),targetType:String(row.target_type),period:row.period as DrinkLimit["period"],limitValue:Number(row.limit_value),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)}; }
+function trackerFromRow(row:Row):Tracker{return{id:Number(row.id),name:String(row.name),icon:String(row.icon),iconType:(row.icon_type??"default") as Tracker["iconType"],iconValue:String(row.icon_value??""),groupName:String(row.group_name),timeType:row.time_type as Tracker["timeType"],quickCaptureEnabled:Boolean(row.quick_capture_enabled),dataSourceType:row.data_source_type as Tracker["dataSourceType"],sourceConfig:row.source_config&&typeof row.source_config==="object"?row.source_config as Record<string,unknown>:{},statsConfig:row.stats_config&&typeof row.stats_config==="object"?row.stats_config as Record<string,unknown>:{},createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trackerFieldFromRow(row:Row):TrackerField{return{id:Number(row.id),trackerId:Number(row.tracker_id),key:String(row.field_key??`field_${row.id}`),name:String(row.name),type:row.type as TrackerField["type"],required:Boolean(row.required),defaultValue:row.default_value??null,options:Array.isArray(row.options_json)?row.options_json.map(String):[],showAfterQuickCapture:Boolean(row.show_after_quick_capture),includeInStats:Boolean(row.include_in_stats),sortOrder:Number(row.sort_order),unit:String(row.unit??""),precision:Number(row.precision??0),config:row.config_json&&typeof row.config_json==="object"?row.config_json as Record<string,unknown>:{},archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trackerEntryFromRow(row:Row):TrackerEntry{return{id:Number(row.id),trackerId:Number(row.tracker_id),occurredAt:String(row.occurred_at),endAt:row.end_at?String(row.end_at):null,values:row.values_json&&typeof row.values_json==="object"?row.values_json as Record<string,unknown>:{},note:String(row.note),sourceType:"native_tracker",createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trackerGoalFromRow(row:Row):TrackerGoal{return{id:Number(row.id),trackerId:Number(row.tracker_id),operator:row.operator as TrackerGoal["operator"],targetValue:Number(row.target_value),periodType:row.period_type as TrackerGoal["periodType"],customPeriod:String(row.custom_period),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trackerReminderFromRow(row:Row):TrackerReminder{return{id:Number(row.id),trackerId:Number(row.tracker_id),reminderType:row.reminder_type as TrackerReminder["reminderType"],scheduleRule:String(row.schedule_rule),intervalDays:row.interval_days===null?null:Number(row.interval_days),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function mappedPatch(input: Record<string, unknown>, map: Record<string, string>) { return Object.fromEntries(Object.entries(map).filter(([key]) => input[key] !== undefined).map(([key, column]) => [column, input[key]])); }
 
 const defaultAiSettings: Omit<InternalAiSettings, "apiKey" | "hasApiKey" | "updatedAt"> = {
@@ -228,6 +234,17 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
         recentMemories: memories.slice(0, 3),
       };
     },
+    async getUiPreferences() {
+      const { data, error } = await client.from("ui_preferences").select("home_module_order,updated_at").maybeSingle();
+      fail(error, "Read UI preferences");
+      return { homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
+    },
+    async updateHomeModuleOrder(order: HomeModuleId[]) {
+      const { data, error } = await client.from("ui_preferences").upsert({ user_id: userId, home_module_order: normalizeHomeModuleOrder(order) }, { onConflict: "user_id" }).select("home_module_order,updated_at").single();
+      fail(error, "Save home module order");
+      if (!data) throw new Error("Save home module order failed");
+      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), updatedAt: String(data.updated_at) };
+    },
     async getAiSettings() {
       return runtimeSettings();
     },
@@ -321,7 +338,7 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
       const { data, error } = await client.from("chat_sessions").select("*,ai_providers(name),ai_model_configs(display_name)").eq("id", id).maybeSingle();
       fail(error, "读取会话"); return data ? oneSession(client, data) : null;
     },
-    async createChatSession(title = "新对话", requestedModelConfigId) {
+    async createChatSession(title = "New conversation", requestedModelConfigId) {
       const {data:model,error:modelError}=requestedModelConfigId
         ? await client.from("ai_model_configs").select("*").eq("id",requestedModelConfigId).maybeSingle()
         : await client.from("ai_model_configs").select("*").eq("is_default",true).maybeSingle();
@@ -375,11 +392,30 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
     async createDrinkLimit(input){const{data,error}=await client.from("drink_limits").insert({user_id:userId,name:input.name,target_type:input.targetType,period:input.period,limit_value:input.limitValue,enabled:input.enabled}).select().single();fail(error,"创建饮品限制");return limitFromRow(data);},
     async updateDrinkLimit(id,input){const patch=mappedPatch(input,{name:"name",targetType:"target_type",period:"period",limitValue:"limit_value",enabled:"enabled"});const{data,error}=await client.from("drink_limits").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新饮品限制");return data?limitFromRow(data):null;},
     async deleteDrinkLimit(id){const{data,error}=await client.from("drink_limits").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除饮品限制");return Boolean(data);},
+    async listTrackers(){const{data,error}=await client.from("trackers").select("*").order("group_name").order("name");fail(error,"读取 Trackers");return(data as Row[]).map(trackerFromRow);},
+    async getTracker(id){const{data,error}=await client.from("trackers").select("*").eq("id",id).maybeSingle();fail(error,"读取 Tracker");return data?trackerFromRow(data):null;},
+    async createTracker(input){const{data,error}=await client.from("trackers").insert({user_id:userId,name:input.name,icon:input.icon,icon_type:input.iconType,icon_value:input.iconValue,group_name:input.groupName,time_type:"point",quick_capture_enabled:input.quickCaptureEnabled,data_source_type:input.dataSourceType,source_config:input.sourceConfig,stats_config:input.statsConfig}).select().single();fail(error,"创建 Tracker");return trackerFromRow(data);},
+    async updateTracker(id,input){const patch=mappedPatch(input,{name:"name",icon:"icon",iconType:"icon_type",iconValue:"icon_value",groupName:"group_name",quickCaptureEnabled:"quick_capture_enabled",dataSourceType:"data_source_type",sourceConfig:"source_config",statsConfig:"stats_config"});if(!Object.keys(patch).length)return repository.getTracker(id);const{data,error}=await client.from("trackers").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Tracker");return data?trackerFromRow(data):null;},
+    async deleteTracker(id){const{data,error}=await client.from("trackers").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Tracker");return Boolean(data);},
+    async listTrackerFields(trackerId){const{data,error}=await client.from("tracker_fields").select("*").eq("tracker_id",trackerId).order("sort_order").order("id");fail(error,"读取 Tracker 字段");return(data as Row[]).map(trackerFieldFromRow);},
+    async createTrackerField(input){const{data,error}=await client.from("tracker_fields").insert({user_id:userId,tracker_id:input.trackerId,field_key:input.key,name:input.name,type:input.type,required:input.required,default_value:input.defaultValue,options_json:input.options,show_after_quick_capture:input.showAfterQuickCapture,include_in_stats:input.includeInStats,sort_order:input.sortOrder,unit:input.unit,precision:input.precision,config_json:input.config,archived_at:input.archivedAt}).select().single();fail(error,"创建 Tracker 字段");return trackerFieldFromRow(data);},
+    async deleteTrackerField(id){const{data,error}=await client.from("tracker_fields").update({archived_at:new Date().toISOString()}).eq("id",id).is("archived_at",null).select("id").maybeSingle();fail(error,"归档 Tracker 字段");return Boolean(data);},
+    async listTrackerEntries(trackerId,input={}){let request=client.from("tracker_entries").select("*");if(trackerId!==undefined)request=request.eq("tracker_id",trackerId);if(input.from)request=request.gte("occurred_at",input.from);if(input.to)request=request.lt("occurred_at",input.to);const{data,error}=await request.order("occurred_at",{ascending:false}).order("id",{ascending:false});fail(error,"读取 Tracker 记录");const entries=(data as Row[]).map(trackerEntryFromRow);if(!input.query)return entries;const query=input.query.toLocaleLowerCase();return entries.filter((entry)=>`${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(query));},
+    async getTrackerEntry(id){const{data,error}=await client.from("tracker_entries").select("*").eq("id",id).maybeSingle();fail(error,"读取 Tracker 记录");return data?trackerEntryFromRow(data):null;},
+    async createTrackerEntry(input){const{data,error}=await client.from("tracker_entries").insert({user_id:userId,tracker_id:input.trackerId,occurred_at:input.occurredAt,end_at:input.endAt,values_json:input.values,note:input.note}).select().single();fail(error,"创建 Tracker 记录");return trackerEntryFromRow(data);},
+    async updateTrackerEntry(id,input){const patch=mappedPatch(input,{occurredAt:"occurred_at",endAt:"end_at",values:"values_json",note:"note"});if(!Object.keys(patch).length)return repository.getTrackerEntry(id);const{data,error}=await client.from("tracker_entries").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Tracker 记录");return data?trackerEntryFromRow(data):null;},
+    async deleteTrackerEntry(id){const{data,error}=await client.from("tracker_entries").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Tracker 记录");return Boolean(data);},
+    async listTrackerGoals(trackerId){const{data,error}=await client.from("tracker_goals").select("*").eq("tracker_id",trackerId).order("enabled",{ascending:false}).order("id");fail(error,"读取 Tracker Goal");return(data as Row[]).map(trackerGoalFromRow);},
+    async createTrackerGoal(input){const{data,error}=await client.from("tracker_goals").insert({user_id:userId,tracker_id:input.trackerId,operator:input.operator,target_value:input.targetValue,period_type:input.periodType,custom_period:input.customPeriod,enabled:input.enabled}).select().single();fail(error,"创建 Tracker Goal");return trackerGoalFromRow(data);},
+    async deleteTrackerGoal(id){const{data,error}=await client.from("tracker_goals").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Tracker Goal");return Boolean(data);},
+    async listTrackerReminders(trackerId){const{data,error}=await client.from("tracker_reminders").select("*").eq("tracker_id",trackerId).order("enabled",{ascending:false}).order("id");fail(error,"读取 Tracker Reminder");return(data as Row[]).map(trackerReminderFromRow);},
+    async createTrackerReminder(input){const{data,error}=await client.from("tracker_reminders").insert({user_id:userId,tracker_id:input.trackerId,reminder_type:input.reminderType,schedule_rule:input.scheduleRule,interval_days:input.intervalDays,enabled:input.enabled}).select().single();fail(error,"创建 Tracker Reminder");return trackerReminderFromRow(data);},
+    async deleteTrackerReminder(id){const{data,error}=await client.from("tracker_reminders").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Tracker Reminder");return Boolean(data);},
     async getNutritionSettings(date){const{data,error}=await client.from("daily_nutrition_summaries").select("resting_energy_kcal,active_energy_kcal,notes").eq("date",date).maybeSingle();fail(error,"读取能量设置");return{restingEnergyKcal:data?.resting_energy_kcal===null||data?.resting_energy_kcal===undefined?null:Number(data.resting_energy_kcal),activeEnergyKcal:data?.active_energy_kcal===null||data?.active_energy_kcal===undefined?null:Number(data.active_energy_kcal),notes:data?String(data.notes):""};},
     async updateNutritionSettings(date,input){const{error}=await client.from("daily_nutrition_summaries").upsert({date,user_id:userId,resting_energy_kcal:input.restingEnergyKcal,active_energy_kcal:input.activeEnergyKcal,notes:input.notes},{onConflict:"date,user_id"});fail(error,"保存能量设置");},
     async autoTitleChatSession(id, content) {
       const session = await repository.getChatSession(id);
-      if (!session || session.messageCount > 1 || session.title !== "新对话") return;
+      if (!session || session.messageCount > 1 || !["新对话", "New conversation"].includes(session.title)) return;
       const compact = content.replace(/\s+/g, " ").trim();
       const title = compact.length > 28 ? `${compact.slice(0, 28)}…` : compact;
       const { error } = await client.from("chat_sessions").update({ title }).eq("id", id);

@@ -1,5 +1,5 @@
-const CACHE = "eva-orbit-static-v2";
-const STATIC_ASSETS = ["/manifest.webmanifest", "/icon.svg"];
+const CACHE = "eva-orbit-static-v3";
+const STATIC_ASSETS = ["/manifest.webmanifest", "/icon.svg", "/eva-home-cat.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS)));

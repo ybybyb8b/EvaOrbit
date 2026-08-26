@@ -1,56 +1,11 @@
 export const aiToolDefinitions = [
-  {
-    type: "function",
-    function: {
-      name: "list_tasks",
-      description: "读取 EvaOrbit 中的任务。适合查询待办、已完成事项、截止日期和优先级。",
-      parameters: { type: "object", properties: { status: { type: "string", enum: ["all", "open", "done"], description: "任务状态" } }, additionalProperties: false },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "search_memories",
-      description: "按关键词或分类搜索 EvaOrbit 的长期记忆。",
-      parameters: { type: "object", properties: { query: { type: "string" }, category: { type: "string" } }, additionalProperties: false },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_task",
-      description: "在 EvaOrbit 中创建新任务。仅在用户明确要求创建任务时调用。",
-      parameters: {
-        type: "object", required: ["title"], additionalProperties: false,
-        properties: {
-          title: { type: "string" }, notes: { type: "string" }, dueDate: { type: "string", description: "YYYY-MM-DD；没有截止日期时省略" },
-          priority: { type: "string", enum: ["low", "medium", "high"] }, tags: { type: "array", items: { type: "string" } },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "complete_task",
-      description: "将指定 ID 的任务标记为已完成。仅在用户明确要求时调用。",
-      parameters: { type: "object", required: ["id"], properties: { id: { type: "integer", minimum: 1 } }, additionalProperties: false },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_memory",
-      description: "在 EvaOrbit 中新增一条长期记忆。仅在用户明确要求保存记忆时调用。",
-      parameters: {
-        type: "object", required: ["title", "content"], additionalProperties: false,
-        properties: { title: { type: "string" }, content: { type: "string" }, category: { type: "string" } },
-      },
-    },
-  },
   {type:"function",function:{name:"list_inbox",description:"读取尚未整理或已处理的 Inbox 条目。",parameters:{type:"object",properties:{status:{type:"string",enum:["inbox","processed","archived","all"]}},additionalProperties:false}}},
   {type:"function",function:{name:"create_inbox",description:"把用户明确想先放着、暂不分类的内容写入 Inbox。",parameters:{type:"object",required:["content"],properties:{content:{type:"string"},source:{type:"string"}},additionalProperties:false}}},
-  {type:"function",function:{name:"convert_inbox_item",description:"把指定 Inbox 条目整理成待办或长期 Memory，并将原条目标记为已处理。仅在用户明确要求整理时调用。",parameters:{type:"object",required:["id","target"],properties:{id:{type:"integer",minimum:1},target:{type:"string",enum:["task","memory"]}},additionalProperties:false}}},
+  {type:"function",function:{name:"get_timeline",description:"读取指定日期的 EvaOrbit 生活时间线。当前聚合 Food、Drink 与原生 Tracker，后续会接入 Cats、People、Media 和 Chronicle。",parameters:{type:"object",properties:{date:{type:"string",description:"YYYY-MM-DD；省略为今天"},limit:{type:"integer",minimum:1,maximum:100}},additionalProperties:false}}},
+  {type:"function",function:{name:"list_trackers",description:"读取全部 Tracker 及今天、本周、本月、最近一次等基础统计。",parameters:{type:"object",properties:{},additionalProperties:false}}},
+  {type:"function",function:{name:"get_tracker_entries",description:"读取指定 Tracker 的记录、字段、Goal 和 Reminder 状态。",parameters:{type:"object",required:["trackerId"],properties:{trackerId:{type:"integer",minimum:1},query:{type:"string"}},additionalProperties:false}}},
+  {type:"function",function:{name:"create_tracker",description:"在用户明确要求时创建一个记录时刻事件的原生 Tracker。图片只能由用户在界面上传。",parameters:{type:"object",required:["name"],properties:{name:{type:"string"},groupName:{type:"string"},quickCaptureEnabled:{type:"boolean"}},additionalProperties:false}}},
+  {type:"function",function:{name:"create_tracker_entry",description:"给指定原生 Tracker 记录一次时刻事件。occurredAt 必须结合当前时间与用户的自然语言时间转换成 ISO；详细属性放入 values，key 使用 get_tracker_entries 返回的字段 key。",parameters:{type:"object",required:["trackerId","occurredAt"],properties:{trackerId:{type:"integer",minimum:1},occurredAt:{type:"string"},values:{type:"object",additionalProperties:true},note:{type:"string"}},additionalProperties:false}}},
   {type:"function",function:{name:"get_today_food",description:"查询今天已保存的饮食记录。回答今天吃了什么或吃了多少时必须调用数据库工具。",parameters:{type:"object",properties:{},additionalProperties:false}}},
   {type:"function",function:{name:"search_food_logs",description:"按名称/明细、日期或餐次搜索历史饮食记录，可用于查询上次吃某样东西的时间。",parameters:{type:"object",properties:{query:{type:"string"},date:{type:"string",description:"YYYY-MM-DD"},mealType:{type:"string",enum:["breakfast","lunch","dinner","snack","late_night"]}},additionalProperties:false}}},
   {type:"function",function:{name:"search_food_library",description:"创建 Food/Drink 前优先搜索常用食品库。品牌已知时必须传 brand；不同品牌不能默认等价。",parameters:{type:"object",properties:{query:{type:"string"},brand:{type:"string"}},additionalProperties:false}}},

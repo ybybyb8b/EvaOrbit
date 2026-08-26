@@ -2,7 +2,7 @@ import type { ChatMessage } from "./types";
 import type { InternalAiSettings } from "./repositories/types";
 import { aiToolDefinitions } from "./ai-tool-definitions.ts";
 import { ExternalApiError } from "./errors.ts";
-import { readSelfPersona, selectRelevantMemories, selectRelevantTasks } from "./persona.ts";
+import { readSelfPersona } from "./persona.ts";
 import { EVAORBIT_TIME_ZONE } from "./time.ts";
 
 export type ProviderMessage = {
@@ -13,7 +13,6 @@ export type ProviderMessage = {
 };
 
 type PromptContext = { module?: string; sessionTitle?: string; omittedMessages?: number };
-type PromptResources = { tasks: import("./types").Task[]; memories: import("./types").Memory[] };
 
 function endpoint(baseUrl: string, pathname: string) {
   return `${baseUrl.replace(/\/+$/, "")}/${pathname.replace(/^\/+/, "")}`;
@@ -36,7 +35,7 @@ export function publicAiSettings(settings: InternalAiSettings) {
     enabled: settings.enabled, temperature: settings.temperature,
     systemPrompt: settings.systemPrompt, responseLength: settings.responseLength, initiative: settings.initiative,
     allowSuggestions: settings.allowSuggestions, allowTeasing: settings.allowTeasing,
-    includeTasks: settings.includeTasks, includeMemories: settings.includeMemories,
+    includeTasks: false, includeMemories: false,
     allowWriteActions: settings.allowWriteActions, updatedAt: settings.updatedAt,
     userDisplayName: settings.userDisplayName, userAvatarType: settings.userAvatarType, userAvatarValue: settings.userAvatarValue,
     assistantDisplayName: settings.assistantDisplayName, assistantAvatarType: settings.assistantAvatarType, assistantAvatarValue: settings.assistantAvatarValue,
@@ -64,23 +63,11 @@ export async function discoverModels(settings: InternalAiSettings, signal?: Abor
   return [...new Set(models)].slice(0, 500);
 }
 
-function compact(value: string, max = 700) {
-  const result = value.replace(/\s+/g, " ").trim();
-  return result.length > max ? `${result.slice(0, max)}…` : result;
-}
-
 function currentTime() {
   return `${new Intl.DateTimeFormat("zh-CN", { dateStyle: "full", timeStyle: "short", timeZone: EVAORBIT_TIME_ZONE }).format(new Date())}（${EVAORBIT_TIME_ZONE}）`;
 }
 
-function lastUserMessage(messages: Array<ChatMessage | ProviderMessage>) {
-  return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
-}
-
-export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<ChatMessage | ProviderMessage>, context: PromptContext = {}, resources: PromptResources = { tasks: [], memories: [] }) {
-  const query = lastUserMessage(messages) ?? "";
-  const tasks = settings.includeTasks ? selectRelevantTasks(resources.tasks, query) : [];
-  const memories = settings.includeMemories ? selectRelevantMemories(resources.memories, query) : [];
+export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<ChatMessage | ProviderMessage>, context: PromptContext = {}) {
   const lengthRule = settings.responseLength === "brief" ? "默认短答；能一句说清就不要展开。" : settings.responseLength === "detailed" ? "需要解释时可以充分展开，但不要凑长度。" : "默认适中；简单问题短答，复杂问题再展开。";
   const initiativeRule = settings.initiative === "quiet" ? "主动程度克制：先看清现状，不额外安排。" : settings.initiative === "active" ? "发现明确遗漏或风险时可以主动指出，但不要接管生活。" : "有明显价值时再主动补充一两点。";
   const voice = [
@@ -90,14 +77,9 @@ export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<
     settings.allowTeasing ? "允许自然的轻吐槽；不要为了有趣而硬玩梗。" : "保持自然，但不要主动吐槽或玩梗。",
     settings.systemPrompt.trim() ? `本人补充的 Persona 说明：${settings.systemPrompt.trim()}` : "",
   ].filter(Boolean).join("\n");
-  const taskContext = tasks.length
-    ? tasks.map((task) => `- [${task.priority}] ${task.title}${task.dueDate ? `，截止 ${task.dueDate}` : ""}${task.notes ? `；${compact(task.notes, 240)}` : ""}`).join("\n")
-    : "- 本次没有自动带入任务；需要时直接调用 list_tasks。";
-  const memoryContext = memories.length
-    ? memories.map((memory) => `- [${memory.category} · 更新于 ${memory.updatedAt}] ${memory.title}：${compact(memory.content)}`).join("\n")
-    : settings.includeMemories ? "- 本次没有召回到相关 Memory。不要假装记得；需要时调用 search_memories。" : "- Memory 自动召回已关闭。";
   const tools = [
-    "可读取 Tasks、Memory、Inbox、Food、Drinks、Food Library、Drink Limits 和每日摄入汇总。",
+    "可读取 Inbox、跨模块 Timeline、Trackers、Food、Drinks、Food Library、Drink Limits 和每日摄入汇总。",
+    "EvaOrbit 不再维护活跃的 Task / Memory 能力。提醒与待办交给 ChatGPT、Todoist 或系统 Reminders；不要声称已在 EvaOrbit 创建任务或长期 Memory。",
     "涉及本人今天/历史吃喝过什么、摄入多少、上次何时吃过时，以 Tool 返回的数据库事实为准，不凭聊天上下文猜。",
     "记录食物前优先检索 Food Library；品牌已知时必须匹配品牌，不同品牌不能默认等价。估算不确定时保留范围并降低可信度。",
     "饮品限制只报告数量和状态，措辞保持中性，不评价自律、健康或好坏。",
@@ -109,13 +91,11 @@ export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<
     `Conversation UI 当前显示：user=${settings.userDisplayName}，assistant=${settings.assistantDisplayName}。这只是界面称呼，不是 Persona 或 Memory 事实，也不改变 user/assistant role。`,
     context.sessionTitle ? `当前话题：${context.sessionTitle}` : "",
     context.omittedMessages ? `为控制上下文，较早的 ${context.omittedMessages} 条消息本次未发送；不要假装看到了。` : "",
-    `与当前问题相关的待办：\n${taskContext}`,
   ].filter(Boolean).join("\n");
   return [
     `[CORE IDENTITY]\n${readSelfPersona()}`,
     `[VOICE]\n${voice}`,
     `[CURRENT TIME]\n${currentTime()}`,
-    `[RELEVANT MEMORY]\n${memoryContext}`,
     `[CURRENT CONTEXT]\n${currentContext}`,
     `[TOOLS]\n${tools}`,
   ].join("\n\n");
@@ -133,7 +113,7 @@ export function selectConversationHistory<T extends ChatMessage>(messages: T[], 
   return { messages: selected, omittedMessages: messages.length - selected.length };
 }
 
-export async function startChatCompletion(settings: InternalAiSettings, messages: Array<ChatMessage | ProviderMessage>, signal?: AbortSignal, context: PromptContext = {}, resources: PromptResources = { tasks: [], memories: [] }) {
+export async function startChatCompletion(settings: InternalAiSettings, messages: Array<ChatMessage | ProviderMessage>, signal?: AbortSignal, context: PromptContext = {}) {
   const response = await fetch(endpoint(settings.baseUrl, "chat/completions"), {
     method: "POST",
     headers: providerHeaders(settings),
@@ -143,7 +123,7 @@ export async function startChatCompletion(settings: InternalAiSettings, messages
       temperature: settings.temperature,
       stream: true,
       messages: [
-        { role: "system", content: buildSystemPrompt(settings, messages, context, resources) },
+        { role: "system", content: buildSystemPrompt(settings, messages, context) },
         ...messages.map((message) => {
           if ("tool_call_id" in message || "tool_calls" in message) return message;
           return { role: message.role, content: message.content };

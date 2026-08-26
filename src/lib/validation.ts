@@ -1,4 +1,4 @@
-import type { TaskPriority } from "./types";
+import type { TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -177,8 +177,8 @@ export function parseAiSettings(value: unknown) {
     initiative: enumValue(body.initiative, "主动程度", ["quiet", "balanced", "active"] as const, "quiet"),
     allowSuggestions: booleanValue(body.allowSuggestions, "主动建议", true),
     allowTeasing: booleanValue(body.allowTeasing, "轻吐槽", true),
-    includeTasks: booleanValue(body.includeTasks, "任务上下文", true),
-    includeMemories: booleanValue(body.includeMemories, "记忆上下文", true),
+    includeTasks: false,
+    includeMemories: false,
     allowWriteActions: booleanValue(body.allowWriteActions, "AI 写入权限", false),
     userDisplayName: text(body.userDisplayName ?? "我", "我的称呼", 40)!,
     userAvatarType: userAvatar.type,
@@ -243,7 +243,7 @@ export function parseChatPreferences(value: unknown) {
 
 export function parseNewChatSession(value: unknown) {
   const body = objectValue(value);
-  return { title: text(body.title ?? "新对话", "会话标题", 120)!, modelConfigId: body.modelConfigId === undefined ? undefined : optionalPositiveId(body.modelConfigId, "模型 ID") };
+  return { title: text(body.title ?? "New conversation", "会话标题", 120)!, modelConfigId: body.modelConfigId === undefined ? undefined : optionalPositiveId(body.modelConfigId, "模型 ID") };
 }
 
 export function parseChatSessionPatch(value: unknown) {
@@ -380,4 +380,101 @@ export function parseDailyEnergy(value: unknown) {
     activeEnergyKcal: optionalNumber(body.activeEnergyKcal, "活动消耗", 0, 20000),
     notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
   };
+}
+
+function positiveInteger(value: unknown, field: string) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new ValidationError(`${field}格式不正确`);
+  return value;
+}
+
+function recordValue(value: unknown, field: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ValidationError(`${field}格式不正确`);
+  return value as Record<string, unknown>;
+}
+
+export function parseNewTracker(value: unknown) {
+  const body = objectValue(value);
+  const dataSourceType = enumValue(body.dataSourceType, "数据来源", ["native_tracker", "linked_source"] as const, "native_tracker") as TrackerDataSourceType;
+  const sourceConfig = body.sourceConfig === undefined ? {} : recordValue(body.sourceConfig, "来源配置");
+  if (dataSourceType === "linked_source") {
+    if (sourceConfig.module !== "drink") throw new ValidationError("第一版联动 Tracker 只支持 Drink 数据源");
+    enumValue(sourceConfig.drinkType, "饮品类型", ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"] as const, "other");
+  }
+  return {
+    name: text(body.name, "Tracker 名称", 80)!,
+    icon: "◉",
+    iconType: "default" as const,
+    iconValue: "",
+    groupName: text(body.groupName ?? "日常", "分组", 60, false) || "日常",
+    timeType: "point" as const,
+    quickCaptureEnabled: booleanValue(body.quickCaptureEnabled, "快速记录", true),
+    dataSourceType,
+    sourceConfig,
+    statsConfig: body.statsConfig === undefined ? {} : recordValue(body.statsConfig, "统计配置"),
+  };
+}
+
+export function parseTrackerPatch(value: unknown) {
+  const body = objectValue(value);
+  const parsed = parseNewTracker({ name: body.name ?? "placeholder", groupName: body.groupName ?? "日常", quickCaptureEnabled: body.quickCaptureEnabled ?? true, dataSourceType: body.dataSourceType ?? "native_tracker", sourceConfig: body.sourceConfig ?? {}, statsConfig: body.statsConfig ?? {} });
+  const keys = ["name", "groupName", "quickCaptureEnabled", "dataSourceType", "sourceConfig", "statsConfig"] as const;
+  const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
+  return result;
+}
+
+export function parseNewTrackerField(value: unknown, trackerId?: number) {
+  const body = objectValue(value);
+  const options = body.options === undefined ? [] : Array.isArray(body.options) && body.options.every((item) => typeof item === "string") ? [...new Set(body.options.map((item) => item.trim()).filter(Boolean))].slice(0, 50) : (() => { throw new ValidationError("字段选项格式不正确"); })();
+  const type = enumValue(body.type, "字段类型", ["number", "single_select", "multi_select", "text", "boolean", "rating"] as const, "text") as TrackerFieldType;
+  if ((type === "single_select" || type === "multi_select") && !options.length) throw new ValidationError("选择字段至少需要一个选项");
+  return {
+    trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), key: crypto.randomUUID(), name: text(body.name, "字段名称", 60)!, type,
+    required: booleanValue(body.required, "必填状态", false), defaultValue: body.defaultValue ?? null, options,
+    showAfterQuickCapture: booleanValue(body.showAfterQuickCapture, "快速记录后补充", false), includeInStats: booleanValue(body.includeInStats, "参与统计", false),
+    sortOrder: numberValue(body.sortOrder, "排序", 0, 10000, 0),
+    unit: text(body.unit ?? "", "字段单位", 20, false) ?? "",
+    precision: Math.trunc(numberValue(body.precision, "小数位数", 0, 6, 0)),
+    config: body.config === undefined ? {} : recordValue(body.config, "字段配置"),
+    archivedAt: null,
+  };
+}
+
+export function parseNewTrackerEntry(value: unknown, trackerId?: number) {
+  const body = objectValue(value);
+  const occurredAt = timestamp(body.occurredAt ?? new Date().toISOString());
+  return { trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), occurredAt, endAt: null, values: body.values === undefined ? {} : recordValue(body.values, "记录字段"), note: text(body.note ?? "", "备注", 5000, false) ?? "" };
+}
+
+export function parseTrackerEntryPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt),
+    endAt: body.endAt === undefined ? undefined : null,
+    values: body.values === undefined ? undefined : recordValue(body.values, "记录字段"),
+    note: body.note === undefined ? undefined : text(body.note, "备注", 5000, false) ?? "",
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的字段");
+  return result;
+}
+
+export function parseNewTrackerGoal(value: unknown, trackerId?: number) {
+  const body = objectValue(value);
+  return {
+    trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"),
+    operator: enumValue(body.operator, "Goal 类型", ["<=", ">=", "="] as const, "<=") as TrackerGoalOperator,
+    targetValue: numberValue(body.targetValue, "目标数量", 0.01, 100000, 1),
+    periodType: enumValue(body.periodType, "周期", ["daily", "weekly", "monthly", "yearly", "custom"] as const, "monthly") as TrackerPeriodType,
+    customPeriod: text(body.customPeriod ?? "", "自定义周期", 200, false) ?? "", enabled: booleanValue(body.enabled, "启用状态", true),
+  };
+}
+
+export function parseNewTrackerReminder(value: unknown, trackerId?: number) {
+  const body = objectValue(value);
+  const reminderType = enumValue(body.reminderType, "提醒类型", ["scheduled", "interval"] as const, "interval") as TrackerReminderType;
+  const intervalDays = body.intervalDays === undefined || body.intervalDays === null || body.intervalDays === "" ? null : positiveInteger(body.intervalDays, "间隔天数");
+  const scheduleRule = text(body.scheduleRule ?? "", "定期规则", 300, false) ?? "";
+  if (reminderType === "interval" && intervalDays === null) throw new ValidationError("间隔提醒需要填写天数");
+  if (reminderType === "scheduled" && !scheduleRule) throw new ValidationError("定期提醒需要填写规则");
+  return { trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), reminderType, scheduleRule, intervalDays, enabled: booleanValue(body.enabled, "启用状态", true) };
 }

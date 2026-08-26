@@ -1,8 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
+import { Icon } from "@/components/icons";
 import { AiProvidersSettings } from "./ai-providers-settings";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
 
@@ -11,7 +13,7 @@ type Draft = Omit<AiSettings, "hasApiKey" | "maskedApiKey" | "updatedAt"> & { ap
 const emptyDraft: Draft = {
   providerPreset: "custom", providerName: "AI Provider", baseUrl: "https://example.com/v1", model: "model-name", apiKey: "", enabled: false,
   temperature: 0.6, systemPrompt: "", responseLength: "balanced", initiative: "quiet",
-  allowSuggestions: true, allowTeasing: true, includeTasks: true, includeMemories: true, allowWriteActions: false,
+  allowSuggestions: true, allowTeasing: true, includeTasks: false, includeMemories: false, allowWriteActions: false,
   userDisplayName: "我", userAvatarType: "default", userAvatarValue: "",
   assistantDisplayName: "Eva", assistantAvatarType: "default", assistantAvatarValue: "",
   showUserName: true, showAssistantName: true, showAvatars: true,
@@ -36,7 +38,7 @@ export function SettingsView() {
         model: settings.model, enabled: settings.enabled, temperature: settings.temperature, systemPrompt: settings.systemPrompt,
         responseLength: settings.responseLength, initiative: settings.initiative,
         allowSuggestions: settings.allowSuggestions, allowTeasing: settings.allowTeasing,
-        includeTasks: settings.includeTasks, includeMemories: settings.includeMemories, allowWriteActions: settings.allowWriteActions, apiKey: "",
+        includeTasks: false, includeMemories: false, allowWriteActions: settings.allowWriteActions, apiKey: "",
         userDisplayName: settings.userDisplayName, userAvatarType: settings.userAvatarType, userAvatarValue: settings.userAvatarValue,
         assistantDisplayName: settings.assistantDisplayName, assistantAvatarType: settings.assistantAvatarType, assistantAvatarValue: settings.assistantAvatarValue,
         showUserName: settings.showUserName, showAssistantName: settings.showAssistantName, showAvatars: settings.showAvatars,
@@ -86,7 +88,7 @@ export function SettingsView() {
   if (loading) return <div className="page"><div className="loading-state">正在读取设置…</div></div>;
 
   return <div className="page">
-    <PageHeader eyebrow="SETTINGS" title="设置" description="模型怎么连、另一个自己怎么说话，都放在这里。" />
+    <PageHeader eyebrow="MORE" title="Settings" description="模型怎么连、另一个自己怎么说话，都放在这里。" />
     <div className="settings-summary">
       <section><span>生产数据</span><strong>Supabase Postgres</strong></section>
       <section><span>访问方式</span><strong>私人账户 · RLS</strong></section>
@@ -97,7 +99,7 @@ export function SettingsView() {
 
     <form className="provider-card" onSubmit={save}>
       <section className="conversation-appearance-settings">
-        <div className="persona-heading"><span className="eyebrow">CONVERSATION APPEARANCE</span><h2>对话里的我们</h2><p>这里只改变聊天界面的称呼和头像，不改变 Persona、Memory、消息角色或数据归属。</p></div>
+        <div className="persona-heading"><span className="eyebrow">CONVERSATION APPEARANCE</span><h2>对话里的我们</h2><p>这里只改变聊天界面的称呼和头像，不改变 Persona、消息角色或数据归属。</p></div>
         <div className="identity-editor-grid">
           <IdentityEditor subject="user" label="我的身份" name={draft.userDisplayName} avatarType={draft.userAvatarType} avatarValue={draft.userAvatarValue} uploading={uploadingAvatar === "user"} onName={(value) => setDraft({ ...draft, userDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, userAvatarType: "emoji", userAvatarValue: value })} onChoose={(type) => void chooseAvatar("user", type)} onUpload={(file) => void uploadAvatar("user", file)} />
           <IdentityEditor subject="assistant" label="Eva 的身份" name={draft.assistantDisplayName} avatarType={draft.assistantAvatarType} avatarValue={draft.assistantAvatarValue} uploading={uploadingAvatar === "assistant"} onName={(value) => setDraft({ ...draft, assistantDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, assistantAvatarType: "emoji", assistantAvatarValue: value })} onChoose={(type) => void chooseAvatar("assistant", type)} onUpload={(file) => void uploadAvatar("assistant", file)} />
@@ -124,18 +126,20 @@ export function SettingsView() {
         <div className="persona-toggles">
           <label><input type="checkbox" checked={draft.allowSuggestions} onChange={(event) => setDraft({ ...draft, allowSuggestions: event.target.checked })} /><span><strong>可以给建议</strong><small>有必要才说，不自动生成计划</small></span></label>
           <label><input type="checkbox" checked={draft.allowTeasing} onChange={(event) => setDraft({ ...draft, allowTeasing: event.target.checked })} /><span><strong>允许轻吐槽</strong><small>自然一点，不硬玩梗</small></span></label>
-          <label><input type="checkbox" checked={draft.includeMemories} onChange={(event) => setDraft({ ...draft, includeMemories: event.target.checked })} /><span><strong>主动找找以前</strong><small>只召回当前问题相关的 Memory</small></span></label>
         </div>
       </section>
       <div className="context-options">
-        <label><input type="checkbox" checked={draft.includeTasks} onChange={(event) => setDraft({ ...draft, includeTasks: event.target.checked })} /><span><strong>按需看待办</strong><small>只在问题涉及安排或任务时带入相关项</small></span></label>
-        <label className="write-permission"><input type="checkbox" checked={draft.allowWriteActions} onChange={(event) => setDraft({ ...draft, allowWriteActions: event.target.checked })} /><span><strong>允许写入 EvaOrbit</strong><small>明确要求时可以创建、完成或留下记录</small></span></label>
+        <label className="write-permission"><input type="checkbox" checked={draft.allowWriteActions} onChange={(event) => setDraft({ ...draft, allowWriteActions: event.target.checked })} /><span><strong>允许写入 EvaOrbit</strong><small>明确要求时可以记录 Food、Drink 或 Inbox；旧 Task / Memory 不再写入</small></span></label>
       </div>
       {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
       <div className="provider-actions">
         <button className="button primary" disabled={working} type="submit">留下偏好</button>
       </div>
     </form>
+    <section className="legacy-data-settings">
+      <div><span className="eyebrow">LEGACY DATA</span><h2>旧数据还在</h2><p>Task 和 Memory 已从日常导航撤下，但本轮不会删除页面、记录或历史链接。需要时仍可以从这里查看。</p></div>
+      <nav aria-label="旧数据入口"><Link href="/tasks"><span><Icon name="tasks" />旧待办</span><Icon name="arrow" /></Link><Link href="/memory"><span><Icon name="memory" />旧 Memory</span><Icon name="arrow" /></Link></nav>
+    </section>
   </div>;
 }
 

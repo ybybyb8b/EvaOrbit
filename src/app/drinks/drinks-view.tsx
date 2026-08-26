@@ -62,7 +62,7 @@ export function DrinksView() {
   }
 
   return <div className="page">
-    <PageHeader eyebrow="DRINKS" title="今天喝了什么" description="只记事实，不给一杯饮料下道德结论。" action={<button className="button primary" onClick={() => { setEditing(null); setDraft(emptyDrink); setShowForm(true); }}><Icon name="plus" />补一杯</button>} />
+    <PageHeader eyebrow="LIFE" title="Drinks" description="只记事实，不给一杯饮料下道德结论。" action={<button className="button primary" onClick={() => { setEditing(null); setDraft(emptyDrink); setShowForm(true); }}><Icon name="plus" />补一杯</button>} />
 
     <div className="section-heading"><div><span className="eyebrow">LIMITS</span><h2>我设的数量线</h2></div><button className="text-button" onClick={() => setShowLimitForm((value) => !value)}>{showLimitForm ? "先不设" : "设置限制"}</button></div>
     {showLimitForm && <form className="editor-card compact-editor" onSubmit={submitLimit}>
