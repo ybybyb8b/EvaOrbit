@@ -138,7 +138,11 @@ export function TrackersView() {
           {!fieldEditor && <button className="tracker-add-property" type="button" onClick={() => startField("number")}><Icon name="plus" />Add a custom property</button>}
         </>}
       </section>
-      <label className="tracker-check"><input type="checkbox" checked={draft.quickCaptureEnabled} onChange={(event) => setDraft({ ...draft, quickCaptureEnabled: event.target.checked })} />Allow one-tap capture from the Tracker card</label>
+      {draft.dataSourceType === "native_tracker" && <fieldset className="tracker-capture-mode">
+        <legend><span className="eyebrow">CARD + ACTION</span><strong>How should the list button record?</strong></legend>
+        <label className={draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: true })} /><span><strong>Quick record</strong><small>Tap + to save the current moment immediately.</small></span></label>
+        <label className={!draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={!draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: false })} /><span><strong>Detailed record</strong><small>Tap + to open the full time, properties and note form.</small></span></label>
+      </fieldset>}
       {error && <p className="form-error">{error}</p>}<button className="button primary" disabled={working}>{working ? "Creating…" : "Create Tracker"}</button>
     </form>}
     {error && !showForm && <p className="form-error">{error}</p>}
@@ -146,7 +150,7 @@ export function TrackersView() {
       <div className="section-heading"><div><span className="eyebrow">GROUP</span><h2>{group}</h2></div><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>
       <div className="tracker-card-grid">{trackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className={`tracker-card ${tracker.stats.reminderDue ? "due" : ""}`} key={tracker.id}>
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><small>{tracker.dataSourceType === "linked_source" ? "LINKED · DRINKS" : "MOMENT"}</small><h3>{tracker.name}</h3></div></div><div className="tracker-card-stats"><span><strong>{tracker.stats.today}</strong>Today</span><span><strong>{tracker.stats.month}</strong>This month</span><span><strong>{tracker.stats.total}</strong>All time</span></div><p>{tracker.stats.reminderDue ? "An interval reminder is due" : `Last recorded · ${ago(tracker.stats.lastOccurredAt)}`}</p></Link>
-        {tracker.quickCaptureEnabled && tracker.dataSourceType === "native_tracker" ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Record ${tracker.name} now`}><Icon name="plus" /></button> : <Link className="tracker-source-link" href={tracker.dataSourceType === "linked_source" ? "/drinks" : `/trackers/${tracker.id}`} aria-label={`Open ${tracker.name}`}><Icon name="arrow" /></Link>}
+        {tracker.dataSourceType === "native_tracker" ? tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link> : <Link className="tracker-source-link" href="/drinks" aria-label={`Open ${tracker.name} source`}><Icon name="arrow" /></Link>}
       </article>)}</div>
     </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>Your first Tracker</h2><p>Keep a low-friction record of anything that happens more than once.</p><button className="button primary" onClick={() => setShowForm(true)}>Create one</button></div>}
   </div>;

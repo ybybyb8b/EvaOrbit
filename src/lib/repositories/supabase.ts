@@ -1,10 +1,10 @@
 import "server-only";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { maskApiKey } from "../ai-provider";
 import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
-import { allowedEmail } from "../config";
+import { allowedEmail, supabaseConfig } from "../config";
 import { ConflictError } from "../errors";
 import { createSupabaseServerClient } from "../supabase/server";
 import type { AiModelConfig, AiProvider, ChatMessage, ChatRole, ChatSession, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, TaskPriority, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "../types";
@@ -148,10 +148,7 @@ async function oneSession(client: SupabaseClient, row: Row) {
   return sessionFromRow(row, latest?.content ? String(latest.content) : "", count ?? 0);
 }
 
-export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
-  const client = await createSupabaseServerClient();
-  const userId = await identity(client);
-
+function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrbitRepository {
   const runtimeSettings = async (modelConfigId: number | null = null) => {
     const [settingsResult, modelResult] = await Promise.all([
       client.from("ai_settings").select("*").maybeSingle(),
@@ -423,4 +420,23 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
     },
   };
   return repository;
+}
+
+export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
+  const client = await createSupabaseServerClient();
+  return buildSupabaseRepository(client, await identity(client));
+}
+
+export async function createMcpSupabaseRepository(): Promise<EvaOrbitRepository> {
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+  const expectedEmail = allowedEmail();
+  if (!secretKey) throw new Error("SUPABASE_SECRET_KEY 未配置；远程 MCP 无法访问私人数据");
+  if (!expectedEmail) throw new Error("EVAORBIT_ALLOWED_EMAIL 未配置；已拒绝 MCP 访问私人数据");
+  const { url } = supabaseConfig();
+  const client = createClient(url, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  fail(error, "识别 MCP 用户");
+  const user = data.users.find((candidate) => candidate.email?.toLocaleLowerCase() === expectedEmail);
+  if (!user) throw new Error("EVAORBIT_ALLOWED_EMAIL 对应的 Supabase Auth 用户不存在");
+  return buildSupabaseRepository(client, user.id);
 }

@@ -336,6 +336,15 @@ button { color: inherit; }
 .tracker-icon-field input { text-align: center; font-size: 22px; }
 .tracker-check { min-height: 42px; margin: 11px 0; display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 10px; cursor: pointer; }
 .tracker-check input, .tracker-inline-checks input, .tracker-multi-field input { accent-color: var(--green); }
+.tracker-capture-mode { min-width: 0; margin: 18px 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.tracker-capture-mode legend { width: 100%; margin-bottom: 9px; display: flex; align-items: baseline; gap: 10px; }
+.tracker-capture-mode legend strong { font: 500 17px var(--font-editorial-label); }
+.tracker-capture-mode > label { min-width: 0; min-height: 76px; padding: 13px 14px; border: 1px solid #d8d6ca; border-radius: 14px; display: flex; align-items: flex-start; gap: 10px; background: rgba(255,254,249,.55); cursor: pointer; }
+.tracker-capture-mode > label.selected { border-color: rgba(31,75,58,.55); box-shadow: 0 0 0 2px rgba(31,75,58,.08); background: rgba(239,242,233,.9); }
+.tracker-capture-mode input { margin-top: 3px; accent-color: var(--green); }
+.tracker-capture-mode label span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tracker-capture-mode label strong { font-size: 11px; }
+.tracker-capture-mode label small { color: var(--muted); font-size: 9px; line-height: 1.45; }
 .tracker-group { margin-top: 30px; }
 .tracker-card-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
 .tracker-card { min-width: 0; min-height: 230px; border: 1px solid transparent; border-radius: 19px; position: relative; background: #e7e9dd; transition: transform .16s,background .16s,border-color .16s; }
@@ -389,6 +398,7 @@ button { color: inherit; }
   .home-ai-hero { background-image: linear-gradient(180deg,rgba(13,40,32,.6),rgba(13,40,32,.9)),url("/eva-home-cat.png"); background-size: cover,cover; background-position: center; }
   .home-ai-hero .home-ai-copy, .home-ai-hero .home-ai-input, .home-ai-hero .home-ai-suggestions { width: 100%; margin-left: 0; }
   .tracker-create-grid { grid-template-columns: 74px minmax(0,1fr); }.tracker-create-grid > :not(.tracker-icon-field):nth-child(n+3) { grid-column: 1 / -1; }
+  .tracker-capture-mode { grid-template-columns: 1fr; }.tracker-capture-mode > label { min-height: 72px; }.tracker-capture-mode label strong { font-size: 13px; }.tracker-capture-mode label small { font-size: 11px; }
   .tracker-card-grid { grid-template-columns: 1fr; }.tracker-card { min-height: 205px; }
   .tracker-card-head h3 { font-size: 24px; }.tracker-card p { font-size: 11px; }.tracker-card-stats span { font-size: 10px; }.tracker-card-stats strong { font-size: 25px; }
   .tracker-stat-grid { grid-template-columns: repeat(2,1fr); }.tracker-stat-grid .wide { grid-column: 1 / -1; }.tracker-stat-grid article { min-height: 88px; }.tracker-stat-grid span { font-size: 10px; }
