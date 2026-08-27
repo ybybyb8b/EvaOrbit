@@ -430,13 +430,44 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
 export async function createMcpSupabaseRepository(): Promise<EvaOrbitRepository> {
   const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
   const expectedEmail = allowedEmail();
+  console.info("[mcp-diagnostic]", {
+    stage: "supabase_config_present",
+    supabase_url: Boolean(process.env.SUPABASE_URL?.trim()),
+    supabase_secret_key: Boolean(secretKey),
+    allowed_email: Boolean(expectedEmail),
+  });
   if (!secretKey) throw new Error("SUPABASE_SECRET_KEY 未配置；远程 MCP 无法访问私人数据");
   if (!expectedEmail) throw new Error("EVAORBIT_ALLOWED_EMAIL 未配置；已拒绝 MCP 访问私人数据");
   const { url } = supabaseConfig();
   const client = createClient(url, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  console.info("[mcp-diagnostic]", { stage: "admin_list_users_start" });
+  let result: Awaited<ReturnType<typeof client.auth.admin.listUsers>>;
+  try {
+    result = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  } catch (error) {
+    console.error("[mcp-diagnostic]", { stage: "admin_list_users_failed", ...safeDiagnosticError(error) });
+    throw error;
+  }
+  const { data, error } = result;
+  if (error) console.error("[mcp-diagnostic]", { stage: "admin_list_users_failed", ...safeDiagnosticError(error) });
   fail(error, "识别 MCP 用户");
+  console.info("[mcp-diagnostic]", { stage: "admin_list_users_success", users_count: data.users.length });
   const user = data.users.find((candidate) => candidate.email?.toLocaleLowerCase() === expectedEmail);
+  console.info("[mcp-diagnostic]", { stage: "allowed_user_found", found: Boolean(user) });
   if (!user) throw new Error("EVAORBIT_ALLOWED_EMAIL 对应的 Supabase Auth 用户不存在");
   return buildSupabaseRepository(client, user.id);
+}
+
+function safeDiagnosticError(error: unknown) {
+  if (!error || typeof error !== "object") return { error_name: "UnknownError" };
+  const value = error as { name?: unknown; status?: unknown; code?: unknown; message?: unknown };
+  const message = typeof value.message === "string"
+    ? value.message.replace(/https?:\/\/\S+/gi, "[redacted-url]").replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, "[redacted-email]").replace(/Bearer\s+\S+/gi, "Bearer [redacted]").slice(0, 300)
+    : undefined;
+  return {
+    error_name: typeof value.name === "string" ? value.name : "Error",
+    status: typeof value.status === "number" || typeof value.status === "string" ? value.status : undefined,
+    code: typeof value.code === "string" ? value.code : undefined,
+    message,
+  };
 }

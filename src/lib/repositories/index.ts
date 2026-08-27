@@ -20,9 +20,16 @@ export async function getRepository(): Promise<EvaOrbitRepository> {
 
 export async function withMcpRepository<T>(action: () => Promise<T>): Promise<T> {
   if (!mcpRepository) {
-    mcpRepository = usesSupabase()
+    console.info("[mcp-diagnostic]", { stage: "mcp_repository_init_start" });
+    const backend = usesSupabase() ? "supabase" : "sqlite";
+    console.info("[mcp-diagnostic]", { stage: "backend_resolved", backend });
+    mcpRepository = (backend === "supabase"
       ? import("./supabase").then(({ createMcpSupabaseRepository }) => createMcpSupabaseRepository())
-      : import("./sqlite").then(({ sqliteRepository }) => sqliteRepository);
+      : import("./sqlite").then(({ sqliteRepository }) => sqliteRepository))
+      .then((repository) => {
+        console.info("[mcp-diagnostic]", { stage: "repository_init_success" });
+        return repository;
+      });
   }
   return repositoryContext.run(await mcpRepository, action);
 }

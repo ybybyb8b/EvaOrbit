@@ -55,6 +55,15 @@ function safeError(error: unknown) {
   return "EvaOrbit could not complete this request.";
 }
 
+function safeDiagnosticError(error: unknown) {
+  if (!error || typeof error !== "object") return { error_name: "UnknownError" };
+  const value = error as { name?: unknown; status?: unknown; code?: unknown; message?: unknown };
+  const message = typeof value.message === "string"
+    ? value.message.replace(/https?:\/\/\S+/gi, "[redacted-url]").replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, "[redacted-email]").replace(/Bearer\s+\S+/gi, "Bearer [redacted]").slice(0, 300)
+    : undefined;
+  return { error_name: typeof value.name === "string" ? value.name : "Error", status: typeof value.status === "number" || typeof value.status === "string" ? value.status : undefined, code: typeof value.code === "string" ? value.code : undefined, message };
+}
+
 async function runTool(action: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
   try { return success(await withMcpRepository(action)); }
   catch (error) { return failure(safeError(error)); }
@@ -90,7 +99,17 @@ function createServer() {
     async ({ date: day }) => runTool(async () => { const summary = await getDailyNutritionSummary(day); return { date: summary.date, estimated_intake_kcal: summary.estimatedIntakeKcal, intake_min: summary.intakeMin, intake_max: summary.intakeMax, confidence: summary.confidence, resting_energy_kcal: summary.restingEnergyKcal, active_energy_kcal: summary.activeEnergyKcal, total_expenditure_kcal: summary.totalExpenditureKcal, energy_balance: summary.energyBalance, energy_balance_min: summary.energyBalanceMin, energy_balance_max: summary.energyBalanceMax, notes: summary.notes }; }));
 
   server.registerTool("tracker_list", { description: "List available EvaOrbit Trackers and the detail fields accepted by native Trackers.", inputSchema: z.object({}) },
-    async () => runTool(async () => ({ trackers: await Promise.all((await listTrackerSummaries()).map(async (tracker) => { const detail = tracker.dataSourceType === "native_tracker" ? await getTrackerDetail(tracker.id) : null; return { id: tracker.id, name: tracker.name, group: tracker.groupName, data_source_type: tracker.dataSourceType, quick_capture_enabled: tracker.quickCaptureEnabled, fields: detail?.fields.filter((field) => !field.archivedAt).map((field) => ({ key: field.key, name: field.name, type: field.type, required: field.required, options: field.options, unit: field.unit })) ?? [] }; })) })));
+    async () => runTool(async () => {
+      console.info("[mcp-diagnostic]", { stage: "tracker_list_query_start" });
+      try {
+        const trackers = await Promise.all((await listTrackerSummaries()).map(async (tracker) => { const detail = tracker.dataSourceType === "native_tracker" ? await getTrackerDetail(tracker.id) : null; return { id: tracker.id, name: tracker.name, group: tracker.groupName, data_source_type: tracker.dataSourceType, quick_capture_enabled: tracker.quickCaptureEnabled, fields: detail?.fields.filter((field) => !field.archivedAt).map((field) => ({ key: field.key, name: field.name, type: field.type, required: field.required, options: field.options, unit: field.unit })) ?? [] }; }));
+        console.info("[mcp-diagnostic]", { stage: "tracker_list_query_success", trackers_count: trackers.length });
+        return { trackers };
+      } catch (error) {
+        console.error("[mcp-diagnostic]", { stage: "tracker_list_query_failed", ...safeDiagnosticError(error) });
+        throw error;
+      }
+    }));
 
   server.registerTool("tracker_create_entry", { description: "Create a point-in-time entry for one native EvaOrbit Tracker.", inputSchema: z.object({ tracker_id: z.number().int().positive(), occurred_at: occurredAt.optional(), detail_fields: z.record(z.string(), z.unknown()).optional(), note: z.string().max(5000).optional() }) },
     async ({ tracker_id, occurred_at, detail_fields, note }) => runTool(async () => { const entry = await createTrackerEntry(parseNewTrackerEntry({ occurredAt: occurred_at, values: detail_fields ?? {}, note: note ?? "" }, tracker_id)); return { record: { id: entry.id, tracker_id: entry.trackerId, occurred_at: entry.occurredAt, detail_fields: entry.values, note: entry.note } }; }));
