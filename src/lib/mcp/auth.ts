@@ -1,24 +1,38 @@
 import "server-only";
 
-import { timingSafeEqual } from "node:crypto";
+import { supabaseConfig } from "../config";
+import { MCP_RESOURCE_METADATA_URL, McpOAuthError, verifySupabaseMcpAccessToken } from "../mcp-oauth";
 
-export function mcpTokenConfigured() {
-  return Boolean(process.env.EVAORBIT_MCP_TOKEN?.trim());
+export class McpAuthConfigurationError extends Error {
+  constructor() {
+    super("MCP OAuth is not configured");
+    this.name = "McpAuthConfigurationError";
+  }
 }
 
-export function hasValidMcpBearer(request: Request) {
-  const expected = process.env.EVAORBIT_MCP_TOKEN?.trim() ?? "";
+export async function authenticateMcpRequest(request: Request) {
   const authorization = request.headers.get("authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (!expected || !match) return false;
-  const suppliedBuffer = Buffer.from(match[1], "utf8");
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
+  if (!match) throw new McpOAuthError();
+  let config: ReturnType<typeof supabaseConfig>;
+  try {
+    config = supabaseConfig();
+  } catch {
+    throw new McpAuthConfigurationError();
+  }
+  return verifySupabaseMcpAccessToken({
+    token: match[1],
+    supabaseUrl: config.url,
+    publishableKey: config.publishableKey,
+  });
 }
 
 export function mcpUnauthorized() {
   return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
-    headers: { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" },
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": `Bearer resource_metadata="${MCP_RESOURCE_METADATA_URL}", error="invalid_token"`,
+    },
   });
 }

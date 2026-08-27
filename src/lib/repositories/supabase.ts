@@ -427,16 +427,11 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
   return buildSupabaseRepository(client, await identity(client));
 }
 
-export async function createMcpSupabaseRepository(): Promise<EvaOrbitRepository> {
-  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
-  const expectedEmail = allowedEmail();
-  if (!secretKey) throw new Error("SUPABASE_SECRET_KEY 未配置；远程 MCP 无法访问私人数据");
-  if (!expectedEmail) throw new Error("EVAORBIT_ALLOWED_EMAIL 未配置；已拒绝 MCP 访问私人数据");
-  const { url } = supabaseConfig();
-  const client = createClient(url, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
-  const { data, error } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  fail(error, "识别 MCP 用户");
-  const user = data.users.find((candidate) => candidate.email?.toLocaleLowerCase() === expectedEmail);
-  if (!user) throw new Error("EVAORBIT_ALLOWED_EMAIL 对应的 Supabase Auth 用户不存在");
-  return buildSupabaseRepository(client, user.id);
+export async function createMcpSupabaseRepository(accessToken: string, userId: string): Promise<EvaOrbitRepository> {
+  const { url, publishableKey } = supabaseConfig();
+  const client = createClient(url, publishableKey, {
+    accessToken: async () => accessToken,
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return buildSupabaseRepository(client, userId);
 }

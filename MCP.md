@@ -2,18 +2,18 @@
 
 - Endpoint: `https://<your-domain>/api/mcp`
 - Transport: stateless Streamable HTTP; there is no legacy `/sse` endpoint
-- Authentication: `Authorization: Bearer <EVAORBIT_MCP_TOKEN>`
+- Authentication: Supabase OAuth 2.1 access token in `Authorization: Bearer <token>`
 
 ## Environment
 
-Set these server-only values locally and in Vercel:
+Set the existing Supabase values locally and in Vercel:
 
 ```env
-EVAORBIT_MCP_TOKEN=<long-random-token>
-SUPABASE_SECRET_KEY=<your-Supabase-secret-key>
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_example
 ```
 
-The existing `SUPABASE_URL` and `EVAORBIT_ALLOWED_EMAIL` select the single EvaOrbit user. Never use a `NEXT_PUBLIC_` prefix for either secret.
+Enable the Supabase OAuth Server, Dynamic OAuth Apps, and set its authorization path to `/oauth/consent`. The MCP resource identifier is `https://eva-orbit.vercel.app/api/mcp`.
 
 ## Tools
 
@@ -28,12 +28,12 @@ The existing `SUPABASE_URL` and `EVAORBIT_ALLOWED_EMAIL` select the single EvaOr
 
 ## Local test
 
-Start EvaOrbit with `EVAORBIT_MCP_TOKEN` set, then POST an MCP initialize request:
+Complete the Supabase OAuth authorization-code flow, then POST an MCP initialize request with the issued access token:
 
 ```powershell
-$headers = @{ Authorization = "Bearer $env:EVAORBIT_MCP_TOKEN"; Accept = "application/json, text/event-stream" }
+$headers = @{ Authorization = "Bearer $env:SUPABASE_OAUTH_ACCESS_TOKEN"; Accept = "application/json, text/event-stream" }
 $body = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"manual-test","version":"1.0"}}}'
 Invoke-RestMethod http://localhost:3000/api/mcp -Method Post -Headers $headers -ContentType application/json -Body $body
 ```
 
-For MCP Inspector, run `npx @modelcontextprotocol/inspector`, choose Streamable HTTP, enter the endpoint URL, and add the same Authorization header. On Vercel, add the environment variables, redeploy, and use the production `/api/mcp` URL.
+For ChatGPT, select OAuth and enter `https://eva-orbit.vercel.app/api/mcp`. For MCP Inspector, choose Streamable HTTP, enter the endpoint URL, complete OAuth, and use the issued access token.

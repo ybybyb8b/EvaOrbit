@@ -7,8 +7,10 @@ function unauthorized(request: NextRequest) {
     return NextResponse.json({ error: "请先登录 EvaOrbit" }, { status: 401 });
   }
   const url = request.nextUrl.clone();
+  const destination = `${request.nextUrl.pathname}${request.nextUrl.search}`;
   url.pathname = "/login";
-  url.searchParams.set("next", request.nextUrl.pathname);
+  url.search = "";
+  url.searchParams.set("next", destination);
   return NextResponse.redirect(url);
 }
 
