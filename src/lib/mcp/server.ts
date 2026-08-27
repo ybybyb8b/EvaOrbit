@@ -4,15 +4,15 @@ import { createMcpHandler, McpServer, type CallToolResult } from "@modelcontextp
 import { z } from "zod";
 import { ConflictError } from "../errors";
 import { withMcpRepository } from "../repositories";
-import { createDrinkLog, updateDrinkLog } from "../services/drink";
-import { createFoodLog, listFoodLogs, updateFoodLog } from "../services/food";
+import { createDrinkLog, deleteDrinkLog, listDrinkLogs, updateDrinkLog } from "../services/drink";
+import { createFoodLog, deleteFoodLog, listFoodLogs, updateFoodLog } from "../services/food";
 import { getDailyNutritionSummary } from "../services/nutrition";
 import { createTrackerEntry, getTrackerDetail, listTrackerSummaries } from "../services/tracker";
 import type { DrinkLog, FoodLog } from "../types";
 import { parseDrinkLogPatch, parseFoodLogPatch, parseNewDrinkLog, parseNewFoodLog, parseNewTrackerEntry, ValidationError } from "../validation";
 
 export const MCP_TOOL_NAMES = [
-  "food_search_recent", "food_create", "food_update", "drink_create", "drink_update", "nutrition_get_daily_summary", "tracker_list", "tracker_create_entry",
+  "food_search_recent", "food_create", "food_update", "food_delete", "drink_search_recent", "drink_create", "drink_update", "drink_delete", "nutrition_get_daily_summary", "tracker_list", "tracker_create_entry",
 ] as const;
 
 const mealType = z.enum(["breakfast", "lunch", "dinner", "snack", "late_night"]);
@@ -80,11 +80,20 @@ function createServer() {
   server.registerTool("food_update", { description: "Update an existing EvaOrbit food record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...foodFields, title: foodFields.title.optional() }) },
     async ({ id, ...input }) => runTool(async () => { const record = await updateFoodLog(id, parseFoodLogPatch(foodInput(input as z.infer<z.ZodObject<typeof foodFields>>))); if (!record) throw new ConflictError("Food record not found."); return { record: compactFood(record) }; }));
 
+  server.registerTool("food_delete", { description: "Delete one EvaOrbit food record by its exact ID.", inputSchema: z.object({ id: z.number().int().positive() }) },
+    async ({ id }) => runTool(async () => { if (!await deleteFoodLog(id)) throw new ConflictError("Food record not found."); return { deleted: true, id }; }));
+
+  server.registerTool("drink_search_recent", { description: "Find recent EvaOrbit drink records.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), drink_type: drinkType.optional(), limit: z.number().int().min(1).max(50).default(10) }) },
+    async ({ query, date: day, drink_type, limit }) => runTool(async () => ({ records: (await listDrinkLogs({ query, date: day, drinkType: drink_type })).slice(0, limit).map(compactDrink) })));
+
   server.registerTool("drink_create", { description: "Create one EvaOrbit drink record.", inputSchema: z.object(drinkFields) },
     async (input) => runTool(async () => { const result = await createDrinkLog(parseNewDrinkLog(drinkInput(input))); return { record: compactDrink(result.drink), limits: result.limits }; }));
 
   server.registerTool("drink_update", { description: "Update an existing EvaOrbit drink record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...drinkFields, name: drinkFields.name.optional() }) },
     async ({ id, ...input }) => runTool(async () => { const result = await updateDrinkLog(id, parseDrinkLogPatch(drinkInput(input as z.infer<z.ZodObject<typeof drinkFields>>))); if (!result) throw new ConflictError("Drink record not found."); return { record: compactDrink(result.drink), limits: result.limits }; }));
+
+  server.registerTool("drink_delete", { description: "Delete one EvaOrbit drink record by its exact ID.", inputSchema: z.object({ id: z.number().int().positive() }) },
+    async ({ id }) => runTool(async () => { if (!await deleteDrinkLog(id)) throw new ConflictError("Drink record not found."); return { deleted: true, id }; }));
 
   server.registerTool("nutrition_get_daily_summary", { description: "Get EvaOrbit's calculated nutrition summary for one date.", inputSchema: z.object({ date }) },
     async ({ date: day }) => runTool(async () => { const summary = await getDailyNutritionSummary(day); return { date: summary.date, estimated_intake_kcal: summary.estimatedIntakeKcal, intake_min: summary.intakeMin, intake_max: summary.intakeMax, confidence: summary.confidence, resting_energy_kcal: summary.restingEnergyKcal, active_energy_kcal: summary.activeEnergyKcal, total_expenditure_kcal: summary.totalExpenditureKcal, energy_balance: summary.energyBalance, energy_balance_min: summary.energyBalanceMin, energy_balance_max: summary.energyBalanceMax, notes: summary.notes }; }));

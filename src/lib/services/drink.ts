@@ -4,9 +4,11 @@ import type { NewDrinkLimit, NewDrinkLog } from "../repositories/types";
 import { calculateLimitStatus } from "../nutrition";
 import { dateInEvaOrbit, dateRange, weekRange } from "../time";
 
-export async function listDrinkLogs(input: { date?: string; from?: string; to?: string; drinkType?: string } = {}) {
+export async function listDrinkLogs(input: { date?: string; query?: string; from?: string; to?: string; drinkType?: string } = {}) {
   const range = input.date ? dateRange(input.date) : null;
-  return (await getRepository()).listDrinkLogs({ ...input, from: range?.from ?? input.from, to: range?.to ?? input.to });
+  const logs = await (await getRepository()).listDrinkLogs({ from: range?.from ?? input.from, to: range?.to ?? input.to, drinkType: input.drinkType });
+  const query = input.query?.trim().toLocaleLowerCase();
+  return query ? logs.filter((item) => [item.name, item.brand, item.notes].some((value) => value.toLocaleLowerCase().includes(query))) : logs;
 }
 export async function getTodayDrinks() { return listDrinkLogs({ date: dateInEvaOrbit() }); }
 export async function getDrinkLimits() { return (await getRepository()).listDrinkLimits(); }

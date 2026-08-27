@@ -54,7 +54,7 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
   }
 
   return <section className={`home-destinations ${arranging ? "arranging" : ""}`}>
-    <div className="section-heading"><div><span className="eyebrow">ALL SPACES</span><h2>Everything has a place</h2></div><button className="home-arrange-button" onClick={() => arranging ? void finishArranging() : setArranging(true)} disabled={saving}>{saving ? "Saving…" : arranging ? "Done" : "Arrange"}</button></div>
+    <div className="section-heading"><div><span className="eyebrow">SPACES</span><h2>All Spaces</h2></div><button className="home-arrange-button" onClick={() => arranging ? void finishArranging() : setArranging(true)} disabled={saving}>{saving ? "Saving…" : arranging ? "Done" : "Arrange"}</button></div>
     {error && <p className="home-order-error">{error}</p>}
     <nav className="home-destination-grid" aria-label="All EvaOrbit spaces">{order.map((id, index) => {
       const item = modules[id];

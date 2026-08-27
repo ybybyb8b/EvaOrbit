@@ -37,7 +37,8 @@ export type AiModelConfigInput = { modelId: string; displayName: string; enabled
 
 export type NewInboxItem = Pick<InboxItem, "content" | "source">;
 export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt">;
-export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "updatedAt">;
+export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
+export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
 export type NewTracker = Omit<Tracker, "id" | "createdAt" | "updatedAt">;
@@ -96,7 +97,10 @@ export interface EvaOrbitRepository {
   updateFoodLog(id: number, input: Record<string, unknown>): Promise<FoodLog | null>;
   deleteFoodLog(id: number): Promise<boolean>;
   searchFoodLibrary(query?: string, brand?: string): Promise<FoodLibraryItem[]>;
+  getFoodLibraryItem(id: number): Promise<FoodLibraryItem | null>;
   upsertFoodLibraryItem(input: NewFoodLibraryItem): Promise<FoodLibraryItem>;
+  updateFoodLibraryItem(id: number, input: NewFoodLibraryItem): Promise<FoodLibraryItem | null>;
+  removeFoodLibraryItem(id: number): Promise<FoodLibraryRemoval | null>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;

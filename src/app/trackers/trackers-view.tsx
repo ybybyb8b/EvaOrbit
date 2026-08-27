@@ -108,7 +108,7 @@ export function TrackersView() {
 
   const groups = [...new Set(trackers.map((tracker) => tracker.groupName))];
   return <div className="page tracker-page">
-    <PageHeader eyebrow="LIFE" title="Trackers" description="Moments worth noticing, without streaks or daily obligations." action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />New Tracker</button>} />
+    <PageHeader eyebrow="LIFE" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />New Tracker</button>} />
     {showForm && <form className="editor-card tracker-create-form" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW TRACKER</span><h2>What do you want to notice?</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
       <div className="tracker-create-basics">

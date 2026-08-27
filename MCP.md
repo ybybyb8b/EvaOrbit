@@ -20,8 +20,11 @@ Enable the Supabase OAuth Server, Dynamic OAuth Apps, and set its authorization 
 - `food_search_recent`
 - `food_create`
 - `food_update`
+- `food_delete`
+- `drink_search_recent`
 - `drink_create`
 - `drink_update`
+- `drink_delete`
 - `nutrition_get_daily_summary`
 - `tracker_list`
 - `tracker_create_entry`

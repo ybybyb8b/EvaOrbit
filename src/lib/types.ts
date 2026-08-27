@@ -323,6 +323,7 @@ export interface FoodLibraryItem {
   servingKcal: number | null;
   dataSource: FoodDataSource;
   notes: string;
+  archivedAt: string | null;
   updatedAt: string;
 }
 

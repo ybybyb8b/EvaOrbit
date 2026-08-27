@@ -13,3 +13,5 @@ export async function updateFoodLog(id: number, input: Record<string, unknown>) 
 export async function deleteFoodLog(id: number) { return (await getRepository()).deleteFoodLog(id); }
 export async function searchFoodLibrary(query = "", brand = "") { return (await getRepository()).searchFoodLibrary(query, brand); }
 export async function upsertFoodLibraryItem(input: NewFoodLibraryItem) { return (await getRepository()).upsertFoodLibraryItem(input); }
+export async function updateFoodLibraryItem(id: number, input: NewFoodLibraryItem) { return (await getRepository()).updateFoodLibraryItem(id, input); }
+export async function removeFoodLibraryItem(id: number) { return (await getRepository()).removeFoodLibraryItem(id); }
