@@ -30,9 +30,14 @@ export type McpOAuthIdentity = {
 };
 
 export class McpOAuthError extends Error {
-  constructor(message = "Invalid OAuth access token") {
-    super(message);
+  readonly reason: string;
+  readonly audience: string | string[] | null;
+
+  constructor(reason = "invalid_token", audience: string | string[] | null = null) {
+    super("Invalid OAuth access token");
     this.name = "McpOAuthError";
+    this.reason = reason;
+    this.audience = audience;
   }
 }
 
@@ -52,7 +57,7 @@ function decodeJwtPart(value: string): Record<string, unknown> {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid JWT object");
     return parsed as Record<string, unknown>;
   } catch {
-    throw new McpOAuthError();
+    throw new McpOAuthError("malformed_token");
   }
 }
 
@@ -82,11 +87,11 @@ async function getJwks(issuer: string, fetcher: typeof fetch, forceRefresh = fal
       cache: "no-store",
     });
   } catch {
-    throw new McpOAuthError();
+    throw new McpOAuthError("jwks_unavailable");
   }
-  if (!response.ok) throw new McpOAuthError();
+  if (!response.ok) throw new McpOAuthError("jwks_unavailable");
   const value: unknown = await response.json().catch(() => null);
-  if (!validJwks(value)) throw new McpOAuthError();
+  if (!validJwks(value)) throw new McpOAuthError("jwks_invalid");
   cachedJwks = { issuer, expiresAt: now + JWKS_CACHE_MS, value };
   return value;
 }
@@ -101,6 +106,12 @@ function scopeIncludesRequiredScope(scope: unknown) {
   return Array.isArray(scope) && scope.includes(MCP_REQUIRED_SCOPE);
 }
 
+function safeAudience(audience: unknown): string | string[] | null {
+  if (typeof audience === "string") return audience.slice(0, 300);
+  if (Array.isArray(audience)) return audience.filter((value): value is string => typeof value === "string").slice(0, 5).map((value) => value.slice(0, 300));
+  return null;
+}
+
 export async function verifySupabaseMcpAccessToken(input: {
   token: string;
   supabaseUrl: string;
@@ -110,7 +121,7 @@ export async function verifySupabaseMcpAccessToken(input: {
   const { header } = parseJwt(input.token);
   const algorithm = typeof header.alg === "string" ? header.alg : "";
   const keyId = typeof header.kid === "string" ? header.kid : "";
-  if (!keyId || !["RS256", "ES256"].includes(algorithm)) throw new McpOAuthError();
+  if (!keyId || !["RS256", "ES256"].includes(algorithm)) throw new McpOAuthError("unsupported_signing_key");
 
   const issuer = supabaseOAuthIssuer(input.supabaseUrl);
   const fetcher = input.fetcher ?? fetch;
@@ -120,13 +131,13 @@ export async function verifySupabaseMcpAccessToken(input: {
     jwks = await getJwks(issuer, fetcher, true);
     signingKey = jwks.keys.find((key) => key.kid === keyId && (!key.alg || key.alg === algorithm));
   }
-  if (!signingKey) throw new McpOAuthError();
+  if (!signingKey) throw new McpOAuthError("signing_key_not_found");
 
   const client = createClient(input.supabaseUrl, input.publishableKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data, error } = await client.auth.getClaims(input.token, { jwks: { keys: [signingKey] } });
-  if (error || !data?.claims) throw new McpOAuthError();
+  if (error || !data?.claims) throw new McpOAuthError("signature_verification_failed");
 
   const claims = data.claims as Record<string, unknown>;
   const now = Math.floor(Date.now() / 1000);
@@ -134,13 +145,13 @@ export async function verifySupabaseMcpAccessToken(input: {
   const notBefore = typeof claims.nbf === "number" ? claims.nbf : null;
   const userId = typeof claims.sub === "string" ? claims.sub : "";
 
-  if (claims.iss !== issuer) throw new McpOAuthError();
-  if (!expiration || expiration <= now - CLOCK_SKEW_SECONDS) throw new McpOAuthError();
-  if (notBefore !== null && notBefore > now + CLOCK_SKEW_SECONDS) throw new McpOAuthError();
-  if (!audienceIncludesResource(claims.aud)) throw new McpOAuthError();
-  if (claims.role !== "authenticated") throw new McpOAuthError();
-  if (!scopeIncludesRequiredScope(claims.scope)) throw new McpOAuthError();
-  if (!USER_ID_PATTERN.test(userId)) throw new McpOAuthError();
+  if (claims.iss !== issuer) throw new McpOAuthError("issuer_mismatch");
+  if (!expiration || expiration <= now - CLOCK_SKEW_SECONDS) throw new McpOAuthError("token_expired");
+  if (notBefore !== null && notBefore > now + CLOCK_SKEW_SECONDS) throw new McpOAuthError("token_not_yet_valid");
+  if (!audienceIncludesResource(claims.aud)) throw new McpOAuthError("audience_mismatch", safeAudience(claims.aud));
+  if (claims.role !== "authenticated") throw new McpOAuthError("role_mismatch");
+  if (!scopeIncludesRequiredScope(claims.scope)) throw new McpOAuthError("required_scope_missing");
+  if (!USER_ID_PATTERN.test(userId)) throw new McpOAuthError("subject_invalid");
 
   return { accessToken: input.token, userId };
 }

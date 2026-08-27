@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const identity = await authenticateMcpRequest(request);
+    console.info("[mcp-oauth-diagnostic]", { stage: "token_validated" });
     return await withMcpRequestRepository(identity, () => mcpHandler.fetch(request));
   } catch (error) {
     if (error instanceof McpAuthConfigurationError) {
@@ -17,7 +18,14 @@ export async function POST(request: Request) {
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (error instanceof McpOAuthError) return mcpUnauthorized();
+    if (error instanceof McpOAuthError) {
+      console.warn("[mcp-oauth-diagnostic]", {
+        stage: "token_rejected",
+        reason: error.reason,
+        audience: error.audience,
+      });
+      return mcpUnauthorized();
+    }
     throw error;
   }
 }

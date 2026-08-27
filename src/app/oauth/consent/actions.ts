@@ -15,7 +15,16 @@ async function decide(formData: FormData, action: "approve" | "deny") {
   const result = action === "approve"
     ? await supabase.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true })
     : await supabase.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true });
-  if (result.error || !result.data?.redirect_url) redirect(`/oauth/consent?authorization_id=${encodeURIComponent(id)}&error=consent_failed`);
+  if (result.error || !result.data?.redirect_url) {
+    console.warn("[mcp-oauth-diagnostic]", {
+      stage: `consent_${action}_failed`,
+      error_name: result.error?.name ?? null,
+      error_status: result.error?.status ?? null,
+      error_code: result.error?.code ?? null,
+    });
+    redirect(`/oauth/consent?authorization_id=${encodeURIComponent(id)}&error=consent_failed`);
+  }
+  console.info("[mcp-oauth-diagnostic]", { stage: `consent_${action}_success` });
   redirect(result.data.redirect_url);
 }
 
