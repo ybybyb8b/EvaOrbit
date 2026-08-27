@@ -1,5 +1,5 @@
-# Web Push boundary
+# Reminder Web Push
 
-This directory only reserves the Web Push boundary. The database migration contains owner-scoped `push_subscriptions`, and the service worker can display an authenticated server-sent payload. EvaOrbit does not currently request notification permission, create subscriptions, hold VAPID keys, or schedule notifications.
+The Cats page exposes an explicit opt-in button. The browser subscription is stored through the owner-scoped repository, `sw.js` displays the payload, and `/api/reminders/deliver` sends due reminders when invoked by a scheduler such as Vercel Cron or Supabase Cron.
 
-Before activation, add an authenticated Application Service and API route that validates the browser subscription, stores it through the Repository, and never exposes another user's endpoint. Permission must be requested from a deliberate UI action. A scheduler may later emit `task_due`, `drink_limit`, `meal_missing`, or `daily_review`, but only when an enabled rule changes state; it must not send routine per-meal nags.
+Production activation requires `EVAORBIT_VAPID_PUBLIC_KEY`, `EVAORBIT_VAPID_PRIVATE_KEY`, `EVAORBIT_VAPID_SUBJECT`, `CRON_SECRET`, and `SUPABASE_SECRET_KEY`. The delivery job records `last_notified_at` after at least one successful device delivery and removes expired subscriptions. On iOS, Web Push is intended for an installed Home Screen PWA.

@@ -1,0 +1,4 @@
+import { NextRequest,NextResponse } from "next/server";import{apiError}from"@/lib/api";import{listPushSubscriptions,removePushSubscription,savePushSubscription}from"@/lib/services/push";export const runtime="nodejs";
+export async function GET(){try{return NextResponse.json({subscribed:(await listPushSubscriptions()).length>0});}catch(error){return apiError(error);}}
+export async function POST(request:NextRequest){try{return NextResponse.json(await savePushSubscription(await request.json()),{status:201});}catch(error){return apiError(error);}}
+export async function DELETE(request:NextRequest){try{return await removePushSubscription((await request.json()).endpoint)?new NextResponse(null,{status:204}):NextResponse.json({error:"Subscription not found"},{status:404});}catch(error){return apiError(error);}}

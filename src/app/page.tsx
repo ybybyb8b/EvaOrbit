@@ -5,6 +5,8 @@ import { getDailyTimelineOverview } from "@/lib/services/timeline";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
 import { HomeDestinations } from "./home-destinations";
 import { HomeTodayBrief } from "./home-today-brief";
+import { DueReminders } from "@/components/due-reminders";
+import { getDueReminders } from "@/lib/services/reminder";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ function timeLabel(value: string) {
 }
 
 export default async function HomePage() {
-  const [inbox, today, preferences] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getUiPreferences()]);
+  const [inbox, today, preferences, due] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getUiPreferences(), getDueReminders(3)]);
   const recentInbox = inbox.slice(0, 4);
 
   return <div className="page home-page">
@@ -35,10 +37,12 @@ export default async function HomePage() {
       <h1>{greeting()}</h1>
     </header>
 
+    <DueReminders items={due} limit={3} compact />
+
     <section className="home-overview">
       <div className="home-today-grid home-now-grid">
         <section className="today-focus home-activity">
-          <div className="section-heading compact"><div><span className="eyebrow">TODAY</span><h2>Today</h2></div><p>{today.events.length} {today.events.length === 1 ? "record" : "records"}</p></div>
+          <div className="section-heading compact"><span className="eyebrow">TODAY</span><p>{today.events.length} {today.events.length === 1 ? "record" : "records"}</p></div>
           <HomeTodayBrief events={today.events} />
         </section>
 

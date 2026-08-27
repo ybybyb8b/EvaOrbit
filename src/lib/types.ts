@@ -380,3 +380,155 @@ export interface DailyNutritionSummary {
   confidence: EstimateConfidence;
   notes: string;
 }
+
+export type PetSex = "female" | "male" | "unknown";
+export interface Pet {
+  id: number;
+  name: string;
+  avatarUrl: string;
+  sex: PetSex | null;
+  birthday: string | null;
+  adoptionDate: string | null;
+  notes: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CatEventType = "deworming" | "grooming" | "care" | "note" | "cleaning" | "shared_note";
+export interface CatEvent {
+  id: number;
+  petId: number | null;
+  eventType: CatEventType;
+  occurredAt: string;
+  title: string;
+  note: string;
+  sourceType: string | null;
+  sourceId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatSymptom {
+  id: number;
+  petId: number;
+  occurredAt: string;
+  title: string;
+  severity: string;
+  description: string;
+  bodyArea: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatVetVisit {
+  id: number;
+  petId: number;
+  occurredAt: string;
+  clinic: string;
+  doctor: string;
+  reason: string;
+  symptoms: string;
+  diagnosis: string;
+  examinations: string;
+  treatment: string;
+  prescriptions: string;
+  cost: number | null;
+  followUpAt: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatMedication {
+  id: number;
+  petId: number;
+  name: string;
+  dose: string;
+  unit: string;
+  frequencyText: string;
+  startedAt: string;
+  endedAt: string | null;
+  reason: string;
+  active: boolean;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatMeasurement {
+  id: number;
+  petId: number;
+  occurredAt: string;
+  measurementType: string;
+  value: number;
+  unit: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CatRecordKind = "event" | "symptom" | "vet_visit" | "medication" | "measurement";
+export interface CatTimelineEntry {
+  id: number;
+  kind: CatRecordKind;
+  petId: number | null;
+  occurredAt: string;
+  eventType: string;
+  title: string;
+  summary: string;
+  metadata: Record<string, unknown>;
+}
+
+export type ReminderTargetType = "cat" | "cat_household" | "tracker";
+export type ReminderScheduleType = "one_time" | "interval" | "course";
+export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
+export type ReminderOccurrenceAction = "completed" | "skipped";
+export interface Reminder {
+  id: number;
+  title: string;
+  targetType: ReminderTargetType;
+  targetId: number | null;
+  sourceType: string | null;
+  sourceId: number | null;
+  scheduleType: ReminderScheduleType;
+  startsAt: string;
+  nextDueAt: string | null;
+  intervalValue: number | null;
+  intervalUnit: ReminderIntervalUnit | null;
+  timesOfDay: string[];
+  endsAt: string | null;
+  timezone: string;
+  isActive: boolean;
+  lastCompletedAt: string | null;
+  snoozedUntil: string | null;
+  lastNotifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReminderOccurrence {
+  id: number;
+  reminderId: number;
+  action: ReminderOccurrenceAction;
+  scheduledFor: string;
+  actedAt: string;
+  createdEventId: number | null;
+  createdAt: string;
+}
+
+export interface DueReminder extends Reminder {
+  subjectLabel: string;
+  dueAt: string;
+  overdueMs: number;
+}
+
+export interface PushSubscriptionRecord {
+  id: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  createdAt: string;
+  lastUsedAt: string;
+}

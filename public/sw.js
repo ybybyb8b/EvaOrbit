@@ -24,15 +24,13 @@ self.addEventListener("fetch", (event) => {
   })));
 });
 
-// Push delivery is intentionally dormant until the user explicitly grants
-// permission and a server-side subscription endpoint is implemented.
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   let payload = {};
   try { payload = event.data.json(); } catch { payload = { body: event.data.text() }; }
   const title = typeof payload.title === "string" ? payload.title : "EvaOrbit";
   const options = {
-    body: typeof payload.body === "string" ? payload.body : "有一件事可以回来看看。",
+    body: typeof payload.body === "string" ? payload.body : "Due in EvaOrbit",
     icon: "/icon.svg",
     data: { url: typeof payload.url === "string" && payload.url.startsWith("/") ? payload.url : "/" },
     tag: typeof payload.tag === "string" ? payload.tag : undefined,

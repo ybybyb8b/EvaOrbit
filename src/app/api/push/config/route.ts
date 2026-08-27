@@ -1,0 +1,1 @@
+import { NextResponse } from "next/server";import { pushPublicConfig } from "@/lib/services/push";export const runtime="nodejs";export async function GET(){return NextResponse.json(pushPublicConfig());}

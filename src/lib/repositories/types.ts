@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
 import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
@@ -46,6 +46,13 @@ export type NewTrackerField = Omit<TrackerField, "id" | "createdAt" | "updatedAt
 export type NewTrackerEntry = Omit<TrackerEntry, "id" | "sourceType" | "createdAt" | "updatedAt">;
 export type NewTrackerGoal = Omit<TrackerGoal, "id" | "createdAt" | "updatedAt">;
 export type NewTrackerReminder = Omit<TrackerReminder, "id" | "createdAt" | "updatedAt">;
+export type NewPet = Omit<Pet, "id" | "createdAt" | "updatedAt">;
+export type NewCatEvent = Omit<CatEvent, "id" | "createdAt" | "updatedAt">;
+export type NewCatSymptom = Omit<CatSymptom, "id" | "createdAt" | "updatedAt">;
+export type NewCatVetVisit = Omit<CatVetVisit, "id" | "createdAt" | "updatedAt">;
+export type NewCatMedication = Omit<CatMedication, "id" | "createdAt" | "updatedAt">;
+export type NewCatMeasurement = Omit<CatMeasurement, "id" | "createdAt" | "updatedAt">;
+export type NewReminder = Omit<Reminder, "id" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "createdAt" | "updatedAt">;
 
 export interface EvaOrbitRepository {
   listTasks(filter?: TaskFilter): Promise<Task[]>;
@@ -131,6 +138,47 @@ export interface EvaOrbitRepository {
   listTrackerReminders(trackerId: number): Promise<TrackerReminder[]>;
   createTrackerReminder(input: NewTrackerReminder): Promise<TrackerReminder>;
   deleteTrackerReminder(id: number): Promise<boolean>;
+
+  listPets(includeInactive?: boolean): Promise<Pet[]>;
+  getPet(id: number): Promise<Pet | null>;
+  createPet(input: NewPet): Promise<Pet>;
+  updatePet(id: number, input: Record<string, unknown>): Promise<Pet | null>;
+  archivePet(id: number): Promise<boolean>;
+  listCatEvents(petId?: number | null): Promise<CatEvent[]>;
+  getCatEvent(id: number): Promise<CatEvent | null>;
+  createCatEvent(input: NewCatEvent): Promise<CatEvent>;
+  updateCatEvent(id: number, input: Record<string, unknown>): Promise<CatEvent | null>;
+  deleteCatEvent(id: number): Promise<boolean>;
+  listCatSymptoms(petId?: number): Promise<CatSymptom[]>;
+  getCatSymptom(id: number): Promise<CatSymptom | null>;
+  createCatSymptom(input: NewCatSymptom): Promise<CatSymptom>;
+  updateCatSymptom(id: number, input: Record<string, unknown>): Promise<CatSymptom | null>;
+  deleteCatSymptom(id: number): Promise<boolean>;
+  listCatVetVisits(petId?: number): Promise<CatVetVisit[]>;
+  getCatVetVisit(id: number): Promise<CatVetVisit | null>;
+  createCatVetVisit(input: NewCatVetVisit): Promise<CatVetVisit>;
+  updateCatVetVisit(id: number, input: Record<string, unknown>): Promise<CatVetVisit | null>;
+  deleteCatVetVisit(id: number): Promise<boolean>;
+  listCatMedications(petId?: number): Promise<CatMedication[]>;
+  getCatMedication(id: number): Promise<CatMedication | null>;
+  createCatMedication(input: NewCatMedication): Promise<CatMedication>;
+  updateCatMedication(id: number, input: Record<string, unknown>): Promise<CatMedication | null>;
+  deleteCatMedication(id: number): Promise<boolean>;
+  listCatMeasurements(petId?: number): Promise<CatMeasurement[]>;
+  getCatMeasurement(id: number): Promise<CatMeasurement | null>;
+  createCatMeasurement(input: NewCatMeasurement): Promise<CatMeasurement>;
+  updateCatMeasurement(id: number, input: Record<string, unknown>): Promise<CatMeasurement | null>;
+  deleteCatMeasurement(id: number): Promise<boolean>;
+
+  listReminders(input?: { targetType?: string; targetId?: number | null; activeOnly?: boolean; dueBefore?: string }): Promise<Reminder[]>;
+  getReminder(id: number): Promise<Reminder | null>;
+  createReminder(input: NewReminder): Promise<Reminder>;
+  updateReminder(id: number, input: Record<string, unknown>): Promise<Reminder | null>;
+  deleteReminder(id: number): Promise<boolean>;
+  createReminderOccurrence(input: Omit<ReminderOccurrence, "id" | "createdAt">): Promise<ReminderOccurrence>;
+  listPushSubscriptions(): Promise<PushSubscriptionRecord[]>;
+  upsertPushSubscription(input: Pick<PushSubscriptionRecord, "endpoint" | "p256dh" | "auth">): Promise<PushSubscriptionRecord>;
+  deletePushSubscription(endpoint: string): Promise<boolean>;
 
   getNutritionSettings(date: string): Promise<Pick<DailyNutritionSummary, "restingEnergyKcal" | "activeEnergyKcal" | "notes">>;
   updateNutritionSettings(date: string, input: { restingEnergyKcal: number | null; activeEnergyKcal: number | null; notes: string }): Promise<void>;
