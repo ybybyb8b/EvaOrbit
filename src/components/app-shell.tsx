@@ -19,6 +19,7 @@ const navigationGroups = [
     { href: "/trackers", label: "Trackers", icon: "tracker" as const },
     { href: "/food", label: "Food", icon: "food" as const },
     { href: "/drinks", label: "Drinks", icon: "drink" as const },
+    { href: "/health", label: "Health", icon: "health" as const },
     { href: "/cats", label: "Cats", icon: "cats" as const },
   ] },
   { label: "ARCHIVE", items: [

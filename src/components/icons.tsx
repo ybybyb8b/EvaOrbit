@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName };
 
@@ -51,6 +49,6 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
 
 export function Icon({ name }: IconProps) {
   const featureSource = featureIconSources[name];
-  if (featureSource) return <Image className="icon feature-icon" src={featureSource} alt="" width={64} height={64} aria-hidden="true" />;
+  if (featureSource) return <span className="icon feature-icon" style={{ backgroundImage: `url("${featureSource}")` }} aria-hidden="true" />;
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

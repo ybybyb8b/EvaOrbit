@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -61,6 +61,9 @@ test("keeps food brands distinct and validates drink limits", () => {
   const item = parseFoodLibraryItem({ name: "燕麦奶", brand: "A 品牌", category: "drink", referenceType: "per_100ml", referenceKcal: 48, dataSource: "package_label" });
   assert.equal(item.brand, "A 品牌");
   assert.equal(item.referenceKcal, 48);
+  assert.deepEqual(parseFoodLibraryItemPatch({ referenceKcal: null }), { referenceKcal: null });
+  assert.deepEqual(parseFoodLibraryItemPatch({ notes: "  只改备注  " }), { notes: "只改备注" });
+  assert.throws(() => parseFoodLibraryItemPatch({}), ValidationError);
   assert.deepEqual(parseDrinkLimit({ name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3 }), { name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3, enabled: true });
   assert.throws(() => parseDrinkLimit({ name: "咖啡", targetType: "coffee", limitValue: 0 }), ValidationError);
 });

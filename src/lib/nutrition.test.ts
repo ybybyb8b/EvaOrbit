@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { calculateDailyNutrition, calculateLimitStatus, limitState } from "./nutrition.ts";
 import type { DrinkLimit, DrinkLog, FoodLog } from "./types.ts";
@@ -27,4 +28,18 @@ test("reports drink limit states factually", () => {
   const limit: DrinkLimit = { id: 1, name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 2, enabled: true, createdAt: "", updatedAt: "" };
   const status = calculateLimitStatus(limit, [drink({ id: 1 }), drink({ id: 2, name: "美式" }), drink({ id: 3, name: "茶", drinkType: "tea" })]);
   assert.deepEqual({ count: status.count, state: status.state }, { count: 2, state: "reached_limit" });
+});
+
+test("nutrition history uses saved settings and one range per log source", () => {
+  const service = readFileSync(new URL("./services/nutrition.ts", import.meta.url), "utf8");
+  const sqlite = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
+  const historyRoute = readFileSync(new URL("../app/api/nutrition/daily/history/route.ts", import.meta.url), "utf8");
+  assert.match(service, /repository\.listNutritionSettings\(limit\)/);
+  assert.match(service, /listFoodLogs\(\{ from, to \}\)/);
+  assert.match(service, /listDrinkLogs\(\{ from, to \}\)/);
+  assert.match(service, /dateInEvaOrbit\(new Date\(record\.occurredAt\)\)/);
+  assert.match(sqlite, /listNutritionSettings\(limit=30\)/);
+  assert.match(sqlite, /resting_energy_kcal IS NOT NULL OR active_energy_kcal IS NOT NULL/);
+  assert.match(historyRoute, /listDailyNutritionHistory/);
+  assert.match(historyRoute, /limit > 90/);
 });

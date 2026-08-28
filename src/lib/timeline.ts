@@ -1,6 +1,6 @@
-import type { DrinkLog, FoodLog, TimelineEvent, Tracker, TrackerEntry } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, TimelineEvent, Tracker, TrackerEntry } from "./types";
 
-export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = []): TimelineEvent[] {
+export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = []): TimelineEvent[] {
   const foodEvents: TimelineEvent[] = foods.map((item) => ({
     id: `food:${item.id}`,
     eventType: "food.logged",
@@ -39,5 +39,11 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
       relatedPeople: [], relatedPets: [], metadata: { trackerId: entry.trackerId, values: entry.values },
     };
   });
-  return [...foodEvents, ...drinkEvents, ...trackerEvents].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+  const healthEvents: TimelineEvent[] = healthRecords.map((item) => ({
+    id: `health:${item.id}`, eventType: `health.${item.type}`, sourceType: "health", sourceId: item.id,
+    title: item.title, detail: item.summary || item.type.replaceAll("_", " "),
+    occurredAt: item.occurredAt, endAt: item.endedAt, href: `/health/records/${item.id}`,
+    relatedPeople: [], relatedPets: [], metadata: { type: item.type, status: item.status, details: item.details },
+  }));
+  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
 }

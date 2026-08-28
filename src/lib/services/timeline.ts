@@ -12,36 +12,38 @@ function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:s
 async function loadDailySources(date: string) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
     repository.listTrackers(),
+    repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
   ]);
-  return { repository, foods, drinks, trackerEntries, trackers };
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords };
 }
 
 export async function listTimeline(input: { date?: string; limit?: number } = {}) {
   const date = input.date ?? dateInEvaOrbit();
-  const { foods, drinks, trackerEntries, trackers } = await loadDailySources(date);
+  const { foods, drinks, trackerEntries, trackers, healthRecords } = await loadDailySources(date);
   const range=dateRange(date);const cats=catsInRange(await catTimeline(),range);
-  return [...buildTimelineEvents(foods, drinks, trackerEntries, trackers),...cats].sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
+  return [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...cats].sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
 }
 
 export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
     repository.listTrackers(),
     repository.getNutritionSettings(date),
     catTimeline(),
+    repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
   ]);
   return {
     date,
-    events: [...buildTimelineEvents(foods, drinks, trackerEntries, trackers),...catsInRange(cats,range)].sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)),
+    events: [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...catsInRange(cats,range)].sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

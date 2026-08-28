@@ -17,6 +17,7 @@ function timelineIcon(sourceType: string): IconName {
   if (sourceType === "drink") return "drink";
   if (sourceType === "tracker") return "tracker";
   if (sourceType === "cat") return "cats";
+  if (sourceType === "health") return "health";
   if (sourceType === "person") return "people";
   if (sourceType === "media") return "media";
   return "chronicle";

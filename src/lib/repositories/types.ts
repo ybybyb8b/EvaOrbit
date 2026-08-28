@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
 import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
@@ -38,7 +38,11 @@ export type AiModelConfigInput = { modelId: string; displayName: string; enabled
 export type NewInboxItem = Pick<InboxItem, "content" | "source">;
 export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt">;
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
+export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryItem["category"]; limit?: number };
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
+export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
+export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
+export type NutritionSettings = Pick<DailyNutritionSummary, "date" | "restingEnergyKcal" | "activeEnergyKcal" | "notes">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
 export type NewTracker = Omit<Tracker, "id" | "createdAt" | "updatedAt">;
@@ -104,11 +108,17 @@ export interface EvaOrbitRepository {
   createFoodLog(input: NewFoodLog): Promise<FoodLog>;
   updateFoodLog(id: number, input: Record<string, unknown>): Promise<FoodLog | null>;
   deleteFoodLog(id: number): Promise<boolean>;
-  searchFoodLibrary(query?: string, brand?: string): Promise<FoodLibraryItem[]>;
+  searchFoodLibrary(query?: string, brand?: string, options?: FoodLibrarySearchOptions): Promise<FoodLibraryItem[]>;
   getFoodLibraryItem(id: number): Promise<FoodLibraryItem | null>;
   upsertFoodLibraryItem(input: NewFoodLibraryItem): Promise<FoodLibraryItem>;
   updateFoodLibraryItem(id: number, input: NewFoodLibraryItem): Promise<FoodLibraryItem | null>;
   removeFoodLibraryItem(id: number): Promise<FoodLibraryRemoval | null>;
+
+  listHealthRecords(input?: HealthRecordListInput): Promise<HealthRecord[]>;
+  getHealthRecord(id: number): Promise<HealthRecord | null>;
+  createHealthRecord(input: NewHealthRecord): Promise<HealthRecord>;
+  updateHealthRecord(id: number, input: Record<string, unknown>): Promise<HealthRecord | null>;
+  deleteHealthRecord(id: number): Promise<boolean>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;
@@ -190,5 +200,6 @@ export interface EvaOrbitRepository {
   deletePushSubscription(endpoint: string): Promise<boolean>;
 
   getNutritionSettings(date: string): Promise<Pick<DailyNutritionSummary, "restingEnergyKcal" | "activeEnergyKcal" | "notes">>;
+  listNutritionSettings(limit?: number): Promise<NutritionSettings[]>;
   updateNutritionSettings(date: string, input: { restingEnergyKcal: number | null; activeEnergyKcal: number | null; notes: string }): Promise<void>;
 }

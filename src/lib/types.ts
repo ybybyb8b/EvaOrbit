@@ -136,7 +136,7 @@ export interface InboxItem {
   updatedAt: string;
 }
 
-export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "person" | "media" | "chronicle";
+export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "person" | "media" | "chronicle";
 
 export interface TimelineEvent {
   id: string;
@@ -324,6 +324,24 @@ export interface FoodLibraryItem {
   dataSource: FoodDataSource;
   notes: string;
   archivedAt: string | null;
+  updatedAt: string;
+}
+
+export type HealthRecordType = "symptom" | "medication" | "visit" | "test" | "condition" | "treatment" | "measurement" | "note";
+export type HealthRecordStatus = "active" | "resolved";
+export type HealthRecordDetailValue = string | number | boolean | null;
+export type HealthRecordDetails = Record<string, HealthRecordDetailValue>;
+export interface HealthRecord {
+  id: number;
+  occurredAt: string;
+  type: HealthRecordType;
+  title: string;
+  summary: string;
+  status: HealthRecordStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  details: HealthRecordDetails;
+  createdAt: string;
   updatedAt: string;
 }
 

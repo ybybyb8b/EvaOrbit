@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildTimelineEvents } from "./timeline.ts";
-import type { DrinkLog, FoodLog, Tracker, TrackerEntry } from "./types.ts";
+import type { DrinkLog, FoodLog, HealthRecord, Tracker, TrackerEntry } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home",
@@ -19,14 +19,20 @@ const trackerEntry: TrackerEntry = {
   id: 17, trackerId: 11, occurredAt: "2026-08-26T07:00:00.000Z", endAt: null, values: {}, note: "早饭后",
   sourceType: "native_tracker", createdAt: "", updatedAt: "",
 };
+const healthRecord: HealthRecord = {
+  id: 19, occurredAt: "2026-08-26T08:00:00.000Z", type: "symptom", title: "Headache", summary: "Mild",
+  status: "active", startedAt: null, endedAt: null, details: { severity: "mild" }, createdAt: "", updatedAt: "",
+};
 
 test("merges module records into a newest-first timeline contract", () => {
-  const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker]);
-  assert.deepEqual(events.map((event) => event.id), ["tracker:17", "drink:3", "food:7"]);
-  assert.equal(events[0].title, "吃药");
-  assert.equal(events[0].href, "/trackers/11");
-  assert.equal(events[1].eventType, "drink.logged");
-  assert.equal(events[2].metadata.mealType, "lunch");
+  const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker], [healthRecord]);
+  assert.deepEqual(events.map((event) => event.id), ["health:19", "tracker:17", "drink:3", "food:7"]);
+  assert.equal(events[0].href, "/health/records/19");
+  assert.equal(events[0].metadata.status, "active");
+  assert.equal(events[1].title, "吃药");
+  assert.equal(events[1].href, "/trackers/11");
+  assert.equal(events[2].eventType, "drink.logged");
+  assert.equal(events[3].metadata.mealType, "lunch");
   assert.deepEqual(events[0].relatedPeople, []);
   assert.deepEqual(events[0].relatedPets, []);
 });

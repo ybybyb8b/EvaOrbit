@@ -1,4 +1,4 @@
-import type { TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import type { HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -333,6 +333,104 @@ export function parseFoodLibraryItem(value: unknown) {
     dataSource: enumValue(body.dataSource, "数据来源", ["package_label", "official", "estimated", "manual"] as const, "manual"),
     notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
   };
+}
+
+export function parseFoodLibraryItemPatch(value: unknown) {
+  const body = objectValue(value);
+  const parsed = parseFoodLibraryItem({
+    name: body.name === undefined ? "placeholder" : body.name,
+    brand: body.brand,
+    category: body.category,
+    defaultPortion: body.defaultPortion,
+    referenceType: body.referenceType,
+    referenceEnergyKj: body.referenceEnergyKj,
+    referenceKcal: body.referenceKcal,
+    servingWeight: body.servingWeight,
+    servingKcal: body.servingKcal,
+    dataSource: body.dataSource,
+    notes: body.notes,
+  });
+  const keys = [
+    "name", "brand", "category", "defaultPortion", "referenceType", "referenceEnergyKj", "referenceKcal",
+    "servingWeight", "servingKcal", "dataSource", "notes",
+  ] as const;
+  const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  if (!Object.keys(result).length) throw new ValidationError("没有可更新的 Food Library 字段");
+  return result;
+}
+
+function nullableTimestamp(value: unknown, field: string) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  return timestamp(value, field);
+}
+
+function validateHealthTimeRange(startedAt: string | null, endedAt: string | null) {
+  if (startedAt && endedAt && endedAt < startedAt) throw new ValidationError("结束时间不能早于开始时间");
+}
+
+function healthDetails(value: unknown, optional = false): HealthRecordDetails {
+  if (value === undefined && optional) return {};
+  const body = objectValue(value ?? {});
+  const entries = Object.entries(body);
+  if (entries.length > 50) throw new ValidationError("健康详情最多包含 50 个字段");
+  const result: HealthRecordDetails = {};
+  const keys = new Set<string>();
+  for (const [rawKey, rawValue] of entries) {
+    const key = rawKey.trim();
+    if (!key) throw new ValidationError("健康详情字段名不能为空");
+    if (key.length > 80) throw new ValidationError("健康详情字段名不能超过 80 个字符");
+    if (keys.has(key)) throw new ValidationError("健康详情字段名不能重复");
+    keys.add(key);
+    if (rawValue !== null && typeof rawValue !== "string" && typeof rawValue !== "number" && typeof rawValue !== "boolean") {
+      throw new ValidationError("健康详情只支持字符串、数字、布尔值或空值");
+    }
+    if (typeof rawValue === "number" && !Number.isFinite(rawValue)) throw new ValidationError("健康详情数字格式不正确");
+    if (typeof rawValue === "string" && rawValue.length > 2000) throw new ValidationError("健康详情文本不能超过 2000 个字符");
+    result[key] = rawValue as HealthRecordDetailValue;
+  }
+  if (JSON.stringify(result).length > 10000) throw new ValidationError("健康详情内容过大");
+  return result;
+}
+
+const healthRecordTypes = ["symptom", "medication", "visit", "test", "condition", "treatment", "measurement", "note"] as const;
+const healthRecordStatuses = ["active", "resolved"] as const;
+
+export function parseNewHealthRecord(value: unknown) {
+  const body = objectValue(value);
+  const startedAt = nullableTimestamp(body.startedAt, "开始时间") ?? null;
+  const endedAt = nullableTimestamp(body.endedAt, "结束时间") ?? null;
+  validateHealthTimeRange(startedAt, endedAt);
+  if (body.type === undefined) throw new ValidationError("健康记录类型不能为空");
+  return {
+    occurredAt: timestamp(body.occurredAt ?? new Date().toISOString(), "发生时间"),
+    type: enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType,
+    title: text(body.title, "健康记录标题", 200)!,
+    summary: text(body.summary ?? "", "健康记录摘要", 5000, false) ?? "",
+    status: enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus,
+    startedAt,
+    endedAt,
+    details: healthDetails(body.details),
+  };
+}
+
+export function parseHealthRecordPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt, "发生时间"),
+    type: body.type === undefined ? undefined : enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType,
+    title: body.title === undefined ? undefined : text(body.title, "健康记录标题", 200),
+    summary: body.summary === undefined ? undefined : text(body.summary, "健康记录摘要", 5000, false),
+    status: body.status === undefined ? undefined : enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus,
+    startedAt: nullableTimestamp(body.startedAt, "开始时间"),
+    endedAt: nullableTimestamp(body.endedAt, "结束时间"),
+    details: body.details === undefined ? undefined : healthDetails(body.details),
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的健康记录字段");
+  if (result.startedAt !== undefined && result.endedAt !== undefined) {
+    validateHealthTimeRange(result.startedAt, result.endedAt);
+  }
+  return result;
 }
 
 export function parseNewDrinkLog(value: unknown) {

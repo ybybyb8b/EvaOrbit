@@ -11,6 +11,7 @@ const modules: Record<HomeModuleId, { href: string; name: string; description: s
   trackers: { href: "/trackers", name: "Trackers", description: "Recurring life events", icon: "tracker" },
   food: { href: "/food", name: "Food", description: "Meals and energy", icon: "food" },
   drinks: { href: "/drinks", name: "Drinks", description: "Coffee and everything else", icon: "drink" },
+  health: { href: "/health", name: "Health", description: "Personal health records", icon: "health" },
   cats: { href: "/cats", name: "Cats", description: "Care and shared home", icon: "cats" },
   people: { href: "/people", name: "People", description: "People and relationships", icon: "people" },
   media: { href: "/media", name: "Media", description: "Things fully watched", icon: "media" },

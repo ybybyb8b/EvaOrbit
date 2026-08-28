@@ -3,6 +3,7 @@ const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icons/app-icon-192.png",
   "/icons/app-icon-512.png",
+  "/apple-touch-icon.png",
   "/icons/apple-touch-icon.png",
   "/icons/features/calendar.png",
   "/icons/features/cats.png",

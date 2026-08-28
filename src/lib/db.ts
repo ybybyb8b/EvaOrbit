@@ -5,8 +5,8 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput } from "./repositories/types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, FoodLibrarySearchOptions, HealthRecordListInput, NewHealthRecord } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -470,6 +470,37 @@ if (!hasV14) {
   `);
 }
 
+const hasV15 = database.prepare("SELECT 1 FROM migrations WHERE version = 15").get();
+if (!hasV15) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS health_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL DEFAULT 'local',
+        occurred_at TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('symptom','medication','visit','test','condition','treatment','measurement','note')),
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','resolved')),
+        started_at TEXT,
+        ended_at TEXT,
+        details TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CHECK(started_at IS NULL OR ended_at IS NULL OR ended_at >= started_at)
+      );
+      CREATE INDEX IF NOT EXISTS idx_health_records_user_occurred ON health_records(user_id, occurred_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_health_records_active ON health_records(user_id, occurred_at DESC) WHERE status='active';
+      INSERT OR IGNORE INTO migrations(version) VALUES (15);
+      COMMIT;
+    `);
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -916,11 +947,18 @@ export function updateFoodLog(id: number, input: Record<string, unknown>) { cons
 export function deleteFoodLog(id:number){return database.prepare("DELETE FROM food_logs WHERE id=?").run(id).changes>0;}
 
 function libraryFromRow(row:Record<string,unknown>):FoodLibraryItem{return{id:Number(row.id),name:String(row.name),brand:String(row.brand),category:row.category as FoodLibraryItem["category"],defaultPortion:String(row.default_portion),referenceType:row.reference_type as FoodLibraryItem["referenceType"],referenceEnergyKj:row.reference_energy_kj===null?null:Number(row.reference_energy_kj),referenceKcal:row.reference_kcal===null?null:Number(row.reference_kcal),servingWeight:row.serving_weight===null?null:Number(row.serving_weight),servingKcal:row.serving_kcal===null?null:Number(row.serving_kcal),dataSource:row.data_source as FoodLibraryItem["dataSource"],notes:String(row.notes),archivedAt:row.archived_at?String(row.archived_at):null,updatedAt:String(row.updated_at)};}
-export function searchFoodLibrary(query="",brand=""){const conditions:string[]=["archived_at IS NULL"],values:string[]=[];if(query){conditions.push("name LIKE ?");values.push(`%${query}%`);}if(brand){conditions.push("brand = ?");values.push(brand);}return(database.prepare(`SELECT * FROM food_library WHERE ${conditions.join(" AND ")} ORDER BY CASE WHEN brand='' THEN 1 ELSE 0 END, updated_at DESC LIMIT 100`).all(...values) as Record<string,unknown>[]).map(libraryFromRow);}
+export function searchFoodLibrary(query="",brand="",options:FoodLibrarySearchOptions={}){const conditions:string[]=["archived_at IS NULL"],values:string[]=[];const keyword=query.trim();if(keyword){conditions.push("(name LIKE ? OR brand LIKE ?)");values.push(`%${keyword}%`,`%${keyword}%`);}if(options.name){conditions.push("name LIKE ?");values.push(`%${options.name}%`);}if(brand){conditions.push("brand = ?");values.push(brand);}if(options.category){conditions.push("category = ?");values.push(options.category);}const limit=Math.min(Math.max(options.limit??100,1),100);return(database.prepare(`SELECT * FROM food_library WHERE ${conditions.join(" AND ")} ORDER BY CASE WHEN brand='' THEN 1 ELSE 0 END, updated_at DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(libraryFromRow);}
 export function getFoodLibraryItem(id:number){const row=database.prepare("SELECT * FROM food_library WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?libraryFromRow(row):null;}
 export function upsertFoodLibraryItem(input:Omit<FoodLibraryItem,"id"|"archivedAt"|"updatedAt">){database.prepare(`INSERT INTO food_library(name,brand,category,default_portion,reference_type,reference_energy_kj,reference_kcal,serving_weight,serving_kcal,data_source,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(name,brand) DO UPDATE SET category=excluded.category,default_portion=excluded.default_portion,reference_type=excluded.reference_type,reference_energy_kj=excluded.reference_energy_kj,reference_kcal=excluded.reference_kcal,serving_weight=excluded.serving_weight,serving_kcal=excluded.serving_kcal,data_source=excluded.data_source,notes=excluded.notes,archived_at=NULL,updated_at=CURRENT_TIMESTAMP`).run(input.name,input.brand,input.category,input.defaultPortion,input.referenceType,input.referenceEnergyKj,input.referenceKcal,input.servingWeight,input.servingKcal,input.dataSource,input.notes);return libraryFromRow(database.prepare("SELECT * FROM food_library WHERE name=? AND brand=?").get(input.name,input.brand) as Record<string,unknown>);}
 export function updateFoodLibraryItem(id:number,input:Omit<FoodLibraryItem,"id"|"archivedAt"|"updatedAt">){const result=database.prepare(`UPDATE food_library SET name=?,brand=?,category=?,default_portion=?,reference_type=?,reference_energy_kj=?,reference_kcal=?,serving_weight=?,serving_kcal=?,data_source=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL`).run(input.name,input.brand,input.category,input.defaultPortion,input.referenceType,input.referenceEnergyKj,input.referenceKcal,input.servingWeight,input.servingKcal,input.dataSource,input.notes,id);return result.changes?getFoodLibraryItem(id):null;}
 export function removeFoodLibraryItem(id:number){if(!getFoodLibraryItem(id))return null;const references=Number((database.prepare("SELECT COUNT(*) AS count FROM drink_logs WHERE food_library_id=?").get(id) as {count:number}).count);if(references>0){database.prepare("UPDATE food_library SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(id);return{id,action:"archived" as const};}database.prepare("DELETE FROM food_library WHERE id=?").run(id);return{id,action:"deleted" as const};}
+function healthDetailsFromRow(value: unknown): HealthRecord["details"] { let parsed: unknown; try { parsed = typeof value === "string" ? JSON.parse(value) : value; } catch { return {}; } if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}; return Object.fromEntries(Object.entries(parsed).filter(([, item]) => item === null || typeof item === "string" || typeof item === "number" || typeof item === "boolean")); }
+function healthRecordFromRow(row:Record<string,unknown>):HealthRecord{return{id:Number(row.id),occurredAt:String(row.occurred_at),type:row.type as HealthRecord["type"],title:String(row.title),summary:String(row.summary??""),status:row.status as HealthRecord["status"],startedAt:row.started_at?String(row.started_at):null,endedAt:row.ended_at?String(row.ended_at):null,details:healthDetailsFromRow(row.details),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listHealthRecords(input:HealthRecordListInput={}){const conditions:string[]=["user_id = 'local'"],values:(string|number)[]=[];if(input.status){conditions.push("status = ?");values.push(input.status);}if(input.type){conditions.push("type = ?");values.push(input.type);}if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM health_records WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(healthRecordFromRow);}
+export function getHealthRecord(id:number){const row=database.prepare("SELECT * FROM health_records WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?healthRecordFromRow(row):null;}
+export function createHealthRecord(input:NewHealthRecord){const result=database.prepare("INSERT INTO health_records(user_id,occurred_at,type,title,summary,status,started_at,ended_at,details) VALUES(?,?,?,?,?,?,?,?,?)").run("local",input.occurredAt,input.type,input.title,input.summary,input.status,input.startedAt,input.endedAt,JSON.stringify(input.details));return getHealthRecord(Number(result.lastInsertRowid))!;}
+export function updateHealthRecord(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",type:"type",title:"title",summary:"summary",status:"status",startedAt:"started_at",endedAt:"ended_at",details:"details"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getHealthRecord(id);const value=(key:string)=>key==="details"?JSON.stringify(input[key]):input[key] as string|null;const result=database.prepare(`UPDATE health_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getHealthRecord(id):null;}
+export function deleteHealthRecord(id:number){return database.prepare("DELETE FROM health_records WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function drinkFromRow(row:Record<string,unknown>):DrinkLog{return{id:Number(row.id),occurredAt:String(row.occurred_at),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listDrinkLogs(input:{from?:string;to?:string;drinkType?:string}={}){const conditions:string[]=[],values:string[]=[];if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}if(input.drinkType){conditions.push("drink_type = ?");values.push(input.drinkType);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM drink_logs ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(drinkFromRow);}
@@ -1029,4 +1067,5 @@ export function upsertPushSubscription(input:Pick<PushSubscriptionRecord,"endpoi
 export function deletePushSubscription(endpoint:string){return database.prepare("DELETE FROM push_subscriptions WHERE endpoint=?").run(endpoint).changes>0;}
 
 export function getNutritionSettings(date:string){const row=database.prepare("SELECT * FROM daily_nutrition_summaries WHERE date=?").get(date) as Record<string,unknown>|undefined;return{restingEnergyKcal:row?.resting_energy_kcal===null||row?.resting_energy_kcal===undefined?null:Number(row.resting_energy_kcal),activeEnergyKcal:row?.active_energy_kcal===null||row?.active_energy_kcal===undefined?null:Number(row.active_energy_kcal),notes:row?String(row.notes):""};}
+export function listNutritionSettings(limit=30){const size=Math.min(Math.max(Math.trunc(limit),1),90);return(database.prepare("SELECT date,resting_energy_kcal,active_energy_kcal,notes FROM daily_nutrition_summaries WHERE resting_energy_kcal IS NOT NULL OR active_energy_kcal IS NOT NULL ORDER BY date DESC LIMIT ?").all(size) as Record<string,unknown>[]).map((row)=>({date:String(row.date),restingEnergyKcal:row.resting_energy_kcal===null||row.resting_energy_kcal===undefined?null:Number(row.resting_energy_kcal),activeEnergyKcal:row.active_energy_kcal===null||row.active_energy_kcal===undefined?null:Number(row.active_energy_kcal),notes:String(row.notes??"")}));}
 export function updateNutritionSettings(date:string,input:{restingEnergyKcal:number|null;activeEnergyKcal:number|null;notes:string}){database.prepare("INSERT INTO daily_nutrition_summaries(date,resting_energy_kcal,active_energy_kcal,notes) VALUES(?,?,?,?) ON CONFLICT(date) DO UPDATE SET resting_energy_kcal=excluded.resting_energy_kcal,active_energy_kcal=excluded.active_energy_kcal,notes=excluded.notes,updated_at=CURRENT_TIMESTAMP").run(date,input.restingEnergyKcal,input.activeEnergyKcal,input.notes);}
