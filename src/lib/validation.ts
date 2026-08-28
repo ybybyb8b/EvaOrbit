@@ -403,13 +403,16 @@ export function parseNewHealthRecord(value: unknown) {
   validateHealthTimeRange(startedAt, endedAt);
   if (body.type === undefined) throw new ValidationError("健康记录类型不能为空");
   return {
-    occurredAt: timestamp(body.occurredAt ?? new Date().toISOString(), "发生时间"),
+    occurredAt: timestamp(body.occurredAt, "发生日期"),
+    occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true),
     type: enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType,
     title: text(body.title, "健康记录标题", 200)!,
     summary: text(body.summary ?? "", "健康记录摘要", 5000, false) ?? "",
     status: enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus,
     startedAt,
+    startedHasExplicitTime: booleanValue(body.startedHasExplicitTime, "开始时间精度", true),
     endedAt,
+    endedHasExplicitTime: booleanValue(body.endedHasExplicitTime, "结束时间精度", true),
     details: healthDetails(body.details),
   };
 }
@@ -418,12 +421,15 @@ export function parseHealthRecordPatch(value: unknown) {
   const body = objectValue(value);
   const result = {
     occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt, "发生时间"),
+    occurredHasExplicitTime: body.occurredHasExplicitTime === undefined ? undefined : booleanValue(body.occurredHasExplicitTime, "发生时间精度", true),
     type: body.type === undefined ? undefined : enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType,
     title: body.title === undefined ? undefined : text(body.title, "健康记录标题", 200),
     summary: body.summary === undefined ? undefined : text(body.summary, "健康记录摘要", 5000, false),
     status: body.status === undefined ? undefined : enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus,
     startedAt: nullableTimestamp(body.startedAt, "开始时间"),
+    startedHasExplicitTime: body.startedHasExplicitTime === undefined ? undefined : booleanValue(body.startedHasExplicitTime, "开始时间精度", true),
     endedAt: nullableTimestamp(body.endedAt, "结束时间"),
+    endedHasExplicitTime: body.endedHasExplicitTime === undefined ? undefined : booleanValue(body.endedHasExplicitTime, "结束时间精度", true),
     details: body.details === undefined ? undefined : healthDetails(body.details),
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的健康记录字段");

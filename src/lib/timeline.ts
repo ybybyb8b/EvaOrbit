@@ -1,4 +1,5 @@
 import type { DrinkLog, FoodLog, HealthRecord, TimelineEvent, Tracker, TrackerEntry } from "./types";
+import { dateInEvaOrbit } from "./time.ts";
 
 export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = []): TimelineEvent[] {
   const foodEvents: TimelineEvent[] = foods.map((item) => ({
@@ -9,6 +10,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     title: item.title,
     detail: item.portion || item.description || "饮食记录",
     occurredAt: item.occurredAt,
+    hasExplicitTime: true,
     endAt: null,
     href: "/food",
     relatedPeople: [],
@@ -23,6 +25,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     title: item.name,
     detail: item.volumeMl ? `${item.volumeMl} ml` : item.brand || "饮品记录",
     occurredAt: item.occurredAt,
+    hasExplicitTime: true,
     endAt: null,
     href: "/drinks",
     relatedPeople: [],
@@ -35,15 +38,17 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     return {
       id: `tracker:${entry.id}`, eventType: "tracker.logged", sourceType: "tracker", sourceId: entry.id,
       title: tracker ? tracker.name : "Tracker record", detail: entry.note || "Recorded a moment",
-      occurredAt: entry.occurredAt, endAt: entry.endAt, href: `/trackers/${entry.trackerId}`,
+      occurredAt: entry.occurredAt, hasExplicitTime: true, endAt: entry.endAt, href: `/trackers/${entry.trackerId}`,
       relatedPeople: [], relatedPets: [], metadata: { trackerId: entry.trackerId, values: entry.values },
     };
   });
   const healthEvents: TimelineEvent[] = healthRecords.map((item) => ({
     id: `health:${item.id}`, eventType: `health.${item.type}`, sourceType: "health", sourceId: item.id,
     title: item.title, detail: item.summary || item.type.replaceAll("_", " "),
-    occurredAt: item.occurredAt, endAt: item.endedAt, href: `/health/records/${item.id}`,
+    occurredAt: item.occurredAt, hasExplicitTime: item.occurredHasExplicitTime, endAt: item.endedAt, href: `/health/records/${item.id}`,
     relatedPeople: [], relatedPets: [], metadata: { type: item.type, status: item.status, details: item.details },
   }));
-  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
+  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort(compareTimelineEvents);
 }
+
+export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}

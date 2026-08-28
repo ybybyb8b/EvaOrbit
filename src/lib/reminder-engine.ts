@@ -16,7 +16,8 @@ export function effectiveDueAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUn
   return reminder.snoozedUntil ?? reminder.nextDueAt;
 }
 
-export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes">) {
+export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime">) {
+  if (!reminder.dueHasExplicitTime && !reminder.snoozedUntil) return null;
   const dueAt = effectiveDueAt(reminder);
   if (!dueAt) return null;
   const scheduled = new Date(dueAt);
@@ -24,17 +25,18 @@ export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snooz
   return scheduled.toISOString();
 }
 
-export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt">, now = new Date()) {
+export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt" | "dueHasExplicitTime">, now = new Date()) {
   const scheduledAt = notificationSendAt(reminder);
   return Boolean(scheduledAt) && new Date(scheduledAt!).getTime() <= now.getTime() && (!reminder.lastNotifiedAt || new Date(reminder.lastNotifiedAt).getTime() < new Date(scheduledAt!).getTime());
 }
 
-export function reminderIsDue(reminder: Pick<Reminder, "isActive" | "nextDueAt" | "snoozedUntil">, now = new Date()) {
+export function reminderIsDue(reminder: Pick<Reminder, "isActive" | "nextDueAt" | "snoozedUntil" | "dueHasExplicitTime">, now = new Date()) {
+  if (!reminder.dueHasExplicitTime && !reminder.snoozedUntil) return false;
   const dueAt = effectiveDueAt(reminder);
   return reminder.isActive && Boolean(dueAt) && new Date(dueAt!).getTime() <= now.getTime();
 }
 
-export function selectDueReminders<T extends Pick<Reminder,"isActive"|"nextDueAt"|"snoozedUntil">>(reminders:T[],now=new Date(),limit=50){return reminders.filter(item=>reminderIsDue(item,now)).sort((a,b)=>(effectiveDueAt(a)??"").localeCompare(effectiveDueAt(b)??"")).slice(0,limit);}
+export function selectDueReminders<T extends Pick<Reminder,"isActive"|"nextDueAt"|"snoozedUntil"|"dueHasExplicitTime">>(reminders:T[],now=new Date(),limit=50){return reminders.filter(item=>reminderIsDue(item,now)).sort((a,b)=>(effectiveDueAt(a)??"").localeCompare(effectiveDueAt(b)??"")).slice(0,limit);}
 
 export function reminderActionPatch(reminder: Reminder, action: "complete" | "skip", actedAt = new Date()) {
   const scheduled = effectiveDueAt(reminder) ?? reminder.startsAt;

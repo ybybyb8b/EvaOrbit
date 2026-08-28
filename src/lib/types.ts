@@ -146,6 +146,7 @@ export interface TimelineEvent {
   title: string;
   detail: string;
   occurredAt: string;
+  hasExplicitTime: boolean;
   endAt: string | null;
   href: string;
   relatedPeople: Array<number | string>;
@@ -334,12 +335,15 @@ export type HealthRecordDetails = Record<string, HealthRecordDetailValue>;
 export interface HealthRecord {
   id: number;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   type: HealthRecordType;
   title: string;
   summary: string;
   status: HealthRecordStatus;
   startedAt: string | null;
+  startedHasExplicitTime: boolean;
   endedAt: string | null;
+  endedHasExplicitTime: boolean;
   details: HealthRecordDetails;
   createdAt: string;
   updatedAt: string;
@@ -419,6 +423,7 @@ export interface CatEvent {
   petId: number | null;
   eventType: CatEventType;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   title: string;
   note: string;
   sourceType: string | null;
@@ -431,6 +436,7 @@ export interface CatSymptom {
   id: number;
   petId: number;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   title: string;
   severity: string;
   description: string;
@@ -444,6 +450,7 @@ export interface CatVetVisit {
   id: number;
   petId: number;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   clinic: string;
   doctor: string;
   reason: string;
@@ -467,7 +474,9 @@ export interface CatMedication {
   unit: string;
   frequencyText: string;
   startedAt: string;
+  startedHasExplicitTime: boolean;
   endedAt: string | null;
+  endedHasExplicitTime: boolean;
   reason: string;
   active: boolean;
   notes: string;
@@ -479,6 +488,7 @@ export interface CatMeasurement {
   id: number;
   petId: number;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   measurementType: string;
   value: number;
   unit: string;
@@ -493,6 +503,7 @@ export interface CatTimelineEntry {
   kind: CatRecordKind;
   petId: number | null;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   eventType: string;
   title: string;
   summary: string;
@@ -533,6 +544,7 @@ export interface Reminder {
   scheduleType: ReminderScheduleType;
   startsAt: string;
   nextDueAt: string | null;
+  dueHasExplicitTime: boolean;
   intervalValue: number | null;
   intervalUnit: ReminderIntervalUnit | null;
   timesOfDay: string[];
@@ -583,6 +595,7 @@ export interface NotificationDelivery {
   targetType: ReminderTargetType;
   targetId: number | null;
   scheduledAt: string;
+  scheduledHasExplicitTime: boolean;
   sentAt: string | null;
   status: NotificationDeliveryStatus;
   createdAt: string;

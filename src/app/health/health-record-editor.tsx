@@ -3,8 +3,9 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Icon } from "@/components/icons";
+import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import type { HealthRecord, HealthRecordDetails, HealthRecordStatus, HealthRecordType } from "@/lib/types";
-import { detailFields, fromLocalDateTime, healthRecordStatusLabels, healthRecordTypes, toLocalDateTime } from "./health-record-utils";
+import { detailFields, healthRecordStatusLabels, healthRecordTypes } from "./health-record-utils";
 
 type Draft = {
   type: HealthRecordType;
@@ -18,7 +19,7 @@ type Draft = {
 };
 
 function emptyDraft(): Draft {
-  return { type: "note", title: "", summary: "", occurredAt: toLocalDateTime(new Date().toISOString()), status: defaultStatusForType("note"), startedAt: "", endedAt: "", details: {} };
+  return { type: "note", title: "", summary: "", occurredAt: currentLocalDate(), status: defaultStatusForType("note"), startedAt: "", endedAt: "", details: {} };
 }
 
 function defaultStatusForType(type: HealthRecordType): HealthRecordStatus {
@@ -26,7 +27,7 @@ function defaultStatusForType(type: HealthRecordType): HealthRecordStatus {
 }
 
 function draftFromRecord(record: HealthRecord): Draft {
-  return { type: record.type, title: record.title, summary: record.summary, occurredAt: toLocalDateTime(record.occurredAt), status: record.status, startedAt: toLocalDateTime(record.startedAt), endedAt: toLocalDateTime(record.endedAt), details: record.details };
+  return { type: record.type, title: record.title, summary: record.summary, occurredAt: compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime), status: record.status, startedAt: compactDateTimeValue(record.startedAt, record.startedHasExplicitTime), endedAt: compactDateTimeValue(record.endedAt, record.endedHasExplicitTime), details: record.details };
 }
 
 export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: HealthRecord; onCancel: () => void; onSaved: (record: HealthRecord) => void }) {
@@ -51,11 +52,12 @@ export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: H
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setSaving(true);
     const details = Object.fromEntries(Object.entries(draft.details).filter(([, value]) => value !== "" && value !== undefined));
+    const occurred=compactDateTimePayload(draft.occurredAt);const started=draft.startedAt?compactDateTimePayload(draft.startedAt):null;const ended=draft.endedAt?compactDateTimePayload(draft.endedAt):null;
     const body = {
       type: draft.type, title: draft.title, summary: draft.summary, status: draft.status,
-      occurredAt: fromLocalDateTime(draft.occurredAt),
-      startedAt: draft.startedAt ? fromLocalDateTime(draft.startedAt) : null,
-      endedAt: draft.endedAt ? fromLocalDateTime(draft.endedAt) : null,
+      occurredAt: occurred.value, occurredHasExplicitTime: occurred.hasExplicitTime,
+      startedAt: started?.value ?? null, startedHasExplicitTime: started?.hasExplicitTime ?? false,
+      endedAt: ended?.value ?? null, endedHasExplicitTime: ended?.hasExplicitTime ?? false,
       details,
     };
     try {
@@ -76,9 +78,9 @@ export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: H
     <div className="form-grid health-form-grid">
       <label className="field"><span>Title</span><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="What should you remember?" /></label>
       <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
-      <label className="field"><span>Occurred at</span><input required type="datetime-local" value={draft.occurredAt} onChange={(event) => setDraft({ ...draft, occurredAt: event.target.value })} /></label>
-      <label className="field"><span>Started at <small>(optional)</small></span><input type="datetime-local" value={draft.startedAt} onChange={(event) => setDraft({ ...draft, startedAt: event.target.value })} /></label>
-      <label className="field"><span>Ended at <small>(optional)</small></span><input type="datetime-local" value={draft.endedAt} onChange={(event) => setDraft({ ...draft, endedAt: event.target.value })} /></label>
+      <HealthDateTime label="Occurred" value={draft.occurredAt} onChange={(occurredAt)=>setDraft({...draft,occurredAt})}/>
+      <HealthDateTime label="Started" value={draft.startedAt} onChange={(startedAt)=>setDraft({...draft,startedAt})} optional/>
+      <HealthDateTime label="Ended" value={draft.endedAt} onChange={(endedAt)=>setDraft({...draft,endedAt})} optional/>
       <label className="field wide"><span>Summary <small>(optional)</small></span><textarea rows={3} maxLength={5000} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} placeholder="A short note for later…" /></label>
     </div>
     <section className="health-details-editor"><div className="health-editor-section-heading"><div><span className="eyebrow">DETAILS</span><p>Small type-specific context. Keep it lightweight.</p></div></div><div className="form-grid health-form-grid">{fields.map((field) => <label className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><input type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onChange={(event) => setDetail(field.key, event.target.value, field.inputType)} placeholder={field.placeholder} /></label>)}</div></section>
@@ -86,3 +88,5 @@ export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: H
     <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
   </form>;
 }
+
+function HealthDateTime({label,value,onChange,optional=false}:{label:string;value:string;onChange:(value:string)=>void;optional?:boolean}){const date=value.slice(0,10),time=value.length>10?value.slice(11,16):"";return <DateTimeField label={label} value={{date,time}} optionalDate={optional} onChange={next=>onChange(next.date+(next.time?`T${next.time}`:""))}/>;}

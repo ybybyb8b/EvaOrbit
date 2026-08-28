@@ -20,8 +20,8 @@ const trackerEntry: TrackerEntry = {
   sourceType: "native_tracker", createdAt: "", updatedAt: "",
 };
 const healthRecord: HealthRecord = {
-  id: 19, occurredAt: "2026-08-26T08:00:00.000Z", type: "symptom", title: "Headache", summary: "Mild",
-  status: "active", startedAt: null, endedAt: null, details: { severity: "mild" }, createdAt: "", updatedAt: "",
+  id: 19, occurredAt: "2026-08-26T08:00:00.000Z", occurredHasExplicitTime: true, type: "symptom", title: "Headache", summary: "Mild",
+  status: "active", startedAt: null, startedHasExplicitTime: true, endedAt: null, endedHasExplicitTime: true, details: { severity: "mild" }, createdAt: "", updatedAt: "",
 };
 
 test("merges module records into a newest-first timeline contract", () => {
@@ -35,4 +35,11 @@ test("merges module records into a newest-first timeline contract", () => {
   assert.equal(events[3].metadata.mealType, "lunch");
   assert.deepEqual(events[0].relatedPeople, []);
   assert.deepEqual(events[0].relatedPets, []);
+});
+
+test("puts timed events before date-only events on the same EvaOrbit day", () => {
+  const dateOnlyHealth = { ...healthRecord, id: 20, occurredAt: "2026-08-26T04:00:00.000Z", occurredHasExplicitTime: false };
+  const events = buildTimelineEvents([food], [], [], [], [dateOnlyHealth]);
+  assert.deepEqual(events.map((event) => event.id), ["food:7", "health:20"]);
+  assert.equal(events[1].hasExplicitTime, false);
 });

@@ -4,18 +4,20 @@ import test from "node:test";
 import { parseHealthRecordPatch, parseNewHealthRecord, ValidationError } from "./validation.ts";
 
 test("validates Health record defaults, details and time ordering", () => {
-  const record = parseNewHealthRecord({ title: "过敏性鼻炎", type: "condition", details: { severity: "mild", active: true, count: 2, note: null } });
+  const occurredAt="2026-08-29T04:00:00.000Z";
+  const record = parseNewHealthRecord({ title: "过敏性鼻炎", type: "condition", occurredAt, occurredHasExplicitTime:false, details: { severity: "mild", active: true, count: 2, note: null } });
   assert.equal(record.status, "active");
   assert.equal(record.summary, "");
   assert.equal(record.startedAt, null);
   assert.deepEqual(record.details, { severity: "mild", active: true, count: 2, note: null });
-  assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", startedAt: "2026-08-28T10:00:00+08:00", endedAt: "2026-08-28T09:00:00+08:00" }), /结束时间不能早于开始时间/);
-  assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", details: { nested: { value: true } } }), ValidationError);
+  assert.equal(record.occurredHasExplicitTime,false);
+  assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", occurredAt, startedAt: "2026-08-28T10:00:00+08:00", endedAt: "2026-08-28T09:00:00+08:00" }), /结束时间不能早于开始时间/);
+  assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", occurredAt, details: { nested: { value: true } } }), ValidationError);
   assert.throws(() => parseNewHealthRecord({ title: "缺少类型" }), /健康记录类型不能为空/);
 });
 
 test("Health PATCH keeps omitted fields absent and supports clearing details", () => {
-  assert.deepEqual(parseHealthRecordPatch({ status: "resolved" }), { status: "resolved", occurredAt: undefined, type: undefined, title: undefined, summary: undefined, startedAt: undefined, endedAt: undefined, details: undefined });
+  assert.deepEqual(parseHealthRecordPatch({ status: "resolved" }), { status: "resolved", occurredAt: undefined, occurredHasExplicitTime:undefined, type: undefined, title: undefined, summary: undefined, startedAt: undefined, startedHasExplicitTime:undefined, endedAt: undefined, endedHasExplicitTime:undefined, details: undefined });
   assert.deepEqual(parseHealthRecordPatch({ details: {} }).details, {});
   assert.throws(() => parseHealthRecordPatch({}), /没有可更新/);
 });

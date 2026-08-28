@@ -38,6 +38,7 @@ function reminderInput(routine: CatRoutine): Omit<Reminder, "id" | "lastComplete
     scheduleType: "one_time",
     startsAt: routine.firstDueAt,
     nextDueAt: routine.nextDueAt,
+    dueHasExplicitTime: true,
     intervalValue: null,
     intervalUnit: null,
     timesOfDay: [],
@@ -61,6 +62,7 @@ async function syncReminder(routine: CatRoutine) {
     targetType: routine.scope === "cat" ? "cat" : "cat_household",
     targetId: routine.scope === "cat" ? routine.petId : null,
     nextDueAt: routine.nextDueAt,
+    dueHasExplicitTime: true,
     note: routine.notes,
     leadTimeMinutes: routine.reminderLeadMinutes,
     isActive: routine.enabled,
@@ -104,6 +106,7 @@ export async function completeCatRoutine(id: number, actedAt = new Date()) {
     petId: routine.scope === "cat" ? routine.petId : null,
     eventType: routine.scope === "cat" ? "care" : "cleaning",
     occurredAt: actedAt.toISOString(),
+    occurredHasExplicitTime: true,
     title: routine.title,
     note: routine.notes,
     sourceType: "cat_routine",
@@ -126,7 +129,7 @@ export async function skipCatRoutineOccurrence(id: number, actedAt = new Date())
   const updated = await repository.updateCatRoutine(id, { nextDueAt });
   if (routine.reminderId) {
     await repository.createReminderOccurrence({ reminderId: routine.reminderId, action: "skipped", scheduledFor: routine.nextDueAt, actedAt: actedAt.toISOString(), createdEventId: null });
-    await repository.createNotificationDelivery({ reminderId: routine.reminderId, title: routine.title, sourceType: "cat_routine", sourceId: routine.id, targetType: routine.scope === "cat" ? "cat" : "cat_household", targetId: routine.petId, scheduledAt: routine.nextDueAt, sentAt: null, status: "cancelled" });
+    await repository.createNotificationDelivery({ reminderId: routine.reminderId, title: routine.title, sourceType: "cat_routine", sourceId: routine.id, targetType: routine.scope === "cat" ? "cat" : "cat_household", targetId: routine.petId, scheduledAt: routine.nextDueAt, scheduledHasExplicitTime: true, sentAt: null, status: "cancelled" });
     await repository.updateReminder(routine.reminderId, { nextDueAt, ...RESET_NOTIFICATION, isActive: true });
   }
   return updated;
@@ -136,7 +139,7 @@ export async function archiveCatRoutine(id: number) {
   const { repository, routine } = await requireRoutine(id);
   const archived = await repository.archiveCatRoutine(id);
   if (archived && routine.reminderId) {
-    await repository.createNotificationDelivery({ reminderId: routine.reminderId, title: routine.title, sourceType: "cat_routine", sourceId: routine.id, targetType: routine.scope === "cat" ? "cat" : "cat_household", targetId: routine.petId, scheduledAt: routine.nextDueAt, sentAt: null, status: "cancelled" });
+    await repository.createNotificationDelivery({ reminderId: routine.reminderId, title: routine.title, sourceType: "cat_routine", sourceId: routine.id, targetType: routine.scope === "cat" ? "cat" : "cat_household", targetId: routine.petId, scheduledAt: routine.nextDueAt, scheduledHasExplicitTime: true, sentAt: null, status: "cancelled" });
     await repository.updateReminder(routine.reminderId, { isActive: false, status: "cancelled", cancelledAt: new Date().toISOString(), snoozedUntil: null });
   }
   return archived;

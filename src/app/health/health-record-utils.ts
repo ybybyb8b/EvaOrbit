@@ -56,6 +56,8 @@ export function formatRecordDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+export function formatRecordMoment(value:string,hasExplicitTime:boolean){return hasExplicitTime?formatRecordDateTime(value):formatRecordDate(value);}
+
 export function recordSummary(record: HealthRecord) {
   if (record.summary) return record.summary;
   const values = Object.entries(record.details).filter(([, value]) => value !== null && value !== "").map(([key, value]) => `${key.replaceAll("_", " ")}: ${String(value)}`);

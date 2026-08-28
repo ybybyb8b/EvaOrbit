@@ -31,7 +31,7 @@ export function HomeTodayBrief({ events }: { events: TimelineEvent[] }) {
 
   return <>
     <div className="home-activity-list">{visible.map((item) => <Link href={item.href} key={item.id} className="home-activity-item">
-      <time>{timeLabel(item.occurredAt)}</time>
+      <time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : "All day"}</time>
       <span className="home-activity-icon"><Icon name={timelineIcon(item.sourceType)} /></span>
       <span><strong>{item.title}</strong>{item.detail && <small>{item.detail}</small>}</span>
     </Link>)}</div>

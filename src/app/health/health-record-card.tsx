@@ -6,7 +6,7 @@ import { formatRecordDate, formatRecordDateTime, healthRecordStatusLabels, healt
 export function HealthRecordCard({ record }: { record: HealthRecord }) {
   const summary = recordSummary(record);
   return <Link className="health-record-card" href={`/health/records/${record.id}`}>
-    <div className="health-record-date"><strong>{formatRecordDate(record.occurredAt)}</strong><small>{formatRecordDateTime(record.occurredAt).split(", ").at(-1)}</small></div>
+    <div className="health-record-date"><strong>{formatRecordDate(record.occurredAt)}</strong><small>{record.occurredHasExplicitTime?formatRecordDateTime(record.occurredAt).split(", ").at(-1):"Date only"}</small></div>
     <div className="health-record-card-copy">
       <div className="health-record-card-meta"><span className="health-type-label">{healthRecordTypeLabels[record.type]}</span><span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span></div>
       <h3>{record.title}</h3>
