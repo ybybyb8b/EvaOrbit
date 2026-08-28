@@ -14,7 +14,14 @@ export const metadata: Metadata = {
   title: { default: "EvaOrbit", template: "%s · EvaOrbit" },
   description: "属于自己的生活与思考空间",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icons/app-icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/app-icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+  },
   robots: { index: false, follow: false },
 };
 

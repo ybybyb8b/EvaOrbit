@@ -1,7 +1,29 @@
-export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more";
+import Image from "next/image";
+
+export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName };
 
-const paths: Record<IconProps["name"], React.ReactNode> = {
+const featureIconSources: Partial<Record<IconName, string>> = {
+  home: "/icons/features/home.png",
+  tasks: "/icons/features/calendar.png",
+  memory: "/icons/features/chronicle.png",
+  ai: "/icons/features/eva.png",
+  settings: "/icons/features/settings.png",
+  inbox: "/icons/features/inbox.png",
+  food: "/icons/features/food.png",
+  drink: "/icons/features/drinks.png",
+  tracker: "/icons/features/trackers.png",
+  cats: "/icons/features/cats.png",
+  people: "/icons/features/people.png",
+  media: "/icons/features/media.png",
+  chronicle: "/icons/features/chronicle.png",
+  more: "/icons/features/more.png",
+  notifications: "/icons/features/notifications.png",
+  calendar: "/icons/features/calendar.png",
+  health: "/icons/features/health.png",
+};
+
+const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
   tasks: <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7"/><path d="M14 9h3M8 14h9M8 18h6"/></>,
   memory: <><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v17H7.5A2.5 2.5 0 0 0 5 21.5z"/><path d="M5 4.5v17M9 6h6"/></>,
@@ -28,5 +50,7 @@ const paths: Record<IconProps["name"], React.ReactNode> = {
 };
 
 export function Icon({ name }: IconProps) {
+  const featureSource = featureIconSources[name];
+  if (featureSource) return <Image className="icon feature-icon" src={featureSource} alt="" width={64} height={64} aria-hidden="true" />;
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

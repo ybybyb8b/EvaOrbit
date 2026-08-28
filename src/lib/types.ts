@@ -484,7 +484,27 @@ export interface CatTimelineEntry {
 export type ReminderTargetType = "cat" | "cat_household" | "tracker";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
+export type CatRoutineScope = "cat" | "household";
+export type NotificationStatus = "scheduled" | "sent" | "cancelled" | "failed" | "completed";
+export type NotificationDeliveryStatus = "sent" | "failed" | "cancelled";
 export type ReminderOccurrenceAction = "completed" | "skipped";
+export interface CatRoutine {
+  id: number;
+  scope: CatRoutineScope;
+  petId: number | null;
+  title: string;
+  intervalValue: number;
+  intervalUnit: ReminderIntervalUnit;
+  firstDueAt: string;
+  lastCompletedAt: string | null;
+  nextDueAt: string;
+  reminderLeadMinutes: number;
+  notes: string;
+  enabled: boolean;
+  reminderId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Reminder {
   id: number;
   title: string;
@@ -500,10 +520,15 @@ export interface Reminder {
   timesOfDay: string[];
   endsAt: string | null;
   timezone: string;
+  note: string;
+  leadTimeMinutes: number;
+  status: NotificationStatus;
   isActive: boolean;
   lastCompletedAt: string | null;
   snoozedUntil: string | null;
   lastNotifiedAt: string | null;
+  sentAt: string | null;
+  cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -522,6 +547,27 @@ export interface DueReminder extends Reminder {
   subjectLabel: string;
   dueAt: string;
   overdueMs: number;
+}
+
+export interface ScheduledNotification extends Reminder {
+  subjectLabel: string;
+  scheduledAt: string;
+  sourceLabel: string;
+  isRoutine: boolean;
+}
+
+export interface NotificationDelivery {
+  id: number;
+  reminderId: number | null;
+  title: string;
+  sourceType: string | null;
+  sourceId: number | null;
+  targetType: ReminderTargetType;
+  targetId: number | null;
+  scheduledAt: string;
+  sentAt: string | null;
+  status: NotificationDeliveryStatus;
+  createdAt: string;
 }
 
 export interface PushSubscriptionRecord {

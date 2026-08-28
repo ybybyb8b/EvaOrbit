@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "./icons";
@@ -12,6 +13,7 @@ const navigationGroups = [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/inbox", label: "Inbox", icon: "inbox" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
+    { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   ] },
   { label: "LIFE", items: [
     { href: "/trackers", label: "Trackers", icon: "tracker" as const },
@@ -34,7 +36,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
     <div className="app-shell">
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label="EvaOrbit 首页">
-          <span className="brand-mark"><span /></span>
+          <span className="brand-mark"><Image src="/icons/app-icon-192.png" alt="" width={68} height={68} priority /></span>
           <span><strong>EvaOrbit</strong><small>MY QUIET SPACE</small></span>
         </Link>
         <nav className="main-nav" aria-label="主导航">
@@ -50,10 +52,10 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="spark" /><span>Eva</span></button>}
+      {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label="移动端导航">
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" /><span>Home</span></Link>
-        <button className="mobile-eva-wake" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><span><Icon name="spark" /></span><strong>Eva</strong></button>
+        <button className="mobile-eva-wake" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><span><Icon name="ai" /></span><strong>Eva</strong></button>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="more" /><span>More</span></Link>
       </nav>
       <EvaWakePanel open={evaOpen} onClose={() => setEvaOpen(false)} />

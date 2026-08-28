@@ -1,4 +1,4 @@
-import type { Reminder, ReminderIntervalUnit } from "./types.ts";
+import type { CatRoutine, Reminder, ReminderIntervalUnit } from "./types.ts";
 
 export function addReminderInterval(value: string | Date, amount: number, unit: ReminderIntervalUnit) {
   const next = new Date(value);
@@ -9,8 +9,24 @@ export function addReminderInterval(value: string | Date, amount: number, unit: 
   return next;
 }
 
+export function catRoutineCompletionPatch(routine: Pick<CatRoutine, "intervalValue" | "intervalUnit">, actedAt = new Date()) { return { lastCompletedAt: actedAt.toISOString(), nextDueAt: addReminderInterval(actedAt, routine.intervalValue, routine.intervalUnit).toISOString() }; }
+export function catRoutineSkipPatch(routine: Pick<CatRoutine, "nextDueAt" | "intervalValue" | "intervalUnit">) { return { nextDueAt: addReminderInterval(routine.nextDueAt, routine.intervalValue, routine.intervalUnit).toISOString() }; }
+
 export function effectiveDueAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil">) {
   return reminder.snoozedUntil ?? reminder.nextDueAt;
+}
+
+export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes">) {
+  const dueAt = effectiveDueAt(reminder);
+  if (!dueAt) return null;
+  const scheduled = new Date(dueAt);
+  if (!reminder.snoozedUntil) scheduled.setUTCMinutes(scheduled.getUTCMinutes() - reminder.leadTimeMinutes);
+  return scheduled.toISOString();
+}
+
+export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt">, now = new Date()) {
+  const scheduledAt = notificationSendAt(reminder);
+  return Boolean(scheduledAt) && new Date(scheduledAt!).getTime() <= now.getTime() && (!reminder.lastNotifiedAt || new Date(reminder.lastNotifiedAt).getTime() < new Date(scheduledAt!).getTime());
 }
 
 export function reminderIsDue(reminder: Pick<Reminder, "isActive" | "nextDueAt" | "snoozedUntil">, now = new Date()) {
