@@ -46,11 +46,11 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         <nav className="main-nav" aria-label="主导航">
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{group.label}</span>{group.items.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon name={item.icon} /><span>{item.label}</span></Link>;
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon name={item.icon} variant="stroke" /><span>{item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
-          <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" /><span>Settings</span></Link>
+          <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="stroke" /><span>Settings</span></Link>
           <div className="local-status"><span className="status-dot" /><span><strong>{cloudMode ? "私人云端" : "本地模式"}</strong><small>{cloudMode ? "登录与行级权限已开启" : "SQLite 开发后备"}</small></span></div>
           {cloudMode && <form action={logout}><button className="sidebar-logout" type="submit">退出登录</button></form>}
         </div>
@@ -58,8 +58,8 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       <main className="main-content">{children}</main>
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label="移动端导航">
-        <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" /><span>Home</span></Link>
-        <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" /><span>Settings</span></Link>
+        <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>Home</span></Link>
+        <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>Settings</span></Link>
       </nav>
       <EvaWakePanel open={evaOpen} onClose={() => setEvaOpen(false)} />
     </div>
