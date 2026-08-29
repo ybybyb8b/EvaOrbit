@@ -8,6 +8,7 @@ import { normalizeHomeModuleOrder, type HomeModuleId } from "@/lib/home-modules"
 const modules: Record<HomeModuleId, { href: string; name: string; description: string; icon: IconName }> = {
   inbox: { href: "/inbox", name: "Inbox", description: "Unsorted thoughts", icon: "inbox" },
   eva: { href: "/ai", name: "Eva", description: "Think and explore", icon: "ai" },
+  projects: { href: "/projects", name: "Projects", description: "What is moving and waiting", icon: "tasks" },
   trackers: { href: "/trackers", name: "Trackers", description: "Recurring life events", icon: "tracker" },
   food: { href: "/food", name: "Food", description: "Meals and energy", icon: "food" },
   drinks: { href: "/drinks", name: "Drinks", description: "Coffee and everything else", icon: "drink" },

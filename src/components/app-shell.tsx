@@ -14,6 +14,7 @@ const navigationGroups = [
     { href: "/inbox", label: "Inbox", icon: "inbox" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
     { href: "/notifications", label: "Notifications", icon: "notifications" as const },
+    { href: "/projects", label: "Projects", icon: "tasks" as const },
   ] },
   { label: "LIFE", items: [
     { href: "/trackers", label: "Trackers", icon: "tracker" as const },

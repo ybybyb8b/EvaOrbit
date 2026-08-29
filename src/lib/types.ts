@@ -388,6 +388,39 @@ export interface ChronicleEntry {
   updatedAt: string;
 }
 
+export type ProjectStatus = "active" | "paused" | "archived";
+export interface Project {
+  id: number;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  doingCount: number;
+  toSolveCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProjectItemType = "feature" | "bug" | "ui" | "migration" | "research" | "tech_debt" | "other";
+export type ProjectItemStatus = "to_solve" | "doing" | "blocked" | "done" | "verified" | "dropped";
+export interface ProjectItem {
+  id: number;
+  projectId: number;
+  projectName?: string;
+  title: string;
+  description: string | null;
+  type: ProjectItemType;
+  status: ProjectItemStatus;
+  module: string | null;
+  priority: string | null;
+  nextStep: string | null;
+  resolution: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  verifiedAt: string | null;
+  updatedAt: string;
+}
+
 export interface MigrationTrace {
   sourceSystem: string | null;
   sourceId: string | null;

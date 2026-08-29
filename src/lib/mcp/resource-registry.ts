@@ -1,6 +1,6 @@
 import { ConflictError } from "../errors.ts";
-import type { ChronicleEntry, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, Memo, MemoStatus, MemoType } from "../types.ts";
-import { dateOnly, parseChronicleEntryPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewChronicleEntry, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, ValidationError } from "../validation.ts";
+import type { ChronicleEntry, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, Memo, MemoStatus, MemoType, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus } from "../types.ts";
+import { dateOnly, parseChronicleEntryPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewChronicleEntry, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, parseNewProject, parseNewProjectItem, parseProjectItemPatch, parseProjectPatch, ValidationError } from "../validation.ts";
 
 export type ResourceId = string | number;
 export type ResourceCapability = "search" | "get" | "create" | "update" | "delete" | "action";
@@ -57,6 +57,20 @@ export type MemoResourceOperations = {
   delete(id: number): Promise<boolean>;
 };
 
+export type ProjectResourceOperations = {
+  search(input: { query?: string; status?: ProjectStatus; limit?: number }): Promise<Project[]>;
+  get(id: number): Promise<Project | null>;
+  create(input: Pick<Project, "name" | "description" | "status">): Promise<Project>;
+  update(id: number, input: Partial<Pick<Project, "name" | "description" | "status">>): Promise<Project | null>;
+};
+
+export type ProjectItemResourceOperations = {
+  search(input: { query?: string; projectId?: number; project?: string; status?: ProjectItemStatus; type?: ProjectItemType; module?: string; limit?: number }): Promise<ProjectItem[]>;
+  get(id: number): Promise<ProjectItem | null>;
+  create(input: Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">): Promise<ProjectItem>;
+  update(id: number, input: Partial<Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">>): Promise<ProjectItem | null>;
+};
+
 export type LuciusDiaryResourceOperations = {
   search(input: { query?: string; tag?: string; limit?: number }): Promise<LuciusDiaryEntry[]>;
   get(id: number): Promise<LuciusDiaryEntry | null>;
@@ -79,6 +93,8 @@ export type ResourceRegistryOperations = {
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
   luciusCase: LuciusCaseResourceOperations;
+  project: ProjectResourceOperations;
+  projectItem: ProjectItemResourceOperations;
 };
 
 function numericId(value: ResourceId, resource = "Resource") {
@@ -146,6 +162,20 @@ function migrationRecord(item: Memo | LuciusDiaryEntry | LuciusCase) {
 
 function memoRecord(item: Memo): ResourceRecord {
   return { id: item.id, title: item.title, content: item.content, type: item.type, status: item.status, tags: item.tags, event_date: item.eventDate, confirmed_at: item.confirmedAt, merged_into_id: item.mergedIntoId, ...migrationRecord(item), created_at: item.createdAt, updated_at: item.updatedAt };
+}
+
+function projectRecord(item:Project):ResourceRecord{return{id:item.id,name:item.name,description:item.description,status:item.status,doing_count:item.doingCount,to_solve_count:item.toSolveCount,created_at:item.createdAt,updated_at:item.updatedAt};}
+function projectItemRecord(item:ProjectItem):ResourceRecord{return{id:item.id,project_id:item.projectId,project:item.projectName,title:item.title,description:item.description,type:item.type,status:item.status,module:item.module,priority:item.priority,next_step:item.nextStep,resolution:item.resolution,created_at:item.createdAt,started_at:item.startedAt,completed_at:item.completedAt,verified_at:item.verifiedAt,updated_at:item.updatedAt};}
+
+function projectResource(operations:ProjectResourceOperations):RegisteredResource{
+  const writable=["name","description","status"];
+  return{schema:{resource:"project",description:"EvaOrbit project containers and their current open-work counts.",fields:{id:{type:"integer",description:"Stable project identifier.",read_only:true},name:{type:"string",max_length:200,description:"Project name."},description:{type:"string",max_length:5000,description:"Optional project context."},status:{type:"string",enum:["active","paused","archived"],default:"active",description:"Project lifecycle state."},doing_count:{type:"integer",description:"Current doing item count.",read_only:true},to_solve_count:{type:"integer",description:"Current to_solve item count.",read_only:true},created_at:{type:"string",format:"date-time",description:"Creation timestamp.",read_only:true},updated_at:{type:"string",format:"date-time",description:"Latest project or item activity.",read_only:true}},required_fields:["name"],writable_fields:writable,searchable_fields:["name","description","status"],supported_actions:[],validation_rules:["search filters accept only status","archive by updating status; project records are retained","unknown fields are rejected"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["status"],"project search filters");rejectCursor(cursor,"Project");return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","archived"] as const,"status"),limit})).map(projectRecord),next_cursor:null};},async get(id){const item=await operations.get(numericId(id,"Project"));if(!item)throw new ConflictError("Project not found.");return projectRecord(item);},async create(data){assertOnlyKeys(data,writable,"project create");return projectRecord(await operations.create(parseNewProject(data)));},async update(id,data){assertOnlyKeys(data,writable,"project update");const item=await operations.update(numericId(id,"Project"),definedValues(parseProjectPatch(data)));if(!item)throw new ConflictError("Project not found.");return projectRecord(item);}};
+}
+
+function projectItemResource(operations:ProjectItemResourceOperations):RegisteredResource{
+  const writable=["project_id","title","description","type","status","module","priority","next_step","resolution"];
+  const inputMap={project_id:"projectId",title:"title",description:"description",type:"type",status:"status",module:"module",priority:"priority",next_step:"nextStep",resolution:"resolution"};
+  return{schema:{resource:"project_item",description:"Persistent EvaOrbit project requirements, issues, research, and completed work. This is the project delivery source of truth.",fields:{id:{type:"integer",description:"Stable item identifier.",read_only:true},project_id:{type:"integer",description:"Owning project identifier."},project:{type:"string",description:"Owning project name.",read_only:true},title:{type:"string",max_length:300,description:"Concise requirement or issue title."},description:{type:"string",max_length:20000,description:"Original request or problem statement."},type:{type:"string",enum:["feature","bug","ui","migration","research","tech_debt","other"],default:"other",description:"Work classification."},status:{type:"string",enum:["to_solve","doing","blocked","done","verified","dropped"],default:"to_solve",description:"done means implementation is claimed complete; verified requires actual user confirmation."},module:{type:"string",max_length:120,description:"Optional product area."},priority:{type:"string",max_length:60,description:"Optional free-form priority."},next_step:{type:"string",max_length:5000,description:"Concrete next action, especially for doing or blocked work."},resolution:{type:"string",max_length:10000,description:"Outcome shown in Recently Solved and Project Chronicle."},created_at:{type:"string",format:"date-time",description:"Creation timestamp.",read_only:true},started_at:{type:"string",format:"date-time",description:"First doing timestamp, assigned by the server.",read_only:true},completed_at:{type:"string",format:"date-time",description:"First done or verified timestamp, assigned by the server.",read_only:true},verified_at:{type:"string",format:"date-time",description:"First explicit verified timestamp, assigned by the server.",read_only:true},updated_at:{type:"string",format:"date-time",description:"Latest update timestamp.",read_only:true}},required_fields:["project_id","title"],writable_fields:writable,searchable_fields:["project","status","type","module","keyword"],supported_actions:[],validation_rules:["search filters accept project, project_id, status, type, and module","query searches title, description, and resolution","new requirements default to to_solve","done is never automatically promoted to verified","set verified only after the user actually checks and confirms the result","use dropped instead of deleting abandoned requirements","lifecycle timestamps are server-managed and retained","unknown fields are rejected"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["project","project_id","status","type","module"],"project_item search filters");rejectCursor(cursor,"Project Item");const projectId=filters.project_id===undefined?undefined:numericId(filters.project_id as ResourceId,"Project");return{items:(await operations.search({query,projectId,project:filterText(filters.project,"project"),status:filterEnum(filters.status,["to_solve","doing","blocked","done","verified","dropped"] as const,"status"),type:filterEnum(filters.type,["feature","bug","ui","migration","research","tech_debt","other"] as const,"type"),module:filterText(filters.module,"module"),limit})).map(projectItemRecord),next_cursor:null};},async get(id){const item=await operations.get(numericId(id,"Project Item"));if(!item)throw new ConflictError("Project item not found.");return projectItemRecord(item);},async create(data){assertOnlyKeys(data,writable,"project_item create");return projectItemRecord(await operations.create(parseNewProjectItem(mappedInput(data,inputMap))));},async update(id,data){assertOnlyKeys(data,writable,"project_item update");const item=await operations.update(numericId(id,"Project Item"),definedValues(parseProjectItemPatch(mappedInput(data,inputMap))));if(!item)throw new ConflictError("Project item not found.");return projectItemRecord(item);}};
 }
 
 function luciusDiaryRecord(item: LuciusDiaryEntry): ResourceRecord {
@@ -398,5 +428,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
     chronicleResource(operations.chronicle),
     luciusDiaryResource(operations.luciusDiary),
     luciusCaseResource(operations.luciusCase),
+    projectResource(operations.project),
+    projectItemResource(operations.projectItem),
   ]);
 }

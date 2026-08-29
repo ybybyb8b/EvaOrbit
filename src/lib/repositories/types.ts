@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
 import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
@@ -51,6 +51,12 @@ export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: s
 export type NewMemo = Omit<Memo, "id" | "createdAt" | "updatedAt">;
 export type MemoPatch = Partial<NewMemo>;
 export type MemoListInput = { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number };
+export type NewProject = Pick<Project, "name" | "description" | "status">;
+export type ProjectPatch = Partial<NewProject>;
+export type ProjectListInput = { query?: string; status?: ProjectStatus; limit?: number };
+export type NewProjectItem = Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">;
+export type ProjectItemPatch = Partial<Omit<NewProjectItem, "projectId">> & { projectId?: number };
+export type ProjectItemListInput = { query?: string; projectId?: number; project?: string; status?: ProjectItemStatus; type?: ProjectItemType; module?: string; limit?: number };
 export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
 export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
 export type LuciusDiaryListInput = { query?: string; tag?: string; limit?: number };
@@ -151,6 +157,15 @@ export interface EvaOrbitRepository {
   createChronicleEntry(input: NewChronicleEntry): Promise<ChronicleEntry>;
   updateChronicleEntry(id: number, input: ChronicleEntryPatch): Promise<ChronicleEntry | null>;
   deleteChronicleEntry(id: number): Promise<boolean>;
+
+  listProjects(input?: ProjectListInput): Promise<Project[]>;
+  getProject(id: number): Promise<Project | null>;
+  createProject(input: NewProject): Promise<Project>;
+  updateProject(id: number, input: ProjectPatch): Promise<Project | null>;
+  listProjectItems(input?: ProjectItemListInput): Promise<ProjectItem[]>;
+  getProjectItem(id: number): Promise<ProjectItem | null>;
+  createProjectItem(input: NewProjectItem): Promise<ProjectItem>;
+  updateProjectItem(id: number, input: ProjectItemPatch): Promise<ProjectItem | null>;
 
   listMemos(input?: MemoListInput): Promise<Memo[]>;
   getMemo(id: number): Promise<Memo | null>;

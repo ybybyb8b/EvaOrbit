@@ -372,11 +372,12 @@ export function adaptNotionExport({ sourcePath, sourcePaths, timezoneOffset = "+
       files: files.map((file) => ({ name: file.name, bytes: file.data.length, source_path: file.sourcePath, nested_containers: file.containers ?? [] })),
     },
     encoding: { csv: "UTF-8", bom_files: discovery.candidates.filter((file) => file.hadBom).map((file) => file.name) },
-    selected_databases: Object.fromEntries(Object.entries(discovery.selected).map(([resource, file]) => [resource, { file: file.name, database_id: file.databaseId, headers: file.headers, rows: file.records.length, selected_complete_export: file.isAll }])),
+    selected_databases: Object.fromEntries(Object.entries(discovery.selected).map(([resource, file]) => [resource, { file: file.name, source_path: file.sourcePath, nested_containers: file.containers ?? [], database_id: file.databaseId, headers: file.headers, rows: file.records.length, selected_complete_export: file.isAll }])),
     ignored_database_exports: discovery.ignored,
-    page_content: { markdown_or_html_files: pageFiles.map((file) => file.name), hub_files: hubFiles.map((file) => file.name), row_body_files: bodyFiles.map((file) => file.name) },
+    page_content: { markdown_or_html_files: pageFiles.map((file) => file.name), hub_files: hubFiles.map((file) => file.name), row_body_files: bodyFiles.map((file) => file.name), diary_join: "exact CSV 日期 value = Markdown filename title before the 32-character page ID" },
     identity: {
       reliable_notion_page_id_available: normalized.lucius_diary.length > 0,
+      reliable_notion_page_id_available_by_resource: { memo: false, chronicle: false, lucius_diary: normalized.lucius_diary.length > 0 },
       strategy_by_resource: {
         memo: "notion-export:<database-id>:sha256(<ordered raw CSV row>)",
         chronicle: "notion-export:<database-id>:sha256(<ordered raw CSV row>)",

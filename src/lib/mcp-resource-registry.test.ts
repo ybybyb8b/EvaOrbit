@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, LuciusCase, LuciusDiaryEntry, Memo } from "./types.ts";
+import type { ChronicleEntry, LuciusCase, LuciusDiaryEntry, Memo, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
@@ -10,7 +10,9 @@ function fakeOperations() {
   const memos: Memo[] = [];
   const diary: LuciusDiaryEntry[] = [];
   const cases: LuciusCase[] = [];
-  let nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0;
+  const projects: Project[] = [];
+  const projectItems: ProjectItem[] = [];
+  let nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0, nextProject = 0, nextProjectItem = 0;
   const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
   const operations: ResourceRegistryOperations = {
     chronicle: {
@@ -42,13 +44,25 @@ function fakeOperations() {
       async delete(id) { return remove(cases, id); },
       async recordRecurrence(id, occurredDate = "2026-08-31") { const item = cases.find((entry) => entry.id === id); if (!item) return null; const interval = Math.round((Date.parse(`${occurredDate}T00:00:00Z`) - Date.parse(`${item.latestOccurredDate}T00:00:00Z`)) / 86400000) || null; Object.assign(item, { occurrenceCount: item.occurrenceCount + 1, latestOccurredDate: occurredDate, recurrenceIntervalDays: interval, isRecurrence: true, consecutiveCorrectCount: 0, updatedAt: "2026-08-31T00:00:00Z" }); return item; },
     },
+    project: {
+      async search({ query, status, limit = 20 }) { return projects.filter((item) => (!query || item.name.includes(query)) && (!status || item.status === status)).slice(0, limit); },
+      async get(id) { return projects.find((item) => item.id === id) ?? null; },
+      async create(input) { const item:Project={...input,id:++nextProject,doingCount:0,toSolveCount:0,createdAt,updatedAt:createdAt};projects.push(item);return item; },
+      async update(id,patch){const item=projects.find((entry)=>entry.id===id);if(!item)return null;Object.assign(item,patch,{updatedAt:"2026-08-30T00:00:00Z"});return item;},
+    },
+    projectItem: {
+      async search({ query, projectId, project, status, type, module, limit = 20 }) { return projectItems.filter((item)=>(!query||item.title.includes(query)||item.description?.includes(query)||item.resolution?.includes(query))&&(!projectId||item.projectId===projectId)&&(!project||item.projectName===project)&&(!status||item.status===status)&&(!type||item.type===type)&&(!module||item.module===module)).slice(0,limit); },
+      async get(id){return projectItems.find((item)=>item.id===id)??null;},
+      async create(input){const owner=projects.find((item)=>item.id===input.projectId);const item:ProjectItem={...input,id:++nextProjectItem,projectName:owner?.name,createdAt,startedAt:null,completedAt:input.status==="done"||input.status==="verified"?createdAt:null,verifiedAt:input.status==="verified"?createdAt:null,updatedAt:createdAt};projectItems.push(item);return item;},
+      async update(id,patch){const item=projectItems.find((entry)=>entry.id===id);if(!item)return null;Object.assign(item,patch,{updatedAt:"2026-08-30T00:00:00Z"});if(patch.status==="done"&&!item.completedAt)item.completedAt=item.updatedAt;if(patch.status==="verified"&&!item.verifiedAt){item.completedAt??=item.updatedAt;item.verifiedAt=item.updatedAt;}return item;},
+    },
   };
   return { operations, chronicles, memos, diary, cases };
 }
 
-test("registry exposes Memo, Chronicle, Lucius Diary and Lucius Case without changing generic tools", () => {
+test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);
@@ -56,7 +70,20 @@ test("registry exposes Memo, Chronicle, Lucius Diary and Lucius Case without cha
   assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md"]);
   assert.deepEqual(registry.schema("lucius_case").supported_actions, ["record_recurrence"]);
   assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
+  assert.match(registry.schema("project_item").validation_rules.join(" "), /never automatically promoted to verified/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);
+});
+
+test("project items remain durable and Done stays distinct from Verified", async () => {
+  const registry=createResourceRegistry(fakeOperations().operations);
+  const project=await registry.create("project",{name:"EvaOrbit"});
+  const issue=await registry.create("project_item",{project_id:project.id,title:"Compact Projects",type:"feature"});
+  assert.equal(issue.status,"to_solve");
+  const done=await registry.update("project_item",issue.id as number,{status:"done",resolution:"Implemented"});
+  assert.equal(done.status,"done");assert.equal(done.verified_at,null);assert.ok(done.completed_at);
+  const verified=await registry.update("project_item",issue.id as number,{status:"verified"});
+  assert.equal(verified.status,"verified");assert.ok(verified.verified_at);
+  assert.deepEqual((await registry.search("project_item",{filters:{project:"EvaOrbit",status:"verified"},limit:20})).items.map((item)=>item.id),[issue.id]);
 });
 
 test("generic Memo CRUD defaults search to active and keeps historical states separate", async () => {

@@ -1,4 +1,4 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -105,6 +105,48 @@ export function parseChronicleEntryPatch(value: unknown) {
     source: body.source === undefined ? undefined : enumValue(body.source, "来源", chronicleSources, "manual"),
   };
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Chronicle 字段");
+  return result;
+}
+
+const projectStatuses = ["active", "paused", "archived"] as const satisfies readonly ProjectStatus[];
+const projectItemTypes = ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"] as const satisfies readonly ProjectItemType[];
+const projectItemStatuses = ["to_solve", "doing", "blocked", "done", "verified", "dropped"] as const satisfies readonly ProjectItemStatus[];
+
+function nullableProjectText(value: unknown, field: string, max: number): string | null;
+function nullableProjectText(value: unknown, field: string, max: number, optional: true): string | null | undefined;
+function nullableProjectText(value: unknown, field: string, max: number, optional = false): string | null | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined || value === null || value === "") return null;
+  return text(value, field, max, false) || null;
+}
+
+function positiveProjectId(value: unknown, optional = false) {
+  if (value === undefined && optional) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new ValidationError("项目 ID 格式不正确");
+  return value;
+}
+
+export function parseNewProject(value: unknown) {
+  const body = objectValue(value);
+  return { name: text(body.name, "项目名称", 200)!, description: nullableProjectText(body.description, "项目描述", 5000), status: enumValue(body.status, "项目状态", projectStatuses, "active") };
+}
+
+export function parseProjectPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = { name: body.name === undefined ? undefined : text(body.name, "项目名称", 200), description: nullableProjectText(body.description, "项目描述", 5000, true), status: body.status === undefined ? undefined : enumValue(body.status, "项目状态", projectStatuses, "active") };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的项目字段");
+  return result;
+}
+
+export function parseNewProjectItem(value: unknown) {
+  const body = objectValue(value);
+  return { projectId: positiveProjectId(body.projectId)!, title: text(body.title, "需求标题", 300)!, description: nullableProjectText(body.description, "原始需求", 20000), type: enumValue(body.type, "需求类型", projectItemTypes, "other"), status: enumValue(body.status, "需求状态", projectItemStatuses, "to_solve"), module: nullableProjectText(body.module, "模块", 120), priority: nullableProjectText(body.priority, "优先级", 60), nextStep: nullableProjectText(body.nextStep, "下一步", 5000), resolution: nullableProjectText(body.resolution, "解决说明", 10000) };
+}
+
+export function parseProjectItemPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = { projectId: positiveProjectId(body.projectId, true), title: body.title === undefined ? undefined : text(body.title, "需求标题", 300), description: nullableProjectText(body.description, "原始需求", 20000, true), type: body.type === undefined ? undefined : enumValue(body.type, "需求类型", projectItemTypes, "other"), status: body.status === undefined ? undefined : enumValue(body.status, "需求状态", projectItemStatuses, "to_solve"), module: nullableProjectText(body.module, "模块", 120, true), priority: nullableProjectText(body.priority, "优先级", 60, true), nextStep: nullableProjectText(body.nextStep, "下一步", 5000, true), resolution: nullableProjectText(body.resolution, "解决说明", 10000, true) };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的需求字段");
   return result;
 }
 

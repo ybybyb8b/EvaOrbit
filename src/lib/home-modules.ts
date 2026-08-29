@@ -1,4 +1,4 @@
-export const HOME_MODULE_IDS = ["inbox", "eva", "trackers", "food", "drinks", "health", "cats", "people", "media", "memo", "chronicle", "lucius"] as const;
+export const HOME_MODULE_IDS = ["inbox", "eva", "projects", "trackers", "food", "drinks", "health", "cats", "people", "media", "memo", "chronicle", "lucius"] as const;
 
 export type HomeModuleId = typeof HOME_MODULE_IDS[number];
 

@@ -3,6 +3,7 @@ import "server-only";
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
 import { createLuciusCase, createLuciusDiaryEntry, deleteLuciusCase, deleteLuciusDiaryEntry, getLuciusCase, getLuciusDiaryEntry, listLuciusCases, listLuciusDiaryEntries, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry } from "../services/lucius";
 import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../services/memo";
+import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
 import { createResourceRegistry } from "./resource-registry";
 
 export const resourceRegistry = createResourceRegistry({
@@ -10,4 +11,6 @@ export const resourceRegistry = createResourceRegistry({
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
   luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },
   luciusCase: { search: listLuciusCases, get: getLuciusCase, create: createLuciusCase, update: updateLuciusCase, delete: deleteLuciusCase, recordRecurrence: recordLuciusCaseRecurrence },
+  project: { search: listProjects, get: getProject, create: createProject, update: updateProject },
+  projectItem: { search: listProjectItems, get: getProjectItem, create: createProjectItem, update: updateProjectItem },
 });
