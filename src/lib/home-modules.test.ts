@@ -8,3 +8,9 @@ test("normalizes a partial home module order without losing new modules", () => 
   assert.equal(result.length, HOME_MODULE_IDS.length);
   assert.deepEqual(new Set(result), new Set(HOME_MODULE_IDS));
 });
+
+test("drops the legacy Settings entry from saved Home orders", () => {
+  const result = normalizeHomeModuleOrder(["settings", "eva", "inbox"]);
+  assert.equal((result as readonly string[]).includes("settings"), false);
+  assert.deepEqual(result.slice(0, 2), ["eva", "inbox"]);
+});

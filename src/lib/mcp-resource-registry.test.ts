@@ -1,82 +1,137 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { createResourceRegistry, type ChronicleResourceOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry } from "./types.ts";
+import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
+import type { ChronicleEntry, LuciusCase, LuciusDiaryEntry, Memo } from "./types.ts";
 
-function fakeChronicleOperations() {
-  let nextId = 0;
-  const entries: ChronicleEntry[] = [];
-  const operations: ChronicleResourceOperations = {
-    async search({ query, limit = 20 }) {
-      const needle = query?.toLocaleLowerCase();
-      return entries.filter((entry) => !needle || entry.title.toLocaleLowerCase().includes(needle) || entry.contentMd.toLocaleLowerCase().includes(needle)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, limit);
+const createdAt = "2026-08-29T00:00:00Z";
+function fakeOperations() {
+  const chronicles: ChronicleEntry[] = [];
+  const memos: Memo[] = [];
+  const diary: LuciusDiaryEntry[] = [];
+  const cases: LuciusCase[] = [];
+  let nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0;
+  const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
+  const operations: ResourceRegistryOperations = {
+    chronicle: {
+      async search({ query, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return chronicles.filter((item) => !needle || item.title.toLocaleLowerCase().includes(needle) || item.contentMd.toLocaleLowerCase().includes(needle)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, limit); },
+      async get(id) { return chronicles.find((item) => item.id === id) ?? null; },
+      async create(input) { const item: ChronicleEntry = { ...input, id: ++nextChronicle, createdAt, updatedAt: createdAt }; chronicles.push(item); return item; },
+      async update(id, patch) { const item = chronicles.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async delete(id) { return remove(chronicles, id); },
     },
-    async get(id) { return entries.find((entry) => entry.id === id) ?? null; },
-    async create(input) {
-      const entry: ChronicleEntry = { ...input, id: ++nextId, createdAt: "2026-08-29T00:00:00Z", updatedAt: "2026-08-29T00:00:00Z" };
-      entries.push(entry);
-      return entry;
+    memo: {
+      async search({ query, tag, type, status, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return memos.filter((item) => (!needle || item.title.toLocaleLowerCase().includes(needle) || item.content.toLocaleLowerCase().includes(needle)) && (!tag || item.tags.includes(tag)) && (!type || item.type === type) && (!status || item.status === status)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id).slice(0, limit); },
+      async get(id) { return memos.find((item) => item.id === id) ?? null; },
+      async create(input) { const item: Memo = { ...input, id: ++nextMemo, createdAt, updatedAt: createdAt }; memos.push(item); return item; },
+      async update(id, patch) { const item = memos.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async delete(id) { return remove(memos, id); },
     },
-    async update(id, input) {
-      const entry = entries.find((item) => item.id === id);
-      if (!entry) return null;
-      Object.assign(entry, input, { updatedAt: "2026-08-29T01:00:00Z" });
-      return entry;
+    luciusDiary: {
+      async search({ query, tag, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return diary.filter((item) => (!needle || item.content.toLocaleLowerCase().includes(needle)) && (!tag || item.tags.includes(tag))).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, limit); },
+      async get(id) { return diary.find((item) => item.id === id) ?? null; },
+      async create(input) { const item: LuciusDiaryEntry = { ...input, id: ++nextDiary, createdAt, updatedAt: createdAt }; diary.push(item); return item; },
+      async update(id, patch) { const item = diary.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async delete(id) { return remove(diary, id); },
     },
-    async delete(id) {
-      const index = entries.findIndex((entry) => entry.id === id);
-      if (index < 0) return false;
-      entries.splice(index, 1);
-      return true;
+    luciusCase: {
+      async search({ query, errorType, severity, status, currentOnly, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return cases.filter((item) => (!needle || item.title.toLocaleLowerCase().includes(needle) || item.cause.toLocaleLowerCase().includes(needle) || item.mandatoryRule.toLocaleLowerCase().includes(needle)) && (!errorType || item.errorType === errorType) && (!severity || item.severity === severity) && (!status || item.status === status) && (!currentOnly || item.status === "serving" || item.status === "probation")).sort((a, b) => b.latestOccurredDate.localeCompare(a.latestOccurredDate) || b.id - a.id).slice(0, limit); },
+      async get(id) { return cases.find((item) => item.id === id) ?? null; },
+      async create(input) { const item: LuciusCase = { ...input, id: ++nextCase, createdAt, updatedAt: createdAt }; cases.push(item); return item; },
+      async update(id, patch) { const item = cases.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async delete(id) { return remove(cases, id); },
+      async recordRecurrence(id, occurredDate = "2026-08-31") { const item = cases.find((entry) => entry.id === id); if (!item) return null; const interval = Math.round((Date.parse(`${occurredDate}T00:00:00Z`) - Date.parse(`${item.latestOccurredDate}T00:00:00Z`)) / 86400000) || null; Object.assign(item, { occurrenceCount: item.occurrenceCount + 1, latestOccurredDate: occurredDate, recurrenceIntervalDays: interval, isRecurrence: true, consecutiveCorrectCount: 0, updatedAt: "2026-08-31T00:00:00Z" }); return item; },
     },
   };
-  return { operations, entries };
+  return { operations, chronicles, memos, diary, cases };
 }
 
-test("registry exposes only Chronicle with declared CRUD capabilities and schema", () => {
-  const { operations } = fakeChronicleOperations();
-  const registry = createResourceRegistry(operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["chronicle"]);
-  assert.deepEqual(registry.resources()[0].capabilities, ["search", "get", "create", "update", "delete"]);
-  const schema = registry.schema("chronicle");
-  assert.deepEqual(schema.required_fields, ["date", "title", "content_md"]);
-  assert.deepEqual(schema.writable_fields, ["date", "title", "content_md", "source"]);
-  assert.deepEqual(schema.searchable_fields, ["title", "content_md"]);
-  assert.deepEqual(schema.supported_actions, []);
+test("registry exposes Memo, Chronicle, Lucius Diary and Lucius Case without changing generic tools", () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case"]);
+  assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
+  assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
+  assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);
+  assert.deepEqual(registry.schema("chronicle").writable_fields, ["date", "title", "content_md", "source"]);
+  assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md"]);
+  assert.deepEqual(registry.schema("lucius_case").supported_actions, ["record_recurrence"]);
+  assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);
 });
 
-test("generic Chronicle flow supports strict create, search, get, PATCH update, get and safe delete", async () => {
-  const { operations } = fakeChronicleOperations();
-  const registry = createResourceRegistry(operations);
-  const created = await registry.create("chronicle", { date: "2026-08-29", title: "Inspector entry", content_md: "# Original\n\nKeep this body.", source: "manual" });
-  const id = created.id as number;
-  assert.deepEqual((await registry.search("chronicle", { query: "Keep this", limit: 20 })).items.map((item) => item.id), [id]);
-  assert.equal((await registry.get("chronicle", id)).title, "Inspector entry");
-  const updated = await registry.update("chronicle", id, { title: "Inspector entry patched" });
-  assert.equal(updated.title, "Inspector entry patched");
-  assert.equal(updated.content_md, "# Original\n\nKeep this body.");
-  assert.equal(updated.date, "2026-08-29");
-  assert.equal(updated.source, "manual");
-  assert.equal((await registry.get("chronicle", id)).content_md, "# Original\n\nKeep this body.");
-  assert.deepEqual(await registry.delete("chronicle", id), { deleted: true, id });
-  await assert.rejects(() => registry.get("chronicle", id), /not found/i);
+test("generic Memo CRUD defaults search to active and keeps historical states separate", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const active = await registry.create("memo", { title: "Current rule", content: "Use the preferred name", type: "basic", tags: ["rule"] });
+  const archived = await registry.create("memo", { title: "Old rule", content: "No longer current", type: "note", status: "archived", tags: ["rule"] });
+  assert.deepEqual((await registry.search("memo", { query: "rule", filters: {}, limit: 20 })).items.map((item) => item.id), [active.id]);
+  assert.deepEqual((await registry.search("memo", { query: "rule", filters: { status: "archived" }, limit: 20 })).items.map((item) => item.id), [archived.id]);
+  const updated = await registry.update("memo", active.id as number, { title: "Current rule patched" });
+  assert.equal(updated.content, "Use the preferred name");
+  assert.equal((await registry.get("memo", active.id as number)).title, "Current rule patched");
+  assert.deepEqual(await registry.delete("memo", archived.id as number), { deleted: true, id: archived.id });
 });
 
-test("registry rejects unknown fields, invalid resource data, filters and unregistered actions", async () => {
-  const { operations } = fakeChronicleOperations();
-  const registry = createResourceRegistry(operations);
-  await assert.rejects(() => registry.create("chronicle", { date: "2026-02-30", title: "Bad", content_md: "Body" }), /日期/);
-  await assert.rejects(() => registry.create("chronicle", { date: "2026-08-29", title: "Bad", content_md: "Body", table: "tasks" }), /does not accept: table/);
-  await assert.rejects(() => registry.update("chronicle", 1, {}), /没有可更新/);
-  await assert.rejects(() => registry.search("chronicle", { filters: { source: "manual" }, limit: 20 }), /does not accept: source/);
+test("existing Generic Chronicle CRUD remains unchanged", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const created = await registry.create("chronicle", { date: "2026-08-29", title: "Inspector entry", content_md: "# Original\n\nKeep this body.", source: "manual" });
+  assert.deepEqual((await registry.search("chronicle", { query: "Keep this", limit: 20 })).items.map((item) => item.id), [created.id]);
+  const updated = await registry.update("chronicle", created.id as number, { title: "Inspector entry patched" });
+  assert.equal(updated.content_md, "# Original\n\nKeep this body.");
+  assert.equal((await registry.get("chronicle", created.id as number)).date, "2026-08-29");
+  assert.deepEqual(await registry.delete("chronicle", created.id as number), { deleted: true, id: created.id });
+});
+
+test("generic Lucius Diary supports search, get, PATCH and delete", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const created = await registry.create("lucius_diary", { date: "2026-08-29", content: "今天修正了误解", tags: ["修正"] });
+  assert.deepEqual((await registry.search("lucius_diary", { query: "误解", filters: { tag: "修正" }, limit: 20 })).items.map((item) => item.id), [created.id]);
+  const updated = await registry.update("lucius_diary", created.id as number, { content: "今天修正了一个误解" });
+  assert.deepEqual(updated.tags, ["修正"]);
+  assert.equal((await registry.get("lucius_diary", created.id as number)).content, "今天修正了一个误解");
+  assert.deepEqual(await registry.delete("lucius_diary", created.id as number), { deleted: true, id: created.id });
+});
+
+test("generic Lucius Case CRUD and record_recurrence calculate derived state server-side", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const created = await registry.create("lucius_case", { title: "称呼错误", error_type: "naming", severity: "moderate", status: "serving", trigger_scenes: ["长对话"], cause: "遗漏 Memo", correct_behavior: "先查 Memo", mandatory_rule: "不得猜测称呼", first_occurred_date: "2026-08-20", latest_occurred_date: "2026-08-25", occurrence_count: 2, consecutive_correct_count: 4 });
+  assert.deepEqual((await registry.search("lucius_case", { query: "称呼", filters: { current_only: true }, limit: 20 })).items.map((item) => item.id), [created.id]);
+  const patched = await registry.update("lucius_case", created.id as number, { punishment: "复查规则" });
+  assert.equal(patched.occurrence_count, 2);
+  const recurrence = await registry.action("lucius_case", { id: created.id as number, action: "record_recurrence", data: { occurred_date: "2026-08-29" } });
+  assert.equal(recurrence.occurrence_count, 3);
+  assert.equal(recurrence.latest_occurred_date, "2026-08-29");
+  assert.equal(recurrence.recurrence_interval_days, 4);
+  assert.equal(recurrence.is_recurrence, true);
+  assert.equal(recurrence.consecutive_correct_count, 0);
+  assert.equal((await registry.get("lucius_case", created.id as number)).occurrence_count, 3);
+  assert.deepEqual(await registry.delete("lucius_case", created.id as number), { deleted: true, id: created.id });
+});
+
+test("registry rejects table names, invalid filters and client-calculated recurrence fields", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  await assert.rejects(() => registry.create("memo", { title: "Bad", content: "Body", table: "memos" }), /does not accept: table/);
+  await assert.rejects(() => registry.search("memo", { filters: { status: "all" }, limit: 20 }), /status filter is invalid/);
+  await assert.rejects(() => registry.update("lucius_diary", 1, {}), /没有可更新/);
+  await assert.rejects(() => registry.action("lucius_case", { id: 1, action: "record_recurrence", data: { occurrence_count: 9 } }), /does not accept: occurrence_count/);
   await assert.rejects(() => registry.action("chronicle", { action: "resolve", data: {} }), /does not support action/);
 });
 
-test("production registry delegates Chronicle delete to the existing business service", () => {
+test("production registry delegates every write and action to existing business services", () => {
   const source = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   assert.match(source, /delete: deleteChronicleEntry/);
-  assert.match(source, /create: createChronicleEntry/);
-  assert.doesNotMatch(source, /from\([^)]*table|\.from\(|DELETE FROM|repository\./i);
+  assert.match(source, /memo: \{ search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
+  assert.match(source, /recordRecurrence: recordLuciusCaseRecurrence/);
+  assert.doesNotMatch(source, /\.from\(|DELETE FROM|INSERT INTO|UPDATE\s+\w+/i);
+});
+
+test("recurrence migration provides an authenticated atomic server operation", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/202608290005_lucius_case_recurrence.sql", import.meta.url), "utf8");
+  assert.match(sql, /occurrence_count = occurrence_count \+ 1/);
+  assert.match(sql, /latest_occurred_date = p_occurred_date/);
+  assert.match(sql, /recurrence_interval_days = nullif\(p_occurred_date - previous_date, 0\)/);
+  assert.match(sql, /is_recurrence = true/);
+  assert.match(sql, /consecutive_correct_count = 0/);
+  assert.match(sql, /security invoker/);
+  assert.match(sql, /grant execute .* to authenticated/);
+  assert.doesNotMatch(sql, /service_role|security definer/i);
 });

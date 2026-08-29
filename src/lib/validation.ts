@@ -1,4 +1,4 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, MediaRating, MediaType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -105,6 +105,202 @@ export function parseChronicleEntryPatch(value: unknown) {
     source: body.source === undefined ? undefined : enumValue(body.source, "来源", chronicleSources, "manual"),
   };
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Chronicle 字段");
+  return result;
+}
+
+const memoTypes = ["basic", "supplement", "event", "note"] as const satisfies readonly MemoType[];
+const memoStatuses = ["active", "merged", "archived", "historical"] as const satisfies readonly MemoStatus[];
+const luciusCaseErrorTypes = ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"] as const satisfies readonly LuciusCaseErrorType[];
+const luciusCaseSeverities = ["minor", "moderate", "serious", "habitual"] as const satisfies readonly LuciusCaseSeverity[];
+const luciusCaseStatuses = ["serving", "probation", "temporary_release", "permanent_record"] as const satisfies readonly LuciusCaseStatus[];
+
+function longTermTags(value: unknown, field: string): string[];
+function longTermTags(value: unknown, field: string, optional: true): string[] | undefined;
+function longTermTags(value: unknown, field: string, optional = false): string[] | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) throw new ValidationError(`${field}格式不正确`);
+  const result = [...new Set((value as string[]).map((item) => item.trim()).filter(Boolean))];
+  if (result.length > 20 || result.some((item) => item.length > 60)) throw new ValidationError(`${field}最多 20 个，每个不能超过 60 个字符`);
+  return result;
+}
+
+function nullableLongTermText(value: unknown, field: string, max: number): string | null;
+function nullableLongTermText(value: unknown, field: string, max: number, optional: true): string | null | undefined;
+function nullableLongTermText(value: unknown, field: string, max: number, optional = false): string | null | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined || value === null || value === "") return null;
+  return text(value, field, max, false) || null;
+}
+
+function nullableLongTermDate(value: unknown, field: string): string | null;
+function nullableLongTermDate(value: unknown, field: string, optional: true): string | null | undefined;
+function nullableLongTermDate(value: unknown, field: string, optional = false): string | null | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined || value === null || value === "") return null;
+  return dateOnly(value, field);
+}
+
+function nullableLongTermTimestamp(value: unknown, field: string): string | null;
+function nullableLongTermTimestamp(value: unknown, field: string, optional: true): string | null | undefined;
+function nullableLongTermTimestamp(value: unknown, field: string, optional = false): string | null | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined || value === null || value === "") return null;
+  return timestamp(value, field);
+}
+
+function nullableLongTermUrl(value: unknown): string | null;
+function nullableLongTermUrl(value: unknown, optional: true): string | null | undefined;
+function nullableLongTermUrl(value: unknown, optional = false): string | null | undefined {
+  const result = optional ? nullableLongTermText(value, "来源链接", 2000, true) : nullableLongTermText(value, "来源链接", 2000);
+  if (result === undefined || result === null) return result;
+  try {
+    const parsed = new URL(result);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error();
+    return result;
+  } catch {
+    throw new ValidationError("来源链接必须是有效的 HTTP 或 HTTPS 地址");
+  }
+}
+
+function nullablePositiveId(value: unknown, field: string): number | null;
+function nullablePositiveId(value: unknown, field: string, optional: true): number | null | undefined;
+function nullablePositiveId(value: unknown, field: string, optional = false): number | null | undefined {
+  if (value === undefined && optional) return undefined;
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) throw new ValidationError(`${field}格式不正确`);
+  return value;
+}
+
+function integerValue(value: unknown, field: string, minimum: number, maximum: number, fallback?: number) {
+  if (value === undefined && fallback !== undefined) return fallback;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new ValidationError(`${field}必须是 ${minimum} 到 ${maximum} 之间的整数`);
+  return value;
+}
+
+function migrationTrace(body: Record<string, unknown>): { sourceSystem: string | null; sourceId: string | null; sourceUrl: string | null; importedAt: string | null };
+function migrationTrace(body: Record<string, unknown>, optional: true): { sourceSystem: string | null | undefined; sourceId: string | null | undefined; sourceUrl: string | null | undefined; importedAt: string | null | undefined };
+function migrationTrace(body: Record<string, unknown>, optional = false) {
+  return {
+    sourceSystem: optional ? nullableLongTermText(body.sourceSystem, "来源系统", 120, true) : nullableLongTermText(body.sourceSystem, "来源系统", 120),
+    sourceId: optional ? nullableLongTermText(body.sourceId, "来源 ID", 300, true) : nullableLongTermText(body.sourceId, "来源 ID", 300),
+    sourceUrl: optional ? nullableLongTermUrl(body.sourceUrl, true) : nullableLongTermUrl(body.sourceUrl),
+    importedAt: optional ? nullableLongTermTimestamp(body.importedAt, "导入时间", true) : nullableLongTermTimestamp(body.importedAt, "导入时间"),
+  };
+}
+
+export function parseNewMemo(value: unknown) {
+  const body = objectValue(value);
+  return {
+    title: text(body.title, "Memo 标题", 300)!,
+    content: text(body.content, "Memo 内容", 100_000)!,
+    type: enumValue(body.type, "Memo 类型", memoTypes, "note"),
+    status: enumValue(body.status, "Memo 状态", memoStatuses, "active"),
+    tags: longTermTags(body.tags, "Memo 标签"),
+    eventDate: nullableLongTermDate(body.eventDate, "事件日期"),
+    confirmedAt: nullableLongTermTimestamp(body.confirmedAt, "确认时间"),
+    mergedIntoId: nullablePositiveId(body.mergedIntoId, "合并目标"),
+    ...migrationTrace(body),
+  };
+}
+
+export function parseMemoPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    title: body.title === undefined ? undefined : text(body.title, "Memo 标题", 300),
+    content: body.content === undefined ? undefined : text(body.content, "Memo 内容", 100_000),
+    type: body.type === undefined ? undefined : enumValue(body.type, "Memo 类型", memoTypes, "note"),
+    status: body.status === undefined ? undefined : enumValue(body.status, "Memo 状态", memoStatuses, "active"),
+    tags: longTermTags(body.tags, "Memo 标签", true),
+    eventDate: nullableLongTermDate(body.eventDate, "事件日期", true),
+    confirmedAt: nullableLongTermTimestamp(body.confirmedAt, "确认时间", true),
+    mergedIntoId: nullablePositiveId(body.mergedIntoId, "合并目标", true),
+    ...migrationTrace(body, true),
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Memo 字段");
+  return result;
+}
+
+export function parseNewLuciusDiaryEntry(value: unknown) {
+  const body = objectValue(value);
+  return {
+    date: dateOnly(body.date),
+    content: text(body.content, "Diary 内容", 100_000)!,
+    tags: longTermTags(body.tags, "Diary 标签"),
+    ...migrationTrace(body),
+  };
+}
+
+export function parseLuciusDiaryPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    date: body.date === undefined ? undefined : dateOnly(body.date),
+    content: body.content === undefined ? undefined : text(body.content, "Diary 内容", 100_000),
+    tags: longTermTags(body.tags, "Diary 标签", true),
+    ...migrationTrace(body, true),
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Diary 字段");
+  return result;
+}
+
+function caseDates(firstOccurredDate: string, latestOccurredDate: string) {
+  if (latestOccurredDate < firstOccurredDate) throw new ValidationError("最近发生日期不能早于首次发生日期");
+}
+
+export function parseNewLuciusCase(value: unknown) {
+  const body = objectValue(value);
+  if (body.errorType === undefined) throw new ValidationError("错误类型不能为空");
+  const firstOccurredDate = dateOnly(body.firstOccurredDate, "首次发生日期");
+  const latestOccurredDate = body.latestOccurredDate === undefined ? firstOccurredDate : dateOnly(body.latestOccurredDate, "最近发生日期");
+  caseDates(firstOccurredDate, latestOccurredDate);
+  return {
+    title: text(body.title, "案底名称", 300)!,
+    errorType: enumValue(body.errorType, "错误类型", luciusCaseErrorTypes, "other"),
+    severity: enumValue(body.severity, "严重程度", luciusCaseSeverities, "moderate"),
+    status: enumValue(body.status, "案底状态", luciusCaseStatuses, "serving"),
+    triggerScenes: longTermTags(body.triggerScenes, "触发场景"),
+    errorQuote: text(body.errorQuote ?? "", "错误原话", 10_000, false) ?? "",
+    cause: text(body.cause, "原因", 20_000)!,
+    correctBehavior: text(body.correctBehavior, "正确行为", 20_000)!,
+    mandatoryRule: text(body.mandatoryRule, "强制规则", 20_000)!,
+    nextCheck: nullableLongTermDate(body.nextCheck, "下次检查日期"),
+    punishment: text(body.punishment ?? "", "惩罚", 10_000, false) ?? "",
+    firstOccurredDate,
+    latestOccurredDate,
+    occurrenceCount: integerValue(body.occurrenceCount, "累计次数", 1, 1_000_000, 1),
+    consecutiveCorrectCount: integerValue(body.consecutiveCorrectCount, "连续正确次数", 0, 1_000_000, 0),
+    recurrenceIntervalDays: nullablePositiveId(body.recurrenceIntervalDays, "复发间隔天数"),
+    isRecurrence: booleanValue(body.isRecurrence, "是否复发", false),
+    resetThreshold: integerValue(body.resetThreshold, "重置阈值", 1, 1_000_000, 3),
+    ...migrationTrace(body),
+  };
+}
+
+export function parseLuciusCasePatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    title: body.title === undefined ? undefined : text(body.title, "案底名称", 300),
+    errorType: body.errorType === undefined ? undefined : enumValue(body.errorType, "错误类型", luciusCaseErrorTypes, "other"),
+    severity: body.severity === undefined ? undefined : enumValue(body.severity, "严重程度", luciusCaseSeverities, "moderate"),
+    status: body.status === undefined ? undefined : enumValue(body.status, "案底状态", luciusCaseStatuses, "serving"),
+    triggerScenes: longTermTags(body.triggerScenes, "触发场景", true),
+    errorQuote: body.errorQuote === undefined ? undefined : text(body.errorQuote, "错误原话", 10_000, false),
+    cause: body.cause === undefined ? undefined : text(body.cause, "原因", 20_000),
+    correctBehavior: body.correctBehavior === undefined ? undefined : text(body.correctBehavior, "正确行为", 20_000),
+    mandatoryRule: body.mandatoryRule === undefined ? undefined : text(body.mandatoryRule, "强制规则", 20_000),
+    nextCheck: nullableLongTermDate(body.nextCheck, "下次检查日期", true),
+    punishment: body.punishment === undefined ? undefined : text(body.punishment, "惩罚", 10_000, false),
+    firstOccurredDate: body.firstOccurredDate === undefined ? undefined : dateOnly(body.firstOccurredDate, "首次发生日期"),
+    latestOccurredDate: body.latestOccurredDate === undefined ? undefined : dateOnly(body.latestOccurredDate, "最近发生日期"),
+    occurrenceCount: body.occurrenceCount === undefined ? undefined : integerValue(body.occurrenceCount, "累计次数", 1, 1_000_000),
+    consecutiveCorrectCount: body.consecutiveCorrectCount === undefined ? undefined : integerValue(body.consecutiveCorrectCount, "连续正确次数", 0, 1_000_000),
+    recurrenceIntervalDays: nullablePositiveId(body.recurrenceIntervalDays, "复发间隔天数", true),
+    isRecurrence: body.isRecurrence === undefined ? undefined : booleanValue(body.isRecurrence, "是否复发", false),
+    resetThreshold: body.resetThreshold === undefined ? undefined : integerValue(body.resetThreshold, "重置阈值", 1, 1_000_000),
+    ...migrationTrace(body, true),
+  };
+  if (result.firstOccurredDate && result.latestOccurredDate) caseDates(result.firstOccurredDate, result.latestOccurredDate);
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Cases 字段");
   return result;
 }
 

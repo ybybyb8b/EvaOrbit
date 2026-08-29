@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, MediaItem, MediaRating, MediaType, MediaViewing, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
 import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
@@ -48,6 +48,15 @@ export type MediaItemPatch = { title?: string; mediaType?: MediaType; rating?: M
 export type NewChronicleEntry = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
 export type ChronicleListInput = { query?: string; limit?: number };
 export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: string; source?: ChronicleSource };
+export type NewMemo = Omit<Memo, "id" | "createdAt" | "updatedAt">;
+export type MemoPatch = Partial<NewMemo>;
+export type MemoListInput = { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number };
+export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
+export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
+export type LuciusDiaryListInput = { query?: string; tag?: string; limit?: number };
+export type NewLuciusCase = Omit<LuciusCase, "id" | "createdAt" | "updatedAt">;
+export type LuciusCasePatch = Partial<NewLuciusCase>;
+export type LuciusCaseListInput = { query?: string; errorType?: LuciusCaseErrorType; severity?: LuciusCaseSeverity; status?: LuciusCaseStatus; currentOnly?: boolean; limit?: number };
 export type NutritionSettings = Pick<DailyNutritionSummary, "date" | "restingEnergyKcal" | "activeEnergyKcal" | "notes">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
@@ -142,6 +151,25 @@ export interface EvaOrbitRepository {
   createChronicleEntry(input: NewChronicleEntry): Promise<ChronicleEntry>;
   updateChronicleEntry(id: number, input: ChronicleEntryPatch): Promise<ChronicleEntry | null>;
   deleteChronicleEntry(id: number): Promise<boolean>;
+
+  listMemos(input?: MemoListInput): Promise<Memo[]>;
+  getMemo(id: number): Promise<Memo | null>;
+  createMemo(input: NewMemo): Promise<Memo>;
+  updateMemo(id: number, input: MemoPatch): Promise<Memo | null>;
+  deleteMemo(id: number): Promise<boolean>;
+
+  listLuciusDiaryEntries(input?: LuciusDiaryListInput): Promise<LuciusDiaryEntry[]>;
+  getLuciusDiaryEntry(id: number): Promise<LuciusDiaryEntry | null>;
+  createLuciusDiaryEntry(input: NewLuciusDiaryEntry): Promise<LuciusDiaryEntry>;
+  updateLuciusDiaryEntry(id: number, input: LuciusDiaryPatch): Promise<LuciusDiaryEntry | null>;
+  deleteLuciusDiaryEntry(id: number): Promise<boolean>;
+
+  listLuciusCases(input?: LuciusCaseListInput): Promise<LuciusCase[]>;
+  getLuciusCase(id: number): Promise<LuciusCase | null>;
+  createLuciusCase(input: NewLuciusCase): Promise<LuciusCase>;
+  updateLuciusCase(id: number, input: LuciusCasePatch): Promise<LuciusCase | null>;
+  deleteLuciusCase(id: number): Promise<boolean>;
+  recordLuciusCaseRecurrence(id: number, occurredDate: string): Promise<LuciusCase | null>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;

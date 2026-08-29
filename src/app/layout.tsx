@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="zh-CN" className={`${inter.variable} ${editorial.variable} ${chinese.variable}`}><body><PwaRegister /><AppShell cloudMode={usesSupabase()}>{children}</AppShell></body></html>;

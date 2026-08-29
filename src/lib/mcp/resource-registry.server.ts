@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
+import { createLuciusCase, createLuciusDiaryEntry, deleteLuciusCase, deleteLuciusDiaryEntry, getLuciusCase, getLuciusDiaryEntry, listLuciusCases, listLuciusDiaryEntries, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry } from "../services/lucius";
+import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../services/memo";
 import { createResourceRegistry } from "./resource-registry";
 
 export const resourceRegistry = createResourceRegistry({
-  search: listChronicle,
-  get: getChronicleEntry,
-  create: createChronicleEntry,
-  update: updateChronicleEntry,
-  delete: deleteChronicleEntry,
+  memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
+  chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
+  luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },
+  luciusCase: { search: listLuciusCases, get: getLuciusCase, create: createLuciusCase, update: updateLuciusCase, delete: deleteLuciusCase, recordRecurrence: recordLuciusCaseRecurrence },
 });

@@ -15,8 +15,9 @@ const modules: Record<HomeModuleId, { href: string; name: string; description: s
   cats: { href: "/cats", name: "Cats", description: "Care and shared home", icon: "cats" },
   people: { href: "/people", name: "People", description: "People and relationships", icon: "people" },
   media: { href: "/media", name: "Media", description: "Things fully watched", icon: "media" },
+  memo: { href: "/memo", name: "Memo", description: "Long-term facts and rules", icon: "memory" },
   chronicle: { href: "/chronicle", name: "Chronicle", description: "Dated Markdown archive", icon: "chronicle" },
-  settings: { href: "/settings", name: "Settings", description: "Models and preferences", icon: "settings" },
+  lucius: { href: "/lucius", name: "Lucius", description: "Diary and correction cases", icon: "history" },
 };
 
 export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[] }) {

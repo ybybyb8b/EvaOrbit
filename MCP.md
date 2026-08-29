@@ -47,7 +47,7 @@ The stable Generic Resource Layer adds:
 - `eo_delete`
 - `eo_action`
 
-Generic tools keep `resource` as a plain string. Call `eo_resources`, then `eo_schema`, before operating on a resource. The server-side registry—not the client—decides which resources, fields, capabilities, validations, and actions are available. The current registry contains only `chronicle`.
+Generic tools keep `resource` as a plain string. Call `eo_resources`, then `eo_schema`, before operating on a resource. The server-side registry—not the client—decides which resources, fields, capabilities, validations, and actions are available. The current registry contains `memo`, `chronicle`, `lucius_diary`, and `lucius_case`. Memo searches default to current-active records unless a status filter is supplied. `lucius_case` exposes the `record_recurrence` business action; the server updates recurrence counters and dates atomically.
 
 ## Local test
 

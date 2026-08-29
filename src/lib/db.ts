@@ -5,8 +5,8 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, MediaItem, MediaViewing, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, MediaItemPatch, MediaListInput, NewChronicleEntry, NewHealthRecord, NewMediaItem } from "./repositories/types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, MediaItem, MediaViewing, Memo, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewMediaItem, NewMemo } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -566,6 +566,89 @@ if (!hasV18) {
   `);
 }
 
+const hasV19 = database.prepare("SELECT 1 FROM migrations WHERE version = 19").get();
+if (!hasV19) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.exec(`
+    CREATE TABLE memos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 300),
+      content TEXT NOT NULL CHECK(length(trim(content)) BETWEEN 1 AND 100000),
+      type TEXT NOT NULL DEFAULT 'note' CHECK(type IN ('basic','supplement','event','note')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','merged','archived','historical')),
+      tags TEXT NOT NULL DEFAULT '[]',
+      event_date TEXT CHECK(event_date IS NULL OR event_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+      confirmed_at TEXT,
+      merged_into_id INTEGER,
+      source_system TEXT,
+      source_id TEXT,
+      source_url TEXT,
+      imported_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(id,user_id),
+      FOREIGN KEY(merged_into_id,user_id) REFERENCES memos(id,user_id) ON DELETE RESTRICT,
+      CHECK(merged_into_id IS NULL OR merged_into_id <> id)
+    );
+    CREATE INDEX idx_memos_user_updated ON memos(user_id,updated_at DESC,id DESC);
+    CREATE INDEX idx_memos_user_filters ON memos(user_id,status,type,updated_at DESC);
+
+    CREATE TABLE lucius_diary_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      date TEXT NOT NULL CHECK(date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+      content TEXT NOT NULL CHECK(length(trim(content)) BETWEEN 1 AND 100000),
+      tags TEXT NOT NULL DEFAULT '[]',
+      source_system TEXT,
+      source_id TEXT,
+      source_url TEXT,
+      imported_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_lucius_diary_user_date ON lucius_diary_entries(user_id,date DESC,id DESC);
+
+    CREATE TABLE lucius_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 300),
+      error_type TEXT NOT NULL CHECK(error_type IN ('naming','memory_omission','factual','tool_misuse','expression','other')),
+      severity TEXT NOT NULL DEFAULT 'moderate' CHECK(severity IN ('minor','moderate','serious','habitual')),
+      status TEXT NOT NULL DEFAULT 'serving' CHECK(status IN ('serving','probation','temporary_release','permanent_record')),
+      trigger_scenes TEXT NOT NULL DEFAULT '[]',
+      error_quote TEXT NOT NULL DEFAULT '',
+      cause TEXT NOT NULL,
+      correct_behavior TEXT NOT NULL,
+      mandatory_rule TEXT NOT NULL,
+      next_check TEXT CHECK(next_check IS NULL OR next_check GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+      punishment TEXT NOT NULL DEFAULT '',
+      first_occurred_date TEXT NOT NULL,
+      latest_occurred_date TEXT NOT NULL,
+      occurrence_count INTEGER NOT NULL DEFAULT 1 CHECK(occurrence_count >= 1),
+      consecutive_correct_count INTEGER NOT NULL DEFAULT 0 CHECK(consecutive_correct_count >= 0),
+      recurrence_interval_days INTEGER CHECK(recurrence_interval_days IS NULL OR recurrence_interval_days > 0),
+      is_recurrence INTEGER NOT NULL DEFAULT 0 CHECK(is_recurrence IN (0,1)),
+      reset_threshold INTEGER NOT NULL DEFAULT 3 CHECK(reset_threshold >= 1),
+      source_system TEXT,
+      source_id TEXT,
+      source_url TEXT,
+      imported_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK(latest_occurred_date >= first_occurred_date)
+    );
+    CREATE INDEX idx_lucius_cases_user_status ON lucius_cases(user_id,status,latest_occurred_date DESC,id DESC);
+    INSERT INTO migrations(version) VALUES (19);
+    COMMIT;
+  `);
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1044,6 +1127,33 @@ export function getChronicleEntry(id:number){const row=database.prepare("SELECT 
 export function createChronicleEntry(input:NewChronicleEntry){const result=database.prepare("INSERT INTO chronicle_entries(user_id,date,title,content_md,source) VALUES('local',?,?,?,?)").run(input.date,input.title,input.contentMd,input.source);return getChronicleEntry(Number(result.lastInsertRowid))!;}
 export function updateChronicleEntry(id:number,input:ChronicleEntryPatch){const map:Record<keyof ChronicleEntryPatch,string>={date:"date",title:"title",contentMd:"content_md",source:"source"};const entries=Object.entries(map).filter(([key])=>input[key as keyof ChronicleEntryPatch]!==undefined);if(!entries.length)return getChronicleEntry(id);const result=database.prepare(`UPDATE chronicle_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof ChronicleEntryPatch] as string),id);return result.changes?getChronicleEntry(id):null;}
 export function deleteChronicleEntry(id:number){return database.prepare("DELETE FROM chronicle_entries WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function migrationTraceFromRow(row:Record<string,unknown>){return{sourceSystem:row.source_system===null?null:String(row.source_system),sourceId:row.source_id===null?null:String(row.source_id),sourceUrl:row.source_url===null?null:String(row.source_url),importedAt:row.imported_at===null?null:String(row.imported_at)};}
+function stringArrayFromRow(value:unknown){const parsed=jsonValue<unknown>(value,[]);return Array.isArray(parsed)?parsed.map(String):[];}
+function escapedLike(value:string){return value.replace(/[\\%_]/g,"\\$&");}
+function patchRow(table:string,id:number,input:Record<string,unknown>,map:Record<string,string>,jsonKeys:string[]=[],booleanKeys:string[]=[]){const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return false;const value=(key:string)=>jsonKeys.includes(key)?JSON.stringify(input[key]):booleanKeys.includes(key)?Number(input[key]):input[key] as string|number|null;return database.prepare(`UPDATE ${table} SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id).changes>0;}
+
+function memoFromRow(row:Record<string,unknown>):Memo{return{id:Number(row.id),title:String(row.title),content:String(row.content),type:row.type as Memo["type"],status:row.status as Memo["status"],tags:stringArrayFromRow(row.tags),eventDate:row.event_date===null?null:String(row.event_date),confirmedAt:row.confirmed_at===null?null:String(row.confirmed_at),mergedIntoId:row.merged_into_id===null?null:Number(row.merged_into_id),...migrationTraceFromRow(row),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listMemos(input:MemoListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.query){const value=`%${escapedLike(input.query.trim())}%`;conditions.push("(title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')");values.push(value,value);}if(input.tag){conditions.push("EXISTS (SELECT 1 FROM json_each(memos.tags) WHERE json_each.value=?)");values.push(input.tag);}if(input.type){conditions.push("type=?");values.push(input.type);}if(input.status){conditions.push("status=?");values.push(input.status);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM memos WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(memoFromRow);}
+export function getMemo(id:number){const row=database.prepare("SELECT * FROM memos WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?memoFromRow(row):null;}
+export function createMemo(input:NewMemo){const result=database.prepare("INSERT INTO memos(user_id,title,content,type,status,tags,event_date,confirmed_at,merged_into_id,source_system,source_id,source_url,imported_at) VALUES('local',?,?,?,?,?,?,?,?,?,?,?,?)").run(input.title,input.content,input.type,input.status,JSON.stringify(input.tags),input.eventDate,input.confirmedAt,input.mergedIntoId,input.sourceSystem,input.sourceId,input.sourceUrl,input.importedAt);return getMemo(Number(result.lastInsertRowid))!;}
+export function updateMemo(id:number,input:MemoPatch){const changed=patchRow("memos",id,input,{title:"title",content:"content",type:"type",status:"status",tags:"tags",eventDate:"event_date",confirmedAt:"confirmed_at",mergedIntoId:"merged_into_id",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"},["tags"]);return changed?getMemo(id):getMemo(id);}
+export function deleteMemo(id:number){return database.prepare("DELETE FROM memos WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function luciusDiaryFromRow(row:Record<string,unknown>):LuciusDiaryEntry{return{id:Number(row.id),date:String(row.date),content:String(row.content),tags:stringArrayFromRow(row.tags),...migrationTraceFromRow(row),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listLuciusDiaryEntries(input:LuciusDiaryListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.query){conditions.push("content LIKE ? ESCAPE '\\'");values.push(`%${escapedLike(input.query.trim())}%`);}if(input.tag){conditions.push("EXISTS (SELECT 1 FROM json_each(lucius_diary_entries.tags) WHERE json_each.value=?)");values.push(input.tag);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM lucius_diary_entries WHERE ${conditions.join(" AND ")} ORDER BY date DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(luciusDiaryFromRow);}
+export function getLuciusDiaryEntry(id:number){const row=database.prepare("SELECT * FROM lucius_diary_entries WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?luciusDiaryFromRow(row):null;}
+export function createLuciusDiaryEntry(input:NewLuciusDiaryEntry){const result=database.prepare("INSERT INTO lucius_diary_entries(user_id,date,content,tags,source_system,source_id,source_url,imported_at) VALUES('local',?,?,?,?,?,?,?)").run(input.date,input.content,JSON.stringify(input.tags),input.sourceSystem,input.sourceId,input.sourceUrl,input.importedAt);return getLuciusDiaryEntry(Number(result.lastInsertRowid))!;}
+export function updateLuciusDiaryEntry(id:number,input:LuciusDiaryPatch){patchRow("lucius_diary_entries",id,input,{date:"date",content:"content",tags:"tags",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"},["tags"]);return getLuciusDiaryEntry(id);}
+export function deleteLuciusDiaryEntry(id:number){return database.prepare("DELETE FROM lucius_diary_entries WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function luciusCaseFromRow(row:Record<string,unknown>):LuciusCase{return{id:Number(row.id),title:String(row.title),errorType:row.error_type as LuciusCase["errorType"],severity:row.severity as LuciusCase["severity"],status:row.status as LuciusCase["status"],triggerScenes:stringArrayFromRow(row.trigger_scenes),errorQuote:String(row.error_quote),cause:String(row.cause),correctBehavior:String(row.correct_behavior),mandatoryRule:String(row.mandatory_rule),nextCheck:row.next_check===null?null:String(row.next_check),punishment:String(row.punishment),firstOccurredDate:String(row.first_occurred_date),latestOccurredDate:String(row.latest_occurred_date),occurrenceCount:Number(row.occurrence_count),consecutiveCorrectCount:Number(row.consecutive_correct_count),recurrenceIntervalDays:row.recurrence_interval_days===null?null:Number(row.recurrence_interval_days),isRecurrence:Boolean(row.is_recurrence),resetThreshold:Number(row.reset_threshold),...migrationTraceFromRow(row),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listLuciusCases(input:LuciusCaseListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.currentOnly)conditions.push("status IN ('serving','probation')");if(input.query){const value=`%${escapedLike(input.query.trim())}%`;conditions.push("(title LIKE ? ESCAPE '\\' OR cause LIKE ? ESCAPE '\\' OR mandatory_rule LIKE ? ESCAPE '\\')");values.push(value,value,value);}if(input.errorType){conditions.push("error_type=?");values.push(input.errorType);}if(input.severity){conditions.push("severity=?");values.push(input.severity);}if(input.status){conditions.push("status=?");values.push(input.status);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM lucius_cases WHERE ${conditions.join(" AND ")} ORDER BY latest_occurred_date DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(luciusCaseFromRow);}
+export function getLuciusCase(id:number){const row=database.prepare("SELECT * FROM lucius_cases WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?luciusCaseFromRow(row):null;}
+export function createLuciusCase(input:NewLuciusCase){const result=database.prepare("INSERT INTO lucius_cases(user_id,title,error_type,severity,status,trigger_scenes,error_quote,cause,correct_behavior,mandatory_rule,next_check,punishment,first_occurred_date,latest_occurred_date,occurrence_count,consecutive_correct_count,recurrence_interval_days,is_recurrence,reset_threshold,source_system,source_id,source_url,imported_at) VALUES('local',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.title,input.errorType,input.severity,input.status,JSON.stringify(input.triggerScenes),input.errorQuote,input.cause,input.correctBehavior,input.mandatoryRule,input.nextCheck,input.punishment,input.firstOccurredDate,input.latestOccurredDate,input.occurrenceCount,input.consecutiveCorrectCount,input.recurrenceIntervalDays,Number(input.isRecurrence),input.resetThreshold,input.sourceSystem,input.sourceId,input.sourceUrl,input.importedAt);return getLuciusCase(Number(result.lastInsertRowid))!;}
+export function updateLuciusCase(id:number,input:LuciusCasePatch){patchRow("lucius_cases",id,input,{title:"title",errorType:"error_type",severity:"severity",status:"status",triggerScenes:"trigger_scenes",errorQuote:"error_quote",cause:"cause",correctBehavior:"correct_behavior",mandatoryRule:"mandatory_rule",nextCheck:"next_check",punishment:"punishment",firstOccurredDate:"first_occurred_date",latestOccurredDate:"latest_occurred_date",occurrenceCount:"occurrence_count",consecutiveCorrectCount:"consecutive_correct_count",recurrenceIntervalDays:"recurrence_interval_days",isRecurrence:"is_recurrence",resetThreshold:"reset_threshold",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"},["triggerScenes"],["isRecurrence"]);return getLuciusCase(id);}
+export function deleteLuciusCase(id:number){return database.prepare("DELETE FROM lucius_cases WHERE id=? AND user_id='local'").run(id).changes>0;}
+export function recordLuciusCaseRecurrence(id:number,occurredDate:string){database.exec("BEGIN IMMEDIATE");try{const item=getLuciusCase(id);if(!item){database.exec("COMMIT");return null;}if(occurredDate<item.latestOccurredDate)throw new ConflictError("复发日期不能早于最近发生日期");const interval=Math.round((Date.parse(`${occurredDate}T00:00:00Z`)-Date.parse(`${item.latestOccurredDate}T00:00:00Z`))/86400000)||null;database.prepare("UPDATE lucius_cases SET occurrence_count=occurrence_count+1,latest_occurred_date=?,recurrence_interval_days=?,is_recurrence=1,consecutive_correct_count=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(occurredDate,interval,id);database.exec("COMMIT");return getLuciusCase(id);}catch(error){database.exec("ROLLBACK");throw error;}}
 
 function drinkFromRow(row:Record<string,unknown>):DrinkLog{return{id:Number(row.id),occurredAt:String(row.occurred_at),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listDrinkLogs(input:{from?:string;to?:string;drinkType?:string}={}){const conditions:string[]=[],values:string[]=[];if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}if(input.drinkType){conditions.push("drink_type = ?");values.push(input.drinkType);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM drink_logs ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(drinkFromRow);}

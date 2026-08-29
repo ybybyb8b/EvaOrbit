@@ -9,9 +9,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/*.test.ts",
+    "test": "node --test src/lib/*.test.ts scripts/*.test.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/apply-migrations.mjs",
-    "db:import-sqlite": "node --env-file-if-exists=.env.local scripts/import-sqlite.mjs"
+    "db:import-sqlite": "node --env-file-if-exists=.env.local scripts/import-sqlite.mjs",
+    "import:notion": "node --env-file-if-exists=.env.local scripts/import-notion-json.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

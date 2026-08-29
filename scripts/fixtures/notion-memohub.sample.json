@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "memo": [
+    {
+      "notion_page_id": "notion-memo-001",
+      "notion_url": "https://www.notion.so/notion-memo-001",
+      "notion_created_at": "2024-01-02T03:04:05.000Z",
+      "notion_updated_at": "2025-06-07T08:09:10.000Z",
+      "title": "长期规则：保留原文",
+      "content": "第一行中文。\n\n第二行包含 **Markdown**、emoji 🪐 与特殊字符 <>&。",
+      "type": "基本信息",
+      "status": "当前有效",
+      "tags": ["长期记忆", "中文"]
+    }
+  ],
+  "chronicle": [
+    {
+      "notion_page_id": "notion-chronicle-001",
+      "notion_url": "https://www.notion.so/notion-chronicle-001",
+      "notion_created_at": "2024-02-03T04:05:06.000Z",
+      "notion_updated_at": "2024-02-04T05:06:07.000Z",
+      "date": "2024-02-03",
+      "title": "迁移测试 Chronicle",
+      "content_md": "# 标题\n\n- 保留 Markdown\n- 保留换行\n- 特殊字符：`<tag>` & 🐈",
+      "source": "manual",
+      "legacy_notion_category": "只进入 migration warning，不扩展 Chronicle schema"
+    },
+    {
+      "notion_page_id": "notion-chronicle-duplicate",
+      "notion_url": "https://www.notion.so/notion-chronicle-duplicate",
+      "date": "2024-02-03",
+      "title": "迁移测试 Chronicle",
+      "content_md": "# 标题\n\n- 保留 Markdown\n- 保留换行\n- 特殊字符：`<tag>` & 🐈",
+      "source": "manual"
+    }
+  ],
+  "lucius_diary": [
+    {
+      "notion_page_id": "notion-diary-001",
+      "notion_url": "https://www.notion.so/notion-diary-001",
+      "notion_created_at": "2024-03-04T05:06:07.000Z",
+      "notion_updated_at": "2024-03-05T06:07:08.000Z",
+      "date": "2024-03-04",
+      "content": "今天修正了一次误解。\n保留这段主观记录的原始换行。",
+      "tags": ["修正", "成长"]
+    }
+  ],
+  "lucius_case": [
+    {
+      "notion_page_id": "notion-case-001",
+      "notion_url": "https://www.notion.so/notion-case-001",
+      "notion_created_at": "2024-04-05T06:07:08.000Z",
+      "notion_updated_at": "2024-04-06T07:08:09.000Z",
+      "title": "遗漏长期记忆",
+      "error_type": "长期记忆遗漏",
+      "severity": "一般",
+      "status": "观察期",
+      "trigger_scenes": ["需要回忆约定时"],
+      "error_quote": "我不记得这件事。",
+      "cause": "回答前没有检查长期记忆。",
+      "correct_behavior": "先搜索当前有效 Memo，再组织回答。",
+      "mandatory_rule": "涉及长期约定时必须先查 Memo。",
+      "next_check": "2024-05-01",
+      "punishment": "记录并复盘。",
+      "first_occurred_date": "2024-04-01",
+      "latest_occurred_date": "2024-04-05",
+      "occurrence_count": 2,
+      "consecutive_correct_count": 1,
+      "recurrence_interval_days": 4,
+      "is_recurrence": true,
+      "reset_threshold": 3
+    }
+  ]
+}

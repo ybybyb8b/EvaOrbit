@@ -88,7 +88,7 @@ export function SettingsView() {
   if (loading) return <div className="page"><div className="loading-state">正在读取设置…</div></div>;
 
   return <div className="page">
-    <PageHeader eyebrow="MORE" title="Settings" description="模型怎么连、另一个自己怎么说话，都放在这里。" />
+    <PageHeader eyebrow="SETTINGS" title="Settings" description="模型怎么连、另一个自己怎么说话，都放在这里。" />
     <div className="settings-summary">
       <section><span>生产数据</span><strong>Supabase Postgres</strong></section>
       <section><span>访问方式</span><strong>私人账户 · RLS</strong></section>

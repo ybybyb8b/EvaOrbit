@@ -388,6 +388,65 @@ export interface ChronicleEntry {
   updatedAt: string;
 }
 
+export interface MigrationTrace {
+  sourceSystem: string | null;
+  sourceId: string | null;
+  sourceUrl: string | null;
+  importedAt: string | null;
+}
+
+export type MemoType = "basic" | "supplement" | "event" | "note";
+export type MemoStatus = "active" | "merged" | "archived" | "historical";
+export interface Memo extends MigrationTrace {
+  id: number;
+  title: string;
+  content: string;
+  type: MemoType;
+  status: MemoStatus;
+  tags: string[];
+  eventDate: string | null;
+  confirmedAt: string | null;
+  mergedIntoId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LuciusDiaryEntry extends MigrationTrace {
+  id: number;
+  date: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LuciusCaseErrorType = "naming" | "memory_omission" | "factual" | "tool_misuse" | "expression" | "other";
+export type LuciusCaseSeverity = "minor" | "moderate" | "serious" | "habitual";
+export type LuciusCaseStatus = "serving" | "probation" | "temporary_release" | "permanent_record";
+export interface LuciusCase extends MigrationTrace {
+  id: number;
+  title: string;
+  errorType: LuciusCaseErrorType;
+  severity: LuciusCaseSeverity;
+  status: LuciusCaseStatus;
+  triggerScenes: string[];
+  errorQuote: string;
+  cause: string;
+  correctBehavior: string;
+  mandatoryRule: string;
+  nextCheck: string | null;
+  punishment: string;
+  firstOccurredDate: string;
+  latestOccurredDate: string;
+  occurrenceCount: number;
+  consecutiveCorrectCount: number;
+  recurrenceIntervalDays: number | null;
+  isRecurrence: boolean;
+  resetThreshold: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type DrinkType = "coffee" | "milk_tea" | "tea" | "soda" | "juice" | "water" | "alcohol" | "other";
 export interface DrinkLog {
   id: number;
