@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, MediaItem, MediaRating, MediaType, MediaViewing, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
 import type { HomeModuleId } from "../home-modules";
 
 export type TaskFilter = "all" | "open" | "done";
@@ -42,6 +42,12 @@ export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryIt
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
+export type NewMediaItem = Pick<MediaItem, "title" | "mediaType" | "rating" | "note" | "coverUrl">;
+export type MediaListInput = { query?: string; mediaType?: MediaType; limit?: number };
+export type MediaItemPatch = { title?: string; mediaType?: MediaType; rating?: MediaRating | null; note?: string | null };
+export type NewChronicleEntry = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
+export type ChronicleListInput = { query?: string; limit?: number };
+export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: string; source?: ChronicleSource };
 export type NutritionSettings = Pick<DailyNutritionSummary, "date" | "restingEnergyKcal" | "activeEnergyKcal" | "notes">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
@@ -119,6 +125,23 @@ export interface EvaOrbitRepository {
   createHealthRecord(input: NewHealthRecord): Promise<HealthRecord>;
   updateHealthRecord(id: number, input: Record<string, unknown>): Promise<HealthRecord | null>;
   deleteHealthRecord(id: number): Promise<boolean>;
+
+  listMediaItems(input?: MediaListInput): Promise<MediaItem[]>;
+  getMediaItem(id: number): Promise<MediaItem | null>;
+  createMediaItem(input: NewMediaItem): Promise<MediaItem>;
+  updateMediaItem(id: number, input: MediaItemPatch): Promise<MediaItem | null>;
+  deleteMediaItem(id: number): Promise<boolean>;
+  listMediaViewings(mediaId?: number): Promise<MediaViewing[]>;
+  getMediaViewing(id: number): Promise<MediaViewing | null>;
+  createMediaViewing(input: { mediaId: number; watchedDate: string }): Promise<MediaViewing>;
+  updateMediaViewing(id: number, watchedDate: string): Promise<MediaViewing | null>;
+  deleteMediaViewing(id: number): Promise<boolean>;
+
+  listChronicleEntries(input?: ChronicleListInput): Promise<ChronicleEntry[]>;
+  getChronicleEntry(id: number): Promise<ChronicleEntry | null>;
+  createChronicleEntry(input: NewChronicleEntry): Promise<ChronicleEntry>;
+  updateChronicleEntry(id: number, input: ChronicleEntryPatch): Promise<ChronicleEntry | null>;
+  deleteChronicleEntry(id: number): Promise<boolean>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;

@@ -5,8 +5,8 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, FoodLibrarySearchOptions, HealthRecordListInput, NewHealthRecord } from "./repositories/types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, MediaItem, MediaViewing, Memory, NotificationDelivery, Pet, PushSubscriptionRecord, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, MediaItemPatch, MediaListInput, NewChronicleEntry, NewHealthRecord, NewMediaItem } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -519,6 +519,53 @@ if (!hasV16) {
   `);
 }
 
+const hasV17 = database.prepare("SELECT 1 FROM migrations WHERE version = 17").get();
+if (!hasV17) {
+  database.exec(`
+    CREATE TABLE media_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 300),
+      media_type TEXT NOT NULL CHECK(media_type IN ('movie','tv','anime','documentary','other')),
+      rating TEXT CHECK(rating IS NULL OR rating IN ('goat','goat+','goat-','dope','dope+','dope-','mid','mid+','mid-','nope','nope+','nope-','shit','shit+','shit-')),
+      note TEXT,
+      cover_url TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE media_viewings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      media_id INTEGER NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
+      watched_date TEXT NOT NULL CHECK(watched_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+      viewing_number INTEGER NOT NULL CHECK(viewing_number > 0),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(media_id, viewing_number)
+    );
+    CREATE INDEX idx_media_items_user_type_title ON media_items(user_id,media_type,title);
+    CREATE INDEX idx_media_viewings_user_media_date ON media_viewings(user_id,media_id,watched_date DESC);
+    INSERT INTO migrations(version) VALUES (17);
+  `);
+}
+
+const hasV18 = database.prepare("SELECT 1 FROM migrations WHERE version = 18").get();
+if (!hasV18) {
+  database.exec(`
+    CREATE TABLE chronicle_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL DEFAULT 'local',
+      date TEXT NOT NULL CHECK(date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+      title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 300),
+      content_md TEXT NOT NULL CHECK(length(content_md) BETWEEN 1 AND 100000),
+      source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','chatgpt')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_chronicle_entries_user_date ON chronicle_entries(user_id,date DESC,id DESC);
+    INSERT INTO migrations(version) VALUES (18);
+  `);
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -977,6 +1024,26 @@ export function getHealthRecord(id:number){const row=database.prepare("SELECT * 
 export function createHealthRecord(input:NewHealthRecord){const result=database.prepare("INSERT INTO health_records(user_id,occurred_at,occurred_has_explicit_time,type,title,summary,status,started_at,started_has_explicit_time,ended_at,ended_has_explicit_time,details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run("local",input.occurredAt,Number(input.occurredHasExplicitTime),input.type,input.title,input.summary,input.status,input.startedAt,Number(input.startedHasExplicitTime),input.endedAt,Number(input.endedHasExplicitTime),JSON.stringify(input.details));return getHealthRecord(Number(result.lastInsertRowid))!;}
 export function updateHealthRecord(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",type:"type",title:"title",summary:"summary",status:"status",startedAt:"started_at",startedHasExplicitTime:"started_has_explicit_time",endedAt:"ended_at",endedHasExplicitTime:"ended_has_explicit_time",details:"details"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getHealthRecord(id);const value=(key:string)=>key==="details"?JSON.stringify(input[key]):key.endsWith("HasExplicitTime")?Number(input[key]):input[key] as string|null;const result=database.prepare(`UPDATE health_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getHealthRecord(id):null;}
 export function deleteHealthRecord(id:number){return database.prepare("DELETE FROM health_records WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function mediaItemFromRow(row:Record<string,unknown>):MediaItem{return{id:Number(row.id),title:String(row.title),mediaType:row.media_type as MediaItem["mediaType"],rating:row.rating as MediaItem["rating"],note:row.note===null?null:String(row.note),coverUrl:row.cover_url===null?null:String(row.cover_url),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function mediaViewingFromRow(row:Record<string,unknown>):MediaViewing{return{id:Number(row.id),mediaId:Number(row.media_id),watchedDate:String(row.watched_date),viewingNumber:Number(row.viewing_number),createdAt:String(row.created_at)};}
+export function listMediaItems(input:MediaListInput={}){const conditions:string[]=["user_id='local'"],values:Array<string|number>=[];if(input.query){conditions.push("title LIKE ?");values.push(`%${input.query}%`);}if(input.mediaType){conditions.push("media_type=?");values.push(input.mediaType);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM media_items WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(mediaItemFromRow);}
+export function getMediaItem(id:number){const row=database.prepare("SELECT * FROM media_items WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?mediaItemFromRow(row):null;}
+export function createMediaItem(input:NewMediaItem){const result=database.prepare("INSERT INTO media_items(user_id,title,media_type,rating,note,cover_url) VALUES('local',?,?,?,?,?)").run(input.title,input.mediaType,input.rating,input.note,input.coverUrl);return getMediaItem(Number(result.lastInsertRowid))!;}
+export function updateMediaItem(id:number,input:MediaItemPatch){const map:Record<string,string>={title:"title",mediaType:"media_type",rating:"rating",note:"note"};const entries=Object.entries(map).filter(([key])=>input[key as keyof MediaItemPatch]!==undefined);if(!entries.length)return getMediaItem(id);const result=database.prepare(`UPDATE media_items SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof MediaItemPatch] as string|null),id);return result.changes?getMediaItem(id):null;}
+export function deleteMediaItem(id:number){return database.prepare("DELETE FROM media_items WHERE id=? AND user_id='local'").run(id).changes>0;}
+export function listMediaViewings(mediaId?:number){const rows=mediaId===undefined?database.prepare("SELECT * FROM media_viewings WHERE user_id='local' ORDER BY media_id,viewing_number,id").all():database.prepare("SELECT * FROM media_viewings WHERE media_id=? AND user_id='local' ORDER BY viewing_number,id").all(mediaId);return(rows as Record<string,unknown>[]).map(mediaViewingFromRow);}
+export function getMediaViewing(id:number){const row=database.prepare("SELECT * FROM media_viewings WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?mediaViewingFromRow(row):null;}
+export function createMediaViewing(input:{mediaId:number;watchedDate:string}){database.exec("BEGIN IMMEDIATE");try{if(!getMediaItem(input.mediaId))throw new ConflictError("Media not found.");const row=database.prepare("SELECT COALESCE(MAX(viewing_number),0)+1 AS next_number FROM media_viewings WHERE media_id=? AND user_id='local'").get(input.mediaId) as {next_number:number};const result=database.prepare("INSERT INTO media_viewings(user_id,media_id,watched_date,viewing_number) VALUES('local',?,?,?)").run(input.mediaId,input.watchedDate,row.next_number);database.exec("COMMIT");return getMediaViewing(Number(result.lastInsertRowid))!;}catch(error){database.exec("ROLLBACK");throw error;}}
+export function updateMediaViewing(id:number,watchedDate:string){const result=database.prepare("UPDATE media_viewings SET watched_date=? WHERE id=? AND user_id='local'").run(watchedDate,id);return result.changes?getMediaViewing(id):null;}
+export function deleteMediaViewing(id:number){const viewing=getMediaViewing(id);if(!viewing||viewing.viewingNumber===1)return false;database.exec("BEGIN IMMEDIATE");try{const result=database.prepare("DELETE FROM media_viewings WHERE id=? AND user_id='local' AND viewing_number>1").run(id);if(result.changes){const later=database.prepare("SELECT id,viewing_number FROM media_viewings WHERE media_id=? AND user_id='local' AND viewing_number>? ORDER BY viewing_number,id").all(viewing.mediaId,viewing.viewingNumber) as Array<{id:number;viewing_number:number}>;const renumber=database.prepare("UPDATE media_viewings SET viewing_number=? WHERE id=?");for(const row of later)renumber.run(row.viewing_number-1,row.id);}database.exec("COMMIT");return result.changes>0;}catch(error){database.exec("ROLLBACK");throw error;}}
+
+function chronicleEntryFromRow(row:Record<string,unknown>):ChronicleEntry{return{id:Number(row.id),date:String(row.date),title:String(row.title),contentMd:String(row.content_md),source:row.source as ChronicleEntry["source"],createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listChronicleEntries(input:ChronicleListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];const query=input.query?.trim();if(query){const escaped=query.replace(/[\\%_]/g,"\\$&");conditions.push("(title LIKE ? ESCAPE '\\' OR content_md LIKE ? ESCAPE '\\')");values.push(`%${escaped}%`,`%${escaped}%`);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM chronicle_entries WHERE ${conditions.join(" AND ")} ORDER BY date DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(chronicleEntryFromRow);}
+export function getChronicleEntry(id:number){const row=database.prepare("SELECT * FROM chronicle_entries WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?chronicleEntryFromRow(row):null;}
+export function createChronicleEntry(input:NewChronicleEntry){const result=database.prepare("INSERT INTO chronicle_entries(user_id,date,title,content_md,source) VALUES('local',?,?,?,?)").run(input.date,input.title,input.contentMd,input.source);return getChronicleEntry(Number(result.lastInsertRowid))!;}
+export function updateChronicleEntry(id:number,input:ChronicleEntryPatch){const map:Record<keyof ChronicleEntryPatch,string>={date:"date",title:"title",contentMd:"content_md",source:"source"};const entries=Object.entries(map).filter(([key])=>input[key as keyof ChronicleEntryPatch]!==undefined);if(!entries.length)return getChronicleEntry(id);const result=database.prepare(`UPDATE chronicle_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof ChronicleEntryPatch] as string),id);return result.changes?getChronicleEntry(id):null;}
+export function deleteChronicleEntry(id:number){return database.prepare("DELETE FROM chronicle_entries WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function drinkFromRow(row:Record<string,unknown>):DrinkLog{return{id:Number(row.id),occurredAt:String(row.occurred_at),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listDrinkLogs(input:{from?:string;to?:string;drinkType?:string}={}){const conditions:string[]=[],values:string[]=[];if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}if(input.drinkType){conditions.push("drink_type = ?");values.push(input.drinkType);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM drink_logs ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(drinkFromRow);}

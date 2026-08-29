@@ -10,9 +10,12 @@ import { getDailyNutritionSummary, updateDailyEnergy } from "../services/nutriti
 import { createTrackerEntry, getTrackerDetail, listTrackerSummaries } from "../services/tracker";
 import type { DrinkLog, FoodLibraryItem, FoodLog } from "../types";
 import { parseDailyEnergy, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodLogPatch, parseNewDrinkLog, parseNewFoodLog, parseNewTrackerEntry, ValidationError } from "../validation";
+import { resourceRegistry } from "./resource-registry.server";
+import { registerGenericResourceTools } from "./resource-tools";
 
 export const MCP_TOOL_NAMES = [
   "food_search_recent", "food_create", "food_update", "food_delete", "food_library_search", "food_library_create", "food_library_update", "food_library_delete", "drink_search_recent", "drink_create", "drink_update", "drink_delete", "nutrition_get_daily_summary", "daily_energy_upsert", "tracker_list", "tracker_create_entry",
+  "eo_resources", "eo_schema", "eo_search", "eo_get", "eo_create", "eo_update", "eo_delete", "eo_action",
 ] as const;
 
 const mealType = z.enum(["breakfast", "lunch", "dinner", "snack", "late_night"]);
@@ -173,6 +176,8 @@ function createServer() {
 
   server.registerTool("tracker_create_entry", { description: "Create a point-in-time entry for one native EvaOrbit Tracker.", inputSchema: z.object({ tracker_id: z.number().int().positive(), occurred_at: occurredAt.optional(), detail_fields: z.record(z.string(), z.unknown()).optional(), note: z.string().max(5000).optional() }) },
     async ({ tracker_id, occurred_at, detail_fields, note }) => runTool(async () => { const entry = await createTrackerEntry(parseNewTrackerEntry({ occurredAt: occurred_at, values: detail_fields ?? {}, note: note ?? "" }, tracker_id)); return { record: { id: entry.id, tracker_id: entry.trackerId, occurred_at: entry.occurredAt, detail_fields: entry.values, note: entry.note } }; }));
+
+  registerGenericResourceTools(server, runTool, resourceRegistry);
 
   return server;
 }

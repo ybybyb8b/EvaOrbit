@@ -19,12 +19,31 @@ const expectedTools = [
   "daily_energy_upsert",
   "tracker_list",
   "tracker_create_entry",
+  "eo_resources",
+  "eo_schema",
+  "eo_search",
+  "eo_get",
+  "eo_create",
+  "eo_update",
+  "eo_delete",
+  "eo_action",
 ];
 
-test("MCP tools/list exposes only the documented tools", () => {
+test("MCP tools/list preserves the 16 dedicated tools and adds the 8 generic tools", () => {
   const source = readFileSync(new URL("./mcp/server.ts", import.meta.url), "utf8");
-  const registered = [...source.matchAll(/server\.registerTool\("([a-z_]+)"/g)].map((match) => match[1]);
+  const genericSource = readFileSync(new URL("./mcp/resource-tools.ts", import.meta.url), "utf8");
+  const registered = [...`${source}\n${genericSource}`.matchAll(/server\.registerTool\("([a-z_]+)"/g)].map((match) => match[1]);
   assert.deepEqual(registered, expectedTools);
+  assert.deepEqual(registered.slice(0, 16), expectedTools.slice(0, 16));
+  assert.equal(new Set(registered).size, 24);
+});
+
+test("generic resource remains a plain string in every fixed tool schema", () => {
+  const source = readFileSync(new URL("./mcp/resource-tools.ts", import.meta.url), "utf8");
+  assert.match(source, /const resource = z\.string\(\)/);
+  assert.doesNotMatch(source, /const resource = z\.enum/);
+  assert.match(source, /server\.registerTool\("eo_resources"/);
+  assert.match(source, /server\.registerTool\("eo_action"/);
 });
 
 test("daily_energy_upsert reuses the existing validated nutrition service", () => {

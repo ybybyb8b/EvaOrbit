@@ -1,4 +1,4 @@
-import type { HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, MediaRating, MediaType, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -25,6 +25,87 @@ function dueDate(value: unknown) {
     throw new ValidationError("截止日期格式不正确");
   }
   return value;
+}
+
+export function dateOnly(value: unknown, field = "日期") {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new ValidationError(`${field}格式不正确`);
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) throw new ValidationError(`${field}格式不正确`);
+  return value;
+}
+
+const mediaTypes = ["movie", "tv", "anime", "documentary", "other"] as const;
+const mediaRatingPattern = /^(goat|dope|mid|nope|shit)[+-]?$/;
+function mediaRating(value: unknown): MediaRating | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !mediaRatingPattern.test(value)) throw new ValidationError("评分格式不正确");
+  return value as MediaRating;
+}
+function nullableMediaText(value: unknown, field: string, max: number) {
+  if (value === null || value === undefined || value === "") return null;
+  return text(value, field, max, false) || null;
+}
+
+export function parseNewMedia(value: unknown) {
+  const body = objectValue(value);
+  if (body.mediaType === undefined) throw new ValidationError("Media 类型不能为空");
+  return {
+    item: {
+      title: text(body.title, "标题", 300)!,
+      mediaType: enumValue(body.mediaType, "Media 类型", mediaTypes, "other") as MediaType,
+      rating: mediaRating(body.rating),
+      note: nullableMediaText(body.note, "备注", 5000),
+      coverUrl: null,
+    },
+    watchedDate: dateOnly(body.watchedDate, "观看日期"),
+  };
+}
+
+export function parseMediaPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    title: body.title === undefined ? undefined : text(body.title, "标题", 300),
+    mediaType: body.mediaType === undefined ? undefined : enumValue(body.mediaType, "Media 类型", mediaTypes, "other") as MediaType,
+    rating: body.rating === undefined ? undefined : mediaRating(body.rating),
+    note: body.note === undefined ? undefined : nullableMediaText(body.note, "备注", 5000),
+  };
+  if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Media 字段");
+  return result;
+}
+
+export function parseMediaViewing(value: unknown) {
+  return { watchedDate: dateOnly(objectValue(value).watchedDate, "观看日期") };
+}
+
+const chronicleSources = ["manual", "chatgpt"] as const satisfies readonly ChronicleSource[];
+
+function markdownText(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) throw new ValidationError("正文不能为空");
+  if (value.length > 100_000) throw new ValidationError("正文不能超过 100000 个字符");
+  return value;
+}
+
+export function parseNewChronicleEntry(value: unknown) {
+  const body = objectValue(value);
+  return {
+    date: dateOnly(body.date),
+    title: text(body.title, "标题", 300)!,
+    contentMd: markdownText(body.contentMd),
+    source: enumValue(body.source, "来源", chronicleSources, "manual"),
+  };
+}
+
+export function parseChronicleEntryPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    date: body.date === undefined ? undefined : dateOnly(body.date),
+    title: body.title === undefined ? undefined : text(body.title, "标题", 300),
+    contentMd: body.contentMd === undefined ? undefined : markdownText(body.contentMd),
+    source: body.source === undefined ? undefined : enumValue(body.source, "来源", chronicleSources, "manual"),
+  };
+  if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Chronicle 字段");
+  return result;
 }
 
 function priority(value: unknown): TaskPriority | undefined {

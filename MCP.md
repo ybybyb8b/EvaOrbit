@@ -17,6 +17,8 @@ Enable the Supabase OAuth Server, Dynamic OAuth Apps, and set its authorization 
 
 ## Tools
 
+The original 16 dedicated tools remain available unchanged:
+
 - `food_search_recent`
 - `food_create`
 - `food_update`
@@ -33,6 +35,19 @@ Enable the Supabase OAuth Server, Dynamic OAuth Apps, and set its authorization 
 - `daily_energy_upsert`
 - `tracker_list`
 - `tracker_create_entry`
+
+The stable Generic Resource Layer adds:
+
+- `eo_resources`
+- `eo_schema`
+- `eo_search`
+- `eo_get`
+- `eo_create`
+- `eo_update`
+- `eo_delete`
+- `eo_action`
+
+Generic tools keep `resource` as a plain string. Call `eo_resources`, then `eo_schema`, before operating on a resource. The server-side registry—not the client—decides which resources, fields, capabilities, validations, and actions are available. The current registry contains only `chronicle`.
 
 ## Local test
 

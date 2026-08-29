@@ -349,6 +349,45 @@ export interface HealthRecord {
   updatedAt: string;
 }
 
+export type MediaType = "movie" | "tv" | "anime" | "documentary" | "other";
+export type MediaRatingBase = "goat" | "dope" | "mid" | "nope" | "shit";
+export type MediaRating = MediaRatingBase | `${MediaRatingBase}+` | `${MediaRatingBase}-`;
+export interface MediaItem {
+  id: number;
+  title: string;
+  mediaType: MediaType;
+  rating: MediaRating | null;
+  note: string | null;
+  coverUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface MediaViewing {
+  id: number;
+  mediaId: number;
+  watchedDate: string;
+  viewingNumber: number;
+  createdAt: string;
+}
+export interface MediaListItem extends MediaItem {
+  latestWatchedDate: string;
+  viewingCount: number;
+}
+export interface MediaDetail extends MediaItem {
+  viewings: MediaViewing[];
+}
+
+export type ChronicleSource = "manual" | "chatgpt";
+export interface ChronicleEntry {
+  id: number;
+  date: string;
+  title: string;
+  contentMd: string;
+  source: ChronicleSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type DrinkType = "coffee" | "milk_tea" | "tea" | "soda" | "juice" | "water" | "alcohol" | "other";
 export interface DrinkLog {
   id: number;

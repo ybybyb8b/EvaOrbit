@@ -1,11 +1,11 @@
-# Future MCP boundary
+# MCP boundary
 
-No MCP endpoint is exposed in this release. A future remote MCP adapter must call
-`src/lib/services/evaorbit.ts` rather than reimplementing Tasks, Memory, or
-Conversation behavior.
+The remote MCP endpoint is authenticated and runs all operations inside the
+request's per-user repository context. Dedicated tools remain backward
+compatible. Generic tools route only through the server-side Resource Registry;
+they never accept table names or expose arbitrary database CRUD.
 
-Remote MCP requirements: HTTPS, authenticated identity, authorization on every
-tool, server-side database access, no database or provider secrets in tool
-responses, and explicit write protection for mutating tools. Tools such as
-`search_memory`, `add_memory`, `list_tasks`, `create_task`, `update_task`, and
-`write_chronicle` must preserve the same per-user RLS boundary as the web app.
+Each registered resource declares capabilities and a public schema, validates
+create/update payloads strictly, preserves PATCH semantics, and delegates
+deletes and non-CRUD actions to existing business services. Register resources
+one at a time rather than mirroring every database table.

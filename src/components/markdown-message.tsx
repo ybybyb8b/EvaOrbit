@@ -4,6 +4,18 @@ import { type ComponentPropsWithoutRef, type ReactNode, useDeferredValue, useSta
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+function safeMarkdownUrl(value: string, key: string) {
+  const url = value.trim();
+  if (url.startsWith("#") || url.startsWith("./") || url.startsWith("../") || (url.startsWith("/") && !url.startsWith("//"))) return url;
+  try {
+    const protocol = new URL(url).protocol;
+    if (protocol === "http:" || protocol === "https:" || (key === "href" && protocol === "mailto:")) return url;
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 function CodeBlock({ className, children }: { className?: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const code = String(children).replace(/\n$/, "");
@@ -33,6 +45,8 @@ export function MarkdownMessage({ content }: { content: string }) {
   return <div className="markdown-content">
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      skipHtml
+      urlTransform={safeMarkdownUrl}
       components={{
         a: Link,
         table: Table,
