@@ -18,7 +18,7 @@ const modules: Record<HomeModuleId, { href: string; name: string; description: s
   media: { href: "/media", name: "Media", description: "Things fully watched", icon: "media" },
   memo: { href: "/memo", name: "Memo", description: "Long-term facts and rules", icon: "memory" },
   chronicle: { href: "/chronicle", name: "Chronicle", description: "Dated Markdown archive", icon: "chronicle" },
-  lucius: { href: "/lucius", name: "Lucius", description: "Diary and correction cases", icon: "history" },
+  lucius: { href: "/lucius", name: "Lucius", description: "Diary and correction cases", icon: "lucius" },
 };
 
 export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[] }) {

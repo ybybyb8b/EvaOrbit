@@ -5,14 +5,16 @@ import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
-import type { DailyNutritionSummary, HealthRecord } from "@/lib/types";
+import { buildHealthDashboard } from "@/lib/health-dashboard";
+import type { DailyNutritionSummary, HealthRecord, TrainingInputSuggestions, TrainingLog } from "@/lib/types";
 import { DailyEnergyCard } from "./daily-energy-card";
 import { HealthRecordEditor } from "./health-record-editor";
 import { HealthRecordList } from "./health-record-card";
+import { TrainingSection } from "./training-section";
 
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 
-export function HealthView({ initial, initialEnergy, initialEnergyHistory }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[] }) {
+export function HealthView({ initial, initialEnergy, initialEnergyHistory, initialTraining, initialTrainingSuggestions, today }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; today: string }) {
   const [dashboard, setDashboard] = useState(initial);
   const [editing, setEditing] = useState<HealthRecord | undefined>();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -21,11 +23,8 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory }: { i
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const [currentResponse, recentResponse] = await Promise.all([
-      fetch("/api/health/records?status=active&limit=6"),
-      fetch("/api/health/records?limit=8"),
-    ]);
-    if (currentResponse.ok && recentResponse.ok) setDashboard({ current: await currentResponse.json(), recent: await recentResponse.json() });
+    const response = await fetch("/api/health/records?limit=100");
+    if (response.ok) setDashboard(buildHealthDashboard(await response.json()));
   }, []);
 
   function closeEditor() { setEditorOpen(false); setEditing(undefined); }
@@ -36,10 +35,11 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory }: { i
     <PageHeader eyebrow="LIFE" title="Health" description="Personal health records" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New record</button>} />
     {message && <p className="success-banner" role="status">{message}</p>}
     {error && <p className="form-error">{error}</p>}
-    {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setDashboard((current) => ({ current: record.status === "active" ? [record, ...current.current.filter((item) => item.id !== record.id)].slice(0, 6) : current.current.filter((item) => item.id !== record.id), recent: [record, ...current.recent.filter((item) => item.id !== record.id)].slice(0, 8) })); void load(); }} /></FormSheet>}
-    <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>Worth keeping in view</h2></div><span>Active now</span></div>{dashboard.current.length ? <div className="health-record-list">{dashboard.current.slice(0, 6).map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div> : <div className="health-empty compact"><span className="health-empty-icon"><Icon name="health" /></span><h2>Nothing active</h2><p>Resolved records stay in your history.</p></div>}</section>
+    {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}
+    <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>Worth keeping in view</h2></div><span>Active now</span></div>{dashboard.current.length ? <div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div> : <p className="health-inline-empty">Nothing active right now.</p>}</section>
+    <TrainingSection initial={initialTraining} initialSuggestions={initialTrainingSuggestions} today={today} />
     <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />
-    <section className="health-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Health records</h2></div><Link href="/health/records">View all <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent.slice(0, 6)} /></section>
+    <section className="health-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Health records</h2></div><Link href="/health/records">View all <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>
   </div>;
 }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/icons";
-import { dateInEvaOrbit } from "@/lib/time";
+import { dateInEvaOrbit, shiftDate } from "@/lib/time";
 import type { DailyNutritionSummary } from "@/lib/types";
 
 type EnergyDraft = {
@@ -22,7 +22,7 @@ function draftFromSummary(summary: DailyNutritionSummary): EnergyDraft {
 }
 
 function formatKcal(value: number | null) {
-  return value === null ? "—" : `${value.toLocaleString()} kcal`;
+  return value === null ? "Not recorded" : `${value.toLocaleString()} kcal`;
 }
 
 function parseEnergy(value: string) {
@@ -119,7 +119,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       setSelectedDate(next.date);
       setDraft(draftFromSummary(next));
       setEditing(false);
-      setMessage("Daily energy saved");
+      setMessage("Energy review saved");
       setHistory((current) => {
         const withoutDate = current.filter((item) => item.date !== next.date);
         const hasSavedEnergy = next.restingEnergyKcal !== null || next.activeEnergyKcal !== null;
@@ -141,17 +141,20 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     ["Total expenditure", summary.totalExpenditureKcal],
     ["Balance", summary.energyBalance],
   ] as const;
+  const today = dateInEvaOrbit();
+  const isToday = selectedDate === today;
+  const isYesterday = selectedDate === shiftDate(today, -1);
 
   return <section className="daily-energy-card" aria-labelledby="daily-energy-title">
     <div className="daily-energy-heading">
-      <div><span className="eyebrow">{selectedDate === dateInEvaOrbit() ? "TODAY · DAILY ENERGY" : "DAILY ENERGY"}</span><h2 id="daily-energy-title">A simple energy estimate</h2><p>Food and drinks in your log, plus optional expenditure settings. Not medical advice.</p></div>
+      <div><span className="eyebrow">{isToday ? "TODAY · IN PROGRESS" : "ENERGY REVIEW"}</span><h2 id="daily-energy-title">{isYesterday ? "Yesterday" : selectedDate}</h2><p>{isToday ? "Today is still changing. This is not a completed review." : "Intake from Food + Drinks, with your saved resting and active energy."}</p></div>
       {!editing && <button className="button secondary" onClick={openEditor}><Icon name="edit" />Edit</button>}
     </div>
     <div className="daily-energy-date-row">
       <label className="daily-energy-date"><span>Date</span><input type="date" value={selectedDate} disabled={editing} onChange={(event) => void loadDate(event.target.value)} /></label>
       {loading && <span className="daily-energy-loading">Loading…</span>}
     </div>
-    <div className="daily-energy-metrics">{metrics.map(([label, value]) => <div className="daily-energy-metric" key={label}><span>{label}</span><strong>{formatKcal(value)}</strong></div>)}</div>
+    <div className="daily-energy-summary">{metrics.map(([label, value]) => <div className={`daily-energy-metric${value === null ? " missing" : ""}`} key={label}><span>{label}</span><strong>{formatKcal(value)}</strong></div>)}</div>
     {editing && <form className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">
         <label className="field"><span>Resting kcal <small>(optional)</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder="e.g. 1500" /></label>
@@ -163,7 +166,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     {!editing && summary.notes && <p className="daily-energy-note">{summary.notes}</p>}
     {error && <p className="form-error">{error}</p>}
     {message && <p className="form-success" role="status">{message}</p>}
-    <div className="daily-energy-history-heading"><span>Recent saved days</span><button className="text-button" onClick={() => setHistoryOpen((open) => !open)}>{historyOpen ? "Hide history" : "View history"}<Icon name="arrow" /></button></div>
+    <div className="daily-energy-history-heading"><span>Energy history</span><button className="text-button" onClick={() => setHistoryOpen((open) => !open)}>{historyOpen ? "Hide history" : "View history"}<Icon name="arrow" /></button></div>
     {historyOpen && (history.length ? <div className="daily-energy-history">{history.slice(0, 7).map((item) => <button key={item.date} className={item.date === selectedDate ? "active" : ""} onClick={() => void loadDate(item.date)}><span>{item.date}</span><strong>{formatKcal(item.totalExpenditureKcal)}</strong><small>Balance {formatKcal(item.energyBalance)}</small></button>)}</div> : <p className="daily-energy-history-empty">Save resting or active energy to build a history.</p>)}
   </section>;
 }

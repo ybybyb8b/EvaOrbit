@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { parseHealthRecordPatch, parseNewHealthRecord, ValidationError } from "./validation.ts";
+import { buildHealthDashboard } from "./health-dashboard.ts";
+import type { HealthRecord } from "./types.ts";
 
 test("validates Health record defaults, details and time ordering", () => {
   const occurredAt="2026-08-29T04:00:00.000Z";
@@ -11,9 +13,17 @@ test("validates Health record defaults, details and time ordering", () => {
   assert.equal(record.startedAt, null);
   assert.deepEqual(record.details, { severity: "mild", active: true, count: 2, note: null });
   assert.equal(record.occurredHasExplicitTime,false);
+  assert.equal(parseNewHealthRecord({ title: "体检", type: "visit", occurredAt, status: "active" }).status, "resolved");
   assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", occurredAt, startedAt: "2026-08-28T10:00:00+08:00", endedAt: "2026-08-28T09:00:00+08:00" }), /结束时间不能早于开始时间/);
   assert.throws(() => parseNewHealthRecord({ title: "不合法", type: "note", occurredAt, details: { nested: { value: true } } }), ValidationError);
   assert.throws(() => parseNewHealthRecord({ title: "缺少类型" }), /健康记录类型不能为空/);
+});
+
+test("Current contains only ongoing active records and Recent excludes the same rows", () => {
+  const record = (id: number, type: HealthRecord["type"], status: HealthRecord["status"]): HealthRecord => ({ id, type, status, title: String(id), summary: "", occurredAt: `2026-08-${30 - id}T04:00:00.000Z`, occurredHasExplicitTime: false, startedAt: null, startedHasExplicitTime: false, endedAt: null, endedHasExplicitTime: false, details: {}, createdAt: "", updatedAt: "" });
+  const result = buildHealthDashboard([record(1, "visit", "active"), record(2, "symptom", "active"), record(5, "medication", "active"), record(3, "note", "resolved"), record(4, "condition", "resolved")], 1);
+  assert.deepEqual(result.current.map((item) => item.id), [2]);
+  assert.deepEqual(result.recent.map((item) => item.id), [1, 3, 4]);
 });
 
 test("Health PATCH keeps omitted fields absent and supports clearing details", () => {

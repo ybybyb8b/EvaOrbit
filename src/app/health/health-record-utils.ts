@@ -1,4 +1,5 @@
 import type { HealthRecord, HealthRecordStatus, HealthRecordType } from "@/lib/types";
+export { healthRecordUsesStatus } from "@/lib/health-dashboard";
 
 export const healthRecordTypes: Array<{ value: HealthRecordType; label: string }> = [
   { value: "symptom", label: "Symptom" },
@@ -40,7 +41,7 @@ export const detailFields: Record<HealthRecordType, Array<{ key: string; label: 
     { key: "provider", label: "Provider", placeholder: "Clinic or clinician" },
   ],
   measurement: [
-    { key: "value", label: "Value", placeholder: "e.g. 120", inputType: "number" },
+    { key: "value", label: "Value", placeholder: "e.g. 120/80 or 63.5" },
     { key: "unit", label: "Unit", placeholder: "e.g. mmHg, kg" },
   ],
   note: [

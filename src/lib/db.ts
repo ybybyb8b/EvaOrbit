@@ -5,9 +5,9 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, MediaItem, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder } from "./types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, MediaItem, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch } from "./repositories/types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -717,6 +717,28 @@ if (!hasV23) database.exec(`
   COMMIT;
 `);
 
+const hasV24 = database.prepare("SELECT 1 FROM migrations WHERE version = 24").get();
+if (!hasV24) database.exec(`
+  BEGIN;
+  CREATE TABLE training_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL DEFAULT 'local',
+    occurred_at TEXT NOT NULL,
+    occurred_has_explicit_time INTEGER NOT NULL DEFAULT 0 CHECK(occurred_has_explicit_time IN (0,1)),
+    training_type TEXT NOT NULL CHECK(training_type IN ('cardio','strength','mixed')),
+    body_parts TEXT NOT NULL DEFAULT '[]',
+    teacher TEXT NOT NULL DEFAULT '',
+    course TEXT NOT NULL DEFAULT '',
+    duration_minutes INTEGER CHECK(duration_minutes IS NULL OR duration_minutes > 0),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX idx_training_logs_user_occurred ON training_logs(user_id, occurred_at DESC);
+  INSERT INTO migrations(version) VALUES(24);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1175,6 +1197,13 @@ export function getHealthRecord(id:number){const row=database.prepare("SELECT * 
 export function createHealthRecord(input:NewHealthRecord){const result=database.prepare("INSERT INTO health_records(user_id,occurred_at,occurred_has_explicit_time,type,title,summary,status,started_at,started_has_explicit_time,ended_at,ended_has_explicit_time,details) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run("local",input.occurredAt,Number(input.occurredHasExplicitTime),input.type,input.title,input.summary,input.status,input.startedAt,Number(input.startedHasExplicitTime),input.endedAt,Number(input.endedHasExplicitTime),JSON.stringify(input.details));return getHealthRecord(Number(result.lastInsertRowid))!;}
 export function updateHealthRecord(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",type:"type",title:"title",summary:"summary",status:"status",startedAt:"started_at",startedHasExplicitTime:"started_has_explicit_time",endedAt:"ended_at",endedHasExplicitTime:"ended_has_explicit_time",details:"details"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getHealthRecord(id);const value=(key:string)=>key==="details"?JSON.stringify(input[key]):key.endsWith("HasExplicitTime")?Number(input[key]):input[key] as string|null;const result=database.prepare(`UPDATE health_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getHealthRecord(id):null;}
 export function deleteHealthRecord(id:number){return database.prepare("DELETE FROM health_records WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function trainingLogFromRow(row:Record<string,unknown>):TrainingLog{let bodyParts:unknown=[];try{bodyParts=JSON.parse(String(row.body_parts??"[]"));}catch{}return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),trainingType:row.training_type as TrainingLog["trainingType"],bodyParts:Array.isArray(bodyParts)?bodyParts.map(String) as TrainingLog["bodyParts"]:[],teacher:String(row.teacher??""),course:String(row.course??""),durationMinutes:row.duration_minutes===null?null:Number(row.duration_minutes),notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrainingLogs(input:TrainingLogListInput={}){const conditions:string[]=["user_id='local'"],values:Array<string|number>=[];if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM training_logs WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(trainingLogFromRow);}
+export function getTrainingLog(id:number){const row=database.prepare("SELECT * FROM training_logs WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?trainingLogFromRow(row):null;}
+export function createTrainingLog(input:NewTrainingLog){const result=database.prepare("INSERT INTO training_logs(user_id,occurred_at,occurred_has_explicit_time,training_type,body_parts,teacher,course,duration_minutes,notes) VALUES('local',?,?,?,?,?,?,?,?)").run(input.occurredAt,Number(input.occurredHasExplicitTime),input.trainingType,JSON.stringify(input.bodyParts),input.teacher,input.course,input.durationMinutes,input.notes);return getTrainingLog(Number(result.lastInsertRowid))!;}
+export function updateTrainingLog(id:number,input:TrainingLogPatch){const map:Record<keyof NewTrainingLog,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",trainingType:"training_type",bodyParts:"body_parts",teacher:"teacher",course:"course",durationMinutes:"duration_minutes",notes:"notes"};const entries=Object.entries(map).filter(([key])=>input[key as keyof TrainingLogPatch]!==undefined);if(!entries.length)return getTrainingLog(id);const value=(key:string):string|number|null=>key==="bodyParts"?JSON.stringify(input.bodyParts):key==="occurredHasExplicitTime"?Number(input.occurredHasExplicitTime):input[key as keyof TrainingLogPatch] as string|number|null;const result=database.prepare(`UPDATE training_logs SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getTrainingLog(id):null;}
+export function deleteTrainingLog(id:number){return database.prepare("DELETE FROM training_logs WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function mediaItemFromRow(row:Record<string,unknown>):MediaItem{return{id:Number(row.id),title:String(row.title),mediaType:row.media_type as MediaItem["mediaType"],rating:row.rating as MediaItem["rating"],note:row.note===null?null:String(row.note),coverUrl:row.cover_url===null?null:String(row.cover_url),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function mediaViewingFromRow(row:Record<string,unknown>):MediaViewing{return{id:Number(row.id),mediaId:Number(row.media_id),watchedDate:String(row.watched_date),viewingNumber:Number(row.viewing_number),createdAt:String(row.created_at)};}

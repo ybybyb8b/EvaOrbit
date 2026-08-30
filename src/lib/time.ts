@@ -26,6 +26,12 @@ export function dateRange(date: string) {
   return { from: start.toISOString(), to: localMidnight(nextDate).toISOString() };
 }
 
+export function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 export function weekRange(value = new Date()) {
   const date = dateInEvaOrbit(value);
   const noon = new Date(`${date}T12:00:00Z`);

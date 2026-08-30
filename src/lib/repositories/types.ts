@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 
@@ -43,6 +43,9 @@ export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryIt
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
+export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt">;
+export type TrainingLogPatch = Partial<NewTrainingLog>;
+export type TrainingLogListInput = { from?: string; to?: string; limit?: number };
 export type NewMediaItem = Pick<MediaItem, "title" | "mediaType" | "rating" | "note" | "coverUrl">;
 export type MediaListInput = { query?: string; mediaType?: MediaType; limit?: number };
 export type MediaItemPatch = { title?: string; mediaType?: MediaType; rating?: MediaRating | null; note?: string | null };
@@ -157,6 +160,12 @@ export interface EvaOrbitRepository {
   createHealthRecord(input: NewHealthRecord): Promise<HealthRecord>;
   updateHealthRecord(id: number, input: Record<string, unknown>): Promise<HealthRecord | null>;
   deleteHealthRecord(id: number): Promise<boolean>;
+
+  listTrainingLogs(input?: TrainingLogListInput): Promise<TrainingLog[]>;
+  getTrainingLog(id: number): Promise<TrainingLog | null>;
+  createTrainingLog(input: NewTrainingLog): Promise<TrainingLog>;
+  updateTrainingLog(id: number, input: TrainingLogPatch): Promise<TrainingLog | null>;
+  deleteTrainingLog(id: number): Promise<boolean>;
 
   listMediaItems(input?: MediaListInput): Promise<MediaItem[]>;
   getMediaItem(id: number): Promise<MediaItem | null>;

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import type { HealthRecord } from "@/lib/types";
-import { formatRecordDate, formatRecordDateTime, healthRecordStatusLabels, healthRecordTypeLabels, recordSummary } from "./health-record-utils";
+import { formatRecordDate, formatRecordDateTime, healthRecordStatusLabels, healthRecordTypeLabels, healthRecordUsesStatus, recordSummary } from "./health-record-utils";
 
 export function HealthRecordCard({ record }: { record: HealthRecord }) {
   const summary = recordSummary(record);
   return <Link className="health-record-card" href={`/health/records/${record.id}`}>
     <div className="health-record-date"><strong>{formatRecordDate(record.occurredAt)}</strong><small>{record.occurredHasExplicitTime?formatRecordDateTime(record.occurredAt).split(", ").at(-1):"Date only"}</small></div>
     <div className="health-record-card-copy">
-      <div className="health-record-card-meta"><span className="health-type-label">{healthRecordTypeLabels[record.type]}</span><span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span></div>
+      <div className="health-record-card-meta"><span className="health-type-label">{healthRecordTypeLabels[record.type]}</span>{healthRecordUsesStatus(record.type) && <span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span>}</div>
       <h3>{record.title}</h3>
       {summary && <p>{summary}</p>}
     </div>

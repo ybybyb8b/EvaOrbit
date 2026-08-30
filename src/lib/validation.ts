@@ -1,5 +1,5 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
-import { SUGAR_LEVELS } from "./types.ts";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType, TrainingBodyPart, TrainingType } from "./types";
+import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 
 export class ValidationError extends Error {}
 
@@ -722,13 +722,15 @@ export function parseNewHealthRecord(value: unknown) {
   const endedAt = nullableTimestamp(body.endedAt, "结束时间") ?? null;
   validateHealthTimeRange(startedAt, endedAt);
   if (body.type === undefined) throw new ValidationError("健康记录类型不能为空");
+  const type = enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType;
+  const usesStatus = ONGOING_HEALTH_RECORD_TYPES.includes(type as typeof ONGOING_HEALTH_RECORD_TYPES[number]);
   return {
     occurredAt: timestamp(body.occurredAt, "发生日期"),
     occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true),
-    type: enumValue(body.type, "健康记录类型", healthRecordTypes, "note") as HealthRecordType,
+    type,
     title: text(body.title, "健康记录标题", 200)!,
     summary: text(body.summary ?? "", "健康记录摘要", 5000, false) ?? "",
-    status: enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus,
+    status: usesStatus ? enumValue(body.status, "健康记录状态", healthRecordStatuses, "active") as HealthRecordStatus : "resolved" as const,
     startedAt,
     startedHasExplicitTime: booleanValue(body.startedHasExplicitTime, "开始时间精度", true),
     endedAt,
@@ -756,6 +758,44 @@ export function parseHealthRecordPatch(value: unknown) {
   if (result.startedAt !== undefined && result.endedAt !== undefined) {
     validateHealthTimeRange(result.startedAt, result.endedAt);
   }
+  return result;
+}
+
+const trainingTypes = ["cardio", "strength", "mixed"] as const;
+function trainingBodyParts(value: unknown) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !TRAINING_BODY_PARTS.includes(item as TrainingBodyPart))) throw new ValidationError("训练部位格式不正确");
+  const result = [...new Set(value as TrainingBodyPart[])];
+  if (!result.length) throw new ValidationError("请至少选择一个训练部位");
+  return result;
+}
+
+export function parseNewTrainingLog(value: unknown) {
+  const body = objectValue(value);
+  return {
+    occurredAt: timestamp(body.occurredAt, "训练日期"),
+    occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "训练时间精度", false),
+    trainingType: enumValue(body.trainingType, "训练类型", trainingTypes, "mixed") as TrainingType,
+    bodyParts: trainingBodyParts(body.bodyParts),
+    teacher: text(body.teacher ?? "", "老师", 120, false) ?? "",
+    course: text(body.course ?? "", "课程", 160, false) ?? "",
+    durationMinutes: optionalNumber(body.durationMinutes, "训练时长", 1, 1440),
+    notes: text(body.notes ?? "", "训练备注", 5000, false) ?? "",
+  };
+}
+
+export function parseTrainingLogPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt, "训练日期"),
+    occurredHasExplicitTime: body.occurredHasExplicitTime === undefined ? undefined : booleanValue(body.occurredHasExplicitTime, "训练时间精度", false),
+    trainingType: body.trainingType === undefined ? undefined : enumValue(body.trainingType, "训练类型", trainingTypes, "mixed") as TrainingType,
+    bodyParts: body.bodyParts === undefined ? undefined : trainingBodyParts(body.bodyParts),
+    teacher: body.teacher === undefined ? undefined : text(body.teacher, "老师", 120, false) ?? "",
+    course: body.course === undefined ? undefined : text(body.course, "课程", 160, false) ?? "",
+    durationMinutes: body.durationMinutes === undefined ? undefined : optionalNumber(body.durationMinutes, "训练时长", 1, 1440),
+    notes: body.notes === undefined ? undefined : text(body.notes, "训练备注", 5000, false) ?? "",
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的训练记录字段");
   return result;
 }
 

@@ -1,4 +1,4 @@
-export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
@@ -20,6 +20,7 @@ const featureIconSources: Partial<Record<IconName, string>> = {
   people: "/icons/features/people.png",
   media: "/icons/features/media.png",
   chronicle: "/icons/features/chronicle.png",
+  lucius: "/icons/features/lucius.png",
   more: "/icons/features/more.png",
   notifications: "/icons/features/notifications.png",
   calendar: "/icons/features/calendar.png",

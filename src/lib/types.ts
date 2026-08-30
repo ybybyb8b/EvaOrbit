@@ -345,6 +345,28 @@ export interface HealthRecord {
   updatedAt: string;
 }
 
+export const ONGOING_HEALTH_RECORD_TYPES = ["symptom", "condition", "medication", "treatment"] as const;
+export type TrainingType = "cardio" | "strength" | "mixed";
+export const TRAINING_BODY_PARTS = ["胸", "背", "腿", "肩", "手臂", "核心", "全身", "其他"] as const;
+export type TrainingBodyPart = typeof TRAINING_BODY_PARTS[number];
+export interface TrainingLog {
+  id: number;
+  occurredAt: string;
+  occurredHasExplicitTime: boolean;
+  trainingType: TrainingType;
+  bodyParts: TrainingBodyPart[];
+  teacher: string;
+  course: string;
+  durationMinutes: number | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface TrainingInputSuggestions {
+  teachers: string[];
+  courses: string[];
+}
+
 export type MediaType = "movie" | "tv" | "anime" | "documentary" | "other";
 export type MediaRatingBase = "goat" | "dope" | "mid" | "nope" | "shit";
 export type MediaRating = MediaRatingBase | `${MediaRatingBase}+` | `${MediaRatingBase}-`;

@@ -2,10 +2,9 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { Icon } from "@/components/icons";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import type { HealthRecord, HealthRecordDetails, HealthRecordStatus, HealthRecordType } from "@/lib/types";
-import { detailFields, healthRecordStatusLabels, healthRecordTypes } from "./health-record-utils";
+import { detailFields, healthRecordStatusLabels, healthRecordTypes, healthRecordUsesStatus } from "./health-record-utils";
 
 type Draft = {
   type: HealthRecordType;
@@ -74,10 +73,10 @@ export function HealthRecordEditor({ editing, onCancel, onSaved, formId, onSavin
   const fields = detailFields[draft.type];
   return <form id={formId} className="editor-card health-editor" onSubmit={(event) => void submit(event)}>
     <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h2>{editing ? "Edit health record" : "Add health record"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
-    <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} onClick={() => selectType(item.value)}><Icon name="health" /><span>{item.label}</span></button>)}</div></div>
+    <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} onClick={() => selectType(item.value)}><span>{item.label}</span></button>)}</div></div>
     <div className="form-grid health-form-grid">
       <label className="field"><span>Title</span><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="What should you remember?" /></label>
-      <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+      {healthRecordUsesStatus(draft.type) && <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}
       <HealthDateTime label="Occurred" value={draft.occurredAt} onChange={(occurredAt)=>setDraft({...draft,occurredAt})}/>
       <HealthDateTime label="Started" value={draft.startedAt} onChange={(startedAt)=>setDraft({...draft,startedAt})} optional/>
       <HealthDateTime label="Ended" value={draft.endedAt} onChange={(endedAt)=>setDraft({...draft,endedAt})} optional/>
