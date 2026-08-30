@@ -1267,6 +1267,79 @@ button { color: inherit; }
 .routine-status-card .routine-card-actions .danger-icon { width: 28px; height: 28px; }
 .routine-status-card .routine-card-actions .button.compact { min-height: 32px; padding-inline: 11px; font-size: 9px; }
 
+/* Cats: compact dashboard and timeline hierarchy. */
+.cats-page > .page-header { margin-bottom: 14px; }
+.cats-pets-section.cats-pets-primary { margin: 0; padding: 0; border: 0; }
+.cats-pets-primary .cat-card { min-height: 92px; padding: 14px 16px; gap: 13px; }
+.cats-pets-primary .cat-card h2 { margin-bottom: 6px; font-size: 23px; }
+.cats-pets-primary .cat-card p { font-size: 9px; }
+.cats-add-pet { min-height: 34px; margin-top: 4px; padding-inline: 2px; color: var(--muted); font-size: 9px; }
+.cats-quick-actions { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+.cats-quick-actions .button { min-height: 40px; }
+.cats-upcoming-section { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }
+.cats-one-time-list article { min-height: 64px; padding: 9px 12px; }
+.cats-one-time-list .one-time-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.one-time-heading { min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.cats-one-time-list .one-time-heading strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.one-time-heading time { flex: none; color: var(--muted); font-size: 9px; white-space: nowrap; }
+.cats-one-time-list .routine-card-actions { flex: none; flex-wrap: nowrap; gap: 5px; }
+.cats-one-time-list .routine-card-actions .text-button { min-height: 30px; padding-inline: 4px; color: var(--muted); font-size: 9px; }
+.cats-one-time-list .routine-card-actions .button { min-height: 32px; }
+.household-care-list article.routine-status-card { min-height: 72px; grid-template-columns: 1fr; align-content: center; gap: 6px; }
+.household-care-list .routine-card-footer { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.household-care-list .routine-card-footer .routine-meta { flex: 1; }
+.cats-recent-section { margin-top: 31px; padding-top: 25px; border-top: 1px solid var(--line); }
+.cats-recent-list { border-top: 1px solid rgba(73,84,75,.1); }
+.cats-recent-list > a { min-width: 0; min-height: 54px; padding: 9px 2px; border-bottom: 1px solid rgba(73,84,75,.1); display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 14px; color: inherit; }
+.cats-recent-list > a:hover { color: var(--green); }
+.cats-recent-list > a > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cats-recent-list small { color: var(--soft-muted); font-size: 8px; }
+.cats-recent-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.cats-recent-list time { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.pet-detail-page > .back-link { margin-bottom: 10px; }
+.pet-profile-head { margin-bottom: 14px; gap: 13px; }
+.pet-profile-head .cat-avatar { width: 58px !important; height: 58px !important; }
+.pet-profile-head .eyebrow { margin-bottom: 3px; }
+.pet-profile-head h1 { font-size: clamp(32px,4.5vw,43px); }
+.pet-profile-head .page-actions .button { min-height: 40px; }
+.cat-tabs { margin-bottom: 16px; }
+.cat-tabs button { min-height: 38px; }
+.cat-timeline-main { min-height: 62px; padding-block: 8px; grid-template-columns: 64px minmax(0,1fr); gap: 10px; align-items: start; }
+.cat-timeline-main time { padding-top: 2px; gap: 3px; }
+.cat-timeline-main > span { gap: 2px; }
+.cat-timeline-main > span > small { line-height: 1.3; letter-spacing: .05em; text-transform: uppercase; }
+.cat-timeline-main > span > strong { line-height: 1.35; }
+.cat-timeline-main p { line-height: 1.4; }
+.cat-record-actions { padding-left: 76px; }
+.cat-record-loading { padding-left: 76px; }
+.cat-record-details { margin-left: 76px; }
+
+@media (max-width: 720px) {
+  .cat-card-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .cats-pets-primary .cat-card { min-height: 84px; padding: 11px; gap: 9px; }
+  .cats-pets-primary .cat-card .cat-avatar { width: 44px !important; height: 44px !important; }
+  .cats-pets-primary .cat-card h2 { margin-bottom: 4px; font-size: 20px; }
+  .cats-pets-primary .cat-card p { font-size: 9px; }
+  .cats-one-time-list article { align-items: center; flex-direction: row; }
+  .cat-timeline-main { min-height: 64px; grid-template-columns: 58px minmax(0,1fr); }
+  .cat-record-actions { padding-left: 68px; }
+  .cat-record-loading { padding-left: 68px; }
+  .cat-record-details { margin-left: 68px; }
+}
+
+@media (max-width: 430px) {
+  .cats-pets-primary .cat-card { align-items: flex-start; flex-direction: column; }
+  .cats-pets-primary .cat-card h2 { font-size: 19px; }
+  .cats-pets-primary .cat-card p { white-space: normal; font-size: 8px; line-height: 1.35; }
+  .cats-quick-actions .button { flex: 1; }
+  .cats-one-time-list article { align-items: stretch; flex-direction: column; gap: 5px; }
+  .cats-one-time-list .routine-card-actions { width: auto; justify-content: flex-end; }
+  .household-care-list article.routine-status-card { align-items: stretch; }
+  .household-care-list .routine-card-footer { align-items: flex-end; }
+  .household-care-list .routine-card-actions { width: auto; }
+  .pet-profile-head .page-actions { width: 100%; }
+}
+
 /* Food Library: compact editorial cards with room for long names. */
 .food-library-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
