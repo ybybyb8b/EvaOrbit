@@ -8,6 +8,9 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  async listRelationPeople(input){return sqlite.listRelationPeople(input);},async getRelationPerson(id){return sqlite.getRelationPerson(id);},async createRelationPerson(input){return sqlite.createRelationPerson(input);},async updateRelationPerson(id,input){return sqlite.updateRelationPerson(id,input);},
+  async listRelationEvents(input){return sqlite.listRelationEvents(input);},async getRelationEvent(id){return sqlite.getRelationEvent(id);},async createRelationEvent(input){return sqlite.createRelationEvent(input);},async updateRelationEvent(id,input){return sqlite.updateRelationEvent(id,input);},async deleteRelationEvent(id){return sqlite.deleteRelationEvent(id);},
+  async listPersonMemoryNotes(personId){return sqlite.listPersonMemoryNotes(personId);},async getPersonMemoryNote(id){return sqlite.getPersonMemoryNote(id);},async createPersonMemoryNote(personId,content){return sqlite.createPersonMemoryNote(personId,content);},async updatePersonMemoryNote(id,content){return sqlite.updatePersonMemoryNote(id,content);},async deletePersonMemoryNote(id){return sqlite.deletePersonMemoryNote(id);},
   async listTasks(filter) { return sqlite.listTasks(filter); },
   async getTask(id) { return sqlite.getTask(id); },
   async createTask(input) { return sqlite.createTask(input); },

@@ -33,13 +33,17 @@ create index if not exists idx_projects_user_updated on public.projects(user_id,
 create index if not exists idx_project_items_project_status on public.project_items(user_id, project_id, status, updated_at desc, id desc);
 create index if not exists idx_project_items_chronicle on public.project_items(user_id, project_id, verified_at desc, completed_at desc, id desc);
 
+drop trigger if exists projects_set_updated_at on public.projects;
 create trigger projects_set_updated_at before update on public.projects for each row execute function public.set_updated_at();
+drop trigger if exists project_items_set_updated_at on public.project_items;
 create trigger project_items_set_updated_at before update on public.project_items for each row execute function public.set_updated_at();
 
 alter table public.projects enable row level security;
 alter table public.project_items enable row level security;
 
+drop policy if exists projects_owner_all on public.projects;
 create policy projects_owner_all on public.projects for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists project_items_owner_all on public.project_items;
 create policy project_items_owner_all on public.project_items for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 grant select, insert on table public.projects, public.project_items to authenticated;

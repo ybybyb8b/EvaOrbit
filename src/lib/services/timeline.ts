@@ -2,7 +2,7 @@ import "server-only";
 
 import { calculateDailyNutrition } from "../nutrition";
 import { getRepository } from "../repositories";
-import { buildTimelineEvents, compareTimelineEvents } from "../timeline";
+import { buildRelationTimelineEvents, buildTimelineEvents, compareTimelineEvents } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import type { TimelineEvent } from "../types";
@@ -12,27 +12,28 @@ function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:s
 async function loadDailySources(date: string) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, healthRecords] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
     repository.listTrackers(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
+    repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
   ]);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords };
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents };
 }
 
 export async function listTimeline(input: { date?: string; limit?: number } = {}) {
   const date = input.date ?? dateInEvaOrbit();
-  const { foods, drinks, trackerEntries, trackers, healthRecords } = await loadDailySources(date);
+  const { foods, drinks, trackerEntries, trackers, healthRecords, relationEvents } = await loadDailySources(date);
   const range=dateRange(date);const cats=catsInRange(await catTimeline(),range);
-  return [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...cats].sort(compareTimelineEvents).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
+  return [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...buildRelationTimelineEvents(relationEvents), ...cats].sort(compareTimelineEvents).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
 }
 
 export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -40,10 +41,11 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     repository.getNutritionSettings(date),
     catTimeline(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
+    repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
   ]);
   return {
     date,
-    events: [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...catsInRange(cats,range)].sort(compareTimelineEvents),
+    events: [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)].sort(compareTimelineEvents),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

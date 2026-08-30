@@ -1,0 +1,4 @@
+import { NextRequest,NextResponse } from "next/server";import { apiError } from "@/lib/api";import { parseRelationPersonPatch } from "@/lib/relations-validation";import { getRelationPersonDetail,updateRelationPerson } from "@/lib/services/relations";
+export const runtime="nodejs";type C={params:Promise<{id:string}>};const num=(s:string)=>Number(s);
+export async function GET(_:NextRequest,{params}:C){try{const result=await getRelationPersonDetail(num((await params).id));return result?NextResponse.json(result):NextResponse.json({error:"人物不存在"},{status:404});}catch(error){return apiError(error);}}
+export async function PATCH(request:NextRequest,{params}:C){try{const result=await updateRelationPerson(num((await params).id),parseRelationPersonPatch(await request.json()));return result?NextResponse.json(result):NextResponse.json({error:"人物不存在"},{status:404});}catch(error){return apiError(error);}}

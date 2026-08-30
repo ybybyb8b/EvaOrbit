@@ -1,0 +1,2 @@
+import { NextRequest,NextResponse } from "next/server";import { apiError } from "@/lib/api";import { parseSettleAdvance } from "@/lib/relations-validation";import { settleAdvance } from "@/lib/services/relations";
+export const runtime="nodejs";export async function POST(r:NextRequest,{params}:{params:Promise<{id:string}>}){try{return NextResponse.json(await settleAdvance(Number((await params).id),parseSettleAdvance(await r.json())),{status:201});}catch(e){return apiError(e);}}

@@ -1,4 +1,4 @@
-import type { DrinkLog, FoodLog, HealthRecord, TimelineEvent, Tracker, TrackerEntry } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineEvent, Tracker, TrackerEntry } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 
 export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = []): TimelineEvent[] {
@@ -52,3 +52,4 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
 }
 
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
+export function buildRelationTimelineEvents(events:RelationEvent[]):TimelineEvent[]{return events.map(event=>{const people=event.parties.flatMap(p=>p.personId?[p.personId]:[]);const detail=event.totalAmountMinor===null?(event.note||event.eventType):`¥${(event.totalAmountMinor/100).toFixed(2)}${event.note?` · ${event.note}`:""}`;return{id:`relation:${event.id}`,eventType:`relation.${event.eventType}`,sourceType:"person" as const,sourceId:event.id,title:event.title,detail,occurredAt:event.occurredAt,hasExplicitTime:event.occurredHasExplicitTime,endAt:null,href:people[0]?`/relations/${people[0]}`:"/relations",relatedPeople:people,relatedPets:[],metadata:{relationEventType:event.eventType,currency:event.currency,totalAmountMinor:event.totalAmountMinor,partyCount:event.parties.length}};}).sort(compareTimelineEvents);}

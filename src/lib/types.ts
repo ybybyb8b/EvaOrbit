@@ -740,3 +740,65 @@ export interface PushSubscriptionRecord {
   createdAt: string;
   lastUsedAt: string;
 }
+
+export type RelationEventType = "expense" | "gift" | "repayment" | "favor" | "interaction";
+export type RelationPartyType = "self" | "person";
+export type RelationFlowType = "advance" | "treat" | "gift" | "repayment" | "favor";
+
+export interface RelationPerson {
+  id: number;
+  name: string;
+  nickname: string | null;
+  relationLabel: string | null;
+  photoPath: string | null;
+  birthday: string | null;
+  likes: string | null;
+  avoid: string | null;
+  note: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RelationEventParty {
+  id: number;
+  partyType: RelationPartyType;
+  personId: number | null;
+  shareAmountMinor: number | null;
+  paidAmountMinor: number | null;
+}
+
+export interface RelationEventItem { id: number; label: string; amountMinor: number; sortOrder: number }
+export interface RelationEventFlow {
+  id: number;
+  fromPartyId: number;
+  toPartyId: number;
+  flowType: RelationFlowType;
+  amountMinor: number;
+  settlesFlowId: number | null;
+  note: string | null;
+}
+
+export interface RelationEvent {
+  id: number;
+  eventType: RelationEventType;
+  title: string;
+  note: string | null;
+  occurredAt: string;
+  occurredHasExplicitTime: boolean;
+  currency: "CNY";
+  totalAmountMinor: number | null;
+  isInPerson: boolean | null;
+  parties: RelationEventParty[];
+  items: RelationEventItem[];
+  flows: RelationEventFlow[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonMemoryNote { id: number; personId: number; content: string; createdAt: string; updatedAt: string }
+export interface RelationBalance { settlementMinor: number; socialMinor: number }
+export interface RelationPersonSummary extends RelationPerson {
+  balance: RelationBalance;
+  latestEvent: RelationEvent | null;
+}

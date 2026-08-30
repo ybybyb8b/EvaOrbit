@@ -56,13 +56,16 @@ function fakeOperations() {
       async create(input){const owner=projects.find((item)=>item.id===input.projectId);const item:ProjectItem={...input,id:++nextProjectItem,projectName:owner?.name,createdAt,startedAt:null,completedAt:input.status==="done"||input.status==="verified"?createdAt:null,verifiedAt:input.status==="verified"?createdAt:null,updatedAt:createdAt};projectItems.push(item);return item;},
       async update(id,patch){const item=projectItems.find((entry)=>entry.id===id);if(!item)return null;Object.assign(item,patch,{updatedAt:"2026-08-30T00:00:00Z"});if(patch.status==="done"&&!item.completedAt)item.completedAt=item.updatedAt;if(patch.status==="verified"&&!item.verifiedAt){item.completedAt??=item.updatedAt;item.verifiedAt=item.updatedAt;}return item;},
     },
+    relationPerson:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;}},
+    relationEvent:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;},async settle(){throw new Error("unused");}},
+    personNote:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;}},
   };
   return { operations, chronicles, memos, diary, cases };
 }
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);

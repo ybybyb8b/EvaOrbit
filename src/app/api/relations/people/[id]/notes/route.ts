@@ -1,0 +1,2 @@
+import { NextRequest,NextResponse } from "next/server";import { apiError } from "@/lib/api";import { parseMemoryNote } from "@/lib/relations-validation";import { createMemoryNote } from "@/lib/services/relations";
+export const runtime="nodejs";export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}){try{return NextResponse.json(await createMemoryNote(Number((await params).id),parseMemoryNote(await request.json())),{status:201});}catch(error){return apiError(error);}}
