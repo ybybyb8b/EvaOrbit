@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, FoodCategory, FoodDataSource, FoodLibraryItem, FoodReferenceType } from "@/lib/types";
 
@@ -50,6 +51,7 @@ export function FoodLibraryView() {
   const [draft, setDraft] = useState<Draft>(empty);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/food/library?q=${encodeURIComponent(query)}`);
@@ -71,11 +73,12 @@ export function FoodLibraryView() {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(""); setNotice("");
+    event.preventDefault(); if (saving) return; setError(""); setNotice(""); setSaving(true);
     const optionalNumber = (value: string) => value ? Number(value) : null;
     const body = { ...draft, referenceEnergyKj: optionalNumber(draft.referenceEnergyKj), referenceKcal: optionalNumber(draft.referenceKcal), servingWeight: optionalNumber(draft.servingWeight), servingKcal: optionalNumber(draft.servingKcal) };
     const editing = editingId;
     const response = await fetch(editing ? `/api/food/library/${editing}` : "/api/food/library", { method: editing ? "PATCH" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setSaving(false);
     if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
     closeEditor(); setNotice(editing ? "Item updated." : "Item added."); await load();
   }
@@ -93,7 +96,7 @@ export function FoodLibraryView() {
   return <div className="page">
     <PageHeader eyebrow="FOOD" title="Food Library" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Item</button>} />
 
-    {showForm && <form className="editor-card compact-editor" onSubmit={submit}>
+    {showForm && <FormSheet title={editingId ? "Edit Item" : "Add Item"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "Save Changes" : "Add Item"} busy={saving}><form id="food-library-form" className="editor-card compact-editor" onSubmit={submit}>
       <div className="editor-title"><h2>{editingId ? "Edit Item" : "Add Item"}</h2><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Name</span><input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
@@ -106,7 +109,7 @@ export function FoodLibraryView() {
         <label className="field"><span>Data source</span><select value={draft.dataSource} onChange={(event) => setDraft({ ...draft, dataSource: event.target.value as FoodDataSource })}><option value="package_label">Package label</option><option value="official">Official</option><option value="estimated">Estimated</option><option value="manual">Manual</option></select></label>
       </div>
       {error && <p className="form-error">{error}</p>}<button className="button primary">{editingId ? "Save Changes" : "Add Item"}</button>
-    </form>}
+    </form></FormSheet>}
 
     {!showForm && error && <p className="form-error">{error}</p>}
     {notice && <p className="form-notice">{notice}</p>}

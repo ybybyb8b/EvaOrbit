@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { DailyNutritionSummary, HealthRecord } from "@/lib/types";
 import { DailyEnergyCard } from "./daily-energy-card";
@@ -17,6 +18,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory }: { i
   const [editorOpen, setEditorOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const [currentResponse, recentResponse] = await Promise.all([
@@ -34,7 +36,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory }: { i
     <PageHeader eyebrow="LIFE" title="Health" description="Personal health records" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New record</button>} />
     {message && <p className="success-banner" role="status">{message}</p>}
     {error && <p className="form-error">{error}</p>}
-    {editorOpen && <HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} editing={editing} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setDashboard((current) => ({ current: record.status === "active" ? [record, ...current.current.filter((item) => item.id !== record.id)].slice(0, 6) : current.current.filter((item) => item.id !== record.id), recent: [record, ...current.recent.filter((item) => item.id !== record.id)].slice(0, 8) })); void load(); }} />}
+    {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setDashboard((current) => ({ current: record.status === "active" ? [record, ...current.current.filter((item) => item.id !== record.id)].slice(0, 6) : current.current.filter((item) => item.id !== record.id), recent: [record, ...current.recent.filter((item) => item.id !== record.id)].slice(0, 8) })); void load(); }} /></FormSheet>}
     <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>Worth keeping in view</h2></div><span>Active now</span></div>{dashboard.current.length ? <div className="health-record-list">{dashboard.current.slice(0, 6).map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div> : <div className="health-empty compact"><span className="health-empty-icon"><Icon name="health" /></span><h2>Nothing active</h2><p>Resolved records stay in your history.</p></div>}</section>
     <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />
     <section className="health-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Health records</h2></div><Link href="/health/records">View all <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent.slice(0, 6)} /></section>

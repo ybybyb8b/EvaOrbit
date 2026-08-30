@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { memoStatusOptions, memoTypeOptions, optionLabel, parseTagInput, plainExcerpt } from "@/lib/long-term-memory";
@@ -13,7 +13,6 @@ const emptyDraft = (): MemoDraft => ({ title: "", content: "", type: "note", sta
 async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 
 export function MemoView({ initial }: { initial: Memo[] }) {
-  const router = useRouter();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("");
@@ -24,6 +23,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const knownTags = useMemo(() => [...new Set(items.flatMap((item) => item.tags))].sort(), [items]);
 
   const load = useCallback(async () => {
@@ -42,14 +42,15 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     try {
       const response = await fetch("/api/memos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null }) });
       if (!response.ok) throw new Error(await responseError(response, "Could not create Memo."));
-      const created = await response.json() as Memo; router.push(`/memo/${created.id}`); router.refresh();
+      await response.json() as Memo; setShowForm(false); setDraft(emptyDraft()); setNotice("Memo saved."); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create Memo."); }
     finally { setSaving(false); }
   }
 
   return <div className="page memo-page">
     <PageHeader eyebrow="LONG-TERM MEMORY" title="Memo" description="Facts, rules, people, events, and context worth carrying forward." action={<button className="button primary" onClick={() => { setDraft(emptyDraft()); setShowForm(true); }}><Icon name="plus" />New Memo</button>} />
-    {showForm && <form className="editor-card long-term-editor" onSubmit={submit}>
+    {notice && <p className="success-banner" role="status">{notice}</p>}
+    {showForm && <FormSheet title="Keep something important" onClose={() => setShowForm(false)} formId="memo-create-form" submitLabel="Save Memo" busy={saving}><form id="memo-create-form" className="editor-card long-term-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW MEMO</span><h2>Keep something important</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
       <div className="form-grid">
         <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
@@ -62,7 +63,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions"><button className="button primary" disabled={saving}>{saving ? "Saving…" : "Save Memo"}</button></div>
-    </form>}
+    </form></FormSheet>}
     {!showForm && error && <p className="form-error" role="alert">{error}</p>}
     <div className="long-term-toolbar" aria-busy={loading}>
       <label className="search-box"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title and content…" aria-label="Search Memo" /></label>

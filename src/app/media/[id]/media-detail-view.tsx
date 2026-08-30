@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { currentLocalDate } from "@/components/date-time-field";
+import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, MediaDetail, MediaRating, MediaType, MediaViewing } from "@/lib/types";
@@ -148,7 +149,7 @@ export function MediaDetailView({ initial }: { initial: MediaDetail }) {
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
 
-    {editing && <form className="editor-card media-editor" onSubmit={submitEdit}>
+    {editing && <FormSheet title="Edit media" onClose={closeEditor} formId="media-edit-form" submitLabel="Save changes" busy={busy}><form id="media-edit-form" className="editor-card media-editor" onSubmit={submitEdit}>
       <div className="editor-title"><div><span className="eyebrow">EDIT MEDIA</span><h2>Edit media</h2></div><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
@@ -157,16 +158,16 @@ export function MediaDetailView({ initial }: { initial: MediaDetail }) {
         <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
       </div>
       <div className="form-actions"><button className="button primary" type="submit" disabled={busy}>Save changes</button></div>
-    </form>}
+    </form></FormSheet>}
 
     {!editing && <section className="media-detail-card">
       <div className="media-detail-section-heading"><span className="eyebrow">VIEWINGS</span><span>{detail.viewings.length} {detail.viewings.length === 1 ? "watch" : "watches"}</span></div>
       <ol className="media-viewings">
         {detail.viewings.map((viewing) => <li key={viewing.id}>
-          {editingViewingId === viewing.id ? <form className="media-viewing-edit" onSubmit={(event) => void saveViewing(event, viewing)}><label className="field"><span>Date</span><input required type="date" value={viewingDate} onChange={(event) => setViewingDate(event.target.value)} /></label><div className="media-viewing-actions"><button className="button primary compact" type="submit" disabled={busy}>Save</button><button className="text-button" type="button" onClick={cancelViewingEdit}>Cancel</button></div></form> : <><div className="media-viewing-copy"><time dateTime={viewing.watchedDate}>{viewing.watchedDate}</time><span>{viewingLabel(viewing)}</span></div><div className="media-viewing-actions"><button className="text-button" type="button" onClick={() => startViewingEdit(viewing)}>Edit date</button>{viewing.viewingNumber > 1 && <button className="text-button danger" type="button" onClick={() => void removeViewing(viewing)} disabled={busy}>Delete</button>}</div></>}
+          {editingViewingId === viewing.id ? <FormSheet title="Edit viewing date" onClose={cancelViewingEdit} formId={`media-viewing-${viewing.id}`} submitLabel="Save" busy={busy}><form id={`media-viewing-${viewing.id}`} className="media-viewing-edit" onSubmit={(event) => void saveViewing(event, viewing)}><label className="field"><span>Date</span><input required type="date" value={viewingDate} onChange={(event) => setViewingDate(event.target.value)} /></label><div className="media-viewing-actions"><button className="button primary compact" type="submit" disabled={busy}>Save</button><button className="text-button" type="button" onClick={cancelViewingEdit}>Cancel</button></div></form></FormSheet> : <><div className="media-viewing-copy"><time dateTime={viewing.watchedDate}>{viewing.watchedDate}</time><span>{viewingLabel(viewing)}</span></div><div className="media-viewing-actions"><button className="text-button" type="button" onClick={() => startViewingEdit(viewing)}>Edit date</button>{viewing.viewingNumber > 1 && <button className="text-button danger" type="button" onClick={() => void removeViewing(viewing)} disabled={busy}>Delete</button>}</div></>}
         </li>)}
       </ol>
-      {rewatchOpen && <form className="media-rewatch-form" onSubmit={addRewatch}><label className="field"><span>Rewatch date</span><input required type="date" value={rewatchDate} onChange={(event) => setRewatchDate(event.target.value)} /></label><div className="media-form-actions"><button className="button primary compact" type="submit" disabled={busy}>Add rewatch</button><button className="text-button" type="button" onClick={() => setRewatchOpen(false)}>Cancel</button></div></form>}
+      {rewatchOpen && <FormSheet title="Add rewatch" onClose={() => setRewatchOpen(false)} formId="media-rewatch-form" submitLabel="Add rewatch" busy={busy} busyLabel="Adding…"><form id="media-rewatch-form" className="media-rewatch-form" onSubmit={addRewatch}><label className="field"><span>Rewatch date</span><input required type="date" value={rewatchDate} onChange={(event) => setRewatchDate(event.target.value)} /></label><div className="media-form-actions"><button className="button primary compact" type="submit" disabled={busy}>Add rewatch</button><button className="text-button" type="button" onClick={() => setRewatchOpen(false)}>Cancel</button></div></form></FormSheet>}
       {!rewatchOpen && <button className="button secondary compact media-add-rewatch" onClick={() => { setError(""); setNotice(""); setRewatchDate(currentLocalDate()); setRewatchOpen(true); }}><Icon name="plus" />Add rewatch</button>}
     </section>}
 

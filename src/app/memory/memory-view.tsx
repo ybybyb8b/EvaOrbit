@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, Memory } from "@/lib/types";
 
@@ -19,6 +20,7 @@ export function MemoryView() {
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,13 +36,13 @@ export function MemoryView() {
   const categories = useMemo(() => [...new Set([...suggestedCategories, ...memories.map((item) => item.category)])], [memories]);
 
   function startNew() { setEditing(null); setDraft(emptyDraft); setError(""); setShowForm(true); }
-  function startEdit(memory: Memory) { setEditing(memory.id); setDraft({ title: memory.title, content: memory.content, category: memory.category }); setError(""); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function startEdit(memory: Memory) { setEditing(memory.id); setDraft({ title: memory.title, content: memory.content, category: memory.category }); setError(""); setShowForm(true); }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError("");
+    event.preventDefault(); if (saving) return; setError(""); setSaving(true);
     const response = await fetch(editing ? `/api/memories/${editing}` : "/api/memories", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-    setShowForm(false); setEditing(null); setDraft(emptyDraft); await load();
+    if (!response.ok) { setError(((await response.json()) as ApiError).error); setSaving(false); return; }
+    setShowForm(false); setEditing(null); setDraft(emptyDraft); await load(); setSaving(false);
   }
 
   async function remove(memory: Memory) {
@@ -50,7 +52,7 @@ export function MemoryView() {
 
   return <div className="page">
     <PageHeader eyebrow="MEMORY" title="留下来的" description="人、事、偏好，想到的时候先记一下。" action={<button className="button primary" onClick={startNew}><Icon name="plus" />记住这个</button>} />
-    {showForm && <form className="editor-card" onSubmit={submit}>
+    {showForm && <FormSheet title={editing ? "改一下" : "先留下来"} onClose={() => setShowForm(false)} formId="memory-record-form" submitLabel={editing ? "改好了" : "留下"} busy={saving} busyLabel="正在保存…" cancelLabel="先不写"><form id="memory-record-form" className="editor-card" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT" : "KEEP"}</span><h2>{editing ? "改一下" : "先留下来"}</h2></div><button type="button" className="text-button" onClick={() => setShowForm(false)}>先不写</button></div>
       <div className="form-grid">
         <label className="field"><span>标题</span><input autoFocus required maxLength={160} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="例如：妈妈喜欢的花" /></label>
@@ -59,7 +61,7 @@ export function MemoryView() {
       </div>
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions"><button className="button primary" type="submit">{editing ? "改好了" : "留下"}</button></div>
-    </form>}
+    </form></FormSheet>}
 
     <div className="memory-toolbar">
       <label className="search-box"><Icon name="search" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="找找以前…" aria-label="找找以前记过的" />{query && <button onClick={() => setQuery("")} aria-label="清空搜索">×</button>}</label>

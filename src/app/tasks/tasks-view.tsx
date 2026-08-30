@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, Task, TaskPriority } from "@/lib/types";
 
@@ -21,6 +22,7 @@ export function TasksView() {
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/tasks?status=${status}`);
@@ -42,7 +44,7 @@ export function TasksView() {
   function startEdit(task: Task) {
     setEditing(task.id);
     setDraft({ title: task.title, notes: task.notes, dueDate: task.dueDate ?? "", priority: task.priority, tags: task.tags.join(", ") });
-    setShowMore(true); setError(""); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowMore(true); setError(""); setShowForm(true);
   }
 
   function quickDate(kind: "today" | "tomorrow" | "week" | "none") {
@@ -54,14 +56,14 @@ export function TasksView() {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError("");
+    event.preventDefault(); if (saving) return; setError(""); setSaving(true);
     const response = await fetch(editing ? `/api/tasks/${editing}` : "/api/tasks", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...draft, dueDate: draft.dueDate || null, tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean) }),
     });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-    setShowForm(false); setEditing(null); setDraft(emptyDraft); await load();
+    if (!response.ok) { setError(((await response.json()) as ApiError).error); setSaving(false); return; }
+    setShowForm(false); setEditing(null); setDraft(emptyDraft); await load(); setSaving(false);
   }
 
   async function toggle(task: Task) {
@@ -76,7 +78,7 @@ export function TasksView() {
 
   return <div className="page">
     <PageHeader eyebrow="TO DO" title="待办" description="先放这里。哪个真得做，再慢慢挑。" action={<button className="button primary" onClick={startNew}><Icon name="plus" />记个待办</button>} />
-    {showForm && <form className="editor-card" onSubmit={submit}>
+    {showForm && <FormSheet title={editing ? "改一下" : "记个待办"} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? "改好了" : "记下"} busy={saving} busyLabel={editing ? "正在修改…" : "正在保存…"} cancelLabel="先不写"><form id="task-record-form" className="editor-card" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT" : "NEW"}</span><h2>{editing ? "改一下" : "记个待办"}</h2></div><button type="button" className="text-button" onClick={() => setShowForm(false)}>先不写</button></div>
       <label className="field wide quick-title"><span>要干嘛？</span><input autoFocus required maxLength={160} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="先写一件事" /></label>
       <div className="quick-date-field"><span>什么时候</span><div>{([['today','今天'],['tomorrow','明天'],['week','这周'],['none','不设时间']] as const).map(([value,label])=><button type="button" key={value} onClick={()=>quickDate(value)}>{label}</button>)}</div>{draft.dueDate&&<small>现在设为 {draft.dueDate}</small>}</div>
@@ -89,7 +91,7 @@ export function TasksView() {
       </div>}
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions"><button className="button primary" type="submit">{editing ? "改好了" : "记下"}</button></div>
-    </form>}
+    </form></FormSheet>}
 
     <div className="toolbar"><div className="segmented">{(["all", "open", "done"] as Status[]).map((item) => <button key={item} className={status === item ? "active" : ""} onClick={() => { setLoading(true); setStatus(item); }}>{item === "all" ? "都在这" : item === "open" ? "还没弄" : "搞定了"}</button>)}</div><span className="result-count">{tasks.length} 个</span></div>
     {loading ? <div className="loading-state">在翻待办…</div> : tasks.length ? <div className="task-list">{tasks.map((task) => <article className={`task-row ${task.completed ? "completed" : ""}`} key={task.id}>

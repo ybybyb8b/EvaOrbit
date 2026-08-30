@@ -30,7 +30,7 @@ function draftFromRecord(record: HealthRecord): Draft {
   return { type: record.type, title: record.title, summary: record.summary, occurredAt: compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime), status: record.status, startedAt: compactDateTimeValue(record.startedAt, record.startedHasExplicitTime), endedAt: compactDateTimeValue(record.endedAt, record.endedHasExplicitTime), details: record.details };
 }
 
-export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: HealthRecord; onCancel: () => void; onSaved: (record: HealthRecord) => void }) {
+export function HealthRecordEditor({ editing, onCancel, onSaved, formId, onSavingChange }: { editing?: HealthRecord; onCancel: () => void; onSaved: (record: HealthRecord) => void; formId?: string; onSavingChange?: (saving: boolean) => void }) {
   const [draft, setDraft] = useState<Draft>(() => editing ? draftFromRecord(editing) : emptyDraft());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -50,7 +50,7 @@ export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: H
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(""); setSaving(true);
+    event.preventDefault(); setError(""); setSaving(true); onSavingChange?.(true);
     const details = Object.fromEntries(Object.entries(draft.details).filter(([, value]) => value !== "" && value !== undefined));
     const occurred=compactDateTimePayload(draft.occurredAt);const started=draft.startedAt?compactDateTimePayload(draft.startedAt):null;const ended=draft.endedAt?compactDateTimePayload(draft.endedAt):null;
     const body = {
@@ -68,11 +68,11 @@ export function HealthRecordEditor({ editing, onCancel, onSaved }: { editing?: H
       if (!response.ok) { setError(result && "error" in result ? result.error || "Could not save this record" : "Could not save this record"); return; }
       onSaved(result as HealthRecord);
     } catch { setError("Could not save this record"); }
-    finally { setSaving(false); }
+    finally { setSaving(false); onSavingChange?.(false); }
   }
 
   const fields = detailFields[draft.type];
-  return <form className="editor-card health-editor" onSubmit={(event) => void submit(event)}>
+  return <form id={formId} className="editor-card health-editor" onSubmit={(event) => void submit(event)}>
     <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h2>{editing ? "Edit health record" : "Add health record"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
     <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} onClick={() => selectType(item.value)}><Icon name="health" /><span>{item.label}</span></button>)}</div></div>
     <div className="form-grid health-form-grid">

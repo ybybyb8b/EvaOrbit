@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { MarkdownMessage } from "@/components/markdown-message";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, ChronicleEntry, ChronicleSource } from "@/lib/types";
@@ -70,7 +71,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
 
-    {editing ? <form className="editor-card chronicle-editor" onSubmit={submit}>
+    {editing ? <FormSheet title="Edit Chronicle" onClose={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }} formId="chronicle-edit-form" submitLabel="Save changes" busy={busy}><form id="chronicle-edit-form" className="editor-card chronicle-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">EDIT ENTRY</span><h2>Edit Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Date</span><input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
@@ -79,7 +80,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
         <label className="field wide"><span>Markdown</span><textarea required rows={18} maxLength={100000} value={draft.contentMd} onChange={(event) => setDraft({ ...draft, contentMd: event.target.value })} /></label>
       </div>
       <div className="form-actions"><button className="button primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button></div>
-    </form> : <>
+    </form></FormSheet> : <>
       <article className="chronicle-article"><MarkdownMessage content={entry.contentMd} /></article>
       <div className="chronicle-entry-meta"><span>Created {new Date(entry.createdAt).toLocaleString()}</span><span>Updated {new Date(entry.updatedAt).toLocaleString()}</span></div>
       <div className="chronicle-detail-actions"><button className="button primary" onClick={startEdit}><Icon name="edit" />Edit</button><button className="text-button danger" onClick={() => void remove()} disabled={busy}><Icon name="trash" />Delete</button></div>

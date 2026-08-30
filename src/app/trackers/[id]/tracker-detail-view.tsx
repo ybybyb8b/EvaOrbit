@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import { TrackerIcon } from "@/components/tracker-icon";
 import type { ApiError, Tracker, TrackerEntry, TrackerField, TrackerFieldType, TrackerGoal, TrackerGoalOperator, TrackerInsights, TrackerPeriodType, TrackerReminder, TrackerReminderType, TrackerStats } from "@/lib/types";
@@ -73,9 +74,9 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
 
     {tab==="timeline"&&<>
       {tracker.dataSourceType==="native_tracker"&&<section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">CAPTURE</span><h2>Add details</h2></div><button className="text-button" onClick={()=>setShowEntry(value=>!value)}>{showEntry?"Close":"New record"}</button></div>
-        {showEntry&&<form className="editor-card tracker-entry-form" onSubmit={addEntry}><label className="field"><span>When</span><input required type="datetime-local" value={occurredAt} onChange={event=>setOccurredAt(event.target.value)}/></label>
+        {showEntry&&<FormSheet title="Add details" onClose={()=>setShowEntry(false)} formId="tracker-entry-form" submitLabel="Save record" busy={working}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={addEntry}><label className="field"><span>When</span><input required type="datetime-local" value={occurredAt} onChange={event=>setOccurredAt(event.target.value)}/></label>
         {activeFields.length>0&&<div className="tracker-values-grid">{activeFields.map(field=><FieldInput field={field} value={values[field.key]} onChange={value=>setFieldValue(field,value)} key={field.id}/>)}</div>}
-        <label className="field"><span>Note</span><textarea rows={3} maxLength={5000} value={note} onChange={event=>setNote(event.target.value)} placeholder="Optional"/></label><button className="button primary" disabled={working}>Save record</button></form>}
+        <label className="field"><span>Note</span><textarea rows={3} maxLength={5000} value={note} onChange={event=>setNote(event.target.value)} placeholder="Optional"/></label><button className="button primary" disabled={working}>Save record</button></form></FormSheet>}
       </section>}
       <section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">TIMELINE</span><h2>Every record</h2></div><span>{filtersActive?`${timelineEntries.length} / ${stats.total}`:stats.total}</span></div><form className="tracker-search" onSubmit={event=>{event.preventDefault();setAppliedQuery(query);void load(query);}}><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search notes or properties"/><button>Search</button></form>
         <div className="tracker-filters"><label><span>Time</span><select value={periodFilter} onChange={event=>setPeriodFilter(event.target.value as TimelinePeriod)}><option value="all">Any time</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="year">This year</option></select></label>{activeFields.length>0&&<label><span>Property</span><select value={fieldFilter} onChange={event=>{setFieldFilter(event.target.value);setFieldValueFilter("");}}><option value="">Any property</option>{activeFields.map(field=><option value={field.key} key={field.key}>{field.name}</option>)}</select></label>}{selectedFilterField&&<FieldFilter field={selectedFilterField} value={fieldValueFilter} onChange={setFieldValueFilter}/>} {filtersActive&&<button type="button" onClick={()=>{setQuery("");setAppliedQuery("");setPeriodFilter("all");setFieldFilter("");setFieldValueFilter("");void load("");}}>Clear</button>}</div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
+import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, MediaListItem, MediaRating, MediaType } from "@/lib/types";
@@ -51,6 +52,7 @@ export function MediaView({ initial }: { initial: MediaListItem[] }) {
   const [draft, setDraft] = useState<MediaDraft>(emptyDraft);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,7 +81,7 @@ export function MediaView({ initial }: { initial: MediaListItem[] }) {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(""); setNotice("");
+    event.preventDefault(); if (saving) return; setError(""); setNotice(""); setSaving(true);
     const editing = editingId !== null;
     const body: Record<string, unknown> = {
       title: draft.title,
@@ -97,12 +99,13 @@ export function MediaView({ initial }: { initial: MediaListItem[] }) {
       if (!response.ok) { setError(await responseError(response, "Could not save media.")); return; }
       closeEditor(); setNotice(editing ? "Media updated." : "Media added."); await load();
     } catch { setError("Could not save media."); }
+    finally { setSaving(false); }
   }
 
   return <div className="page media-page">
     <PageHeader eyebrow="ARCHIVE" title="Media" description="Completed watches, dates, ratings, and rewatch history." action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Media</button>} />
 
-    {showForm && <form className="editor-card media-editor" onSubmit={submit}>
+    {showForm && <FormSheet title={editingId === null ? "Add media" : "Edit media"} onClose={closeEditor} formId="media-record-form" submitLabel={editingId === null ? "Add media" : "Save changes"} busy={saving}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">{editingId === null ? "NEW MEDIA" : "EDIT MEDIA"}</span><h2>{editingId === null ? "Add media" : "Edit media"}</h2></div><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
@@ -113,7 +116,7 @@ export function MediaView({ initial }: { initial: MediaListItem[] }) {
       </div>
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions"><button className="button primary" type="submit">{editingId === null ? "Add media" : "Save changes"}</button></div>
-    </form>}
+    </form></FormSheet>}
 
     {!showForm && error && <p className="form-error">{error}</p>}
     {notice && <p className="form-notice" role="status">{notice}</p>}

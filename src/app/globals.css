@@ -166,6 +166,26 @@ button { color: inherit; }
 .field textarea { resize: vertical; line-height: 1.55; }.field input:focus, .field textarea:focus, .field select:focus, .search-box:focus-within { border-color: #748879; box-shadow: 0 0 0 3px rgba(36,66,53,.08); }
 .api-key-control { display: flex; align-items: center; gap: 8px; }.api-key-control input { min-width: 0; flex: 1; }.api-key-control .text-button { flex: 0 0 auto; white-space: nowrap; }
 .form-actions { margin-top: 17px; display: flex; justify-content: flex-end; }.form-error { margin: 13px 0 0; color: var(--danger); font-size: 10px; }.form-success { margin: 13px 0 0; color: #4d755e; font-size: 10px; }
+
+/* Shared create/edit surface: centered modal on desktop, bottom sheet on mobile. */
+.form-sheet-layer { position: fixed; z-index: 120; top: var(--form-sheet-viewport-top,0); left: var(--form-sheet-viewport-left,0); width: var(--form-sheet-viewport-width,100vw); height: var(--form-sheet-viewport-height,100dvh); padding: 24px; display: grid; place-items: center; overflow: hidden; }
+.form-sheet-backdrop { position: absolute; inset: 0; border: 0; background: rgba(28,39,32,.28); backdrop-filter: blur(3px); cursor: default; }
+.form-sheet-panel { width: min(680px,calc(100vw - 48px)); max-height: min(88dvh,calc(var(--form-sheet-viewport-height,100dvh) - 48px)); border: 1px solid rgba(83,89,78,.15); border-radius: 24px; position: relative; display: grid; grid-template-rows: auto minmax(0,1fr) auto; overflow: hidden; background: var(--paper); box-shadow: 0 28px 80px rgba(27,39,31,.22); }
+.form-sheet-header,.form-sheet-footer { min-height: 67px; padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: rgba(249,247,240,.97); }
+.form-sheet-header { border-bottom: 1px solid var(--line); }.form-sheet-header h2 { margin: 0; font-family: var(--font-serif); font-size: 23px; font-weight: 500; }.form-sheet-header .text-button { min-height: 40px; }
+.form-sheet-body { min-height: 0; padding: 20px; overflow-y: auto; overscroll-behavior: contain; scroll-padding: 22px 0 90px; -webkit-overflow-scrolling: touch; }
+.form-sheet-footer { border-top: 1px solid var(--line); justify-content: flex-end; }.form-sheet-footer .button { min-width: 104px; }
+.form-sheet-body > .editor-card { margin: 0; padding: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.form-sheet-body .editor-title,.form-sheet-body .form-actions,.form-sheet-body .health-editor-actions,.form-sheet-body .media-viewing-actions,.form-sheet-body .media-form-actions { display: none; }
+.form-sheet-body > form > .button.primary:last-child { display: none; }
+
+@media (max-width: 720px) {
+  .form-sheet-layer { padding: max(12px,env(safe-area-inset-top)) 0 0; place-items: end stretch; }
+  .form-sheet-panel { width: 100%; max-height: min(92dvh,calc(var(--form-sheet-viewport-height) - max(48px,env(safe-area-inset-top)))); border-width: 1px 0 0; border-radius: 24px 24px 0 0; }
+  .form-sheet-header,.form-sheet-footer { min-height: 62px; padding-inline: 16px; }.form-sheet-header h2 { font-size: 21px; }
+  .form-sheet-body { padding: 18px 16px; scroll-padding-bottom: 100px; }
+  .form-sheet-footer { padding-bottom: max(13px,env(safe-area-inset-bottom)); }.form-sheet-footer .button { min-width: 0; flex: 1; }
+}
 .toolbar, .memory-toolbar { min-height: 48px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
 .segmented { padding: 4px; border-radius: 11px; display: flex; gap: 2px; background: #e9e7de; }
 .segmented button { padding: 7px 14px; border: 0; border-radius: 8px; background: transparent; color: #737b74; font-size: 10px; cursor: pointer; }.segmented button.active { background: var(--white); color: var(--green); box-shadow: 0 2px 7px rgba(48,55,46,.07); font-weight: 750; }

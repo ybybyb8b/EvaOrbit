@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
 import { CatRecordEditor } from "./cat-record-editor";
@@ -46,6 +47,7 @@ export function CatsView({ initialDashboard }: { initialDashboard: Dashboard }) 
   const [editingReminder, setEditingReminder] = useState<Reminder>();
   const [routineScope, setRoutineScope] = useState<CatRoutine["scope"]>("household");
   const [message, setMessage] = useState("");
+  const [sheetBusy, setSheetBusy] = useState(false);
   const pets = dashboard.pets.map(item => item.pet);
   const householdHistory = dashboard.timeline.filter(item => item.petId === null);
   const recentRecords = dashboard.timeline.filter(item => item.petId !== null).slice(0, 5);
@@ -60,14 +62,10 @@ export function CatsView({ initialDashboard }: { initialDashboard: Dashboard }) 
     <section className="cats-pets-section cats-pets-primary">{dashboard.pets.length ? <><div className="cat-card-grid">{dashboard.pets.map(({ pet, latest }) => <Link href={`/cats/${pet.id}`} className="cat-card" key={pet.id}><CatAvatar pet={pet}/><div><h2>{pet.name}</h2><p>{latest ? <>Latest · {latest.title} · {relative(latest.occurredAt)}</> : "No recent records"}</p></div></Link>)}</div><button className="text-button cats-add-pet" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button></> : <button className="cats-inline-empty" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button>}</section>
     <div className="cats-quick-actions" aria-label="Quick actions"><button className="button primary" onClick={() => { setEditingRecord(undefined); setPanel("record"); }}><Icon name="plus"/>New record</button><button className="button secondary" onClick={() => setPanel("care")}><Icon name="plus"/>Care</button></div>
     {message && <p className="success-banner" role="status">{message}</p>}
-    {panel === "record" && (
-      <CatRecordEditor pets={pets} editing={editingRecord} initialPetId={editingRecord ? null : undefined} onCancel={() => { setPanel(null); setEditingRecord(undefined); }} onSaved={async () => { await load(); setPanel(null); setEditingRecord(undefined); setMessage(editingRecord ? "Record updated" : "Record saved"); }}/>
-    )}
-    {panel === "routine" && (
-      <RoutineEditor pets={pets} initialScope={routineScope} editing={editingRoutine} onCancel={() => { setPanel(null); setEditingRoutine(undefined); }} onSaved={value => { setPanel(null); setEditingRoutine(undefined); setMessage(value); void load(); }}/>
-    )}
-    {panel === "care" && <section className="editor-card care-choice"><div className="editor-title"><div><span className="eyebrow">ADD CARE</span><h2>What kind of care?</h2></div><button type="button" className="text-button" onClick={() => setPanel(null)}>Cancel</button></div><div className="care-choice-grid"><button type="button" onClick={() => { setEditingReminder(undefined); setPanel("reminder"); }}><strong>One-time</strong><span>Do once on a specific date</span></button><button type="button" onClick={() => addRoutine("household")}><strong>Routine</strong><span>Repeat on a schedule</span></button></div></section>}
-    {panel === "reminder" && <ReminderEditor pets={pets} editing={editingReminder} onCancel={() => { setPanel(null); setEditingReminder(undefined); }} onSaved={() => { setPanel(null); setEditingReminder(undefined); setMessage(editingReminder ? "One-time task updated" : "One-time task created"); void load(); }}/>}
+    {panel === "record" && <FormSheet title={editingRecord ? "Edit record" : "New record"} onClose={() => { setPanel(null); setEditingRecord(undefined); }} submitLabel={editingRecord ? "Save changes" : "Save record"} busy={sheetBusy}><CatRecordEditor pets={pets} editing={editingRecord} initialPetId={editingRecord ? null : undefined} onSavingChange={setSheetBusy} onCancel={() => { setPanel(null); setEditingRecord(undefined); }} onSaved={async () => { await load(); setPanel(null); setEditingRecord(undefined); setMessage(editingRecord ? "Record updated" : "Record saved"); }}/></FormSheet>}
+    {panel === "routine" && <FormSheet title={editingRoutine ? "Edit routine" : "Add routine"} onClose={() => { setPanel(null); setEditingRoutine(undefined); }} submitLabel="Save routine" busy={sheetBusy}><RoutineEditor pets={pets} initialScope={routineScope} editing={editingRoutine} onSavingChange={setSheetBusy} onCancel={() => { setPanel(null); setEditingRoutine(undefined); }} onSaved={value => { setPanel(null); setEditingRoutine(undefined); setMessage(value); void load(); }}/></FormSheet>}
+    {panel === "care" && <FormSheet title="What kind of care?" onClose={() => setPanel(null)}><section className="editor-card care-choice"><div className="editor-title"><div><span className="eyebrow">ADD CARE</span><h2>What kind of care?</h2></div><button type="button" className="text-button" onClick={() => setPanel(null)}>Cancel</button></div><div className="care-choice-grid"><button type="button" onClick={() => { setEditingReminder(undefined); setPanel("reminder"); }}><strong>One-time</strong><span>Do once on a specific date</span></button><button type="button" onClick={() => addRoutine("household")}><strong>Routine</strong><span>Repeat on a schedule</span></button></div></section></FormSheet>}
+    {panel === "reminder" && <FormSheet title={editingReminder ? "Edit one-time task" : "Do once"} onClose={() => { setPanel(null); setEditingReminder(undefined); }} submitLabel={editingReminder ? "Save changes" : "Save one-time task"} busy={sheetBusy}><ReminderEditor pets={pets} editing={editingReminder} onSavingChange={setSheetBusy} onCancel={() => { setPanel(null); setEditingReminder(undefined); }} onSaved={() => { setPanel(null); setEditingReminder(undefined); setMessage(editingReminder ? "One-time task updated" : "One-time task created"); void load(); }}/></FormSheet>}
     {panel === "pet" && (
       <PetEditor onCancel={() => setPanel(null)} onSaved={() => { setPanel(null); setMessage("Cat added"); void load(); }}/>
     )}

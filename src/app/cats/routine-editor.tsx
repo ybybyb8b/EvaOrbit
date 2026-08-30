@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CatRoutine, Pet } from "@/lib/types";
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
   editing?: CatRoutine;
   onCancel: () => void;
   onSaved: (message: string) => void;
+  onSavingChange?: (saving: boolean) => void;
 };
 type RoutineDraft = { scope: CatRoutine["scope"]; petId: number | null; title: string; intervalValue: number; intervalUnit: CatRoutine["intervalUnit"]; firstDueAt: string; nextDueAt: string; reminderLeadMinutes: number; notes: string; enabled: boolean };
 
@@ -20,7 +21,7 @@ function localInput(value?: string) {
   return date.toISOString().slice(0, 16);
 }
 
-export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCancel, onSaved }: Props) {
+export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCancel, onSaved, onSavingChange }: Props) {
   const initial = useMemo<RoutineDraft>(() => ({
     scope: editing?.scope ?? initialScope ?? (initialPetId ? "cat" : "household") as CatRoutine["scope"],
     petId: editing?.petId ?? initialPetId ?? pets[0]?.id ?? null,
@@ -36,6 +37,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
   const [draft, setDraft] = useState<RoutineDraft>(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  useEffect(() => onSavingChange?.(saving), [onSavingChange, saving]);
   const suggestions = ["Deworming", "Filter change", "Deep clean", "Nail trim"];
   async function submit(event: FormEvent) {
     event.preventDefault(); setSaving(true); setError("");

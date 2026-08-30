@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
+import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { HealthRecord, HealthRecordStatus } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
@@ -14,6 +15,7 @@ export function HealthRecordsView({ initial }: { initial: HealthRecord[] }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (requestedFilter: "" | HealthRecordStatus = filter) => {
     const response = await fetch(`/api/health/records?limit=100${requestedFilter ? `&status=${requestedFilter}` : ""}`);
@@ -32,7 +34,7 @@ export function HealthRecordsView({ initial }: { initial: HealthRecord[] }) {
     <PageHeader eyebrow="HEALTH" title="Records" description="A chronological place for the context worth keeping" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New record</button>} />
     {message && <p className="success-banner" role="status">{message}</p>}
     {error && <p className="form-error">{error}</p>}
-    {editorOpen && <HealthRecordEditor editing={editing} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setRecords((current) => [record, ...current.filter((item) => item.id !== record.id)]); void load(); }} />}
+    {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-records-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor formId="health-records-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setRecords((current) => [record, ...current.filter((item) => item.id !== record.id)]); void load(); }} /></FormSheet>}
     <div className="health-record-filters" aria-label="Filter health records"><button className={!filter ? "active" : ""} onClick={() => selectFilter("")}>All</button><button className={filter === "active" ? "active" : ""} onClick={() => selectFilter("active")}>Active</button><button className={filter === "resolved" ? "active" : ""} onClick={() => selectFilter("resolved")}>Resolved</button></div>
     <section className="health-history-section"><HealthRecordList records={records} /></section>
   </div>;

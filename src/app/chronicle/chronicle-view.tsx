@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
+import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { chronicleExcerpt } from "@/lib/chronicle";
@@ -29,7 +29,6 @@ async function responseError(response: Response, fallback: string) {
 }
 
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
-  const router = useRouter();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<ChronicleDraft>(emptyDraft);
@@ -37,6 +36,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,7 +56,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   }, [query]);
 
   function openCreate() {
-    setDraft(emptyDraft()); setError(""); setShowForm(true);
+    setDraft(emptyDraft()); setError(""); setNotice(""); setShowForm(true);
   }
 
   async function submit(event: FormEvent) {
@@ -69,7 +69,8 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
       });
       if (!response.ok) { setError(await responseError(response, "Could not create Chronicle entry.")); return; }
       const created = await response.json() as ChronicleEntry;
-      router.push(`/chronicle/${created.id}`); router.refresh();
+      setItems((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setShowForm(false); setDraft(emptyDraft()); setNotice("Chronicle entry saved.");
     } catch {
       setError("Could not create Chronicle entry.");
     } finally {
@@ -80,7 +81,8 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   return <div className="page chronicle-page">
     <PageHeader eyebrow="ARCHIVE" title="Chronicle" description="Dated Markdown entries, kept in their original words." action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New entry</button>} />
 
-    {showForm && <form className="editor-card chronicle-editor" onSubmit={submit}>
+    {notice && <p className="success-banner" role="status">{notice}</p>}
+    {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW ENTRY</span><h2>Add to Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setShowForm(false); setError(""); }}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Date</span><input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
@@ -90,7 +92,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-actions"><button className="button primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save entry"}</button></div>
-    </form>}
+    </form></FormSheet>}
 
     {!showForm && error && <p className="form-error" role="alert">{error}</p>}
     <div className="chronicle-toolbar" aria-busy={loading}>

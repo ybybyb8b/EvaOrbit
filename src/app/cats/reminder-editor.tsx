@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { currentLocalDate, dateTimeDraft, dateTimePayload, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
 import type { Pet, Reminder } from "@/lib/types";
 
@@ -12,12 +12,14 @@ function tomorrow(): DateTimeDraft {
   return { date: local, time: "" };
 }
 
-export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void }) {
+export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel, onSavingChange }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void; onSavingChange?: (saving: boolean) => void }) {
   const [draft, setDraft] = useState(() => ({ target: editing ? editing.targetType === "cat" ? String(editing.targetId) : "household" : initialPetId === null ? "household" : initialPetId ? String(initialPetId) : pets[0] ? String(pets[0].id) : "household", title: editing?.title ?? "", due: editing?.nextDueAt ? dateTimeDraft(editing.nextDueAt, editing.dueHasExplicitTime) : tomorrow(), leadTimeMinutes: editing?.leadTimeMinutes ?? 0, note: editing?.note ?? "" }));
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => onSavingChange?.(saving), [onSavingChange, saving]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError("");
+    event.preventDefault(); if (saving) return; setError(""); setSaving(true);
     const household = draft.target === "household";
     const due = dateTimePayload(draft.due);
     const response = await fetch(editing ? `/api/reminders/${editing.id}` : "/api/reminders", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
@@ -26,6 +28,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel 
       intervalValue: null, intervalUnit: null, timesOfDay: [], endsAt: null, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       note: draft.note, leadTimeMinutes: due.hasExplicitTime ? draft.leadTimeMinutes : 0, status: "scheduled", isActive: true, cancelledAt: null, lastNotifiedAt: null, sentAt: null,
     }) });
+    setSaving(false);
     if (!response.ok) { setError((await response.json()).error ?? "Could not save one-time task."); return; }
     onSaved();
   }
@@ -39,6 +42,6 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel 
       {draft.due.time ? <label className="field"><span>Remind</span><select value={draft.leadTimeMinutes} onChange={(event) => setDraft({ ...draft, leadTimeMinutes: Number(event.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></select></label> : <p className="date-only-note">Date-only tasks stay in Upcoming but do not send a push notification until a time is added.</p>}
       <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
     </div>
-    {error && <p className="form-error">{error}</p>}<button className="button primary">{editing ? "Save changes" : "Save one-time task"}</button>
+    {error && <p className="form-error">{error}</p>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
   </form>;
 }
