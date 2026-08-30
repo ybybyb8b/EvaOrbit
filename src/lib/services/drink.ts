@@ -1,8 +1,9 @@
 import "server-only";
 import { getRepository } from "../repositories";
 import type { NewDrinkLimit, NewDrinkLog } from "../repositories/types";
+import { buildDrinkInputSuggestions } from "../drink-suggestions";
 import { calculateLimitStatus } from "../nutrition";
-import { dateInEvaOrbit, dateRange, weekRange } from "../time";
+import { dateInEvaOrbit, dateRange, monthRange, weekRange } from "../time";
 
 export async function listDrinkLogs(input: { date?: string; query?: string; from?: string; to?: string; drinkType?: string } = {}) {
   const range = input.date ? dateRange(input.date) : null;
@@ -11,12 +12,13 @@ export async function listDrinkLogs(input: { date?: string; query?: string; from
   return query ? logs.filter((item) => [item.name, item.brand, item.notes].some((value) => value.toLocaleLowerCase().includes(query))) : logs;
 }
 export async function getTodayDrinks() { return listDrinkLogs({ date: dateInEvaOrbit() }); }
+export async function getDrinkInputSuggestions() { return buildDrinkInputSuggestions(await (await getRepository()).listDrinkLogs()); }
 export async function getDrinkLimits() { return (await getRepository()).listDrinkLimits(); }
 export async function checkDrinkLimits(at = new Date()) {
   const repository = await getRepository();
   const limits = (await repository.listDrinkLimits()).filter((limit) => limit.enabled);
   return Promise.all(limits.map(async (limit) => {
-    const range = limit.period === "daily" ? dateRange(dateInEvaOrbit(at)) : weekRange(at);
+    const range = limit.period === "daily" ? dateRange(dateInEvaOrbit(at)) : limit.period === "weekly" ? weekRange(at) : monthRange(at);
     return calculateLimitStatus(limit, await repository.listDrinkLogs(range));
   }));
 }

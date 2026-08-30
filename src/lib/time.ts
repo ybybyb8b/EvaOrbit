@@ -35,3 +35,11 @@ export function weekRange(value = new Date()) {
   noon.setUTCDate(noon.getUTCDate() + 7);
   return { from: localMidnight(monday).toISOString(), to: localMidnight(noon.toISOString().slice(0, 10)).toISOString() };
 }
+
+export function monthRange(value = new Date()) {
+  const date = dateInEvaOrbit(value);
+  const first = `${date.slice(0, 7)}-01`;
+  const next = new Date(`${first}T12:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  return { from: localMidnight(first).toISOString(), to: localMidnight(next.toISOString().slice(0, 10)).toISOString() };
+}

@@ -32,7 +32,7 @@ export async function executeAiTool(name: string, value: unknown, allowWrite: bo
     return { result: JSON.stringify({ error: "AI 写入权限未开启。请让用户前往设置启用后再试。" }), summary: "写入被权限设置阻止", wrote: false };
   }
   if(name==="create_inbox"){const item=await createInbox(parseNewInbox({...args,source:typeof args.source==="string"?args.source:"eva"}));return{result:JSON.stringify({success:true,item}),summary:"已放进 Inbox",wrote:true};}
-  if(name==="create_tracker"){const tracker=await createTracker(parseNewTracker({...args,dataSourceType:"native_tracker",sourceConfig:{}}));return{result:JSON.stringify({success:true,tracker}),summary:`已创建 Tracker「${tracker.name}」`,wrote:true};}
+  if(name==="create_tracker"){const tracker=await createTracker(parseNewTracker(args));return{result:JSON.stringify({success:true,tracker}),summary:`已创建 Tracker「${tracker.name}」`,wrote:true};}
   if(name==="create_tracker_entry"){const entry=await createTrackerEntry(parseNewTrackerEntry(args));return{result:JSON.stringify({success:true,entry}),summary:"已记录一次 Tracker 事件",wrote:true};}
   if(name==="create_food_log"){const log=await createFoodLog(parseNewFoodLog(args));return{result:JSON.stringify({success:true,log}),summary:`已记录${log.title}`,wrote:true};}
   if(name==="update_food_log"){const id=positiveId(args.id);const patch={...args};delete patch.id;const log=await updateFoodLog(id,parseFoodLogPatch(patch));return{result:JSON.stringify(log?{success:true,log}:{error:"饮食记录不存在"}),summary:log?`已修正${log.title}`:"未找到饮食记录",wrote:Boolean(log)};}

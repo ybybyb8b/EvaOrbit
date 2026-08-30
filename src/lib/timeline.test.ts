@@ -13,11 +13,11 @@ const drink: DrinkLog = {
 };
 const tracker: Tracker = {
   id: 11, name: "吃药", icon: "💊", iconType: "default", iconValue: "", groupName: "健康", timeType: "point", quickCaptureEnabled: true,
-  dataSourceType: "native_tracker", sourceConfig: {}, statsConfig: {}, createdAt: "", updatedAt: "",
+  statsConfig: {}, createdAt: "", updatedAt: "",
 };
 const trackerEntry: TrackerEntry = {
   id: 17, trackerId: 11, occurredAt: "2026-08-26T07:00:00.000Z", endAt: null, values: {}, note: "早饭后",
-  sourceType: "native_tracker", createdAt: "", updatedAt: "",
+  createdAt: "", updatedAt: "",
 };
 const healthRecord: HealthRecord = {
   id: 19, occurredAt: "2026-08-26T08:00:00.000Z", occurredHasExplicitTime: true, type: "symptom", title: "Headache", summary: "Mild",

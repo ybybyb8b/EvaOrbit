@@ -1,4 +1,5 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerDataSourceType, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType } from "./types";
+import { SUGAR_LEVELS } from "./types.ts";
 
 export class ValidationError extends Error {}
 
@@ -767,7 +768,7 @@ export function parseNewDrinkLog(value: unknown) {
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()), name: text(body.name, "饮品名称", 200)!,
     brand: text(body.brand ?? "", "品牌", 120, false) ?? "",
     drinkType: enumValue(body.drinkType, "饮品类型", ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"] as const, "other"),
-    volumeMl: optionalNumber(body.volumeMl, "容量", 0, 10000), sugarLevel: text(body.sugarLevel ?? "", "糖度", 80, false) ?? "",
+    volumeMl: optionalNumber(body.volumeMl, "容量", 0, 10000), sugarLevel: enumValue(body.sugarLevel, "糖度", ["", ...SUGAR_LEVELS] as const, ""),
     caffeineMg: optionalNumber(body.caffeineMg, "咖啡因", 0, 5000), estimatedKcal: optionalNumber(body.estimatedKcal, "估算热量"), kcalMin, kcalMax,
     confidence: enumValue(body.confidence, "可信度", ["high", "medium", "low"] as const, "low"),
     foodLibraryId: optionalNumber(body.foodLibraryId, "Food Library ID", 1, Number.MAX_SAFE_INTEGER), notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
@@ -787,7 +788,7 @@ export function parseDrinkLimit(value: unknown) {
   const body = objectValue(value);
   return {
     name: text(body.name, "限制名称", 120)!, targetType: text(body.targetType, "目标类型", 80)!,
-    period: enumValue(body.period, "周期", ["daily", "weekly"] as const, "weekly"),
+    period: enumValue(body.period, "周期", ["daily", "weekly", "monthly"] as const, "weekly"),
     limitValue: numberValue(body.limitValue, "限制数量", 1, 1000, 1), enabled: booleanValue(body.enabled, "启用状态", true),
   };
 }
@@ -817,12 +818,6 @@ function recordValue(value: unknown, field: string) {
 
 export function parseNewTracker(value: unknown) {
   const body = objectValue(value);
-  const dataSourceType = enumValue(body.dataSourceType, "数据来源", ["native_tracker", "linked_source"] as const, "native_tracker") as TrackerDataSourceType;
-  const sourceConfig = body.sourceConfig === undefined ? {} : recordValue(body.sourceConfig, "来源配置");
-  if (dataSourceType === "linked_source") {
-    if (sourceConfig.module !== "drink") throw new ValidationError("第一版联动 Tracker 只支持 Drink 数据源");
-    enumValue(sourceConfig.drinkType, "饮品类型", ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"] as const, "other");
-  }
   return {
     name: text(body.name, "Tracker 名称", 80)!,
     icon: "◉",
@@ -831,16 +826,14 @@ export function parseNewTracker(value: unknown) {
     groupName: text(body.groupName ?? "日常", "分组", 60, false) || "日常",
     timeType: "point" as const,
     quickCaptureEnabled: booleanValue(body.quickCaptureEnabled, "快速记录", true),
-    dataSourceType,
-    sourceConfig,
     statsConfig: body.statsConfig === undefined ? {} : recordValue(body.statsConfig, "统计配置"),
   };
 }
 
 export function parseTrackerPatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseNewTracker({ name: body.name ?? "placeholder", groupName: body.groupName ?? "日常", quickCaptureEnabled: body.quickCaptureEnabled ?? true, dataSourceType: body.dataSourceType ?? "native_tracker", sourceConfig: body.sourceConfig ?? {}, statsConfig: body.statsConfig ?? {} });
-  const keys = ["name", "groupName", "quickCaptureEnabled", "dataSourceType", "sourceConfig", "statsConfig"] as const;
+  const parsed = parseNewTracker({ name: body.name ?? "placeholder", groupName: body.groupName ?? "日常", quickCaptureEnabled: body.quickCaptureEnabled ?? true, statsConfig: body.statsConfig ?? {} });
+  const keys = ["name", "groupName", "quickCaptureEnabled", "statsConfig"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

@@ -155,7 +155,6 @@ export interface TimelineEvent {
 }
 
 export type TrackerTimeType = "point" | "range";
-export type TrackerDataSourceType = "native_tracker" | "linked_source";
 export type TrackerIconType = "default" | "image";
 export type TrackerFieldType = "number" | "single_select" | "multi_select" | "text" | "boolean" | "rating";
 export type TrackerGoalOperator = "<=" | ">=" | "=";
@@ -171,8 +170,6 @@ export interface Tracker {
   groupName: string;
   timeType: TrackerTimeType;
   quickCaptureEnabled: boolean;
-  dataSourceType: TrackerDataSourceType;
-  sourceConfig: Record<string, unknown>;
   statsConfig: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -205,7 +202,6 @@ export interface TrackerEntry {
   endAt: string | null;
   values: Record<string, unknown>;
   note: string;
-  sourceType: "native_tracker" | "drink";
   createdAt: string;
   updatedAt: string;
 }
@@ -481,6 +477,8 @@ export interface LuciusCase extends MigrationTrace {
 }
 
 export type DrinkType = "coffee" | "milk_tea" | "tea" | "soda" | "juice" | "water" | "alcohol" | "other";
+export const SUGAR_LEVELS = ["无糖", "微糖", "半糖", "少糖", "标准", "多糖"] as const;
+export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
 export interface DrinkLog {
   id: number;
   occurredAt: string;
@@ -500,7 +498,11 @@ export interface DrinkLog {
   updatedAt: string;
 }
 
-export type LimitPeriod = "daily" | "weekly";
+export type LimitPeriod = "daily" | "weekly" | "monthly";
+export interface DrinkInputSuggestions {
+  names: string[];
+  brands: string[];
+}
 export interface DrinkLimit {
   id: number;
   name: string;

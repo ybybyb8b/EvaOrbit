@@ -3,24 +3,10 @@ import "server-only";
 import { getRepository } from "../repositories";
 import type { NewTracker, NewTrackerEntry, NewTrackerField, NewTrackerGoal, NewTrackerReminder } from "../repositories/types";
 import { dateInEvaOrbit, dateRange, weekRange } from "../time";
-import type { DrinkLog, Tracker, TrackerEntry, TrackerField, TrackerReminder, TrackerStats, TrackerSummary } from "../types";
-import { ConflictError } from "../errors";
+import type { TrackerEntry, TrackerField, TrackerReminder, TrackerStats, TrackerSummary } from "../types";
 import { ValidationError } from "../validation";
 import { buildTrackerInsights } from "../tracker-insights";
 import { resetTrackerIcon } from "./tracker-icon";
-
-function linkedDrinkType(tracker: Tracker) {
-  return tracker.dataSourceType === "linked_source" && tracker.sourceConfig.module === "drink" && typeof tracker.sourceConfig.drinkType === "string" ? tracker.sourceConfig.drinkType : null;
-}
-
-function drinkEntry(trackerId: number, drink: DrinkLog): TrackerEntry {
-  return {
-    id: drink.id, trackerId, occurredAt: drink.occurredAt, endAt: null,
-    values: { drinkType: drink.drinkType, brand: drink.brand, volumeMl: drink.volumeMl, sugarLevel: drink.sugarLevel },
-    note: drink.notes || [drink.brand, drink.volumeMl ? `${drink.volumeMl} ml` : ""].filter(Boolean).join(" · "),
-    sourceType: "drink", createdAt: drink.createdAt, updatedAt: drink.updatedAt,
-  };
-}
 
 function stats(entries: TrackerEntry[], reminders: TrackerReminder[], now = new Date()): TrackerStats {
   const today = dateInEvaOrbit(now);
@@ -42,31 +28,15 @@ function stats(entries: TrackerEntry[], reminders: TrackerReminder[], now = new 
   };
 }
 
-async function entriesFor(tracker: Tracker, input: { from?: string; to?: string; query?: string } = {}) {
-  const repository = await getRepository();
-  const drinkType = linkedDrinkType(tracker);
-  if (drinkType) {
-    const drinks = await repository.listDrinkLogs({ from: input.from, to: input.to, drinkType });
-    const entries = drinks.map((drink) => drinkEntry(tracker.id, drink));
-    if (!input.query) return entries;
-    const query = input.query.toLocaleLowerCase();
-    return entries.filter((entry) => `${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(query));
-  }
-  return repository.listTrackerEntries(tracker.id, input);
-}
-
 export async function listTrackerSummaries(): Promise<TrackerSummary[]> {
   const repository = await getRepository();
   const trackers = await repository.listTrackers();
-  const [nativeEntries, reminders, drinks] = await Promise.all([
+  const [entries, reminders] = await Promise.all([
     repository.listTrackerEntries(undefined),
     Promise.all(trackers.map((tracker) => repository.listTrackerReminders(tracker.id))),
-    trackers.some(linkedDrinkType) ? repository.listDrinkLogs() : Promise.resolve([]),
   ]);
   return trackers.map((tracker, index) => {
-    const drinkType = linkedDrinkType(tracker);
-    const entries = drinkType ? drinks.filter((drink) => drink.drinkType === drinkType).map((drink) => drinkEntry(tracker.id, drink)) : nativeEntries.filter((entry) => entry.trackerId === tracker.id);
-    return { ...tracker, stats: stats(entries, reminders[index]) };
+    return { ...tracker, stats: stats(entries.filter((entry) => entry.trackerId === tracker.id), reminders[index]) };
   });
 }
 
@@ -75,7 +45,7 @@ export async function getTrackerDetail(id: number, query = "") {
   const tracker = await repository.getTracker(id);
   if (!tracker) return null;
   const [fields, goals, reminders, allEntries] = await Promise.all([
-    repository.listTrackerFields(id), repository.listTrackerGoals(id), repository.listTrackerReminders(id), entriesFor(tracker),
+    repository.listTrackerFields(id), repository.listTrackerGoals(id), repository.listTrackerReminders(id), repository.listTrackerEntries(id),
   ]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const entries = normalizedQuery ? allEntries.filter((entry) => `${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(normalizedQuery)) : allEntries;
@@ -93,7 +63,6 @@ export async function deleteTracker(id: number) {
 export async function createTrackerField(input: NewTrackerField) {
   const tracker = await (await getRepository()).getTracker(input.trackerId);
   if (!tracker) throw new ValidationError("Tracker 不存在");
-  if (tracker.dataSourceType === "linked_source") throw new ConflictError("联动 Tracker 的字段来自原始模块，不能在这里重复定义");
   return (await getRepository()).createTrackerField(input);
 }
 export async function deleteTrackerField(id: number) { return (await getRepository()).deleteTrackerField(id); }
@@ -120,7 +89,6 @@ export async function createTrackerEntry(input: NewTrackerEntry) {
   const repository = await getRepository();
   const tracker = await repository.getTracker(input.trackerId);
   if (!tracker) throw new ValidationError("Tracker 不存在");
-  if (tracker.dataSourceType === "linked_source") throw new ConflictError("这是联动 Tracker，请从原始 Drink 记录新增数据");
   const fields = await repository.listTrackerFields(tracker.id);
   return repository.createTrackerEntry({ ...input, values: validatedValues(fields, input.values) });
 }

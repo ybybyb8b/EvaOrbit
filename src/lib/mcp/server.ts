@@ -8,6 +8,7 @@ import { createDrinkLog, deleteDrinkLog, listDrinkLogs, updateDrinkLog } from ".
 import { createFoodLog, deleteFoodLog, listFoodLogs, removeFoodLibraryItem, searchFoodLibrary, updateFoodLog, updateFoodLibraryItem, upsertFoodLibraryItem } from "../services/food";
 import { getDailyNutritionSummary, updateDailyEnergy } from "../services/nutrition";
 import { createTrackerEntry, getTrackerDetail, listTrackerSummaries } from "../services/tracker";
+import { SUGAR_LEVELS } from "../types";
 import type { DrinkLog, FoodLibraryItem, FoodLog } from "../types";
 import { parseDailyEnergy, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodLogPatch, parseNewDrinkLog, parseNewFoodLog, parseNewTrackerEntry, ValidationError } from "../validation";
 import { resourceRegistry } from "./resource-registry.server";
@@ -22,6 +23,7 @@ const mealType = z.enum(["breakfast", "lunch", "dinner", "snack", "late_night"])
 const scene = z.enum(["home", "delivery", "restaurant", "packaged_food", "other"]);
 const confidence = z.enum(["high", "medium", "low"]);
 const drinkType = z.enum(["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"]);
+const sugarLevel = z.enum(SUGAR_LEVELS).or(z.literal(""));
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.");
 const occurredAt = z.string().datetime({ offset: true });
 const optionalKcal = z.number().min(0).max(100000).nullable().optional();
@@ -36,7 +38,7 @@ const foodFields = {
 };
 const drinkFields = {
   occurred_at: occurredAt.optional(), name: z.string().trim().min(1).max(200), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
-  volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: z.string().max(80).optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
+  volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: sugarLevel.optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };
 const foodLibraryFields = {
@@ -171,10 +173,10 @@ function createServer() {
       return compactNutrition(await updateDailyEnergy(parsed.date, parsed));
     }));
 
-  server.registerTool("tracker_list", { description: "List available EvaOrbit Trackers and the detail fields accepted by native Trackers.", inputSchema: z.object({}) },
-    async () => runTool(async () => ({ trackers: await Promise.all((await listTrackerSummaries()).map(async (tracker) => { const detail = tracker.dataSourceType === "native_tracker" ? await getTrackerDetail(tracker.id) : null; return { id: tracker.id, name: tracker.name, group: tracker.groupName, data_source_type: tracker.dataSourceType, quick_capture_enabled: tracker.quickCaptureEnabled, fields: detail?.fields.filter((field) => !field.archivedAt).map((field) => ({ key: field.key, name: field.name, type: field.type, required: field.required, options: field.options, unit: field.unit })) ?? [] }; })) })));
+  server.registerTool("tracker_list", { description: "List available EvaOrbit Trackers and their detail fields.", inputSchema: z.object({}) },
+    async () => runTool(async () => ({ trackers: await Promise.all((await listTrackerSummaries()).map(async (tracker) => { const detail = await getTrackerDetail(tracker.id); return { id: tracker.id, name: tracker.name, group: tracker.groupName, quick_capture_enabled: tracker.quickCaptureEnabled, fields: detail?.fields.filter((field) => !field.archivedAt).map((field) => ({ key: field.key, name: field.name, type: field.type, required: field.required, options: field.options, unit: field.unit })) ?? [] }; })) })));
 
-  server.registerTool("tracker_create_entry", { description: "Create a point-in-time entry for one native EvaOrbit Tracker.", inputSchema: z.object({ tracker_id: z.number().int().positive(), occurred_at: occurredAt.optional(), detail_fields: z.record(z.string(), z.unknown()).optional(), note: z.string().max(5000).optional() }) },
+  server.registerTool("tracker_create_entry", { description: "Create a point-in-time entry for one EvaOrbit Tracker.", inputSchema: z.object({ tracker_id: z.number().int().positive(), occurred_at: occurredAt.optional(), detail_fields: z.record(z.string(), z.unknown()).optional(), note: z.string().max(5000).optional() }) },
     async ({ tracker_id, occurred_at, detail_fields, note }) => runTool(async () => { const entry = await createTrackerEntry(parseNewTrackerEntry({ occurredAt: occurred_at, values: detail_fields ?? {}, note: note ?? "" }, tracker_id)); return { record: { id: entry.id, tracker_id: entry.trackerId, occurred_at: entry.occurredAt, detail_fields: entry.values, note: entry.note } }; }));
 
   registerGenericResourceTools(server, runTool, resourceRegistry);

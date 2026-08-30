@@ -52,9 +52,12 @@ test("normalizes core life capture records", () => {
   assert.equal(food.occurredAt, "2026-08-25T04:00:00.000Z");
   assert.equal(food.confidence, "low");
   assert.throws(() => parseNewFoodLog({ title: "面", kcalMin: 600, kcalMax: 400 }), /热量下限/);
-  const drink = parseNewDrinkLog({ name: "拿铁", drinkType: "coffee", volumeMl: 350 });
-  assert.equal(drink.brand, "");
+  const drink = parseNewDrinkLog({ name: " 拿铁 ", brand: " 品牌 A ", drinkType: "coffee", volumeMl: 350, sugarLevel: "半糖" });
+  assert.equal(drink.name, "拿铁");
+  assert.equal(drink.brand, "品牌 A");
   assert.equal(drink.volumeMl, 350);
+  assert.equal(drink.sugarLevel, "半糖");
+  assert.throws(() => parseNewDrinkLog({ name: "拿铁", sugarLevel: "五分糖" }), /糖度/);
 });
 
 test("keeps food brands distinct and validates drink limits", () => {
@@ -65,6 +68,7 @@ test("keeps food brands distinct and validates drink limits", () => {
   assert.deepEqual(parseFoodLibraryItemPatch({ notes: "  只改备注  " }), { notes: "只改备注" });
   assert.throws(() => parseFoodLibraryItemPatch({}), ValidationError);
   assert.deepEqual(parseDrinkLimit({ name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3 }), { name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3, enabled: true });
+  assert.deepEqual(parseDrinkLimit({ name: "本月咖啡", targetType: "coffee", period: "monthly", limitValue: 10 }), { name: "本月咖啡", targetType: "coffee", period: "monthly", limitValue: 10, enabled: true });
   assert.throws(() => parseDrinkLimit({ name: "咖啡", targetType: "coffee", limitValue: 0 }), ValidationError);
 });
 
@@ -82,12 +86,13 @@ test("keeps conversation identity as a validated UI preference", () => {
   assert.throws(() => parseChatPreferences({ userDisplayName: "我", userAvatarType: "emoji", userAvatarValue: "", assistantDisplayName: "Eva" }), ValidationError);
 });
 
-test("normalizes tracker configuration and validates linked sources", () => {
+test("normalizes Tracker configuration as an independent entry source", () => {
   assert.deepEqual(parseNewTracker({ name: "  吃药  ", icon: "💊", groupName: "健康" }), {
-    name: "吃药", icon: "◉", iconType: "default", iconValue: "", groupName: "健康", timeType: "point", quickCaptureEnabled: true, dataSourceType: "native_tracker", sourceConfig: {}, statsConfig: {},
+    name: "吃药", icon: "◉", iconType: "default", iconValue: "", groupName: "健康", timeType: "point", quickCaptureEnabled: true, statsConfig: {},
   });
-  assert.equal(parseNewTracker({ name: "咖啡", dataSourceType: "linked_source", sourceConfig: { module: "drink", drinkType: "coffee" } }).dataSourceType, "linked_source");
-  assert.throws(() => parseNewTracker({ name: "错误联动", dataSourceType: "linked_source", sourceConfig: { module: "food" } }), /只支持 Drink/);
+  assert.deepEqual(parseNewTracker({ name: "咖啡", dataSourceType: "linked_source", sourceConfig: { module: "drink", drinkType: "coffee" } }), {
+    name: "咖啡", icon: "◉", iconType: "default", iconValue: "", groupName: "日常", timeType: "point", quickCaptureEnabled: true, statsConfig: {},
+  });
 });
 
 test("validates tracker fields and keeps entries as point events", () => {

@@ -33,7 +33,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     metadata: { drinkType: item.drinkType, brand: item.brand, volumeMl: item.volumeMl, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
   }));
   const trackerMap = new Map(trackers.map((tracker) => [tracker.id, tracker]));
-  const trackerEvents: TimelineEvent[] = trackerEntries.filter((entry) => entry.sourceType === "native_tracker").map((entry) => {
+  const trackerEvents: TimelineEvent[] = trackerEntries.map((entry) => {
     const tracker = trackerMap.get(entry.trackerId);
     return {
       id: `tracker:${entry.id}`, eventType: "tracker.logged", sourceType: "tracker", sourceId: entry.id,
