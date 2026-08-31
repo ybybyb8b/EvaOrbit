@@ -21,8 +21,7 @@ function newFieldDraft(type: TrackerFieldType = "number"): FieldDraft {
   return { clientId: crypto.randomUUID(), name: "", type, options: "", required: false, includeInStats: type !== "text", unit: "", precision: "0" };
 }
 
-function ago(value: string | null) {
-  if (!value) return "No records yet";
+function ago(value: string) {
   const milliseconds = Date.now() - new Date(value).getTime();
   const days = Math.floor(milliseconds / 86400000);
   if (days > 0) return `${days}d ago`;
@@ -140,8 +139,8 @@ export function TrackersView() {
     {error && !showForm && <p className="form-error">{error}</p>}
     {loading ? <div className="loading-state">Opening Trackers…</div> : trackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
       <div className="section-heading"><div><span className="eyebrow">GROUP</span><h2>{group}</h2></div><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>
-      <div className="tracker-card-grid">{trackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className={`tracker-card ${tracker.stats.reminderDue ? "due" : ""}`} key={tracker.id}>
-        <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><small>MOMENT</small><h3>{tracker.name}</h3></div></div><div className="tracker-card-stats"><span><strong>{tracker.stats.today}</strong>Today</span><span><strong>{tracker.stats.month}</strong>This month</span><span><strong>{tracker.stats.total}</strong>All time</span></div><p>{tracker.stats.reminderDue ? "An interval reminder is due" : `Last recorded · ${ago(tracker.stats.lastOccurredAt)}`}</p></Link>
+      <div className="tracker-card-grid">{trackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
+        <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><small>MOMENT</small><h3>{tracker.name}</h3></div></div><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></Link>
         {tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
       </article>)}</div>
     </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>Your first Tracker</h2><p>Keep a low-friction record of anything that happens more than once.</p><button className="button primary" onClick={() => setShowForm(true)}>Create one</button></div>}
