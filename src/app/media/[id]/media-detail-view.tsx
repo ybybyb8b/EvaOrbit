@@ -8,13 +8,14 @@ import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
 import { PageHeader } from "@/components/page-header";
+import { getMediaDisplayTitle, mediaNameKey } from "@/lib/media-display";
 import type { ApiError, MediaDetail, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing } from "@/lib/types";
 import { mediaRatings, mediaStatuses, mediaTypes, statusLabel, typeLabel } from "../media-view";
 
-type MediaDraft = { title: string; mediaType: MediaType; status: MediaStatus; rating: MediaRating | ""; isFavorite:boolean; note: string; seriesChoice:string; newSeries:string; seasonNumber:string; seasonTitle:string };
+type MediaDraft = { originalTitle: string; translatedTitle: string; mediaType: MediaType; status: MediaStatus; rating: MediaRating | ""; isFavorite:boolean; note: string; seriesChoice:string; newSeries:string; seasonNumber:string; seasonTitle:string };
 
 function draftFromDetail(detail: MediaDetail): MediaDraft {
-  return { title: detail.title, mediaType: detail.mediaType, status:detail.status, rating: detail.rating ?? "", isFavorite:detail.isFavorite, note: detail.note ?? "", seriesChoice:detail.seriesId?String(detail.seriesId):"", newSeries:"", seasonNumber:detail.seasonNumber?String(detail.seasonNumber):"", seasonTitle:detail.seasonTitle??"" };
+  return { originalTitle: detail.originalTitle ?? "", translatedTitle: detail.translatedTitle ?? "", mediaType: detail.mediaType, status:detail.status, rating: detail.rating ?? "", isFavorite:detail.isFavorite, note: detail.note ?? "", seriesChoice:detail.seriesId?String(detail.seriesId):"", newSeries:"", seasonNumber:detail.seasonNumber?String(detail.seasonNumber):"", seasonTitle:detail.seasonTitle??"" };
 }
 
 async function responseError(response: Response, fallback: string) {
@@ -57,7 +58,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
       const response = await fetch(`/api/media/${detail.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: draft.title, mediaType: draft.mediaType, status:draft.status, rating: draft.rating || null, isFavorite:draft.isFavorite, note: draft.note || null, seriesId, seasonNumber:draft.seasonNumber||null, seasonTitle:draft.seasonTitle||null }),
+        body: JSON.stringify({ originalTitle: draft.originalTitle || null, translatedTitle: draft.translatedTitle || null, mediaType: draft.mediaType, status:draft.status, rating: draft.rating || null, isFavorite:draft.isFavorite, note: draft.note || null, seriesId, seasonNumber:draft.seasonNumber||null, seasonTitle:draft.seasonTitle||null }),
       });
       if (!response.ok) { setError(await responseError(response, "Could not update media.")); return; }
       let next = await response.json() as MediaDetail;
@@ -122,7 +123,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
   }
 
   async function removeMedia() {
-    if (!window.confirm(`Delete “${detail.title}”? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete “${getMediaDisplayTitle(detail).primary}”? This cannot be undone.`)) return;
     setBusy(true); setError("");
     try {
       const response = await fetch(`/api/media/${detail.id}`, { method: "DELETE" });
@@ -132,9 +133,15 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
     finally { setBusy(false); }
   }
 
+  const displayTitle = getMediaDisplayTitle(detail);
+  const primaryKey = mediaNameKey(displayTitle.primary);
+  const visibleOriginal = detail.originalTitle && mediaNameKey(detail.originalTitle) !== primaryKey ? detail.originalTitle : null;
+  const visibleTranslated = detail.translatedTitle && mediaNameKey(detail.translatedTitle) !== primaryKey && mediaNameKey(detail.translatedTitle) !== mediaNameKey(visibleOriginal) ? detail.translatedTitle : null;
+  const seriesRepeatsName = detail.seriesName && [displayTitle.primary, detail.originalTitle, detail.translatedTitle].some((name) => mediaNameKey(name) === mediaNameKey(detail.seriesName));
+
   return <div className="page media-page media-detail-page">
     <Link className="back-link media-back-link" href="/media">← Media</Link>
-    <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={detail.title} description={detail.seriesName?`${detail.seriesName}${detail.seasonNumber?` · S${detail.seasonNumber}`:""}`:"A single item from your private shelf."} />
+    <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={displayTitle.primary} description={displayTitle.secondary ?? "A single item from your private shelf."} />
 
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -143,20 +150,22 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
       <div className="editor-title"><div><span className="eyebrow">EDIT MEDIA</span><h2>Edit media</h2></div><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="media-cover-picker wide"><span className="media-cover-picker-preview"><Icon name="media"/><strong>{coverFile?coverFile.name:detail.coverUrl?"Replace cover":"Choose cover"}</strong><small>JPG, PNG or WebP · up to 4 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>setCoverFile(event.target.files?.[0]??null)}/></label>
-        <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+        <label className="field wide"><span>Original title <small>Optional</small></span><input autoFocus maxLength={300} value={draft.originalTitle} onChange={(event) => setDraft({ ...draft, originalTitle: event.target.value })} /></label>
+        <label className="field wide"><span>Translated title <small>Optional</small></span><input maxLength={300} value={draft.translatedTitle} onChange={(event) => setDraft({ ...draft, translatedTitle: event.target.value })} /></label>
+        {!detail.originalTitle&&!detail.translatedTitle&&<p className="media-legacy-title wide">Legacy name: {detail.title}. Add either name when you want to modernize this record.</p>}
         <label className="field"><span>Type</span><select value={draft.mediaType} onChange={(event) => {const mediaType=event.target.value as MediaType;setDraft({ ...draft, mediaType,...(!["tv","anime"].includes(mediaType)?{seasonNumber:"",seasonTitle:""}:{}) });}}>{mediaTypes.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         <label className="field"><span>Status</span><select value={draft.status} onChange={event=>setDraft({...draft,status:event.target.value as MediaStatus})}>{mediaStatuses.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         <label className="field"><span>Rating <small>Optional</small></span><select value={draft.rating} onChange={(event) => setDraft({ ...draft, rating: event.target.value as MediaDraft["rating"] })}><option value="">No rating</option>{mediaRatings.map((rating) => <option value={rating} key={rating}>{rating}</option>)}</select></label>
-        <label className="field wide"><span>Series / Franchise <small>Optional</small></span><select value={draft.seriesChoice} onChange={event=>setDraft({...draft,seriesChoice:event.target.value})}><option value="">None</option>{series.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}<option value="__new__">Create new series…</option></select></label>
+        <label className="field wide"><span>{["tv","anime"].includes(draft.mediaType)?"Parent work / Series":"Series / Franchise"} <small>Optional</small></span><select value={draft.seriesChoice} onChange={event=>setDraft({...draft,seriesChoice:event.target.value})}><option value="">None</option>{series.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}<option value="__new__">Create new series…</option></select></label>
         {draft.seriesChoice==="__new__"&&<label className="field wide"><span>New series name</span><input required maxLength={200} value={draft.newSeries} onChange={event=>setDraft({...draft,newSeries:event.target.value})}/></label>}
-        {["tv","anime"].includes(draft.mediaType)&&<><label className="field"><span>Season number <small>Optional</small></span><input type="number" min="1" max="999" value={draft.seasonNumber} onChange={event=>setDraft({...draft,seasonNumber:event.target.value})}/></label><label className="field"><span>Season title <small>Optional</small></span><input maxLength={120} value={draft.seasonTitle} onChange={event=>setDraft({...draft,seasonTitle:event.target.value})}/></label></>}
+        {["tv","anime"].includes(draft.mediaType)&&<><label className="field"><span>Season number <small>Optional</small></span><input type="number" min="1" max="999" value={draft.seasonNumber} onChange={event=>setDraft({...draft,seasonNumber:event.target.value})}/></label><label className="field"><span>Season title <small>Only for a real subtitle</small></span><input maxLength={120} placeholder="The Final Chapter" value={draft.seasonTitle} onChange={event=>setDraft({...draft,seasonTitle:event.target.value})}/></label></>}
         <label className="media-favorite-toggle wide"><input type="checkbox" checked={draft.isFavorite} onChange={event=>setDraft({...draft,isFavorite:event.target.checked})}/><span><strong>Favorite</strong><small>Keep it on the Favorites shelf.</small></span></label>
         <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
       </div>
       <div className="form-actions"><button className="button primary" type="submit" disabled={busy}>Save changes</button></div>
     </form></FormSheet>}
 
-    {!editing && <section className="media-detail-hero"><MediaCover item={detail}/><dl><div><dt>Type</dt><dd>{typeLabel(detail.mediaType)}</dd></div><div><dt>Status</dt><dd>{statusLabel(detail.status)}</dd></div><div><dt>Series / Franchise</dt><dd>{detail.seriesId?<Link href={`/media/series/${detail.seriesId}`}>{detail.seriesName}</Link>:"None"}</dd></div>{["tv","anime"].includes(detail.mediaType)&&<div><dt>Season</dt><dd>{detail.seasonNumber?`S${detail.seasonNumber}`:"—"}{detail.seasonTitle?` · ${detail.seasonTitle}`:""}</dd></div>}<div><dt>Rating</dt><dd>{detail.rating??"Not rated"}{detail.isFavorite?" · Favorite":""}</dd></div><div><dt>Completed</dt><dd>{detail.viewings[0]?.watchedDate??"Not completed"}</dd></div><div><dt>Rewatches</dt><dd>{Math.max(0,detail.viewings.length-1)}</dd></div></dl></section>}
+    {!editing && <section className="media-detail-hero"><MediaCover item={detail}/><dl>{visibleOriginal&&<div><dt>Original title</dt><dd>{visibleOriginal}</dd></div>}{visibleTranslated&&<div><dt>Translated title</dt><dd>{visibleTranslated}</dd></div>}<div><dt>Type</dt><dd>{typeLabel(detail.mediaType)}</dd></div><div><dt>Status</dt><dd>{statusLabel(detail.status)}</dd></div><div><dt>Series / Franchise</dt><dd>{detail.seriesId?<Link href={`/media/series/${detail.seriesId}`}>{seriesRepeatsName?"Open series":detail.seriesName}</Link>:"None"}</dd></div>{["tv","anime"].includes(detail.mediaType)&&<div><dt>Season</dt><dd>{detail.seasonNumber?`S${detail.seasonNumber}`:"—"}{detail.seasonTitle&&mediaNameKey(detail.seasonTitle)!==mediaNameKey(detail.seriesName)?` · ${detail.seasonTitle}`:""}</dd></div>}<div><dt>Rating</dt><dd>{detail.rating??"Not rated"}{detail.isFavorite?" · Favorite":""}</dd></div><div><dt>Completed</dt><dd>{detail.viewings[0]?.watchedDate??"Not completed"}</dd></div><div><dt>Rewatches</dt><dd>{Math.max(0,detail.viewings.length-1)}</dd></div></dl></section>}
 
     {!editing && <section className="media-detail-card">
       <div className="media-detail-section-heading"><span className="eyebrow">VIEWINGS</span><span>{detail.viewings.length} {detail.viewings.length === 1 ? "watch" : "watches"}</span></div>

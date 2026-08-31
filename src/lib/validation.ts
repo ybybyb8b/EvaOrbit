@@ -66,7 +66,8 @@ function mediaFields(body: Record<string, unknown>, partial: boolean) {
   const seasonTitle = body.seasonTitle === undefined && partial ? undefined : nullableMediaText(body.seasonTitle, "Season title", 120);
   if (mediaType && !["tv", "anime"].includes(mediaType) && (seasonNumber || seasonTitle)) throw new ValidationError("只有 TV 或 Anime 可以填写 Season");
   return {
-    title: body.title === undefined && partial ? undefined : text(body.title, "标题", 300),
+    originalTitle: body.originalTitle === undefined && body.title === undefined && partial ? undefined : nullableMediaText(body.originalTitle === undefined ? body.title : body.originalTitle, "原名", 300),
+    translatedTitle: body.translatedTitle === undefined && partial ? undefined : nullableMediaText(body.translatedTitle, "译名", 300),
     mediaType,
     status: body.status === undefined && partial ? undefined : enumValue(body.status, "Media 状态", mediaStatuses, "completed") as MediaStatus,
     rating: body.rating === undefined && partial ? undefined : mediaRating(body.rating),
@@ -82,15 +83,19 @@ export function parseNewMedia(value: unknown) {
   const body = objectValue(value);
   if (body.mediaType === undefined) throw new ValidationError("Media 类型不能为空");
   const fields = mediaFields(body, false);
+  const legacyTitle = nullableMediaText(body.title, "标题", 300);
+  const hasItemName=Boolean(fields.originalTitle||fields.translatedTitle||legacyTitle);
+  if(!hasItemName&&!fields.seriesId)throw new ValidationError("请填写原名、译名或选择 Series / Franchise");
+  if(!hasItemName&&!(["tv","anime"] as MediaType[]).includes(fields.mediaType!))throw new ValidationError("该 Media item 需要原名或译名");
   const watchedDate = body.watchedDate === null || body.watchedDate === undefined || body.watchedDate === "" ? null : dateOnly(body.watchedDate, "完成日期");
   if (fields.status === "completed" && !watchedDate) throw new ValidationError("Completed Media 需要完成日期");
   return {
     item: {
-      title: fields.title!, mediaType: fields.mediaType!, status: fields.status!, rating: fields.rating ?? null,
+      originalTitle: fields.originalTitle ?? null, translatedTitle: fields.translatedTitle ?? null, mediaType: fields.mediaType!, status: fields.status!, rating: fields.rating ?? null,
       isFavorite: fields.isFavorite ?? false, note: fields.note ?? null, coverUrl: null,
       seriesId: fields.seriesId ?? null, seasonNumber: fields.seasonNumber ?? null, seasonTitle: fields.seasonTitle ?? null,
     },
-    watchedDate,
+    watchedDate, legacyTitle,
   };
 }
 

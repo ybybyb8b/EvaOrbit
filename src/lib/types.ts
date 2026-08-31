@@ -384,6 +384,8 @@ export interface MediaSeries {
 export interface MediaItem {
   id: number;
   title: string;
+  originalTitle: string | null;
+  translatedTitle: string | null;
   mediaType: MediaType;
   status: MediaStatus;
   rating: MediaRating | null;

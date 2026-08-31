@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getMediaDisplayTitle, mediaMatchesQuery } from "./media-display.ts";
 import { addMediaRewatchWithRepository, createMediaWithRepository, deleteMediaViewingWithRepository, getMediaDetailWithRepository, listMediaWithRepository, updateMediaViewingWithRepository, updateMediaWithRepository } from "./media.ts";
 import type { EvaOrbitRepository, MediaItemPatch, MediaListInput, NewMediaItem } from "./repositories/types.ts";
 import type { MediaItem, MediaViewing } from "./types.ts";
@@ -12,6 +13,7 @@ function fakeMediaRepository(){
   const repository={
     async listMediaItems(input:MediaListInput={}){return items.filter(item=>(!input.query||item.title.includes(input.query))&&(!input.mediaType||item.mediaType===input.mediaType)&&(!input.status||item.status===input.status)&&(!input.rating||item.rating===input.rating)&&(input.favorite===undefined||item.isFavorite===input.favorite)&&(!input.seriesId||item.seriesId===input.seriesId));},
     async getMediaItem(id:number){return items.find(item=>item.id===id)??null;},
+    async getMediaSeries(id:number){return id===1?{id:1,name:"Reacher",createdAt:"now",updatedAt:"now"}:null;},
     async createMediaItem(input:NewMediaItem){const item={...input,seriesName:null,id:++itemId,createdAt:"now",updatedAt:"now"};items.push(item);return item;},
     async updateMediaItem(id:number,input:MediaItemPatch){const item=items.find(value=>value.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"later"});return item;},
     async deleteMediaItem(id:number){const index=items.findIndex(item=>item.id===id);if(index<0)return false;items.splice(index,1);for(let offset=viewings.length-1;offset>=0;offset--)if(viewings[offset].mediaId===id)viewings.splice(offset,1);return true;},
@@ -37,11 +39,26 @@ test("validates Media type, rating and true date-only input",()=>{
   assert.equal(season.item.seasonNumber,3);assert.equal(season.item.isFavorite,true);
   assert.throws(()=>parseNewMedia({title:"Movie",mediaType:"movie",status:"completed",watchedDate:"2026-08-29",seasonNumber:1}),/Season/);
   assert.equal(parseNewMedia({title:"Next",mediaType:"movie",status:"planned"}).watchedDate,null);
+  assert.equal(parseNewMedia({mediaType:"tv",status:"planned",seriesId:1,seasonNumber:1}).item.originalTitle,null);
+  assert.throws(()=>parseNewMedia({mediaType:"movie",status:"planned"}),/原名|译名/);
+});
+
+test("uses one deduplicated display title and searches every compatible name",()=>{
+  const localized:MediaItem={id:1,title:"侠探杰克 · S1",originalTitle:"Reacher",translatedTitle:"侠探杰克",mediaType:"tv",status:"completed",rating:null,isFavorite:false,note:null,coverUrl:null,seriesId:1,seriesName:"Reacher",seasonNumber:1,seasonTitle:null,createdAt:"now",updatedAt:"now"};
+  assert.deepEqual(getMediaDisplayTitle(localized),{primary:"侠探杰克",secondary:"Reacher · S1",seasonLabel:"S1"});
+  assert.equal(mediaMatchesQuery(localized,"Reacher"),true);
+  assert.equal(mediaMatchesQuery(localized,"侠探"),true);
+  const plain={...localized,title:"Reacher · S1",translatedTitle:null,seasonTitle:"Reacher"};
+  assert.deepEqual(getMediaDisplayTitle(plain),{primary:"Reacher",secondary:"S1",seasonLabel:"S1"});
+  const named={...plain,seasonNumber:2,seasonTitle:"The Final Chapter"};
+  assert.equal(getMediaDisplayTitle(named).secondary,"S2 · The Final Chapter");
+  assert.equal(mediaMatchesQuery(named,"final chapter"),true);
+  assert.equal(getMediaDisplayTitle({...localized,title:"Legacy",originalTitle:null,translatedTitle:null,seriesName:null}).primary,"Legacy");
 });
 
 test("creates first viewing, manages rewatch numbering, edits and deletes consistently",async()=>{
   const{repository}=fakeMediaRepository();
-  const created=await createMediaWithRepository(repository,{item:{title:"Healer",mediaType:"tv",status:"completed",rating:"dope+",isFavorite:true,note:null,coverUrl:null,seriesId:null,seasonNumber:1,seasonTitle:null},watchedDate:"2024-03-18"});
+  const created=await createMediaWithRepository(repository,{item:{originalTitle:"Healer",translatedTitle:null,mediaType:"tv",status:"completed",rating:"dope+",isFavorite:true,note:null,coverUrl:null,seriesId:null,seasonNumber:1,seasonTitle:null},watchedDate:"2024-03-18"});
   assert.deepEqual(created.viewings.map(viewing=>[viewing.viewingNumber,viewing.watchedDate]),[[1,"2024-03-18"]]);
   const second=await addMediaRewatchWithRepository(repository,created.id,"2025-01-01");
   const third=await addMediaRewatchWithRepository(repository,created.id,"2026-08-29");
@@ -50,7 +67,7 @@ test("creates first viewing, manages rewatch numbering, edits and deletes consis
   await assert.rejects(()=>deleteMediaViewingWithRepository(repository,created.id,created.viewings[0].id),/first viewing/i);
   assert.equal(await deleteMediaViewingWithRepository(repository,created.id,second.id),true);
   assert.deepEqual((await getMediaDetailWithRepository(repository,created.id))?.viewings.map(viewing=>viewing.viewingNumber),[1,2]);
-  assert.equal((await updateMediaWithRepository(repository,created.id,{title:"힐러",rating:"goat"}))?.title,"힐러");
+  assert.equal((await updateMediaWithRepository(repository,created.id,{translatedTitle:"힐러",rating:"goat"}))?.title,"힐러 · S1");
   assert.equal(await repository.deleteMediaItem(created.id),true);
   assert.equal(await getMediaDetailWithRepository(repository,created.id),null);
   assert.deepEqual(await repository.listMediaViewings(created.id),[]);
@@ -58,9 +75,9 @@ test("creates first viewing, manages rewatch numbering, edits and deletes consis
 
 test("list filtering and migration preserve ownership and RLS",async()=>{
   const{repository}=fakeMediaRepository();
-  await createMediaWithRepository(repository,{item:{title:"Movie A",mediaType:"movie",status:"completed",rating:null,isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:null,seasonTitle:null},watchedDate:"2026-01-01"});
-  await createMediaWithRepository(repository,{item:{title:"Anime B",mediaType:"anime",status:"completed",rating:"mid-",isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:2,seasonTitle:"Part 2"},watchedDate:"2026-02-01"});
-  assert.deepEqual((await listMediaWithRepository(repository,{mediaType:"anime"})).map(item=>item.title),["Anime B"]);
+  await createMediaWithRepository(repository,{item:{originalTitle:"Movie A",translatedTitle:null,mediaType:"movie",status:"completed",rating:null,isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:null,seasonTitle:null},watchedDate:"2026-01-01"});
+  await createMediaWithRepository(repository,{item:{originalTitle:"Anime B",translatedTitle:null,mediaType:"anime",status:"completed",rating:"mid-",isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:2,seasonTitle:"Part 2"},watchedDate:"2026-02-01"});
+  assert.deepEqual((await listMediaWithRepository(repository,{mediaType:"anime"})).map(item=>item.title),["Anime B · S2 · Part 2"]);
   assert.deepEqual((await listMediaWithRepository(repository,{query:"Movie"})).map(item=>item.title),["Movie A"]);
   const sql=readFileSync(new URL("../../supabase/migrations/202608290002_media.sql",import.meta.url),"utf8");
   assert.match(sql,/watched_date date not null/);
@@ -80,4 +97,8 @@ test("list filtering and migration preserve ownership and RLS",async()=>{
   assert.match(collectionSql,/default 'completed'/);
   assert.match(collectionSql,/media-covers/);
   assert.match(collectionSql,/enable row level security/);
+  const titleSql=readFileSync(new URL("../../supabase/migrations/202608310005_media_titles.sql",import.meta.url),"utf8");
+  assert.match(titleSql,/add column if not exists original_title/);
+  assert.match(titleSql,/add column if not exists translated_title/);
+  assert.doesNotMatch(titleSql,/\b(update|delete|truncate)\b/i);
 });

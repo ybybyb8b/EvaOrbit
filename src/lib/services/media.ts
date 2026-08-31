@@ -2,18 +2,18 @@ import "server-only";
 
 import { addMediaRewatchWithRepository, createMediaWithRepository, deleteMediaViewingWithRepository, getMediaDetailWithRepository, listMediaWithRepository, updateMediaViewingWithRepository, updateMediaWithRepository } from "../media";
 import { getRepository } from "../repositories";
-import type { MediaItemPatch, MediaListInput, NewMediaItem } from "../repositories/types";
+import type { MediaDraftPatch, MediaListInput, NewMediaDraft } from "../repositories/types";
 import { resetMediaCover } from "./media-cover";
 
 export async function listMedia(input:MediaListInput={}){return listMediaWithRepository(await getRepository(),input);}
 
 export async function getMediaDetail(id:number){return getMediaDetailWithRepository(await getRepository(),id);}
 
-export async function createMedia(input:{item:NewMediaItem;watchedDate:string|null}) {
+export async function createMedia(input:{item:NewMediaDraft;watchedDate:string|null;legacyTitle?:string|null}) {
   return createMediaWithRepository(await getRepository(),input);
 }
 
-export async function updateMedia(id:number,input:MediaItemPatch){return updateMediaWithRepository(await getRepository(),id,input);}
+export async function updateMedia(id:number,input:MediaDraftPatch){return updateMediaWithRepository(await getRepository(),id,input);}
 
 export async function deleteMedia(id:number){await resetMediaCover(id);return(await getRepository()).deleteMediaItem(id);}
 
