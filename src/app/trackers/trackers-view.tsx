@@ -138,7 +138,7 @@ export function TrackersView() {
     </form>}
     {error && !showForm && <p className="form-error">{error}</p>}
     {loading ? <div className="loading-state">Opening Trackers…</div> : trackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
-      <div className="section-heading"><div><span className="eyebrow">GROUP</span><h2>{group}</h2></div><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>
+      <div className="tracker-group-heading"><h2>{group}</h2><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>
       <div className="tracker-card-grid">{trackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>
         {tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}

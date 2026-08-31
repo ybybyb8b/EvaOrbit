@@ -29,7 +29,7 @@ function timeLabel(value: string) {
 
 export default async function HomePage() {
   const [inbox, today, preferences, due] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getUiPreferences(), getDueReminders(3)]);
-  const recentInbox = inbox.slice(0, 4);
+  const latestInbox = inbox[0];
 
   return <div className="page home-page">
     <header className="home-masthead">
@@ -46,8 +46,12 @@ export default async function HomePage() {
           <HomeTodayBrief events={today.events} />
         </section>
 
-        <section className={`home-kept home-inbox-card ${recentInbox.length ? "" : "is-empty"}`}>
-          {recentInbox.length ? <><div className="section-heading compact"><div><span className="eyebrow">INBOX</span><h2>Inbox</h2></div><p>{inbox.length}</p></div><div className="home-inbox-list">{recentInbox.map((item) => <Link href="/inbox" key={item.id}><strong>{item.content}</strong><small>{timeLabel(item.createdAt)}</small></Link>)}</div></> : <Link className="home-inbox-empty" href="/inbox?new=1"><span>Inbox · 0</span><strong>Capture →</strong></Link>}
+        <section className="home-kept home-inbox-card">
+          <div className="home-inbox-heading">
+            <div><span className="eyebrow">INBOX</span><div><h2>Inbox</h2><span className="home-inbox-count">{inbox.length}</span></div></div>
+            <Link className="section-link" href="/inbox">View inbox →</Link>
+          </div>
+          {latestInbox ? <Link className="home-inbox-preview" href="/inbox"><strong>{latestInbox.content}</strong><time dateTime={latestInbox.createdAt}>{timeLabel(latestInbox.createdAt)}</time></Link> : <p className="home-inbox-empty">Nothing waiting to be sorted.</p>}
         </section>
       </div>
     </section>
