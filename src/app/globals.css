@@ -22,6 +22,9 @@
   --font-ui: var(--font-zh);
   --font-editorial-label: var(--font-editorial), var(--font-zh), Georgia, serif;
   --font-serif: var(--font-editorial-label);
+  --text-readable-small: 14px;
+  --text-interactive-small: 14px;
+  --text-input-mobile: 16px;
 }
 
 * { box-sizing: border-box; }
@@ -1409,7 +1412,13 @@ button { color: inherit; }
 }
 
 /* Food Library: compact editorial cards with room for long names. */
+.food-library-page { min-width: 0; }
+.food-library-content-grid { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0,1fr); justify-items: stretch; }
+.food-library-page .library-search { width: 100%; min-width: 0; height: 48px; margin: 0 0 14px; border-color: transparent; border-radius: 14px; background: rgba(232,233,223,.8); }
+.food-library-page .library-search:focus-within { border-color: #748879; box-shadow: 0 0 0 3px rgba(36,66,53,.08); }
 .food-library-list {
+  width: 100%;
+  min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
   align-items: start;
@@ -1419,7 +1428,10 @@ button { color: inherit; }
   min-height: 0;
   height: auto;
   padding: 12px 11px 11px;
+  border: 0;
+  border-radius: 15px;
   display: block;
+  background: rgba(232,233,223,.72);
 }
 
 .food-library-copy {
@@ -1451,10 +1463,6 @@ button { color: inherit; }
 .food-library-list h2 {
   min-height: 0;
   margin: 7px 0 8px;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
   overflow-wrap: anywhere;
   font-size: 17px;
   line-height: 1.22;
@@ -1463,29 +1471,28 @@ button { color: inherit; }
 .food-library-list p {
   min-height: 0;
   margin: 0;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: var(--muted);
-  font-size: 9px;
-  line-height: 1.35;
+  overflow-wrap: anywhere;
+  color: var(--soft-muted);
+  font-size: 8px;
+  line-height: 1.42;
 }
 
 .food-library-menu-button {
-  width: 28px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   position: absolute;
-  top: 7px;
-  right: 7px;
+  top: 4px;
+  right: 4px;
   border-radius: 8px;
-  color: var(--soft-muted);
+  color: rgba(100,111,102,.62);
   font-size: 13px;
   line-height: 1;
   letter-spacing: 1px;
+  outline: 0;
 }
 
 .food-library-menu-button > span { transform: translateY(-2px); }
+.food-library-menu-button:focus-visible { box-shadow: 0 0 0 2px rgba(36,66,53,.12); }
 .food-library-menu { top: 35px; right: 7px; }
 
 @media (max-width: 720px) {
@@ -1509,11 +1516,11 @@ button { color: inherit; }
   }
 
   .food-library-list article { min-height: 0; padding: 11px 10px 10px; }
-  .food-library-copy { padding-right: 25px; }
+  .food-library-copy { padding-right: 38px; }
   .food-library-list h2 { font-size: 16px; }
-  .food-library-list p { font-size: 9px; }
-  .food-library-menu-button { width: 26px; height: 23px; top: 6px; right: 6px; }
-  .food-library-menu { top: 33px; right: 6px; }
+  .food-library-list p { font-size: 8px; }
+  .food-library-menu-button { width: 38px; height: 38px; top: 1px; right: 1px; }
+  .food-library-menu { top: 39px; right: 5px; }
 }
 
 @media (max-width: 430px) {
@@ -1706,4 +1713,266 @@ button { color: inherit; }
   .long-term-toolbar,.diary-toolbar,.case-toolbar { grid-template-columns: 1fr; }.long-term-toolbar .search-box,.long-term-toolbar .result-count { grid-column: 1; }.long-term-toolbar .result-count { justify-self: start; }
   .long-term-prose { padding: 19px 15px; font-size: 14px; }.long-term-meta,.case-meta { grid-template-columns: 1fr; }
   .lucius-sections > a { grid-template-columns: 42px minmax(0,1fr) 13px; gap: 11px; }.lucius-sections > a > span { width: 42px; height: 42px; }
+}
+
+/* Mobile readability floor for information and controls. Decorative overlines stay compact. */
+@media (max-width: 720px) {
+  .mobile-nav a,
+  .button,
+  .text-button,
+  .section-link,
+  .segmented button,
+  .field > span,
+  .field > span small,
+  .field-caption,
+  .form-error,
+  .form-success,
+  .form-notice,
+  .result-count,
+  .loading-state,
+  .empty-state p,
+  .menu-popover button,
+  .section-heading > div > p,
+  .health-current-section > .section-heading > span {
+    font-size: var(--text-interactive-small);
+  }
+
+  .field input,
+  .field textarea,
+  .field select,
+  .search-box input,
+  .food-date-nav input,
+  .daily-energy-date input,
+  .drink-history-toolbar select,
+  .tracker-search input,
+  .tracker-filters input,
+  .tracker-filters select,
+  .relations-search input,
+  .memory-toolbar select,
+  .long-term-toolbar select {
+    font-size: var(--text-input-mobile);
+  }
+
+  .food-page .summary-links a,
+  .food-page .food-meal-filters button,
+  .food-page .food-log-card span,
+  .food-page .food-log-card p,
+  .food-page .food-log-card small,
+  .food-library-page .food-library-copy > span,
+  .food-library-page .food-library-copy > small,
+  .food-library-page .food-library-list p,
+  .food-library-page .food-library-menu button {
+    font-size: var(--text-readable-small);
+  }
+
+  .drink-limit-copy > span,
+  .drink-limit-copy strong,
+  .drink-limit-count strong small,
+  .drink-limit-count > span,
+  .drink-limit-empty,
+  .drink-limit-empty small,
+  .drink-record-copy > span,
+  .drink-record-brand,
+  .drink-record-copy small,
+  .drink-preference-grid span,
+  .drink-preference-grid strong,
+  .drink-history-toolbar span,
+  .drink-history-empty {
+    font-size: var(--text-readable-small);
+  }
+
+  .health-record-date small,
+  .health-type-label,
+  .health-status-pill,
+  .health-record-card p,
+  .health-current-main strong,
+  .health-current-main small,
+  .health-empty p,
+  .health-inline-empty,
+  .health-record-filters button,
+  .health-type-grid button span,
+  .health-editor-section-heading p,
+  .health-detail-page .back-link,
+  .health-detail-meta,
+  .health-detail-dates dt,
+  .health-detail-dates dd,
+  .health-detail-fields dt,
+  .health-detail-fields dd,
+  .daily-energy-heading p,
+  .daily-energy-date > span,
+  .daily-energy-loading,
+  .daily-energy-metric span,
+  .daily-energy-metric.missing strong,
+  .daily-energy-note,
+  .daily-energy-history-heading,
+  .daily-energy-history button span,
+  .daily-energy-history button strong,
+  .daily-energy-history button small,
+  .daily-energy-history-empty,
+  .training-log-main strong,
+  .training-log-main small,
+  .training-log-meta,
+  .training-body-field legend {
+    font-size: var(--text-readable-small);
+  }
+
+  .due-section .section-heading a,
+  .due-list strong,
+  .due-list small,
+  .due-actions button,
+  .snooze-menu button,
+  .snooze-menu label,
+  .cat-card p,
+  .cat-card small,
+  .cats-inline-empty,
+  .household-care-list small,
+  .routine-card-copy > span,
+  .button.compact,
+  .success-banner,
+  .routine-suggestions button,
+  .date-time-add,
+  .date-only-note,
+  .care-choice-grid span,
+  .cats-one-time-list strong,
+  .cats-one-time-list small,
+  .pet-profile-head small,
+  .cat-tabs button,
+  .cat-timeline-main time strong,
+  .cat-timeline-main time span,
+  .cat-timeline-main time small,
+  .cat-timeline-main > span > strong,
+  .cat-timeline-main p,
+  .cat-record-actions button,
+  .pet-reminders strong,
+  .pet-reminders small,
+  .pet-routine-list span,
+  .pet-routine-list small,
+  .routine-records strong,
+  .routine-records small,
+  .empty-copy,
+  .pet-profile-identity p,
+  .pet-profile-view dt,
+  .pet-profile-view dd,
+  .profile-notes p,
+  .danger-zone p,
+  .routine-status-card .routine-due,
+  .routine-status-card .routine-meta,
+  .cats-pets-primary .cat-card p,
+  .cats-add-pet,
+  .one-time-heading time,
+  .cats-recent small,
+  .cats-recent strong,
+  .cats-recent time,
+  .cat-record-loading,
+  .cat-record-details dt,
+  .cat-record-details dd,
+  .household-history summary,
+  .household-history strong,
+  .household-history small {
+    font-size: var(--text-readable-small);
+  }
+
+  .tracker-image-picker small,
+  .tracker-tabs button,
+  .tracker-property-insights span,
+  .tracker-property-insights small,
+  .tracker-property-insights p,
+  .tracker-icon-settings small,
+  .tracker-check,
+  .tracker-capture-mode strong,
+  .tracker-capture-mode small,
+  .tracker-card-head small,
+  .tracker-card-stats span,
+  .tracker-card p,
+  .tracker-stat-grid span,
+  .tracker-reminder-alert strong,
+  .tracker-reminder-alert small,
+  .tracker-entry-time strong,
+  .tracker-entry-time span,
+  .tracker-entry-list p,
+  .tracker-entry-list small,
+  .tracker-entry-values span,
+  .tracker-rule-list strong,
+  .tracker-rule-list small,
+  .tracker-inline-checks label,
+  .tracker-multi-field legend,
+  .tracker-multi-field label,
+  .tracker-danger-zone button,
+  .tracker-builder-help,
+  .tracker-builder-field > span,
+  .tracker-filter-buttons button {
+    font-size: var(--text-readable-small);
+  }
+
+  .relation-person-copy span,
+  .relation-person-copy small,
+  .relation-balance-card span,
+  .relation-balance-card strong,
+  .relation-check,
+  .relation-preview,
+  .relation-profile-title p,
+  .relation-summary span,
+  .relation-summary p,
+  .relation-profile-facts span,
+  .relation-profile-facts p,
+  .relation-time time,
+  .relation-time span,
+  .relation-event-card p,
+  .relation-event-card details,
+  .relation-event-actions button,
+  .relation-note-list p,
+  .relation-note-list time,
+  .relation-open-advances article {
+    font-size: var(--text-readable-small);
+  }
+
+  .project-row p,
+  .project-row-counts,
+  .project-row-state,
+  .project-row time,
+  .item-status,
+  .project-item-list strong,
+  .project-item-list small,
+  .project-item-list em,
+  .project-item-list time,
+  .project-timeline-date,
+  .project-timeline small,
+  .project-timeline p,
+  .field-note,
+  .lifecycle dt,
+  .lifecycle dd {
+    font-size: var(--text-readable-small);
+  }
+
+  .notification-list strong,
+  .notification-list p,
+  .notification-list time,
+  .media-card small,
+  .media-card p,
+  .media-filter-count,
+  .media-viewing-copy span,
+  .media-viewing-copy time,
+  .chronicle-row-date,
+  .chronicle-row-excerpt,
+  .chronicle-entry-meta,
+  .memo-row-copy small,
+  .memo-row-copy > span:nth-child(2),
+  .memo-row > time,
+  .long-term-meta dt,
+  .long-term-meta dd,
+  .suggested-tags > span,
+  .suggested-tags button,
+  .lucius-sections p,
+  .diary-timeline time,
+  .diary-timeline strong,
+  .case-view-tabs button,
+  .case-title small,
+  .case-count small,
+  .case-severity,
+  .case-status,
+  .case-list time,
+  .case-detail-summary span,
+  .case-detail-grid p {
+    font-size: var(--text-readable-small);
+  }
 }

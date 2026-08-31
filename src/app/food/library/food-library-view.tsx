@@ -93,7 +93,7 @@ export function FoodLibraryView() {
     await load();
   }
 
-  return <div className="page">
+  return <div className="page food-library-page">
     <PageHeader eyebrow="FOOD" title="Food Library" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Item</button>} />
 
     {showForm && <FormSheet title={editingId ? "Edit Item" : "Add Item"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "Save Changes" : "Add Item"} busy={saving}><form id="food-library-form" className="editor-card compact-editor" onSubmit={submit}>
@@ -113,7 +113,7 @@ export function FoodLibraryView() {
 
     {!showForm && error && <p className="form-error">{error}</p>}
     {notice && <p className="form-notice">{notice}</p>}
-    <label className="search-box library-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or brand…" /></label>
+    <div className="food-library-content-grid"><label className="search-box library-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or brand…" /></label>
 
     {items.length ? <div className="food-library-list">{items.map((item) => <article key={item.id}>
       <button type="button" className="food-library-copy" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>
@@ -123,7 +123,7 @@ export function FoodLibraryView() {
       </button>
       <button type="button" className="food-library-menu-button" aria-label={`Actions for ${item.name}`} aria-expanded={openMenuId === item.id} onClick={() => setOpenMenuId((current) => current === item.id ? null : item.id)}><span aria-hidden="true">···</span></button>
       {openMenuId === item.id && <div className="food-library-menu"><button type="button" onClick={() => openEdit(item)}><Icon name="edit" />Edit</button><button type="button" className="danger" onClick={() => void remove(item)}><Icon name="trash" />Remove</button></div>}
-    </article>)}</div> : <div className="empty-state compact-empty"><h2>{query ? "No matching items" : "Food Library is empty"}</h2></div>}
+    </article>)}</div> : <div className="empty-state compact-empty"><h2>{query ? "No matching items" : "Food Library is empty"}</h2></div>}</div>
     <Link className="section-link" href="/food">Back to Food <Icon name="arrow" /></Link>
   </div>;
 }
