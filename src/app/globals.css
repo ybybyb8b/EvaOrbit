@@ -1421,20 +1421,22 @@ button { color: inherit; }
   min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .food-library-list article {
   min-height: 0;
-  height: auto;
+  height: 100%;
   padding: 12px 11px 11px;
   border: 0;
   border-radius: 15px;
-  display: block;
+  display: flex;
+  align-items: stretch;
   background: rgba(232,233,223,.72);
 }
 
 .food-library-copy {
+  flex: 1;
   width: 100%;
   min-width: 0;
   min-height: auto;
@@ -1455,14 +1457,20 @@ button { color: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.2;
-  letter-spacing: .045em;
+  letter-spacing: .02em;
 }
 
 .food-library-list h2 {
   min-height: 0;
   margin: 7px 0 8px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
   font-size: 17px;
   line-height: 1.22;
@@ -1471,7 +1479,9 @@ button { color: inherit; }
 .food-library-list p {
   min-height: 0;
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--soft-muted);
   font-size: 8px;
   line-height: 1.42;
@@ -1517,6 +1527,7 @@ button { color: inherit; }
 
   .food-library-list article { min-height: 0; padding: 11px 10px 10px; }
   .food-library-copy { padding-right: 38px; }
+  .food-library-list article > .food-library-copy > span { font-size: 15px; }
   .food-library-list h2 { font-size: 16px; }
   .food-library-list p { font-size: 8px; }
   .food-library-menu-button { width: 38px; height: 38px; top: 1px; right: 1px; }
@@ -1758,7 +1769,6 @@ button { color: inherit; }
   .food-page .food-log-card span,
   .food-page .food-log-card p,
   .food-page .food-log-card small,
-  .food-library-page .food-library-copy > span,
   .food-library-page .food-library-copy > small,
   .food-library-page .food-library-list p,
   .food-library-page .food-library-menu button {

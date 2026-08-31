@@ -10,11 +10,9 @@ import type { ApiError, FoodCategory, FoodDataSource, FoodLibraryItem, FoodRefer
 const empty = { name: "", brand: "", category: "other" as FoodCategory, defaultPortion: "", referenceType: "per_serving" as FoodReferenceType, referenceEnergyKj: "", referenceKcal: "", servingWeight: "", servingKcal: "", dataSource: "manual" as FoodDataSource, notes: "" };
 type Draft = typeof empty;
 
-const sourceLabels: Record<FoodDataSource, string> = {
-  package_label: "Package label",
+const cardSourceLabels: Partial<Record<FoodDataSource, string>> = {
   official: "Official",
   estimated: "Estimated",
-  manual: "Manual",
 };
 
 function draftFromItem(item: FoodLibraryItem): Draft {
@@ -34,12 +32,14 @@ function draftFromItem(item: FoodLibraryItem): Draft {
 }
 
 function libraryItemDetails(item: FoodLibraryItem) {
-  const servingDetails = [
-    item.defaultPortion,
-    item.referenceKcal !== null ? `${item.referenceKcal} kcal` : "",
-    item.servingKcal !== null ? `${item.servingKcal} kcal / serving` : "",
-  ].filter(Boolean).join(" · ");
-  return `${servingDetails || "No serving data"} · ${sourceLabels[item.dataSource]}`;
+  const portion = item.defaultPortion.trim();
+  const referenceSuffix = item.referenceType === "per_100g" ? " / 100 g" : item.referenceType === "per_100ml" ? " / 100 ml" : " / serving";
+  const kcal = item.servingKcal !== null
+    ? `${item.servingKcal} kcal${portion ? "" : " / serving"}`
+    : item.referenceKcal !== null
+      ? `${item.referenceKcal} kcal${referenceSuffix}`
+      : "";
+  return [portion, kcal].filter(Boolean).join(" · ") || cardSourceLabels[item.dataSource] || "";
 }
 
 export function FoodLibraryView() {
@@ -115,15 +115,18 @@ export function FoodLibraryView() {
     {notice && <p className="form-notice">{notice}</p>}
     <div className="food-library-content-grid"><label className="search-box library-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or brand…" /></label>
 
-    {items.length ? <div className="food-library-list">{items.map((item) => <article key={item.id}>
-      <button type="button" className="food-library-copy" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>
-        <span>{item.brand || "No brand"}</span>
-        <h2>{item.name}</h2>
-        <p>{libraryItemDetails(item)}</p>
-      </button>
-      <button type="button" className="food-library-menu-button" aria-label={`Actions for ${item.name}`} aria-expanded={openMenuId === item.id} onClick={() => setOpenMenuId((current) => current === item.id ? null : item.id)}><span aria-hidden="true">···</span></button>
-      {openMenuId === item.id && <div className="food-library-menu"><button type="button" onClick={() => openEdit(item)}><Icon name="edit" />Edit</button><button type="button" className="danger" onClick={() => void remove(item)}><Icon name="trash" />Remove</button></div>}
-    </article>)}</div> : <div className="empty-state compact-empty"><h2>{query ? "No matching items" : "Food Library is empty"}</h2></div>}</div>
+    {items.length ? <div className="food-library-list">{items.map((item) => {
+      const details = libraryItemDetails(item);
+      return <article key={item.id}>
+        <button type="button" className="food-library-copy" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>
+          <span>{item.brand || "No brand"}</span>
+          <h2>{item.name}</h2>
+          {details && <p>{details}</p>}
+        </button>
+        <button type="button" className="food-library-menu-button" aria-label={`Actions for ${item.name}`} aria-expanded={openMenuId === item.id} onClick={() => setOpenMenuId((current) => current === item.id ? null : item.id)}><span aria-hidden="true">···</span></button>
+        {openMenuId === item.id && <div className="food-library-menu"><button type="button" onClick={() => openEdit(item)}><Icon name="edit" />Edit</button><button type="button" className="danger" onClick={() => void remove(item)}><Icon name="trash" />Remove</button></div>}
+      </article>;
+    })}</div> : <div className="empty-state compact-empty"><h2>{query ? "No matching items" : "Food Library is empty"}</h2></div>}</div>
     <Link className="section-link" href="/food">Back to Food <Icon name="arrow" /></Link>
   </div>;
 }
