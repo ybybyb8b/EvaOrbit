@@ -4,11 +4,11 @@ import { buildTimelineEvents } from "./timeline.ts";
 import type { DrinkLog, FoodLog, HealthRecord, Tracker, TrackerEntry } from "./types.ts";
 
 const food: FoodLog = {
-  id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home",
+  id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
   estimatedKcal: 300, kcalMin: 260, kcalMax: 340, confidence: "medium", notes: "", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "",
 };
 const drink: DrinkLog = {
-  id: 3, occurredAt: "2026-08-26T06:00:00.000Z", name: "咖啡", brand: "", drinkType: "coffee", volumeMl: 300, sugarLevel: "none",
+  id: 3, occurredAt: "2026-08-26T06:00:00.000Z", occurredHasExplicitTime: true, name: "咖啡", brand: "", drinkType: "coffee", volumeMl: 300, sugarLevel: "none", temperature: null, rating: null,
   caffeineMg: 90, estimatedKcal: 5, kcalMin: 0, kcalMax: 10, confidence: "high", foodLibraryId: null, notes: "", createdAt: "", updatedAt: "",
 };
 const tracker: Tracker = {

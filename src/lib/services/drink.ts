@@ -2,6 +2,7 @@ import "server-only";
 import { getRepository } from "../repositories";
 import type { NewDrinkLimit, NewDrinkLog } from "../repositories/types";
 import { buildDrinkInputSuggestions } from "../drink-suggestions";
+import { buildDrinkPreferenceSummary } from "../drink-preferences";
 import { calculateLimitStatus } from "../nutrition";
 import { dateInEvaOrbit, dateRange, monthRange, weekRange } from "../time";
 
@@ -13,6 +14,7 @@ export async function listDrinkLogs(input: { date?: string; query?: string; from
 }
 export async function getTodayDrinks() { return listDrinkLogs({ date: dateInEvaOrbit() }); }
 export async function getDrinkInputSuggestions() { return buildDrinkInputSuggestions(await (await getRepository()).listDrinkLogs()); }
+export async function getDrinkPreferenceSummary() { return buildDrinkPreferenceSummary(await (await getRepository()).listDrinkLogs()); }
 export async function getDrinkLimits() { return (await getRepository()).listDrinkLimits(); }
 export async function checkDrinkLimits(at = new Date()) {
   const repository = await getRepository();

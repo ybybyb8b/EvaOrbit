@@ -51,12 +51,18 @@ test("normalizes core life capture records", () => {
   const food = parseNewFoodLog({ occurredAt: "2026-08-25T12:00:00+08:00", title: "面", mealType: "lunch", estimatedKcal: 420, kcalMin: 360, kcalMax: 520 });
   assert.equal(food.occurredAt, "2026-08-25T04:00:00.000Z");
   assert.equal(food.confidence, "low");
+  assert.equal(parseNewFoodLog({ title: "面", scene: "delivery", rating: "love" }).rating, "love");
+  assert.throws(() => parseNewFoodLog({ title: "面", scene: "home", rating: "love" }), /外卖或外食/);
   assert.throws(() => parseNewFoodLog({ title: "面", kcalMin: 600, kcalMax: 400 }), /热量下限/);
   const drink = parseNewDrinkLog({ name: " 拿铁 ", brand: " 品牌 A ", drinkType: "coffee", volumeMl: 350, sugarLevel: "半糖" });
   assert.equal(drink.name, "拿铁");
   assert.equal(drink.brand, "品牌 A");
   assert.equal(drink.volumeMl, 350);
   assert.equal(drink.sugarLevel, "半糖");
+  const datedDrink = parseNewDrinkLog({ name: "冰茶", occurredAt: "2026-08-20T12:00:00+08:00", occurredHasExplicitTime: false, temperature: "less_ice", rating: "good" });
+  assert.equal(datedDrink.occurredHasExplicitTime, false);
+  assert.equal(datedDrink.temperature, "less_ice");
+  assert.equal(datedDrink.rating, "good");
   assert.throws(() => parseNewDrinkLog({ name: "拿铁", sugarLevel: "五分糖" }), /糖度/);
 });
 

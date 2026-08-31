@@ -6,7 +6,7 @@ import { monthRange } from "./time.ts";
 import type { DrinkLog } from "./types.ts";
 
 function drink(id: number, occurredAt: string, name: string, brand: string, notes = ""): DrinkLog {
-  return { id, occurredAt, name, brand, drinkType: "coffee", volumeMl: null, sugarLevel: "", caffeineMg: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", foodLibraryId: null, notes, createdAt: occurredAt, updatedAt: occurredAt };
+  return { id, occurredAt, occurredHasExplicitTime: true, name, brand, drinkType: "coffee", volumeMl: null, sugarLevel: "", temperature: null, rating: null, caffeineMg: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", foodLibraryId: null, notes, createdAt: occurredAt, updatedAt: occurredAt };
 }
 
 test("ranks trimmed Drink name and brand history by frequency then recency", () => {

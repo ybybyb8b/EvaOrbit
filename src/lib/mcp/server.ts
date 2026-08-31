@@ -8,7 +8,7 @@ import { createDrinkLog, deleteDrinkLog, listDrinkLogs, updateDrinkLog } from ".
 import { createFoodLog, deleteFoodLog, listFoodLogs, removeFoodLibraryItem, searchFoodLibrary, updateFoodLog, updateFoodLibraryItem, upsertFoodLibraryItem } from "../services/food";
 import { getDailyNutritionSummary, updateDailyEnergy } from "../services/nutrition";
 import { createTrackerEntry, getTrackerDetail, listTrackerSummaries } from "../services/tracker";
-import { SUGAR_LEVELS } from "../types";
+import { DRINK_TEMPERATURES, SUGAR_LEVELS, TASTE_RATINGS } from "../types";
 import type { DrinkLog, FoodLibraryItem, FoodLog } from "../types";
 import { parseDailyEnergy, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodLogPatch, parseNewDrinkLog, parseNewFoodLog, parseNewTrackerEntry, ValidationError } from "../validation";
 import { resourceRegistry } from "./resource-registry.server";
@@ -24,6 +24,8 @@ const scene = z.enum(["home", "delivery", "restaurant", "packaged_food", "other"
 const confidence = z.enum(["high", "medium", "low"]);
 const drinkType = z.enum(["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"]);
 const sugarLevel = z.enum(SUGAR_LEVELS).or(z.literal(""));
+const tasteRating = z.enum(TASTE_RATINGS);
+const drinkTemperature = z.enum(DRINK_TEMPERATURES);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.");
 const occurredAt = z.string().datetime({ offset: true });
 const optionalKcal = z.number().min(0).max(100000).nullable().optional();
@@ -34,11 +36,12 @@ const foodLibraryDataSource = z.enum(["package_label", "official", "estimated", 
 const foodFields = {
   occurred_at: occurredAt.optional(), meal_type: mealType.optional(), title: z.string().trim().min(1).max(200),
   description: z.string().max(4000).optional(), portion: z.string().max(200).optional(), scene: scene.optional(),
+  rating: tasteRating.nullable().optional(),
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };
 const drinkFields = {
-  occurred_at: occurredAt.optional(), name: z.string().trim().min(1).max(200), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
-  volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: sugarLevel.optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
+  occurred_at: occurredAt.optional(), occurred_has_explicit_time: z.boolean().optional(), name: z.string().trim().min(1).max(200), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
+  volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: sugarLevel.optional(), temperature: drinkTemperature.nullable().optional(), rating: tasteRating.nullable().optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };
 const foodLibraryFields = {
@@ -51,11 +54,11 @@ const foodLibraryFields = {
 const foodLibraryPatchFields = { ...foodLibraryFields, name: foodLibraryFields.name.optional() };
 
 function compactFood(record: FoodLog) {
-  return { id: record.id, occurred_at: record.occurredAt, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { id: record.id, occurred_at: record.occurredAt, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactDrink(record: DrinkLog) {
-  return { id: record.id, occurred_at: record.occurredAt, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { id: record.id, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, temperature: record.temperature, rating: record.rating, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactFoodLibrary(item: FoodLibraryItem) {
@@ -95,11 +98,11 @@ async function runTool(action: () => Promise<Record<string, unknown>>): Promise<
 }
 
 function foodInput(input: z.infer<z.ZodObject<typeof foodFields>>) {
-  return { occurredAt: input.occurred_at, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { occurredAt: input.occurred_at, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function drinkInput(input: z.infer<z.ZodObject<typeof drinkFields>>) {
-  return { occurredAt: input.occurred_at, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, temperature: input.temperature, rating: input.rating, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function foodLibraryInput(input: Record<string, unknown>) {

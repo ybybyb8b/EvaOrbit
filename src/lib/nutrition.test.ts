@@ -4,8 +4,8 @@ import test from "node:test";
 import { calculateDailyNutrition, calculateLimitStatus, limitState } from "./nutrition.ts";
 import type { DrinkLimit, DrinkLog, FoodLog } from "./types.ts";
 
-const food = (values: Partial<FoodLog>): FoodLog => ({ id: 1, occurredAt: "2026-08-25T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "", scene: "home", estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", notes: "", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "", ...values });
-const drink = (values: Partial<DrinkLog>): DrinkLog => ({ id: 1, occurredAt: "2026-08-25T05:00:00.000Z", name: "拿铁", brand: "", drinkType: "coffee", volumeMl: 350, sugarLevel: "", caffeineMg: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "high", foodLibraryId: null, notes: "", createdAt: "", updatedAt: "", ...values });
+const food = (values: Partial<FoodLog>): FoodLog => ({ id: 1, occurredAt: "2026-08-25T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "", scene: "home", estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", notes: "", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "", ...values, rating: values.rating ?? null });
+const drink = (values: Partial<DrinkLog>): DrinkLog => ({ id: 1, occurredAt: "2026-08-25T05:00:00.000Z", name: "拿铁", brand: "", drinkType: "coffee", volumeMl: 350, sugarLevel: "", caffeineMg: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "high", foodLibraryId: null, notes: "", createdAt: "", updatedAt: "", ...values, occurredHasExplicitTime: values.occurredHasExplicitTime ?? true, temperature: values.temperature ?? null, rating: values.rating ?? null });
 
 test("sums food and drink estimates while preserving uncertainty range", () => {
   const result = calculateDailyNutrition("2026-08-25", [food({ estimatedKcal: 500, kcalMin: 430, kcalMax: 620 })], [drink({ estimatedKcal: 180, kcalMin: 150, kcalMax: 220 })], { restingEnergyKcal: 1500, activeEnergyKcal: 300, notes: "" });

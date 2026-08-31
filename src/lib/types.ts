@@ -284,6 +284,8 @@ export interface TrackerSummary extends Tracker {
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "late_night";
 export type FoodScene = "home" | "delivery" | "restaurant" | "packaged_food" | "other";
+export const TASTE_RATINGS = ["love", "good", "neutral", "dislike"] as const;
+export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
   id: number;
@@ -293,6 +295,7 @@ export interface FoodLog {
   description: string;
   portion: string;
   scene: FoodScene;
+  rating: TasteRating | null;
   estimatedKcal: number | null;
   kcalMin: number | null;
   kcalMax: number | null;
@@ -501,14 +504,19 @@ export interface LuciusCase extends MigrationTrace {
 export type DrinkType = "coffee" | "milk_tea" | "tea" | "soda" | "juice" | "water" | "alcohol" | "other";
 export const SUGAR_LEVELS = ["无糖", "微糖", "半糖", "少糖", "标准", "多糖"] as const;
 export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
+export const DRINK_TEMPERATURES = ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const;
+export type DrinkTemperature = typeof DRINK_TEMPERATURES[number];
 export interface DrinkLog {
   id: number;
   occurredAt: string;
+  occurredHasExplicitTime: boolean;
   name: string;
   brand: string;
   drinkType: DrinkType;
   volumeMl: number | null;
   sugarLevel: string;
+  temperature: DrinkTemperature | null;
+  rating: TasteRating | null;
   caffeineMg: number | null;
   estimatedKcal: number | null;
   kcalMin: number | null;
@@ -524,6 +532,16 @@ export type LimitPeriod = "daily" | "weekly" | "monthly";
 export interface DrinkInputSuggestions {
   names: string[];
   brands: string[];
+}
+export interface DrinkPreferenceSummary {
+  totalRecords: number;
+  commonTypes: Array<{ value: DrinkType; count: number }>;
+  commonDrinks: Array<{ name: string; brand: string; count: number }>;
+  preferredDrinks: Array<{ name: string; brand: string; count: number; score: number; ratingCount: number }>;
+  commonBrands: Array<{ value: string; count: number }>;
+  sugarTendency: Array<{ value: string; count: number }>;
+  temperatureTendency: Array<{ value: DrinkTemperature; count: number }>;
+  recent: DrinkLog[];
 }
 export interface DrinkLimit {
   id: number;

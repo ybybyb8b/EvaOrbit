@@ -15,7 +15,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     href: "/food",
     relatedPeople: [],
     relatedPets: [],
-    metadata: { mealType: item.mealType, scene: item.scene, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
+    metadata: { mealType: item.mealType, scene: item.scene, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
   }));
   const drinkEvents: TimelineEvent[] = drinks.map((item) => ({
     id: `drink:${item.id}`,
@@ -25,12 +25,12 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     title: item.name,
     detail: item.volumeMl ? `${item.volumeMl} ml` : item.brand || "饮品记录",
     occurredAt: item.occurredAt,
-    hasExplicitTime: true,
+    hasExplicitTime: item.occurredHasExplicitTime,
     endAt: null,
     href: "/drinks",
     relatedPeople: [],
     relatedPets: [],
-    metadata: { drinkType: item.drinkType, brand: item.brand, volumeMl: item.volumeMl, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
+    metadata: { drinkType: item.drinkType, brand: item.brand, volumeMl: item.volumeMl, sugarLevel: item.sugarLevel, temperature: item.temperature, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
   }));
   const trackerMap = new Map(trackers.map((tracker) => [tracker.id, tracker]));
   const trackerEvents: TimelineEvent[] = trackerEntries.map((entry) => {

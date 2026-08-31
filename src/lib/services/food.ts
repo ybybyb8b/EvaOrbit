@@ -1,7 +1,8 @@
 import "server-only";
 import { getRepository } from "../repositories";
 import type { FoodLibrarySearchOptions, NewFoodLibraryItem, NewFoodLog } from "../repositories/types";
-import type { FoodLibraryItem } from "../types";
+import type { FoodLibraryItem, FoodLog } from "../types";
+import { ValidationError } from "../validation";
 import { dateInEvaOrbit, dateRange } from "../time";
 
 export async function listFoodLogs(input: { date?: string; query?: string; mealType?: string; from?: string; to?: string } = {}) {
@@ -10,7 +11,17 @@ export async function listFoodLogs(input: { date?: string; query?: string; mealT
 }
 export async function getTodayFood() { return listFoodLogs({ date: dateInEvaOrbit() }); }
 export async function createFoodLog(input: NewFoodLog) { return (await getRepository()).createFoodLog(input); }
-export async function updateFoodLog(id: number, input: Record<string, unknown>) { return (await getRepository()).updateFoodLog(id, input); }
+export async function updateFoodLog(id: number, input: Record<string, unknown>) {
+  const repository = await getRepository(); const existing = await repository.getFoodLog(id); if (!existing) return null;
+  const scene = (input.scene ?? existing.scene) as FoodLog["scene"];
+  const rating = input.rating === undefined ? existing.rating : input.rating;
+  if (scene !== "delivery" && scene !== "restaurant") {
+    if (input.rating !== undefined && input.rating !== null) throw new ValidationError("只有外卖或外食记录可以填写评价");
+    input = { ...input, rating: null };
+  }
+  else if (rating !== null && !["love", "good", "neutral", "dislike"].includes(String(rating))) throw new ValidationError("评价不正确");
+  return repository.updateFoodLog(id, input);
+}
 export async function deleteFoodLog(id: number) { return (await getRepository()).deleteFoodLog(id); }
 export async function searchFoodLibrary(query = "", brand = "", options?: FoodLibrarySearchOptions) { return (await getRepository()).searchFoodLibrary(query, brand, options); }
 export async function upsertFoodLibraryItem(input: NewFoodLibraryItem) { return (await getRepository()).upsertFoodLibraryItem(input); }

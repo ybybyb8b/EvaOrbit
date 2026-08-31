@@ -52,3 +52,12 @@ test("daily_energy_upsert reuses the existing validated nutrition service", () =
   assert.match(source, /parseDailyEnergy\(/);
   assert.match(source, /updateDailyEnergy\(parsed\.date, parsed\)/);
 });
+
+test("Food and Drink MCP CRUD expose scene, rating, temperature and Drink time precision",()=>{
+  const source=readFileSync(new URL("./mcp/server.ts",import.meta.url),"utf8");
+  assert.match(source,/scene: record\.scene, rating: record\.rating/);
+  assert.match(source,/occurred_has_explicit_time: record\.occurredHasExplicitTime/);
+  assert.match(source,/temperature: record\.temperature, rating: record\.rating/);
+  assert.match(source,/occurred_has_explicit_time: z\.boolean\(\)\.optional\(\)/);
+  assert.match(source,/rating: tasteRating\.nullable\(\)\.optional\(\)/);
+});
