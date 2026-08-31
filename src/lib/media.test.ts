@@ -10,9 +10,9 @@ function fakeMediaRepository(){
   let itemId=0,viewingId=0;
   const items:MediaItem[]=[],viewings:MediaViewing[]=[];
   const repository={
-    async listMediaItems(input:MediaListInput={}){return items.filter(item=>(!input.query||item.title.includes(input.query))&&(!input.mediaType||item.mediaType===input.mediaType));},
+    async listMediaItems(input:MediaListInput={}){return items.filter(item=>(!input.query||item.title.includes(input.query))&&(!input.mediaType||item.mediaType===input.mediaType)&&(!input.status||item.status===input.status)&&(!input.rating||item.rating===input.rating)&&(input.favorite===undefined||item.isFavorite===input.favorite)&&(!input.seriesId||item.seriesId===input.seriesId));},
     async getMediaItem(id:number){return items.find(item=>item.id===id)??null;},
-    async createMediaItem(input:NewMediaItem){const item={...input,id:++itemId,createdAt:"now",updatedAt:"now"};items.push(item);return item;},
+    async createMediaItem(input:NewMediaItem){const item={...input,seriesName:null,id:++itemId,createdAt:"now",updatedAt:"now"};items.push(item);return item;},
     async updateMediaItem(id:number,input:MediaItemPatch){const item=items.find(value=>value.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"later"});return item;},
     async deleteMediaItem(id:number){const index=items.findIndex(item=>item.id===id);if(index<0)return false;items.splice(index,1);for(let offset=viewings.length-1;offset>=0;offset--)if(viewings[offset].mediaId===id)viewings.splice(offset,1);return true;},
     async listMediaViewings(mediaId?:number){return viewings.filter(viewing=>mediaId===undefined||viewing.mediaId===mediaId).sort((a,b)=>a.mediaId-b.mediaId||a.viewingNumber-b.viewingNumber);},
@@ -33,11 +33,15 @@ test("validates Media type, rating and true date-only input",()=>{
   assert.throws(()=>parseNewMedia({title:"X",mediaType:"variety",watchedDate:"2026-08-29"}));
   assert.throws(()=>parseNewMedia({title:"X",mediaType:"movie",watchedDate:"2026-02-30"}));
   assert.throws(()=>parseMediaPatch({rating:"10/10"}));
+  const season=parseNewMedia({title:"Black Mirror",mediaType:"tv",status:"completed",watchedDate:"2026-08-29",seasonNumber:3,seasonTitle:"Part 2",isFavorite:true});
+  assert.equal(season.item.seasonNumber,3);assert.equal(season.item.isFavorite,true);
+  assert.throws(()=>parseNewMedia({title:"Movie",mediaType:"movie",status:"completed",watchedDate:"2026-08-29",seasonNumber:1}),/Season/);
+  assert.equal(parseNewMedia({title:"Next",mediaType:"movie",status:"planned"}).watchedDate,null);
 });
 
 test("creates first viewing, manages rewatch numbering, edits and deletes consistently",async()=>{
   const{repository}=fakeMediaRepository();
-  const created=await createMediaWithRepository(repository,{item:{title:"Healer",mediaType:"tv",rating:"dope+",note:null,coverUrl:null},watchedDate:"2024-03-18"});
+  const created=await createMediaWithRepository(repository,{item:{title:"Healer",mediaType:"tv",status:"completed",rating:"dope+",isFavorite:true,note:null,coverUrl:null,seriesId:null,seasonNumber:1,seasonTitle:null},watchedDate:"2024-03-18"});
   assert.deepEqual(created.viewings.map(viewing=>[viewing.viewingNumber,viewing.watchedDate]),[[1,"2024-03-18"]]);
   const second=await addMediaRewatchWithRepository(repository,created.id,"2025-01-01");
   const third=await addMediaRewatchWithRepository(repository,created.id,"2026-08-29");
@@ -54,8 +58,8 @@ test("creates first viewing, manages rewatch numbering, edits and deletes consis
 
 test("list filtering and migration preserve ownership and RLS",async()=>{
   const{repository}=fakeMediaRepository();
-  await createMediaWithRepository(repository,{item:{title:"Movie A",mediaType:"movie",rating:null,note:null,coverUrl:null},watchedDate:"2026-01-01"});
-  await createMediaWithRepository(repository,{item:{title:"Anime B",mediaType:"anime",rating:"mid-",note:null,coverUrl:null},watchedDate:"2026-02-01"});
+  await createMediaWithRepository(repository,{item:{title:"Movie A",mediaType:"movie",status:"completed",rating:null,isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:null,seasonTitle:null},watchedDate:"2026-01-01"});
+  await createMediaWithRepository(repository,{item:{title:"Anime B",mediaType:"anime",status:"completed",rating:"mid-",isFavorite:false,note:null,coverUrl:null,seriesId:null,seasonNumber:2,seasonTitle:"Part 2"},watchedDate:"2026-02-01"});
   assert.deepEqual((await listMediaWithRepository(repository,{mediaType:"anime"})).map(item=>item.title),["Anime B"]);
   assert.deepEqual((await listMediaWithRepository(repository,{query:"Movie"})).map(item=>item.title),["Movie A"]);
   const sql=readFileSync(new URL("../../supabase/migrations/202608290002_media.sql",import.meta.url),"utf8");
@@ -69,4 +73,11 @@ test("list filtering and migration preserve ownership and RLS",async()=>{
   assert.match(sql,/grant update \(watched_date\)/i);
   assert.doesNotMatch(sql,/grant all/i);
   assert.doesNotMatch(sql,/service_role/i);
+  const collectionSql=readFileSync(new URL("../../supabase/migrations/202608310004_media_collection.sql",import.meta.url),"utf8");
+  assert.match(collectionSql,/create table if not exists public\.media_series/);
+  assert.match(collectionSql,/foreign key \(series_id, user_id\)/);
+  assert.match(collectionSql,/season_number/);
+  assert.match(collectionSql,/default 'completed'/);
+  assert.match(collectionSql,/media-covers/);
+  assert.match(collectionSql,/enable row level security/);
 });

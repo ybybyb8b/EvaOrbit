@@ -1,0 +1,19 @@
+import "server-only";
+
+import fs from "node:fs/promises";
+import path from "node:path";
+import { detectAvatarImage, MAX_AVATAR_BYTES } from "../avatar";
+import { allowedEmail, usesSupabase } from "../config";
+import { getRepository } from "../repositories";
+import { createSupabaseServerClient } from "../supabase/server";
+import { ValidationError } from "../validation";
+
+const extensions = ["jpg", "png", "webp"];
+function extension(value:string|null){try{const result=new URL(value??"","http://local").searchParams.get("type")??"";return extensions.includes(result)?result:"";}catch{return"";}}
+function directory(){return path.resolve(/* turbopackIgnore: true */process.env.EVAORBIT_MEDIA_COVER_DIR||path.join(process.cwd(),"data","media-covers"));}
+function local(mediaId:number,ext:string){const dir=directory(),target=path.resolve(dir,`${mediaId}.${ext}`);if(path.dirname(target)!==dir)throw new Error("Media cover path is unsafe");return{dir,target};}
+async function identity(){const client=await createSupabaseServerClient();const{data,error}=await client.auth.getClaims();if(error)throw new Error("Could not verify Media cover access");const userId=typeof data?.claims?.sub==="string"?data.claims.sub:"",email=typeof data?.claims?.email==="string"?data.claims.email.toLowerCase():"";if(!userId||email!==allowedEmail())throw new Error("Media cover access denied");return{client,userId};}
+
+export async function saveMediaCover(mediaId:number,file:File){if(file.size<=0||file.size>MAX_AVATAR_BYTES)throw new ValidationError("Cover must be smaller than 4 MB");const bytes=new Uint8Array(await file.arrayBuffer()),kind=detectAvatarImage(bytes);if(!kind)throw new ValidationError("Cover must be a real JPG, PNG, or WebP image");const repo=await getRepository(),item=await repo.getMediaItem(mediaId);if(!item)throw new ValidationError("Media not found");const previous=extension(item.coverUrl);if(usesSupabase()){const{client,userId}=await identity(),objectPath=`${userId}/${mediaId}.${kind.extension}`;const{error}=await client.storage.from("media-covers").upload(objectPath,bytes,{contentType:kind.mime,upsert:true,cacheControl:"300"});if(error)throw new Error("Could not upload Media cover");if(previous&&previous!==kind.extension)await client.storage.from("media-covers").remove([`${userId}/${mediaId}.${previous}`]);}else{const{dir,target}=local(mediaId,kind.extension);await fs.mkdir(dir,{recursive:true});const temporary=`${target}.uploading`;await fs.writeFile(temporary,bytes,{flag:"w"});await fs.rm(target,{force:true});await fs.rename(temporary,target);if(previous&&previous!==kind.extension)await fs.rm(local(mediaId,previous).target,{force:true});}return repo.updateMediaItem(mediaId,{coverUrl:`/api/media/${mediaId}/cover?type=${kind.extension}&v=${Date.now()}`});}
+export async function readMediaCover(mediaId:number){const item=await(await getRepository()).getMediaItem(mediaId),ext=extension(item?.coverUrl??null);if(!ext)return null;const mime=ext==="jpg"?"image/jpeg":`image/${ext}`;if(usesSupabase()){const{client,userId}=await identity();const{data,error}=await client.storage.from("media-covers").download(`${userId}/${mediaId}.${ext}`);if(error||!data)return null;return{bytes:new Uint8Array(await data.arrayBuffer()),mime};}try{return{bytes:new Uint8Array(await fs.readFile(/* turbopackIgnore: true */local(mediaId,ext).target)),mime};}catch{return null;}}
+export async function resetMediaCover(mediaId:number){const repo=await getRepository(),item=await repo.getMediaItem(mediaId);if(!item)return null;const ext=extension(item.coverUrl);if(ext){if(usesSupabase()){const{client,userId}=await identity();await client.storage.from("media-covers").remove([`${userId}/${mediaId}.${ext}`]);}else await fs.rm(local(mediaId,ext).target,{force:true});}return repo.updateMediaItem(mediaId,{coverUrl:null});}

@@ -1,4 +1,4 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType, TrainingBodyPart, TrainingType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType, TrainingBodyPart, TrainingType } from "./types";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 
 export class ValidationError extends Error {}
@@ -37,6 +37,7 @@ export function dateOnly(value: unknown, field = "日期") {
 }
 
 const mediaTypes = ["movie", "tv", "anime", "documentary", "other"] as const;
+const mediaStatuses = ["planned", "watching", "completed", "paused", "dropped"] as const;
 const mediaRatingPattern = /^(goat|dope|mid|nope|shit)[+-]?$/;
 function mediaRating(value: unknown): MediaRating | null {
   if (value === null || value === undefined || value === "") return null;
@@ -47,32 +48,61 @@ function nullableMediaText(value: unknown, field: string, max: number) {
   if (value === null || value === undefined || value === "") return null;
   return text(value, field, max, false) || null;
 }
+function nullablePositiveInteger(value: unknown, field: string) {
+  if (value === null || value === undefined || value === "") return null;
+  const result = Number(value);
+  if (!Number.isSafeInteger(result) || result < 1 || result > 999) throw new ValidationError(`${field}格式不正确`);
+  return result;
+}
+function nullableId(value: unknown, field: string) {
+  if (value === null || value === undefined || value === "") return null;
+  const result = Number(value);
+  if (!Number.isSafeInteger(result) || result < 1) throw new ValidationError(`${field}格式不正确`);
+  return result;
+}
+function mediaFields(body: Record<string, unknown>, partial: boolean) {
+  const mediaType = body.mediaType === undefined ? undefined : enumValue(body.mediaType, "Media 类型", mediaTypes, "other") as MediaType;
+  const seasonNumber = body.seasonNumber === undefined && partial ? undefined : nullablePositiveInteger(body.seasonNumber, "Season number");
+  const seasonTitle = body.seasonTitle === undefined && partial ? undefined : nullableMediaText(body.seasonTitle, "Season title", 120);
+  if (mediaType && !["tv", "anime"].includes(mediaType) && (seasonNumber || seasonTitle)) throw new ValidationError("只有 TV 或 Anime 可以填写 Season");
+  return {
+    title: body.title === undefined && partial ? undefined : text(body.title, "标题", 300),
+    mediaType,
+    status: body.status === undefined && partial ? undefined : enumValue(body.status, "Media 状态", mediaStatuses, "completed") as MediaStatus,
+    rating: body.rating === undefined && partial ? undefined : mediaRating(body.rating),
+    isFavorite: body.isFavorite === undefined && partial ? undefined : booleanValue(body.isFavorite, "Favorite", false),
+    note: body.note === undefined && partial ? undefined : nullableMediaText(body.note, "备注", 5000),
+    seriesId: body.seriesId === undefined && partial ? undefined : nullableId(body.seriesId, "Series"),
+    seasonNumber,
+    seasonTitle,
+  };
+}
 
 export function parseNewMedia(value: unknown) {
   const body = objectValue(value);
   if (body.mediaType === undefined) throw new ValidationError("Media 类型不能为空");
+  const fields = mediaFields(body, false);
+  const watchedDate = body.watchedDate === null || body.watchedDate === undefined || body.watchedDate === "" ? null : dateOnly(body.watchedDate, "完成日期");
+  if (fields.status === "completed" && !watchedDate) throw new ValidationError("Completed Media 需要完成日期");
   return {
     item: {
-      title: text(body.title, "标题", 300)!,
-      mediaType: enumValue(body.mediaType, "Media 类型", mediaTypes, "other") as MediaType,
-      rating: mediaRating(body.rating),
-      note: nullableMediaText(body.note, "备注", 5000),
-      coverUrl: null,
+      title: fields.title!, mediaType: fields.mediaType!, status: fields.status!, rating: fields.rating ?? null,
+      isFavorite: fields.isFavorite ?? false, note: fields.note ?? null, coverUrl: null,
+      seriesId: fields.seriesId ?? null, seasonNumber: fields.seasonNumber ?? null, seasonTitle: fields.seasonTitle ?? null,
     },
-    watchedDate: dateOnly(body.watchedDate, "观看日期"),
+    watchedDate,
   };
 }
 
 export function parseMediaPatch(value: unknown) {
   const body = objectValue(value);
-  const result = {
-    title: body.title === undefined ? undefined : text(body.title, "标题", 300),
-    mediaType: body.mediaType === undefined ? undefined : enumValue(body.mediaType, "Media 类型", mediaTypes, "other") as MediaType,
-    rating: body.rating === undefined ? undefined : mediaRating(body.rating),
-    note: body.note === undefined ? undefined : nullableMediaText(body.note, "备注", 5000),
-  };
+  const result = mediaFields(body, true);
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Media 字段");
   return result;
+}
+
+export function parseMediaSeries(value: unknown) {
+  return { name: text(objectValue(value).name, "Series / Franchise", 200)! };
 }
 
 export function parseMediaViewing(value: unknown) {

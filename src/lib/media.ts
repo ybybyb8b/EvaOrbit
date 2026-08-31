@@ -3,7 +3,7 @@ import type { EvaOrbitRepository, MediaItemPatch, MediaListInput, NewMediaItem }
 import type { MediaDetail, MediaListItem } from "./types.ts";
 
 export async function listMediaWithRepository(repository:EvaOrbitRepository,input:MediaListInput={}):Promise<MediaListItem[]> {
-  const items=await repository.listMediaItems(input);
+  const items=await repository.listMediaItems({...input,query:undefined,rewatched:undefined,limit:200});
   if(!items.length)return[];
   const itemIds=new Set(items.map(item=>item.id));
   const grouped=new Map<number,Awaited<ReturnType<EvaOrbitRepository["listMediaViewings"]>>>();
@@ -16,9 +16,13 @@ export async function listMediaWithRepository(repository:EvaOrbitRepository,inpu
   const summaries=items.map(item=>{
     const viewings=grouped.get(item.id)??[];
     const latest=viewings.reduce((value,viewing)=>viewing.watchedDate>value?viewing.watchedDate:value,"");
-    return{...item,latestWatchedDate:latest,viewingCount:viewings.length};
+    return{...item,latestWatchedDate:latest||null,viewingCount:viewings.length};
   });
-  return summaries.sort((left,right)=>right.latestWatchedDate.localeCompare(left.latestWatchedDate)||right.id-left.id);
+  const query=input.query?.trim().toLocaleLowerCase();
+  return summaries
+    .filter(item=>(!query||item.title.toLocaleLowerCase().includes(query)||item.seriesName?.toLocaleLowerCase().includes(query))&&(!input.rewatched||item.viewingCount>1))
+    .sort((left,right)=>(right.latestWatchedDate??"").localeCompare(left.latestWatchedDate??"")||right.id-left.id)
+    .slice(0,Math.min(Math.max(input.limit??100,1),200));
 }
 
 export async function getMediaDetailWithRepository(repository:EvaOrbitRepository,id:number):Promise<MediaDetail|null> {
@@ -26,9 +30,9 @@ export async function getMediaDetailWithRepository(repository:EvaOrbitRepository
   return item?{...item,viewings:await repository.listMediaViewings(id)}:null;
 }
 
-export async function createMediaWithRepository(repository:EvaOrbitRepository,input:{item:NewMediaItem;watchedDate:string}):Promise<MediaDetail> {
+export async function createMediaWithRepository(repository:EvaOrbitRepository,input:{item:NewMediaItem;watchedDate:string|null}):Promise<MediaDetail> {
   const item=await repository.createMediaItem(input.item);
-  try{await repository.createMediaViewing({mediaId:item.id,watchedDate:input.watchedDate});}
+  try{if(input.watchedDate)await repository.createMediaViewing({mediaId:item.id,watchedDate:input.watchedDate});}
   catch(error){await repository.deleteMediaItem(item.id).catch(()=>false);throw error;}
   return{...item,viewings:await repository.listMediaViewings(item.id)};
 }
@@ -40,8 +44,10 @@ export async function updateMediaWithRepository(repository:EvaOrbitRepository,id
 }
 
 export async function addMediaRewatchWithRepository(repository:EvaOrbitRepository,mediaId:number,watchedDate:string) {
-  if(!await repository.getMediaItem(mediaId))throw new ConflictError("Media not found.");
-  return repository.createMediaViewing({mediaId,watchedDate});
+  const item=await repository.getMediaItem(mediaId);if(!item)throw new ConflictError("Media not found.");
+  const viewing=await repository.createMediaViewing({mediaId,watchedDate});
+  if(item.status!=="completed")await repository.updateMediaItem(mediaId,{status:"completed"});
+  return viewing;
 }
 
 export async function updateMediaViewingWithRepository(repository:EvaOrbitRepository,mediaId:number,viewingId:number,watchedDate:string) {

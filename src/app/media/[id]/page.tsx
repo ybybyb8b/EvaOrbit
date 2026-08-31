@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getMediaDetail } from "@/lib/services/media";
+import { getMediaDetail, listMediaSeries } from "@/lib/services/media";
 import { MediaDetailView } from "./media-detail-view";
 
 export const metadata: Metadata = { title: "Media" };
@@ -11,8 +11,8 @@ export default async function MediaDetailPage({ params }: { params: Promise<{ id
   const id = Number(rawId);
   if (!Number.isSafeInteger(id) || id <= 0) notFound();
 
-  const detail = await getMediaDetail(id);
+  const [detail, series] = await Promise.all([getMediaDetail(id), listMediaSeries()]);
   if (!detail) notFound();
 
-  return <MediaDetailView initial={detail} />;
+  return <MediaDetailView initial={detail} initialSeries={series} />;
 }

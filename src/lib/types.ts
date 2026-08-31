@@ -371,15 +371,29 @@ export interface TrainingInputSuggestions {
 }
 
 export type MediaType = "movie" | "tv" | "anime" | "documentary" | "other";
+export type MediaStatus = "planned" | "watching" | "completed" | "paused" | "dropped";
 export type MediaRatingBase = "goat" | "dope" | "mid" | "nope" | "shit";
 export type MediaRating = MediaRatingBase | `${MediaRatingBase}+` | `${MediaRatingBase}-`;
+export interface MediaSeries {
+  id: number;
+  name: string;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface MediaItem {
   id: number;
   title: string;
   mediaType: MediaType;
+  status: MediaStatus;
   rating: MediaRating | null;
+  isFavorite: boolean;
   note: string | null;
   coverUrl: string | null;
+  seriesId: number | null;
+  seriesName: string | null;
+  seasonNumber: number | null;
+  seasonTitle: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -391,7 +405,7 @@ export interface MediaViewing {
   createdAt: string;
 }
 export interface MediaListItem extends MediaItem {
-  latestWatchedDate: string;
+  latestWatchedDate: string | null;
   viewingCount: number;
 }
 export interface MediaDetail extends MediaItem {

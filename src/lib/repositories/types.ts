@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 
@@ -46,9 +46,9 @@ export type HealthRecordListInput = { status?: HealthRecordStatus; type?: Health
 export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt">;
 export type TrainingLogPatch = Partial<NewTrainingLog>;
 export type TrainingLogListInput = { from?: string; to?: string; limit?: number };
-export type NewMediaItem = Pick<MediaItem, "title" | "mediaType" | "rating" | "note" | "coverUrl">;
-export type MediaListInput = { query?: string; mediaType?: MediaType; limit?: number };
-export type MediaItemPatch = { title?: string; mediaType?: MediaType; rating?: MediaRating | null; note?: string | null };
+export type NewMediaItem = Pick<MediaItem, "title" | "mediaType" | "status" | "rating" | "isFavorite" | "note" | "coverUrl" | "seriesId" | "seasonNumber" | "seasonTitle">;
+export type MediaListInput = { query?: string; mediaType?: MediaType; status?: MediaStatus; rating?: MediaRating; seriesId?: number; favorite?: boolean; rewatched?: boolean; limit?: number };
+export type MediaItemPatch = { title?: string; mediaType?: MediaType; status?: MediaStatus; rating?: MediaRating | null; isFavorite?: boolean; note?: string | null; coverUrl?: string | null; seriesId?: number | null; seasonNumber?: number | null; seasonTitle?: string | null };
 export type NewChronicleEntry = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
 export type ChronicleListInput = { query?: string; limit?: number };
 export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: string; source?: ChronicleSource };
@@ -168,6 +168,9 @@ export interface EvaOrbitRepository {
   deleteTrainingLog(id: number): Promise<boolean>;
 
   listMediaItems(input?: MediaListInput): Promise<MediaItem[]>;
+  listMediaSeries(): Promise<MediaSeries[]>;
+  getMediaSeries(id: number): Promise<MediaSeries | null>;
+  createMediaSeries(name: string): Promise<MediaSeries>;
   getMediaItem(id: number): Promise<MediaItem | null>;
   createMediaItem(input: NewMediaItem): Promise<MediaItem>;
   updateMediaItem(id: number, input: MediaItemPatch): Promise<MediaItem | null>;

@@ -1,143 +1,67 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
+import { MediaCover } from "@/components/media-cover";
 import { PageHeader } from "@/components/page-header";
-import type { ApiError, MediaListItem, MediaRating, MediaType } from "@/lib/types";
+import type { ApiError, MediaDetail, MediaListItem, MediaRating, MediaSeries, MediaStatus, MediaType } from "@/lib/types";
 
-const mediaTypes: Array<{ value: MediaType; label: string }> = [
-  { value: "movie", label: "Movie" },
-  { value: "tv", label: "TV" },
-  { value: "anime", label: "Anime" },
-  { value: "documentary", label: "Documentary" },
-  { value: "other", label: "Other" },
+export const mediaTypes: Array<{ value: MediaType; label: string }> = [
+  { value: "movie", label: "Movies" }, { value: "tv", label: "TV Shows" }, { value: "anime", label: "Anime" },
+  { value: "documentary", label: "Documentaries" }, { value: "other", label: "Other" },
 ];
-
-const mediaRatings: MediaRating[] = [
-  "goat", "goat+", "goat-", "dope", "dope+", "dope-", "mid", "mid+", "mid-",
-  "nope", "nope+", "nope-", "shit", "shit+", "shit-",
+export const mediaStatuses: Array<{value:MediaStatus;label:string}> = [
+  {value:"planned",label:"Planned"},{value:"watching",label:"Watching"},{value:"completed",label:"Completed"},{value:"paused",label:"Paused"},{value:"dropped",label:"Dropped"},
 ];
+export const mediaRatings: MediaRating[] = ["goat", "goat+", "goat-", "dope", "dope+", "dope-", "mid", "mid+", "mid-", "nope", "nope+", "nope-", "shit", "shit+", "shit-"];
 
-type MediaDraft = {
-  title: string;
-  mediaType: MediaType;
-  watchedDate: string;
-  rating: MediaRating | "";
-  note: string;
-};
+type MediaDraft={title:string;mediaType:MediaType;status:MediaStatus;watchedDate:string;rating:MediaRating|"";isFavorite:boolean;note:string;seriesChoice:string;newSeries:string;seasonNumber:string;seasonTitle:string};
+function emptyDraft():MediaDraft{return{title:"",mediaType:"movie",status:"completed",watchedDate:currentLocalDate(),rating:"",isFavorite:false,note:"",seriesChoice:"",newSeries:"",seasonNumber:"",seasonTitle:""};}
+export function typeLabel(value:MediaType){return mediaTypes.find(item=>item.value===value)?.label??"Other";}
+export function statusLabel(value:MediaStatus){return mediaStatuses.find(item=>item.value===value)?.label??value;}
+async function responseError(response:Response,fallback:string){const result=await response.json().catch(()=>null) as ApiError|null;return result?.error||fallback;}
 
-function emptyDraft(): MediaDraft {
-  return { title: "", mediaType: "movie", watchedDate: currentLocalDate(), rating: "", note: "" };
-}
+export function MediaPosterCard({item}:{item:MediaListItem}){const season=item.seasonNumber?`S${item.seasonNumber}`:item.seasonTitle;return <Link className="media-poster-card" href={`/media/${item.id}`}><MediaCover item={item}/><span><strong>{item.title}</strong><small>{season||typeLabel(item.mediaType)}{item.rating?` · ${item.rating}`:""}</small></span>{item.isFavorite&&<span className="media-favorite-mark" aria-label="Favorite">♥</span>}</Link>;}
+function Shelf({title,items}:{title:string;items:MediaListItem[]}){if(!items.length)return null;return <section className="media-shelf"><div className="media-shelf-heading"><h2>{title}</h2><span>{items.length}</span></div><div className="media-shelf-track">{items.map(item=><MediaPosterCard item={item} key={item.id}/>)}</div></section>;}
 
-function typeLabel(value: MediaType) {
-  return mediaTypes.find((item) => item.value === value)?.label ?? "Other";
-}
+export function MediaView({initial,initialSeries}:{initial:MediaListItem[];initialSeries:MediaSeries[]}){
+  const[items,setItems]=useState(initial),[series,setSeries]=useState(initialSeries),[query,setQuery]=useState("");
+  const[mediaType,setMediaType]=useState<""|MediaType>(""),[status,setStatus]=useState<""|MediaStatus>("");
+  const[rating,setRating]=useState<""|MediaRating>("");
+  const[favoriteOnly,setFavoriteOnly]=useState(false),[rewatchedOnly,setRewatchedOnly]=useState(false);
+  const[loading,setLoading]=useState(false),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState<MediaDraft>(emptyDraft);
+  const[coverFile,setCoverFile]=useState<File|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false);
+  const filtered=Boolean(query.trim()||mediaType||status||rating||favoriteOnly||rewatchedOnly);
 
-async function responseError(response: Response, fallback: string) {
-  const result = await response.json().catch(() => null) as ApiError | null;
-  return result?.error || fallback;
-}
+  const load=useCallback(async()=>{setLoading(true);const params=new URLSearchParams({limit:"200"});if(query.trim())params.set("q",query.trim());if(mediaType)params.set("mediaType",mediaType);if(status)params.set("status",status);if(rating)params.set("rating",rating);if(favoriteOnly)params.set("favorite","true");if(rewatchedOnly)params.set("rewatched","true");try{const response=await fetch(`/api/media?${params}`,{cache:"no-store"});if(!response.ok){setError(await responseError(response,"Could not load media."));return;}setItems(await response.json() as MediaListItem[]);}catch{setError("Could not load media.");}finally{setLoading(false);}},[favoriteOnly,mediaType,query,rating,rewatchedOnly,status]);
+  useEffect(()=>{const timer=window.setTimeout(()=>void load(),140);return()=>window.clearTimeout(timer);},[load]);
+  const shelves=useMemo(()=>({recent:[...items].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,18),movies:items.filter(item=>item.mediaType==="movie"),tv:items.filter(item=>item.mediaType==="tv"),anime:items.filter(item=>item.mediaType==="anime"),favorites:items.filter(item=>item.isFavorite),rewatched:items.filter(item=>item.viewingCount>1)}),[items]);
 
-export function MediaView({ initial }: { initial: MediaListItem[] }) {
-  const [items, setItems] = useState(initial);
-  const [query, setQuery] = useState("");
-  const [mediaType, setMediaType] = useState<"" | MediaType>("");
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<MediaDraft>(emptyDraft);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ limit: "100" });
-    if (query.trim()) params.set("q", query.trim());
-    if (mediaType) params.set("mediaType", mediaType);
-    try {
-      const response = await fetch(`/api/media?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) { setError(await responseError(response, "Could not load media.")); return; }
-      setItems(await response.json() as MediaListItem[]);
-    } catch { setError("Could not load media."); }
-    finally { setLoading(false); }
-  }, [mediaType, query]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 140);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
-  function openCreate() {
-    setEditingId(null); setDraft(emptyDraft); setError(""); setNotice(""); setShowForm(true);
-  }
-
-  function closeEditor() {
-    setShowForm(false); setEditingId(null); setDraft(emptyDraft); setError("");
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault(); if (saving) return; setError(""); setNotice(""); setSaving(true);
-    const editing = editingId !== null;
-    const body: Record<string, unknown> = {
-      title: draft.title,
-      mediaType: draft.mediaType,
-      rating: draft.rating || null,
-      note: draft.note || null,
-    };
-    if (!editing) body.watchedDate = draft.watchedDate;
-    try {
-      const response = await fetch(editing ? `/api/media/${editingId}` : "/api/media", {
-        method: editing ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) { setError(await responseError(response, "Could not save media.")); return; }
-      closeEditor(); setNotice(editing ? "Media updated." : "Media added."); await load();
-    } catch { setError("Could not save media."); }
-    finally { setSaving(false); }
-  }
+  async function resolveSeries(){if(draft.seriesChoice!=="__new__")return draft.seriesChoice?Number(draft.seriesChoice):null;const response=await fetch("/api/media/series",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:draft.newSeries})});if(!response.ok)throw new Error(await responseError(response,"Could not create series."));const created=await response.json() as MediaSeries;setSeries(current=>[...current.filter(item=>item.id!==created.id),created].sort((a,b)=>a.name.localeCompare(b.name)));return created.id;}
+  async function submit(event:FormEvent){event.preventDefault();if(saving)return;setSaving(true);setError("");setNotice("");try{const seriesId=await resolveSeries();const response=await fetch("/api/media",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:draft.title,mediaType:draft.mediaType,status:draft.status,watchedDate:draft.status==="completed"?draft.watchedDate:null,rating:draft.rating||null,isFavorite:draft.isFavorite,note:draft.note||null,seriesId,seasonNumber:draft.seasonNumber||null,seasonTitle:draft.seasonTitle||null})});if(!response.ok){setError(await responseError(response,"Could not save media."));return;}const created=await response.json() as MediaDetail;let coverFailed=false;if(coverFile){const body=new FormData();body.set("file",coverFile);const upload=await fetch(`/api/media/${created.id}/cover`,{method:"POST",body});coverFailed=!upload.ok;}setShowForm(false);setDraft(emptyDraft());setCoverFile(null);setNotice(coverFailed?"Media added, but its cover could not be uploaded.":"Media added.");await load();const seriesResponse=await fetch("/api/media/series",{cache:"no-store"});if(seriesResponse.ok)setSeries(await seriesResponse.json() as MediaSeries[]);}catch(reason){setError(reason instanceof Error?reason.message:"Could not save media.");}finally{setSaving(false);}}
+  function clearFilters(){setQuery("");setMediaType("");setStatus("");setRating("");setFavoriteOnly(false);setRewatchedOnly(false);}
 
   return <div className="page media-page">
-    <PageHeader eyebrow="ARCHIVE" title="Media" description="Completed watches, dates, ratings, and rewatch history." action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Media</button>} />
-
-    {showForm && <FormSheet title={editingId === null ? "Add media" : "Edit media"} onClose={closeEditor} formId="media-record-form" submitLabel={editingId === null ? "Add media" : "Save changes"} busy={saving}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}>
-      <div className="editor-title"><div><span className="eyebrow">{editingId === null ? "NEW MEDIA" : "EDIT MEDIA"}</span><h2>{editingId === null ? "Add media" : "Edit media"}</h2></div><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
-      <div className="form-grid">
-        <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-        <label className="field"><span>Type</span><select value={draft.mediaType} onChange={(event) => setDraft({ ...draft, mediaType: event.target.value as MediaType })}>{mediaTypes.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-        {editingId === null && <label className="field"><span>Watched date</span><input required type="date" value={draft.watchedDate} onChange={(event) => setDraft({ ...draft, watchedDate: event.target.value })} /></label>}
-        <label className="field"><span>Rating <small>Optional</small></span><select value={draft.rating} onChange={(event) => setDraft({ ...draft, rating: event.target.value as MediaDraft["rating"] })}><option value="">No rating</option>{mediaRatings.map((rating) => <option value={rating} key={rating}>{rating}</option>)}</select></label>
-        <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
-      </div>
-      {error && <p className="form-error">{error}</p>}
-      <div className="form-actions"><button className="button primary" type="submit">{editingId === null ? "Add media" : "Save changes"}</button></div>
-    </form></FormSheet>}
-
-    {!showForm && error && <p className="form-error">{error}</p>}
-    {notice && <p className="form-notice" role="status">{notice}</p>}
-
-    <div className="media-toolbar" aria-busy={loading}>
-      <label className="search-box media-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles…" aria-label="Search media titles" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
-      <span className="result-count">{items.length} {items.length === 1 ? "item" : "items"}</span>
-    </div>
-    <div className="media-filters" role="group" aria-label="Filter media by type">
-      <button type="button" className={!mediaType ? "active" : ""} onClick={() => setMediaType("")}>All</button>
-      {mediaTypes.map((item) => <button type="button" className={mediaType === item.value ? "active" : ""} onClick={() => setMediaType(item.value)} key={item.value}>{item.label}</button>)}
-    </div>
-
-    {items.length ? <div className="media-list" aria-busy={loading}>{items.map((item) => {
-      const rewatchCount = Math.max(0, item.viewingCount - 1);
-      return <Link className="media-row" href={`/media/${item.id}`} key={item.id}>
-        <span className="media-row-main"><strong>{item.title}</strong><span className="media-row-type">{typeLabel(item.mediaType)}</span></span>
-        <span className="media-row-rating">{item.rating ? <span className="media-rating">{item.rating}</span> : <span className="media-muted">No rating</span>}</span>
-        <span className="media-row-date"><time dateTime={item.latestWatchedDate}>{item.latestWatchedDate}</time>{rewatchCount > 0 && <small>Rewatched × {rewatchCount}</small>}</span>
-        <Icon name="arrow" />
-      </Link>;
-    })}</div> : <div className="empty-state media-empty"><span className="empty-icon"><Icon name="media" /></span><h2>{query || mediaType ? "No matching media" : "No media recorded"}</h2><p>{query || mediaType ? "Try a different search or filter." : "Add a completed watch to begin."}</p>{!query && !mediaType && <button className="button secondary" onClick={openCreate}><Icon name="plus" />Add Media</button>}</div>}
+    <PageHeader eyebrow="PRIVATE SHELF" title="Media" description="A quiet cabinet for what you watched, loved, and returned to." action={<button className="button primary" onClick={()=>{setDraft(emptyDraft());setError("");setShowForm(true);}}><Icon name="plus"/>Add Media</button>}/>
+    {showForm&&<FormSheet title="Add media" onClose={()=>setShowForm(false)} formId="media-record-form" submitLabel="Add media" busy={saving}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}><div className="form-grid">
+      <label className="media-cover-picker wide"><span className="media-cover-picker-preview">{coverFile?<span>{coverFile.name}</span>:<><Icon name="media"/><strong>Choose cover</strong><small>JPG, PNG or WebP · up to 4 MB</small></>}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>setCoverFile(event.target.files?.[0]??null)}/></label>
+      <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={event=>setDraft({...draft,title:event.target.value})}/></label>
+      <label className="field"><span>Type</span><select value={draft.mediaType} onChange={event=>{const mediaType=event.target.value as MediaType;setDraft({...draft,mediaType,...(!["tv","anime"].includes(mediaType)?{seasonNumber:"",seasonTitle:""}:{})});}}>{mediaTypes.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+      <label className="field"><span>Status</span><select value={draft.status} onChange={event=>setDraft({...draft,status:event.target.value as MediaStatus})}>{mediaStatuses.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+      {draft.status==="completed"&&<label className="field"><span>Completed date</span><input required type="date" value={draft.watchedDate} onChange={event=>setDraft({...draft,watchedDate:event.target.value})}/></label>}
+      <label className="field"><span>Rating <small>Optional</small></span><select value={draft.rating} onChange={event=>setDraft({...draft,rating:event.target.value as MediaDraft["rating"]})}><option value="">No rating</option>{mediaRatings.map(value=><option value={value} key={value}>{value}</option>)}</select></label>
+      <label className="field wide"><span>Series / Franchise <small>Optional</small></span><select value={draft.seriesChoice} onChange={event=>setDraft({...draft,seriesChoice:event.target.value})}><option value="">None</option>{series.map(value=><option value={value.id} key={value.id}>{value.name}</option>)}<option value="__new__">Create new series…</option></select></label>
+      {draft.seriesChoice==="__new__"&&<label className="field wide"><span>New series name</span><input required maxLength={200} value={draft.newSeries} onChange={event=>setDraft({...draft,newSeries:event.target.value})}/></label>}
+      {["tv","anime"].includes(draft.mediaType)&&<><label className="field"><span>Season number <small>Optional</small></span><input type="number" min="1" max="999" value={draft.seasonNumber} onChange={event=>setDraft({...draft,seasonNumber:event.target.value})}/></label><label className="field"><span>Season title <small>Optional</small></span><input maxLength={120} placeholder="Final Season / Part 2" value={draft.seasonTitle} onChange={event=>setDraft({...draft,seasonTitle:event.target.value})}/></label></>}
+      <label className="media-favorite-toggle wide"><input type="checkbox" checked={draft.isFavorite} onChange={event=>setDraft({...draft,isFavorite:event.target.checked})}/><span><strong>Favorite</strong><small>Keep it on the Favorites shelf.</small></span></label>
+      <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={event=>setDraft({...draft,note:event.target.value})}/></label>
+    </div>{error&&<p className="form-error">{error}</p>}</form></FormSheet>}
+    {!showForm&&error&&<p className="form-error">{error}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
+    <div className="media-toolbar" aria-busy={loading}><label className="search-box media-search"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search title or series…" aria-label="Search Media"/>{query&&<button type="button" onClick={()=>setQuery("")} aria-label="Clear search">×</button>}</label>{filtered&&<button className="text-button" type="button" onClick={clearFilters}>Clear filters</button>}</div>
+    <div className="media-filters" role="group" aria-label="Filter Media"><button className={!mediaType&&!status&&!rating&&!favoriteOnly&&!rewatchedOnly?"active":""} onClick={clearFilters}>All</button>{mediaTypes.map(item=><button className={mediaType===item.value?"active":""} onClick={()=>setMediaType(current=>current===item.value?"":item.value)} key={item.value}>{item.label}</button>)}<button className={favoriteOnly?"active":""} onClick={()=>setFavoriteOnly(value=>!value)}>Favorites</button><button className={rewatchedOnly?"active":""} onClick={()=>setRewatchedOnly(value=>!value)}>Rewatched</button><select aria-label="Filter by status" value={status} onChange={event=>setStatus(event.target.value as ""|MediaStatus)}><option value="">Any status</option>{mediaStatuses.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</select><select aria-label="Filter by rating" value={rating} onChange={event=>setRating(event.target.value as ""|MediaRating)}><option value="">Any rating</option>{mediaRatings.map(value=><option value={value} key={value}>{value}</option>)}</select></div>
+    {filtered?(items.length?<section className="media-results"><div className="media-shelf-heading"><h2>Results</h2><span>{items.length}</span></div><div className="media-poster-grid">{items.map(item=><MediaPosterCard item={item} key={item.id}/>)}</div></section>:<div className="empty-state media-empty"><span className="empty-icon"><Icon name="media"/></span><h2>No matching media</h2><p>Try a different title, series, or filter.</p></div>):items.length?<div className="media-cabinet"><Shelf title="Recently added" items={shelves.recent}/>{series.length>0&&<section className="media-shelf media-series-shelf"><div className="media-shelf-heading"><h2>Series & Franchises</h2><span>{series.length}</span></div><div className="media-series-track">{series.map(group=><Link href={`/media/series/${group.id}`} key={group.id}><strong>{group.name}</strong><small>{group.itemCount} {group.itemCount===1?"item":"items"}</small></Link>)}</div></section>}<Shelf title="Favorites" items={shelves.favorites}/><Shelf title="Movies" items={shelves.movies}/><Shelf title="TV Shows" items={shelves.tv}/><Shelf title="Anime" items={shelves.anime}/><Shelf title="Rewatched" items={shelves.rewatched}/></div>:<div className="empty-state media-empty"><span className="empty-icon"><Icon name="media"/></span><h2>Your private shelf</h2><p>Add the first work you want to keep close.</p><button className="button secondary" onClick={()=>setShowForm(true)}><Icon name="plus"/>Add Media</button></div>}
   </div>;
 }
