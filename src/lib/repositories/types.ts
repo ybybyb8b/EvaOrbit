@@ -89,7 +89,7 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
-  listRelationPeople(input?: { query?: string; includeArchived?: boolean }): Promise<RelationPerson[]>;
+  listRelationPeople(input?: { query?: string; includeArchived?: boolean; relationshipStatus?: "active" | "ended" }): Promise<RelationPerson[]>;
   getRelationPerson(id: number): Promise<RelationPerson | null>;
   createRelationPerson(input: NewRelationPerson): Promise<RelationPerson>;
   updateRelationPerson(id: number, input: RelationPersonPatch): Promise<RelationPerson | null>;

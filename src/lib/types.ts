@@ -808,6 +808,8 @@ export interface RelationPerson {
   name: string;
   nickname: string | null;
   relationLabel: string | null;
+  closenessRank: 1 | 2 | 3 | 4 | 5 | null;
+  relationshipStatus: "active" | "ended";
   photoPath: string | null;
   birthday: string | null;
   likes: string | null;
@@ -859,4 +861,6 @@ export interface RelationBalance { settlementMinor: number; socialMinor: number 
 export interface RelationPersonSummary extends RelationPerson {
   balance: RelationBalance;
   latestEvent: RelationEvent | null;
+  lastMetAt: string | null;
+  lastMetHasExplicitTime: boolean | null;
 }

@@ -1,10 +1,10 @@
 import "server-only";
 import { ConflictError } from "../errors";
-import { derivePersonBalance, validateRelationEvent, type RelationEventInput } from "../relations";
+import { derivePersonBalance, derivePersonRecency, validateRelationEvent, type RelationEventInput } from "../relations";
 import { getRepository } from "../repositories";
 
-export async function listRelationPeople(input:{query?:string;includeArchived?:boolean}={}){const repo=await getRepository();const [people,events]=await Promise.all([repo.listRelationPeople(input),repo.listRelationEvents({limit:500})]);return people.map(person=>{const related=events.filter(event=>event.parties.some(p=>p.personId===person.id));return{...person,balance:derivePersonBalance(related,person.id),latestEvent:related[0]??null};});}
-export async function getRelationPersonDetail(id:number){const repo=await getRepository();const person=await repo.getRelationPerson(id);if(!person)return null;const [events,memoryNotes]=await Promise.all([repo.listRelationEvents({personId:id,limit:500}),repo.listPersonMemoryNotes(id)]);return{person,balance:derivePersonBalance(events,id),events,memoryNotes};}
+export async function listRelationPeople(input:{query?:string;includeArchived?:boolean;relationshipStatus?:"active"|"ended"}={}){const repo=await getRepository();const [people,events]=await Promise.all([repo.listRelationPeople(input),repo.listRelationEvents({limit:500})]);return people.map(person=>{const related=events.filter(event=>event.parties.some(p=>p.personId===person.id));return{...person,balance:derivePersonBalance(related,person.id),...derivePersonRecency(related)};});}
+export async function getRelationPersonDetail(id:number){const repo=await getRepository();const person=await repo.getRelationPerson(id);if(!person)return null;const [events,memoryNotes]=await Promise.all([repo.listRelationEvents({personId:id,limit:500}),repo.listPersonMemoryNotes(id)]);return{person,balance:derivePersonBalance(events,id),...derivePersonRecency(events),events,memoryNotes};}
 export async function createRelationPerson(input:Parameters<Awaited<ReturnType<typeof getRepository>>["createRelationPerson"]>[0]){return(await getRepository()).createRelationPerson(input);}
 export async function updateRelationPerson(id:number,input:Parameters<Awaited<ReturnType<typeof getRepository>>["updateRelationPerson"]>[1]){return(await getRepository()).updateRelationPerson(id,input);}
 async function ensurePeople(input:RelationEventInput){const repo=await getRepository();for(const personId of input.parties.flatMap(p=>p.personId?[p.personId]:[]))if(!await repo.getRelationPerson(personId))throw new ConflictError(`人物 ${personId} 不存在`);}

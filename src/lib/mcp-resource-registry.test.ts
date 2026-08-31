@@ -86,6 +86,10 @@ test("registry exposes long-term memory and project resources without changing g
   assert.deepEqual(registry.schema("lucius_case").supported_actions, ["record_recurrence"]);
   assert.deepEqual(registry.schema("inbox").supported_actions, ["mark_processed", "archive", "restore"]);
   assert.deepEqual(registry.schema("inbox").writable_fields, ["content"]);
+  assert.ok(registry.schema("relation_person").writable_fields.includes("closeness_rank"));
+  assert.ok(registry.schema("relation_person").writable_fields.includes("relationship_status"));
+  assert.equal(registry.schema("relation_person").fields.last_met_at.read_only, true);
+  assert.match(registry.schema("relation_person").validation_rules.join(" "), /new events never change/i);
   assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
   assert.match(registry.schema("project_item").validation_rules.join(" "), /never automatically promoted to verified/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);

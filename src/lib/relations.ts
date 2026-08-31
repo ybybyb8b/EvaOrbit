@@ -72,6 +72,16 @@ export function derivePersonBalance(events: RelationEvent[], personId: number): 
   return { settlementMinor, socialMinor };
 }
 
+export function derivePersonRecency(events: RelationEvent[]) {
+  const latestEvent = events[0] ?? null;
+  const lastMet = events.find((event) => event.isInPerson === true) ?? null;
+  return {
+    latestEvent,
+    lastMetAt: lastMet?.occurredAt ?? null,
+    lastMetHasExplicitTime: lastMet?.occurredHasExplicitTime ?? null,
+  };
+}
+
 export function minorFromDecimal(value: string): number {
   if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value.trim())) throw new RelationRuleError("金额格式不正确，最多两位小数");
   const [whole, fraction = ""] = value.trim().split(".");
