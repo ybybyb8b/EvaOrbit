@@ -4,7 +4,7 @@ import { checkDrinkLimits, createDrinkLimit, createDrinkLog, getDrinkLimits, get
 import { getDailyNutritionSummary } from "./services/nutrition";
 import { listTimeline } from "./services/timeline";
 import { createTracker, createTrackerEntry, getTrackerDetail, listTrackerSummaries } from "./services/tracker";
-import { parseDrinkLimit, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLogPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTracker, parseNewTrackerEntry, ValidationError } from "./validation.ts";
+import { parseDrinkLimit, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLogPatch, parseInboxStatus, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTracker, parseNewTrackerEntry, ValidationError } from "./validation.ts";
 
 type ToolResult = { result: string; summary: string; wrote: boolean };
 
@@ -17,7 +17,7 @@ function positiveId(value: unknown) { if (!Number.isSafeInteger(value) || (value
 
 export async function executeAiTool(name: string, value: unknown, allowWrite: boolean): Promise<ToolResult> {
   const args = argsObject(value);
-  if (name === "list_inbox") { const status=typeof args.status==="string"?args.status:"inbox";const items=(await listInbox(status)).slice(0,100);return{result:JSON.stringify({count:items.length,items}),summary:`读取了 ${items.length} 条 Inbox`,wrote:false}; }
+  if (name === "list_inbox") { const items=(await listInbox(parseInboxStatus(args.status))).slice(0,100);return{result:JSON.stringify({count:items.length,items}),summary:`读取了 ${items.length} 条 Inbox`,wrote:false}; }
   if (name === "get_timeline") { const limit=typeof args.limit==="number"?Math.max(1,Math.min(100,Math.trunc(args.limit))):50;const events=await listTimeline({date:typeof args.date==="string"?args.date:undefined,limit});return{result:JSON.stringify({count:events.length,events}),summary:`读取了 ${events.length} 条生活记录`,wrote:false}; }
   if(name==="list_trackers"){const trackers=await listTrackerSummaries();return{result:JSON.stringify({count:trackers.length,trackers}),summary:`读取了 ${trackers.length} 个 Tracker`,wrote:false};}
   if(name==="get_tracker_entries"){const detail=await getTrackerDetail(positiveId(args.trackerId),typeof args.query==="string"?args.query:"");return{result:JSON.stringify(detail??{error:"Tracker 不存在"}),summary:detail?`读取了「${detail.tracker.name}」的记录`:"未找到 Tracker",wrote:false};}

@@ -628,6 +628,10 @@ export function parseNewInbox(value: unknown) {
   return { content: text(body.content, "内容", 10000)!, source: text(body.source ?? "manual", "来源", 40)! };
 }
 
+export function parseInboxStatus(value: unknown): "inbox" | "processed" | "archived" | "all" {
+  return enumValue(value ?? "inbox", "状态", ["inbox", "processed", "archived", "all"] as const, "inbox");
+}
+
 export function parseInboxPatch(value: unknown) {
   const body = objectValue(value);
   const result = {

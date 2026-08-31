@@ -1,7 +1,7 @@
 import { ConflictError } from "../errors.ts";
-import type { ChronicleEntry, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, Memo, MemoStatus, MemoType, PersonMemoryNote, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary } from "../types.ts";
+import type { ChronicleEntry, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, Memo, MemoStatus, MemoType, PersonMemoryNote, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary } from "../types.ts";
 import { parseMemoryNote,parseRelationEvent,parseRelationPerson,parseRelationPersonPatch,parseSettleAdvance } from "../relations-validation.ts";
-import { dateOnly, parseChronicleEntryPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewChronicleEntry, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, parseNewProject, parseNewProjectItem, parseProjectItemPatch, parseProjectPatch, ValidationError } from "../validation.ts";
+import { dateOnly, parseChronicleEntryPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewChronicleEntry, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, parseNewProject, parseNewProjectItem, parseProjectItemPatch, parseProjectPatch, ValidationError } from "../validation.ts";
 
 export type ResourceId = string | number;
 export type ResourceCapability = "search" | "get" | "create" | "update" | "delete" | "action";
@@ -50,6 +50,17 @@ export type ChronicleResourceOperations = {
   delete(id: number): Promise<boolean>;
 };
 
+export type InboxResourceOperations = {
+  search(input: { query?: string; status?: InboxStatus | "all"; limit?: number }): Promise<InboxItem[]>;
+  get(id: number): Promise<InboxItem | null>;
+  create(input: Pick<InboxItem, "content" | "source">): Promise<InboxItem>;
+  update(id: number, input: Pick<InboxItem, "content">): Promise<InboxItem | null>;
+  delete(id: number): Promise<boolean>;
+  markProcessed(id: number): Promise<InboxItem | null>;
+  archive(id: number): Promise<InboxItem | null>;
+  restore(id: number): Promise<InboxItem | null>;
+};
+
 export type MemoResourceOperations = {
   search(input: { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number }): Promise<Memo[]>;
   get(id: number): Promise<Memo | null>;
@@ -90,6 +101,7 @@ export type LuciusCaseResourceOperations = {
 };
 
 export type ResourceRegistryOperations = {
+  inbox: InboxResourceOperations;
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
@@ -157,6 +169,89 @@ function chronicleRecord(entry: ChronicleEntry): ResourceRecord {
     source: entry.source,
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
+  };
+}
+
+function inboxRecord(item: InboxItem): ResourceRecord {
+  return {
+    id: item.id,
+    content: item.content,
+    status: item.status,
+    source: item.source,
+    processed_at: item.processedAt,
+    converted_type: item.convertedType,
+    converted_id: item.convertedId,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
+  };
+}
+
+function inboxResource(operations: InboxResourceOperations): RegisteredResource {
+  return {
+    schema: {
+      resource: "inbox",
+      description: "Temporary, user-controlled capture items awaiting sorting in EvaOrbit Inbox.",
+      fields: {
+        id: { type: "integer", description: "Stable Inbox item identifier.", read_only: true },
+        content: { type: "string", max_length: 10000, description: "The captured free-form text." },
+        status: { type: "string", enum: ["inbox", "processed", "archived"], description: "Server-managed Inbox lifecycle state.", read_only: true },
+        source: { type: "string", description: "Capture source.", read_only: true },
+        processed_at: { type: "string", format: "date-time", description: "When the item was marked processed.", read_only: true },
+        converted_type: { type: "string", description: "Legacy conversion target, when present.", read_only: true },
+        converted_id: { type: "integer", description: "Legacy conversion record id, when present.", read_only: true },
+        created_at: { type: "string", format: "date-time", description: "Server-assigned creation timestamp.", read_only: true },
+        updated_at: { type: "string", format: "date-time", description: "Server-assigned update timestamp.", read_only: true },
+      },
+      required_fields: ["content"],
+      writable_fields: ["content"],
+      searchable_fields: ["content", "status"],
+      supported_actions: ["mark_processed", "archive", "restore"],
+      validation_rules: [
+        "search defaults to status=inbox; use filters.status=all to search all history",
+        "search filters accept only status: inbox, processed, archived, or all",
+        "status is never client-writable; use mark_processed, archive, or restore",
+        "creating an item records source=chatgpt",
+        "moving content to Memo, Chronicle, or Project uses those resources separately and is never automatic",
+        "delete only after an explicit user request",
+        "unknown fields are rejected",
+      ],
+    },
+    async search({ query, filters = {}, limit, cursor }) {
+      assertOnlyKeys(filters, ["status"], "inbox search filters");
+      rejectCursor(cursor, "Inbox");
+      const status = filterEnum(filters.status, ["inbox", "processed", "archived", "all"] as const, "status") ?? "inbox";
+      return { items: (await operations.search({ query, status, limit })).map(inboxRecord), next_cursor: null };
+    },
+    async get(resourceId) {
+      const item = await operations.get(numericId(resourceId, "Inbox"));
+      if (!item) throw new ConflictError("Inbox item not found.");
+      return inboxRecord(item);
+    },
+    async create(data) {
+      assertOnlyKeys(data, ["content"], "inbox create");
+      return inboxRecord(await operations.create(parseNewInbox({ content: data.content, source: "chatgpt" })));
+    },
+    async update(resourceId, data) {
+      assertOnlyKeys(data, ["content"], "inbox update");
+      const patch = parseInboxPatch(data);
+      const item = await operations.update(numericId(resourceId, "Inbox"), { content: patch.content! });
+      if (!item) throw new ConflictError("Inbox item not found.");
+      return inboxRecord(item);
+    },
+    async delete(resourceId) {
+      const id = numericId(resourceId, "Inbox");
+      if (!await operations.delete(id)) throw new ConflictError("Inbox item not found.");
+      return { deleted: true, id };
+    },
+    async action({ id, action, data }) {
+      if (id === undefined) throw new ValidationError(`${action} requires an Inbox item id.`);
+      assertOnlyKeys(data, [], `inbox ${action}`);
+      const numeric = numericId(id, "Inbox");
+      const operation = action === "mark_processed" ? operations.markProcessed : action === "archive" ? operations.archive : operations.restore;
+      const item = await operation(numeric);
+      if (!item) throw new ConflictError("Inbox item not found.");
+      return inboxRecord(item);
+    },
   };
 }
 
@@ -436,6 +531,7 @@ export class ResourceRegistry {
 
 export function createResourceRegistry(operations: ResourceRegistryOperations) {
   return new ResourceRegistry([
+    inboxResource(operations.inbox),
     memoResource(operations.memo),
     chronicleResource(operations.chronicle),
     luciusDiaryResource(operations.luciusDiary),

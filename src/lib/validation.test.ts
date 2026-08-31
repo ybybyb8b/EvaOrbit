@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseInboxStatus, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -48,6 +48,8 @@ test("checks chat request identifiers and content", () => {
 
 test("normalizes core life capture records", () => {
   assert.deepEqual(parseNewInbox({ content: "  先记着  " }), { content: "先记着", source: "manual" });
+  assert.equal(parseInboxStatus("all"), "all");
+  assert.throws(() => parseInboxStatus("done"), ValidationError);
   const food = parseNewFoodLog({ occurredAt: "2026-08-25T12:00:00+08:00", title: "面", mealType: "lunch", estimatedKcal: 420, kcalMin: 360, kcalMax: 520 });
   assert.equal(food.occurredAt, "2026-08-25T04:00:00.000Z");
   assert.equal(food.confidence, "low");

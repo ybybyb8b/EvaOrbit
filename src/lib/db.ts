@@ -1202,7 +1202,13 @@ function inboxFromRow(row: Record<string, unknown>): InboxItem {
   return { id: Number(row.id), content: String(row.content), status: row.status as InboxItem["status"], source: String(row.source), processedAt: row.processed_at ? String(row.processed_at) : null, convertedType: row.converted_type ? String(row.converted_type) : null, convertedId: row.converted_id === null ? null : Number(row.converted_id), createdAt: String(row.created_at), updatedAt: String(row.updated_at) };
 }
 
-export function listInbox(status = "inbox") { return (database.prepare("SELECT * FROM inbox_items WHERE status = ? ORDER BY created_at DESC, id DESC").all(status) as Record<string, unknown>[]).map(inboxFromRow); }
+export function listInbox(status: InboxItem["status"] | "all" = "inbox") {
+  const statement = status === "all"
+    ? database.prepare("SELECT * FROM inbox_items ORDER BY created_at DESC, id DESC")
+    : database.prepare("SELECT * FROM inbox_items WHERE status = ? ORDER BY created_at DESC, id DESC");
+  const rows = status === "all" ? statement.all() : statement.all(status);
+  return (rows as Record<string, unknown>[]).map(inboxFromRow);
+}
 export function getInboxItem(id: number) { const row = database.prepare("SELECT * FROM inbox_items WHERE id = ?").get(id) as Record<string, unknown> | undefined; return row ? inboxFromRow(row) : null; }
 export function createInboxItem(input: { content: string; source: string }) { const result = database.prepare("INSERT INTO inbox_items(content, source) VALUES (?, ?)").run(input.content, input.source); return getInboxItem(Number(result.lastInsertRowid))!; }
 export function updateInboxItem(id: number, input: Record<string, unknown>) {

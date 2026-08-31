@@ -2,19 +2,30 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, LuciusCase, LuciusDiaryEntry, Memo, Project, ProjectItem } from "./types.ts";
+import type { ChronicleEntry, InboxItem, LuciusCase, LuciusDiaryEntry, Memo, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
+  const inbox: InboxItem[] = [];
   const chronicles: ChronicleEntry[] = [];
   const memos: Memo[] = [];
   const diary: LuciusDiaryEntry[] = [];
   const cases: LuciusCase[] = [];
   const projects: Project[] = [];
   const projectItems: ProjectItem[] = [];
-  let nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0, nextProject = 0, nextProjectItem = 0;
+  let nextInbox = 0, nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0, nextProject = 0, nextProjectItem = 0;
   const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
   const operations: ResourceRegistryOperations = {
+    inbox: {
+      async search({ query, status = "inbox", limit = 20 }) { const needle = query?.toLocaleLowerCase(); return inbox.filter((item) => (status === "all" || item.status === status) && (!needle || item.content.toLocaleLowerCase().includes(needle))).slice(0, limit); },
+      async get(id) { return inbox.find((item) => item.id === id) ?? null; },
+      async create(input) { const item: InboxItem = { ...input, id: ++nextInbox, status: "inbox", processedAt: null, convertedType: null, convertedId: null, createdAt, updatedAt: createdAt }; inbox.push(item); return item; },
+      async update(id, patch) { const item = inbox.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async delete(id) { return remove(inbox, id); },
+      async markProcessed(id) { const item = inbox.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, { status: "processed", processedAt: "2026-08-30T00:00:00Z", updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async archive(id) { const item = inbox.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, { status: "archived", updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+      async restore(id) { const item = inbox.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, { status: "inbox", processedAt: null, updatedAt: "2026-08-30T00:00:00Z" }); return item; },
+    },
     chronicle: {
       async search({ query, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return chronicles.filter((item) => !needle || item.title.toLocaleLowerCase().includes(needle) || item.contentMd.toLocaleLowerCase().includes(needle)).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, limit); },
       async get(id) { return chronicles.find((item) => item.id === id) ?? null; },
@@ -60,21 +71,42 @@ function fakeOperations() {
     relationEvent:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;},async settle(){throw new Error("unused");}},
     personNote:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;}},
   };
-  return { operations, chronicles, memos, diary, cases };
+  return { operations, inbox, chronicles, memos, diary, cases };
 }
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["inbox", "memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);
   assert.deepEqual(registry.schema("chronicle").writable_fields, ["date", "title", "content_md", "source"]);
   assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md"]);
   assert.deepEqual(registry.schema("lucius_case").supported_actions, ["record_recurrence"]);
+  assert.deepEqual(registry.schema("inbox").supported_actions, ["mark_processed", "archive", "restore"]);
+  assert.deepEqual(registry.schema("inbox").writable_fields, ["content"]);
   assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
   assert.match(registry.schema("project_item").validation_rules.join(" "), /never automatically promoted to verified/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);
+});
+
+test("generic Inbox searches current and historical items while lifecycle changes stay actions", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const first = await registry.create("inbox", { content: "整理 Reacher 观后感" });
+  const second = await registry.create("inbox", { content: "给项目补一条需求" });
+  assert.equal(first.source, "chatgpt");
+  assert.deepEqual((await registry.search("inbox", { query: "Reacher", filters: {}, limit: 20 })).items.map((item) => item.id), [first.id]);
+  const processed = await registry.action("inbox", { id: first.id as number, action: "mark_processed", data: {} });
+  assert.equal(processed.status, "processed");
+  assert.deepEqual((await registry.search("inbox", { query: "Reacher", filters: {}, limit: 20 })).items, []);
+  assert.deepEqual((await registry.search("inbox", { query: "Reacher", filters: { status: "all" }, limit: 20 })).items.map((item) => item.id), [first.id]);
+  const edited = await registry.update("inbox", second.id as number, { content: "给 EvaOrbit 项目补一条需求" });
+  assert.equal(edited.status, "inbox");
+  await assert.rejects(() => registry.update("inbox", second.id as number, { status: "archived" }), /does not accept: status/);
+  assert.equal((await registry.action("inbox", { id: first.id as number, action: "archive", data: {} })).status, "archived");
+  assert.equal((await registry.action("inbox", { id: first.id as number, action: "restore", data: {} })).status, "inbox");
+  assert.deepEqual(await registry.delete("inbox", second.id as number), { deleted: true, id: second.id });
 });
 
 test("project items remain durable and Done stays distinct from Verified", async () => {
@@ -151,6 +183,7 @@ test("production registry delegates every write and action to existing business 
   assert.match(source, /delete: deleteChronicleEntry/);
   assert.match(source, /memo: \{ search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
   assert.match(source, /recordRecurrence: recordLuciusCaseRecurrence/);
+  assert.match(source, /inbox: \{ search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox \}/);
   assert.doesNotMatch(source, /\.from\(|DELETE FROM|INSERT INTO|UPDATE\s+\w+/i);
 });
 

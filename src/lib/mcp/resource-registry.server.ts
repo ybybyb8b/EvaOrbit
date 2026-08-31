@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
+import { archiveInbox, createInbox, deleteInbox, getInbox, markInboxProcessed, restoreInbox, searchInbox, updateInbox } from "../services/inbox";
 import { createLuciusCase, createLuciusDiaryEntry, deleteLuciusCase, deleteLuciusDiaryEntry, getLuciusCase, getLuciusDiaryEntry, listLuciusCases, listLuciusDiaryEntries, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry } from "../services/lucius";
 import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../services/memo";
 import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
@@ -8,6 +9,7 @@ import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryN
 import { createResourceRegistry } from "./resource-registry";
 
 export const resourceRegistry = createResourceRegistry({
+  inbox: { search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox },
   memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
   luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },
