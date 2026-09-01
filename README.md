@@ -61,6 +61,10 @@ SQLite schema v7 会先把旧 `api_key` 明文加密并删除明文列；schema 
 
 完整步骤见 [DEPLOYMENT.md](./DEPLOYMENT.md)。项目不会自动创建 Supabase / Vercel 项目，也不会自动上传现有 SQLite 数据。
 
+## iOS Native Host
+
+仓库内的轻量 Swift/WKWebView Host、GitHub Actions ad-hoc IPA 构建、patched xtool 和 Windows/WSL 安装链路见 [docs/IOS_NATIVE_HOST.md](./docs/IOS_NATIVE_HOST.md)。Web 主体继续部署在 Vercel，数据继续使用 Supabase。
+
 ## 数据库命令
 
 ```bash

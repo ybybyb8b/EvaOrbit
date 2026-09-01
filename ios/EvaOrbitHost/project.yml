@@ -1,0 +1,73 @@
+name: EvaOrbitHost
+
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: zh-Hans
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  EvaOrbitHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+    dependencies:
+      - sdk: WebKit.framework
+      - sdk: HealthKit.framework
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: EvaOrbit
+        EvaOrbitBaseURL: https://eva-orbit.vercel.app
+        ITSAppUsesNonExemptEncryption: false
+        NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: Generated/EvaOrbitHost.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.nativehost
+        PRODUCT_NAME: EvaOrbitHost
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+
+  EvaOrbitHostTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: EvaOrbitHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.nativehost.tests
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  EvaOrbitHost:
+    build:
+      targets:
+        EvaOrbitHost: all
+        EvaOrbitHostTests: [test]
+    test:
+      targets:
+        - EvaOrbitHostTests

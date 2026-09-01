@@ -1,0 +1,84 @@
+name: iOS Native Host
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ios/EvaOrbitHost/**"
+      - "scripts/ios/prepare-assets.sh"
+      - "scripts/ios/package-ad-hoc-ipa.sh"
+      - ".github/workflows/ios-native-host.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodebuild -version
+
+      - name: Prepare native assets
+        run: bash scripts/ios/prepare-assets.sh
+
+      - name: Generate Xcode project
+        working-directory: ios/EvaOrbitHost
+        run: xcodegen generate
+
+      - name: Compile host and tests for Simulator
+        working-directory: ios/EvaOrbitHost
+        run: |
+          xcodebuild \
+            -project EvaOrbitHost.xcodeproj \
+            -scheme EvaOrbitHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing
+
+      - name: Build ad-hoc signed device app
+        working-directory: ios/EvaOrbitHost
+        run: |
+          xcodebuild \
+            -project EvaOrbitHost.xcodeproj \
+            -scheme EvaOrbitHost \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Device" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            build
+
+      - name: Verify entitlements and package IPA
+        run: |
+          app="$RUNNER_TEMP/EvaOrbitHost-Device/Build/Products/Release-iphoneos/EvaOrbitHost.app"
+          bash scripts/ios/package-ad-hoc-ipa.sh "$app" "$RUNNER_TEMP/EvaOrbitHost-Artifact"
+          dsym="$RUNNER_TEMP/EvaOrbitHost-Device/Build/Products/Release-iphoneos/EvaOrbitHost.app.dSYM"
+          if [[ -d "$dsym" ]]; then
+            ditto "$dsym" "$RUNNER_TEMP/EvaOrbitHost-Artifact/EvaOrbitHost.app.dSYM"
+          fi
+          xcodebuild -version > "$RUNNER_TEMP/EvaOrbitHost-Artifact/XCODE_VERSION.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/EvaOrbitHost-Artifact/GIT_SHA.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EvaOrbitHost-ad-hoc-${{ github.run_number }}
+          path: ${{ runner.temp }}/EvaOrbitHost-Artifact
+          if-no-files-found: error
+          retention-days: 14

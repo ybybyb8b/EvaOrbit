@@ -8,10 +8,16 @@ work/npm-cache/
 .next-verify/
 out/
 coverage/
+tmp/
 .vercel/
 *.tsbuildinfo
 notion-import-reports/
 notion-import-work/
+
+# Generated iOS project and build products
+ios/EvaOrbitHost/EvaOrbitHost.xcodeproj/
+ios/EvaOrbitHost/build/
+ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 
 # Local environment and secrets
 .env*

@@ -1,0 +1,56 @@
+name: Build patched xtool
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tools/xtool/patches/**"
+      - ".github/workflows/xtool-patched.yml"
+
+permissions:
+  contents: read
+
+env:
+  XTOOL_COMMIT: 2d58d987edff728fccebc6df643b1672e3583f00
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned xtool source
+        run: |
+          git clone https://github.com/xtool-org/xtool.git "$RUNNER_TEMP/xtool"
+          git -C "$RUNNER_TEMP/xtool" checkout "$XTOOL_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/xtool" rev-parse HEAD)" = "$XTOOL_COMMIT"
+
+      - name: Apply and verify HealthKit background-delivery patch
+        run: |
+          patch="$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch"
+          git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
+          git -C "$RUNNER_TEMP/xtool" apply "$patch"
+          grep -R -q 'public static let identifier = "com.apple.developer.healthkit.background-delivery"' "$RUNNER_TEMP/xtool/Sources/XKit"
+          grep -R -q 'DeveloperServicesCapability(.healthkit, isFree: true)' "$RUNNER_TEMP/xtool/Sources/XKit"
+
+      - name: Build patched AppImage
+        run: docker build --target build-xtool -t evaorbit-xtool-patched "$RUNNER_TEMP/xtool"
+
+      - name: Extract AppImage
+        run: |
+          mkdir -p "$RUNNER_TEMP/xtool-artifact"
+          container_id="$(docker create evaorbit-xtool-patched)"
+          trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container_id:/xtool/Linux/packages/." "$RUNNER_TEMP/xtool-artifact/"
+          cd "$RUNNER_TEMP/xtool-artifact"
+          sha256sum ./*.AppImage > SHA256SUMS
+          printf '%s\n' "$XTOOL_COMMIT" > XTOOL_COMMIT.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xtool-patched-${{ env.XTOOL_COMMIT }}
+          path: ${{ runner.temp }}/xtool-artifact
+          if-no-files-found: error
+          retention-days: 30
