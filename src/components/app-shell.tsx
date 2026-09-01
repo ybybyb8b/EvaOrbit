@@ -13,7 +13,7 @@ const navigationGroups = [
     { href: "/", label: "Home", icon: "home" as const },
     { href: "/inbox", label: "Inbox", icon: "inbox" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
-    { href: "/notifications", label: "Notifications", icon: "notifications" as const },
+    { href: "/lucius", label: "Lucius", icon: "lucius" as const },
     { href: "/projects", label: "Projects", icon: "tasks" as const },
   ] },
   { label: "LIFE", items: [
@@ -28,7 +28,6 @@ const navigationGroups = [
     { href: "/media", label: "Media", icon: "media" as const },
     { href: "/memo", label: "Memo", icon: "memory" as const },
     { href: "/chronicle", label: "Chronicle", icon: "chronicle" as const },
-    { href: "/lucius", label: "Lucius", icon: "history" as const },
   ] },
 ];
 
@@ -59,6 +58,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label="移动端导航">
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>Home</span></Link>
+        <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>Settings</span></Link>
       </nav>
       <EvaWakePanel open={evaOpen} onClose={() => setEvaOpen(false)} />

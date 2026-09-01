@@ -34,6 +34,16 @@ export function resolveEnergyMetric(manual: number | null, healthKit: number | n
   return { value: null, source: null };
 }
 
+export function resolveEffectiveDailyEnergy(
+  manual: { restingEnergyKcal: number | null; activeEnergyKcal: number | null },
+  healthKit?: { restingEnergyKcal: number | null; activeEnergyKcal: number | null } | null,
+) {
+  return {
+    resting: resolveEnergyMetric(manual.restingEnergyKcal, healthKit?.restingEnergyKcal),
+    active: resolveEnergyMetric(manual.activeEnergyKcal, healthKit?.activeEnergyKcal),
+  };
+}
+
 export function limitState(count: number, limit: number): LimitState {
   if (count > limit) return "exceeded_limit";
   if (count === limit) return "reached_limit";

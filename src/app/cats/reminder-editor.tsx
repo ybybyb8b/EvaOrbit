@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { currentLocalDate, dateTimeDraft, dateTimePayload, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
 import type { Pet, Reminder } from "@/lib/types";
+import { reconcileNativeNotifications } from "@/lib/native-bridge";
 
 function tomorrow(): DateTimeDraft {
   const date = new Date(`${currentLocalDate()}T12:00:00`);
@@ -30,6 +31,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
     }) });
     setSaving(false);
     if (!response.ok) { setError((await response.json()).error ?? "Could not save one-time task."); return; }
+    try { await reconcileNativeNotifications(); } catch { /* The browser push path remains active. */ }
     onSaved();
   }
 

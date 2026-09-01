@@ -3,6 +3,7 @@ type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
   home: "/icons/nav/home.png",
+  lucius: "/icons/features/lucius.png",
   settings: "/icons/nav/settings.png",
 };
 

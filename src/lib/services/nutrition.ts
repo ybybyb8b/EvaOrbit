@@ -1,6 +1,6 @@
 import "server-only";
 import { getRepository } from "../repositories";
-import { calculateDailyNutrition, resolveEnergyMetric } from "../nutrition";
+import { calculateDailyNutrition, resolveEffectiveDailyEnergy } from "../nutrition";
 import type { DailyNutritionSummary, DrinkLog, FoodLog } from "../types";
 import { listDrinkLogs } from "./drink";
 import { listFoodLogs } from "./food";
@@ -14,8 +14,7 @@ function withEnergySources(
   manual: { restingEnergyKcal: number | null; activeEnergyKcal: number | null; notes: string },
   healthKit: HealthKitDailyEnergy | null,
 ): DailyNutritionSummary {
-  const resting = resolveEnergyMetric(manual.restingEnergyKcal, healthKit?.restingEnergyKcal);
-  const active = resolveEnergyMetric(manual.activeEnergyKcal, healthKit?.activeEnergyKcal);
+  const { resting, active } = resolveEffectiveDailyEnergy(manual, healthKit);
   return {
     ...calculateDailyNutrition(date, foods, drinks, { restingEnergyKcal: resting.value, activeEnergyKcal: active.value, notes: manual.notes }),
     manualRestingEnergyKcal: manual.restingEnergyKcal,

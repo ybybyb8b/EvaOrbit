@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, InboxItem, LuciusCase, LuciusDiaryEntry, Memo, Project, ProjectItem } from "./types.ts";
+import type { ChronicleEntry, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
@@ -11,6 +11,7 @@ function fakeOperations() {
   const memos: Memo[] = [];
   const diary: LuciusDiaryEntry[] = [];
   const cases: LuciusCase[] = [];
+  const luciusState: LuciusState = { currentNote: "", status: "quiet", mood: "composed", updatedAt: null };
   const projects: Project[] = [];
   const projectItems: ProjectItem[] = [];
   let nextInbox = 0, nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0, nextProject = 0, nextProjectItem = 0;
@@ -55,6 +56,10 @@ function fakeOperations() {
       async delete(id) { return remove(cases, id); },
       async recordRecurrence(id, occurredDate = "2026-08-31") { const item = cases.find((entry) => entry.id === id); if (!item) return null; const interval = Math.round((Date.parse(`${occurredDate}T00:00:00Z`) - Date.parse(`${item.latestOccurredDate}T00:00:00Z`)) / 86400000) || null; Object.assign(item, { occurrenceCount: item.occurrenceCount + 1, latestOccurredDate: occurredDate, recurrenceIntervalDays: interval, isRecurrence: true, consecutiveCorrectCount: 0, updatedAt: "2026-08-31T00:00:00Z" }); return item; },
     },
+    luciusState: {
+      async get() { return luciusState; },
+      async update(input) { Object.assign(luciusState, input, { updatedAt: "2026-09-01T14:41:00Z" }); return luciusState; },
+    },
     project: {
       async search({ query, status, limit = 20 }) { return projects.filter((item) => (!query || item.name.includes(query)) && (!status || item.status === status)).slice(0, limit); },
       async get(id) { return projects.find((item) => item.id === id) ?? null; },
@@ -76,10 +81,11 @@ function fakeOperations() {
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["inbox", "memo", "chronicle", "lucius_diary", "lucius_case", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["inbox", "memo", "chronicle", "lucius_diary", "lucius_case", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
+  assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_state")?.capabilities, ["get", "update"]);
   assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);
   assert.deepEqual(registry.schema("chronicle").writable_fields, ["date", "title", "content_md", "source"]);
   assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md"]);
@@ -93,6 +99,16 @@ test("registry exposes long-term memory and project resources without changing g
   assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
   assert.match(registry.schema("project_item").validation_rules.join(" "), /never automatically promoted to verified/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);
+});
+
+test("Lucius state is a single explicit MCP-updatable display resource", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  assert.equal((await registry.get("lucius_state", "current")).status, "quiet");
+  const updated = await registry.update("lucius_state", "current", { current_note: "I remember today.", status: "resting", mood: "composed" });
+  assert.equal(updated.current_note, "I remember today.");
+  assert.equal(updated.updated_at, "2026-09-01T14:41:00Z");
+  await assert.rejects(() => registry.get("lucius_state", "other"), /id must be current/);
+  await assert.rejects(() => registry.update("lucius_state", "current", { affection: 91 }), /does not accept/);
 });
 
 test("generic Inbox searches current and historical items while lifecycle changes stay actions", async () => {

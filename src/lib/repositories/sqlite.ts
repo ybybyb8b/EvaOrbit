@@ -111,6 +111,8 @@ export const sqliteRepository: EvaOrbitRepository = {
   async updateLuciusCase(id, input) { return sqlite.updateLuciusCase(id, input); },
   async deleteLuciusCase(id) { return sqlite.deleteLuciusCase(id); },
   async recordLuciusCaseRecurrence(id, occurredDate) { return sqlite.recordLuciusCaseRecurrence(id, occurredDate); },
+  async getLuciusState() { return sqlite.getLuciusState(); },
+  async updateLuciusState(input) { return sqlite.updateLuciusState(input); },
   async listDrinkLogs(input) { return sqlite.listDrinkLogs(input); },
   async getDrinkLog(id) { return sqlite.getDrinkLog(id); },
   async createDrinkLog(input) { return sqlite.createDrinkLog(input); },

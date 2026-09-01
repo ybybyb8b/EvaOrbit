@@ -36,11 +36,11 @@ test("Training migrations define independent owner-scoped storage for Supabase a
   assert.match(sqlite, /INSERT INTO migrations\(version\) VALUES\(24\)/);
 });
 
-test("Health home defaults Energy Review to yesterday and exposes Training CRUD", () => {
+test("Health home shows today's energy outcome and exposes Training CRUD", () => {
   const page = readFileSync(new URL("../app/health/page.tsx", import.meta.url), "utf8");
   const collection = readFileSync(new URL("../app/api/health/training/route.ts", import.meta.url), "utf8");
   const item = readFileSync(new URL("../app/api/health/training/[id]/route.ts", import.meta.url), "utf8");
-  assert.match(page, /shiftDate\(today, -1\)/);
+  assert.match(page, /getDailyNutritionSummary\(today\)/);
   assert.match(collection, /export async function GET/);
   assert.match(collection, /export async function POST/);
   assert.match(item, /export async function PATCH/);

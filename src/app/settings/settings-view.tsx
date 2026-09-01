@@ -1,11 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
-import { Icon } from "@/components/icons";
-import { AiProvidersSettings } from "./ai-providers-settings";
+import Link from "next/link";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
 
 type Draft = Omit<AiSettings, "hasApiKey" | "maskedApiKey" | "updatedAt"> & { apiKey: string };
@@ -88,14 +86,7 @@ export function SettingsView() {
   if (loading) return <div className="page"><div className="loading-state">正在读取设置…</div></div>;
 
   return <div className="page">
-    <PageHeader eyebrow="SETTINGS" title="Settings" description="模型怎么连、另一个自己怎么说话，都放在这里。" />
-    <div className="settings-summary">
-      <section><span>生产数据</span><strong>Supabase Postgres</strong></section>
-      <section><span>访问方式</span><strong>私人账户 · RLS</strong></section>
-      <section><span>本地后备</span><strong>SQLite schema v8</strong></section>
-    </div>
-
-    <AiProvidersSettings />
+    <PageHeader eyebrow="APP & APPEARANCE" title="App & Appearance" description="The names, visual details, and conversational tone that make this space yours." action={<Link className="settings-back-link" href="/settings">All settings</Link>} />
 
     <form className="provider-card" onSubmit={save}>
       <section className="conversation-appearance-settings">
@@ -136,10 +127,6 @@ export function SettingsView() {
         <button className="button primary" disabled={working} type="submit">留下偏好</button>
       </div>
     </form>
-    <section className="legacy-data-settings">
-      <div><span className="eyebrow">LEGACY DATA</span><h2>旧数据还在</h2><p>Task 和 Memory 已从日常导航撤下，但本轮不会删除页面、记录或历史链接。需要时仍可以从这里查看。</p></div>
-      <nav aria-label="旧数据入口"><Link href="/tasks"><span><Icon name="tasks" />旧待办</span><Icon name="arrow" /></Link><Link href="/memory"><span><Icon name="memory" />旧 Memory</span><Icon name="arrow" /></Link></nav>
-    </section>
   </div>;
 }
 

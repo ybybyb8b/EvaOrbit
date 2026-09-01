@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { CatRoutine, Pet } from "@/lib/types";
+import { reconcileNativeNotifications } from "@/lib/native-bridge";
 
 type Props = {
   pets: Pet[];
@@ -44,6 +45,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
     const response = await fetch(editing ? `/api/cats/routines/${editing.id}` : "/api/cats/routines", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, petId: draft.scope === "cat" ? draft.petId : null, firstDueAt: new Date(draft.firstDueAt).toISOString(), nextDueAt: new Date(draft.nextDueAt).toISOString() }) });
     setSaving(false);
     if (!response.ok) { setError((await response.json()).error ?? "Could not save routine"); return; }
+    try { await reconcileNativeNotifications(); } catch { /* The browser push path remains active. */ }
     onSaved(editing ? "Routine updated" : "Routine created");
   }
   return <form className="editor-card routine-editor" onSubmit={submit}>

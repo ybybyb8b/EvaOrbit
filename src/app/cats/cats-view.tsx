@@ -7,6 +7,7 @@ import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
+import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { CatRecordEditor } from "./cat-record-editor";
 import { ReminderEditor } from "./reminder-editor";
 import { RoutineEditor } from "./routine-editor";
@@ -53,8 +54,8 @@ export function CatsView({ initialDashboard }: { initialDashboard: Dashboard }) 
   const recentRecords = dashboard.timeline.filter(item => item.petId !== null).slice(0, 5);
   async function load() { const response = await fetch("/api/cats"); if (response.ok) setDashboard(await response.json()); }
   function addRoutine(scope: CatRoutine["scope"]) { setEditingRoutine(undefined); setRoutineScope(scope); setPanel("routine"); }
-  async function completeRoutine(id: number) { const response = await fetch(`/api/cats/routines/${id}/complete`, { method: "POST" }); if (response.ok) { setMessage("Routine completed"); await load(); } }
-  async function reminderAction(id:number,action:"complete"|"cancel"){if(action==="cancel"&&!confirm("Cancel this one-time task?"))return;const response=await fetch(`/api/reminders/${id}${action==="complete"?"/complete":""}`,{method:action==="complete"?"POST":"DELETE"});if(response.ok){setMessage(action==="complete"?"One-time task completed":"One-time task cancelled");await load();}}
+  async function completeRoutine(id: number) { const response = await fetch(`/api/cats/routines/${id}/complete`, { method: "POST" }); if (response.ok) { setMessage("Routine completed"); await load(); try { await reconcileNativeNotifications(); } catch { /* Web fallback remains active. */ } } }
+  async function reminderAction(id:number,action:"complete"|"cancel"){if(action==="cancel"&&!confirm("Cancel this one-time task?"))return;const response=await fetch(`/api/reminders/${id}${action==="complete"?"/complete":""}`,{method:action==="complete"?"POST":"DELETE"});if(response.ok){setMessage(action==="complete"?"One-time task completed":"One-time task cancelled");await load();try{await reconcileNativeNotifications();}catch{/* Web fallback remains active. */}}}
   async function editRecord(item: CatTimelineEntry) { const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`); if (!response.ok) return; setEditingRecord({ kind: item.kind, id: item.id, record: await response.json() }); setPanel("record"); }
   async function removeRecord(item: CatTimelineEntry) { if (!confirm(`Delete “${item.title}”?`)) return; const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`, { method: "DELETE" }); if (response.ok) void load(); }
   return <div className="page cats-page">

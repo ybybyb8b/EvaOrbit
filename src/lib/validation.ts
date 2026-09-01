@@ -321,6 +321,17 @@ export function parseLuciusDiaryPatch(value: unknown) {
   return result;
 }
 
+export function parseLuciusStatePatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    currentNote: body.currentNote === undefined ? undefined : text(body.currentNote, "Lucius 当前便签", 2_000, false),
+    status: body.status === undefined ? undefined : text(body.status, "Lucius 状态", 80),
+    mood: body.mood === undefined ? undefined : text(body.mood, "Lucius mood", 80),
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Lucius state 字段");
+  return result;
+}
+
 function caseDates(firstOccurredDate: string, latestOccurredDate: string) {
   if (latestOccurredDate < firstOccurredDate) throw new ValidationError("最近发生日期不能早于首次发生日期");
 }

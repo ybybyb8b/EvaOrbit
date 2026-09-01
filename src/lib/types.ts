@@ -490,6 +490,13 @@ export interface LuciusDiaryEntry extends MigrationTrace {
   updatedAt: string;
 }
 
+export interface LuciusState {
+  currentNote: string;
+  status: string;
+  mood: string;
+  updatedAt: string | null;
+}
+
 export type LuciusCaseErrorType = "naming" | "memory_omission" | "factual" | "tool_misuse" | "expression" | "other";
 export type LuciusCaseSeverity = "minor" | "moderate" | "serious" | "habitual";
 export type LuciusCaseStatus = "serving" | "probation" | "temporary_release" | "permanent_record";

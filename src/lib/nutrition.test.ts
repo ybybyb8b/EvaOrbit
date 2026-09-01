@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { calculateDailyNutrition, calculateLimitStatus, limitState, resolveEnergyMetric } from "./nutrition.ts";
+import { calculateDailyNutrition, calculateLimitStatus, limitState, resolveEffectiveDailyEnergy, resolveEnergyMetric } from "./nutrition.ts";
 import type { DrinkLimit, DrinkLog, FoodLog } from "./types.ts";
 
 const food = (values: Partial<FoodLog>): FoodLog => ({ id: 1, occurredAt: "2026-08-25T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "", scene: "home", estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", notes: "", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "", ...values, rating: values.rating ?? null });
@@ -25,6 +25,16 @@ test("manual daily energy remains an explicit override over Apple Health", () =>
   assert.deepEqual(resolveEnergyMetric(1550, 1490), { value: 1550, source: "manual" });
   assert.deepEqual(resolveEnergyMetric(null, 1490), { value: 1490, source: "apple_health" });
   assert.deepEqual(resolveEnergyMetric(null, null), { value: null, source: null });
+});
+
+test("effective daily energy resolves each metric independently", () => {
+  assert.deepEqual(resolveEffectiveDailyEnergy(
+    { restingEnergyKcal: 1550, activeEnergyKcal: null },
+    { restingEnergyKcal: 1490, activeEnergyKcal: 420 },
+  ), {
+    resting: { value: 1550, source: "manual" },
+    active: { value: 420, source: "apple_health" },
+  });
 });
 
 test("reports drink limit states factually", () => {

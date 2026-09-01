@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/icons";
+import { NativeNotificationControl } from "@/components/native-notification-control";
 import { PageHeader } from "@/components/page-header";
 import { PushNotificationControl } from "@/components/push-notification-control";
 import type { CatRoutine, NotificationDelivery, Pet, Reminder, ScheduledNotification } from "@/lib/types";
 import { ReminderEditor } from "../cats/reminder-editor";
 import { RoutineEditor } from "../cats/routine-editor";
+import { reconcileNativeNotifications } from "@/lib/native-bridge";
 
 type Data = { upcoming: ScheduledNotification[]; routines: CatRoutine[]; reminders: Reminder[]; history: NotificationDelivery[] };
 type Tab = "upcoming" | "rules" | "history";
@@ -16,18 +19,19 @@ function month(value: string) { const date = new Date(value); const now = new Da
 
 export function NotificationsView({ pets, initial }: { pets: Pet[]; initial: Data }) {
   const [data, setData] = useState(initial); const [tab, setTab] = useState<Tab>("upcoming"); const [panel, setPanel] = useState<"new" | "routine" | "reminder" | null>(null); const [selected, setSelected] = useState<ScheduledNotification | null>(null); const [editingRoutine, setEditingRoutine] = useState<CatRoutine>(); const [editingReminder, setEditingReminder] = useState<Reminder>(); const [message, setMessage] = useState("");
-  async function load() { const response = await fetch("/api/notifications"); if (response.ok) setData(await response.json()); }
+  async function load() { const response = await fetch("/api/notifications"); if (response.ok) { const next = await response.json() as Data; setData(next); try { await reconcileNativeNotifications(next.upcoming); } catch { /* Web Push remains the fallback if the native host rejects a sync. */ } } }
   async function cancel(reminder: Reminder) { const label = reminder.sourceType === "cat_routine" ? "Skip this occurrence? The routine will remain." : "Cancel this reminder?"; if (!confirm(label)) return; const response = await fetch(`/api/reminders/${reminder.id}`, { method: "DELETE" }); if (response.ok) { setSelected(null); setMessage(reminder.sourceType === "cat_routine" ? "Occurrence skipped" : "Reminder cancelled"); await load(); } }
   async function complete(reminder:Reminder){const response=await fetch(`/api/reminders/${reminder.id}/complete`,{method:"POST"});if(response.ok){setSelected(null);setMessage(reminder.sourceType==="cat_routine"?"Routine completed":"One-time task completed");await load();}}
   async function toggleReminder(reminder: Reminder) { const enabled = !reminder.isActive; const response = await fetch(`/api/reminders/${reminder.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: enabled, status: enabled ? "scheduled" : "cancelled", cancelledAt: enabled ? null : new Date().toISOString() }) }); if (response.ok) await load(); }
-  return <div className="page notifications-page"><PageHeader eyebrow="SPACE" title="Notifications" action={<button className="button primary" onClick={() => setPanel("new")}><Icon name="plus"/>New reminder</button>}/>{message && <p className="success-banner" role="status">{message}</p>}
+  return <div className="page notifications-page"><PageHeader eyebrow="SETTINGS · NOTIFICATIONS" title="Notifications" description="Native and Web delivery live together; your reminder rules stay the same." action={<div className="settings-page-actions"><Link className="settings-back-link" href="/settings">All settings</Link><button className="button primary" onClick={() => setPanel("new")}><Icon name="plus"/>New reminder</button></div>}/>{message && <p className="success-banner" role="status">{message}</p>}
+    <div className="notification-channels"><NativeNotificationControl /><PushNotificationControl /></div>
     <nav className="notification-tabs" aria-label="Notification sections">{(["upcoming", "rules", "history"] as Tab[]).map(value => <button key={value} className={tab === value ? "active" : ""} onClick={() => setTab(value)}>{value[0].toUpperCase() + value.slice(1)}{value === "upcoming" && <span>{data.upcoming.length}</span>}</button>)}</nav>
     {panel === "new" && <ReminderEditor pets={pets} onCancel={() => setPanel(null)} onSaved={() => { setPanel(null); setMessage("Reminder created"); void load(); }}/>}
     {panel === "routine" && editingRoutine && <RoutineEditor pets={pets} editing={editingRoutine} onCancel={() => setPanel(null)} onSaved={value => { setPanel(null); setMessage(value); void load(); }}/>}
     {panel === "reminder" && editingReminder && <ReminderEditor pets={pets} editing={editingReminder} onCancel={() => setPanel(null)} onSaved={() => { setPanel(null); setMessage("Reminder updated"); void load(); }}/>}
     {tab === "upcoming" && <Upcoming items={data.upcoming} selected={selected} onSelect={setSelected} onEdit={item => { if (item.isRoutine) { const routine = data.routines.find(value => value.id === item.sourceId); if (routine) { setEditingRoutine(routine); setPanel("routine"); } } else { setEditingReminder(item); setPanel("reminder"); } }} onComplete={item=>void complete(item)} onCancel={item => void cancel(item)}/>}
     {tab === "rules" && <Rules routines={data.routines} reminders={data.reminders} onEditRoutine={routine => { setEditingRoutine(routine); setPanel("routine"); }} onEditReminder={reminder => { setEditingReminder(reminder); setPanel("reminder"); }} onToggleReminder={reminder => void toggleReminder(reminder)} onDeleteRoutine={async routine => { if (!confirm(`Delete routine “${routine.title}”?`)) return; if ((await fetch(`/api/cats/routines/${routine.id}`, { method: "DELETE" })).ok) { setMessage("Routine deleted"); await load(); } }}/>}
-    {tab === "history" && <History items={data.history}/>}<PushNotificationControl />
+    {tab === "history" && <History items={data.history}/>}
   </div>;
 }
 

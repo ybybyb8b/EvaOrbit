@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo } from "./validation.ts";
+import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusStatePatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo } from "./validation.ts";
 
 test("Memo validation keeps long-term fields, unique tags and PATCH semantics", () => {
   const item = parseNewMemo({ title: "  姓名规则  ", content: "始终使用正确称呼", type: "basic", tags: ["人物", "人物", "规则"], eventDate: "2026-08-29", confirmedAt: "2026-08-29T08:00:00+08:00" });
@@ -33,6 +33,13 @@ test("Lucius Cases preserves the complete correction record and validates counte
   assert.throws(() => parseLuciusCasePatch({ occurrenceCount: 0 }));
 });
 
+test("Lucius state accepts only the three explicit presentation fields", () => {
+  assert.deepEqual(parseLuciusStatePatch({ currentNote: "  Return before dusk.  ", status: "reading", mood: "calm" }), { currentNote: "Return before dusk.", status: "reading", mood: "calm" });
+  assert.equal(parseLuciusStatePatch({ currentNote: "" }).currentNote, "");
+  assert.throws(() => parseLuciusStatePatch({}));
+  assert.throws(() => parseLuciusStatePatch({ status: "" }));
+});
+
 test("migration adds three independent owner-scoped models without touching Chronicle", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/202608290004_memo_lucius.sql", import.meta.url), "utf8");
   assert.match(sql, /create table if not exists public\.memos/);
@@ -53,9 +60,24 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   const memoRoute = readFileSync(new URL("../app/api/memos/route.ts", import.meta.url), "utf8");
   const diaryRoute = readFileSync(new URL("../app/api/lucius/diary/route.ts", import.meta.url), "utf8");
   const casesRoute = readFileSync(new URL("../app/api/lucius/cases/route.ts", import.meta.url), "utf8");
+  const stateRoute = readFileSync(new URL("../app/api/lucius/state/route.ts", import.meta.url), "utf8");
   assert.match(shell, /href: "\/memo"/);
   assert.match(shell, /href: "\/lucius"/);
+  assert.match(shell, /<Link href="\/lucius"[\s\S]*?<span>Lucius<\/span><\/Link>/);
   assert.match(destinations, /href: "\/memo"/);
   assert.match(destinations, /href: "\/lucius"/);
   for (const route of [memoRoute, diaryRoute, casesRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
+  assert.match(stateRoute, /export async function GET/);
+  assert.match(stateRoute, /export async function PATCH/);
+});
+
+test("Lucius state migration is a minimal owner-scoped singleton", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/202609010002_lucius_state.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table if not exists public\.lucius_state/);
+  assert.match(sql, /user_id uuid primary key/);
+  assert.match(sql, /current_note text[\s\S]*status text[\s\S]*mood text[\s\S]*updated_at timestamptz/);
+  assert.match(sql, /alter table public\.lucius_state enable row level security/);
+  assert.match(sql, /auth\.uid\(\).*user_id/s);
+  assert.match(sql, /grant update \(current_note, status, mood\)/);
+  assert.doesNotMatch(sql, /affection|relationship|history|timeline/i);
 });

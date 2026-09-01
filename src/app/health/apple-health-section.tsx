@@ -1,34 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-
-type NativeBridgeResponse<T> = { ok: true; result: T } | { ok: false; error: { code: string; message: string } };
-type NativeBridge = { version: number; call<T>(method: string, params?: Record<string, unknown>): Promise<NativeBridgeResponse<T>> };
-type HealthKitStatus = {
-  available: boolean;
-  installationId: string;
-  authorizationRequested: boolean;
-  hasReadData: boolean;
-  metrics: Array<{ metric: "resting" | "active"; name: string }>;
-  backgroundDelivery: Record<string, "enabled" | "failed" | "not_requested">;
-  lastLocalSync: string | null;
-  lastSuccessfulUpload: string | null;
-  pendingCount: number;
-  credentialConfigured: boolean;
-  lastError: string | null;
-};
-
-declare global {
-  interface Window { EvaOrbitNative?: NativeBridge }
-}
-
-async function nativeCall<T>(method: string, params: Record<string, unknown> = {}) {
-  const bridge = window.EvaOrbitNative;
-  if (!bridge) throw new Error("EvaOrbit Native Host is not available");
-  const response = await bridge.call<T>(method, params);
-  if (!response.ok) throw new Error(response.error.message);
-  return response.result;
-}
+import { getNativeHostInfo, healthKitSupported, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
 
 function formatTime(value: string | null) {
   if (!value) return "Not yet";
@@ -48,8 +21,9 @@ export function AppleHealthSection() {
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    if (!window.EvaOrbitNative) { setNativeHost(false); setStatus(null); return; }
-    setNativeHost(true);
+    const info = await getNativeHostInfo();
+    if (!healthKitSupported(info)) { setNativeHost(false); setStatus(null); return; }
+    setNativeHost(true); setError("");
     try { setStatus(await nativeCall<HealthKitStatus>("healthkit.getStatus")); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not read Apple Health status"); }
   }, []);

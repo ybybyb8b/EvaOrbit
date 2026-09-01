@@ -1,7 +1,7 @@
 import { ConflictError } from "../errors.ts";
-import type { ChronicleEntry, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, Memo, MemoStatus, MemoType, PersonMemoryNote, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary } from "../types.ts";
+import type { ChronicleEntry, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusState, Memo, MemoStatus, MemoType, PersonMemoryNote, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary } from "../types.ts";
 import { parseMemoryNote,parseRelationEvent,parseRelationPerson,parseRelationPersonPatch,parseSettleAdvance } from "../relations-validation.ts";
-import { dateOnly, parseChronicleEntryPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseMemoPatch, parseNewChronicleEntry, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, parseNewProject, parseNewProjectItem, parseProjectItemPatch, parseProjectPatch, ValidationError } from "../validation.ts";
+import { dateOnly, parseChronicleEntryPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusStatePatch, parseMemoPatch, parseNewChronicleEntry, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo, parseNewProject, parseNewProjectItem, parseProjectItemPatch, parseProjectPatch, ValidationError } from "../validation.ts";
 
 export type ResourceId = string | number;
 export type ResourceCapability = "search" | "get" | "create" | "update" | "delete" | "action";
@@ -100,12 +100,18 @@ export type LuciusCaseResourceOperations = {
   recordRecurrence(id: number, occurredDate?: string): Promise<LuciusCase | null>;
 };
 
+export type LuciusStateResourceOperations = {
+  get(): Promise<LuciusState>;
+  update(input: Partial<Pick<LuciusState, "currentNote" | "status" | "mood">>): Promise<LuciusState>;
+};
+
 export type ResourceRegistryOperations = {
   inbox: InboxResourceOperations;
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
   luciusCase: LuciusCaseResourceOperations;
+  luciusState: LuciusStateResourceOperations;
   project: ProjectResourceOperations;
   projectItem: ProjectItemResourceOperations;
   relationPerson: {search(input:{query?:string;includeArchived?:boolean;relationshipStatus?:"active"|"ended"}):Promise<RelationPersonSummary[]>;get(id:number):Promise<{person:RelationPerson;balance:{settlementMinor:number;socialMinor:number};latestEvent:RelationEvent|null;lastMetAt:string|null;lastMetHasExplicitTime:boolean|null;events:RelationEvent[];memoryNotes:PersonMemoryNote[]}|null>;create(input:ReturnType<typeof parseRelationPerson>):Promise<RelationPerson>;update(id:number,input:Partial<ReturnType<typeof parseRelationPersonPatch>>):Promise<RelationPerson|null>};
@@ -283,6 +289,32 @@ function luciusDiaryRecord(item: LuciusDiaryEntry): ResourceRecord {
 
 function luciusCaseRecord(item: LuciusCase): ResourceRecord {
   return { id: item.id, title: item.title, error_type: item.errorType, severity: item.severity, status: item.status, trigger_scenes: item.triggerScenes, error_quote: item.errorQuote, cause: item.cause, correct_behavior: item.correctBehavior, mandatory_rule: item.mandatoryRule, next_check: item.nextCheck, punishment: item.punishment, first_occurred_date: item.firstOccurredDate, latest_occurred_date: item.latestOccurredDate, occurrence_count: item.occurrenceCount, consecutive_correct_count: item.consecutiveCorrectCount, recurrence_interval_days: item.recurrenceIntervalDays, is_recurrence: item.isRecurrence, reset_threshold: item.resetThreshold, ...migrationRecord(item), created_at: item.createdAt, updated_at: item.updatedAt };
+}
+
+function luciusStateRecord(item: LuciusState): ResourceRecord {
+  return { id: "current", current_note: item.currentNote, status: item.status, mood: item.mood, updated_at: item.updatedAt };
+}
+
+function luciusStateResource(operations: LuciusStateResourceOperations): RegisteredResource {
+  const writableFields = ["current_note", "status", "mood"];
+  const current = (id: ResourceId) => { if (id !== "current") throw new ValidationError("Lucius state id must be current."); };
+  return {
+    schema: {
+      resource: "lucius_state",
+      description: "The single persisted display state for the Lucius space. It does not generate text or keep mood history.",
+      fields: {
+        id: { type: "string", description: "Stable singleton id: current.", read_only: true },
+        current_note: { type: "string", max_length: 2000, description: "The last explicitly saved Lucius note; empty is allowed." },
+        status: { type: "string", max_length: 80, description: "Short persisted status text." },
+        mood: { type: "string", max_length: 80, description: "Short persisted mood text." },
+        updated_at: { type: "string", format: "date-time", description: "Server-managed last update timestamp, or null before first save.", read_only: true },
+      },
+      required_fields: [], writable_fields: writableFields, searchable_fields: [], supported_actions: [],
+      validation_rules: ["use resource id current", "state changes only through explicit update", "no mood history, scores, or generated text", "unknown fields are rejected"],
+    },
+    async get(id) { current(id); return luciusStateRecord(await operations.get()); },
+    async update(id, data) { current(id); assertOnlyKeys(data, writableFields, "lucius_state update"); return luciusStateRecord(await operations.update(parseLuciusStatePatch(mappedInput(data, { current_note: "currentNote", status: "status", mood: "mood" })))); },
+  };
 }
 
 function chronicleResource(operations: ChronicleResourceOperations): RegisteredResource {
@@ -536,6 +568,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
     chronicleResource(operations.chronicle),
     luciusDiaryResource(operations.luciusDiary),
     luciusCaseResource(operations.luciusCase),
+    luciusStateResource(operations.luciusState),
     projectResource(operations.project),
     projectItemResource(operations.projectItem),
     relationPersonResource(operations.relationPerson),

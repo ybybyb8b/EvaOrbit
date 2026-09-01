@@ -5,9 +5,9 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -794,6 +794,20 @@ if (!hasV28) database.exec(`
   COMMIT;
 `);
 
+const hasV29 = database.prepare("SELECT 1 FROM migrations WHERE version = 29").get();
+if (!hasV29) database.exec(`
+  BEGIN;
+  CREATE TABLE lucius_state (
+    user_id TEXT PRIMARY KEY NOT NULL DEFAULT 'local',
+    current_note TEXT NOT NULL DEFAULT '' CHECK(length(current_note) <= 2000),
+    status TEXT NOT NULL DEFAULT 'quiet' CHECK(length(trim(status)) BETWEEN 1 AND 80),
+    mood TEXT NOT NULL DEFAULT 'composed' CHECK(length(trim(mood)) BETWEEN 1 AND 80),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  INSERT INTO migrations(version) VALUES(29);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1328,6 +1342,8 @@ export function createLuciusCase(input:NewLuciusCase){const result=database.prep
 export function updateLuciusCase(id:number,input:LuciusCasePatch){patchRow("lucius_cases",id,input,{title:"title",errorType:"error_type",severity:"severity",status:"status",triggerScenes:"trigger_scenes",errorQuote:"error_quote",cause:"cause",correctBehavior:"correct_behavior",mandatoryRule:"mandatory_rule",nextCheck:"next_check",punishment:"punishment",firstOccurredDate:"first_occurred_date",latestOccurredDate:"latest_occurred_date",occurrenceCount:"occurrence_count",consecutiveCorrectCount:"consecutive_correct_count",recurrenceIntervalDays:"recurrence_interval_days",isRecurrence:"is_recurrence",resetThreshold:"reset_threshold",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"},["triggerScenes"],["isRecurrence"]);return getLuciusCase(id);}
 export function deleteLuciusCase(id:number){return database.prepare("DELETE FROM lucius_cases WHERE id=? AND user_id='local'").run(id).changes>0;}
 export function recordLuciusCaseRecurrence(id:number,occurredDate:string){database.exec("BEGIN IMMEDIATE");try{const item=getLuciusCase(id);if(!item){database.exec("COMMIT");return null;}if(occurredDate<item.latestOccurredDate)throw new ConflictError("复发日期不能早于最近发生日期");const interval=Math.round((Date.parse(`${occurredDate}T00:00:00Z`)-Date.parse(`${item.latestOccurredDate}T00:00:00Z`))/86400000)||null;database.prepare("UPDATE lucius_cases SET occurrence_count=occurrence_count+1,latest_occurred_date=?,recurrence_interval_days=?,is_recurrence=1,consecutive_correct_count=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(occurredDate,interval,id);database.exec("COMMIT");return getLuciusCase(id);}catch(error){database.exec("ROLLBACK");throw error;}}
+export function getLuciusState():LuciusState{const row=database.prepare("SELECT current_note,status,mood,updated_at FROM lucius_state WHERE user_id='local'").get() as Record<string,unknown>|undefined;return row?{currentNote:String(row.current_note),status:String(row.status),mood:String(row.mood),updatedAt:String(row.updated_at)}:{currentNote:"",status:"quiet",mood:"composed",updatedAt:null};}
+export function updateLuciusState(input:LuciusStatePatch){const current=getLuciusState();database.prepare("INSERT INTO lucius_state(user_id,current_note,status,mood,updated_at) VALUES('local',?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET current_note=excluded.current_note,status=excluded.status,mood=excluded.mood,updated_at=CURRENT_TIMESTAMP").run(input.currentNote??current.currentNote,input.status??current.status,input.mood??current.mood);return getLuciusState();}
 
 function drinkFromRow(row:Record<string,unknown>):DrinkLog{return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:row.occurred_has_explicit_time===undefined?true:Boolean(row.occurred_has_explicit_time),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),temperature:row.temperature?row.temperature as DrinkLog["temperature"]:null,rating:row.rating?row.rating as DrinkLog["rating"]:null,caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listDrinkLogs(input:{from?:string;to?:string;drinkType?:string}={}){const conditions:string[]=[],values:string[]=[];if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}if(input.drinkType){conditions.push("drink_type = ?");values.push(input.drinkType);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM drink_logs ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(drinkFromRow);}
