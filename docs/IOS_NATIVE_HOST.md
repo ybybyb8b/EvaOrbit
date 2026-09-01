@@ -18,11 +18,24 @@ The workflow contains no Apple ID, certificate, provisioning profile, Supabase k
 
 ## Build patched xtool
 
-Run the `Build patched xtool` workflow. It checks out the pinned upstream commit recorded in the workflow, applies `tools/xtool/patches/0001-healthkit-background-delivery.patch`, verifies the added entitlement mapping, builds xtool's official `build-xtool` Docker target, and publishes the AppImage with a checksum.
+Run the `Build patched xtool` workflow. It checks out the pinned upstream commit recorded in the workflow, applies the HealthKit background-delivery patch followed by the password-auth compatibility patch, verifies both changes, builds xtool's official `build-xtool` Docker target, and publishes the AppImage together with the pinned commit, patches, and checksums.
 
 The patch teaches xtool that `com.apple.developer.healthkit.background-delivery` is a free-Team entitlement backed by the same HealthKit Developer Services capability as `com.apple.developer.healthkit`. Without it, xtool's free-Team filter removes background delivery before signing.
 
 Keep the upstream commit pinned. Upgrade only by reviewing the changed entitlement model, reapplying the patch, and rerunning both source checks and a real-device background-delivery test.
+
+### Password-auth diagnostics
+
+The compatibility patch does not print Apple credentials or response bodies. With diagnostics enabled it records only the authentication stage, request type, Apple endpoint without query parameters, HTTP status, Content-Type, coarse response type, and byte count:
+
+```bash
+XTL_AUTH_DIAGNOSTICS=1 xtool auth login
+xtool auth status
+xtool devices
+bash scripts/ios/xtool-install.sh /mnt/c/Users/<you>/Downloads/EvaOrbitHost-ad-hoc.ipa
+```
+
+Save the diagnostic lines beginning with `[xtool-auth]` or `[xtool-auth-http]` if login fails. Do not copy the password or 2FA prompt. A successful login now writes the token atomically, restricts its file permissions, reads it back before reporting success, and lets `auth status` distinguish a missing token from an unreadable or malformed token file. `xtool auth logout` can remove malformed stored auth data before a clean retry.
 
 ## Windows and WSL device transport
 

@@ -27,13 +27,21 @@ jobs:
           git -C "$RUNNER_TEMP/xtool" checkout "$XTOOL_COMMIT"
           test "$(git -C "$RUNNER_TEMP/xtool" rev-parse HEAD)" = "$XTOOL_COMMIT"
 
-      - name: Apply and verify HealthKit background-delivery patch
+      - name: Apply and verify EvaOrbit patches
         run: |
-          patch="$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch"
-          git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
-          git -C "$RUNNER_TEMP/xtool" apply "$patch"
+          patches=(
+            "$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch"
+            "$GITHUB_WORKSPACE/tools/xtool/patches/0002-password-auth-compatibility.patch"
+          )
+          for patch in "${patches[@]}"; do
+            git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
+            git -C "$RUNNER_TEMP/xtool" apply "$patch"
+          done
           grep -R -q 'public static let identifier = "com.apple.developer.healthkit.background-delivery"' "$RUNNER_TEMP/xtool/Sources/XKit"
           grep -R -q 'DeveloperServicesCapability(.healthkit, isFree: true)' "$RUNNER_TEMP/xtool/Sources/XKit"
+          grep -R -q 'XTL_AUTH_DIAGNOSTICS' "$RUNNER_TEMP/xtool/Sources"
+          grep -R -q 'The response body was intentionally not logged' "$RUNNER_TEMP/xtool/Sources/XKit"
+          grep -R -q 'options: .atomic' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/KeyValueStorage.swift"
 
       - name: Build patched AppImage
         run: docker build --target build-xtool -t evaorbit-xtool-patched "$RUNNER_TEMP/xtool"
@@ -47,6 +55,8 @@ jobs:
           cd "$RUNNER_TEMP/xtool-artifact"
           sha256sum ./*.AppImage > SHA256SUMS
           printf '%s\n' "$XTOOL_COMMIT" > XTOOL_COMMIT.txt
+          cp "$GITHUB_WORKSPACE"/tools/xtool/patches/*.patch .
+          sha256sum ./*.patch > PATCH_SHA256SUMS
 
       - uses: actions/upload-artifact@v4
         with:
