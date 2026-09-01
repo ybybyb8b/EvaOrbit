@@ -590,6 +590,13 @@ export interface DailyNutritionSummary {
   energyBalanceMax: number | null;
   confidence: EstimateConfidence;
   notes: string;
+  manualRestingEnergyKcal?: number | null;
+  manualActiveEnergyKcal?: number | null;
+  healthKitRestingEnergyKcal?: number | null;
+  healthKitActiveEnergyKcal?: number | null;
+  restingEnergySource?: "manual" | "apple_health" | null;
+  activeEnergySource?: "manual" | "apple_health" | null;
+  healthKitLastIngestedAt?: string | null;
 }
 
 export type PetSex = "female" | "male" | "unknown";

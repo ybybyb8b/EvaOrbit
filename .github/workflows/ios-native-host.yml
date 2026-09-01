@@ -46,6 +46,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build-for-testing
 
+      - name: Run native unit tests on iPhone 16 Pro Simulator
+        working-directory: ios/EvaOrbitHost
+        run: |
+          xcodebuild \
+            -project EvaOrbitHost.xcodeproj \
+            -scheme EvaOrbitHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
       - name: Build ad-hoc signed device app
         working-directory: ios/EvaOrbitHost
         run: |

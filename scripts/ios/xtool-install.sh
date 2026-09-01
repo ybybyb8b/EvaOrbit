@@ -7,16 +7,9 @@ if [[ ! -f "$ipa_path" ]]; then
   exit 1
 fi
 
-windows_gateway="$(ip route show default | awk 'NR == 1 { print $3 }')"
-if [[ -z "$windows_gateway" ]]; then
-  echo "Could not determine the Windows host address from WSL." >&2
-  exit 1
-fi
-
-sudo service usbmuxd stop >/dev/null 2>&1 || true
-export USBMUXD_SOCKET_ADDRESS="${windows_gateway}:27016"
-export APPIMAGE_EXTRACT_AND_RUN=1
+script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=xtool-env.sh
+source "$script_directory/xtool-env.sh" --no-next-steps
 
 echo "Using Windows usbmuxd through $USBMUXD_SOCKET_ADDRESS"
-ideviceinfo -k ActivationState
 xtool install "$ipa_path"

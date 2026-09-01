@@ -13,10 +13,12 @@ type EnergyDraft = {
 };
 
 function draftFromSummary(summary: DailyNutritionSummary): EnergyDraft {
+  const resting = summary.manualRestingEnergyKcal === undefined ? summary.restingEnergyKcal : summary.manualRestingEnergyKcal;
+  const active = summary.manualActiveEnergyKcal === undefined ? summary.activeEnergyKcal : summary.manualActiveEnergyKcal;
   return {
     date: summary.date,
-    restingEnergyKcal: summary.restingEnergyKcal === null ? "" : String(summary.restingEnergyKcal),
-    activeEnergyKcal: summary.activeEnergyKcal === null ? "" : String(summary.activeEnergyKcal),
+    restingEnergyKcal: resting === null ? "" : String(resting),
+    activeEnergyKcal: active === null ? "" : String(active),
     notes: summary.notes,
   };
 }
@@ -135,11 +137,11 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
   }
 
   const metrics = [
-    ["Intake", summary.estimatedIntakeKcal],
-    ["Resting", summary.restingEnergyKcal],
-    ["Active", summary.activeEnergyKcal],
-    ["Total expenditure", summary.totalExpenditureKcal],
-    ["Balance", summary.energyBalance],
+    ["Intake", summary.estimatedIntakeKcal, null],
+    ["Resting", summary.restingEnergyKcal, summary.restingEnergySource === "manual" ? "Manual override" : summary.restingEnergySource === "apple_health" ? "Apple Health" : null],
+    ["Active", summary.activeEnergyKcal, summary.activeEnergySource === "manual" ? "Manual override" : summary.activeEnergySource === "apple_health" ? "Apple Health" : null],
+    ["Total expenditure", summary.totalExpenditureKcal, null],
+    ["Balance", summary.energyBalance, null],
   ] as const;
   const today = dateInEvaOrbit();
   const isToday = selectedDate === today;
@@ -154,7 +156,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       <label className="daily-energy-date"><span>Date</span><input type="date" value={selectedDate} disabled={editing} onChange={(event) => void loadDate(event.target.value)} /></label>
       {loading && <span className="daily-energy-loading">Loading…</span>}
     </div>
-    <div className="daily-energy-summary">{metrics.map(([label, value]) => <div className={`daily-energy-metric${value === null ? " missing" : ""}`} key={label}><span>{label}</span><strong>{formatKcal(value)}</strong></div>)}</div>
+    <div className="daily-energy-summary">{metrics.map(([label, value, source]) => <div className={`daily-energy-metric${value === null ? " missing" : ""}`} key={label}><span>{label}</span><strong>{formatKcal(value)}</strong>{source && <small>{source}</small>}</div>)}</div>
     {editing && <form className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">
         <label className="field"><span>Resting kcal <small>(optional)</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder="e.g. 1500" /></label>

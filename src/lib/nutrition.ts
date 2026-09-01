@@ -28,6 +28,12 @@ export function calculateDailyNutrition(date: string, foods: FoodLog[], drinks: 
   };
 }
 
+export function resolveEnergyMetric(manual: number | null, healthKit: number | null | undefined) {
+  if (manual !== null) return { value: manual, source: "manual" as const };
+  if (healthKit !== null && healthKit !== undefined) return { value: healthKit, source: "apple_health" as const };
+  return { value: null, source: null };
+}
+
 export function limitState(count: number, limit: number): LimitState {
   if (count > limit) return "exceeded_limit";
   if (count === limit) return "reached_limit";

@@ -9,8 +9,8 @@ final class WebViewController: UIViewController {
     private let failureLabel = UILabel()
     private let retryButton = UIButton(type: .system)
 
-    init(configuration: HostConfiguration) {
-        let nativeBridge = NativeBridge(hostConfiguration: configuration)
+    init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator) {
+        let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator)
         hostConfiguration = configuration
         bridge = nativeBridge
 

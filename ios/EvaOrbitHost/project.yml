@@ -24,6 +24,8 @@ targets:
     dependencies:
       - sdk: WebKit.framework
       - sdk: HealthKit.framework
+      - sdk: Security.framework
+      - sdk: libsqlite3.tbd
     info:
       path: Generated/Info.plist
       properties:

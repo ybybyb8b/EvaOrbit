@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === "/api/mcp" || request.nextUrl.pathname === "/.well-known/oauth-protected-resource" || request.nextUrl.pathname === "/api/reminders/deliver") {
+  if (request.nextUrl.pathname === "/api/mcp" || request.nextUrl.pathname === "/.well-known/oauth-protected-resource" || request.nextUrl.pathname === "/api/reminders/deliver" || request.nextUrl.pathname === "/api/healthkit/energy/ingest") {
     return NextResponse.next({ request });
   }
   return updateSession(request);

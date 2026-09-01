@@ -4,11 +4,16 @@ import WebKit
 final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let name = "evaOrbit"
     static let protocolVersion = 1
+    static let supportedMethods: Set<String> = [
+        "host.ping", "host.getInfo", "navigation.openExternal",
+        "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
+        "healthkit.configureCredential", "healthkit.clearCredential"
+    ]
 
     static let bootstrapScript = #"""
     (() => {
       if (window.EvaOrbitNative) return;
-      let sequence = 0;
+      var sequence = 0;
       const call = (method, params = {}) => {
         sequence += 1;
         return window.webkit.messageHandlers.evaOrbit.postMessage({
@@ -29,9 +34,11 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
+    private let healthKitCoordinator: HealthKitCoordinator
 
-    init(hostConfiguration: HostConfiguration) {
+    init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator) {
         self.hostConfiguration = hostConfiguration
+        self.healthKitCoordinator = healthKitCoordinator
     }
 
     func userContentController(
@@ -61,6 +68,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
 
         let parameters = request["params"] as? [String: Any] ?? [:]
+        guard Self.supportedMethods.contains(method) else {
+            replyHandler(failure(id: identifier, code: "unknown_method", message: "Unsupported native method."), nil)
+            return
+        }
         switch method {
         case "host.ping":
             replyHandler(success(id: identifier, result: ["pong": true]), nil)
@@ -68,9 +79,59 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(success(id: identifier, result: hostInfo()), nil)
         case "navigation.openExternal":
             openExternal(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "healthkit.getStatus":
+            replyHandler(success(id: identifier, result: healthKitCoordinator.status().dictionary), nil)
+        case "healthkit.requestAuthorization":
+            Task {
+                do {
+                    let status = try await healthKitCoordinator.requestAuthorization()
+                    replyOnMain(replyHandler, value: success(id: identifier, result: status.dictionary))
+                } catch {
+                    replyOnMain(replyHandler, value: failure(id: identifier, code: "healthkit_authorization_failed", message: HealthDiagnostics.safe(error)))
+                }
+            }
+        case "healthkit.syncNow":
+            Task {
+                let synced = await healthKitCoordinator.syncNow()
+                let result: [String: Any] = ["synced": synced, "status": healthKitCoordinator.status().dictionary]
+                replyOnMain(replyHandler, value: success(id: identifier, result: result))
+            }
+        case "healthkit.configureCredential":
+            configureCredential(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "healthkit.clearCredential":
+            healthKitCoordinator.clearCredential()
+            replyHandler(success(id: identifier, result: ["configured": false]), nil)
         default:
+            assertionFailure("Whitelisted bridge method is not implemented")
             replyHandler(failure(id: identifier, code: "unknown_method", message: "Unsupported native method."), nil)
         }
+    }
+
+    private func configureCredential(
+        parameters: [String: Any],
+        id: String,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
+        guard let credential = parameters["credential"] as? String,
+              credential.count >= 32,
+              let rawURL = parameters["ingestUrl"] as? String,
+              let ingestURL = URL(string: rawURL),
+              hostConfiguration.allows(ingestURL),
+              ingestURL.path == "/api/healthkit/energy/ingest"
+        else {
+            replyHandler(failure(id: id, code: "invalid_credential_configuration", message: "Native credential configuration is invalid."), nil)
+            return
+        }
+        do {
+            try healthKitCoordinator.configureCredential(credential, ingestURL: ingestURL)
+            replyHandler(success(id: id, result: ["configured": true]), nil)
+        } catch {
+            replyHandler(failure(id: id, code: "credential_storage_failed", message: "Native credential could not be stored."), nil)
+        }
+    }
+
+    private func replyOnMain(_ replyHandler: @escaping (Any?, String?) -> Void, value: [String: Any]) {
+        DispatchQueue.main.async { replyHandler(value, nil) }
     }
 
     private func openExternal(
@@ -98,7 +159,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "bridgeVersion": Self.protocolVersion,
             "appVersion": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             "buildVersion": bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
-            "healthKitPipeline": "reserved"
+            "healthKitPipeline": "energy-v1"
         ]
     }
 
