@@ -40,6 +40,8 @@ jobs:
           grep -R -q 'public static let identifier = "com.apple.developer.healthkit.background-delivery"' "$RUNNER_TEMP/xtool/Sources/XKit"
           grep -R -q 'DeveloperServicesCapability(.healthkit, isFree: true)' "$RUNNER_TEMP/xtool/Sources/XKit"
           grep -R -q 'XTL_AUTH_DIAGNOSTICS' "$RUNNER_TEMP/xtool/Sources"
+          grep -R -q 'GrandSlamCookieJar' "$RUNNER_TEMP/xtool/Sources/XKit"
+          grep -R -q 'evaorbit-compat-v3-linux-cookie-session' "$RUNNER_TEMP/xtool/Sources/XToolSupport"
           grep -R -q 'The response body was intentionally not logged' "$RUNNER_TEMP/xtool/Sources/XKit"
           grep -R -q 'options: .atomic' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/KeyValueStorage.swift"
 

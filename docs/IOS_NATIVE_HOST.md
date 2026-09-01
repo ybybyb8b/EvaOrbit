@@ -36,7 +36,7 @@ xtool devices
 bash scripts/ios/xtool-install.sh /mnt/c/Users/<you>/Downloads/EvaOrbitHost-ad-hoc.ipa
 ```
 
-Save the diagnostic lines beginning with `[xtool-auth]` or `[xtool-auth-http]` if login fails. Do not copy the password or 2FA prompt. A successful login now writes the token atomically, restricts its file permissions, reads it back before reporting success, and lets `auth status` distinguish a missing token from an unreadable or malformed token file. `xtool auth logout` removes malformed stored auth data before a clean retry. The Xcode app-token request retries HTTP 503 at most twice with fresh anisette data; other authentication requests and errors are not retried.
+Save the diagnostic lines beginning with `[xtool-auth]` or `[xtool-auth-http]` if login fails. Do not copy the password or 2FA prompt. A successful login now writes the token atomically, restricts its file permissions, reads it back before reporting success, and lets `auth status` distinguish a missing token from an unreadable or malformed token file. `xtool auth logout` removes malformed stored auth data before a clean retry. On Linux, the GrandSlam flow keeps Apple response cookies only in memory for the lifetime of the login client, matching URLSession's session behavior without persisting or logging cookie values. The Xcode app-token request retries HTTP 503 at most twice with fresh anisette data; other authentication requests and errors are not retried.
 
 ## Windows and WSL device transport
 
