@@ -68,6 +68,7 @@ export default async function LuciusPage() {
 
         <section className="lucius-nameplate" aria-label="About Lucius">
           <span><small>ABOUT</small><strong>Lucius</strong></span>
+          <p>A private place for what he keeps, remembers, and corrects.</p>
           <i aria-hidden="true">→</i>
         </section>
       </div>
