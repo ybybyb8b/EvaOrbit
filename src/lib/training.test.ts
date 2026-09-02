@@ -38,9 +38,17 @@ test("Training migrations define independent owner-scoped storage for Supabase a
 
 test("Health home shows today's energy outcome and exposes Training CRUD", () => {
   const page = readFileSync(new URL("../app/health/page.tsx", import.meta.url), "utf8");
+  const view = readFileSync(new URL("../app/health/health-view.tsx", import.meta.url), "utf8");
+  const energy = readFileSync(new URL("../app/health/daily-energy-card.tsx", import.meta.url), "utf8");
   const collection = readFileSync(new URL("../app/api/health/training/route.ts", import.meta.url), "utf8");
   const item = readFileSync(new URL("../app/api/health/training/[id]/route.ts", import.meta.url), "utf8");
   assert.match(page, /getDailyNutritionSummary\(today\)/);
+  assert.doesNotMatch(view, /AppleHealthSummary|apple-health-summary|health-current-icon/);
+  assert.match(view, /<TrainingSection[\s\S]*<DailyEnergyCard[\s\S]*Health records/);
+  assert.match(energy, /label="Intake"[\s\S]*label="Expenditure"[\s\S]*label="Balance"/);
+  assert.match(energy, /Resting[\s\S]*Active[\s\S]*sourceLabel/);
+  assert.doesNotMatch(energy, /daily-energy-summary|daily-energy-date-row/);
+  assert.match(energy, /editing && <form[\s\S]*<span>Date<\/span><input type="date"/);
   assert.match(collection, /export async function GET/);
   assert.match(collection, /export async function POST/);
   assert.match(item, /export async function PATCH/);

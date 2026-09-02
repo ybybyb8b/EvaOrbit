@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/icons";
-import { dateInEvaOrbit, shiftDate } from "@/lib/time";
+import { dateInEvaOrbit } from "@/lib/time";
 import type { DailyNutritionSummary } from "@/lib/types";
 
 type EnergyDraft = {
@@ -25,6 +25,26 @@ function draftFromSummary(summary: DailyNutritionSummary): EnergyDraft {
 
 function formatKcal(value: number | null) {
   return value === null ? "Not recorded" : `${value.toLocaleString()} kcal`;
+}
+
+function shortDate(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit" }).format(new Date(`${value}T12:00:00`));
+}
+
+function energySourceLabel(summary: DailyNutritionSummary) {
+  const apple = [summary.restingEnergySource === "apple_health" ? "resting" : null, summary.activeEnergySource === "apple_health" ? "active" : null].filter(Boolean);
+  const manual = [summary.restingEnergySource === "manual" ? "resting" : null, summary.activeEnergySource === "manual" ? "active" : null].filter(Boolean);
+  if (apple.length === 2 && !manual.length) return "Apple Health";
+  if (manual.length === 2 && !apple.length) return "Manual overrides";
+  return [apple.length ? `Apple Health (${apple.join(" + ")})` : null, manual.length ? `Manual (${manual.join(" + ")})` : null].filter(Boolean).join(" · ");
+}
+
+function PrimaryEnergyMetric({ label, value, prominent = false }: { label: string; value: number | null; prominent?: boolean }) {
+  return <div className={`daily-energy-primary-metric${value === null ? " missing" : ""}${prominent ? " prominent" : ""}`}>
+    <strong>{value === null ? "Not recorded" : value.toLocaleString()}</strong>
+    {value !== null && <span>kcal</span>}
+    <small>{label}</small>
+  </div>;
 }
 
 function parseEnergy(value: string) {
@@ -136,29 +156,29 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     }
   }
 
-  const metrics = [
-    ["Intake", summary.estimatedIntakeKcal, null],
-    ["Resting", summary.restingEnergyKcal, summary.restingEnergySource === "manual" ? "Manual override" : summary.restingEnergySource === "apple_health" ? "Apple Health" : null],
-    ["Active", summary.activeEnergyKcal, summary.activeEnergySource === "manual" ? "Manual override" : summary.activeEnergySource === "apple_health" ? "Apple Health" : null],
-    ["Total expenditure", summary.totalExpenditureKcal, null],
-    ["Balance", summary.energyBalance, null],
-  ] as const;
   const today = dateInEvaOrbit();
   const isToday = selectedDate === today;
-  const isYesterday = selectedDate === shiftDate(today, -1);
+  const sourceLabel = energySourceLabel(summary);
 
   return <section className="daily-energy-card" aria-labelledby="daily-energy-title">
     <div className="daily-energy-heading">
-      <div><span className="eyebrow">{isToday ? "TODAY · IN PROGRESS" : "ENERGY REVIEW"}</span><h2 id="daily-energy-title">{isYesterday ? "Yesterday" : selectedDate}</h2><p>{isToday ? "Today is still changing. This is not a completed review." : "Intake from Food + Drinks, with your saved resting and active energy."}</p></div>
-      {!editing && <button className="button secondary" onClick={openEditor}><Icon name="edit" />Edit</button>}
+      <div><span className="eyebrow">{isToday ? "TODAY · IN PROGRESS" : "ENERGY REVIEW"}</span><h2 id="daily-energy-title">{shortDate(selectedDate)}</h2></div>
+      {!editing && <button className="text-button daily-energy-edit" onClick={openEditor}>Edit</button>}
     </div>
-    <div className="daily-energy-date-row">
-      <label className="daily-energy-date"><span>Date</span><input type="date" value={selectedDate} disabled={editing} onChange={(event) => void loadDate(event.target.value)} /></label>
-      {loading && <span className="daily-energy-loading">Loading…</span>}
+    <div className="daily-energy-primary">
+      <PrimaryEnergyMetric label="Intake" value={summary.estimatedIntakeKcal} prominent />
+      <PrimaryEnergyMetric label="Expenditure" value={summary.totalExpenditureKcal} />
+      <PrimaryEnergyMetric label="Balance" value={summary.energyBalance} />
     </div>
-    <div className="daily-energy-summary">{metrics.map(([label, value, source]) => <div className={`daily-energy-metric${value === null ? " missing" : ""}`} key={label}><span>{label}</span><strong>{formatKcal(value)}</strong>{source && <small>{source}</small>}</div>)}</div>
+    <div className="daily-energy-breakdown">
+      <p><span>Resting <strong>{formatKcal(summary.restingEnergyKcal)}</strong></span><i aria-hidden="true">·</i><span>Active <strong>{formatKcal(summary.activeEnergyKcal)}</strong></span></p>
+      {sourceLabel && <small>{sourceLabel}</small>}
+    </div>
+    {!editing && <p className="daily-energy-progress-note">{isToday ? "Today is still changing. This is not a completed review." : "Intake from Food + Drinks, with saved resting and active energy."}</p>}
+    {loading && <span className="daily-energy-loading">Loading…</span>}
     {editing && <form className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">
+        <label className="field wide"><span>Date</span><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
         <label className="field"><span>Resting kcal <small>(optional)</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder="e.g. 1500" /></label>
         <label className="field"><span>Active kcal <small>(optional)</small></span><input type="number" min="0" max="20000" step="1" value={draft.activeEnergyKcal} onChange={(event) => setDraft({ ...draft, activeEnergyKcal: event.target.value })} placeholder="e.g. 300" /></label>
         <label className="field wide"><span>Note <small>(optional)</small></span><textarea rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="What informed this estimate?" /></label>
