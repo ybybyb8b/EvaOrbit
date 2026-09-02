@@ -332,6 +332,24 @@ export function parseLuciusStatePatch(value: unknown) {
   return result;
 }
 
+export function parseNewLuciusPost(value: unknown) {
+  const body = objectValue(value);
+  return {
+    content: text(body.content, "Lucius Post 正文", 1_000)!,
+    publishedAt: timestamp(body.publishedAt ?? new Date().toISOString(), "发布时间"),
+  };
+}
+
+export function parseLuciusPostPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    content: body.content === undefined ? undefined : text(body.content, "Lucius Post 正文", 1_000),
+    publishedAt: body.publishedAt === undefined ? undefined : timestamp(body.publishedAt, "发布时间"),
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Lucius Post 字段");
+  return result;
+}
+
 function caseDates(firstOccurredDate: string, latestOccurredDate: string) {
   if (latestOccurredDate < firstOccurredDate) throw new ValidationError("最近发生日期不能早于首次发生日期");
 }

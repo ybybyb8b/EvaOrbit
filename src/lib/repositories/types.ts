@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 
@@ -70,6 +70,9 @@ export type NewLuciusCase = Omit<LuciusCase, "id" | "createdAt" | "updatedAt">;
 export type LuciusCasePatch = Partial<NewLuciusCase>;
 export type LuciusCaseListInput = { query?: string; errorType?: LuciusCaseErrorType; severity?: LuciusCaseSeverity; status?: LuciusCaseStatus; currentOnly?: boolean; limit?: number };
 export type LuciusStatePatch = Partial<Pick<LuciusState, "currentNote" | "status" | "mood">>;
+export type NewLuciusPost = Pick<LuciusPost, "content" | "publishedAt">;
+export type LuciusPostPatch = Partial<NewLuciusPost>;
+export type LuciusPostListInput = { limit?: number };
 export type NutritionSettings = Pick<DailyNutritionSummary, "date" | "restingEnergyKcal" | "activeEnergyKcal" | "notes">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
@@ -219,6 +222,11 @@ export interface EvaOrbitRepository {
   recordLuciusCaseRecurrence(id: number, occurredDate: string): Promise<LuciusCase | null>;
   getLuciusState(): Promise<LuciusState>;
   updateLuciusState(input: LuciusStatePatch): Promise<LuciusState>;
+  listLuciusPosts(input?: LuciusPostListInput): Promise<LuciusPost[]>;
+  getLuciusPost(id: number): Promise<LuciusPost | null>;
+  createLuciusPost(input: NewLuciusPost): Promise<LuciusPost>;
+  updateLuciusPost(id: number, input: LuciusPostPatch): Promise<LuciusPost | null>;
+  deleteLuciusPost(id: number): Promise<boolean>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;

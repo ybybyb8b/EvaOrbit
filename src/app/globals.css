@@ -2343,3 +2343,90 @@ button { color: inherit; }
   .lucius-note-paper { grid-column:1 / 8; margin-left:5px; }
   .lucius-state-token { grid-column:8 / 13; gap:4px; }.lucius-medallion { flex-basis:39px; width:39px; height:39px; }
 }
+
+/* Lucius private profile: restrained editorial surface, shared across all three tabs. */
+.lucius-profile-page {
+  --lucius-forest:#12372e;
+  --lucius-forest-deep:#0b2b24;
+  --lucius-ivory:#f5f0e5;
+  --lucius-paper:#faf7ef;
+  --lucius-gold:#ad8a4d;
+  --lucius-ink:#24352f;
+  width:min(920px,calc(100% - 40px));
+  min-height:calc(100vh - 58px);
+  margin:0 auto;
+  overflow:hidden;
+  border:1px solid rgba(111,89,48,.16);
+  border-radius:24px 24px 0 0;
+  background:
+    radial-gradient(circle at 15% 42%,rgba(173,138,77,.045),transparent 22%),
+    radial-gradient(circle at 84% 64%,rgba(18,55,46,.035),transparent 24%),
+    var(--lucius-paper);
+  color:var(--lucius-ink);
+  box-shadow:0 20px 60px rgba(29,43,36,.08);
+}
+.lucius-profile-header { position:relative; border-bottom:1px solid rgba(173,138,77,.3); background:rgba(250,247,239,.93); text-align:center; }
+.lucius-cover {
+  height:224px;
+  position:relative;
+  overflow:hidden;
+  border-bottom:1px solid #c5a86c;
+  background:
+    radial-gradient(circle at 18% 29%,rgba(214,183,115,.08),transparent 22%),
+    linear-gradient(112deg,transparent 0 48%,rgba(255,255,255,.025) 49% 50%,transparent 51%),
+    var(--lucius-forest-deep);
+}
+.lucius-cover::before,.lucius-cover::after { content:""; width:290px; height:210px; position:absolute; bottom:-92px; border:1px solid rgba(193,158,91,.36); border-radius:52% 48% 35% 65%; transform:rotate(24deg); }
+.lucius-cover::before { left:-95px; box-shadow:72px -42px 0 -70px rgba(193,158,91,.7),126px -7px 0 -122px rgba(193,158,91,.8); }
+.lucius-cover::after { right:-86px; transform:scaleX(-1) rotate(24deg); }
+.lucius-cover-script { position:absolute; top:48px; left:7%; color:rgba(193,158,91,.19); font:italic 21px/1.45 Georgia,serif; letter-spacing:.08em; transform:rotate(-4deg); }
+.lucius-cover-star { position:absolute; color:#c39d5b; font:18px Georgia,serif; }.lucius-cover-star.star-one { top:43px; right:11%; }.lucius-cover-star.star-two { top:108px; left:29%; font-size:11px; }
+.lucius-cover-botanical { width:164px; height:118px; position:absolute; bottom:-28px; font-size:0; opacity:.72; transform:rotate(-13deg); }
+.lucius-cover-botanical::before { content:""; position:absolute; inset:0; background:linear-gradient(62deg,transparent 49.6%,rgba(193,158,91,.55) 50%,transparent 50.4%); }
+.lucius-cover-botanical::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse 13px 6px at 24% 70%,transparent 42%,rgba(193,158,91,.62) 46% 52%,transparent 56%),radial-gradient(ellipse 14px 6px at 39% 58%,transparent 42%,rgba(193,158,91,.62) 46% 52%,transparent 56%),radial-gradient(ellipse 13px 6px at 55% 46%,transparent 42%,rgba(193,158,91,.62) 46% 52%,transparent 56%),radial-gradient(ellipse 12px 6px at 69% 34%,transparent 42%,rgba(193,158,91,.62) 46% 52%,transparent 56%); transform:rotate(-17deg); }
+.lucius-cover-botanical.botanical-left { left:0; }.lucius-cover-botanical.botanical-right { right:0; transform:scaleX(-1) rotate(-13deg); }
+.lucius-profile-portrait { width:158px; height:158px; margin:-82px auto 0; position:relative; z-index:2; border:2px solid var(--lucius-gold); border-radius:50%; background:var(--lucius-ivory); box-shadow:0 0 0 5px var(--lucius-paper),0 0 0 6px rgba(173,138,77,.58); }
+.lucius-profile-portrait img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.lucius-profile-portrait > span { width:39px; height:39px; position:absolute; right:-1px; bottom:3px; display:grid; place-items:center; border:1px solid #d0af6a; border-radius:50%; background:var(--lucius-forest); color:#d4b573; font:italic 23px/1 Georgia,serif; box-shadow:0 0 0 3px var(--lucius-paper); }
+.lucius-profile-identity { padding:25px 24px 29px; }
+.lucius-profile-name { margin:0; color:#18382f; font:500 48px/.95 var(--font-editorial-label),Georgia,serif; letter-spacing:.19em; text-indent:.19em; }.lucius-profile-name i { color:var(--lucius-gold); font:10px/1 Georgia,serif; vertical-align:middle; }
+.lucius-profile-handle { margin:11px 0 0; color:#927750; font:italic 15px/1.2 Georgia,serif; letter-spacing:.09em; }
+.lucius-profile-rule { width:178px; margin:15px auto 8px; display:flex; align-items:center; gap:9px; color:var(--lucius-gold); font-size:9px; }.lucius-profile-rule::before,.lucius-profile-rule::after { content:""; height:1px; flex:1; background:rgba(173,138,77,.42); }
+.lucius-profile-state { margin:0; color:#756346; font:italic 16px/1.2 Georgia,serif; letter-spacing:.11em; }
+.lucius-profile-bio { margin:13px 0 0; color:#3e4c46; font:15px/1.6 Georgia,"Songti SC",serif; letter-spacing:.06em; }
+.lucius-profile-tabs { min-height:57px; padding:0 clamp(20px,8vw,86px); display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid rgba(173,138,77,.15); }
+.lucius-profile-tabs a { min-width:0; position:relative; display:grid; place-items:center; color:#806c4d; font:600 12px/1 var(--font-editorial-label),Georgia,serif; letter-spacing:.16em; text-transform:uppercase; }
+.lucius-profile-tabs a::after { content:""; width:0; height:2px; position:absolute; bottom:0; left:50%; background:var(--lucius-forest); transform:translateX(-50%); transition:width .18s ease; }
+.lucius-profile-tabs a:hover,.lucius-profile-tabs a.active { color:var(--lucius-forest); }.lucius-profile-tabs a.active::after { width:72%; }.lucius-profile-tabs a.active::before { content:"✦"; position:absolute; bottom:-6px; z-index:1; padding:0 6px; background:var(--lucius-paper); color:var(--lucius-gold); font-size:9px; }
+.lucius-profile-content { width:min(690px,calc(100% - 64px)); min-height:280px; margin:0 auto; padding:18px 0 92px; }
+.lucius-post { padding:30px 10px 26px; border-bottom:1px solid rgba(101,87,59,.2); }.lucius-post:first-child { padding-top:25px; }
+.lucius-post p { max-width:620px; margin:0; color:#263c34; font:17px/1.85 Georgia,"Songti SC",serif; letter-spacing:.025em; white-space:pre-wrap; overflow-wrap:anywhere; }
+.lucius-post time { margin-top:14px; display:block; color:#947c56; font:italic 12px/1 Georgia,serif; }
+.lucius-profile-empty { min-height:230px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#88734f; text-align:center; }.lucius-profile-empty > span { margin-bottom:15px; color:var(--lucius-gold); font-size:13px; }.lucius-profile-empty p { margin:0; font:italic 20px/1.3 Georgia,serif; }.lucius-profile-empty small { margin-top:9px; color:#9b917e; font:11px/1.4 Georgia,serif; letter-spacing:.06em; }
+.lucius-profile-archive { padding-top:16px; }
+.lucius-profile-section-heading { padding:0 8px 18px; display:flex; align-items:flex-end; justify-content:space-between; gap:20px; border-bottom:1px solid rgba(101,87,59,.2); }.lucius-profile-section-heading div > span { color:#a08350; font:9px/1 var(--font-editorial-label); letter-spacing:.16em; text-transform:uppercase; }.lucius-profile-section-heading h2 { margin:6px 0 0; color:#1a382f; font:500 30px/1 var(--font-editorial-label),Georgia,serif; }.lucius-profile-section-heading > a { padding-bottom:2px; color:#7e6c4c; font:11px/1 Georgia,serif; border-bottom:1px solid rgba(126,108,76,.45); }
+.lucius-profile-list > a { padding:25px 8px 23px; display:grid; gap:9px; border-bottom:1px solid rgba(101,87,59,.2); color:inherit; transition:padding .16s ease,background .16s ease; }.lucius-profile-list > a:hover { padding-inline:14px; background:rgba(173,138,77,.035); }
+.lucius-profile-list > a > time,.lucius-case-entry > div { color:#9a8053; font:10px/1.2 Georgia,serif; letter-spacing:.08em; text-transform:uppercase; }.lucius-profile-list > a > strong { color:#203a32; font:500 20px/1.3 var(--font-editorial-label),Georgia,serif; }.lucius-profile-list > a > p { margin:0; color:#667068; font:13px/1.65 Georgia,"Songti SC",serif; }.lucius-profile-list > a > span { justify-self:start; color:#896f45; font:italic 11px/1.2 Georgia,serif; }.lucius-profile-list > a > span i { margin-left:5px; font-style:normal; }
+.lucius-case-entry > div { display:flex; justify-content:space-between; gap:12px; }.lucius-case-entry > div time { color:inherit; }
+
+@media (max-width:720px) {
+  body:has(.lucius-profile-page) .main-content { padding:0; background:var(--lucius-paper); }
+  .lucius-profile-page { width:100%; min-height:100vh; border:0; border-radius:0; box-shadow:none; }
+  .lucius-cover { height:178px; }.lucius-cover-script { top:31px; left:6%; font-size:15px; }.lucius-cover-botanical { width:130px; height:98px; }
+  .lucius-profile-portrait { width:128px; height:128px; margin-top:-65px; }.lucius-profile-portrait > span { width:34px; height:34px; font-size:20px; }
+  .lucius-profile-identity { padding:21px 18px 23px; }.lucius-profile-name { font-size:36px; letter-spacing:.16em; text-indent:.16em; }.lucius-profile-handle { margin-top:9px; font-size:14px; }.lucius-profile-rule { margin-top:12px; }.lucius-profile-bio { margin-top:10px; font-size:14px; }
+  .lucius-profile-tabs { min-height:54px; padding:0 10px; }.lucius-profile-tabs a { font-size:11px; letter-spacing:.1em; }
+  .lucius-profile-content { width:calc(100% - 36px); padding-top:8px; padding-bottom:calc(88px + env(safe-area-inset-bottom)); }
+  .lucius-post { padding:25px 4px 23px; }.lucius-post:first-child { padding-top:22px; }.lucius-post p { font-size:16px; line-height:1.8; }.lucius-post time { font-size:12px; }
+  .lucius-profile-archive { padding-top:15px; }.lucius-profile-section-heading { padding-inline:3px; }.lucius-profile-section-heading h2 { font-size:27px; }.lucius-profile-list > a { padding-inline:3px; }.lucius-profile-list > a:hover { padding-inline:7px; }
+  body:has(.lucius-profile-page) .mobile-nav { border-top-color:rgba(190,157,94,.38); background:linear-gradient(180deg,rgba(18,55,46,.97),rgba(11,43,36,.99)); box-shadow:0 -10px 24px rgba(11,28,23,.16); }
+  body:has(.lucius-profile-page) .mobile-nav a { color:#c5bfaf; }
+  body:has(.lucius-profile-page) .mobile-nav a.active { color:#d3ad65; }
+}
+
+@media (max-width:380px) {
+  .lucius-profile-name { font-size:32px; }
+  .lucius-profile-bio { font-size:13px; }
+  .lucius-profile-tabs a { font-size:10px; letter-spacing:.07em; }
+  .lucius-profile-content { width:calc(100% - 28px); }
+}

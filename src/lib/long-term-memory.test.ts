@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusStatePatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewMemo } from "./validation.ts";
+import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewMemo } from "./validation.ts";
 
 test("Memo validation keeps long-term fields, unique tags and PATCH semantics", () => {
   const item = parseNewMemo({ title: "  姓名规则  ", content: "始终使用正确称呼", type: "basic", tags: ["人物", "人物", "规则"], eventDate: "2026-08-29", confirmedAt: "2026-08-29T08:00:00+08:00" });
@@ -40,6 +40,16 @@ test("Lucius state accepts only the three explicit presentation fields", () => {
   assert.throws(() => parseLuciusStatePatch({ status: "" }));
 });
 
+test("Lucius Posts remain a minimal short-text timeline", () => {
+  const item = parseNewLuciusPost({ content: "  安静地观察一会儿。  ", publishedAt: "2026-09-02T00:06:00+08:00" });
+  assert.equal(item.content, "安静地观察一会儿。");
+  assert.equal(item.publishedAt, "2026-09-01T16:06:00.000Z");
+  assert.equal(parseLuciusPostPatch({ content: "Still here." }).content, "Still here.");
+  assert.throws(() => parseNewLuciusPost({ content: "" }));
+  assert.throws(() => parseNewLuciusPost({ content: "x".repeat(1001) }));
+  assert.throws(() => parseLuciusPostPatch({}));
+});
+
 test("migration adds three independent owner-scoped models without touching Chronicle", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/202608290004_memo_lucius.sql", import.meta.url), "utf8");
   assert.match(sql, /create table if not exists public\.memos/);
@@ -61,14 +71,19 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   const diaryRoute = readFileSync(new URL("../app/api/lucius/diary/route.ts", import.meta.url), "utf8");
   const casesRoute = readFileSync(new URL("../app/api/lucius/cases/route.ts", import.meta.url), "utf8");
   const stateRoute = readFileSync(new URL("../app/api/lucius/state/route.ts", import.meta.url), "utf8");
+  const postsRoute = readFileSync(new URL("../app/api/lucius/posts/route.ts", import.meta.url), "utf8");
+  const luciusPage = readFileSync(new URL("../app/lucius/page.tsx", import.meta.url), "utf8");
   assert.match(shell, /href: "\/memo"/);
   assert.match(shell, /href: "\/lucius"/);
   assert.match(shell, /<Link href="\/lucius"[\s\S]*?<span>Lucius<\/span><\/Link>/);
   assert.match(destinations, /href: "\/memo"/);
   assert.match(destinations, /href: "\/lucius"/);
-  for (const route of [memoRoute, diaryRoute, casesRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
+  for (const route of [memoRoute, diaryRoute, casesRoute, postsRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
   assert.match(stateRoute, /export async function GET/);
   assert.match(stateRoute, /export async function PATCH/);
+  assert.match(luciusPage, /tab === "posts" \? listLuciusPosts/);
+  assert.match(luciusPage, /tab === "diary" \? listLuciusDiaryEntries/);
+  assert.match(luciusPage, /tab === "cases" \? listLuciusCases/);
 });
 
 test("Lucius state migration is a minimal owner-scoped singleton", () => {
@@ -80,4 +95,15 @@ test("Lucius state migration is a minimal owner-scoped singleton", () => {
   assert.match(sql, /auth\.uid\(\).*user_id/s);
   assert.match(sql, /grant update \(current_note, status, mood\)/);
   assert.doesNotMatch(sql, /affection|relationship|history|timeline/i);
+});
+
+test("Lucius Posts migration is owner-scoped and intentionally lightweight", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/202609020001_lucius_posts.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table if not exists public\.lucius_posts/);
+  assert.match(sql, /content text not null check/);
+  assert.match(sql, /published_at timestamptz not null/);
+  assert.match(sql, /alter table public\.lucius_posts enable row level security/);
+  assert.match(sql, /auth\.uid\(\).*user_id/s);
+  assert.match(sql, /grant update \(content, published_at\)/);
+  assert.doesNotMatch(sql, /image|video|like|comment|repost|hashtag/i);
 });

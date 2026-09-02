@@ -497,6 +497,14 @@ export interface LuciusState {
   updatedAt: string | null;
 }
 
+export interface LuciusPost {
+  id: number;
+  content: string;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type LuciusCaseErrorType = "naming" | "memory_omission" | "factual" | "tool_misuse" | "expression" | "other";
 export type LuciusCaseSeverity = "minor" | "moderate" | "serious" | "habitual";
 export type LuciusCaseStatus = "serving" | "probation" | "temporary_release" | "permanent_record";
