@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
 import Link from "next/link";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
+import { AppearanceThemeSettings } from "./appearance-theme-settings";
 
 type Draft = Omit<AiSettings, "hasApiKey" | "maskedApiKey" | "updatedAt"> & { apiKey: string };
 
@@ -89,6 +90,7 @@ export function SettingsView() {
     <PageHeader eyebrow="APP & APPEARANCE" title="App & Appearance" description="The names, visual details, and conversational tone that make this space yours." action={<Link className="settings-back-link" href="/settings">All settings</Link>} />
 
     <form className="provider-card" onSubmit={save}>
+      <AppearanceThemeSettings />
       <section className="conversation-appearance-settings">
         <div className="persona-heading"><span className="eyebrow">CONVERSATION APPEARANCE</span><h2>对话里的我们</h2><p>这里只改变聊天界面的称呼和头像，不改变 Persona、消息角色或数据归属。</p></div>
         <div className="identity-editor-grid">

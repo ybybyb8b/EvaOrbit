@@ -12,17 +12,41 @@ enum LoadingThemeToken: String, CaseIterable {
 
 enum NativeThemeIdentifier: String {
     case editorial
+    case rosewood
+}
+
+enum NativeAppearanceMode: String {
+    case system
+    case light
+    case dark
+
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .system: return .unspecified
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
 }
 
 enum NativeLoadingTheme {
-    static let preferenceKey = "evaorbit.nativeThemeIdentifier"
+    static let themePreferenceKey = "evaorbit.nativeThemeIdentifier"
+    static let appearancePreferenceKey = "evaorbit.nativeAppearanceMode"
 
     static var currentIdentifier: NativeThemeIdentifier {
         get {
-            guard let value = UserDefaults.standard.string(forKey: preferenceKey) else { return .editorial }
+            guard let value = UserDefaults.standard.string(forKey: themePreferenceKey) else { return .editorial }
             return NativeThemeIdentifier(rawValue: value) ?? .editorial
         }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: preferenceKey) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: themePreferenceKey) }
+    }
+
+    static var currentAppearanceMode: NativeAppearanceMode {
+        get {
+            guard let value = UserDefaults.standard.string(forKey: appearancePreferenceKey) else { return .system }
+            return NativeAppearanceMode(rawValue: value) ?? .system
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: appearancePreferenceKey) }
     }
 }
 
@@ -54,6 +78,7 @@ struct LoadingThemePalette {
     static func assetName(for token: LoadingThemeToken, identifier: NativeThemeIdentifier) -> String {
         switch identifier {
         case .editorial: return token.rawValue
+        case .rosewood: return "Rosewood\(token.rawValue)"
         }
     }
 

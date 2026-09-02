@@ -6,6 +6,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let protocolVersion = 1
     static let supportedMethods: Set<String> = [
         "host.ping", "host.getInfo", "navigation.openExternal",
+        "appearance.setPreference",
         "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
         "healthkit.configureCredential", "healthkit.clearCredential",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
@@ -83,6 +84,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(success(id: identifier, result: hostInfo()), nil)
         case "navigation.openExternal":
             openExternal(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "appearance.setPreference":
+            setAppearancePreference(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "healthkit.getStatus":
             replyHandler(success(id: identifier, result: healthKitCoordinator.status().dictionary), nil)
         case "healthkit.requestAuthorization":
@@ -157,6 +160,34 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             } catch {
                 replyOnMain(replyHandler, value: failure(id: id, code: "notification_schedule_failed", message: error.localizedDescription))
             }
+        }
+    }
+
+    private func setAppearancePreference(
+        parameters: [String: Any],
+        id: String,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
+        guard let rawMode = parameters["appearanceMode"] as? String,
+              let mode = NativeAppearanceMode(rawValue: rawMode),
+              let rawTheme = parameters["colorTheme"] as? String,
+              let theme = NativeThemeIdentifier(rawValue: rawTheme)
+        else {
+            replyHandler(failure(id: id, code: "invalid_appearance", message: "Appearance preference is invalid."), nil)
+            return
+        }
+
+        NativeLoadingTheme.currentAppearanceMode = mode
+        NativeLoadingTheme.currentIdentifier = theme
+        DispatchQueue.main.async {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .forEach { $0.overrideUserInterfaceStyle = mode.interfaceStyle }
+            replyHandler(self.success(id: id, result: [
+                "appearanceMode": mode.rawValue,
+                "colorTheme": theme.rawValue,
+            ]), nil)
         }
     }
 

@@ -24,6 +24,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async getDashboardSummary() { return sqlite.getDashboardSummary(); },
   async getUiPreferences() { return sqlite.getUiPreferences(); },
   async updateHomeModuleOrder(order) { return sqlite.updateHomeModuleOrder(order); },
+  async updateAppearancePreferences(input) { return sqlite.updateAppearancePreferences(input); },
   async getAiSettings() { return sqlite.getAiSettings(); },
   async updateAiSettings(input) { return sqlite.updateAiSettings(input); },
   async updateChatPreferences(input) { return sqlite.updateChatPreferences(input); },

@@ -1,6 +1,7 @@
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
+import type { AppearanceMode, ColorTheme } from "../theme";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -122,6 +123,7 @@ export interface EvaOrbitRepository {
   getDashboardSummary(): Promise<DashboardSummary>;
   getUiPreferences(): Promise<UiPreferences>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
+  updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme }): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;

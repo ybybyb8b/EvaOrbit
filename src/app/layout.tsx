@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Cormorant_Garamond } from "next/font/google";
 import localFont from "next/font/local";
 import { AppShell } from "@/components/app-shell";
@@ -24,8 +25,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width", initialScale: 1, viewportFit: "cover", colorScheme: "light dark" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN" className={`${editorial.variable} ${chinese.variable}`}><body><PwaRegister /><AppShell cloudMode={usesSupabase()}>{children}</AppShell></body></html>;
+  return <html lang="zh-CN" className={`${editorial.variable} ${chinese.variable}`} suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><AppShell cloudMode={usesSupabase()}>{children}</AppShell></body></html>;
 }

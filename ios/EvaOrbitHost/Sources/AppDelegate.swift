@@ -19,6 +19,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         let window = UIWindow(frame: UIScreen.main.bounds)
+        window.overrideUserInterfaceStyle = NativeLoadingTheme.currentAppearanceMode.interfaceStyle
         healthKitCoordinator.restoreAtLaunch()
         window.rootViewController = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager)
         window.makeKeyAndVisible()

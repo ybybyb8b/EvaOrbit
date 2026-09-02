@@ -22,6 +22,7 @@ final class HostConfigurationTests: XCTestCase {
         XCTAssertTrue(NativeBridge.bootstrapScript.contains("evaorbit:native-ready"))
         XCTAssertEqual(NativeBridge.supportedMethods, Set([
             "host.ping", "host.getInfo", "navigation.openExternal",
+            "appearance.setPreference",
             "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
             "healthkit.configureCredential", "healthkit.clearCredential",
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",

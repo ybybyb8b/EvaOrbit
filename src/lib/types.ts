@@ -35,6 +35,8 @@ export interface ApiError {
 
 export interface UiPreferences {
   homeModuleOrder: import("./home-modules").HomeModuleId[];
+  appearanceMode: import("./theme").AppearanceMode;
+  colorTheme: import("./theme").ColorTheme;
   updatedAt: string;
 }
 

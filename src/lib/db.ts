@@ -5,6 +5,7 @@ import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
+import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
@@ -824,6 +825,15 @@ if (!hasV30) database.exec(`
   COMMIT;
 `);
 
+const hasV31 = database.prepare("SELECT 1 FROM migrations WHERE version = 31").get();
+if (!hasV31) database.exec(`
+  BEGIN;
+  ALTER TABLE ui_preferences ADD COLUMN appearance_mode TEXT NOT NULL DEFAULT 'system' CHECK(appearance_mode IN ('system','light','dark'));
+  ALTER TABLE ui_preferences ADD COLUMN color_theme TEXT NOT NULL DEFAULT 'editorial' CHECK(color_theme IN ('editorial','rosewood'));
+  INSERT INTO migrations(version) VALUES(31);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -985,14 +995,19 @@ export function getDashboardSummary(): DashboardSummary {
 }
 
 export function getUiPreferences() {
-  const row = database.prepare("SELECT home_module_order, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; updated_at: string };
+  const row = database.prepare("SELECT home_module_order, appearance_mode, color_theme, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; appearance_mode: string; color_theme: string; updated_at: string };
   let order: unknown = [];
   try { order = JSON.parse(row.home_module_order); } catch { order = []; }
-  return { homeModuleOrder: normalizeHomeModuleOrder(order), updatedAt: row.updated_at };
+  return { homeModuleOrder: normalizeHomeModuleOrder(order), appearanceMode: normalizeAppearanceMode(row.appearance_mode), colorTheme: normalizeColorTheme(row.color_theme), updatedAt: row.updated_at };
 }
 
 export function updateHomeModuleOrder(order: HomeModuleId[]) {
   database.prepare("UPDATE ui_preferences SET home_module_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(JSON.stringify(normalizeHomeModuleOrder(order)));
+  return getUiPreferences();
+}
+
+export function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme }) {
+  database.prepare("UPDATE ui_preferences SET appearance_mode=?, color_theme=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(input.appearanceMode, input.colorTheme);
   return getUiPreferences();
 }
 

@@ -8,6 +8,7 @@ import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
+import { ThemeController } from "./theme-controller";
 
 const navigationGroups = [
   { label: "SPACE", items: [
@@ -38,6 +39,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   if (pathname === "/login") return children;
   return (
     <div className="app-shell">
+      <ThemeController />
       <NativeNotificationReconciler />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label="EvaOrbit 首页">

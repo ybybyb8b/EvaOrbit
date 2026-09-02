@@ -16,6 +16,25 @@ final class NativeLoadingThemeTests: XCTestCase {
         for name in names { XCTAssertNotNil(UIColor(named: name), "Missing semantic color asset \(name)") }
     }
 
+    func testRosewoodThemeMapsEverySemanticRoleToOneNamedColorAsset() {
+        let names = LoadingThemeToken.allCases.map {
+            LoadingThemePalette.assetName(for: $0, identifier: .rosewood)
+        }
+
+        XCTAssertEqual(Set(names).count, LoadingThemeToken.allCases.count)
+        XCTAssertEqual(names, [
+            "RosewoodLoadingBackground", "RosewoodLoadingPrimary", "RosewoodLoadingAccent", "RosewoodLoadingText",
+            "RosewoodLoadingSecondaryText", "RosewoodLoadingButtonBackground", "RosewoodLoadingButtonText",
+        ])
+        for name in names { XCTAssertNotNil(UIColor(named: name), "Missing semantic color asset \(name)") }
+    }
+
+    func testAppearanceModesMapToExpectedInterfaceStyles() {
+        XCTAssertEqual(NativeAppearanceMode.system.interfaceStyle, .unspecified)
+        XCTAssertEqual(NativeAppearanceMode.light.interfaceStyle, .light)
+        XCTAssertEqual(NativeAppearanceMode.dark.interfaceStyle, .dark)
+    }
+
     func testIntroTimingKeepsCoreExperienceBeforeShortExit() {
         XCTAssertEqual(LoadingOverlayView.Timing.introDuration, 2.0)
         XCTAssertEqual(LoadingOverlayView.Timing.exitDuration, 0.30)

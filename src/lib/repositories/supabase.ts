@@ -6,6 +6,7 @@ import { maskApiKey } from "../ai-provider";
 import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
 import { allowedEmail, supabaseConfig } from "../config";
 import { ConflictError } from "../errors";
+import { normalizeAppearanceMode, normalizeColorTheme } from "../theme";
 import { createSupabaseServerClient } from "../supabase/server";
 import type { AiModelConfig, AiProvider, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatRole, ChatSession, ChronicleEntry, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, TaskPriority, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "../types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, EvaOrbitRepository, FoodLibrarySearchOptions, HealthRecordListInput, InternalAiProvider, InternalAiSettings, LuciusCasePatch, LuciusDiaryPatch, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MemoPatch, NewTask, ProjectItemPatch, ProjectPatch, TaskFilter } from "./types";
@@ -282,15 +283,22 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       };
     },
     async getUiPreferences() {
-      const { data, error } = await client.from("ui_preferences").select("home_module_order,updated_at").maybeSingle();
+      const { data, error } = await client.from("ui_preferences").select("home_module_order,appearance_mode,color_theme,updated_at").maybeSingle();
       fail(error, "Read UI preferences");
-      return { homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
+      return { homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), appearanceMode: normalizeAppearanceMode(data?.appearance_mode), colorTheme: normalizeColorTheme(data?.color_theme), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
     },
     async updateHomeModuleOrder(order: HomeModuleId[]) {
-      const { data, error } = await client.from("ui_preferences").upsert({ user_id: userId, home_module_order: normalizeHomeModuleOrder(order) }, { onConflict: "user_id" }).select("home_module_order,updated_at").single();
+      const { data, error } = await client.from("ui_preferences").upsert({ user_id: userId, home_module_order: normalizeHomeModuleOrder(order) }, { onConflict: "user_id" }).select("home_module_order,appearance_mode,color_theme,updated_at").single();
       fail(error, "Save home module order");
       if (!data) throw new Error("Save home module order failed");
-      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), updatedAt: String(data.updated_at) };
+      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), updatedAt: String(data.updated_at) };
+    },
+    async updateAppearancePreferences(input) {
+      const values = { user_id: userId, appearance_mode: input.appearanceMode, color_theme: input.colorTheme };
+      const { data, error } = await client.from("ui_preferences").upsert(values, { onConflict: "user_id" }).select("home_module_order,appearance_mode,color_theme,updated_at").single();
+      fail(error, "Save appearance preferences");
+      if (!data) throw new Error("Save appearance preferences failed");
+      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), updatedAt: String(data.updated_at) };
     },
     async getAiSettings() {
       return runtimeSettings();
