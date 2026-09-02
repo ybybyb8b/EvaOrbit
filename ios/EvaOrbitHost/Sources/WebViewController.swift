@@ -5,14 +5,19 @@ final class WebViewController: UIViewController {
     private let hostConfiguration: HostConfiguration
     private let bridge: NativeBridge
     private let webView: WKWebView
-    private let failureView = UIView()
-    private let failureLabel = UILabel()
-    private let retryButton = UIButton(type: .system)
+    private let palette: LoadingThemePalette
+    private let loadingOverlay: LoadingOverlayView
+    private var loadingCoordinator: LoadingExperienceCoordinator!
+    private var navigationTimeoutWorkItem: DispatchWorkItem?
+    private static let navigationTimeout: TimeInterval = 25
 
-    init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator) {
-        let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator)
+    init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager) {
+        let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager)
+        let themePalette = LoadingThemePalette.current()
         hostConfiguration = configuration
         bridge = nativeBridge
+        palette = themePalette
+        loadingOverlay = LoadingOverlayView(palette: themePalette)
 
         let userContentController = WKUserContentController()
         userContentController.addUserScript(WKUserScript(
@@ -35,6 +40,8 @@ final class WebViewController: UIViewController {
         webView = WKWebView(frame: .zero, configuration: webConfiguration)
 
         super.init(nibName: nil, bundle: nil)
+        loadingCoordinator = LoadingExperienceCoordinator(presenter: loadingOverlay)
+        loadingOverlay.onRetry = { [weak self] in self?.retryFromFailure() }
     }
 
     @available(*, unavailable)
@@ -51,9 +58,10 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 245 / 255, green: 242 / 255, blue: 233 / 255, alpha: 1)
+        view.backgroundColor = palette.loadingBackground
         configureWebView()
-        configureFailureView()
+        configureLoadingOverlay()
+        loadingCoordinator.startColdLaunch()
         loadEvaOrbit()
     }
 
@@ -64,6 +72,9 @@ final class WebViewController: UIViewController {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.keyboardDismissMode = .interactive
+        webView.isOpaque = false
+        webView.backgroundColor = palette.loadingBackground
+        webView.scrollView.backgroundColor = palette.loadingBackground
         webView.scrollView.refreshControl = UIRefreshControl()
         webView.scrollView.refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
         view.addSubview(webView)
@@ -76,45 +87,23 @@ final class WebViewController: UIViewController {
         ])
     }
 
-    private func configureFailureView() {
-        failureView.translatesAutoresizingMaskIntoConstraints = false
-        failureView.backgroundColor = view.backgroundColor
-        failureView.isHidden = true
-
-        failureLabel.translatesAutoresizingMaskIntoConstraints = false
-        failureLabel.text = "EvaOrbit 暂时无法连接"
-        failureLabel.textAlignment = .center
-        failureLabel.textColor = .secondaryLabel
-        failureLabel.font = .preferredFont(forTextStyle: .headline)
-
-        retryButton.translatesAutoresizingMaskIntoConstraints = false
-        retryButton.setTitle("重试", for: .normal)
-        retryButton.addTarget(self, action: #selector(retry), for: .touchUpInside)
-
-        let stack = UIStackView(arrangedSubviews: [failureLabel, retryButton])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 16
-        failureView.addSubview(stack)
-        view.addSubview(failureView)
-
+    private func configureLoadingOverlay() {
+        loadingOverlay.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(loadingOverlay)
         NSLayoutConstraint.activate([
-            failureView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            failureView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            failureView.topAnchor.constraint(equalTo: view.topAnchor),
-            failureView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stack.centerXAnchor.constraint(equalTo: failureView.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: failureView.centerYAnchor)
+            loadingOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            loadingOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            loadingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            loadingOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
 
     private func loadEvaOrbit() {
-        failureView.isHidden = true
         webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
     }
 
     @objc private func refresh() {
+        loadingCoordinator.beginRecovery()
         if webView.url == nil {
             loadEvaOrbit()
         } else {
@@ -122,14 +111,27 @@ final class WebViewController: UIViewController {
         }
     }
 
-    @objc private func retry() {
-        loadEvaOrbit()
+    private func retryFromFailure() {
+        loadingCoordinator.beginRecovery()
+        if webView.url == nil { loadEvaOrbit() } else { webView.reload() }
     }
 
-    private func showFailure() {
+    private func startNavigationTimeout() {
+        navigationTimeoutWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.webView.isLoading else { return }
+            self.webView.stopLoading()
+            self.webView.scrollView.refreshControl?.endRefreshing()
+            self.loadingCoordinator.fail()
+        }
+        navigationTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.navigationTimeout, execute: workItem)
+    }
+
+    private func finishNavigationAttempt() {
+        navigationTimeoutWorkItem?.cancel()
+        navigationTimeoutWorkItem = nil
         webView.scrollView.refreshControl?.endRefreshing()
-        failureView.isHidden = false
-        view.bringSubviewToFront(failureView)
     }
 
     private func openOutsideApp(_ url: URL) {
@@ -138,6 +140,14 @@ final class WebViewController: UIViewController {
 }
 
 extension WebViewController: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        startNavigationTimeout()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        webView.backgroundColor = palette.loadingBackground
+    }
+
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
@@ -160,19 +170,28 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        webView.scrollView.refreshControl?.endRefreshing()
-        failureView.isHidden = true
+        finishNavigationAttempt()
+        loadingCoordinator.webViewDidBecomeReady()
+    }
+
+    func notifyApplicationDidBecomeActive() {
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:native-active'))")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        showFailure()
+        finishNavigationAttempt()
+        guard (error as? URLError)?.code != .cancelled else { return }
+        loadingCoordinator.fail()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showFailure()
+        finishNavigationAttempt()
+        guard (error as? URLError)?.code != .cancelled else { return }
+        loadingCoordinator.fail()
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        loadingCoordinator.beginRecovery()
         webView.reload()
     }
 }

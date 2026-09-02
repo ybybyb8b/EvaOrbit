@@ -23,7 +23,9 @@ final class HostConfigurationTests: XCTestCase {
         XCTAssertEqual(NativeBridge.supportedMethods, Set([
             "host.ping", "host.getInfo", "navigation.openExternal",
             "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
-            "healthkit.configureCredential", "healthkit.clearCredential"
+            "healthkit.configureCredential", "healthkit.clearCredential",
+            "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
+            "notification.cancel", "notification.listPending", "notification.openSettings"
         ]))
     }
 }

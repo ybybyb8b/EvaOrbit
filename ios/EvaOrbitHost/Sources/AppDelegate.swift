@@ -4,6 +4,7 @@ import UIKit
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     private let healthKitCoordinator: HealthKitCoordinator
+    private let notificationManager = NotificationManager()
 
     override init() {
         let store = try! HealthLocalStore()
@@ -19,7 +20,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         let window = UIWindow(frame: UIScreen.main.bounds)
         healthKitCoordinator.restoreAtLaunch()
-        window.rootViewController = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator)
+        window.rootViewController = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager)
         window.makeKeyAndVisible()
         self.window = window
 
@@ -28,6 +29,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidBecomeActive(_ application: UIApplication) {
         healthKitCoordinator.applicationDidBecomeActive()
+        (window?.rootViewController as? WebViewController)?.notifyApplicationDidBecomeActive()
     }
 
     func application(

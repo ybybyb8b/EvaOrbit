@@ -24,6 +24,7 @@ targets:
     dependencies:
       - sdk: WebKit.framework
       - sdk: HealthKit.framework
+      - sdk: UserNotifications.framework
       - sdk: Security.framework
       - sdk: libsqlite3.tbd
     info:
@@ -33,7 +34,8 @@ targets:
         EvaOrbitBaseURL: https://eva-orbit.vercel.app
         ITSAppUsesNonExemptEncryption: false
         NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LoadingBackground
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
