@@ -312,8 +312,9 @@ a { color: inherit; text-decoration: none; }
 button { color: inherit; }
 .icon { width: 20px; height: 20px; flex: none; }
 /* Feature PNGs use a transparent 512px canvas; scale the image box so their visible artwork matches the SVG weight. */
-.feature-icon { display: inline-block; background-position: center; background-repeat: no-repeat; background-size: contain; transform: scale(var(--feature-icon-scale)); transform-origin: center; }
-.nav-icon { display: inline-block; background-position: center; background-repeat: no-repeat; background-size: contain; }
+.feature-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; transform: scale(var(--feature-icon-scale)); transform-origin: center; }
+.nav-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; }
+html[data-mode="dark"] .feature-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
 
 /* App frame */
 .app-shell { min-height: 100vh; }
@@ -2639,4 +2640,88 @@ html[data-mode="dark"] .field select { background-image: url("data:image/svg+xml
   .lucius-profile-bio { font-size:13px; }
   .lucius-profile-tabs a { font-size:10px; letter-spacing:.07em; }
   .lucius-profile-content { width:calc(100% - 28px); }
+}
+
+/* Lucius profile palette: independent warm-neutral identity with a matched dark mode. */
+.lucius-profile-page {
+  --lucius-paper:#f3eee5;
+  --lucius-ivory:#eee7dc;
+  --lucius-surface:#f8f4ec;
+  --lucius-ink:#2a2927;
+  --lucius-ink-strong:#1d1c1a;
+  --lucius-muted:#6f6b65;
+  --lucius-soft:#918b83;
+  --lucius-accent:#3b3936;
+  --lucius-accent-soft:#8b8379;
+  --lucius-border:rgba(48,46,43,.16);
+  --lucius-border-strong:rgba(48,46,43,.28);
+  --lucius-header:rgba(248,244,236,.94);
+  --lucius-shadow:rgba(24,23,21,.09);
+  --lucius-cover-ink:rgba(55,52,48,.28);
+  --lucius-cover-image:url("/images/lucius-cover-light.png");
+  --lucius-forest:var(--lucius-accent);
+  --lucius-forest-deep:#242321;
+  --lucius-gold:var(--lucius-accent-soft);
+  border-color:var(--lucius-border);
+  background:radial-gradient(circle at 15% 42%,rgba(69,65,60,.035),transparent 22%),radial-gradient(circle at 84% 64%,rgba(69,65,60,.025),transparent 24%),var(--lucius-paper);
+  color:var(--lucius-ink);
+  box-shadow:0 20px 60px var(--lucius-shadow);
+}
+html[data-mode="dark"] .lucius-profile-page {
+  --lucius-paper:#151514;
+  --lucius-ivory:#292724;
+  --lucius-surface:#1c1b1a;
+  --lucius-ink:#e6dfd5;
+  --lucius-ink-strong:#f2ebe1;
+  --lucius-muted:#b1aaa1;
+  --lucius-soft:#847e76;
+  --lucius-accent:#d8cec0;
+  --lucius-accent-soft:#a09689;
+  --lucius-border:rgba(230,220,207,.14);
+  --lucius-border-strong:rgba(230,220,207,.25);
+  --lucius-header:rgba(26,25,24,.95);
+  --lucius-shadow:rgba(0,0,0,.36);
+  --lucius-cover-ink:rgba(222,211,196,.25);
+  --lucius-cover-image:url("/images/lucius-cover-dark.png");
+  --lucius-forest:var(--lucius-accent);
+  --lucius-forest-deep:#111110;
+  --lucius-gold:var(--lucius-accent-soft);
+}
+.lucius-profile-header { border-bottom-color:var(--lucius-border); background:var(--lucius-header); }
+.lucius-cover { border-bottom-color:var(--lucius-border-strong); background:var(--lucius-cover-image) center/cover no-repeat; }
+.lucius-cover::before,.lucius-cover::after { border-color:var(--lucius-cover-ink); opacity:.3; }
+.lucius-cover::before { box-shadow:72px -42px 0 -70px var(--lucius-cover-ink),126px -7px 0 -122px var(--lucius-cover-ink); }
+.lucius-cover-script { color:var(--lucius-cover-ink); }
+.lucius-cover-star { color:var(--lucius-accent-soft); }
+.lucius-cover-botanical { filter:grayscale(1); opacity:.2; }
+.lucius-profile-portrait { border-color:var(--lucius-accent-soft); background:var(--lucius-ivory); box-shadow:0 0 0 5px var(--lucius-paper),0 0 0 6px var(--lucius-border-strong); }
+.lucius-profile-portrait > span { border-color:var(--lucius-accent-soft); background:var(--lucius-accent); color:var(--lucius-surface); box-shadow:0 0 0 3px var(--lucius-paper); }
+.lucius-profile-name,.lucius-profile-section-heading h2,.lucius-profile-list > a > strong { color:var(--lucius-ink-strong); }
+.lucius-profile-handle,.lucius-profile-state,.lucius-post time,.lucius-profile-section-heading div > span,.lucius-profile-section-heading > a,.lucius-profile-list > a > time,.lucius-case-entry > div,.lucius-profile-list > a > span { color:var(--lucius-soft); }
+.lucius-profile-rule { color:var(--lucius-accent-soft); }
+.lucius-profile-rule::before,.lucius-profile-rule::after { background:var(--lucius-border-strong); }
+.lucius-profile-bio,.lucius-post p,.lucius-profile-list > a > p { color:var(--lucius-muted); }
+.lucius-profile-tabs { border-top-color:var(--lucius-border); }
+.lucius-profile-tabs a { color:var(--lucius-muted); }
+.lucius-profile-tabs a::after { background:var(--lucius-accent); }
+.lucius-profile-tabs a:hover,.lucius-profile-tabs a.active { color:var(--lucius-accent); }
+.lucius-profile-tabs a.active::before { background:var(--lucius-paper); color:var(--lucius-accent-soft); }
+.lucius-post,.lucius-profile-section-heading,.lucius-profile-list > a { border-bottom-color:var(--lucius-border); }
+.lucius-profile-empty { color:var(--lucius-muted); }
+.lucius-profile-empty > span { color:var(--lucius-accent-soft); }
+.lucius-profile-empty small { color:var(--lucius-soft); }
+.lucius-profile-list > a:hover { background:rgba(71,67,62,.04); }
+html[data-mode="dark"] .lucius-profile-list > a:hover { background:rgba(255,255,255,.025); }
+body:has(.lucius-profile-page) .main-nav a.active { background:rgba(48,46,43,.1); color:#2a2927; }
+html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { background:rgba(230,220,207,.12); color:#eee5d9; }
+
+@media (max-width:720px) {
+  body:has(.lucius-profile-page) .main-content { background:#f3eee5; }
+  body:has(.lucius-profile-page) .mobile-nav { border-top-color:rgba(48,46,43,.18); background:rgba(243,238,229,.98); box-shadow:0 -10px 24px rgba(24,23,21,.08); }
+  body:has(.lucius-profile-page) .mobile-nav a { color:#777169; }
+  body:has(.lucius-profile-page) .mobile-nav a.active { color:#252321; }
+  html[data-mode="dark"] body:has(.lucius-profile-page) .main-content { background:#151514; }
+  html[data-mode="dark"] body:has(.lucius-profile-page) .mobile-nav { border-top-color:rgba(230,220,207,.14); background:rgba(21,21,20,.98); box-shadow:0 -10px 24px rgba(0,0,0,.3); }
+  html[data-mode="dark"] body:has(.lucius-profile-page) .mobile-nav a { color:#9d968d; }
+  html[data-mode="dark"] body:has(.lucius-profile-page) .mobile-nav a.active { color:#eee5d9; }
 }

@@ -2,31 +2,43 @@ export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" 
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
-  home: "/icons/nav/home.png",
-  lucius: "/icons/features/lucius.png",
-  settings: "/icons/nav/settings.png",
+  home: "/icons/nav/home.svg",
+  lucius: "/icons/nav/lucius.svg",
+  settings: "/icons/nav/settings.svg",
 };
 
 const featureIconSources: Partial<Record<IconName, string>> = {
-  home: "/icons/features/home.png",
-  tasks: "/icons/features/projects.png",
-  memory: "/icons/features/memo.png",
-  ai: "/icons/features/eva.png",
-  settings: "/icons/features/settings.png",
-  inbox: "/icons/features/inbox.png",
-  food: "/icons/features/food.png",
-  drink: "/icons/features/drinks.png",
-  tracker: "/icons/features/trackers.png",
-  cats: "/icons/features/cats.png",
-  people: "/icons/features/people.png",
-  media: "/icons/features/media.png",
-  chronicle: "/icons/features/chronicle.png",
-  lucius: "/icons/features/lucius.png",
-  more: "/icons/features/more.png",
-  notifications: "/icons/features/notifications.png",
-  calendar: "/icons/features/calendar.png",
-  health: "/icons/features/health.png",
+  home: "/icons/features/home.svg",
+  tasks: "/icons/features/projects.svg",
+  memory: "/icons/features/memo.svg",
+  ai: "/icons/features/eva.svg",
+  settings: "/icons/features/settings.svg",
+  inbox: "/icons/features/inbox.svg",
+  food: "/icons/features/food.svg",
+  drink: "/icons/features/drinks.svg",
+  tracker: "/icons/features/trackers.svg",
+  cats: "/icons/features/cats.svg",
+  people: "/icons/features/people.svg",
+  media: "/icons/features/media.svg",
+  chronicle: "/icons/features/chronicle.svg",
+  lucius: "/icons/features/lucius.svg",
+  more: "/icons/features/more.svg",
+  notifications: "/icons/features/notifications.svg",
+  calendar: "/icons/features/calendar.svg",
+  health: "/icons/features/health.svg",
 };
+
+const darkFeatureIconSources: Partial<Record<IconName, string>> = {
+  ai: "/icons/features/eva-dark.svg",
+  tracker: "/icons/features/trackers-dark.svg",
+};
+
+function iconSourceStyle(source: string, darkSource?: string) {
+  return {
+    "--icon-source": `url("${source}")`,
+    ...(darkSource ? { "--icon-source-dark": `url("${darkSource}")` } : {}),
+  } as React.CSSProperties;
+}
 
 const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
@@ -59,7 +71,7 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
 export function Icon({ name, variant = "feature" }: IconProps) {
   const featureSource = featureIconSources[name];
   const navSource = navIconSources[name];
-  if (navSource && variant === "nav") return <span className="icon nav-icon" style={{ backgroundImage: `url("${navSource}")` }} aria-hidden="true" />;
-  if (featureSource && variant === "feature") return <span className="icon feature-icon" style={{ backgroundImage: `url("${featureSource}")` }} aria-hidden="true" />;
+  if (navSource && variant === "nav") return <span className="icon nav-icon" style={iconSourceStyle(navSource)} aria-hidden="true" />;
+  if (featureSource && variant === "feature") return <span className="icon feature-icon" style={iconSourceStyle(featureSource, darkFeatureIconSources[name])} aria-hidden="true" />;
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

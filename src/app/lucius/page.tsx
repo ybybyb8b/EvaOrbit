@@ -66,7 +66,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
       </div>
 
       <div className="lucius-profile-portrait">
-        <Image src="/images/lucius-portrait.png" alt="Lucius" width={1254} height={1254} priority sizes="(max-width: 720px) 126px, 154px" />
+        <Image src="/images/lucius-profile-portrait-v2.png" alt="Lucius" width={1254} height={1254} priority sizes="(max-width: 720px) 126px, 154px" />
         <span title={`Current mood: ${state.mood}`} aria-label={`Current mood: ${state.mood}`}>L</span>
       </div>
 
