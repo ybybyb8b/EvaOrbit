@@ -1,0 +1,42 @@
+.destinations { margin: 0; padding-top: 4px; }
+.heading { margin-bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.heading h2 { margin: 0; font: 600 31px/1.05 var(--font-editorial-label); letter-spacing: -.45px; }
+.heading p { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+.manageButton { min-width: 76px; min-height: 42px; padding: 0 15px; border: 0; border-radius: 12px; background: rgb(var(--surface-tint-rgb) / .72); color: var(--green); cursor: pointer; font-size: 12px; font-weight: 760; }
+.manageButton:hover { background: var(--surface-tint); }
+.manageButton:active { transform: translateY(1px); }
+.manageButton:disabled { opacity: .55; cursor: wait; }
+.error { margin: -8px 0 14px; color: var(--danger); font-size: 12px; }
+.favoriteGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.card { min-width: 0; min-height: 88px; padding: 14px 15px; border: 0; border-radius: 17px; display: grid; grid-template-columns: 38px minmax(0, 1fr) 15px; align-items: center; gap: 12px; color: inherit; background: rgb(var(--surface-card-rgb) / .72); box-shadow: 0 12px 30px rgb(var(--shadow-rgb) / .03); transition: transform .15s ease, background .15s ease, box-shadow .15s ease; }
+.card:hover { background: var(--white); color: inherit; box-shadow: 0 15px 34px rgb(var(--shadow-rgb) / .055); transform: translateY(-1px); }
+.card:active { transform: translateY(1px); }
+.icon { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; color: var(--green); background: var(--surface-warm); }
+.icon :global(.icon) { width: 18px; }
+.icon :global(.feature-icon) { width: 35px; height: 35px; }
+.copy { min-width: 0; }
+.copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 21px/1 var(--font-editorial-label); }
+.card > :global(.icon) { width: 14px; color: var(--text-tertiary); }
+.arranging { grid-template-columns: 40px minmax(0, 1fr) auto; background: var(--surface-warm); cursor: grab; }
+.arranging:active { cursor: grabbing; }
+.dragHandle { color: var(--text-tertiary); font-weight: 900; letter-spacing: 2px; transform: rotate(90deg); }
+.orderControls { grid-column: 2 / -1; display: flex; gap: 6px; }
+.orderControls button { width: 34px; height: 34px; border: 0; border-radius: 10px; background: rgb(var(--surface-raised-rgb) / .72); color: var(--green); cursor: pointer; }
+.orderControls button:disabled { opacity: .3; }
+@media (max-width: 860px) { .favoriteGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .destinations { padding-top: 0; }
+  .heading { margin-bottom: 14px; align-items: center; gap: 14px; }
+  .heading h2 { font-size: 30px; }
+  .heading p { margin-top: 6px; font-size: 12px; }
+  .manageButton { min-width: 68px; min-height: 44px; flex: none; font-size: 12px; }
+  .favoriteGrid { gap: 8px; }
+  .card { min-height: 76px; padding: 12px; grid-template-columns: 34px minmax(0, 1fr); align-content: center; gap: 10px; }
+  .card > :global(.icon) { display: none; }
+  .icon { width: 34px; height: 34px; border-radius: 12px; }
+  .copy strong { font-size: 19px; }
+  .arranging { grid-template-columns: 36px minmax(0, 1fr) auto; }
+  .dragHandle { display: block; }
+}
+@media (max-width: 370px) { .favoriteGrid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }

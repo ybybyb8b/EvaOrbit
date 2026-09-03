@@ -6,3 +6,7 @@ export function normalizeHomeModuleOrder(value: unknown): HomeModuleId[] {
   const supplied = Array.isArray(value) ? value.filter((item): item is HomeModuleId => typeof item === "string" && HOME_MODULE_IDS.includes(item as HomeModuleId)) : [];
   return [...new Set(supplied), ...HOME_MODULE_IDS.filter((item) => !supplied.includes(item))];
 }
+
+export function homeFavoriteModuleOrder(value: unknown, limit = 6): HomeModuleId[] {
+  return normalizeHomeModuleOrder(value).filter((item) => item !== "eva").slice(0, Math.max(0, limit));
+}

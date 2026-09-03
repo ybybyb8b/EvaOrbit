@@ -1,0 +1,55 @@
+.date {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--text-overline);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.2;
+  letter-spacing: .02em;
+}
+
+.overview {
+  margin-bottom: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.overview .nowGrid {
+  grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr);
+  gap: 14px;
+}
+
+.overview :global(.today-focus),
+.overview :global(.home-kept) {
+  min-width: 0;
+  padding: 22px 24px;
+  border: 0;
+  border-radius: 20px;
+  background: rgb(var(--surface-card-rgb) / .7);
+  box-shadow: 0 14px 38px rgb(var(--shadow-rgb) / .035);
+}
+
+.overview :global(.home-inbox-card) {
+  background: rgb(var(--surface-tint-rgb) / .68);
+}
+
+@media (max-width: 720px) {
+  .overview {
+    margin-bottom: 38px;
+  }
+
+  .overview .nowGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .overview :global(.today-focus),
+  .overview :global(.home-kept) {
+    padding: 19px 17px;
+    border-radius: 18px;
+  }
+}
