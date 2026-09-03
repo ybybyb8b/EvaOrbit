@@ -15,6 +15,7 @@ import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../servi
 import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
 import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryNote,deleteRelationEvent,getMemoryNote,getRelationEvent,getRelationPersonDetail,listMemoryNotes,listRelationEvents,listRelationPeople,settleAdvance,updateMemoryNote,updateRelationEvent,updateRelationPerson } from "../services/relations";
 import { createResourceRegistry } from "./resource-registry";
+import { createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,updateFoodDish,updateFoodPlace } from "../services/food";
 
 export const resourceRegistry = createResourceRegistry({
   inbox: { search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox },
@@ -39,4 +40,6 @@ export const resourceRegistry = createResourceRegistry({
   relationPerson:{search:listRelationPeople,get:getRelationPersonDetail,create:createRelationPerson,update:updateRelationPerson},
   relationEvent:{search:listRelationEvents,get:getRelationEvent,create:createRelationEvent,update:updateRelationEvent,delete:deleteRelationEvent,settle:settleAdvance},
   personNote:{search:listMemoryNotes,get:getMemoryNote,create:createMemoryNote,update:updateMemoryNote,delete:deleteMemoryNote},
+  foodPlace:{search:listFoodPlaces,get:getFoodPlace,create:createFoodPlace,update:updateFoodPlace},
+  foodDish:{search:listFoodDishes,get:getFoodDish,create:createFoodDish,update:updateFoodDish,delete:async(id)=>Boolean(await removeFoodDish(id))},
 });

@@ -1,4 +1,13 @@
-const CACHE = "eva-orbit-static-v5";
+const CACHE = "eva-orbit-static-v6";
+const THEMED_ICON_ASSETS = ["rosewood", "powderblue"].flatMap((theme) => [
+  "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
+].map((name) => `/icons/themes/${theme}/features/${name}.svg`).concat([
+  `/icons/themes/${theme}/features/eva-dark.svg`,
+  `/icons/themes/${theme}/features/trackers-dark.svg`,
+  `/icons/themes/${theme}/nav/home.svg`,
+  `/icons/themes/${theme}/nav/lucius.svg`,
+  `/icons/themes/${theme}/nav/settings.svg`,
+]));
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icons/app-icon-192.png",
@@ -28,6 +37,7 @@ const STATIC_ASSETS = [
   "/icons/nav/home.svg",
   "/icons/nav/lucius.svg",
   "/icons/nav/settings.svg",
+  ...THEMED_ICON_ASSETS,
   "/eva-home-cat.png",
 ];
 

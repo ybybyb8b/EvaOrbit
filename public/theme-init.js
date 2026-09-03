@@ -1,7 +1,7 @@
 (() => {
   try {
     const modes = new Set(["system", "light", "dark"]);
-    const themes = new Set(["editorial", "rosewood"]);
+    const themes = new Set(["editorial", "rosewood", "powderblue"]);
     const preferredMode = localStorage.getItem("evaorbit.appearanceMode");
     const preferredTheme = localStorage.getItem("evaorbit.colorTheme");
     const appearance = modes.has(preferredMode) ? preferredMode : "system";

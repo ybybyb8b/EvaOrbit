@@ -9,7 +9,7 @@ import {
 
 test("appearance preferences expose the supported values", () => {
   assert.deepEqual(APPEARANCE_MODES, ["system", "light", "dark"]);
-  assert.deepEqual(COLOR_THEMES, ["editorial", "rosewood"]);
+  assert.deepEqual(COLOR_THEMES, ["editorial", "rosewood", "powderblue"]);
 });
 
 test("appearance preference normalization preserves known values", () => {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
+import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
@@ -118,6 +118,30 @@ test("optional Web API resources are exposed when production operations are regi
   assert.equal((await registry.get("lucius_post",created.id as number)).published_at,"2026-09-02T00:00:00.000Z");
   assert.equal((await registry.update("lucius_post",created.id as number,{content:"Still quiet."})).content,"Still quiet.");
   assert.deepEqual(await registry.delete("lucius_post",created.id as number),{deleted:true,id:created.id});
+});
+
+test("food place and dish resources expose safe generic CRUD",async()=>{
+  const base=fakeOperations().operations,places:FoodPlace[]=[],dishes:FoodDish[]=[];
+  const registry=createResourceRegistry({...base,foodPlace:{
+    async search(query="",options={}){return places.filter(item=>(!query||item.name.includes(query))&&(!options.status||item.status===options.status)).slice(0,options.limit??20);},
+    async get(id){return places.find(item=>item.id===id)??null;},
+    async create(input){const item:FoodPlace={...input,id:places.length+1,archivedAt:null,dishCount:0,visitCount:0,lastVisitedAt:null,createdAt,updatedAt:createdAt};places.push(item);return item;},
+    async update(id,input){const item=places.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item;},
+  },foodDish:{
+    async search(query="",options={}){return dishes.filter(item=>(!query||item.name.includes(query))&&(!options.foodPlaceId||item.foodPlaceId===options.foodPlaceId)).slice(0,options.limit??20);},
+    async get(id){return dishes.find(item=>item.id===id)??null;},
+    async create(input){const item:FoodDish={...input,id:dishes.length+1,archivedAt:null,eatCount:0,lastEatenAt:null,createdAt,updatedAt:createdAt};dishes.push(item);return item;},
+    async update(id,input){const item=dishes.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item;},
+    async delete(id){const index=dishes.findIndex(item=>item.id===id);if(index<0)return false;dishes.splice(index,1);return true;},
+  }});
+  assert.deepEqual(registry.resources().slice(-2).map(item=>item.resource),["food_place","food_dish"]);
+  const place=await registry.create("food_place",{name:"某某米线",branch:"天府和悦店",category:"米线",rating:"love",status:"frequent"});
+  const dish=await registry.create("food_dish",{food_place_id:place.id,name:"番茄米线",rating:"good",recommended:true});
+  assert.equal(dish.food_place_id,place.id);assert.equal(dish.recommended,true);
+  assert.deepEqual((await registry.search("food_dish",{filters:{food_place_id:place.id,recommended:true},limit:20})).items.map(item=>item.id),[dish.id]);
+  assert.equal((await registry.update("food_place",place.id as number,{status:"paused"})).status,"paused");
+  assert.deepEqual(await registry.delete("food_dish",dish.id as number),{deleted:true,id:dish.id});
+  await assert.rejects(()=>registry.create("food_place",{name:"Bad",address:"not supported"}),/does not accept: address/);
 });
 
 test("Lucius state is a single explicit MCP-updatable display resource", async () => {

@@ -305,8 +305,52 @@ export interface FoodLog {
   notes: string;
   imageUrl: string | null;
   attachmentId: string | null;
+  foodPlaceId?: number | null;
+  foodDishId?: number | null;
+  foodPlaceName?: string | null;
+  foodPlaceBranch?: string | null;
+  foodDishName?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export const FOOD_PLACE_STATUSES = ["frequent", "occasional", "paused", "avoid", "closed"] as const;
+export type FoodPlaceStatus = typeof FOOD_PLACE_STATUSES[number];
+export interface FoodPlace {
+  id: number;
+  name: string;
+  branch: string;
+  category: string;
+  rating: TasteRating | null;
+  status: FoodPlaceStatus;
+  notes: string;
+  archivedAt: string | null;
+  dishCount: number;
+  visitCount: number;
+  lastVisitedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FoodDish {
+  id: number;
+  foodPlaceId: number;
+  name: string;
+  category: string;
+  rating: TasteRating | null;
+  recommended: boolean;
+  notes: string;
+  archivedAt: string | null;
+  eatCount: number;
+  lastEatenAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FoodPlaceDetail {
+  place: FoodPlace;
+  dishes: FoodDish[];
+  recentFoodLogs: FoodLog[];
 }
 
 export type FoodCategory = "staple" | "dish" | "snack" | "drink" | "other";

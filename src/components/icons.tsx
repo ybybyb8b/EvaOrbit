@@ -34,9 +34,14 @@ const darkFeatureIconSources: Partial<Record<IconName, string>> = {
 };
 
 function iconSourceStyle(source: string, darkSource?: string) {
+  const themedSource = (theme: "rosewood" | "powderblue", value: string) => value.replace("/icons/", `/icons/themes/${theme}/`);
   return {
     "--icon-source": `url("${source}")`,
     ...(darkSource ? { "--icon-source-dark": `url("${darkSource}")` } : {}),
+    "--icon-source-rosewood": `url("${themedSource("rosewood", source)}")`,
+    "--icon-source-rosewood-dark": `url("${themedSource("rosewood", darkSource ?? source)}")`,
+    "--icon-source-powderblue": `url("${themedSource("powderblue", source)}")`,
+    "--icon-source-powderblue-dark": `url("${themedSource("powderblue", darkSource ?? source)}")`,
   } as React.CSSProperties;
 }
 

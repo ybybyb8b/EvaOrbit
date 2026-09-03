@@ -14,6 +14,7 @@ const modes: Array<{ value: AppearanceMode; label: string; detail: string }> = [
 const themes: Array<{ value: ColorTheme; label: string; detail: string }> = [
   { value: "editorial", label: "原野绿", detail: "EvaOrbit 当前的米白与绿色" },
   { value: "rosewood", label: "粉棕", detail: "柔和粉褐、陶土与暖纸色" },
+  { value: "powderblue", label: "粉雾蓝", detail: "浅蓝、粉蓝与雾面冷灰" },
 ];
 
 export function AppearanceThemeSettings() {

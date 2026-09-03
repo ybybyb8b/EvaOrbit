@@ -695,6 +695,8 @@ export function parseNewFoodLog(value: unknown) {
     notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
     imageUrl: body.imageUrl === undefined || body.imageUrl === null ? null : text(body.imageUrl, "图片地址", 1000, false) || null,
     attachmentId: body.attachmentId === undefined || body.attachmentId === null ? null : text(body.attachmentId, "附件 ID", 200, false) || null,
+    foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER),
+    foodDishId: optionalNumber(body.foodDishId, "菜品 ID", 1, Number.MAX_SAFE_INTEGER),
   };
 }
 
@@ -704,11 +706,55 @@ export function parseFoodLogPatch(value: unknown) {
     occurredAt: body.occurredAt ?? new Date().toISOString(), mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
-    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId,
+    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId,
   });
-  const keys = ["occurredAt", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId"] as const;
+  const keys = ["occurredAt", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodPlaceId", "foodDishId"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
+  return result;
+}
+
+export function parseFoodPlace(value: unknown) {
+  const body = objectValue(value);
+  return {
+    name: text(body.name, "店铺名称", 200)!,
+    branch: text(body.branch ?? "", "分店信息", 160, false) ?? "",
+    category: text(body.category ?? "", "店铺品类", 100, false) ?? "",
+    rating: body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "总体评价", ["love", "good", "neutral", "dislike"] as const, "neutral"),
+    status: enumValue(body.status, "店铺状态", ["frequent", "occasional", "paused", "avoid", "closed"] as const, "occasional"),
+    notes: text(body.notes ?? "", "备注", 4000, false) ?? "",
+  };
+}
+
+export function parseFoodPlacePatch(value: unknown) {
+  const body = objectValue(value);
+  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", branch: body.branch, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
+  const keys = ["name", "branch", "category", "rating", "status", "notes"] as const;
+  const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  if (!Object.keys(result).length) throw new ValidationError("没有可更新的店铺字段");
+  return result;
+}
+
+export function parseFoodDish(value: unknown) {
+  const body = objectValue(value);
+  const foodPlaceId = optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER);
+  if (foodPlaceId === null) throw new ValidationError("菜品必须属于一家店铺");
+  return {
+    foodPlaceId,
+    name: text(body.name, "菜名", 200)!,
+    category: text(body.category ?? "", "菜品品类", 100, false) ?? "",
+    rating: body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "菜品评价", ["love", "good", "neutral", "dislike"] as const, "neutral"),
+    recommended: booleanValue(body.recommended, "是否推荐", false),
+    notes: text(body.notes ?? "", "备注", 4000, false) ?? "",
+  };
+}
+
+export function parseFoodDishPatch(value: unknown) {
+  const body = objectValue(value);
+  const parsed = parseFoodDish({ foodPlaceId: body.foodPlaceId ?? 1, name: body.name ?? "placeholder", category: body.category, rating: body.rating, recommended: body.recommended, notes: body.notes });
+  const keys = ["foodPlaceId", "name", "category", "rating", "recommended", "notes"] as const;
+  const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  if (!Object.keys(result).length) throw new ValidationError("没有可更新的菜品字段");
   return result;
 }
 

@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -38,10 +38,15 @@ export type AiProviderInput = { name: string; providerType: string; baseUrl: str
 export type AiModelConfigInput = { modelId: string; displayName: string; enabled: boolean; isDefault: boolean; capabilities: Record<string, unknown> };
 
 export type NewInboxItem = Pick<InboxItem, "content" | "source">;
-export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt">;
+export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt" | "foodPlaceName" | "foodPlaceBranch" | "foodDishName">;
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
 export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryItem["category"]; limit?: number };
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
+export type NewFoodPlace = Omit<FoodPlace, "id" | "archivedAt" | "dishCount" | "visitCount" | "lastVisitedAt" | "createdAt" | "updatedAt">;
+export type NewFoodDish = Omit<FoodDish, "id" | "archivedAt" | "eatCount" | "lastEatenAt" | "createdAt" | "updatedAt">;
+export type FoodPlaceSearchOptions = { status?: FoodPlace["status"]; category?: string; includeArchived?: boolean; limit?: number };
+export type FoodDishSearchOptions = { foodPlaceId?: number; recommended?: boolean; rating?: FoodDish["rating"]; includeArchived?: boolean; limit?: number };
+export type FoodObjectRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
 export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt">;
@@ -152,7 +157,7 @@ export interface EvaOrbitRepository {
   updateInboxItem(id: number, input: Record<string, unknown>): Promise<InboxItem | null>;
   deleteInboxItem(id: number): Promise<boolean>;
 
-  listFoodLogs(input?: { date?: string; query?: string; mealType?: string; from?: string; to?: string }): Promise<FoodLog[]>;
+  listFoodLogs(input?: { date?: string; query?: string; mealType?: string; from?: string; to?: string; foodPlaceId?: number; foodDishId?: number; limit?: number }): Promise<FoodLog[]>;
   getFoodLog(id: number): Promise<FoodLog | null>;
   createFoodLog(input: NewFoodLog): Promise<FoodLog>;
   updateFoodLog(id: number, input: Record<string, unknown>): Promise<FoodLog | null>;
@@ -162,6 +167,16 @@ export interface EvaOrbitRepository {
   upsertFoodLibraryItem(input: NewFoodLibraryItem): Promise<FoodLibraryItem>;
   updateFoodLibraryItem(id: number, input: NewFoodLibraryItem): Promise<FoodLibraryItem | null>;
   removeFoodLibraryItem(id: number): Promise<FoodLibraryRemoval | null>;
+  listFoodPlaces(query?: string, options?: FoodPlaceSearchOptions): Promise<FoodPlace[]>;
+  getFoodPlace(id: number): Promise<FoodPlace | null>;
+  createFoodPlace(input: NewFoodPlace): Promise<FoodPlace>;
+  updateFoodPlace(id: number, input: Partial<NewFoodPlace>): Promise<FoodPlace | null>;
+  removeFoodPlace(id: number): Promise<FoodObjectRemoval | null>;
+  listFoodDishes(query?: string, options?: FoodDishSearchOptions): Promise<FoodDish[]>;
+  getFoodDish(id: number): Promise<FoodDish | null>;
+  createFoodDish(input: NewFoodDish): Promise<FoodDish>;
+  updateFoodDish(id: number, input: Partial<NewFoodDish>): Promise<FoodDish | null>;
+  removeFoodDish(id: number): Promise<FoodObjectRemoval | null>;
 
   listHealthRecords(input?: HealthRecordListInput): Promise<HealthRecord[]>;
   getHealthRecord(id: number): Promise<HealthRecord | null>;

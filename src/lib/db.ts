@@ -6,9 +6,9 @@ import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
 import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodLibraryItem, FoodLog, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodLibrarySearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -834,6 +834,68 @@ if (!hasV31) database.exec(`
   COMMIT;
 `);
 
+const hasV32 = database.prepare("SELECT 1 FROM migrations WHERE version = 32").get();
+if (!hasV32) database.exec(`
+  BEGIN;
+  ALTER TABLE ui_preferences RENAME TO ui_preferences_v31;
+  CREATE TABLE ui_preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    home_module_order TEXT NOT NULL DEFAULT '${JSON.stringify(HOME_MODULE_IDS)}',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    appearance_mode TEXT NOT NULL DEFAULT 'system' CHECK(appearance_mode IN ('system','light','dark')),
+    color_theme TEXT NOT NULL DEFAULT 'editorial' CHECK(color_theme IN ('editorial','rosewood','powderblue'))
+  );
+  INSERT INTO ui_preferences(id,home_module_order,updated_at,appearance_mode,color_theme)
+    SELECT id,home_module_order,updated_at,appearance_mode,color_theme FROM ui_preferences_v31;
+  DROP TABLE ui_preferences_v31;
+  INSERT INTO migrations(version) VALUES(32);
+  COMMIT;
+`);
+
+const hasV33 = database.prepare("SELECT 1 FROM migrations WHERE version = 33").get();
+if (!hasV33) database.exec(`
+  BEGIN;
+  CREATE TABLE food_places (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL DEFAULT 'local',
+    name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200),
+    branch TEXT NOT NULL DEFAULT '' CHECK(length(branch) <= 160),
+    category TEXT NOT NULL DEFAULT '' CHECK(length(category) <= 100),
+    rating TEXT CHECK(rating IS NULL OR rating IN ('love','good','neutral','dislike')),
+    status TEXT NOT NULL DEFAULT 'occasional' CHECK(status IN ('frequent','occasional','paused','avoid','closed')),
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes) <= 4000),
+    archived_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(id,user_id)
+  );
+  CREATE UNIQUE INDEX idx_food_places_identity ON food_places(user_id,name COLLATE NOCASE,branch COLLATE NOCASE);
+  CREATE INDEX idx_food_places_active ON food_places(user_id,archived_at,status,updated_at DESC);
+  CREATE TABLE food_dishes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL DEFAULT 'local',
+    food_place_id INTEGER NOT NULL,
+    name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200),
+    category TEXT NOT NULL DEFAULT '' CHECK(length(category) <= 100),
+    rating TEXT CHECK(rating IS NULL OR rating IN ('love','good','neutral','dislike')),
+    recommended INTEGER NOT NULL DEFAULT 0 CHECK(recommended IN (0,1)),
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes) <= 4000),
+    archived_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(food_place_id,user_id) REFERENCES food_places(id,user_id) ON DELETE CASCADE,
+    UNIQUE(id,user_id)
+  );
+  CREATE UNIQUE INDEX idx_food_dishes_identity ON food_dishes(user_id,food_place_id,name COLLATE NOCASE);
+  CREATE INDEX idx_food_dishes_place_active ON food_dishes(user_id,food_place_id,archived_at,recommended DESC,updated_at DESC);
+  ALTER TABLE food_logs ADD COLUMN food_place_id INTEGER REFERENCES food_places(id) ON DELETE SET NULL;
+  ALTER TABLE food_logs ADD COLUMN food_dish_id INTEGER REFERENCES food_dishes(id) ON DELETE SET NULL;
+  CREATE INDEX idx_food_logs_place_occurred ON food_logs(food_place_id,occurred_at DESC);
+  CREATE INDEX idx_food_logs_dish_occurred ON food_logs(food_dish_id,occurred_at DESC);
+  INSERT INTO migrations(version) VALUES(33);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1274,20 +1336,22 @@ export function updateInboxItem(id: number, input: Record<string, unknown>) {
 }
 export function deleteInboxItem(id: number) { return database.prepare("DELETE FROM inbox_items WHERE id = ?").run(id).changes > 0; }
 
-function foodFromRow(row: Record<string, unknown>): FoodLog { return { id: Number(row.id), occurredAt: String(row.occurred_at), mealType: row.meal_type as FoodLog["mealType"], title: String(row.title), description: String(row.description), portion: String(row.portion), scene: row.scene as FoodLog["scene"], rating: row.rating ? row.rating as FoodLog["rating"] : null, estimatedKcal: row.estimated_kcal === null ? null : Number(row.estimated_kcal), kcalMin: row.kcal_min === null ? null : Number(row.kcal_min), kcalMax: row.kcal_max === null ? null : Number(row.kcal_max), confidence: row.confidence as FoodLog["confidence"], notes: String(row.notes), imageUrl: row.image_url ? String(row.image_url) : null, attachmentId: row.attachment_id ? String(row.attachment_id) : null, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }; }
-export function listFoodLogs(input: { query?: string; mealType?: string; from?: string; to?: string } = {}) {
-  const conditions: string[] = [], values: string[] = [];
-  if (input.query) { conditions.push("(title LIKE ? OR description LIKE ?)"); values.push(`%${input.query}%`, `%${input.query}%`); }
-  if (input.mealType) { conditions.push("meal_type = ?"); values.push(input.mealType); }
-  if (input.from) { conditions.push("occurred_at >= ?"); values.push(input.from); } if (input.to) { conditions.push("occurred_at < ?"); values.push(input.to); }
+function foodFromRow(row: Record<string, unknown>): FoodLog { return { id: Number(row.id), occurredAt: String(row.occurred_at), mealType: row.meal_type as FoodLog["mealType"], title: String(row.title), description: String(row.description), portion: String(row.portion), scene: row.scene as FoodLog["scene"], rating: row.rating ? row.rating as FoodLog["rating"] : null, estimatedKcal: row.estimated_kcal === null ? null : Number(row.estimated_kcal), kcalMin: row.kcal_min === null ? null : Number(row.kcal_min), kcalMax: row.kcal_max === null ? null : Number(row.kcal_max), confidence: row.confidence as FoodLog["confidence"], notes: String(row.notes), imageUrl: row.image_url ? String(row.image_url) : null, attachmentId: row.attachment_id ? String(row.attachment_id) : null, foodPlaceId: row.food_place_id === null || row.food_place_id === undefined ? null : Number(row.food_place_id), foodDishId: row.food_dish_id === null || row.food_dish_id === undefined ? null : Number(row.food_dish_id), foodPlaceName: row.food_place_name ? String(row.food_place_name) : null, foodPlaceBranch: row.food_place_branch ? String(row.food_place_branch) : null, foodDishName: row.food_dish_name ? String(row.food_dish_name) : null, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }; }
+export function listFoodLogs(input: { query?: string; mealType?: string; from?: string; to?: string; foodPlaceId?:number; foodDishId?:number; limit?:number } = {}) {
+  const conditions: string[] = [], values:Array<string|number> = [];
+  if (input.query) { conditions.push("(fl.title LIKE ? OR fl.description LIKE ? OR fp.name LIKE ? OR fd.name LIKE ?)"); values.push(...Array(4).fill(`%${input.query}%`)); }
+  if (input.mealType) { conditions.push("fl.meal_type = ?"); values.push(input.mealType); }
+  if (input.from) { conditions.push("fl.occurred_at >= ?"); values.push(input.from); } if (input.to) { conditions.push("fl.occurred_at < ?"); values.push(input.to); }
+  if(input.foodPlaceId){conditions.push("fl.food_place_id=?");values.push(input.foodPlaceId);}if(input.foodDishId){conditions.push("fl.food_dish_id=?");values.push(input.foodDishId);}
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  return (database.prepare(`SELECT * FROM food_logs ${where} ORDER BY occurred_at DESC, id DESC`).all(...values) as Record<string, unknown>[]).map(foodFromRow);
+  const limit=Math.min(Math.max(input.limit??500,1),500);
+  return (database.prepare(`SELECT fl.*,fp.name AS food_place_name,fp.branch AS food_place_branch,fd.name AS food_dish_name FROM food_logs fl LEFT JOIN food_places fp ON fp.id=fl.food_place_id LEFT JOIN food_dishes fd ON fd.id=fl.food_dish_id ${where} ORDER BY fl.occurred_at DESC,fl.id DESC LIMIT ?`).all(...values,limit) as Record<string, unknown>[]).map(foodFromRow);
 }
-export function getFoodLog(id: number) { const row = database.prepare("SELECT * FROM food_logs WHERE id = ?").get(id) as Record<string, unknown> | undefined; return row ? foodFromRow(row) : null; }
-export function createFoodLog(input: Omit<FoodLog, "id" | "createdAt" | "updatedAt">) {
-  const result = database.prepare("INSERT INTO food_logs(occurred_at,meal_type,title,description,portion,scene,rating,estimated_kcal,kcal_min,kcal_max,confidence,notes,image_url,attachment_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.occurredAt,input.mealType,input.title,input.description,input.portion,input.scene,input.rating,input.estimatedKcal,input.kcalMin,input.kcalMax,input.confidence,input.notes,input.imageUrl,input.attachmentId); return getFoodLog(Number(result.lastInsertRowid))!;
+export function getFoodLog(id: number) { const row = database.prepare("SELECT fl.*,fp.name AS food_place_name,fp.branch AS food_place_branch,fd.name AS food_dish_name FROM food_logs fl LEFT JOIN food_places fp ON fp.id=fl.food_place_id LEFT JOIN food_dishes fd ON fd.id=fl.food_dish_id WHERE fl.id=?").get(id) as Record<string, unknown> | undefined; return row ? foodFromRow(row) : null; }
+export function createFoodLog(input: NewFoodLog) {
+  const result = database.prepare("INSERT INTO food_logs(occurred_at,meal_type,title,description,portion,scene,rating,estimated_kcal,kcal_min,kcal_max,confidence,notes,image_url,attachment_id,food_place_id,food_dish_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.occurredAt,input.mealType,input.title,input.description,input.portion,input.scene,input.rating,input.estimatedKcal,input.kcalMin,input.kcalMax,input.confidence,input.notes,input.imageUrl,input.attachmentId,input.foodPlaceId??null,input.foodDishId??null); return getFoodLog(Number(result.lastInsertRowid))!;
 }
-export function updateFoodLog(id: number, input: Record<string, unknown>) { const map: Record<string,string>={occurredAt:"occurred_at",mealType:"meal_type",title:"title",description:"description",portion:"portion",scene:"scene",rating:"rating",estimatedKcal:"estimated_kcal",kcalMin:"kcal_min",kcalMax:"kcal_max",confidence:"confidence",notes:"notes",imageUrl:"image_url",attachmentId:"attachment_id"}; const entries=Object.entries(map).filter(([key])=>input[key]!==undefined); if(!entries.length)return getFoodLog(id); database.prepare(`UPDATE food_logs SET ${entries.map(([,column])=>`${column} = ?`).join(", ")}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>input[key] as string|number|null),id); return getFoodLog(id); }
+export function updateFoodLog(id: number, input: Record<string, unknown>) { const map: Record<string,string>={occurredAt:"occurred_at",mealType:"meal_type",title:"title",description:"description",portion:"portion",scene:"scene",rating:"rating",estimatedKcal:"estimated_kcal",kcalMin:"kcal_min",kcalMax:"kcal_max",confidence:"confidence",notes:"notes",imageUrl:"image_url",attachmentId:"attachment_id",foodPlaceId:"food_place_id",foodDishId:"food_dish_id"}; const entries=Object.entries(map).filter(([key])=>input[key]!==undefined); if(!entries.length)return getFoodLog(id); database.prepare(`UPDATE food_logs SET ${entries.map(([,column])=>`${column} = ?`).join(", ")}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>input[key] as string|number|null),id); return getFoodLog(id); }
 export function deleteFoodLog(id:number){return database.prepare("DELETE FROM food_logs WHERE id=?").run(id).changes>0;}
 
 function libraryFromRow(row:Record<string,unknown>):FoodLibraryItem{return{id:Number(row.id),name:String(row.name),brand:String(row.brand),category:row.category as FoodLibraryItem["category"],defaultPortion:String(row.default_portion),referenceType:row.reference_type as FoodLibraryItem["referenceType"],referenceEnergyKj:row.reference_energy_kj===null?null:Number(row.reference_energy_kj),referenceKcal:row.reference_kcal===null?null:Number(row.reference_kcal),servingWeight:row.serving_weight===null?null:Number(row.serving_weight),servingKcal:row.serving_kcal===null?null:Number(row.serving_kcal),dataSource:row.data_source as FoodLibraryItem["dataSource"],notes:String(row.notes),archivedAt:row.archived_at?String(row.archived_at):null,updatedAt:String(row.updated_at)};}
@@ -1296,6 +1360,31 @@ export function getFoodLibraryItem(id:number){const row=database.prepare("SELECT
 export function upsertFoodLibraryItem(input:Omit<FoodLibraryItem,"id"|"archivedAt"|"updatedAt">){database.prepare(`INSERT INTO food_library(name,brand,category,default_portion,reference_type,reference_energy_kj,reference_kcal,serving_weight,serving_kcal,data_source,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(name,brand) DO UPDATE SET category=excluded.category,default_portion=excluded.default_portion,reference_type=excluded.reference_type,reference_energy_kj=excluded.reference_energy_kj,reference_kcal=excluded.reference_kcal,serving_weight=excluded.serving_weight,serving_kcal=excluded.serving_kcal,data_source=excluded.data_source,notes=excluded.notes,archived_at=NULL,updated_at=CURRENT_TIMESTAMP`).run(input.name,input.brand,input.category,input.defaultPortion,input.referenceType,input.referenceEnergyKj,input.referenceKcal,input.servingWeight,input.servingKcal,input.dataSource,input.notes);return libraryFromRow(database.prepare("SELECT * FROM food_library WHERE name=? AND brand=?").get(input.name,input.brand) as Record<string,unknown>);}
 export function updateFoodLibraryItem(id:number,input:Omit<FoodLibraryItem,"id"|"archivedAt"|"updatedAt">){const result=database.prepare(`UPDATE food_library SET name=?,brand=?,category=?,default_portion=?,reference_type=?,reference_energy_kj=?,reference_kcal=?,serving_weight=?,serving_kcal=?,data_source=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL`).run(input.name,input.brand,input.category,input.defaultPortion,input.referenceType,input.referenceEnergyKj,input.referenceKcal,input.servingWeight,input.servingKcal,input.dataSource,input.notes,id);return result.changes?getFoodLibraryItem(id):null;}
 export function removeFoodLibraryItem(id:number){if(!getFoodLibraryItem(id))return null;const references=Number((database.prepare("SELECT COUNT(*) AS count FROM drink_logs WHERE food_library_id=?").get(id) as {count:number}).count);if(references>0){database.prepare("UPDATE food_library SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(id);return{id,action:"archived" as const};}database.prepare("DELETE FROM food_library WHERE id=?").run(id);return{id,action:"deleted" as const};}
+
+function foodPlaceFromRow(row:Record<string,unknown>):FoodPlace{return{id:Number(row.id),name:String(row.name),branch:String(row.branch??""),category:String(row.category??""),rating:row.rating as FoodPlace["rating"],status:row.status as FoodPlace["status"],notes:String(row.notes??""),archivedAt:row.archived_at?String(row.archived_at):null,dishCount:Number(row.dish_count??0),visitCount:Number(row.visit_count??0),lastVisitedAt:row.last_visited_at?String(row.last_visited_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+const foodPlaceSelect=`SELECT fp.*,COUNT(DISTINCT CASE WHEN fd.archived_at IS NULL THEN fd.id END) AS dish_count,COUNT(DISTINCT fl.id) AS visit_count,MAX(fl.occurred_at) AS last_visited_at FROM food_places fp LEFT JOIN food_dishes fd ON fd.food_place_id=fp.id LEFT JOIN food_logs fl ON fl.food_place_id=fp.id`;
+export function listFoodPlaces(query="",options:FoodPlaceSearchOptions={}){const conditions=["fp.user_id='local'"];const values:Array<string|number>=[];if(!options.includeArchived)conditions.push("fp.archived_at IS NULL");if(query.trim()){conditions.push("(fp.name LIKE ? OR fp.branch LIKE ? OR fp.category LIKE ? OR fp.notes LIKE ?)");values.push(...Array(4).fill(`%${query.trim()}%`));}if(options.status){conditions.push("fp.status=?");values.push(options.status);}if(options.category){conditions.push("fp.category=?");values.push(options.category);}const limit=Math.min(Math.max(options.limit??100,1),200);return(database.prepare(`${foodPlaceSelect} WHERE ${conditions.join(" AND ")} GROUP BY fp.id ORDER BY CASE fp.status WHEN 'frequent' THEN 0 WHEN 'occasional' THEN 1 WHEN 'paused' THEN 2 WHEN 'avoid' THEN 3 ELSE 4 END,COALESCE(MAX(fl.occurred_at),fp.updated_at) DESC,fp.id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(foodPlaceFromRow);}
+export function getFoodPlace(id:number){const row=database.prepare(`${foodPlaceSelect} WHERE fp.id=? AND fp.user_id='local' GROUP BY fp.id`).get(id) as Record<string,unknown>|undefined;return row?foodPlaceFromRow(row):null;}
+export function createFoodPlace(input:NewFoodPlace){const result=database.prepare("INSERT INTO food_places(user_id,name,branch,category,rating,status,notes) VALUES('local',?,?,?,?,?,?)").run(input.name,input.branch,input.category,input.rating,input.status,input.notes);return getFoodPlace(Number(result.lastInsertRowid))!;}
+export function updateFoodPlace(id:number,input:Partial<NewFoodPlace>){const map:Record<string,string>={name:"name",branch:"branch",category:"category",rating:"rating",status:"status",notes:"notes"};const entries=Object.entries(map).filter(([key])=>input[key as keyof NewFoodPlace]!==undefined);if(!entries.length)return getFoodPlace(id);const result=database.prepare(`UPDATE food_places SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof NewFoodPlace] as string|null),id);return result.changes?getFoodPlace(id):null;}
+export function removeFoodPlace(id:number){if(!getFoodPlace(id))return null;const references=Number((database.prepare("SELECT COUNT(*) AS count FROM food_logs WHERE food_place_id=?").get(id) as {count:number}).count);if(references){database.prepare("UPDATE food_places SET status='closed',archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(id);return{id,action:"archived" as const};}database.prepare("DELETE FROM food_places WHERE id=?").run(id);return{id,action:"deleted" as const};}
+
+function foodDishFromRow(row:Record<string,unknown>):FoodDish{return{id:Number(row.id),foodPlaceId:Number(row.food_place_id),name:String(row.name),category:String(row.category??""),rating:row.rating as FoodDish["rating"],recommended:Boolean(row.recommended),notes:String(row.notes??""),archivedAt:row.archived_at?String(row.archived_at):null,eatCount:Number(row.eat_count??0),lastEatenAt:row.last_eaten_at?String(row.last_eaten_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+const foodDishSelect=`SELECT fd.*,COUNT(fl.id) AS eat_count,MAX(fl.occurred_at) AS last_eaten_at FROM food_dishes fd LEFT JOIN food_logs fl ON fl.food_dish_id=fd.id`;
+export function listFoodDishes(query="",options:FoodDishSearchOptions={}){
+  const conditions=["fd.user_id='local'"];const values:Array<string|number>=[];
+  if(!options.includeArchived)conditions.push("fd.archived_at IS NULL");
+  if(query.trim()){conditions.push("(fd.name LIKE ? OR fd.category LIKE ? OR fd.notes LIKE ?)");values.push(...Array(3).fill(`%${query.trim()}%`));}
+  if(options.foodPlaceId){conditions.push("fd.food_place_id=?");values.push(options.foodPlaceId);}
+  if(options.recommended!==undefined){conditions.push("fd.recommended=?");values.push(Number(options.recommended));}
+  if(options.rating!==undefined){if(options.rating===null)conditions.push("fd.rating IS NULL");else{conditions.push("fd.rating=?");values.push(options.rating);}}
+  const limit=Math.min(Math.max(options.limit??100,1),200);
+  return(database.prepare(`${foodDishSelect} WHERE ${conditions.join(" AND ")} GROUP BY fd.id ORDER BY fd.recommended DESC,CASE fd.rating WHEN 'love' THEN 0 WHEN 'good' THEN 1 WHEN 'neutral' THEN 2 WHEN 'dislike' THEN 3 ELSE 4 END,fd.updated_at DESC,fd.id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(foodDishFromRow);
+}
+export function getFoodDish(id:number){const row=database.prepare(`${foodDishSelect} WHERE fd.id=? AND fd.user_id='local' GROUP BY fd.id`).get(id) as Record<string,unknown>|undefined;return row?foodDishFromRow(row):null;}
+export function createFoodDish(input:NewFoodDish){const result=database.prepare("INSERT INTO food_dishes(user_id,food_place_id,name,category,rating,recommended,notes) VALUES('local',?,?,?,?,?,?)").run(input.foodPlaceId,input.name,input.category,input.rating,Number(input.recommended),input.notes);return getFoodDish(Number(result.lastInsertRowid))!;}
+export function updateFoodDish(id:number,input:Partial<NewFoodDish>){const map:Record<string,string>={foodPlaceId:"food_place_id",name:"name",category:"category",rating:"rating",recommended:"recommended",notes:"notes"};const entries=Object.entries(map).filter(([key])=>input[key as keyof NewFoodDish]!==undefined);if(!entries.length)return getFoodDish(id);const value=(key:string)=>key==="recommended"?Number(input.recommended):input[key as keyof NewFoodDish] as string|number|null;const result=database.prepare(`UPDATE food_dishes SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getFoodDish(id):null;}
+export function removeFoodDish(id:number){if(!getFoodDish(id))return null;const references=Number((database.prepare("SELECT COUNT(*) AS count FROM food_logs WHERE food_dish_id=?").get(id) as {count:number}).count);if(references){database.prepare("UPDATE food_dishes SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(id);return{id,action:"archived" as const};}database.prepare("DELETE FROM food_dishes WHERE id=?").run(id);return{id,action:"deleted" as const};}
 function healthDetailsFromRow(value: unknown): HealthRecord["details"] { let parsed: unknown; try { parsed = typeof value === "string" ? JSON.parse(value) : value; } catch { return {}; } if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}; return Object.fromEntries(Object.entries(parsed).filter(([, item]) => item === null || typeof item === "string" || typeof item === "number" || typeof item === "boolean")); }
 function healthRecordFromRow(row:Record<string,unknown>):HealthRecord{return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:row.occurred_has_explicit_time===undefined?true:Boolean(row.occurred_has_explicit_time),type:row.type as HealthRecord["type"],title:String(row.title),summary:String(row.summary??""),status:row.status as HealthRecord["status"],startedAt:row.started_at?String(row.started_at):null,startedHasExplicitTime:row.started_has_explicit_time===undefined?true:Boolean(row.started_has_explicit_time),endedAt:row.ended_at?String(row.ended_at):null,endedHasExplicitTime:row.ended_has_explicit_time===undefined?true:Boolean(row.ended_has_explicit_time),details:healthDetailsFromRow(row.details),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listHealthRecords(input:HealthRecordListInput={}){const conditions:string[]=["user_id = 'local'"],values:(string|number)[]=[];if(input.status){conditions.push("status = ?");values.push(input.status);}if(input.type){conditions.push("type = ?");values.push(input.type);}if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM health_records WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(healthRecordFromRow);}

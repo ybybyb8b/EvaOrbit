@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseInboxStatus, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodPlace, parseFoodPlacePatch, parseInboxStatus, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -78,6 +78,17 @@ test("keeps food brands distinct and validates drink limits", () => {
   assert.deepEqual(parseDrinkLimit({ name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3 }), { name: "本周咖啡", targetType: "coffee", period: "weekly", limitValue: 3, enabled: true });
   assert.deepEqual(parseDrinkLimit({ name: "本月咖啡", targetType: "coffee", period: "monthly", limitValue: 10 }), { name: "本月咖啡", targetType: "coffee", period: "monthly", limitValue: 10, enabled: true });
   assert.throws(() => parseDrinkLimit({ name: "咖啡", targetType: "coffee", limitValue: 0 }), ValidationError);
+});
+
+test("validates lightweight food places, dishes, and optional Food Record links",()=>{
+  assert.deepEqual(parseFoodPlace({name:" 某某米线 ",branch:" 天府和悦店 ",category:" 米线 ",rating:"love",status:"frequent"}),{name:"某某米线",branch:"天府和悦店",category:"米线",rating:"love",status:"frequent",notes:""});
+  assert.deepEqual(parseFoodPlacePatch({status:"closed"}),{status:"closed"});
+  assert.deepEqual(parseFoodDish({foodPlaceId:3,name:" 番茄米线 ",recommended:true}),{foodPlaceId:3,name:"番茄米线",category:"",rating:null,recommended:true,notes:""});
+  assert.deepEqual(parseFoodDishPatch({rating:"dislike"}),{rating:"dislike"});
+  const log=parseNewFoodLog({title:"午饭",foodPlaceId:3,foodDishId:8});
+  assert.equal(log.foodPlaceId,3);assert.equal(log.foodDishId,8);
+  assert.throws(()=>parseFoodDish({name:"无归属菜品"}),/必须属于一家店铺/);
+  assert.throws(()=>parseFoodPlace({name:"店",status:"gone"}),ValidationError);
 });
 
 test("validates daily energy settings without inventing values", () => {
