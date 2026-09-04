@@ -5,6 +5,8 @@ import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, NewTask, Tas
 import type { ChatRole } from "../types";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
+import type { UiLanguage } from "../locale";
+import type { ChineseFont, EnglishFont } from "../font-preferences";
 
 export async function listTasks(filter: TaskFilter = "all") { return (await getRepository()).listTasks(filter); }
 export async function getTask(id: number) { return (await getRepository()).getTask(id); }
@@ -21,7 +23,7 @@ export async function deleteMemory(id: number) { return (await getRepository()).
 export async function getDashboardSummary() { return (await getRepository()).getDashboardSummary(); }
 export async function getUiPreferences() { return (await getRepository()).getUiPreferences(); }
 export async function updateHomeModuleOrder(order: HomeModuleId[]) { return (await getRepository()).updateHomeModuleOrder(order); }
-export async function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme }) { return (await getRepository()).updateAppearancePreferences(input); }
+export async function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }) { return (await getRepository()).updateAppearancePreferences(input); }
 export async function getAiSettings() { return (await getRepository()).getAiSettings(); }
 export async function updateAiSettings(input: AiSettingsInput) { return (await getRepository()).updateAiSettings(input); }
 export async function getAiRuntimeSettings(modelConfigId?: number | null) { return (await getRepository()).getAiRuntimeSettings(modelConfigId); }

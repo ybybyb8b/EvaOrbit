@@ -6,6 +6,8 @@ import { ConflictError } from "./errors";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
 import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
+import { normalizeUiLanguage, type UiLanguage } from "./locale";
+import { normalizeChineseFont, normalizeEnglishFont, type ChineseFont, type EnglishFont } from "./font-preferences";
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
@@ -896,6 +898,23 @@ if (!hasV33) database.exec(`
   COMMIT;
 `);
 
+const hasV34 = database.prepare("SELECT 1 FROM migrations WHERE version = 34").get();
+if (!hasV34) database.exec(`
+  BEGIN;
+  ALTER TABLE ui_preferences ADD COLUMN ui_language TEXT NOT NULL DEFAULT 'zh-CN' CHECK(ui_language IN ('zh-CN','en'));
+  INSERT INTO migrations(version) VALUES(34);
+  COMMIT;
+`);
+
+const hasV35 = database.prepare("SELECT 1 FROM migrations WHERE version = 35").get();
+if (!hasV35) database.exec(`
+  BEGIN;
+  ALTER TABLE ui_preferences ADD COLUMN chinese_font TEXT NOT NULL DEFAULT 'canger' CHECK(chinese_font IN ('canger','lxgw','alimama','ibm'));
+  ALTER TABLE ui_preferences ADD COLUMN english_font TEXT NOT NULL DEFAULT 'zen' CHECK(english_font IN ('zen','ibm','polyamine','cormorant'));
+  INSERT INTO migrations(version) VALUES(35);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1057,10 +1076,10 @@ export function getDashboardSummary(): DashboardSummary {
 }
 
 export function getUiPreferences() {
-  const row = database.prepare("SELECT home_module_order, appearance_mode, color_theme, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; appearance_mode: string; color_theme: string; updated_at: string };
+  const row = database.prepare("SELECT home_module_order, appearance_mode, color_theme, ui_language, chinese_font, english_font, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; appearance_mode: string; color_theme: string; ui_language: string; chinese_font: string; english_font: string; updated_at: string };
   let order: unknown = [];
   try { order = JSON.parse(row.home_module_order); } catch { order = []; }
-  return { homeModuleOrder: normalizeHomeModuleOrder(order), appearanceMode: normalizeAppearanceMode(row.appearance_mode), colorTheme: normalizeColorTheme(row.color_theme), updatedAt: row.updated_at };
+  return { homeModuleOrder: normalizeHomeModuleOrder(order), appearanceMode: normalizeAppearanceMode(row.appearance_mode), colorTheme: normalizeColorTheme(row.color_theme), uiLanguage: normalizeUiLanguage(row.ui_language), chineseFont: normalizeChineseFont(row.chinese_font), englishFont: normalizeEnglishFont(row.english_font), updatedAt: row.updated_at };
 }
 
 export function updateHomeModuleOrder(order: HomeModuleId[]) {
@@ -1068,8 +1087,8 @@ export function updateHomeModuleOrder(order: HomeModuleId[]) {
   return getUiPreferences();
 }
 
-export function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme }) {
-  database.prepare("UPDATE ui_preferences SET appearance_mode=?, color_theme=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(input.appearanceMode, input.colorTheme);
+export function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }) {
+  database.prepare("UPDATE ui_preferences SET appearance_mode=?, color_theme=?, ui_language=?, chinese_font=?, english_font=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(input.appearanceMode, input.colorTheme, input.uiLanguage, input.chineseFont, input.englishFont);
   return getUiPreferences();
 }
 

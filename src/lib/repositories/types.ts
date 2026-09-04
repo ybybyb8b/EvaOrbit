@@ -2,6 +2,8 @@ import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, C
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
+import type { UiLanguage } from "../locale";
+import type { ChineseFont, EnglishFont } from "../font-preferences";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -128,7 +130,7 @@ export interface EvaOrbitRepository {
   getDashboardSummary(): Promise<DashboardSummary>;
   getUiPreferences(): Promise<UiPreferences>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
-  updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme }): Promise<UiPreferences>;
+  updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;

@@ -37,6 +37,9 @@ export interface UiPreferences {
   homeModuleOrder: import("./home-modules").HomeModuleId[];
   appearanceMode: import("./theme").AppearanceMode;
   colorTheme: import("./theme").ColorTheme;
+  uiLanguage: import("./locale").UiLanguage;
+  chineseFont: import("./font-preferences").ChineseFont;
+  englishFont: import("./font-preferences").EnglishFont;
   updatedAt: string;
 }
 

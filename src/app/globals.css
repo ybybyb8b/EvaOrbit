@@ -74,13 +74,42 @@
   --form-control-padding-inline: 12px;
   --shadow: 0 18px 55px rgb(var(--shadow-rgb) / .07);
   --font-zh: var(--font-canger-huaxin), "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-ui: var(--font-zh);
-  --font-editorial-label: var(--font-editorial), var(--font-zh), Georgia, serif;
+  --font-selected-zh: var(--font-canger-huaxin);
+  --font-selected-en: var(--font-zen-serif);
+  --font-editorial: var(--font-selected-en), var(--font-selected-zh), Georgia, serif;
+  --font-ui: var(--font-selected-en), var(--font-selected-zh), Georgia, serif;
+  --font-editorial-label: var(--font-editorial);
   --font-serif: var(--font-editorial-label);
   --text-readable-small: 14px;
   --text-interactive-small: 14px;
   --text-input-mobile: 16px;
 }
+
+html[data-chinese-font="lxgw"] { --font-selected-zh: var(--font-lxgw); }
+html[data-chinese-font="alimama"] { --font-selected-zh: var(--font-alimama); }
+html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-ibm-plex); }
+html[data-english-font="ibm"] { --font-selected-en: var(--font-ibm-plex); }
+html[data-english-font="polyamine"] { --font-selected-en: var(--font-polyamine); }
+html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant); }
+
+:is(input, textarea, [contenteditable="true"], .user-content) {
+  font-family: var(--font-zh);
+}
+
+.appearance-option-grid.language-options { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.appearance-option-grid.language-options button { grid-template-columns: 1fr; min-height: 64px; }
+.appearance-option-grid.language-options button small { grid-column: 1; }
+.appearance-option-grid.font-options { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.appearance-option-grid.font-options button { grid-template-columns: 1fr; min-height: 68px; }
+.appearance-option-grid.font-options button small { grid-column: 1; }
+.font-sample { font-size: 14px!important; font-weight: 400!important; }
+.font-sample.font-canger { font-family: var(--font-canger-huaxin); }
+.font-sample.font-lxgw { font-family: var(--font-lxgw); }
+.font-sample.font-alimama { font-family: var(--font-alimama); }
+.font-sample.font-ibm { font-family: var(--font-ibm-plex); }
+.font-sample.font-zen { font-family: var(--font-zen-serif); }
+.font-sample.font-polyamine { font-family: var(--font-polyamine); }
+.font-sample.font-cormorant { font-family: var(--font-cormorant); }
 
 html[data-theme="rosewood"] {
   --surface-canvas: #f4ece8;
@@ -3302,4 +3331,9 @@ html[data-mode="dark"] .cat-tabs button.active {
     padding:14px 15px;
   }
   .mobile-nav a { font-size:11px; }
+}
+
+/* User-authored content keeps a stable Chinese typeface across UI themes. */
+:is(input, textarea, [contenteditable="true"], .user-content) {
+  font-family:var(--font-zh) !important;
 }
