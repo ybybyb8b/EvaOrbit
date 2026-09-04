@@ -3,12 +3,13 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Icon } from "@/components/icons";
+import { useLocale } from "@/components/locale-controller";
 import type { ApiError, InboxItem, InboxStatus } from "@/lib/types";
 
-const filters = [["inbox", "没整理"], ["processed", "处理过"], ["archived", "归档"], ["all", "全部"]] as const;
-const statusLabels: Record<InboxStatus, string> = { inbox: "没整理", processed: "处理过", archived: "已归档" };
-
 export function InboxView() {
+  const { english } = useLocale();
+  const filters = [["inbox", english ? "Unsorted" : "没整理"], ["processed", english ? "Processed" : "处理过"], ["archived", english ? "Archived" : "归档"], ["all", english ? "All" : "全部"]] as const;
+  const statusLabels: Record<InboxStatus, string> = { inbox: english ? "Unsorted" : "没整理", processed: english ? "Processed" : "处理过", archived: english ? "Archived" : "已归档" };
   const [items, setItems] = useState<InboxItem[]>([]);
   const [status, setStatus] = useState<InboxStatus | "all">("inbox");
   const [content, setContent] = useState("");
@@ -40,31 +41,31 @@ export function InboxView() {
   }
 
   async function remove(id: number) {
-    if (!confirm("删掉这条临时记录？")) return;
+    if (!confirm(english ? "Delete this temporary record?" : "删掉这条临时记录？")) return;
     await fetch(`/api/inbox/${id}`, { method: "DELETE" });
     await load();
   }
 
   return <div className="page inbox-page">
-    <PageHeader eyebrow="空间" title="Inbox" />
+    <PageHeader eyebrow={english ? "SPACE" : "空间"} title="Inbox" />
     <form className="capture-card inbox-capture" onSubmit={submit}>
-      <textarea autoFocus required rows={3} maxLength={10000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={"脑子里刚冒出来什么？\n随便写，不用整理"} />
-      <div>{error && <p className="form-error">{error}</p>}<button className="button primary" type="submit">先放这里</button></div>
+      <textarea autoFocus required rows={3} maxLength={10000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={english ? "What's on your mind?\nNo need to organize it." : "脑子里刚冒出来什么？\n随便写，不用整理"} />
+      <div>{error && <p className="form-error">{error}</p>}<button className="button primary" type="submit">{english ? "Capture here" : "先放这里"}</button></div>
     </form>
     <div className="toolbar inbox-toolbar">
-      <div className="segmented" aria-label="Inbox 状态筛选">{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
-      <span className="result-count">{items.length} 条</span>
+      <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
+      <span className="result-count">{english ? `${items.length} ${items.length === 1 ? "entry" : "entries"}` : `${items.length} 条`}</span>
     </div>
-    {loading ? <div className="loading-state">在翻 Inbox…</div> : items.length ? <div className="inbox-list">{items.map((item) => <article className="inbox-row" key={item.id}>
-      <p>{item.content}</p>
+    {loading ? <div className="loading-state">{english ? "Loading Inbox…" : "在翻 Inbox…"}</div> : items.length ? <div className="inbox-list">{items.map((item) => <article className="inbox-row" key={item.id}>
+      <p className="user-content">{item.content}</p>
       <div className="inbox-row-footer">
-        <div className="inbox-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><span>{statusLabels[item.status]}</span>{item.convertedType && <span>旧版已转为 {item.convertedType}</span>}</div>
+        <div className="inbox-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(english ? "en-US" : "zh-CN")}</time><span>{statusLabels[item.status]}</span>{item.convertedType && <span>{english ? "Converted from legacy" : "旧版已转为"} {item.convertedType}</span>}</div>
         <div className="row-actions">
-          {item.status === "inbox" && <><button type="button" onClick={() => patch(item.id, { status: "processed" })}>处理好了</button><button type="button" onClick={() => patch(item.id, { status: "archived" })}>归档</button></>}
-          {item.status !== "inbox" && <button type="button" onClick={() => patch(item.id, { status: "inbox" })}>放回未整理</button>}
-          <button className="danger inbox-delete" type="button" aria-label="删除这条 Inbox" title="删除" onClick={() => remove(item.id)}><Icon name="trash" /></button>
+          {item.status === "inbox" && <><button type="button" onClick={() => patch(item.id, { status: "processed" })}>{english ? "Mark processed" : "处理好了"}</button><button type="button" onClick={() => patch(item.id, { status: "archived" })}>{english ? "Archive" : "归档"}</button></>}
+          {item.status !== "inbox" && <button type="button" onClick={() => patch(item.id, { status: "inbox" })}>{english ? "Move to unsorted" : "放回未整理"}</button>}
+          <button className="danger inbox-delete" type="button" aria-label={english ? "Delete Inbox item" : "删除这条 Inbox"} title={english ? "Delete" : "删除"} onClick={() => remove(item.id)}><Icon name="trash" /></button>
         </div>
       </div>
-    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>Inbox 为空</h2></div>}
+    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>{english ? "Inbox is empty" : "Inbox 为空"}</h2></div>}
   </div>;
 }

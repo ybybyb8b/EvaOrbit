@@ -2,6 +2,8 @@
 
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocale } from "@/components/locale-controller";
+import { translateUiCopy } from "@/lib/ui-copy";
 
 type FormSheetProps = {
   title: string;
@@ -24,6 +26,8 @@ export function FormSheet({
   busy = false,
   cancelLabel = "Cancel",
 }: FormSheetProps) {
+  const { language } = useLocale();
+  const copy = (value: string) => translateUiCopy(value, language);
   const [mounted, setMounted] = useState(false);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -81,11 +85,11 @@ export function FormSheet({
 
   return createPortal(
     <div className="form-sheet-layer" role="presentation" ref={panelRef}>
-      <button className="form-sheet-backdrop" type="button" aria-label={`Close ${title}`} onClick={() => { if (!busy) onClose(); }} />
+      <button className="form-sheet-backdrop" type="button" aria-label={`${copy("Close")} ${copy(title)}`} onClick={() => { if (!busy) onClose(); }} />
       <div className="form-sheet-panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header className="form-sheet-header">
-          <h2 id={titleId}>{title}</h2>
-          <button className="text-button" type="button" onClick={onClose} disabled={busy}>Close</button>
+          <h2 id={titleId}>{copy(title)}</h2>
+          <button className="text-button" type="button" onClick={onClose} disabled={busy}>{copy("Close")}</button>
         </header>
         <div
           className="form-sheet-body"
@@ -99,8 +103,8 @@ export function FormSheet({
           {children}
         </div>
         {submitLabel && <footer className="form-sheet-footer">
-          <button className="button secondary" type="button" onClick={onClose} disabled={busy}>{cancelLabel}</button>
-          <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy}>{busy ? busyLabel : submitLabel}</button>
+          <button className="button secondary" type="button" onClick={onClose} disabled={busy}>{copy(cancelLabel)}</button>
+          <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy}>{copy(busy ? busyLabel : submitLabel)}</button>
         </footer>}
       </div>
     </div>,

@@ -6,6 +6,7 @@ import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { useLocale } from "@/components/locale-controller";
 import { chronicleExcerpt } from "@/lib/chronicle";
 import type { ApiError, ChronicleEntry, ChronicleSource } from "@/lib/types";
 
@@ -29,6 +30,7 @@ async function responseError(response: Response, fallback: string) {
 }
 
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
+  const { english } = useLocale();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<ChronicleDraft>(emptyDraft);
@@ -79,7 +81,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   }
 
   return <div className="page chronicle-page">
-    <PageHeader eyebrow="归档" title="Chronicle" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
+    <PageHeader eyebrow={english ? "ARCHIVE" : "归档"} title="Chronicle" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />{english ? "Add entry" : "新增记录"}</button>} />
 
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>

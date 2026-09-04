@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { UiPreferences } from "@/lib/types";
 import { DEFAULT_UI_LANGUAGE, type UiLanguage } from "@/lib/locale";
-import { applyUiLanguage, storedUiLanguage } from "@/lib/locale-runtime";
+import { applyUiLanguage, installUiCopyBridge, storedUiLanguage } from "@/lib/locale-runtime";
 import { DEFAULT_CHINESE_FONT, DEFAULT_ENGLISH_FONT, type ChineseFont, type EnglishFont } from "@/lib/font-preferences";
 import { applyFonts, storedFonts } from "@/lib/font-runtime";
 
@@ -39,6 +39,8 @@ export function LocaleController({ children }: { children: React.ReactNode }) {
       .then((preferences) => { if (preferences) { update(preferences.uiLanguage); updateFonts(preferences.chineseFont, preferences.englishFont); } })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => installUiCopyBridge(language), [language]);
 
   const value = useMemo<LocaleContextValue>(() => ({
     language,

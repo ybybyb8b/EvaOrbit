@@ -211,7 +211,7 @@ html[data-theme="powderblue"] {
   --backdrop-rgb:26 38 48;
 }
 
-html[data-mode="dark"] {
+html[data-theme="editorial"][data-mode="dark"] {
   --surface-canvas: #101111;
   --surface-card: #171818;
   --surface-raised: #1d1e1e;
@@ -3336,4 +3336,216 @@ html[data-mode="dark"] .cat-tabs button.active {
 /* User-authored content keeps a stable Chinese typeface across UI themes. */
 :is(input, textarea, [contenteditable="true"], .user-content) {
   font-family:var(--font-zh) !important;
+}
+
+/* Premium tonal hierarchy: depth comes from material and contrast, never decorative outlines. */
+body {
+  background:var(--paper);
+}
+
+.sidebar {
+  border-right:0;
+  background:rgb(var(--surface-shell-rgb) / .96);
+  box-shadow:10px 0 32px rgb(var(--shadow-rgb) / .035);
+}
+
+.main-nav a,
+.sidebar-bottom > a {
+  color:var(--text-secondary);
+}
+
+.main-nav a.active,
+.sidebar-bottom > a.active {
+  background:rgb(var(--surface-warm-rgb) / .72);
+  color:var(--text-primary);
+}
+
+.local-status {
+  margin-top:14px;
+  padding:12px 10px;
+  border:0;
+  border-radius:var(--radius-content);
+  background:rgb(var(--surface-card-rgb) / .54);
+}
+
+.status-dot {
+  box-shadow:none;
+}
+
+.page-header h1,
+.home-masthead h1 {
+  letter-spacing:-.035em;
+}
+
+.button.primary {
+  background:linear-gradient(180deg,rgb(var(--accent-rgb) / .94),var(--accent-primary));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .13);
+}
+
+.button.secondary,
+.button.ghost,
+.icon-button,
+.form-sheet-header .text-button {
+  background:rgb(var(--surface-raised-rgb) / .58);
+}
+
+.button:hover,
+.icon-button:hover,
+.text-button:hover,
+.section-link:hover,
+.settings-back-link:hover {
+  filter:brightness(1.025);
+}
+
+.home-page .today-focus {
+  background:rgb(var(--surface-card-rgb) / .38);
+  box-shadow:none;
+}
+
+.home-page .home-inbox-card {
+  background:rgb(var(--surface-tint-rgb) / .72);
+  box-shadow:none;
+}
+
+.home-page .home-inbox-heading h2,
+.home-page .home-space-copy strong {
+  color:var(--text-primary);
+}
+
+.home-destination-grid .home-space-card {
+  background:rgb(var(--surface-card-rgb) / .5);
+  box-shadow:none;
+}
+
+.home-destination-grid a.home-space-card:hover {
+  background:rgb(var(--surface-raised-rgb) / .74);
+}
+
+.home-space-icon,
+.home-destination-grid > a > span:first-child,
+.settings-directory-icon,
+.module-preview-card > span {
+  background:rgb(var(--surface-warm-rgb) / .7);
+}
+
+.capture-card,
+.inbox-row,
+.task-row,
+.memory-card,
+.tracker-card,
+.health-record-card,
+.food-log-card,
+.food-library-list article,
+.notification-rules > article,
+.notification-history > article,
+.cats-one-time-list article,
+.pet-routine-list article,
+.pet-profile-view,
+.apple-health-section,
+.apple-health-metrics > div,
+.settings-directory-item {
+  background:rgb(var(--surface-card-rgb) / .56);
+  box-shadow:none;
+}
+
+.settings-directory-item.paper,
+.settings-directory-item.linen,
+.settings-directory-item.gold,
+.settings-directory-item.green,
+.settings-directory-item.plain {
+  background:rgb(var(--surface-card-rgb) / .56);
+}
+
+.settings-directory-item:hover,
+.memory-card:hover,
+.tracker-card:hover,
+.health-record-card:hover {
+  background:rgb(var(--surface-raised-rgb) / .72);
+}
+
+html[data-mode="dark"] {
+  --surface-canvas:#0f1110;
+  --surface-card:#191b1a;
+  --surface-raised:#212321;
+  --surface-soft:#202321;
+  --surface-tint:#242925;
+  --surface-warm:#292824;
+  --text-secondary:#bcb8b2;
+  --text-tertiary:#908e89;
+  --surface-card-rgb:25 27 26;
+  --surface-raised-rgb:33 35 33;
+  --surface-tint-rgb:36 41 37;
+  --surface-warm-rgb:41 40 36;
+  --surface-shell-rgb:19 21 20;
+  --surface-header-rgb:23 25 24;
+}
+
+html[data-mode="dark"] .sidebar {
+  box-shadow:none;
+}
+
+html[data-mode="dark"] .button.primary {
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .1);
+}
+
+html[data-mode="dark"] .button.secondary,
+html[data-mode="dark"] .button.ghost,
+html[data-mode="dark"] .icon-button,
+html[data-mode="dark"] .form-sheet-header .text-button {
+  background:rgb(255 255 255 / .055);
+}
+
+html[data-mode="dark"] .home-page .today-focus,
+html[data-mode="dark"] .home-destination-grid .home-space-card,
+html[data-mode="dark"] .capture-card,
+html[data-mode="dark"] .inbox-row,
+html[data-mode="dark"] .task-row,
+html[data-mode="dark"] .memory-card,
+html[data-mode="dark"] .tracker-card,
+html[data-mode="dark"] .health-record-card,
+html[data-mode="dark"] .food-log-card,
+html[data-mode="dark"] .food-library-list article,
+html[data-mode="dark"] .notification-rules > article,
+html[data-mode="dark"] .notification-history > article,
+html[data-mode="dark"] .cats-one-time-list article,
+html[data-mode="dark"] .pet-routine-list article,
+html[data-mode="dark"] .pet-profile-view,
+html[data-mode="dark"] .apple-health-section,
+html[data-mode="dark"] .apple-health-metrics > div,
+html[data-mode="dark"] .settings-directory-item {
+  background:rgb(255 255 255 / .032);
+}
+
+html[data-mode="dark"] .home-page .home-inbox-card {
+  background:rgb(var(--surface-tint-rgb) / .72);
+}
+
+html[data-mode="dark"] .home-destination-grid a.home-space-card:hover,
+html[data-mode="dark"] .settings-directory-item:hover,
+html[data-mode="dark"] .memory-card:hover,
+html[data-mode="dark"] .tracker-card:hover,
+html[data-mode="dark"] .health-record-card:hover {
+  background:rgb(255 255 255 / .06);
+}
+
+@media (max-width:720px) {
+  .home-page .today-focus,
+  .home-page .home-inbox-card {
+    padding:17px 16px;
+  }
+
+  .home-destination-grid .home-space-card {
+    min-height:74px;
+  }
+
+  .mobile-nav {
+    box-shadow:0 14px 34px rgb(var(--shadow-rgb) / .12);
+  }
+
+  html[data-mode="dark"] .mobile-nav,
+  html[data-mode="dark"] body:has(.lucius-room) .mobile-nav,
+  html[data-mode="dark"] body:has(.lucius-profile-page) .mobile-nav {
+    background:rgb(var(--surface-header-rgb) / .84);
+    box-shadow:0 12px 30px rgb(0 0 0 / .2);
+  }
 }
