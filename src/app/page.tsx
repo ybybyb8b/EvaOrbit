@@ -47,14 +47,14 @@ export default async function HomePage() {
     <section className={`home-overview ${styles.overview}`}>
       <div className={`home-today-grid home-now-grid ${styles.nowGrid}`}>
         <section className="today-focus home-activity" data-empty={today.events.length === 0}>
-          <div className="section-heading compact"><span className="eyebrow">{english ? "Today" : "今天"}</span><p>{english ? `${today.events.length} entries` : `${today.events.length} 条记录`}</p></div>
+          <div className="section-heading compact home-timeline-heading"><div><span className="eyebrow">{english ? "Today" : "今天"}</span><h2>{english ? "Timeline" : "时间线"}</h2></div><p>{english ? `${today.events.length} entries` : `${today.events.length} 条记录`}</p></div>
           <HomeTodayBrief events={today.events} language={preferences.uiLanguage} />
         </section>
 
         <section className="home-kept home-inbox-card">
           <div className="home-inbox-heading">
-            <div><span className="eyebrow">{english ? "Unsorted" : "待整理"}</span><div><h2>{english ? "Inbox" : "待整理"}</h2><span className="home-inbox-count">{inbox.length}</span></div></div>
-            <Link className="section-link" href="/inbox">{english ? "Open Inbox →" : "打开待整理 →"}</Link>
+            <div><span className="eyebrow">{english ? "Unsorted" : "散落"}</span><div><h2>{english ? "Inbox" : "散落"}</h2><span className="home-inbox-count">{inbox.length}</span></div></div>
+            <Link className="section-link" href="/inbox">{english ? "Open Inbox →" : "打开散落 →"}</Link>
           </div>
           {latestInbox && <Link className="home-inbox-preview user-content" href="/inbox"><strong>{latestInbox.content}</strong><time dateTime={latestInbox.createdAt}>{timeLabel(latestInbox.createdAt)}</time></Link>}
         </section>

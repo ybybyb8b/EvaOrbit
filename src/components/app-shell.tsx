@@ -14,22 +14,22 @@ import { useLocale } from "./locale-controller";
 const navigationGroups = [
   { label: "SPACE", items: [
     { href: "/", label: "Home", zh: "首页", icon: "home" as const },
-    { href: "/inbox", label: "Inbox", zh: "待整理", icon: "inbox" as const },
+    { href: "/inbox", label: "Inbox", zh: "散落", icon: "inbox" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
     { href: "/lucius", label: "Lucius", icon: "lucius" as const },
-    { href: "/projects", label: "Projects", zh: "项目", icon: "tasks" as const },
+    { href: "/projects", label: "Projects", zh: "工坊", icon: "tasks" as const },
   ] },
   { label: "LIFE", items: [
-    { href: "/trackers", label: "Trackers", zh: "追踪", icon: "tracker" as const },
-    { href: "/food", label: "Food", zh: "饮食", icon: "food" as const },
-    { href: "/drinks", label: "Drinks", zh: "饮水", icon: "drink" as const },
-    { href: "/health", label: "Health", zh: "健康", icon: "health" as const },
-    { href: "/cats", label: "Cats", zh: "猫咪", icon: "cats" as const },
+    { href: "/trackers", label: "Trackers", zh: "观测", icon: "tracker" as const },
+    { href: "/food", label: "Food", zh: "吃吃", icon: "food" as const },
+    { href: "/drinks", label: "Drinks", zh: "喝喝", icon: "drink" as const },
+    { href: "/health", label: "Health", zh: "体征", icon: "health" as const },
+    { href: "/cats", label: "Cats", zh: "咪子", icon: "cats" as const },
   ] },
   { label: "ARCHIVE", items: [
-    { href: "/people", label: "People", zh: "人物", icon: "people" as const },
-    { href: "/media", label: "Media", zh: "媒体", icon: "media" as const },
-    { href: "/memo", label: "Memo", zh: "随记", icon: "memory" as const },
+    { href: "/relations", label: "Relations", zh: "她们", icon: "people" as const },
+    { href: "/media", label: "Media", zh: "展架", icon: "media" as const },
+    { href: "/memo", label: "Memo", zh: "碎片", icon: "memory" as const },
     { href: "/chronicle", label: "Chronicle", zh: "纪事", icon: "chronicle" as const },
   ] },
 ];
@@ -86,9 +86,9 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       </nav>
       {spacesOpen && <div className="space-drawer-layer" role="presentation">
         <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={() => setSpacesOpen(false)} />
-        <aside className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "全部空间"}>
-          <header><strong>{english ? "All Spaces" : "全部空间"}</strong><button type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={() => setSpacesOpen(false)}><Icon name="close" /></button></header>
-          <nav aria-label={english ? "All spaces" : "全部空间"}>
+        <aside className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"}>
+          <header><strong>{english ? "All Spaces" : "总览"}</strong><button type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={() => setSpacesOpen(false)}><Icon name="close" /></button></header>
+          <nav aria-label={english ? "All spaces" : "总览"}>
             {navigationGroups.map((group) => <section key={group.label}>
               <span>{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>
               {group.items.filter((item) => item.href !== "/").map((item) => {

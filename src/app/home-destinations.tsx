@@ -57,16 +57,16 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
     setSaving(true); setError("");
     try {
       const response = await fetch("/api/preferences/home", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order }) });
-      if (!response.ok) throw new Error(english ? "Could not save favorite spaces" : "无法保存常用空间");
+      if (!response.ok) throw new Error(english ? "Could not save favorite spaces" : "无法保存驻点");
       const result = await response.json() as { homeModuleOrder: HomeModuleId[] };
       setOrder(normalizeHomeModuleOrder(result.homeModuleOrder)); setArranging(false);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : english ? "Could not save favorite spaces" : "无法保存常用空间"); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : english ? "Could not save favorite spaces" : "无法保存驻点"); }
     finally { setSaving(false); }
   }
 
   function spaceCard(id: HomeModuleId, index: number) {
     const item = modules[id];
-    const names: Partial<Record<HomeModuleId, string>> = { inbox: "待整理", projects: "项目", trackers: "追踪", food: "饮食", drinks: "饮水", health: "健康", cats: "猫咪", people: "人物", media: "媒体", memo: "随记", chronicle: "纪事" };
+    const names: Partial<Record<HomeModuleId, string>> = { inbox: "散落", projects: "工坊", trackers: "观测", food: "吃吃", drinks: "喝喝", health: "体征", cats: "咪子", people: "她们", media: "展架", memo: "碎片", chronicle: "纪事" };
     const displayName = english ? item.name : names[id] ?? item.name;
     const content = <><span className={styles.icon}><Icon name={item.icon} /></span><span className={styles.copy}><strong>{displayName}</strong></span></>;
     if (!arranging) return <Link className={styles.card} href={item.href} key={id}>{content}<Icon name="arrow" /></Link>;
@@ -77,12 +77,12 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
 
   return <section className={styles.destinations}>
     <div className={styles.heading}>
-      <div><h2>{english ? arranging ? "Arrange Favorites" : "Favorites" : arranging ? "管理常用空间" : "常用空间"}</h2>{arranging && <p>{english ? "The first six spaces appear on Home. Eva remains in All Spaces." : "排序最前的 6 个空间会显示在首页，Eva 只保留在全部空间。"}</p>}</div>
+      <div><h2>{english ? arranging ? "Arrange Favorites" : "Favorites" : arranging ? "管理驻点" : "驻点"}</h2>{arranging && <p>{english ? "The first six spaces appear on Home. Eva remains in All Spaces." : "排序最前的 6 个空间会显示在首页，Eva 只保留在总览。"}</p>}</div>
       <button className={styles.manageButton} onClick={() => arranging ? void finishArranging() : setArranging(true)} disabled={saving}>{english ? saving ? "Saving…" : arranging ? "Done" : "Manage" : saving ? "保存中…" : arranging ? "完成" : "管理"}</button>
     </div>
     {error && <p className={styles.error}>{error}</p>}
 
-    <nav className={styles.favoriteGrid} aria-label={english ? arranging ? "Arrange Home spaces" : "Favorite spaces" : arranging ? "管理首页空间" : "常用空间"}>
+    <nav className={styles.favoriteGrid} aria-label={english ? arranging ? "Arrange Home spaces" : "Favorite spaces" : arranging ? "管理首页驻点" : "驻点"}>
       {(arranging ? arrangeableOrder : favorites).map((id, index) => spaceCard(id, index))}
     </nav>
 

@@ -2972,6 +2972,295 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
   }
 }
 
+/* Hierarchy pass: open page headers, material summaries, and quiet record rows. */
+.page:not(.home-page) > .page-header {
+  margin-bottom:42px;
+}
+
+.page:not(.home-page) > .page-header .eyebrow {
+  margin-bottom:9px;
+}
+
+.page:not(.home-page) > .page-header h1 {
+  font-size:clamp(38px,4.4vw,52px);
+}
+
+.section-heading:not(.compact) {
+  margin-top:30px;
+  margin-bottom:18px;
+}
+
+.section-heading:not(.compact) h2 {
+  font-size:26px;
+  line-height:1.08;
+}
+
+.module-intro-card,
+.daily-energy-card,
+.health-detail-card,
+.pet-profile-view,
+.apple-health-section,
+.media-detail-hero,
+.relation-profile-head,
+.tracker-insight-card,
+.editor-card {
+  background:linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .76),rgb(var(--surface-card-rgb) / .48));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .32),0 18px 46px rgb(var(--shadow-rgb) / .055);
+}
+
+.tracker-card,
+.health-record-card,
+.settings-directory-item,
+.module-preview-card,
+.provider-card {
+  background:linear-gradient(145deg,rgb(var(--surface-card-rgb) / .68),rgb(var(--surface-tint-rgb) / .3));
+  box-shadow:0 9px 28px rgb(var(--shadow-rgb) / .035);
+}
+
+.inbox-list,
+.food-log-list,
+.food-library-list,
+.notification-rules,
+.notification-history {
+  gap:3px;
+}
+
+.inbox-row,
+.food-log-card,
+.food-library-list article,
+.notification-rules > article,
+.notification-history > article,
+.cats-one-time-list article,
+.pet-routine-list article,
+.task-row {
+  padding-inline:8px;
+  border:0;
+  border-radius:var(--radius-control);
+  background:transparent;
+  box-shadow:none;
+}
+
+.inbox-row:hover,
+.food-log-card:hover,
+.food-library-list article:hover,
+.notification-rules > article:hover,
+.notification-history > article:hover,
+.cats-one-time-list article:hover,
+.pet-routine-list article:hover,
+.task-row:hover {
+  background:rgb(var(--surface-card-rgb) / .46);
+}
+
+.memo-list,
+.chronicle-list {
+  gap:3px;
+  border:0;
+}
+
+.memo-row,
+.chronicle-row {
+  padding-inline:12px;
+  border:0;
+  border-radius:var(--radius-control);
+}
+
+/* Home Today is one timeline surface, not a stack of anonymous records. */
+.home-page .today-focus {
+  background:linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .78),rgb(var(--surface-card-rgb) / .5));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .34),0 18px 46px rgb(var(--shadow-rgb) / .06);
+}
+
+.home-timeline-heading {
+  margin-bottom:18px;
+  align-items:center;
+}
+
+.home-timeline-heading > div {
+  min-width:0;
+}
+
+.home-timeline-heading .eyebrow {
+  display:block;
+  margin-bottom:7px;
+}
+
+.home-timeline-heading h2 {
+  margin:0;
+  font:600 27px/1 var(--font-editorial-label);
+  letter-spacing:-.025em;
+}
+
+.home-timeline-heading > p {
+  padding:7px 10px;
+  border-radius:9px;
+  background:rgb(var(--surface-tint-rgb) / .58);
+  color:var(--text-secondary);
+  font-size:11px;
+  font-weight:700;
+}
+
+.home-activity-list {
+  --timeline-time-width:48px;
+  --timeline-marker-size:18px;
+  --timeline-gap:10px;
+  position:relative;
+}
+
+.home-activity-list::before {
+  content:"";
+  width:3px;
+  position:absolute;
+  top:15px;
+  bottom:15px;
+  left:calc(var(--timeline-time-width) + var(--timeline-gap) + (var(--timeline-marker-size) / 2) - 1.5px);
+  border-radius:3px;
+  background:rgb(var(--accent-rgb) / .14);
+}
+
+.home-activity-item {
+  min-height:72px;
+  padding:10px 7px 10px 0;
+  grid-template-columns:var(--timeline-time-width) var(--timeline-marker-size) minmax(0,1fr);
+  align-items:start;
+  gap:var(--timeline-gap);
+  border-radius:var(--radius-control);
+  transition:background-color var(--motion-fast) var(--motion-ease);
+}
+
+.home-activity-item:hover {
+  background:rgb(var(--surface-raised-rgb) / .42);
+  color:inherit;
+}
+
+.home-activity-item time {
+  padding-top:22px;
+  color:var(--text-tertiary);
+  font-size:10px;
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+}
+
+.home-activity-marker {
+  width:10px;
+  height:10px;
+  margin:23px auto 0;
+  border-radius:4px;
+  position:relative;
+  z-index:1;
+  background:var(--accent-primary);
+  box-shadow:0 0 0 4px rgb(var(--surface-raised-rgb) / .92);
+}
+
+.home-activity-copy {
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:4px;
+}
+
+.home-activity-source {
+  justify-self:start;
+  color:var(--text-action);
+  font-size:10px;
+  font-weight:760;
+  line-height:1.2;
+  letter-spacing:.04em;
+}
+
+.home-activity-item .home-activity-copy strong {
+  font-size:13px;
+  line-height:1.35;
+}
+
+.home-activity-item .home-activity-copy small {
+  overflow:hidden;
+  color:var(--text-secondary);
+  font-size:11px;
+  line-height:1.4;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.home-today-toggle {
+  border:0;
+  background:rgb(var(--surface-tint-rgb) / .58);
+}
+
+html[data-mode="dark"] .module-intro-card,
+html[data-mode="dark"] .daily-energy-card,
+html[data-mode="dark"] .health-detail-card,
+html[data-mode="dark"] .pet-profile-view,
+html[data-mode="dark"] .apple-health-section,
+html[data-mode="dark"] .media-detail-hero,
+html[data-mode="dark"] .relation-profile-head,
+html[data-mode="dark"] .tracker-insight-card,
+html[data-mode="dark"] .editor-card,
+html[data-mode="dark"] .home-page .today-focus {
+  background:linear-gradient(145deg,rgb(255 255 255 / .048),rgb(255 255 255 / .015));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .045),0 16px 42px rgb(0 0 0 / .14);
+}
+
+html[data-mode="dark"] .tracker-card,
+html[data-mode="dark"] .health-record-card,
+html[data-mode="dark"] .settings-directory-item,
+html[data-mode="dark"] .module-preview-card,
+html[data-mode="dark"] .provider-card {
+  background:linear-gradient(145deg,rgb(255 255 255 / .036),rgb(255 255 255 / .012));
+  box-shadow:none;
+}
+
+html[data-mode="dark"] .home-activity-marker {
+  box-shadow:0 0 0 4px rgb(var(--surface-raised-rgb) / .78);
+}
+
+@media (max-width:720px) {
+  .page:not(.home-page) > .page-header {
+    margin-bottom:32px;
+  }
+
+  .page:not(.home-page) > .page-header h1 {
+    font-size:40px;
+  }
+
+  .home-timeline-heading h2 {
+    font-size:25px;
+  }
+
+  .home-activity-list {
+    --timeline-time-width:42px;
+    --timeline-marker-size:16px;
+    --timeline-gap:8px;
+  }
+
+  .home-activity-item {
+    min-height:78px;
+    padding-block:11px;
+    grid-template-columns:var(--timeline-time-width) var(--timeline-marker-size) minmax(0,1fr);
+    gap:var(--timeline-gap);
+  }
+
+  .home-activity-item time {
+    padding-top:23px;
+    font-size:10px;
+  }
+
+  .home-activity-marker {
+    margin-top:24px;
+  }
+
+  .home-activity-source {
+    font-size:11px;
+  }
+
+  .home-activity-item .home-activity-copy strong {
+    font-size:14px;
+  }
+
+  .home-activity-item .home-activity-copy small {
+    font-size:12px;
+  }
+}
+
 @supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
   @media (max-width:720px) {
     .mobile-nav,
@@ -3548,4 +3837,74 @@ html[data-mode="dark"] .health-record-card:hover {
     background:rgb(var(--surface-header-rgb) / .84);
     box-shadow:0 12px 30px rgb(0 0 0 / .2);
   }
+}
+
+/* Surface hierarchy must win over the legacy compatibility layer above. */
+.home-page .today-focus,
+.module-intro-card,
+.daily-energy-card,
+.health-detail-card,
+.pet-profile-view,
+.apple-health-section,
+.media-detail-hero,
+.relation-profile-head,
+.tracker-insight-card,
+.editor-card {
+  background:linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .76),rgb(var(--surface-card-rgb) / .48));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .32),0 18px 46px rgb(var(--shadow-rgb) / .055);
+}
+
+.tracker-card,
+.health-record-card,
+.settings-directory-item,
+.module-preview-card,
+.provider-card {
+  background:linear-gradient(145deg,rgb(var(--surface-card-rgb) / .68),rgb(var(--surface-tint-rgb) / .3));
+  box-shadow:0 9px 28px rgb(var(--shadow-rgb) / .035);
+}
+
+.inbox-row,
+.food-log-card,
+.food-library-list article,
+.notification-rules > article,
+.notification-history > article,
+.cats-one-time-list article,
+.pet-routine-list article,
+.task-row {
+  background:transparent;
+  box-shadow:none;
+}
+
+html[data-mode="dark"] .home-page .today-focus,
+html[data-mode="dark"] .module-intro-card,
+html[data-mode="dark"] .daily-energy-card,
+html[data-mode="dark"] .health-detail-card,
+html[data-mode="dark"] .pet-profile-view,
+html[data-mode="dark"] .apple-health-section,
+html[data-mode="dark"] .media-detail-hero,
+html[data-mode="dark"] .relation-profile-head,
+html[data-mode="dark"] .tracker-insight-card,
+html[data-mode="dark"] .editor-card {
+  background:linear-gradient(145deg,rgb(255 255 255 / .048),rgb(255 255 255 / .015));
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .045),0 16px 42px rgb(0 0 0 / .14);
+}
+
+html[data-mode="dark"] .tracker-card,
+html[data-mode="dark"] .health-record-card,
+html[data-mode="dark"] .settings-directory-item,
+html[data-mode="dark"] .module-preview-card,
+html[data-mode="dark"] .provider-card {
+  background:linear-gradient(145deg,rgb(255 255 255 / .036),rgb(255 255 255 / .012));
+  box-shadow:none;
+}
+
+html[data-mode="dark"] .inbox-row,
+html[data-mode="dark"] .food-log-card,
+html[data-mode="dark"] .food-library-list article,
+html[data-mode="dark"] .notification-rules > article,
+html[data-mode="dark"] .notification-history > article,
+html[data-mode="dark"] .cats-one-time-list article,
+html[data-mode="dark"] .pet-routine-list article,
+html[data-mode="dark"] .task-row {
+  background:transparent;
 }
