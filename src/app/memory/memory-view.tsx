@@ -51,7 +51,7 @@ export function MemoryView() {
   }
 
   return <div className="page">
-    <PageHeader eyebrow="MEMORY" title="留下来的" description="人、事、偏好，想到的时候先记一下。" action={<button className="button primary" onClick={startNew}><Icon name="plus" />记住这个</button>} />
+    <PageHeader eyebrow="记忆" title="留下来的" action={<button className="button primary" onClick={startNew}><Icon name="plus" />新增记录</button>} />
     {showForm && <FormSheet title={editing ? "改一下" : "先留下来"} onClose={() => setShowForm(false)} formId="memory-record-form" submitLabel={editing ? "改好了" : "留下"} busy={saving} busyLabel="正在保存…" cancelLabel="先不写"><form id="memory-record-form" className="editor-card" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT" : "KEEP"}</span><h2>{editing ? "改一下" : "先留下来"}</h2></div><button type="button" className="text-button" onClick={() => setShowForm(false)}>先不写</button></div>
       <div className="form-grid">
@@ -71,6 +71,6 @@ export function MemoryView() {
     {loading ? <div className="loading-state">在翻以前记过的…</div> : memories.length ? <div className="memory-grid">{memories.map((memory) => <article className="memory-card" key={memory.id}>
       <div className="memory-card-top"><span className="category-chip">{memory.category}</span><div className="row-actions"><button onClick={() => startEdit(memory)} aria-label="编辑记忆"><Icon name="edit" /></button><button className="danger" onClick={() => remove(memory)} aria-label="删除记忆"><Icon name="trash" /></button></div></div>
       <h2>{memory.title}</h2><p>{memory.content}</p><time>{new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(new Date(`${memory.updatedAt}Z`))} 更新</time>
-    </article>)}</div> : <div className="empty-state"><span className="empty-icon memory"><Icon name="memory" /></span><h2>{query || category ? "没翻到" : "这里还空着"}</h2><p>{query || category ? "换个词再找找。" : "有件不想忘的事，就先留在这。"}</p>{!query && !category && <button className="button secondary" onClick={startNew}><Icon name="plus" />记住这个</button>}</div>}
+    </article>)}</div> : <div className="empty-state"><span className="empty-icon memory"><Icon name="memory" /></span><h2>{query || category ? "没有匹配记录" : "暂无记录"}</h2>{!query && !category && <button className="button secondary" onClick={startNew}><Icon name="plus" />新增记录</button>}</div>}
   </div>;
 }

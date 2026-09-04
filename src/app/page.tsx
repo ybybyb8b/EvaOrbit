@@ -44,7 +44,7 @@ export default async function HomePage() {
 
     <section className={`home-overview ${styles.overview}`}>
       <div className={`home-today-grid home-now-grid ${styles.nowGrid}`}>
-        <section className="today-focus home-activity">
+        <section className="today-focus home-activity" data-empty={today.events.length === 0}>
           <div className="section-heading compact"><span className="eyebrow">今天</span><p>{today.events.length} 条记录</p></div>
           <HomeTodayBrief events={today.events} />
         </section>
@@ -54,7 +54,7 @@ export default async function HomePage() {
             <div><span className="eyebrow">待整理</span><div><h2>Inbox</h2><span className="home-inbox-count">{inbox.length}</span></div></div>
             <Link className="section-link" href="/inbox">打开 Inbox →</Link>
           </div>
-          {latestInbox ? <Link className="home-inbox-preview" href="/inbox"><strong>{latestInbox.content}</strong><time dateTime={latestInbox.createdAt}>{timeLabel(latestInbox.createdAt)}</time></Link> : <p className="home-inbox-empty">没有等待整理的内容。</p>}
+          {latestInbox && <Link className="home-inbox-preview" href="/inbox"><strong>{latestInbox.content}</strong><time dateTime={latestInbox.createdAt}>{timeLabel(latestInbox.createdAt)}</time></Link>}
         </section>
       </div>
     </section>

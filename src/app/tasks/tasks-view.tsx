@@ -77,7 +77,7 @@ export function TasksView() {
   }
 
   return <div className="page">
-    <PageHeader eyebrow="TO DO" title="待办" description="先放这里。哪个真得做，再慢慢挑。" action={<button className="button primary" onClick={startNew}><Icon name="plus" />记个待办</button>} />
+    <PageHeader eyebrow="待办" title="待办" action={<button className="button primary" onClick={startNew}><Icon name="plus" />新增待办</button>} />
     {showForm && <FormSheet title={editing ? "改一下" : "记个待办"} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? "改好了" : "记下"} busy={saving} busyLabel={editing ? "正在修改…" : "正在保存…"} cancelLabel="先不写"><form id="task-record-form" className="editor-card" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT" : "NEW"}</span><h2>{editing ? "改一下" : "记个待办"}</h2></div><button type="button" className="text-button" onClick={() => setShowForm(false)}>先不写</button></div>
       <label className="field wide quick-title"><span>要干嘛？</span><input autoFocus required maxLength={160} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="先写一件事" /></label>
@@ -98,6 +98,6 @@ export function TasksView() {
       <button className="task-check" onClick={() => toggle(task)} aria-label={task.completed ? "标记为未完成" : "标记为已完成"}>{task.completed && <Icon name="check" />}</button>
       <div className="task-body"><div className="task-title-line"><h3>{task.title}</h3><span className={`priority-label ${task.priority}`}>{task.priority === "high" ? "高" : task.priority === "medium" ? "中" : "低"}</span></div>{task.notes && <p>{task.notes}</p>}<div className="task-meta">{task.dueDate && <span>{task.dueDate} 截止</span>}{task.tags.map((tag) => <span className="tag" key={tag}>#{tag}</span>)}</div></div>
       <div className="row-actions"><button onClick={() => startEdit(task)} aria-label="编辑任务"><Icon name="edit" /></button><button className="danger" onClick={() => remove(task)} aria-label="删除任务"><Icon name="trash" /></button></div>
-    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>{status === "done" ? "还没留下搞定的" : "暂时没什么要弄"}</h2><p>{status === "open" ? "没有就挺好。" : "想到什么再丢进来。"}</p>{status !== "done" && <button className="button secondary" onClick={startNew}><Icon name="plus" />记个待办</button>}</div>}
+    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>{status === "done" ? "暂无已完成待办" : "暂无待办"}</h2>{status !== "done" && <button className="button secondary" onClick={startNew}><Icon name="plus" />新增待办</button>}</div>}
   </div>;
 }

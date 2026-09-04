@@ -103,7 +103,7 @@ export function TrackersView() {
 
   const groups = [...new Set(trackers.map((tracker) => tracker.groupName))];
   return <div className="page tracker-page">
-    <PageHeader eyebrow="LIFE" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />New Tracker</button>} />
+    <PageHeader eyebrow="生活" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />新增 Tracker</button>} />
     {showForm && <form className="editor-card tracker-create-form" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW TRACKER</span><h2>What do you want to notice?</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
       <div className="tracker-create-basics">
@@ -143,6 +143,6 @@ export function TrackersView() {
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>
         {tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
       </article>)}</div>
-    </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>Your first Tracker</h2><p>Keep a low-friction record of anything that happens more than once.</p><button className="button primary" onClick={() => setShowForm(true)}>Create one</button></div>}
+    </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>暂无 Tracker</h2><button className="button primary" onClick={() => setShowForm(true)}>新增 Tracker</button></div>}
   </div>;
 }

@@ -28,7 +28,7 @@
   min-width: 0;
   padding: 22px 24px;
   border: 0;
-  border-radius: 20px;
+  border-radius: var(--radius-content);
   background: rgb(var(--surface-card-rgb) / .7);
   box-shadow: 0 14px 38px rgb(var(--shadow-rgb) / .035);
 }
@@ -50,6 +50,10 @@
   .overview :global(.today-focus),
   .overview :global(.home-kept) {
     padding: 19px 17px;
-    border-radius: 18px;
+    border-radius: var(--radius-content);
+  }
+
+  .overview :global(.today-focus[data-empty="true"]) {
+    padding-block: 15px;
   }
 }

@@ -46,7 +46,7 @@ export function InboxView() {
   }
 
   return <div className="page inbox-page">
-    <PageHeader eyebrow="SPACE" title="Inbox" description="随便丢进来，不用现在整理。" />
+    <PageHeader eyebrow="空间" title="Inbox" />
     <form className="capture-card inbox-capture" onSubmit={submit}>
       <textarea autoFocus required rows={3} maxLength={10000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={"脑子里刚冒出来什么？\n随便写，不用整理"} />
       <div>{error && <p className="form-error">{error}</p>}<button className="button primary" type="submit">先放这里</button></div>
@@ -65,6 +65,6 @@ export function InboxView() {
           <button className="danger inbox-delete" type="button" aria-label="删除这条 Inbox" title="删除" onClick={() => remove(item.id)}><Icon name="trash" /></button>
         </div>
       </div>
-    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>这里空着</h2><p>脑子也可以暂时空着。</p></div>}
+    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>Inbox 为空</h2></div>}
   </div>;
 }

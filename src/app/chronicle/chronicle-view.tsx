@@ -79,7 +79,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   }
 
   return <div className="page chronicle-page">
-    <PageHeader eyebrow="ARCHIVE" title="Chronicle" description="Dated Markdown entries, kept in their original words." action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New entry</button>} />
+    <PageHeader eyebrow="归档" title="Chronicle" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
 
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>

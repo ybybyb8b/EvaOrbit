@@ -32,7 +32,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory, initi
   function openEdit(record: HealthRecord) { setError(""); setMessage(""); setEditing(record); setEditorOpen(true); }
 
   return <div className="page health-page">
-    <PageHeader eyebrow="LIFE" title="Health" description="Personal health records" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />New record</button>} />
+    <PageHeader eyebrow="生活" title="Health" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
     {message && <p className="success-banner" role="status">{message}</p>}
     {error && <p className="form-error">{error}</p>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}

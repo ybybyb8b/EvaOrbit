@@ -87,7 +87,7 @@ export function SettingsView() {
   if (loading) return <div className="page"><div className="loading-state">正在读取设置…</div></div>;
 
   return <div className="page">
-    <PageHeader eyebrow="APP & APPEARANCE" title="App & Appearance" description="The names, visual details, and conversational tone that make this space yours." action={<Link className="settings-back-link" href="/settings">All settings</Link>} />
+    <PageHeader eyebrow="应用与外观" title="App & Appearance" action={<Link className="settings-back-link" href="/settings">全部设置</Link>} />
 
     <form className="provider-card" onSubmit={save}>
       <AppearanceThemeSettings />
