@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -322,6 +322,8 @@ export interface EvaOrbitRepository {
   createReminderOccurrence(input: Omit<ReminderOccurrence, "id" | "createdAt">): Promise<ReminderOccurrence>;
   listNotificationDeliveries(limit?: number): Promise<NotificationDelivery[]>;
   createNotificationDelivery(input: Omit<NotificationDelivery, "id" | "createdAt">): Promise<NotificationDelivery>;
+  listMealReminderRules(): Promise<MealReminderRule[]>;
+  updateMealReminderRules(input: Array<Pick<MealReminderRule, "mealType" | "remindAt" | "enabled">>): Promise<MealReminderRule[]>;
   listPushSubscriptions(): Promise<PushSubscriptionRecord[]>;
   upsertPushSubscription(input: Pick<PushSubscriptionRecord, "endpoint" | "p256dh" | "auth">): Promise<PushSubscriptionRecord>;
   deletePushSubscription(endpoint: string): Promise<boolean>;

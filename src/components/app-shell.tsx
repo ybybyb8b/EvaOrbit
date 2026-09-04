@@ -10,6 +10,7 @@ import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
 import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
+import { PullToRefresh } from "./pull-to-refresh";
 
 const navigationGroups = [
   { label: "SPACE", items: [
@@ -59,6 +60,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
     <div className="app-shell">
       <ThemeController />
       <NativeNotificationReconciler />
+      <PullToRefresh enabled={!spacesOpen && !evaOpen} />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>
           <span className="brand-mark"><Image src="/icons/app-icon-192.png" alt="" width={68} height={68} priority /></span>

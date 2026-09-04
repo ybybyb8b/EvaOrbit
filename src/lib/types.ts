@@ -43,6 +43,15 @@ export interface UiPreferences {
   updatedAt: string;
 }
 
+export type MealReminderType = "breakfast" | "lunch" | "dinner";
+
+export interface MealReminderRule {
+  mealType: MealReminderType;
+  remindAt: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
 export type ChatRole = "user" | "assistant";
 export type AvatarType = "default" | "emoji" | "image";
 
@@ -852,7 +861,7 @@ export interface NotificationDelivery {
   title: string;
   sourceType: string | null;
   sourceId: number | null;
-  targetType: ReminderTargetType;
+  targetType: ReminderTargetType | "food";
   targetId: number | null;
   scheduledAt: string;
   scheduledHasExplicitTime: boolean;
