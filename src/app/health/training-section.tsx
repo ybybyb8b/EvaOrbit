@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
+import { useLocale } from "@/components/locale-controller";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import { TRAINING_BODY_PARTS, type TrainingBodyPart, type TrainingInputSuggestions, type TrainingLog, type TrainingType } from "@/lib/types";
+import { dateInEvaOrbit } from "@/lib/time";
+import { TrainingCalendar } from "./training-calendar";
 
 const trainingTypeLabels: Record<TrainingType, string> = { cardio: "有氧", strength: "无氧", mixed: "混合" };
 type Draft = { occurredAt: string; trainingType: TrainingType; bodyParts: TrainingBodyPart[]; teacher: string; course: string; durationMinutes: string; notes: string };
@@ -15,14 +17,17 @@ function draftFromLog(log: TrainingLog): Draft { return { occurredAt: compactDat
 function getError(result: unknown, fallback: string) { return result && typeof result === "object" && "error" in result && typeof result.error === "string" ? result.error : fallback; }
 function trainingMeta(log: TrainingLog) { return [log.occurredHasExplicitTime ? compactDateTimeValue(log.occurredAt, true).slice(11) : "Date only", log.course, log.teacher, log.durationMinutes ? `${log.durationMinutes} min` : ""].filter(Boolean).join(" · "); }
 
-export function TrainingSection({ initial, initialSuggestions, today }: { initial: TrainingLog[]; initialSuggestions: TrainingInputSuggestions; today: string }) {
+export function TrainingSection({ initial, initialMonth, initialMonthLogs, initialSuggestions, today }: { initial: TrainingLog[]; initialMonth: string; initialMonthLogs: TrainingLog[]; initialSuggestions: TrainingInputSuggestions; today: string }) {
+  const { english } = useLocale();
   const [logs, setLogs] = useState(initial);
+  const [monthLogs, setMonthLogs] = useState(initialMonthLogs);
   const [suggestions, setSuggestions] = useState(initialSuggestions);
   const [editing, setEditing] = useState<TrainingLog>();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   function openCreate() { setEditing(undefined); setDraft(emptyDraft()); setError(""); setOpen(true); }
   function openEdit(log: TrainingLog) { setEditing(log); setDraft(draftFromLog(log)); setError(""); setOpen(true); }
@@ -30,8 +35,9 @@ export function TrainingSection({ initial, initialSuggestions, today }: { initia
   function toggleBodyPart(bodyPart: TrainingBodyPart) { setDraft((current) => ({ ...current, bodyParts: current.bodyParts.includes(bodyPart) ? current.bodyParts.filter((item) => item !== bodyPart) : [...current.bodyParts, bodyPart] })); }
 
   async function reload() {
-    const [logsResponse, suggestionsResponse] = await Promise.all([fetch(`/api/health/training?date=${encodeURIComponent(today)}`), fetch("/api/health/training/suggestions")]);
+    const [logsResponse, monthResponse, suggestionsResponse] = await Promise.all([fetch(`/api/health/training?date=${encodeURIComponent(today)}`), fetch(`/api/health/training?month=${encodeURIComponent(initialMonth)}`), fetch("/api/health/training/suggestions")]);
     if (logsResponse.ok) setLogs(await logsResponse.json());
+    if (monthResponse.ok) setMonthLogs((await monthResponse.json() as TrainingLog[]).filter((log) => dateInEvaOrbit(new Date(log.occurredAt)).startsWith(initialMonth)));
     if (suggestionsResponse.ok) setSuggestions(await suggestionsResponse.json());
   }
 
@@ -75,7 +81,8 @@ export function TrainingSection({ initial, initialSuggestions, today }: { initia
         {editing && <button className="danger-text training-delete" type="button" onClick={() => void remove()}>Delete training log</button>}
       </form>
     </FormSheet>}
-    <div className="section-heading"><div><span className="eyebrow">TRAINING</span><h2>Today</h2></div><div className="training-heading-actions"><Link className="text-button" href="/health/training">History</Link><button className="text-button training-add" onClick={openCreate}><Icon name="plus" />Log training</button></div></div>
+    <div className="section-heading"><div><span className="eyebrow">TRAINING</span><h2>Today</h2></div><div className="training-heading-actions"><button className="text-button" type="button" aria-expanded={historyOpen} onClick={() => setHistoryOpen((value) => !value)}>{historyOpen ? english ? "Hide history" : "收起历史" : english ? "History" : "历史记录"}</button><button className="text-button training-add" onClick={openCreate}><Icon name="plus" />Log training</button></div></div>
     {logs.length ? <div className="training-log-list">{logs.map((log) => <article className="training-log-row" key={log.id}><button className="training-log-main" onClick={() => openEdit(log)}><span><strong>{trainingTypeLabels[log.trainingType]}</strong><small>{log.bodyParts.join(" · ")}</small></span><span className="training-log-meta">{trainingMeta(log)}</span></button><button className="icon-button subtle" aria-label={`Edit ${trainingTypeLabels[log.trainingType]} training`} onClick={() => openEdit(log)}><Icon name="edit" /></button></article>)}</div> : <p className="health-inline-empty">No training logged today.</p>}
+    {historyOpen && <TrainingCalendar key={monthLogs.map((log) => `${log.id}:${log.updatedAt}`).join("-")} initialMonth={initialMonth} initialLogs={monthLogs} />}
   </section>;
 }

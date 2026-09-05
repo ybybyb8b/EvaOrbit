@@ -4085,7 +4085,7 @@ html[data-mode="dark"] .health-current-section .health-current-card,
 html[data-mode="dark"] .health-page .training-log-list { background:rgb(255 255 255 / .035); }
 
 /* Training calendar */
-.training-history-page { max-width:920px; }
+.training-history-inline { margin-top:18px; }
 .training-calendar {
   padding:22px;
   border-radius:var(--radius-content);
@@ -4099,7 +4099,7 @@ html[data-mode="dark"] .health-page .training-log-list { background:rgb(255 255 
   align-items:center;
   gap:12px;
 }
-.training-calendar > header h2 {
+.training-calendar > header h3 {
   margin:0;
   font:500 25px/1.1 var(--font-editorial-label);
   text-align:center;
@@ -4134,13 +4134,13 @@ html[data-mode="dark"] .health-page .training-log-list { background:rgb(255 255 
   border-radius:var(--radius-control);
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
+  align-items:center;
   justify-content:space-between;
   gap:6px;
   background:transparent;
   color:var(--text-primary);
   cursor:pointer;
-  text-align:left;
+  text-align:center;
 }
 .training-calendar-grid > button[data-has-record="true"] { background:rgb(var(--surface-card-rgb) / .68); }
 .training-calendar-grid > button.selected {
@@ -4168,7 +4168,7 @@ html[data-mode="dark"] .health-page .training-log-list { background:rgb(255 255 
 }
 .training-day-history > header span,
 .training-day-history > header > strong { color:var(--text-secondary);font-size:10px; }
-.training-day-history > header h2 { margin:5px 0 0;font:500 25px/1.1 var(--font-editorial-label); }
+.training-day-history > header h3 { margin:5px 0 0;font:500 25px/1.1 var(--font-editorial-label); }
 .training-day-history > div {
   padding:5px;
   border-radius:var(--radius-content);

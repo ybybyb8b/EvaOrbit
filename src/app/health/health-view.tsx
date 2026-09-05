@@ -14,7 +14,7 @@ import { TrainingSection } from "./training-section";
 
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 
-export function HealthView({ initial, initialEnergy, initialEnergyHistory, initialTraining, initialTrainingSuggestions, today }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; today: string }) {
+export function HealthView({ initial, initialEnergy, initialEnergyHistory, initialTraining, initialTrainingMonth, initialTrainingMonthLogs, initialTrainingSuggestions, today }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialTrainingMonth: string; initialTrainingMonthLogs: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; today: string }) {
   const [dashboard, setDashboard] = useState(initial);
   const [editing, setEditing] = useState<HealthRecord | undefined>();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -37,7 +37,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory, initi
     {error && <p className="form-error">{error}</p>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}
     <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>Worth keeping in view</h2></div><span>Active</span></div>{dashboard.current.length ? <div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div> : <p className="health-inline-empty">Nothing active right now.</p>}</section>
-    <TrainingSection initial={initialTraining} initialSuggestions={initialTrainingSuggestions} today={today} />
+    <TrainingSection initial={initialTraining} initialMonth={initialTrainingMonth} initialMonthLogs={initialTrainingMonthLogs} initialSuggestions={initialTrainingSuggestions} today={today} />
     <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />
     <section className="health-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Health records</h2></div><Link href="/health/records">View all <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>
   </div>;
