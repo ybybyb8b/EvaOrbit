@@ -12,6 +12,7 @@
     "test": "node --test src/lib/*.test.ts scripts/*.test.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/apply-migrations.mjs",
     "db:import-sqlite": "node --env-file-if-exists=.env.local scripts/import-sqlite.mjs",
+    "data:restore": "node --env-file-if-exists=.env.local scripts/restore-backup.mjs",
     "import:notion": "node --env-file-if-exists=.env.local scripts/import-notion-json.mjs"
   },
   "dependencies": {
