@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
@@ -35,18 +35,44 @@ const navigationGroups = [
   ] },
 ];
 
+type SpacesDrawerPhase = "closed" | "opening" | "open" | "closing";
+const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
+
 export function AppShell({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
   const { english } = useLocale();
   const pathname = usePathname();
   const [evaOpen, setEvaOpen] = useState(false);
-  const [spacesOpen, setSpacesOpen] = useState(false);
+  const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
+  const spacesDrawerMounted = spacesDrawerPhase !== "closed";
+  const openSpacesDrawer = useCallback(() => {
+    setSpacesDrawerPhase((phase) => phase === "closed" || phase === "closing" ? "opening" : phase);
+  }, []);
+  const closeSpacesDrawer = useCallback(() => {
+    setSpacesDrawerPhase((phase) => phase === "opening" || phase === "open" ? "closing" : phase);
+  }, []);
 
   useEffect(() => {
-    if (!spacesOpen) return;
+    if (spacesDrawerPhase !== "opening") return;
+    const frame = window.requestAnimationFrame(() => {
+      setSpacesDrawerPhase((phase) => phase === "opening" ? "open" : phase);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [spacesDrawerPhase]);
+
+  useEffect(() => {
+    if (spacesDrawerPhase !== "closing") return;
+    const fallback = window.setTimeout(() => {
+      setSpacesDrawerPhase((phase) => phase === "closing" ? "closed" : phase);
+    }, SPACES_DRAWER_CLOSE_FALLBACK_MS);
+    return () => window.clearTimeout(fallback);
+  }, [spacesDrawerPhase]);
+
+  useEffect(() => {
+    if (!spacesDrawerMounted) return;
     const body = document.body;
     const previousOverflow = body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSpacesOpen(false);
+      if (event.key === "Escape") closeSpacesDrawer();
     };
     body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
@@ -54,13 +80,19 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [spacesOpen]);
+  }, [closeSpacesDrawer, spacesDrawerMounted]);
+
+  const finishSpacesDrawerClose = (event: React.TransitionEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget || (event.propertyName !== "transform" && event.propertyName !== "opacity")) return;
+    setSpacesDrawerPhase((phase) => phase === "closing" ? "closed" : phase);
+  };
+
   if (pathname === "/login") return children;
   return (
     <div className="app-shell">
       <ThemeController />
       <NativeNotificationReconciler />
-      <PullToRefresh enabled={!spacesOpen && !evaOpen} />
+      <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>
           <span className="brand-mark"><Image src="/icons/app-icon-192.png" alt="" width={68} height={68} priority /></span>
@@ -79,23 +111,23 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      <button type="button" className={`spaces-drawer-trigger ${spacesOpen ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" onClick={() => setSpacesOpen(true)}><span className="spaces-menu-lines" aria-hidden="true"><i /><i /><i /></span></button>
+      <button type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><span className="spaces-menu-lines" aria-hidden="true"><i /><i /><i /></span></button>
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
         <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
-      {spacesOpen && <div className="space-drawer-layer" role="presentation">
-        <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={() => setSpacesOpen(false)} />
-        <aside className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"}>
-          <header><strong>{english ? "All Spaces" : "总览"}</strong><button type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={() => setSpacesOpen(false)}><Icon name="close" /></button></header>
+      {spacesDrawerMounted && <div className="space-drawer-layer" data-state={spacesDrawerPhase} role="presentation">
+        <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer} />
+        <aside className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"} onTransitionEnd={finishSpacesDrawerClose}>
+          <header><strong>{english ? "All Spaces" : "总览"}</strong><button type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer}><Icon name="close" /></button></header>
           <nav aria-label={english ? "All spaces" : "总览"}>
             {navigationGroups.map((group) => <section key={group.label}>
               <span>{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>
               {group.items.filter((item) => item.href !== "/").map((item) => {
                 const active = pathname.startsWith(item.href);
-                return <Link href={item.href} className={active ? "active" : ""} onClick={() => setSpacesOpen(false)} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
+                return <Link href={item.href} className={active ? "active" : ""} onClick={closeSpacesDrawer} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
               })}
             </section>)}
           </nav>

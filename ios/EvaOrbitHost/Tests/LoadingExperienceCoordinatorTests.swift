@@ -3,16 +3,19 @@ import XCTest
 
 @MainActor
 final class LoadingExperienceCoordinatorTests: XCTestCase {
-    func testFastWebViewWaitsForIntroNaturalEndThenDismissesOnce() {
+    func testFastWebViewDismissesImmediatelyAndIgnoresRepeatedReadyAndStaleIntroCompletion() {
         let presenter = LoadingPresenterSpy()
         let coordinator = LoadingExperienceCoordinator(presenter: presenter)
 
         coordinator.startColdLaunch()
         coordinator.webViewDidBecomeReady()
-        coordinator.webViewDidBecomeReady()
 
         XCTAssertEqual(coordinator.state, .readyToDismiss)
-        XCTAssertEqual(presenter.dismissCount, 0)
+        XCTAssertEqual(presenter.dismissCount, 1)
+
+        coordinator.webViewDidBecomeReady()
+        XCTAssertEqual(presenter.dismissCount, 1)
+
         presenter.finishIntro()
         XCTAssertEqual(presenter.dismissCount, 1)
         presenter.finishDismissal()

@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+> 后续开发会话在修改 Native Host、iOS 权限/capability、bridge、打包或签名之前，还必须先阅读维护契约 [`docs/IOS_NATIVE_MAINTENANCE.md`](./IOS_NATIVE_MAINTENANCE.md)。本文保留已经真机走通的详细安装、续签和故障排查步骤。
+
 本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程只是加载生产站点的轻量 `WKWebView` Host。
 
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库现已加入第一批 HealthKit 能量同步代码；它只读取静息能量和活动能量，并新增原生 SQLite/outbox、设备凭据、同步 API 与独立的 `healthkit_daily_energy` 表。部署这批代码前须先应用 `supabase/migrations/202609010001_healthkit_energy.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。

@@ -35,9 +35,9 @@ final class NativeLoadingThemeTests: XCTestCase {
         XCTAssertEqual(NativeAppearanceMode.dark.interfaceStyle, .dark)
     }
 
-    func testIntroTimingKeepsCoreExperienceBeforeShortExit() {
+    func testIntroTimingAllowsAnInterruptibleShortExit() {
         XCTAssertEqual(LoadingOverlayView.Timing.introDuration, 2.0)
-        XCTAssertEqual(LoadingOverlayView.Timing.exitDuration, 0.30)
+        XCTAssertEqual(LoadingOverlayView.Timing.exitDuration, 0.20)
         XCTAssertLessThan(LoadingOverlayView.Timing.wordmarkDelay, LoadingOverlayView.Timing.introDuration)
     }
 }

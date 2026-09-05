@@ -6,7 +6,10 @@ final class OrbitArtworkView: UIView {
     private let orbitLayers = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
     private let planetLayer = CAShapeLayer()
     private let starLayers = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
-    private let monogramLabel = UILabel()
+    private let coreContainer = CALayer()
+    private let coreShapeLayer = CAShapeLayer()
+    private let coreFacetLayers = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
+    private let coreStarLayer = CAShapeLayer()
     private var lastLayoutBounds = CGRect.zero
     private var quietLoopActive = false
     private var reduceMotionForLoop = false
@@ -18,7 +21,7 @@ final class OrbitArtworkView: UIView {
         accessibilityLabel = "EvaOrbit"
         isUserInteractionEnabled = false
         configureLayers()
-        configureMonogram()
+        configureCore()
         applyTheme()
     }
 
@@ -33,7 +36,6 @@ final class OrbitArtworkView: UIView {
         lastLayoutBounds = bounds
         orbitContainer.frame = bounds
         updatePaths()
-        monogramLabel.frame = bounds
         if quietLoopActive { addQuietLoopAnimations(reduceMotion: reduceMotionForLoop) }
     }
 
@@ -50,9 +52,11 @@ final class OrbitArtworkView: UIView {
         orbitLayers.forEach { $0.strokeEnd = 0; $0.opacity = 0 }
         planetLayer.opacity = 0
         starLayers.forEach { $0.opacity = 0 }
+        coreContainer.opacity = 0
+        coreContainer.setAffineTransform(
+            UIAccessibility.isReduceMotionEnabled ? .identity : CGAffineTransform(scaleX: 0.97, y: 0.97)
+        )
         CATransaction.commit()
-        monogramLabel.alpha = 0
-        monogramLabel.transform = CGAffineTransform(scaleX: 0.97, y: 0.97)
     }
 
     func playIntro(reduceMotion: Bool) {
@@ -67,6 +71,8 @@ final class OrbitArtworkView: UIView {
         planetLayer.opacity = 1
         planetLayer.position = OrbitGeometry.point(in: bounds, descriptor: .primary, angle: 0.38)
         for (index, star) in starLayers.enumerated() { star.opacity = index < 2 ? 0.82 : 0.58 }
+        coreContainer.opacity = 1
+        coreContainer.setAffineTransform(.identity)
         CATransaction.commit()
         if reduceMotion {
             orbitLayers.forEach { orbit in
@@ -92,15 +98,29 @@ final class OrbitArtworkView: UIView {
             }
         }
 
-        UIView.animate(
-            withDuration: 0.53,
-            delay: 0.72,
-            options: [.curveEaseInOut, .beginFromCurrentState],
-            animations: {
-                self.monogramLabel.alpha = 1
-                self.monogramLabel.transform = .identity
-            }
-        )
+        let coreOpacity = CABasicAnimation(keyPath: "opacity")
+        coreOpacity.fromValue = 0
+        coreOpacity.toValue = 1
+        if reduceMotion {
+            coreOpacity.beginTime = now + 0.72
+            coreOpacity.duration = 0.53
+            coreOpacity.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            coreOpacity.fillMode = .backwards
+            coreContainer.add(coreOpacity, forKey: "introCoreFade")
+        } else {
+            coreOpacity.duration = 0.53
+            let coreScale = CABasicAnimation(keyPath: "transform.scale")
+            coreScale.fromValue = 0.97
+            coreScale.toValue = 1
+            coreScale.duration = 0.53
+            let coreReveal = CAAnimationGroup()
+            coreReveal.animations = [coreOpacity, coreScale]
+            coreReveal.beginTime = now + 0.72
+            coreReveal.duration = 0.53
+            coreReveal.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            coreReveal.fillMode = .backwards
+            coreContainer.add(coreReveal, forKey: "introCore")
+        }
 
         if reduceMotion {
             planetLayer.add(Self.opacityAnimation(from: 0, to: 1, beginTime: now + 1.0, duration: 0.7), forKey: "introPlanetFade")
@@ -137,9 +157,9 @@ final class OrbitArtworkView: UIView {
         planetLayer.opacity = 1
         planetLayer.position = OrbitGeometry.point(in: bounds, descriptor: .primary, angle: 0.38)
         for (index, star) in starLayers.enumerated() { star.opacity = index < 2 ? 0.82 : 0.58 }
+        coreContainer.opacity = 1
+        coreContainer.setAffineTransform(.identity)
         CATransaction.commit()
-        monogramLabel.alpha = 1
-        monogramLabel.transform = .identity
     }
 
     func beginQuietLoop(reduceMotion: Bool) {
@@ -149,13 +169,17 @@ final class OrbitArtworkView: UIView {
         addQuietLoopAnimations(reduceMotion: reduceMotion)
     }
 
-    func stopAnimations() {
+    func stopAnimations(preservingVisibleState: Bool = false) {
+        if preservingVisibleState { freezePresentationState() }
         layer.removeAllAnimations()
         orbitContainer.removeAllAnimations()
         orbitLayers.forEach { $0.removeAllAnimations() }
         planetLayer.removeAllAnimations()
         starLayers.forEach { $0.removeAllAnimations() }
-        monogramLabel.layer.removeAllAnimations()
+        coreContainer.removeAllAnimations()
+        coreShapeLayer.removeAllAnimations()
+        coreFacetLayers.forEach { $0.removeAllAnimations() }
+        coreStarLayer.removeAllAnimations()
         quietLoopActive = false
     }
 
@@ -174,12 +198,18 @@ final class OrbitArtworkView: UIView {
         starLayers.forEach { layer.addSublayer($0) }
     }
 
-    private func configureMonogram() {
-        monogramLabel.textAlignment = .center
-        monogramLabel.adjustsFontForContentSizeCategory = false
-        let font = UIFont(name: "Didot", size: 56) ?? UIFont(name: "TimesNewRomanPSMT", size: 56) ?? .systemFont(ofSize: 56, weight: .light)
-        monogramLabel.attributedText = NSAttributedString(string: "EO", attributes: [.font: font, .kern: -13])
-        addSubview(monogramLabel)
+    private func configureCore() {
+        coreContainer.bounds = CGRect(x: 0, y: 0, width: 76, height: 76)
+        coreContainer.addSublayer(coreShapeLayer)
+        coreFacetLayers.forEach {
+            $0.fillColor = UIColor.clear.cgColor
+            $0.lineWidth = 0.8
+            $0.lineCap = .round
+            $0.lineJoin = .round
+            coreContainer.addSublayer($0)
+        }
+        coreContainer.addSublayer(coreStarLayer)
+        layer.addSublayer(coreContainer)
     }
 
     private func updatePaths() {
@@ -201,6 +231,19 @@ final class OrbitArtworkView: UIView {
             star.frame = bounds
             star.path = Self.starPath(center: centers[index], radius: index < 2 ? 5 : 2.2)
         }
+        let coreBounds = coreContainer.bounds
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        coreContainer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        coreShapeLayer.frame = coreBounds
+        coreShapeLayer.path = Self.corePath(in: coreBounds)
+        for (index, facet) in coreFacetLayers.enumerated() {
+            facet.frame = coreBounds
+            facet.path = Self.coreFacetPath(index: index, in: coreBounds)
+        }
+        coreStarLayer.frame = coreBounds
+        coreStarLayer.path = Self.starPath(center: CGPoint(x: coreBounds.midX, y: coreBounds.midY), radius: 18)
+        CATransaction.commit()
     }
 
     private func addQuietLoopAnimations(reduceMotion: Bool) {
@@ -237,12 +280,39 @@ final class OrbitArtworkView: UIView {
     }
 
     private func applyTheme() {
-        monogramLabel.textColor = palette.loadingText
         let primary = palette.loadingPrimary.resolvedColor(with: traitCollection).cgColor
-        let accent = palette.loadingAccent.resolvedColor(with: traitCollection).cgColor
+        let resolvedAccent = palette.loadingAccent.resolvedColor(with: traitCollection)
+        let accent = resolvedAccent.cgColor
         orbitLayers.forEach { $0.strokeColor = primary }
         planetLayer.fillColor = accent
         for (index, star) in starLayers.enumerated() { star.fillColor = (index == 0 ? accent : primary) }
+        coreShapeLayer.fillColor = primary
+        coreFacetLayers.forEach { $0.strokeColor = resolvedAccent.withAlphaComponent(0.30).cgColor }
+        coreStarLayer.fillColor = accent
+    }
+
+    private func freezePresentationState() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if let presentation = orbitContainer.presentation() { orbitContainer.transform = presentation.transform }
+        for orbit in orbitLayers {
+            if let presentation = orbit.presentation() {
+                orbit.strokeEnd = presentation.strokeEnd
+                orbit.opacity = presentation.opacity
+            }
+        }
+        if let presentation = planetLayer.presentation() {
+            planetLayer.position = presentation.position
+            planetLayer.opacity = presentation.opacity
+        }
+        for star in starLayers {
+            if let presentation = star.presentation() { star.opacity = presentation.opacity }
+        }
+        if let presentation = coreContainer.presentation() {
+            coreContainer.opacity = presentation.opacity
+            coreContainer.transform = presentation.transform
+        }
+        CATransaction.commit()
     }
 
     private static func opacityAnimation(from: Float, to: Float, beginTime: CFTimeInterval, duration: CFTimeInterval) -> CAAnimation {
@@ -268,6 +338,51 @@ final class OrbitArtworkView: UIView {
         path.addLine(to: CGPoint(x: center.x - radius * 0.22, y: center.y - radius * 0.22))
         path.closeSubpath()
         return path
+    }
+
+    private static func corePath(in bounds: CGRect) -> CGPath {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: bounds.minX + bounds.width * x, y: bounds.minY + bounds.height * y)
+        }
+
+        let path = UIBezierPath()
+        path.move(to: point(0.50, 0.03))
+        path.addCurve(to: point(0.78, 0.14), controlPoint1: point(0.61, 0.03), controlPoint2: point(0.71, 0.08))
+        path.addCurve(to: point(0.96, 0.43), controlPoint1: point(0.87, 0.20), controlPoint2: point(0.93, 0.31))
+        path.addCurve(to: point(0.82, 0.77), controlPoint1: point(0.98, 0.56), controlPoint2: point(0.91, 0.68))
+        path.addCurve(to: point(0.54, 0.97), controlPoint1: point(0.75, 0.88), controlPoint2: point(0.64, 0.96))
+        path.addCurve(to: point(0.24, 0.87), controlPoint1: point(0.43, 0.99), controlPoint2: point(0.32, 0.94))
+        path.addCurve(to: point(0.04, 0.60), controlPoint1: point(0.14, 0.81), controlPoint2: point(0.05, 0.70))
+        path.addCurve(to: point(0.15, 0.27), controlPoint1: point(0.03, 0.48), controlPoint2: point(0.08, 0.36))
+        path.addCurve(to: point(0.50, 0.03), controlPoint1: point(0.23, 0.14), controlPoint2: point(0.36, 0.03))
+        path.close()
+        return path.cgPath
+    }
+
+    private static func coreFacetPath(index: Int, in bounds: CGRect) -> CGPath {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: bounds.minX + bounds.width * x, y: bounds.minY + bounds.height * y)
+        }
+
+        let path = UIBezierPath()
+        switch index {
+        case 0:
+            path.move(to: point(0.16, 0.30))
+            path.addLine(to: point(0.43, 0.19))
+            path.addLine(to: point(0.65, 0.24))
+            path.addLine(to: point(0.82, 0.37))
+        case 1:
+            path.move(to: point(0.05, 0.59))
+            path.addLine(to: point(0.29, 0.68))
+            path.addLine(to: point(0.39, 0.89))
+            path.addLine(to: point(0.54, 0.97))
+        default:
+            path.move(to: point(0.95, 0.43))
+            path.addLine(to: point(0.74, 0.58))
+            path.addLine(to: point(0.77, 0.77))
+            path.addLine(to: point(0.57, 0.91))
+        }
+        return path.cgPath
     }
 }
 

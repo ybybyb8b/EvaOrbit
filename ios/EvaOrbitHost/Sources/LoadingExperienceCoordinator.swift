@@ -38,6 +38,7 @@ final class LoadingExperienceCoordinator {
         switch state {
         case .introPlaying:
             state = .readyToDismiss
+            dismissOnce()
         case .waitingForWebView:
             state = .readyToDismiss
             dismissOnce()

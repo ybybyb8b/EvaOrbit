@@ -6,7 +6,7 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         static let reducedMotionIntroDuration: TimeInterval = 1.65
         static let wordmarkDelay: TimeInterval = 1.35
         static let wordmarkDuration: TimeInterval = 0.60
-        static let exitDuration: TimeInterval = 0.30
+        static let exitDuration: TimeInterval = 0.20
     }
 
     var onRetry: (() -> Void)?
@@ -53,8 +53,8 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         brandContainer.transform = .identity
         artworkView.prepareForIntro()
         wordmarkLabel.alpha = 0
-        wordmarkLabel.transform = CGAffineTransform(translationX: 0, y: 4)
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        wordmarkLabel.transform = reduceMotion ? .identity : CGAffineTransform(translationX: 0, y: 4)
         artworkView.playIntro(reduceMotion: reduceMotion)
         UIView.animate(
             withDuration: Timing.wordmarkDuration,
@@ -119,14 +119,15 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
     func dismiss(completion: @escaping () -> Void) {
         animationGeneration += 1
         let generation = animationGeneration
-        artworkView.stopAnimations()
+        artworkView.stopAnimations(preservingVisibleState: true)
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
         UIView.animate(
             withDuration: Timing.exitDuration,
             delay: 0,
-            options: [.curveEaseInOut, .beginFromCurrentState],
+            options: [.curveEaseOut, .beginFromCurrentState],
             animations: {
                 self.alpha = 0
-                self.transform = CGAffineTransform(scaleX: 0.985, y: 0.985)
+                self.transform = reduceMotion ? .identity : CGAffineTransform(scaleX: 0.985, y: 0.985)
             },
             completion: { _ in
                 guard self.animationGeneration == generation else { return }

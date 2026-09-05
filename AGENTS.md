@@ -28,6 +28,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - The primary real-device target is iPhone 16 Pro. For mobile UI changes, check its viewport, safe areas, Safari/PWA layout, and keyboard behavior.
 - Keep layouts responsive. Do not hard-code a page width, device-specific offset, or magic number for iPhone 16 Pro.
 
+## iOS Native Host
+
+- Before changing `ios/EvaOrbitHost`, iOS permissions or capabilities, the JS↔Swift bridge, IPA packaging/signing, patched xtool, or Windows/WSL device installation, read `docs/IOS_NATIVE_MAINTENANCE.md` completely.
+- Preserve the verified macOS CI ad-hoc IPA → audited patched xtool → free Personal Team re-signing → Windows usbmuxd/WSL installation chain unless the task explicitly authorizes a migration and the replacement is fully verified on device.
+- Do not add an entitlement without checking Personal Team support, xtool preservation, packaged entitlements, and the real-device result. Local notifications do not require APNs capability.
+
 ## Local development servers
 
 - If the task starts a dev server, record the exact process and close that server and its listening process before finishing. Verify that no new `localhost:3000`, `3001`, `3002`, or other test listener remains.
