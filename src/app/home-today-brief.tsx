@@ -23,6 +23,14 @@ const sourceMeta: Record<TimelineEvent["sourceType"], { en: string; zh: string }
   chronicle: { en: "Chronicle", zh: "纪事" },
 };
 
+const mealLabels: Record<string, { en: string; zh: string }> = {
+  breakfast: { en: "Breakfast", zh: "早餐" },
+  lunch: { en: "Lunch", zh: "午餐" },
+  dinner: { en: "Dinner", zh: "晚餐" },
+  snack: { en: "Snack", zh: "加餐" },
+  late_night: { en: "Late night", zh: "夜宵" },
+};
+
 export function HomeTodayBrief({ events, language }: { events: TimelineEvent[]; language: UiLanguage }) {
   const english = language === "en";
   const [expanded, setExpanded] = useState(false);
@@ -33,12 +41,13 @@ export function HomeTodayBrief({ events, language }: { events: TimelineEvent[]; 
   return <>
     <div className="home-activity-list">{visible.map((item) => {
       const source = sourceMeta[item.sourceType];
+      const meal = item.sourceType === "food" && typeof item.metadata.mealType === "string" ? mealLabels[item.metadata.mealType] : null;
       return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}>
         <time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time>
         <span className="home-activity-marker" aria-hidden="true" />
         <span className="home-activity-copy">
           <span className="home-activity-source">{english ? source.en : source.zh}</span>
-          <strong className="user-content">{item.title}</strong>
+          <strong className={meal ? "" : "user-content"}>{meal ? english ? meal.en : meal.zh : item.title}</strong>
           {item.detail && <small className="user-content">{item.detail}</small>}
         </span>
       </Link>;

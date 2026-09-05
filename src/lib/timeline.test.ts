@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEvents } from "./timeline.ts";
+import { buildTimelineEvents, groupMealTimelineEvents } from "./timeline.ts";
 import type { DrinkLog, FoodLog, HealthRecord, Tracker, TrackerEntry } from "./types.ts";
 
 const food: FoodLog = {
@@ -42,4 +42,13 @@ test("puts timed events before date-only events on the same EvaOrbit day", () =>
   const events = buildTimelineEvents([food], [], [], [], [dateOnlyHealth]);
   assert.deepEqual(events.map((event) => event.id), ["food:7", "health:20"]);
   assert.equal(events[1].hasExplicitTime, false);
+});
+
+test("groups food records into one home timeline row per meal", () => {
+  const secondFood = { ...food, id: 8, title: "青菜", portion: "一碟" };
+  const events = groupMealTimelineEvents(buildTimelineEvents([food, secondFood], [drink]));
+  assert.deepEqual(events.map((event) => event.id), ["drink:3", "food-meal:lunch:2026-08-26"]);
+  assert.equal(events[1].eventType, "food.meal");
+  assert.equal(events[1].metadata.count, 2);
+  assert.deepEqual(events[1].metadata.foodItems, [{ title: "青菜", detail: "一碟" }, { title: "午饭", detail: "半碗饭" }]);
 });

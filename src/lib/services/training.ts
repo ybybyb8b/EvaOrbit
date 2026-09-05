@@ -5,9 +5,16 @@ import { getRepository } from "../repositories";
 import type { NewTrainingLog, TrainingLogListInput, TrainingLogPatch } from "../repositories/types";
 import { dateRange } from "../time";
 
-export async function listTrainingLogs(input: TrainingLogListInput & { date?: string } = {}) {
-  const { date, ...query } = input;
-  return (await getRepository()).listTrainingLogs(date ? { ...query, ...dateRange(date) } : query);
+function monthRange(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const next = new Date(Date.UTC(year, monthNumber, 1, 12));
+  return { from: dateRange(`${month}-01`).from, to: dateRange(next.toISOString().slice(0, 7) + "-01").from };
+}
+
+export async function listTrainingLogs(input: TrainingLogListInput & { date?: string; month?: string } = {}) {
+  const { date, month, ...query } = input;
+  const range = date ? dateRange(date) : month ? monthRange(month) : null;
+  return (await getRepository()).listTrainingLogs(range ? { ...query, ...range } : query);
 }
 
 export async function getTrainingLog(id: number) { return (await getRepository()).getTrainingLog(id); }

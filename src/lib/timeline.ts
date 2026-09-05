@@ -51,5 +51,29 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
   return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort(compareTimelineEvents);
 }
 
+export function groupMealTimelineEvents(events: TimelineEvent[]) {
+  const mealGroups = new Map<string, TimelineEvent[]>();
+  const otherEvents: TimelineEvent[] = [];
+  for (const event of events) {
+    const mealType = event.sourceType === "food" && typeof event.metadata.mealType === "string" ? event.metadata.mealType : null;
+    if (!mealType) { otherEvents.push(event); continue; }
+    const group = mealGroups.get(mealType) ?? [];
+    group.push(event);
+    mealGroups.set(mealType, group);
+  }
+  const meals = [...mealGroups.entries()].map(([mealType, items]) => {
+    const ordered = [...items].sort(compareTimelineEvents);
+    const first = ordered[0];
+    return {
+      ...first,
+      id: `food-meal:${mealType}:${dateInEvaOrbit(new Date(first.occurredAt))}`,
+      eventType: "food.meal",
+      detail: ordered.map((item) => item.title).join(" · "),
+      metadata: { ...first.metadata, mealType, foodItems: ordered.map((item) => ({ title: item.title, detail: item.detail })), count: ordered.length },
+    } satisfies TimelineEvent;
+  });
+  return [...otherEvents, ...meals].sort(compareTimelineEvents);
+}
+
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
 export function buildRelationTimelineEvents(events:RelationEvent[]):TimelineEvent[]{return events.map(event=>{const people=event.parties.flatMap(p=>p.personId?[p.personId]:[]);const detail=event.totalAmountMinor===null?(event.note||event.eventType):`¥${(event.totalAmountMinor/100).toFixed(2)}${event.note?` · ${event.note}`:""}`;return{id:`relation:${event.id}`,eventType:`relation.${event.eventType}`,sourceType:"person" as const,sourceId:event.id,title:event.title,detail,occurredAt:event.occurredAt,hasExplicitTime:event.occurredHasExplicitTime,endAt:null,href:people[0]?`/relations/${people[0]}`:"/relations",relatedPeople:people,relatedPets:[],metadata:{relationEventType:event.eventType,currency:event.currency,totalAmountMinor:event.totalAmountMinor,partyCount:event.parties.length}};}).sort(compareTimelineEvents);}

@@ -2,7 +2,7 @@ import "server-only";
 
 import { calculateDailyNutrition } from "../nutrition";
 import { getRepository } from "../repositories";
-import { buildRelationTimelineEvents, buildTimelineEvents, compareTimelineEvents } from "../timeline";
+import { buildRelationTimelineEvents, buildTimelineEvents, compareTimelineEvents, groupMealTimelineEvents } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import type { TimelineEvent } from "../types";
@@ -45,7 +45,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   ]);
   return {
     date,
-    events: [...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)].sort(compareTimelineEvents),
+    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)]),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

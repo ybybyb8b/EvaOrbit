@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
@@ -74,7 +75,7 @@ export function TrainingSection({ initial, initialSuggestions, today }: { initia
         {editing && <button className="danger-text training-delete" type="button" onClick={() => void remove()}>Delete training log</button>}
       </form>
     </FormSheet>}
-    <div className="section-heading"><div><span className="eyebrow">TRAINING</span><h2>Today</h2></div><button className="text-button training-add" onClick={openCreate}><Icon name="plus" />Log training</button></div>
+    <div className="section-heading"><div><span className="eyebrow">TRAINING</span><h2>Today</h2></div><div className="training-heading-actions"><Link className="text-button" href="/health/training">History</Link><button className="text-button training-add" onClick={openCreate}><Icon name="plus" />Log training</button></div></div>
     {logs.length ? <div className="training-log-list">{logs.map((log) => <article className="training-log-row" key={log.id}><button className="training-log-main" onClick={() => openEdit(log)}><span><strong>{trainingTypeLabels[log.trainingType]}</strong><small>{log.bodyParts.join(" · ")}</small></span><span className="training-log-meta">{trainingMeta(log)}</span></button><button className="icon-button subtle" aria-label={`Edit ${trainingTypeLabels[log.trainingType]} training`} onClick={() => openEdit(log)}><Icon name="edit" /></button></article>)}</div> : <p className="health-inline-empty">No training logged today.</p>}
   </section>;
 }
