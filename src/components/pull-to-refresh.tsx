@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "./locale-controller";
+import {
+  getPullRefreshDistance,
+  REFRESH_THRESHOLD,
+  shouldTriggerPullRefresh,
+} from "@/lib/pull-refresh-gesture";
 
 type RefreshPhase = "idle" | "pulling" | "ready" | "refreshing";
 
-const REFRESH_THRESHOLD = 68;
-const MAX_PULL_DISTANCE = 112;
 const DISABLED_TARGETS = [
   "input",
   "textarea",
@@ -35,29 +38,44 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
   const { english } = useLocale();
   const indicatorRef = useRef<HTMLDivElement>(null);
+  const spinnerRef = useRef<HTMLSpanElement>(null);
   const phaseRef = useRef<RefreshPhase>("idle");
-  const gestureRef = useRef({ tracking: false, startX: 0, startY: 0 });
+  const gestureRef = useRef({ tracking: false, startX: 0, startY: 0, startTime: 0, currentDistance: 0 });
   const reloadTimerRef = useRef<number | null>(null);
   const [phase, setPhaseState] = useState<RefreshPhase>("idle");
 
   useEffect(() => {
     const indicator = indicatorRef.current;
+    if (!indicator) return;
     const setPhase = (next: RefreshPhase) => {
       if (phaseRef.current === next) return;
       phaseRef.current = next;
       setPhaseState(next);
     };
-    const setDistance = (distance: number) => {
-      if (!indicator) return;
-      indicator.style.setProperty("--pull-distance", `${distance}px`);
-      indicator.style.setProperty("--pull-progress", `${Math.min(distance / REFRESH_THRESHOLD, 1)}`);
+    const setVisuals = (distance: number) => {
+      const progress = Math.min(distance / REFRESH_THRESHOLD, 1);
+      indicator.style.opacity = `${progress}`;
+      indicator.style.transform = `translate3d(-50%,calc(-100% - 10px + ${distance}px),0)`;
+      if (spinnerRef.current) spinnerRef.current.style.transform = `rotate(${progress * 220}deg)`;
+      gestureRef.current.currentDistance = distance;
     };
-    const reset = () => {
+    const settleTo = (distance: number) => {
+      indicator.style.transition = "";
+      void window.getComputedStyle(indicator).transform;
+      setVisuals(distance);
+    };
+    const reset = (flushCurrentStyle = true) => {
       gestureRef.current.tracking = false;
-      setDistance(0);
+      if (flushCurrentStyle) {
+        settleTo(0);
+      } else {
+        indicator.style.transition = "";
+        setVisuals(0);
+      }
       setPhase("idle");
     };
-    reset();
+    setVisuals(0);
+    setPhase("idle");
     const canStart = (target: EventTarget | null) => {
       if (!enabled || pathname === "/ai" || phaseRef.current === "refreshing") return false;
       if (!window.matchMedia("(max-width: 720px)").matches || window.scrollY > 0) return false;
@@ -66,46 +84,63 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       return !hasScrollableParent(target);
     };
     const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1 || !canStart(event.target)) return;
+      if (event.touches.length !== 1) {
+        if (gestureRef.current.tracking) reset();
+        return;
+      }
+      if (!canStart(event.target)) return;
       const touch = event.touches[0];
-      gestureRef.current = { tracking: true, startX: touch.clientX, startY: touch.clientY };
+      indicator.style.transition = "none";
+      gestureRef.current = {
+        tracking: true,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startTime: performance.now(),
+        currentDistance: 0,
+      };
     };
     const onTouchMove = (event: TouchEvent) => {
       const gesture = gestureRef.current;
-      if (!gesture.tracking || event.touches.length !== 1) return;
+      if (!gesture.tracking) return;
+      if (event.touches.length !== 1) {
+        reset(false);
+        return;
+      }
       const touch = event.touches[0];
       const deltaX = touch.clientX - gesture.startX;
       const deltaY = touch.clientY - gesture.startY;
       if (deltaY <= 0 || Math.abs(deltaX) > deltaY) {
-        reset();
+        reset(false);
         return;
       }
       if (event.cancelable && deltaY > 4) event.preventDefault();
-      const distance = Math.min(MAX_PULL_DISTANCE, deltaY * 0.52);
-      setDistance(distance);
+      const distance = getPullRefreshDistance(deltaY);
+      setVisuals(distance);
       setPhase(distance >= REFRESH_THRESHOLD ? "ready" : "pulling");
     };
     const onTouchEnd = () => {
-      if (!gestureRef.current.tracking) return;
-      gestureRef.current.tracking = false;
-      if (phaseRef.current !== "ready") {
+      const gesture = gestureRef.current;
+      if (!gesture.tracking) return;
+      gesture.tracking = false;
+      if (!shouldTriggerPullRefresh(gesture.currentDistance, performance.now() - gesture.startTime)) {
         reset();
         return;
       }
-      setDistance(54);
+      settleTo(54);
       setPhase("refreshing");
       reloadTimerRef.current = window.setTimeout(() => window.location.reload(), 360);
     };
+    const onTouchCancel = () => reset();
 
     document.addEventListener("touchstart", onTouchStart, { passive: true });
     document.addEventListener("touchmove", onTouchMove, { passive: false });
     document.addEventListener("touchend", onTouchEnd, { passive: true });
-    document.addEventListener("touchcancel", reset, { passive: true });
+    document.addEventListener("touchcancel", onTouchCancel, { passive: true });
     return () => {
       document.removeEventListener("touchstart", onTouchStart);
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
-      document.removeEventListener("touchcancel", reset);
+      document.removeEventListener("touchcancel", onTouchCancel);
       if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
     };
   }, [enabled, pathname]);
@@ -117,7 +152,7 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       : english ? "Pull to refresh" : "下拉刷新";
 
   return <div ref={indicatorRef} className={`pull-refresh-indicator is-${phase}`} role="status" aria-live="polite" aria-hidden={phase === "idle"}>
-    <span className="pull-refresh-spinner" aria-hidden="true" />
+    <span ref={spinnerRef} className="pull-refresh-spinner" aria-hidden="true" />
     <span>{label}</span>
   </div>;
 }

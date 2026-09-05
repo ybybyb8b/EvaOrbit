@@ -7,9 +7,7 @@ final class OrbitArtworkView: UIView {
     private let planetLayer = CAShapeLayer()
     private let starLayers = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
     private let coreContainer = CALayer()
-    private let coreShapeLayer = CAShapeLayer()
-    private let coreFacetLayers = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
-    private let coreStarLayer = CAShapeLayer()
+    private let coreImageLayer = CALayer()
     private var lastLayoutBounds = CGRect.zero
     private var quietLoopActive = false
     private var reduceMotionForLoop = false
@@ -177,9 +175,6 @@ final class OrbitArtworkView: UIView {
         planetLayer.removeAllAnimations()
         starLayers.forEach { $0.removeAllAnimations() }
         coreContainer.removeAllAnimations()
-        coreShapeLayer.removeAllAnimations()
-        coreFacetLayers.forEach { $0.removeAllAnimations() }
-        coreStarLayer.removeAllAnimations()
         quietLoopActive = false
     }
 
@@ -199,16 +194,16 @@ final class OrbitArtworkView: UIView {
     }
 
     private func configureCore() {
-        coreContainer.bounds = CGRect(x: 0, y: 0, width: 76, height: 76)
-        coreContainer.addSublayer(coreShapeLayer)
-        coreFacetLayers.forEach {
-            $0.fillColor = UIColor.clear.cgColor
-            $0.lineWidth = 0.8
-            $0.lineCap = .round
-            $0.lineJoin = .round
-            coreContainer.addSublayer($0)
-        }
-        coreContainer.addSublayer(coreStarLayer)
+        coreContainer.bounds = CGRect(x: 0, y: 0, width: 66, height: 66)
+        coreImageLayer.frame = coreContainer.bounds
+        coreImageLayer.contentsGravity = .resizeAspect
+        coreImageLayer.contentsScale = traitCollection.displayScale
+        coreImageLayer.minificationFilter = .trilinear
+        coreImageLayer.magnificationFilter = .linear
+        coreImageLayer.shadowColor = UIColor.black.cgColor
+        coreImageLayer.shadowOffset = CGSize(width: 0, height: 3)
+        coreImageLayer.shadowRadius = 6
+        coreContainer.addSublayer(coreImageLayer)
         layer.addSublayer(coreContainer)
     }
 
@@ -235,14 +230,8 @@ final class OrbitArtworkView: UIView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         coreContainer.position = CGPoint(x: bounds.midX, y: bounds.midY)
-        coreShapeLayer.frame = coreBounds
-        coreShapeLayer.path = Self.corePath(in: coreBounds)
-        for (index, facet) in coreFacetLayers.enumerated() {
-            facet.frame = coreBounds
-            facet.path = Self.coreFacetPath(index: index, in: coreBounds)
-        }
-        coreStarLayer.frame = coreBounds
-        coreStarLayer.path = Self.starPath(center: CGPoint(x: coreBounds.midX, y: coreBounds.midY), radius: 18)
+        coreImageLayer.frame = coreBounds
+        coreImageLayer.contentsScale = traitCollection.displayScale
         CATransaction.commit()
     }
 
@@ -280,15 +269,19 @@ final class OrbitArtworkView: UIView {
     }
 
     private func applyTheme() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         let primary = palette.loadingPrimary.resolvedColor(with: traitCollection).cgColor
         let resolvedAccent = palette.loadingAccent.resolvedColor(with: traitCollection)
         let accent = resolvedAccent.cgColor
         orbitLayers.forEach { $0.strokeColor = primary }
         planetLayer.fillColor = accent
         for (index, star) in starLayers.enumerated() { star.fillColor = (index == 0 ? accent : primary) }
-        coreShapeLayer.fillColor = primary
-        coreFacetLayers.forEach { $0.strokeColor = resolvedAccent.withAlphaComponent(0.30).cgColor }
-        coreStarLayer.fillColor = accent
+        let coreImage = UIImage(named: "LoadingCore", in: .main, compatibleWith: traitCollection)
+        coreImageLayer.contents = coreImage?.cgImage
+        coreImageLayer.contentsScale = traitCollection.displayScale
+        coreImageLayer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0.34 : 0.18
+        CATransaction.commit()
     }
 
     private func freezePresentationState() {
@@ -340,50 +333,6 @@ final class OrbitArtworkView: UIView {
         return path
     }
 
-    private static func corePath(in bounds: CGRect) -> CGPath {
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: bounds.minX + bounds.width * x, y: bounds.minY + bounds.height * y)
-        }
-
-        let path = UIBezierPath()
-        path.move(to: point(0.50, 0.03))
-        path.addCurve(to: point(0.78, 0.14), controlPoint1: point(0.61, 0.03), controlPoint2: point(0.71, 0.08))
-        path.addCurve(to: point(0.96, 0.43), controlPoint1: point(0.87, 0.20), controlPoint2: point(0.93, 0.31))
-        path.addCurve(to: point(0.82, 0.77), controlPoint1: point(0.98, 0.56), controlPoint2: point(0.91, 0.68))
-        path.addCurve(to: point(0.54, 0.97), controlPoint1: point(0.75, 0.88), controlPoint2: point(0.64, 0.96))
-        path.addCurve(to: point(0.24, 0.87), controlPoint1: point(0.43, 0.99), controlPoint2: point(0.32, 0.94))
-        path.addCurve(to: point(0.04, 0.60), controlPoint1: point(0.14, 0.81), controlPoint2: point(0.05, 0.70))
-        path.addCurve(to: point(0.15, 0.27), controlPoint1: point(0.03, 0.48), controlPoint2: point(0.08, 0.36))
-        path.addCurve(to: point(0.50, 0.03), controlPoint1: point(0.23, 0.14), controlPoint2: point(0.36, 0.03))
-        path.close()
-        return path.cgPath
-    }
-
-    private static func coreFacetPath(index: Int, in bounds: CGRect) -> CGPath {
-        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: bounds.minX + bounds.width * x, y: bounds.minY + bounds.height * y)
-        }
-
-        let path = UIBezierPath()
-        switch index {
-        case 0:
-            path.move(to: point(0.16, 0.30))
-            path.addLine(to: point(0.43, 0.19))
-            path.addLine(to: point(0.65, 0.24))
-            path.addLine(to: point(0.82, 0.37))
-        case 1:
-            path.move(to: point(0.05, 0.59))
-            path.addLine(to: point(0.29, 0.68))
-            path.addLine(to: point(0.39, 0.89))
-            path.addLine(to: point(0.54, 0.97))
-        default:
-            path.move(to: point(0.95, 0.43))
-            path.addLine(to: point(0.74, 0.58))
-            path.addLine(to: point(0.77, 0.77))
-            path.addLine(to: point(0.57, 0.91))
-        }
-        return path.cgPath
-    }
 }
 
 private struct OrbitDescriptor {

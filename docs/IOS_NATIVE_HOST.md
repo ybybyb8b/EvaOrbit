@@ -1,6 +1,8 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
 > 后续开发会话在修改 Native Host、iOS 权限/capability、bridge、打包或签名之前，还必须先阅读维护契约 [`docs/IOS_NATIVE_MAINTENANCE.md`](./IOS_NATIVE_MAINTENANCE.md)。本文保留已经真机走通的详细安装、续签和故障排查步骤。
+>
+> 只想安装已经打包好的 IPA 时，先看 [`docs/IOS_IPA_INSTALL_QUICKSTART.md`](./IOS_IPA_INSTALL_QUICKSTART.md)。
 
 本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程只是加载生产站点的轻量 `WKWebView` Host。
 
@@ -21,6 +23,10 @@ GitHub Actions 的 `iOS Native Host` workflow 使用 `macos-15` runner：
 5. 打包 `EvaOrbitHost-ad-hoc.ipa`，并同时发布 entitlements、IPA SHA-256、dSYM、Git SHA 和 Xcode 版本。
 
 第一次实际构建产物导出的 entitlements 已确认上述两项均为 `true`。设备构建必须继续使用 ad-hoc code signing，不能用 `CODE_SIGNING_ALLOWED=NO` 生成完全 unsigned 的设备包；否则 patched xtool 没有可读取并重建的 entitlement。workflow 中 Simulator 编译使用 `CODE_SIGNING_ALLOWED=NO` 不属于设备包构建，不需要改变。
+
+### 原生启动核心资源
+
+启动轨道中央的核心图来自 `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`：`LoadingCoreLight.png` 是 universal 默认浅色资源，`LoadingCoreDark.png` 是 dark luminosity 变体。修改任一图片后都要重新运行 `iOS Native Host` workflow 并安装新 IPA；仅替换这组资源不会改变 bridge、entitlement、framework、系统权限、签名方式或本文已经验证的 IPA 打包、重签和安装链。
 
 ### patched xtool 基线
 

@@ -38,12 +38,14 @@ WKWebView Native Host
 | Web bridge 类型、能力检测和通知 reconcile | `src/lib/native-bridge.ts` |
 | HealthKit 实现 | `ios/EvaOrbitHost/Sources/HealthKit*.swift`、`HealthLocalStore.swift`、`HealthUploadManager.swift` |
 | Local Notification 实现 | `ios/EvaOrbitHost/Sources/NotificationManager.swift` |
+| 原生启动核心图 | `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`、`ios/EvaOrbitHost/Sources/OrbitArtworkView.swift` |
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
 | Web Push / Cron | `src/lib/push/**`、现有 reminders delivery API / cron 配置 |
 | iOS CI 构建与打包 | `.github/workflows/ios-native-host.yml`、`scripts/ios/package-ad-hoc-ipa.sh` |
 | patched xtool 构建 | `.github/workflows/xtool-patched.yml`、`tools/xtool/patches/**` |
 | Windows / WSL 安装辅助 | `scripts/ios/xtool-env.sh`、`scripts/ios/xtool-install.sh` |
+| IPA 简易安装 | `docs/IOS_IPA_INSTALL_QUICKSTART.md` |
 | 完整安装与故障 runbook | `docs/IOS_NATIVE_HOST.md` |
 
 不要依赖旧聊天记录猜测工程状态；先检查以上文件和当前 Git diff。
@@ -101,6 +103,8 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 - Web bridge 新能力同时依赖新的 Swift 方法；此时通常还要先部署兼容的 Web 端。
 
 仅有 Web 页面或服务端改动，且没有改变原生接口时，通常只需部署 Web；Host 下次加载生产站点即可获取更新。个人免费签名过期但 Native 二进制未变时，可以重用同一个可信 IPA 重新签名安装。
+
+原生启动轨道中央的核心图由 `LoadingCore.imageset` 负责：`LoadingCoreLight.png` 是 universal 默认（浅色外观），`LoadingCoreDark.png` 是 dark luminosity 变体。`OrbitArtworkView` 只负责按当前 trait collection 解析并显示该资源。替换任一文件都属于原生资源变化，必须重新构建 IPA；这项资源不会新增或改变 bridge、entitlement、framework、系统权限、签名方式及已验证的 IPA 打包/重签/安装链。
 
 ### 3.4 个人免费签名基线
 

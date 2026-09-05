@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { KeyboardEvent, useEffect, useRef, useState } from "react";
+import { KeyboardEvent, TransitionEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
 import { MarkdownMessage } from "./markdown-message";
 import type { AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
 
+type EvaWakePhase = "closed" | "opening" | "open" | "closing";
+const EVA_WAKE_CLOSE_FALLBACK_MS = 240;
+
 export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [phase, setPhase] = useState<EvaWakePhase>(open ? "opening" : "closed");
+  const visible = phase !== "closed";
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -23,6 +28,36 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
   const optimisticIdRef = useRef(-100000);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setPhase((current) => {
+        if (open) return current === "closed" || current === "closing" ? "opening" : current;
+        return current === "opening" || current === "open" ? "closing" : current;
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (phase !== "opening") return;
+    const frame = window.requestAnimationFrame(() => {
+      setPhase((current) => current === "opening" ? "open" : current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "closing") return;
+    const fallback = window.setTimeout(() => {
+      setPhase((current) => current === "closing" ? "closed" : current);
+    }, EVA_WAKE_CLOSE_FALLBACK_MS);
+    return () => window.clearTimeout(fallback);
+  }, [phase]);
+
+  const requestClose = useCallback(() => {
+    if (open) onClose();
+  }, [onClose, open]);
+
+  useEffect(() => {
     if (!open) return;
     setTimeout(() => inputRef.current?.focus(), 80);
     if (loadedRef.current) return;
@@ -36,11 +71,11 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!visible) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [open]);
+  }, [visible]);
 
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: streaming ? "auto" : "smooth" }); }, [messages, open, streaming, toolActivity]);
 
@@ -111,15 +146,19 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   }
 
-  if (!open) return null;
+  if (!visible) return null;
+  const finishClose = (event: TransitionEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget || (event.propertyName !== "transform" && event.propertyName !== "opacity")) return;
+    setPhase((current) => current === "closing" ? "closed" : current);
+  };
   const active = sessions.find((session) => session.id === activeId);
-  return <div className="eva-wake-layer" role="dialog" aria-modal="true" aria-label="Eva conversation">
-    <button className="eva-wake-backdrop" onClick={onClose} aria-label="Close Eva" />
-    <section className="eva-wake-panel">
-      <header className="eva-wake-header"><div><span className="eva-wake-mark"><Icon name="ai" /></span><span><small>EVA</small><strong>{active?.title ?? "A quiet conversation"}</strong></span></div><div>{activeId && <Link href={`/ai?session=${activeId}`} aria-label="Open full conversation">Expand</Link>}<button onClick={() => { setActiveId(null); setMessages([]); setToolActivity([]); setError(""); }} aria-label="New conversation"><Icon name="plus" /></button><button onClick={onClose} aria-label="Close"><Icon name="close" /></button></div></header>
+  return <div className="eva-wake-layer" data-state={phase} role="dialog" aria-modal="true" aria-label="Eva conversation">
+    <button className="eva-wake-backdrop" onClick={requestClose} aria-label="Close Eva" />
+    <section className="eva-wake-panel" onTransitionEnd={finishClose}>
+      <header className="eva-wake-header"><div><span className="eva-wake-mark"><Icon name="ai" /></span><span><small>EVA</small><strong>{active?.title ?? "A quiet conversation"}</strong></span></div><div>{activeId && <Link href={`/ai?session=${activeId}`} aria-label="Open full conversation">Expand</Link>}<button onClick={() => { setActiveId(null); setMessages([]); setToolActivity([]); setError(""); }} aria-label="New conversation"><Icon name="plus" /></button><button onClick={requestClose} aria-label="Close"><Icon name="close" /></button></div></header>
       <div className="eva-wake-body">
         {loading ? <div className="eva-wake-empty">Opening your space…</div>
-        : !settings?.enabled ? <div className="eva-wake-empty"><span className="eva-wake-mark"><Icon name="ai" /></span><h2>Eva needs a model</h2><p>Connect any OpenAI-compatible provider first.</p><Link href="/settings" onClick={onClose}>Open Settings</Link></div>
+        : !settings?.enabled ? <div className="eva-wake-empty"><span className="eva-wake-mark"><Icon name="ai" /></span><h2>Eva needs a model</h2><p>Connect any OpenAI-compatible provider first.</p><Link href="/settings" onClick={requestClose}>Open Settings</Link></div>
         : !messages.length ? <div className="eva-wake-start"><div className="eva-wake-art"><span className="eva-wake-mark"><Icon name="ai" /></span><h2>Wake Eva</h2><p>Say one thing. Eva can record, find, and make sense of the life already here.</p></div>{sessions.length > 0 && <div className="eva-recent-sessions"><small>RECENT</small>{sessions.slice(0, 3).map((session) => <button key={session.id} onClick={() => void openSession(session.id)}><strong>{session.title}</strong><span>{session.preview || "Continue this conversation"}</span></button>)}</div>}</div>
         : <div className="eva-wake-messages">{messages.map((message) => <article className={message.role} key={message.id}><div>{message.content ? message.role === "assistant" ? <MarkdownMessage content={message.content} /> : message.content : <span className="typing"><i /><i /><i /></span>}</div></article>)}{toolActivity.length > 0 && <div className="eva-wake-tools">{toolActivity.map((item, index) => <span key={`${item}-${index}`}>✓ {item}</span>)}</div>}<div ref={endRef} /></div>}
       </div>
