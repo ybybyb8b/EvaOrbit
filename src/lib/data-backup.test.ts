@@ -6,6 +6,7 @@ import {
   BACKUP_VERSION,
   EXCLUDED_BACKUP_TABLES,
   emptyBackupResources,
+  normalizeBackupRowForSqlite,
   parseBackupDocument,
   sanitizeExportRow,
   toSqliteValue,
@@ -51,4 +52,10 @@ test("SQLite conversion preserves scalars and serializes structured values", () 
   assert.equal(toSqliteValue(null), null);
   assert.equal(toSqliteValue(["a", "b"]), '["a","b"]');
   assert.equal(toSqliteValue({ value: 3 }), '{"value":3}');
+});
+
+test("Postgres time values are compatible with the local minute-only reminder schema", () => {
+  assert.equal(sanitizeExportRow("meal_reminder_rules", { remind_at: "10:30:00" }).remind_at, "10:30");
+  assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "20:15:00.000000" }).remind_at, "20:15");
+  assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "08:05" }).remind_at, "08:05");
 });

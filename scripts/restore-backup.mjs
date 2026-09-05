@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { DatabaseSync } from "node:sqlite";
-import { BACKUP_TABLES, parseBackupDocument, toSqliteValue } from "../src/lib/data-backup.ts";
+import { BACKUP_TABLES, normalizeBackupRowForSqlite, parseBackupDocument, toSqliteValue } from "../src/lib/data-backup.ts";
 
 function fail(message) {
   console.error(`Restore refused: ${message}`);
@@ -54,12 +54,13 @@ try {
     const availableColumns = new Set(database.prepare(`PRAGMA table_info("${table}")`).all().map((column) => column.name));
     let inserted = 0;
     for (const sourceRow of backup.resources[table]) {
-      const columns = Object.keys(sourceRow).filter((column) => column !== "user_id" && availableColumns.has(column));
+      const normalizedRow = normalizeBackupRowForSqlite(table, sourceRow);
+      const columns = Object.keys(normalizedRow).filter((column) => availableColumns.has(column));
       if (!columns.length) throw new Error(`resources.${table} contains a row with no restorable columns`);
       const quotedColumns = columns.map((column) => `"${column}"`).join(",");
       const placeholders = columns.map(() => "?").join(",");
       database.prepare(`INSERT INTO "${table}" (${quotedColumns}) VALUES (${placeholders})`)
-        .run(...columns.map((column) => toSqliteValue(sourceRow[column])));
+        .run(...columns.map((column) => toSqliteValue(normalizedRow[column])));
       inserted += 1;
     }
     counts[table] = inserted;

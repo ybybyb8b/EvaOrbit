@@ -95,7 +95,28 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
     row.provider_id = null;
     row.model_config_id = null;
   }
+  if (table === "meal_reminder_rules" && typeof row.remind_at === "string") {
+    row.remind_at = normalizeLocalTime(row.remind_at);
+  }
   return row;
+}
+
+export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRow): BackupRow {
+  const row = { ...source };
+  delete row.user_id;
+  if (table === "chat_sessions" || table === "chat_messages") {
+    row.provider_id = null;
+    row.model_config_id = null;
+  }
+  if (table === "meal_reminder_rules" && typeof row.remind_at === "string") {
+    row.remind_at = normalizeLocalTime(row.remind_at);
+  }
+  return row;
+}
+
+function normalizeLocalTime(value: string): string {
+  const match = /^(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,6})?)?$/.exec(value);
+  return match ? `${match[1]}:${match[2]}` : value;
 }
 
 export function toSqliteValue(value: unknown): string | number | null {
