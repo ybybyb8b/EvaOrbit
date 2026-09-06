@@ -2,7 +2,7 @@ import "server-only";
 
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
 import { archiveInbox, createInbox, deleteInbox, getInbox, markInboxProcessed, restoreInbox, searchInbox, updateInbox } from "../services/inbox";
-import { createLuciusCase, createLuciusDiaryEntry, createLuciusPost, deleteLuciusCase, deleteLuciusDiaryEntry, deleteLuciusPost, getLuciusCase, getLuciusDiaryEntry, getLuciusPost, getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPosts, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry, updateLuciusPost, updateLuciusState } from "../services/lucius";
+import { createLuciusCase, createLuciusDiaryEntry, createLuciusPost, createLuciusPostComment, deleteLuciusCase, deleteLuciusDiaryEntry, deleteLuciusPost, deleteLuciusPostComment, getLuciusCase, getLuciusDiaryEntry, getLuciusPost, getLuciusPostComment, getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry, updateLuciusPost, updateLuciusPostComment, updateLuciusState } from "../services/lucius";
 import { createHealthRecord, deleteHealthRecord, getHealthRecord, listHealthRecords, updateHealthRecord } from "../services/health";
 import { createTrainingLog, deleteTrainingLog, getTrainingLog, listTrainingLogs, updateTrainingLog } from "../services/training";
 import { addMediaRewatch, createMedia, createMediaSeries, deleteMedia, deleteMediaViewing, getMediaDetail, getMediaSeries, listMedia, listMediaSeries, updateMedia, updateMediaViewing } from "../services/media";
@@ -25,6 +25,7 @@ export const resourceRegistry = createResourceRegistry({
   luciusCase: { search: listLuciusCases, get: getLuciusCase, create: createLuciusCase, update: updateLuciusCase, delete: deleteLuciusCase, recordRecurrence: recordLuciusCaseRecurrence },
   luciusState: { get: getLuciusState, update: updateLuciusState },
   luciusPost: { search: listLuciusPosts, get: getLuciusPost, create: createLuciusPost, update: updateLuciusPost, delete: deleteLuciusPost },
+  luciusPostComment: { search: listLuciusPostComments, get: getLuciusPostComment, create: createLuciusPostComment, update: updateLuciusPostComment, delete: deleteLuciusPostComment },
   healthRecord: { search: listHealthRecords, get: getHealthRecord, create: createHealthRecord, update: updateHealthRecord, delete: deleteHealthRecord },
   trainingLog: { search: listTrainingLogs, get: getTrainingLog, create: createTrainingLog, update: updateTrainingLog, delete: deleteTrainingLog },
   media: { search: listMedia, get: getMediaDetail, create: createMedia, update: updateMedia, delete: deleteMedia, addViewing: addMediaRewatch, updateViewing: updateMediaViewing, deleteViewing: deleteMediaViewing },

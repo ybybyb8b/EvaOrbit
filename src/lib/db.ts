@@ -8,9 +8,9 @@ import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./
 import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
 import { normalizeUiLanguage, type UiLanguage } from "./locale";
 import { normalizeChineseFont, normalizeEnglishFont, type ChineseFont, type EnglishFont } from "./font-preferences";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, MealReminderRule, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaSeries, MediaViewing, Memo, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog } from "./types";
 import type { RelationEventInput } from "./relations";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment, NewMediaItem, NewMemo, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
   id: number;
@@ -958,6 +958,23 @@ if (!hasV37) database.exec(`
   COMMIT;
 `);
 
+const hasV38 = database.prepare("SELECT 1 FROM migrations WHERE version = 38").get();
+if (!hasV38) database.exec(`
+  BEGIN;
+  CREATE TABLE lucius_post_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL DEFAULT 'local',
+    post_id INTEGER NOT NULL REFERENCES lucius_posts(id) ON DELETE CASCADE,
+    author TEXT NOT NULL CHECK(author IN ('user','lucius')),
+    content TEXT NOT NULL CHECK(length(trim(content)) BETWEEN 1 AND 2000),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX lucius_post_comments_post_created ON lucius_post_comments(user_id,post_id,created_at,id);
+  INSERT INTO migrations(version) VALUES(38);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1532,6 +1549,12 @@ export function getLuciusPost(id:number){const row=database.prepare("SELECT * FR
 export function createLuciusPost(input:NewLuciusPost){const result=database.prepare("INSERT INTO lucius_posts(user_id,content,published_at) VALUES('local',?,?)").run(input.content,input.publishedAt);return getLuciusPost(Number(result.lastInsertRowid))!;}
 export function updateLuciusPost(id:number,input:LuciusPostPatch){patchRow("lucius_posts",id,input,{content:"content",publishedAt:"published_at"});return getLuciusPost(id);}
 export function deleteLuciusPost(id:number){return database.prepare("DELETE FROM lucius_posts WHERE id=? AND user_id='local'").run(id).changes>0;}
+function luciusPostCommentFromRow(row:Record<string,unknown>):LuciusPostComment{return{id:Number(row.id),postId:Number(row.post_id),author:row.author as LuciusPostComment["author"],content:String(row.content),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listLuciusPostComments(input:LuciusPostCommentListInput={}){if(input.postIds&&!input.postIds.length)return[];const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.postId!==undefined){conditions.push("post_id=?");values.push(input.postId);}if(input.postIds){conditions.push(`post_id IN (${input.postIds.map(()=>"?").join(",")})`);values.push(...input.postIds);}if(input.author){conditions.push("author=?");values.push(input.author);}const limit=Math.min(Math.max(input.limit??200,1),500);return(database.prepare(`SELECT * FROM lucius_post_comments WHERE ${conditions.join(" AND ")} ORDER BY created_at,id LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(luciusPostCommentFromRow);}
+export function getLuciusPostComment(id:number){const row=database.prepare("SELECT * FROM lucius_post_comments WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?luciusPostCommentFromRow(row):null;}
+export function createLuciusPostComment(input:NewLuciusPostComment){const result=database.prepare("INSERT INTO lucius_post_comments(user_id,post_id,author,content) SELECT 'local',id,?,? FROM lucius_posts WHERE id=? AND user_id='local'").run(input.author,input.content,input.postId);if(!result.changes)throw new ConflictError("Lucius Post not found.");return getLuciusPostComment(Number(result.lastInsertRowid))!;}
+export function updateLuciusPostComment(id:number,input:LuciusPostCommentPatch){patchRow("lucius_post_comments",id,input,{content:"content"});return getLuciusPostComment(id);}
+export function deleteLuciusPostComment(id:number){return database.prepare("DELETE FROM lucius_post_comments WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function drinkFromRow(row:Record<string,unknown>):DrinkLog{return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:row.occurred_has_explicit_time===undefined?true:Boolean(row.occurred_has_explicit_time),name:String(row.name),brand:String(row.brand),drinkType:row.drink_type as DrinkLog["drinkType"],volumeMl:row.volume_ml===null?null:Number(row.volume_ml),sugarLevel:String(row.sugar_level),temperature:row.temperature?row.temperature as DrinkLog["temperature"]:null,rating:row.rating?row.rating as DrinkLog["rating"]:null,caffeineMg:row.caffeine_mg===null?null:Number(row.caffeine_mg),estimatedKcal:row.estimated_kcal===null?null:Number(row.estimated_kcal),kcalMin:row.kcal_min===null?null:Number(row.kcal_min),kcalMax:row.kcal_max===null?null:Number(row.kcal_max),confidence:row.confidence as DrinkLog["confidence"],foodLibraryId:row.food_library_id===null?null:Number(row.food_library_id),notes:String(row.notes),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listDrinkLogs(input:{from?:string;to?:string;drinkType?:string}={}){const conditions:string[]=[],values:string[]=[];if(input.from){conditions.push("occurred_at >= ?");values.push(input.from);}if(input.to){conditions.push("occurred_at < ?");values.push(input.to);}if(input.drinkType){conditions.push("drink_type = ?");values.push(input.drinkType);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM drink_logs ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(drinkFromRow);}

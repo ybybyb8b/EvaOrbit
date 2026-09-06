@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
+import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
@@ -104,19 +104,33 @@ test("registry exposes long-term memory and project resources without changing g
 test("optional Web API resources are exposed when production operations are registered", async () => {
   const base=fakeOperations().operations;
   const posts:LuciusPost[]=[];
+  const comments:LuciusPostComment[]=[];
   const registry=createResourceRegistry({...base,luciusPost:{
     async search({limit=20}){return posts.slice(0,limit);},
     async get(id){return posts.find(item=>item.id===id)??null;},
     async create(input){const item={...input,id:posts.length+1,createdAt,updatedAt:createdAt};posts.unshift(item);return item;},
     async update(id,input){const item=posts.find(post=>post.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"2026-09-02T01:00:00Z"});return item;},
     async delete(id){const index=posts.findIndex(post=>post.id===id);if(index<0)return false;posts.splice(index,1);return true;},
+  },luciusPostComment:{
+    async search({postId,author,limit=20}){return comments.filter(item=>(!postId||item.postId===postId)&&(!author||item.author===author)).slice(0,limit);},
+    async get(id){return comments.find(item=>item.id===id)??null;},
+    async create(input){const item:LuciusPostComment={...input,id:comments.length+1,createdAt,updatedAt:createdAt};comments.push(item);return item;},
+    async update(id,input){const item=comments.find(comment=>comment.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"2026-09-02T01:00:00Z"});return item;},
+    async delete(id){const index=comments.findIndex(comment=>comment.id===id);if(index<0)return false;comments.splice(index,1);return true;},
   }});
   assert.ok(registry.resources().some(item=>item.resource==="lucius_post"));
+  assert.ok(registry.resources().some(item=>item.resource==="lucius_post_comment"));
   assert.ok(!registry.resources().some(item=>item.resource==="task"||item.resource==="memory"));
   const created=await registry.create("lucius_post",{content:"The room is quiet.",published_at:"2026-09-02T00:00:00Z"});
   assert.equal(created.content,"The room is quiet.");
   assert.equal((await registry.get("lucius_post",created.id as number)).published_at,"2026-09-02T00:00:00.000Z");
   assert.equal((await registry.update("lucius_post",created.id as number,{content:"Still quiet."})).content,"Still quiet.");
+  const comment=await registry.create("lucius_post_comment",{post_id:created.id,author:"lucius",content:"I heard you."});
+  assert.equal(comment.author,"lucius");
+  assert.deepEqual((await registry.search("lucius_post_comment",{filters:{post_id:created.id,author:"lucius"},limit:20})).items.map(item=>item.id),[comment.id]);
+  assert.equal((await registry.update("lucius_post_comment",comment.id as number,{content:"Still listening."})).content,"Still listening.");
+  await assert.rejects(()=>registry.update("lucius_post_comment",comment.id as number,{author:"user"}),/does not accept: author/);
+  assert.deepEqual(await registry.delete("lucius_post_comment",comment.id as number),{deleted:true,id:comment.id});
   assert.deepEqual(await registry.delete("lucius_post",created.id as number),{deleted:true,id:created.id});
 });
 
@@ -247,6 +261,7 @@ test("production registry delegates every write and action to existing business 
   assert.match(source, /memo: \{ search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
   assert.match(source, /recordRecurrence: recordLuciusCaseRecurrence/);
   assert.match(source, /luciusPost: \{ search: listLuciusPosts, get: getLuciusPost, create: createLuciusPost, update: updateLuciusPost, delete: deleteLuciusPost \}/);
+  assert.match(source, /luciusPostComment: \{ search: listLuciusPostComments, get: getLuciusPostComment, create: createLuciusPostComment, update: updateLuciusPostComment, delete: deleteLuciusPostComment \}/);
   assert.match(source, /healthRecord: \{ search: listHealthRecords/);
   assert.match(source, /trainingLog: \{ search: listTrainingLogs/);
   assert.match(source, /mediaSeries: \{ search: listMediaSeries/);

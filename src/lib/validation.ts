@@ -351,6 +351,22 @@ export function parseLuciusPostPatch(value: unknown) {
   return result;
 }
 
+const luciusPostCommentAuthors = ["user", "lucius"] as const;
+
+export function parseNewLuciusPostComment(value: unknown, postId?: number, author?: "user" | "lucius") {
+  const body = objectValue(value);
+  return {
+    postId: postId ?? positiveInteger(body.postId, "Lucius Post ID"),
+    author: author ?? enumValue(body.author, "评论作者", luciusPostCommentAuthors, "user"),
+    content: text(body.content, "评论内容", 2_000)!,
+  };
+}
+
+export function parseLuciusPostCommentPatch(value: unknown) {
+  const body = objectValue(value);
+  return { content: text(body.content, "评论内容", 2_000)! };
+}
+
 function caseDates(firstOccurredDate: string, latestOccurredDate: string) {
   if (latestOccurredDate < firstOccurredDate) throw new ValidationError("最近发生日期不能早于首次发生日期");
 }

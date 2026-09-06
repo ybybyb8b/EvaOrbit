@@ -15,6 +15,7 @@ import {
 test("backup allowlist excludes credentials and HealthKit/device data", () => {
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
+  assert.ok(BACKUP_TABLES.includes("lucius_post_comments"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("ai_providers"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));

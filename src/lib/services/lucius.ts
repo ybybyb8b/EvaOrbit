@@ -3,7 +3,7 @@ import "server-only";
 import { getRepository } from "../repositories";
 import { dateInEvaOrbit } from "../time";
 import { dateOnly } from "../validation";
-import type { LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost } from "../repositories/types";
+import type { LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment } from "../repositories/types";
 
 export async function listLuciusDiaryEntries(input: LuciusDiaryListInput = {}) { return (await getRepository()).listLuciusDiaryEntries(input); }
 export async function getLuciusDiaryEntry(id: number) { return (await getRepository()).getLuciusDiaryEntry(id); }
@@ -24,3 +24,8 @@ export async function getLuciusPost(id: number) { return (await getRepository())
 export async function createLuciusPost(input: NewLuciusPost) { return (await getRepository()).createLuciusPost(input); }
 export async function updateLuciusPost(id: number, input: LuciusPostPatch) { return (await getRepository()).updateLuciusPost(id, input); }
 export async function deleteLuciusPost(id: number) { return (await getRepository()).deleteLuciusPost(id); }
+export async function listLuciusPostComments(input: LuciusPostCommentListInput = {}) { return (await getRepository()).listLuciusPostComments(input); }
+export async function getLuciusPostComment(id: number) { return (await getRepository()).getLuciusPostComment(id); }
+export async function createLuciusPostComment(input: NewLuciusPostComment) { return (await getRepository()).createLuciusPostComment(input); }
+export async function updateLuciusPostComment(id: number, input: LuciusPostCommentPatch) { return (await getRepository()).updateLuciusPostComment(id, input); }
+export async function deleteLuciusPostComment(id: number) { return (await getRepository()).deleteLuciusPostComment(id); }

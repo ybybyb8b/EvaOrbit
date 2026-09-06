@@ -1,5 +1,5 @@
 export const BACKUP_VERSION = 1 as const;
-export const BACKUP_SCHEMA_VERSION = "202609050001_meal_reminders";
+export const BACKUP_SCHEMA_VERSION = "202609060003_lucius_post_comments";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -44,6 +44,7 @@ export const BACKUP_TABLES = [
   "lucius_cases",
   "lucius_state",
   "lucius_posts",
+  "lucius_post_comments",
   "projects",
   "project_items",
   "relation_people",

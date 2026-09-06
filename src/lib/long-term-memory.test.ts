@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewMemo } from "./validation.ts";
+import { parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostCommentPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMemoPatch, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewLuciusPostComment, parseNewMemo } from "./validation.ts";
 
 test("Memo validation keeps long-term fields, unique tags and PATCH semantics", () => {
   const item = parseNewMemo({ title: "  姓名规则  ", content: "始终使用正确称呼", type: "basic", tags: ["人物", "人物", "规则"], eventDate: "2026-08-29", confirmedAt: "2026-08-29T08:00:00+08:00" });
@@ -50,6 +50,17 @@ test("Lucius Posts remain a minimal short-text timeline", () => {
   assert.throws(() => parseLuciusPostPatch({}));
 });
 
+test("Lucius Post comments keep author attribution explicit", () => {
+  const item = parseNewLuciusPostComment({ postId: 7, author: "lucius", content: "  I heard you.  " });
+  assert.deepEqual(item, { postId: 7, author: "lucius", content: "I heard you." });
+  assert.equal(parseLuciusPostCommentPatch({ content: "Still here." }).content, "Still here.");
+  assert.throws(() => parseNewLuciusPostComment({ postId: 7, author: "other", content: "No." }));
+  assert.throws(() => parseNewLuciusPostComment({ postId: 0, author: "user", content: "No." }));
+  assert.throws(() => parseNewLuciusPostComment({ postId: 7, author: "user", content: "" }));
+  assert.throws(() => parseNewLuciusPostComment({ postId: 7, author: "user", content: "x".repeat(2001) }));
+  assert.throws(() => parseLuciusPostCommentPatch({}));
+});
+
 test("migration adds three independent owner-scoped models without touching Chronicle", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/202608290004_memo_lucius.sql", import.meta.url), "utf8");
   assert.match(sql, /create table if not exists public\.memos/);
@@ -72,6 +83,8 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   const casesRoute = readFileSync(new URL("../app/api/lucius/cases/route.ts", import.meta.url), "utf8");
   const stateRoute = readFileSync(new URL("../app/api/lucius/state/route.ts", import.meta.url), "utf8");
   const postsRoute = readFileSync(new URL("../app/api/lucius/posts/route.ts", import.meta.url), "utf8");
+  const commentsRoute = readFileSync(new URL("../app/api/lucius/posts/[id]/comments/route.ts", import.meta.url), "utf8");
+  const commentsUi = readFileSync(new URL("../app/lucius/lucius-post-comments.tsx", import.meta.url), "utf8");
   const luciusPage = readFileSync(new URL("../app/lucius/page.tsx", import.meta.url), "utf8");
   assert.match(shell, /href: "\/memo"/);
   assert.match(shell, /href: "\/lucius"/);
@@ -79,6 +92,9 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   assert.match(destinations, /href: "\/memo"/);
   assert.match(destinations, /href: "\/lucius"/);
   for (const route of [memoRoute, diaryRoute, casesRoute, postsRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
+  assert.match(commentsRoute, /export async function GET/);
+  assert.match(commentsRoute, /export async function POST/);
+  assert.match(commentsUi, /\/api\/lucius\/posts\/\$\{postId\}\/comments/);
   assert.match(stateRoute, /export async function GET/);
   assert.match(stateRoute, /export async function PATCH/);
   assert.match(luciusPage, /tab === "posts" \? listLuciusPosts/);
@@ -106,4 +122,14 @@ test("Lucius Posts migration is owner-scoped and intentionally lightweight", () 
   assert.match(sql, /auth\.uid\(\).*user_id/s);
   assert.match(sql, /grant update \(content, published_at\)/);
   assert.doesNotMatch(sql, /image|video|like|comment|repost|hashtag/i);
+});
+
+test("Lucius Post comments migration is owner-scoped and follows its parent post", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/202609060003_lucius_post_comments.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table if not exists public\.lucius_post_comments/);
+  assert.match(sql, /post_id bigint not null references public\.lucius_posts\(id\) on delete cascade/);
+  assert.match(sql, /author text not null check \(author in \('user', 'lucius'\)\)/);
+  assert.match(sql, /alter table public\.lucius_post_comments enable row level security/);
+  assert.match(sql, /auth\.uid\(\).*user_id/s);
+  assert.match(sql, /grant update \(content\)/);
 });

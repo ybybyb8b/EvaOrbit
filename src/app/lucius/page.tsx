@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { plainExcerpt } from "@/lib/long-term-memory";
-import { getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPosts } from "@/lib/services/lucius";
-import type { LuciusCaseStatus } from "@/lib/types";
+import { getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts } from "@/lib/services/lucius";
+import type { LuciusCaseStatus, LuciusPostComment } from "@/lib/types";
+import { LuciusPostComments } from "./lucius-post-comments";
 
 export const metadata: Metadata = { title: "Lucius" };
 export const dynamic = "force-dynamic";
@@ -54,6 +55,13 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
     tab === "diary" ? listLuciusDiaryEntries({ limit: 100 }) : Promise.resolve([]),
     tab === "cases" ? listLuciusCases({ limit: 100 }) : Promise.resolve([]),
   ]);
+  const comments = posts.length ? await listLuciusPostComments({ postIds: posts.map((post) => post.id), limit: 500 }) : [];
+  const commentsByPost = comments.reduce((groups, comment) => {
+    const group = groups.get(comment.postId) ?? [];
+    group.push(comment);
+    groups.set(comment.postId, group);
+    return groups;
+  }, new Map<number, LuciusPostComment[]>());
 
   return <div className="lucius-profile-page">
     <header className="lucius-profile-header">
@@ -87,7 +95,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
       {tab === "posts" && <section className="lucius-post-feed" aria-label="Lucius posts">
         {posts.length ? posts.map((post) => <article className="lucius-post" key={post.id}>
           <p>{post.content}</p>
-          <time dateTime={post.publishedAt} title={new Date(post.publishedAt).toLocaleString()}>{relativeTime(post.publishedAt)}</time>
+          <div className="lucius-post-meta"><time dateTime={post.publishedAt} title={new Date(post.publishedAt).toLocaleString()}>{relativeTime(post.publishedAt)}</time><LuciusPostComments postId={post.id} initialComments={commentsByPost.get(post.id) ?? []} /></div>
         </article>) : <div className="lucius-profile-empty">
           <span aria-hidden="true">✦</span>
           <p>Nothing has been posted yet.</p>
