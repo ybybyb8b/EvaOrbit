@@ -1,4 +1,5 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderType, TrainingBodyPart, TrainingType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
+import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 
 export class ValidationError extends Error {}
@@ -1046,10 +1047,20 @@ export function parseNewTrackerGoal(value: unknown, trackerId?: number) {
 
 export function parseNewTrackerReminder(value: unknown, trackerId?: number) {
   const body = objectValue(value);
-  const reminderType = enumValue(body.reminderType, "提醒类型", ["scheduled", "interval"] as const, "interval") as TrackerReminderType;
-  const intervalDays = body.intervalDays === undefined || body.intervalDays === null || body.intervalDays === "" ? null : positiveInteger(body.intervalDays, "间隔天数");
-  const scheduleRule = text(body.scheduleRule ?? "", "定期规则", 300, false) ?? "";
-  if (reminderType === "interval" && intervalDays === null) throw new ValidationError("间隔提醒需要填写天数");
-  if (reminderType === "scheduled" && !scheduleRule) throw new ValidationError("定期提醒需要填写规则");
-  return { trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), reminderType, scheduleRule, intervalDays, enabled: booleanValue(body.enabled, "启用状态", true) };
+  const legacyMode = body.reminderType === "scheduled" ? "standard" : body.reminderType === "interval" ? "missing" : undefined;
+  const reminderMode = enumValue(body.reminderMode ?? legacyMode, "提醒模式", ["standard", "missing"] as const, "missing") as TrackerReminderMode;
+  const periodDays = positiveInteger(body.periodDays ?? body.intervalDays ?? 1, "观察周期");
+  const configuredTime = text(body.configuredTime ?? body.timeOfDay ?? (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(body.scheduleRule??""))?body.scheduleRule:"20:00"), "提醒时刻", 5)!;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(configuredTime)) throw new ValidationError("提醒时刻格式不正确");
+  const timezone = text(body.timezone ?? "Asia/Shanghai", "时区", 80)!;
+  try { new Intl.DateTimeFormat("en", { timeZone: timezone }).format(); } catch { throw new ValidationError("时区格式不正确"); }
+  const anchorDate = body.anchorDate === undefined ? dateInEvaOrbit() : text(body.anchorDate, "周期起始日期", 10)!;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(anchorDate)) throw new ValidationError("周期起始日期格式不正确");
+  const dueDate = reminderMode === "missing" ? addCalendarInterval(anchorDate, periodDays - 1, "day") : anchorDate;
+  return { trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), reminderMode, configuredTime, periodDays, anchorDate, nextDueAt: zonedDateTimeToUtc(dueDate, configuredTime, timezone), timezone, reminderId: null, enabled: booleanValue(body.enabled, "启用状态", true) };
+}
+
+export function parseTrackerReminderPatch(value: unknown) {
+  const body = objectValue(value);
+  return parseNewTrackerReminder({ ...body, trackerId: body.trackerId ?? 1 });
 }

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { currentLocalDate, dateTimeDraft, dateTimePayload, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
 import type { Pet, Reminder } from "@/lib/types";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 function tomorrow(): DateTimeDraft {
   const date = new Date(`${currentLocalDate()}T12:00:00`);
@@ -30,7 +31,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
       note: draft.note, leadTimeMinutes: due.hasExplicitTime ? draft.leadTimeMinutes : 0, status: "scheduled", isActive: true, cancelledAt: null, lastNotifiedAt: null, sentAt: null,
     }) });
     setSaving(false);
-    if (!response.ok) { setError((await response.json()).error ?? "Could not save one-time task."); return; }
+    if (!response.ok) { playNativeHaptic("error"); setError((await response.json()).error ?? "Could not save one-time task."); return; }
     try { await reconcileNativeNotifications(); } catch { /* The browser push path remains active. */ }
     onSaved();
   }

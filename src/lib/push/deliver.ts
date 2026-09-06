@@ -5,7 +5,8 @@ import webpush from "web-push";
 import { supabaseConfig } from "../config";
 import { dateInEvaOrbit } from "../time";
 import { isMealReminderType, MEAL_REMINDER_TARGET_IDS, mealReminderWindow } from "../meal-reminders";
-import { notificationShouldSend } from "../reminder-engine";
+import { nextTrackerNotification, notificationShouldSend, trackerReminderShouldNotify } from "../reminder-engine";
+import type { TrackerReminder } from "../types";
 import type { EvaPushPayload } from "./types";
 
 type Row = Record<string, unknown>;
@@ -47,6 +48,38 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date) {
   }, now));
   let sent = 0;
   for (const reminder of due) {
+    let trackerRule: TrackerReminder | null = null;
+    let trackerDeliveryId: number | null = null;
+    if (String(reminder.source_type??"").startsWith("tracker_") && reminder.source_id) {
+      const ruleResult = await client.from("tracker_reminders").select("*").eq("id",Number(reminder.source_id)).eq("enabled",true).maybeSingle();
+      if (ruleResult.error) throw new Error("Could not read Tracker reminder rule");
+      if (!ruleResult.data) continue;
+      const row=ruleResult.data as Row;
+      trackerRule={id:Number(row.id),trackerId:Number(row.tracker_id),reminderMode:String(row.notification_mode) as TrackerReminder["reminderMode"],configuredTime:String(row.configured_time).slice(0,5),periodDays:Number(row.period_days),anchorDate:String(row.anchor_date),nextDueAt:String(row.next_due_at),timezone:String(row.timezone),reminderId:row.reminder_id===null?null:Number(row.reminder_id),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};
+      const entriesResult=await client.from("tracker_entries").select("occurred_at").eq("user_id",String(reminder.user_id)).eq("tracker_id",trackerRule.trackerId);
+      if(entriesResult.error)throw new Error("Could not check Tracker entries");
+      const entries=((entriesResult.data??[]) as Row[]).map(entry=>({occurredAt:String(entry.occurred_at)}));
+      if(!trackerReminderShouldNotify(trackerRule,entries,now)){
+        const nextDueAt=nextTrackerNotification(trackerRule,entries,now);
+        await client.from("tracker_reminders").update({next_due_at:nextDueAt}).eq("id",trackerRule.id);
+        await client.from("reminders").update({next_due_at:nextDueAt,status:"scheduled",last_notified_at:null,sent_at:null}).eq("id",reminder.id);
+        continue;
+      }
+      const existing=await client.from("notification_deliveries").select("id,status").eq("user_id",String(reminder.user_id)).eq("source_type",String(reminder.source_type)).eq("source_id",trackerRule.id).eq("scheduled_at",String(reminder.next_due_at)).maybeSingle();
+      if(existing.error)throw new Error("Could not check Tracker notification history");
+      if(existing.data?.status==="sent"){
+        const nextDueAt=nextTrackerNotification({...trackerRule,nextDueAt:String(reminder.next_due_at)},entries,now);
+        await client.from("tracker_reminders").update({next_due_at:nextDueAt}).eq("id",trackerRule.id);
+        await client.from("reminders").update({next_due_at:nextDueAt,status:"scheduled",last_notified_at:null,sent_at:null}).eq("id",reminder.id);
+        continue;
+      }
+      trackerDeliveryId=existing.data?.id?Number(existing.data.id):null;
+      if(trackerDeliveryId===null){
+        const reservation=await client.from("notification_deliveries").insert({user_id:reminder.user_id,reminder_id:reminder.id,title:reminder.title,source_type:reminder.source_type,source_id:trackerRule.id,target_type:reminder.target_type,target_id:reminder.target_id,scheduled_at:reminder.next_due_at,scheduled_has_explicit_time:true,sent_at:null,status:"failed"}).select("id").single();
+        if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve Tracker notification");}
+        trackerDeliveryId=Number(reservation.data.id);
+      }
+    }
     const delivery = await sendToUser(client, String(reminder.user_id), {
       kind: "reminder_due",
       title: String(reminder.title),
@@ -56,7 +89,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date) {
     });
     sent += delivery.sent;
     const status = delivery.delivered ? "sent" : "failed";
-    if (delivery.delivered || reminder.status !== "failed") await client.from("notification_deliveries").insert({
+    const deliveryRow={
       user_id: reminder.user_id,
       reminder_id: reminder.id,
       title: reminder.title,
@@ -68,8 +101,15 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date) {
       scheduled_has_explicit_time: reminder.due_has_explicit_time === undefined ? true : Boolean(reminder.due_has_explicit_time),
       sent_at: delivery.delivered ? now.toISOString() : null,
       status,
-    });
-    await client.from("reminders").update({
+    };
+    if(trackerDeliveryId!==null)await client.from("notification_deliveries").update({sent_at:deliveryRow.sent_at,status}).eq("id",trackerDeliveryId);
+    else if (delivery.delivered || reminder.status !== "failed") await client.from("notification_deliveries").insert(deliveryRow);
+    if(trackerRule&&delivery.delivered){
+      const entries: Array<{occurredAt:string}>=[];
+      const nextDueAt=nextTrackerNotification({...trackerRule,nextDueAt:String(reminder.next_due_at)},entries,now);
+      await client.from("tracker_reminders").update({next_due_at:nextDueAt}).eq("id",trackerRule.id);
+      await client.from("reminders").update({next_due_at:nextDueAt,status:"scheduled",last_notified_at:now.toISOString(),sent_at:now.toISOString()}).eq("id",reminder.id);
+    }else await client.from("reminders").update({
       status,
       last_notified_at: delivery.delivered ? now.toISOString() : reminder.last_notified_at,
       sent_at: delivery.delivered ? now.toISOString() : reminder.sent_at,

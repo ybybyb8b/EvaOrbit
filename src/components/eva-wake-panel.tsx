@@ -5,6 +5,7 @@ import { KeyboardEvent, TransitionEvent, useCallback, useEffect, useRef, useStat
 import { Icon } from "./icons";
 import { MarkdownMessage } from "./markdown-message";
 import type { AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 type EvaWakePhase = "closed" | "opening" | "open" | "closing";
 const EVA_WAKE_CLOSE_FALLBACK_MS = 240;
@@ -115,6 +116,7 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
         { id: userId, sessionId: resolvedSessionId, role: "user", content: text, model: null, providerId: null, modelConfigId: null, createdAt: "" },
         { id: assistantId, sessionId: resolvedSessionId, role: "assistant", content: "", model: settings.model, providerId: null, modelConfigId: null, createdAt: "" },
       ]);
+      playNativeHaptic("light");
       setStreaming(true);
       const controller = new AbortController(); abortRef.current = controller;
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: resolvedSessionId, content: text }), signal: controller.signal });
@@ -137,7 +139,7 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
       if (history.ok) setMessages(await history.json() as ChatMessage[]);
       await refreshSessions();
     } catch (reason) {
-      if ((reason as Error).name !== "AbortError") setError(reason instanceof Error ? reason.message : "Eva could not reply");
+      if ((reason as Error).name !== "AbortError") { playNativeHaptic("error"); setError(reason instanceof Error ? reason.message : "Eva could not reply"); }
       setMessages((current) => current.filter((message) => message.content || message.role !== "assistant"));
     } finally { setStreaming(false); abortRef.current = null; }
   }

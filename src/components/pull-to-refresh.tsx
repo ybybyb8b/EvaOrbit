@@ -8,6 +8,7 @@ import {
   REFRESH_THRESHOLD,
   shouldTriggerPullRefresh,
 } from "@/lib/pull-refresh-gesture";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 type RefreshPhase = "idle" | "pulling" | "ready" | "refreshing";
 
@@ -40,7 +41,7 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
   const indicatorRef = useRef<HTMLDivElement>(null);
   const spinnerRef = useRef<HTMLSpanElement>(null);
   const phaseRef = useRef<RefreshPhase>("idle");
-  const gestureRef = useRef({ tracking: false, startX: 0, startY: 0, startTime: 0, currentDistance: 0 });
+  const gestureRef = useRef({ tracking: false, startX: 0, startY: 0, startTime: 0, currentDistance: 0, thresholdFeedbackPlayed: false });
   const reloadTimerRef = useRef<number | null>(null);
   const [phase, setPhaseState] = useState<RefreshPhase>("idle");
 
@@ -97,6 +98,7 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
         startY: touch.clientY,
         startTime: performance.now(),
         currentDistance: 0,
+        thresholdFeedbackPlayed: false,
       };
     };
     const onTouchMove = (event: TouchEvent) => {
@@ -116,7 +118,12 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       if (event.cancelable && deltaY > 4) event.preventDefault();
       const distance = getPullRefreshDistance(deltaY);
       setVisuals(distance);
-      setPhase(distance >= REFRESH_THRESHOLD ? "ready" : "pulling");
+      const nextPhase = distance >= REFRESH_THRESHOLD ? "ready" : "pulling";
+      if (nextPhase === "ready" && !gesture.thresholdFeedbackPlayed) {
+        gesture.thresholdFeedbackPlayed = true;
+        playNativeHaptic("selection");
+      }
+      setPhase(nextPhase);
     };
     const onTouchEnd = () => {
       const gesture = gestureRef.current;

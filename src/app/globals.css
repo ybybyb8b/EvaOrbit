@@ -321,8 +321,8 @@ html[data-theme="powderblue"][data-mode="dark"] {
   --surface-soft:#202a32;
   --surface-tint:#23313b;
   --surface-accent-soft:#273947;
-  --surface-warm:#302a31;
-  --surface-lavender:#292b3a;
+  --surface-warm:#25313a;
+  --surface-lavender:#252f3b;
   --surface-danger:#38252b;
   --text-primary:#e7edf2;
   --text-secondary:#adb9c2;
@@ -349,13 +349,13 @@ html[data-theme="powderblue"][data-mode="dark"] {
   --surface-list:#202b32;
   --surface-segmented:#1e282f;
   --surface-note:#242a2f;
-  --surface-note-alt:#292630;
+  --surface-note-alt:#232e38;
   --surface-note-green:#222d34;
   --accent-gold:#cfad7f;
   --surface-card-rgb:22 29 35;
   --surface-raised-rgb:27 36 43;
   --surface-tint-rgb:35 49 59;
-  --surface-warm-rgb:48 42 49;
+  --surface-warm-rgb:37 49 58;
   --surface-shell-rgb:17 23 28;
   --surface-header-rgb:19 27 33;
   --surface-chat-rgb:15 21 26;
@@ -453,6 +453,7 @@ button { color: inherit; }
 .feature-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; transform: scale(var(--feature-icon-scale)); transform-origin: center; }
 .nav-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; }
 html[data-mode="dark"] .feature-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
+html[data-mode="dark"] .nav-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
 html[data-theme="rosewood"] .feature-icon,html[data-theme="rosewood"] .nav-icon { background-image:var(--icon-source-rosewood,var(--icon-source)); }
 html[data-theme="rosewood"][data-mode="dark"] .feature-icon,html[data-theme="rosewood"][data-mode="dark"] .nav-icon { background-image:var(--icon-source-rosewood-dark,var(--icon-source-rosewood,var(--icon-source))); }
 html[data-theme="powderblue"] .feature-icon,html[data-theme="powderblue"] .nav-icon { background-image:var(--icon-source-powderblue,var(--icon-source)); }
@@ -3742,6 +3743,7 @@ body {
   background:rgb(var(--surface-warm-rgb) / .7);
 }
 
+
 .capture-card,
 .inbox-row,
 .task-row,
@@ -4467,4 +4469,22 @@ html[data-mode="dark"] .drinks-page .drink-limit-row.exceeded_limit { background
   .drinks-page .drink-preference-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .drinks-page .drink-preference-grid article { min-height:70px;padding:11px; }
   .drink-history-page .drink-record-card { min-height:76px;padding-left:13px; }
+}
+
+/* The sheet already owns the surface; keep nested record editors visually flat. */
+.form-sheet-body > .editor-card,
+html[data-mode="dark"] .form-sheet-body > .editor-card {
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+.drink-record-delete {
+  -webkit-appearance:none;
+  appearance:none;
+  border:0;
+  background:transparent;
 }

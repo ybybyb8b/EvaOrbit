@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, Task, TaskPriority } from "@/lib/types";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 type Status = "all" | "open" | "done";
 type TaskDraft = { title: string; notes: string; dueDate: string; priority: TaskPriority; tags: string };
@@ -62,18 +63,22 @@ export function TasksView() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...draft, dueDate: draft.dueDate || null, tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean) }),
     });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); setSaving(false); return; }
+    if (!response.ok) { playNativeHaptic("error"); setError(((await response.json()) as ApiError).error); setSaving(false); return; }
     setShowForm(false); setEditing(null); setDraft(emptyDraft); await load(); setSaving(false);
   }
 
   async function toggle(task: Task) {
-    await fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completed: !task.completed }) });
+    const response = await fetch(`/api/tasks/${task.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ completed: !task.completed }) });
+    if (!response.ok) { playNativeHaptic("error"); return; }
     await load();
+    playNativeHaptic(task.completed ? "selection" : "success");
   }
 
   async function remove(task: Task) {
     if (!window.confirm(`删除“${task.title}”？此操作无法撤销。`)) return;
-    await fetch(`/api/tasks/${task.id}`, { method: "DELETE" }); await load();
+    const response = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+    if (!response.ok) { playNativeHaptic("error"); return; }
+    await load();
   }
 
   return <div className="page">

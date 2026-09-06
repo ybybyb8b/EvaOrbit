@@ -173,7 +173,7 @@ export type TrackerIconType = "default" | "image";
 export type TrackerFieldType = "number" | "single_select" | "multi_select" | "text" | "boolean" | "rating";
 export type TrackerGoalOperator = "<=" | ">=" | "=";
 export type TrackerPeriodType = "daily" | "weekly" | "monthly" | "yearly" | "custom";
-export type TrackerReminderType = "scheduled" | "interval";
+export type TrackerReminderMode = "standard" | "missing";
 
 export interface Tracker {
   id: number;
@@ -235,9 +235,13 @@ export interface TrackerGoal {
 export interface TrackerReminder {
   id: number;
   trackerId: number;
-  reminderType: TrackerReminderType;
-  scheduleRule: string;
-  intervalDays: number | null;
+  reminderMode: TrackerReminderMode;
+  configuredTime: string;
+  periodDays: number;
+  anchorDate: string;
+  nextDueAt: string;
+  timezone: string;
+  reminderId: number | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -783,6 +787,7 @@ export type ReminderTargetType = "cat" | "cat_household" | "tracker";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";
+export type CatRoutineRecurrenceMode = "completion" | "fixed";
 export type NotificationStatus = "scheduled" | "sent" | "cancelled" | "failed" | "completed";
 export type NotificationDeliveryStatus = "sent" | "failed" | "cancelled";
 export type ReminderOccurrenceAction = "completed" | "skipped";
@@ -792,7 +797,13 @@ export interface CatRoutine {
   petId: number | null;
   title: string;
   intervalValue: number;
-  intervalUnit: ReminderIntervalUnit;
+  intervalUnit: Exclude<ReminderIntervalUnit, "hour">;
+  recurrenceMode: CatRoutineRecurrenceMode;
+  anchorDate: string;
+  firstDueDate: string;
+  nextDueDate: string;
+  configuredReminderTime: string;
+  timezone: string;
   firstDueAt: string;
   lastCompletedAt: string | null;
   nextDueAt: string;

@@ -28,6 +28,12 @@ GitHub Actions 的 `iOS Native Host` workflow 使用 `macos-15` runner：
 
 启动轨道中央的核心图来自 `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`：`LoadingCoreLight.png` 是 universal 默认浅色资源，`LoadingCoreDark.png` 是 dark luminosity 变体。修改任一图片后都要重新运行 `iOS Native Host` workflow 并安装新 IPA；仅替换这组资源不会改变 bridge、entitlement、framework、系统权限、签名方式或本文已经验证的 IPA 打包、重签和安装链。
 
+### 原生触感反馈
+
+Native Host 通过现有版本化 bridge 的 `haptic.play` 使用 UIKit 播放 `selection`、`light`、`medium`、`success`、`warning` 和 `error` 六种固定语义。它不使用 Web Vibration API，不需要 Core Haptics framework、权限、Info.plist 文案或 entitlement。Web 端通过 `host.getInfo().methods` 检查能力；旧 IPA 和普通浏览器会静默跳过。
+
+Swift 端是通用触感执行器，具体页面触发点和业务语义仍由 Web 决定。因此首次加入 `haptic.play` 需要重新构建并安装 IPA；之后只增删 Web 触发点通常只需部署 Web，不需要再次重装 Host。
+
 ### patched xtool 基线
 
 - xtool upstream 固定为 `2d58d987edff728fccebc6df643b1672e3583f00`。
@@ -324,6 +330,7 @@ bash scripts/ios/xtool-install.sh /path/to/new/EvaOrbitHost-ad-hoc.ipa
 - AI streaming，以及 WebKit content process 恢复。
 - 离线启动错误页、重试和恢复联网。
 - `window.EvaOrbitNative.call("host.ping")` 和 `host.getInfo()` 基础 bridge。
+- 在待办完成、表单提交、选择控件、危险操作、错误提示和下拉刷新阈值上检查触感；确认普通导航、滚动、输入与后台同步不会连续触发。
 
 安装包含 HealthKit 能量同步的新 IPA 后，再进入 EvaOrbit 的 Health 页面并点击 `Connect / Request Access`；仅安装或启动 App 不会主动弹出权限框。授权页只应出现 Resting Energy 与 Active Energy 的读取请求。随后检查 `Data read`、两类 background delivery、pending 数、最近本地同步和最近上传时间。iOS 不向读取方透露每一种类型是否被允许，因此不能把“授权请求已完成”当成“读权限已授予”；`Data read` 只有在 EvaOrbit 实际读到样本后才会变化。
 

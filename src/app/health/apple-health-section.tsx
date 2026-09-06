@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getNativeHostInfo, healthKitSupported, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 function formatTime(value: string | null) {
   if (!value) return "Not yet";
@@ -67,9 +68,11 @@ export function AppleHealthSection() {
     setBusy(true); setError(""); setMessage("");
     try {
       const result = await nativeCall<{ synced: boolean }>("healthkit.syncNow");
+      playNativeHaptic(result.synced ? "success" : "warning");
       setMessage(result.synced ? "Local Apple Health sync completed" : "Sync finished with an error; data remains queued safely");
       await refresh();
     } catch (cause) {
+      playNativeHaptic("error");
       setError(cause instanceof Error ? cause.message : "Could not sync Apple Health");
     } finally { setBusy(false); }
   }

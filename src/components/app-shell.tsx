@@ -8,6 +8,7 @@ import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
+import { NativeHapticController } from "./native-haptic-controller";
 import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
@@ -91,6 +92,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   return (
     <div className="app-shell">
       <ThemeController />
+      <NativeHapticController />
       <NativeNotificationReconciler />
       <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
       <aside className="sidebar">

@@ -16,6 +16,7 @@ WKWebView Native Host
           │ 单一、版本化、白名单 JS↔Swift bridge
           ├─ HealthKit：读取与聚合能量、可靠上传
           ├─ UserNotifications：本地提醒调度
+          ├─ UIKit Haptics：按 Web 语义播放原生触感
           └─ Native loading / appearance：启动体验
 ```
 
@@ -38,6 +39,7 @@ WKWebView Native Host
 | Web bridge 类型、能力检测和通知 reconcile | `src/lib/native-bridge.ts` |
 | HealthKit 实现 | `ios/EvaOrbitHost/Sources/HealthKit*.swift`、`HealthLocalStore.swift`、`HealthUploadManager.swift` |
 | Local Notification 实现 | `ios/EvaOrbitHost/Sources/NotificationManager.swift` |
+| 原生触感执行器 | `ios/EvaOrbitHost/Sources/HapticFeedbackManager.swift`、`src/lib/native-haptics.ts` |
 | 原生启动核心图 | `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`、`ios/EvaOrbitHost/Sources/OrbitArtworkView.swift` |
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
@@ -164,6 +166,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 | 原生本地通知 | `UserNotifications.framework` | 无额外用途文案 | 无 APNs entitlement | 仅当状态为 `not_determined` 且用户点击 Request Access |
 | HealthKit 凭据安全存储 | `Security.framework` | 无 | 当前无需 Keychain Sharing capability | Web 注册完成后写入 app 自有 Keychain |
 | Web Push | Web Service Worker / Push API | 浏览器管理 | 不属于 Native Host entitlement | 由浏览器设置中的独立按钮请求 |
+| 原生触感 | `UIKit`（已由 App 使用） | 无 | 无 | 无权限弹窗；只响应当前用户交互 |
 
 不要把“引入 framework”“Info.plist 用途文案”“entitlement/capability”“运行时 permission prompt”混为一件事。新增原生权限前必须分别核对这四层，以及免费个人 Team 和 patched xtool 是否支持对应 entitlement。
 
@@ -245,6 +248,12 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - Native 权限调用必须由可见的用户操作触发；bridge ready 或 App launch 只允许读状态、恢复已有后台能力或 reconcile 已获授权的项目。
 
 如果同时修改 Web 和 Swift bridge，部署顺序应兼容旧 Host：Web 端先以 capability detection 做无害降级，再安装新 IPA。不要假设所有用户已经更新 Native Host。
+
+### 5.1 原生触感语义
+
+`haptic.play` 只接受 `selection`、`light`、`medium`、`success`、`warning`、`error` 六种固定语义。Web 决定当前业务动作的语义，Swift 只使用 UIKit feedback generator 播放并做短间隔去重；不得把业务规则复制进 Swift，也不得允许 Web 提交任意强度、时长或自定义波形。
+
+普通浏览器、PWA 和未包含该方法的旧 IPA 必须静默降级。触感失败不得阻断保存、删除、导航或其他业务操作。普通导航、滚动、输入、后台同步和 AI 流式 token 不触发反馈；选择变化、表单正式提交、完成、危险动作、可见错误和下拉刷新阈值才可使用。该能力基于 UIKit，不需要 Core Haptics framework、Info.plist 用途文案、权限或 entitlement。
 
 ## 六、新增或修改 iOS 权限的检查清单
 

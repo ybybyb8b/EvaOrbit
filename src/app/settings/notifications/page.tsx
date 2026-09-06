@@ -10,5 +10,5 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsNotificationsPage() {
   const [pets, upcoming, routines, reminders, history, mealRules] = await Promise.all([listPets(), listScheduledNotifications(), listCatRoutines(), listReminders(), listNotificationHistory(), listMealReminderRules()]);
-  return <NotificationsView pets={pets} initial={{ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine"), history, mealRules }}/>;
+  return <NotificationsView pets={pets} initial={{ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine" && !item.sourceType?.startsWith("tracker_")), history, mealRules }}/>;
 }

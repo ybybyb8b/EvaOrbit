@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { MarkdownMessage } from "@/components/markdown-message";
 import { ConversationAvatar } from "@/components/conversation-avatar";
 import type { AiProvider, AiSettings, ApiError, ChatMessage, ChatSession } from "@/lib/types";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 const starters = [
   "看看我今天吃喝了什么",
@@ -120,7 +121,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
       const modelConfigId = selectedModel?.model.id ?? null;
       const optimisticUser: ChatMessage = { id: optimisticId, sessionId, role: "user", content: text, model: null, providerId, modelConfigId, createdAt: "" };
       const optimisticAssistant: ChatMessage = { id: optimisticIdRef.current--, sessionId, role: "assistant", content: "", model: selectedModel?.model.modelId ?? settings.model, providerId, modelConfigId, createdAt: "" };
-      setMessages((current) => [...current, optimisticUser, optimisticAssistant]); setStreaming(true);
+      setMessages((current) => [...current, optimisticUser, optimisticAssistant]); setStreaming(true); playNativeHaptic("light");
       const controller = new AbortController(); abortRef.current = controller;
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId, content: text }), signal: controller.signal });
       if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
@@ -144,7 +145,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
       if (messageResponse.ok) setMessages(await messageResponse.json() as ChatMessage[]);
       await refreshSessions();
     } catch (reason) {
-      if ((reason as Error).name !== "AbortError") setError(reason instanceof Error ? reason.message : "生成回复失败");
+      if ((reason as Error).name !== "AbortError") { playNativeHaptic("error"); setError(reason instanceof Error ? reason.message : "生成回复失败"); }
       setMessages((current) => current.filter((item) => item.content || item.role !== "assistant"));
     } finally { setStreaming(false); abortRef.current = null; }
   }

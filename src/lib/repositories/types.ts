@@ -274,7 +274,9 @@ export interface EvaOrbitRepository {
   createTrackerGoal(input: NewTrackerGoal): Promise<TrackerGoal>;
   deleteTrackerGoal(id: number): Promise<boolean>;
   listTrackerReminders(trackerId: number): Promise<TrackerReminder[]>;
+  getTrackerReminder(id: number): Promise<TrackerReminder | null>;
   createTrackerReminder(input: NewTrackerReminder): Promise<TrackerReminder>;
+  updateTrackerReminder(id: number, input: Record<string, unknown>): Promise<TrackerReminder | null>;
   deleteTrackerReminder(id: number): Promise<boolean>;
 
   listPets(includeInactive?: boolean): Promise<Pet[]>;

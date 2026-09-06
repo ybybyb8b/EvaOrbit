@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/page-header";
 import { getMediaDisplayTitle, mediaNameKey } from "@/lib/media-display";
 import type { ApiError, MediaDetail, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing } from "@/lib/types";
 import { mediaRatings, mediaStatuses, mediaTypes, statusLabel, typeLabel } from "../media-view";
+import { playNativeHaptic } from "@/lib/native-haptics";
 
 type MediaDraft = { originalTitle: string; translatedTitle: string; mediaType: MediaType; status: MediaStatus; rating: MediaRating | ""; isFavorite:boolean; note: string; seriesChoice:string; newSeries:string; seasonNumber:string; seasonTitle:string };
 
@@ -79,6 +80,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
       if (!response.ok) { setError(await responseError(response, "Could not add rewatch.")); return; }
       const viewing = await response.json() as MediaViewing;
       setDetail((current) => ({ ...current, status:"completed", viewings: [...current.viewings, viewing].sort((a, b) => a.viewingNumber - b.viewingNumber || a.id - b.id) }));
+      playNativeHaptic("success");
       setRewatchOpen(false); setRewatchDate(currentLocalDate()); setNotice("Rewatch added.");
     } catch { setError("Could not add rewatch."); }
     finally { setBusy(false); }

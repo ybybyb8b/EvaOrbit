@@ -7,6 +7,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let supportedMethods: Set<String> = [
         "host.ping", "host.getInfo", "navigation.openExternal",
         "appearance.setPreference",
+        "haptic.play",
         "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
         "healthkit.configureCredential", "healthkit.clearCredential",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
@@ -39,6 +40,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private let hostConfiguration: HostConfiguration
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager: NotificationManager
+    private let hapticFeedbackManager = HapticFeedbackManager()
 
     init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager) {
         self.hostConfiguration = hostConfiguration
@@ -86,6 +88,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             openExternal(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "appearance.setPreference":
             setAppearancePreference(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "haptic.play":
+            playHaptic(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "healthkit.getStatus":
             replyHandler(success(id: identifier, result: healthKitCoordinator.status().dictionary), nil)
         case "healthkit.requestAuthorization":
@@ -191,6 +195,21 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
+    private func playHaptic(
+        parameters: [String: Any],
+        id: String,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
+        guard let rawKind = parameters["kind"] as? String,
+              let kind = HapticFeedbackKind(rawValue: rawKind)
+        else {
+            replyHandler(failure(id: id, code: "invalid_haptic", message: "Haptic feedback kind is invalid."), nil)
+            return
+        }
+        hapticFeedbackManager.play(kind)
+        replyHandler(success(id: id, result: ["played": true, "kind": kind.rawValue]), nil)
+    }
+
     private func cancelNotification(
         parameters: [String: Any],
         id: String,
@@ -268,6 +287,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "buildVersion": bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
             "healthKitPipeline": "energy-v1",
             "notificationPipeline": "local-v1",
+            "hapticPipeline": "feedback-v1",
             "methods": Self.supportedMethods.sorted()
         ]
     }

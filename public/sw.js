@@ -1,42 +1,23 @@
-const CACHE = "eva-orbit-static-v6";
-const THEMED_ICON_ASSETS = ["rosewood", "powderblue"].flatMap((theme) => [
+const CACHE = "eva-orbit-static-v7";
+const ICON_NAMES = [
   "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
-].map((name) => `/icons/themes/${theme}/features/${name}.svg`).concat([
-  `/icons/themes/${theme}/features/eva-dark.svg`,
-  `/icons/themes/${theme}/features/trackers-dark.svg`,
-  `/icons/themes/${theme}/nav/home.svg`,
-  `/icons/themes/${theme}/nav/lucius.svg`,
-  `/icons/themes/${theme}/nav/settings.svg`,
+];
+const NAV_ICON_NAMES = ["home", "lucius", "settings"];
+const iconAssets = (base = "/icons") => ICON_NAMES.flatMap((name) => [
+  `${base}/features/${name}.png`,
+  `${base}/features/${name}-dark.png`,
+]).concat(NAV_ICON_NAMES.flatMap((name) => [
+  `${base}/nav/${name}.png`,
+  `${base}/nav/${name}-dark.png`,
 ]));
+const THEMED_ICON_ASSETS = ["rosewood", "powderblue"].flatMap((theme) => iconAssets(`/icons/themes/${theme}`));
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icons/app-icon-192.png",
   "/icons/app-icon-512.png",
   "/apple-touch-icon.png",
   "/icons/apple-touch-icon.png",
-  "/icons/features/calendar.svg",
-  "/icons/features/cats.svg",
-  "/icons/features/chronicle.svg",
-  "/icons/features/drinks.svg",
-  "/icons/features/eva.svg",
-  "/icons/features/eva-dark.svg",
-  "/icons/features/food.svg",
-  "/icons/features/health.svg",
-  "/icons/features/home.svg",
-  "/icons/features/inbox.svg",
-  "/icons/features/lucius.svg",
-  "/icons/features/media.svg",
-  "/icons/features/memo.svg",
-  "/icons/features/more.svg",
-  "/icons/features/notifications.svg",
-  "/icons/features/people.svg",
-  "/icons/features/projects.svg",
-  "/icons/features/settings.svg",
-  "/icons/features/trackers.svg",
-  "/icons/features/trackers-dark.svg",
-  "/icons/nav/home.svg",
-  "/icons/nav/lucius.svg",
-  "/icons/nav/settings.svg",
+  ...iconAssets(),
   ...THEMED_ICON_ASSETS,
   "/eva-home-cat.png",
 ];

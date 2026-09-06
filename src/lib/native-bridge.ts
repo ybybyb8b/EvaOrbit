@@ -9,6 +9,7 @@ export type NativeHostInfo = {
   appVersion?: string;
   buildVersion?: string;
   healthKitPipeline?: string;
+  hapticPipeline?: string;
   capabilities?: string[] | Record<string, boolean>;
   methods?: string[];
 };
@@ -63,6 +64,10 @@ export function healthKitSupported(info: NativeHostInfo | null) {
 export function nativeNotificationsSupported(info: NativeHostInfo | null) {
   return ["notification.getStatus", "notification.requestAuthorization", "notification.schedule", "notification.cancel", "notification.listPending", "notification.openSettings"]
     .every((method) => hostSupports(info, method));
+}
+
+export function nativeHapticsSupported(info: NativeHostInfo | null) {
+  return hostSupports(info, "haptic.play");
 }
 
 export function nativeNotificationIdentifier(reminderId: number) {

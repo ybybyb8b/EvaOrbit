@@ -8,6 +8,7 @@ import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
+import { playNativeHaptic } from "@/lib/native-haptics";
 import { CatRecordEditor } from "./cat-record-editor";
 import { ReminderEditor } from "./reminder-editor";
 import { RoutineEditor } from "./routine-editor";
@@ -54,10 +55,10 @@ export function CatsView({ initialDashboard }: { initialDashboard: Dashboard }) 
   const recentRecords = dashboard.timeline.filter(item => item.petId !== null).slice(0, 5);
   async function load() { const response = await fetch("/api/cats"); if (response.ok) setDashboard(await response.json()); }
   function addRoutine(scope: CatRoutine["scope"]) { setEditingRoutine(undefined); setRoutineScope(scope); setPanel("routine"); }
-  async function completeRoutine(id: number) { const response = await fetch(`/api/cats/routines/${id}/complete`, { method: "POST" }); if (response.ok) { setMessage("Routine completed"); await load(); try { await reconcileNativeNotifications(); } catch { /* Web fallback remains active. */ } } }
-  async function reminderAction(id:number,action:"complete"|"cancel"){if(action==="cancel"&&!confirm("Cancel this one-time task?"))return;const response=await fetch(`/api/reminders/${id}${action==="complete"?"/complete":""}`,{method:action==="complete"?"POST":"DELETE"});if(response.ok){setMessage(action==="complete"?"One-time task completed":"One-time task cancelled");await load();try{await reconcileNativeNotifications();}catch{/* Web fallback remains active. */}}}
+  async function completeRoutine(id: number) { const response = await fetch(`/api/cats/routines/${id}/complete`, { method: "POST" }); if (response.ok) { playNativeHaptic("success"); setMessage("Routine completed"); await load(); try { await reconcileNativeNotifications(); } catch { /* Web fallback remains active. */ } } else playNativeHaptic("error"); }
+  async function reminderAction(id:number,action:"complete"|"cancel"){if(action==="cancel"&&!confirm("Cancel this one-time task?"))return;const response=await fetch(`/api/reminders/${id}${action==="complete"?"/complete":""}`,{method:action==="complete"?"POST":"DELETE"});if(response.ok){playNativeHaptic(action==="complete"?"success":"medium");setMessage(action==="complete"?"One-time task completed":"One-time task cancelled");await load();try{await reconcileNativeNotifications();}catch{/* Web fallback remains active. */}}else playNativeHaptic("error");}
   async function editRecord(item: CatTimelineEntry) { const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`); if (!response.ok) return; setEditingRecord({ kind: item.kind, id: item.id, record: await response.json() }); setPanel("record"); }
-  async function removeRecord(item: CatTimelineEntry) { if (!confirm(`Delete “${item.title}”?`)) return; const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`, { method: "DELETE" }); if (response.ok) void load(); }
+  async function removeRecord(item: CatTimelineEntry) { if (!confirm(`Delete “${item.title}”?`)) return; const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`, { method: "DELETE" }); if (response.ok) void load(); else playNativeHaptic("error"); }
   return <div className="page cats-page">
     <PageHeader eyebrow="LIFE" title="Cats"/>
     <div className="cats-overview">
@@ -82,6 +83,6 @@ export function CatAvatar({ pet, size = 54 }: { pet: Pet; size?: number }) { ret
 
 function PetEditor({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => void }) {
   const [draft, setDraft] = useState({ name: "", sex: "", birthday: "", adoptionDate: "", notes: "" }); const [error, setError] = useState("");
-  async function submit(event: FormEvent) { event.preventDefault(); const response = await fetch("/api/cats/pets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, avatarUrl: "", sex: draft.sex || null, isActive: true }) }); if (!response.ok) { setError((await response.json()).error); return; } onSaved(); }
+  async function submit(event: FormEvent) { event.preventDefault(); const response = await fetch("/api/cats/pets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, avatarUrl: "", sex: draft.sex || null, isActive: true }) }); if (!response.ok) { playNativeHaptic("error"); setError((await response.json()).error); return; } onSaved(); }
   return <form className="editor-card pet-editor" onSubmit={submit}><div className="editor-title"><div><span className="eyebrow">PROFILE</span><h2>Add cat</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div><div className="form-grid"><label className="field"><span>Name</span><input required value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })}/></label><label className="field"><span>Sex</span><select value={draft.sex} onChange={e => setDraft({ ...draft, sex: e.target.value })}><option value="">Not set</option><option value="female">Female</option><option value="male">Male</option><option value="unknown">Unknown</option></select></label><label className="field"><span>Birthday</span><input type="date" value={draft.birthday} onChange={e => setDraft({ ...draft, birthday: e.target.value })}/></label><label className="field"><span>Adoption date</span><input type="date" value={draft.adoptionDate} onChange={e => setDraft({ ...draft, adoptionDate: e.target.value })}/></label><label className="field wide"><span>Notes</span><textarea rows={3} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label></div>{error && <p className="form-error">{error}</p>}<button className="button primary">Add cat</button></form>;
 }

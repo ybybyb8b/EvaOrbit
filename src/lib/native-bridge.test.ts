@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { healthKitSupported, hostSupports, nativeNotificationIdentifier, nativeNotificationSchedule, nativeNotificationsSupported } from "./native-bridge.ts";
+import { healthKitSupported, hostSupports, nativeHapticsSupported, nativeNotificationIdentifier, nativeNotificationSchedule, nativeNotificationsSupported } from "./native-bridge.ts";
 import type { ScheduledNotification } from "./types.ts";
 
 test("native capabilities are detected from getInfo, never from user agent", () => {
   const oldHost = { platform: "ios", healthKitPipeline: "energy-v1" };
   assert.equal(healthKitSupported(oldHost), true);
   assert.equal(nativeNotificationsSupported(oldHost), false);
+  assert.equal(nativeHapticsSupported(oldHost), false);
   assert.equal(hostSupports(oldHost, "notification.getStatus"), false);
 
   const nextHost = { platform: "ios", methods: [
     "notification.getStatus", "notification.requestAuthorization", "notification.schedule", "notification.cancel", "notification.listPending", "notification.openSettings",
   ] };
   assert.equal(nativeNotificationsSupported(nextHost), true);
+  assert.equal(nativeHapticsSupported({ platform: "ios", methods: ["haptic.play"] }), true);
 });
 
 test("partial notification bridges stay unavailable", () => {

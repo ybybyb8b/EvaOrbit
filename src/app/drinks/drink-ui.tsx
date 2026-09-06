@@ -34,7 +34,7 @@ export function DrinkRecordEditor({record,suggestions,onClose,onSaved,onDeleted}
       <label className="field wide"><span>Notes</span><textarea rows={3} maxLength={2000} value={draft.notes} onChange={event=>setDraft({...draft,notes:event.target.value})}/></label>
     </div>
     <datalist id="drink-name-history">{suggestions.names.map(value=><option value={value} key={value}/>)}</datalist><datalist id="drink-brand-history">{suggestions.brands.map(value=><option value={value} key={value}/>)}</datalist>
-    {error&&<p className="form-error">{error}</p>}{record&&onDeleted&&<button className="danger-text drink-record-delete" type="button" onClick={()=>void remove()}>删除这条记录</button>}
+    {error&&<p className="form-error">{error}</p>}{record&&onDeleted&&<button className="text-button danger drink-record-delete" type="button" onClick={()=>void remove()}>删除这条记录</button>}
   </form></FormSheet>;
 }
 

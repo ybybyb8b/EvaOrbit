@@ -1,4 +1,5 @@
-import type { CatRoutine, Reminder, ReminderIntervalUnit } from "./types.ts";
+import type { CatRoutine, Reminder, ReminderIntervalUnit, TrackerEntry, TrackerReminder } from "./types.ts";
+import { addCalendarInterval, zonedDateParts, zonedDateTimeToUtc } from "./time.ts";
 
 export function addReminderInterval(value: string | Date, amount: number, unit: ReminderIntervalUnit) {
   const next = new Date(value);
@@ -9,8 +10,51 @@ export function addReminderInterval(value: string | Date, amount: number, unit: 
   return next;
 }
 
-export function catRoutineCompletionPatch(routine: Pick<CatRoutine, "intervalValue" | "intervalUnit">, actedAt = new Date()) { return { lastCompletedAt: actedAt.toISOString(), nextDueAt: addReminderInterval(actedAt, routine.intervalValue, routine.intervalUnit).toISOString() }; }
-export function catRoutineSkipPatch(routine: Pick<CatRoutine, "nextDueAt" | "intervalValue" | "intervalUnit">) { return { nextDueAt: addReminderInterval(routine.nextDueAt, routine.intervalValue, routine.intervalUnit).toISOString() }; }
+type RoutineSchedule = Pick<CatRoutine, "intervalValue" | "intervalUnit" | "recurrenceMode" | "anchorDate" | "nextDueDate" | "configuredReminderTime" | "timezone">;
+
+export function catRoutineCompletionPatch(routine: RoutineSchedule, actedAt = new Date()) {
+  const completedDate = zonedDateParts(actedAt, routine.timezone).date;
+  const plannedNextDate = addCalendarInterval(routine.nextDueDate, routine.intervalValue, routine.intervalUnit);
+  const reanchor = routine.recurrenceMode === "completion" || completedDate >= plannedNextDate;
+  const anchorDate = reanchor ? completedDate : routine.anchorDate;
+  const nextDueDate = reanchor ? addCalendarInterval(completedDate, routine.intervalValue, routine.intervalUnit) : plannedNextDate;
+  return { lastCompletedAt: actedAt.toISOString(), anchorDate, nextDueDate, nextDueAt: zonedDateTimeToUtc(nextDueDate, routine.configuredReminderTime, routine.timezone) };
+}
+export function catRoutineSkipPatch(routine: Pick<CatRoutine, "nextDueDate" | "intervalValue" | "intervalUnit" | "configuredReminderTime" | "timezone">) {
+  const nextDueDate = addCalendarInterval(routine.nextDueDate, routine.intervalValue, routine.intervalUnit);
+  return { nextDueDate, nextDueAt: zonedDateTimeToUtc(nextDueDate, routine.configuredReminderTime, routine.timezone) };
+}
+
+export function trackerReminderNextDueAt(rule: Pick<TrackerReminder, "nextDueAt" | "periodDays" | "configuredTime" | "timezone">) {
+  const nextDate = addCalendarInterval(zonedDateParts(rule.nextDueAt, rule.timezone).date, rule.periodDays, "day");
+  return zonedDateTimeToUtc(nextDate, rule.configuredTime, rule.timezone);
+}
+
+export function trackerReminderWindow(rule: Pick<TrackerReminder, "nextDueAt" | "periodDays" | "timezone">) {
+  const dueDate = zonedDateParts(rule.nextDueAt, rule.timezone).date;
+  const fromDate = addCalendarInterval(dueDate, -(rule.periodDays - 1), "day");
+  return { from: zonedDateTimeToUtc(fromDate, "00:00", rule.timezone), to: rule.nextDueAt };
+}
+
+export function trackerReminderHasEntry(rule: Pick<TrackerReminder, "nextDueAt" | "periodDays" | "timezone">, entries: Pick<TrackerEntry, "occurredAt">[]) {
+  const window = trackerReminderWindow(rule);
+  return entries.some((entry) => entry.occurredAt >= window.from && entry.occurredAt <= window.to);
+}
+
+export function trackerReminderShouldNotify(rule: TrackerReminder, entries: Pick<TrackerEntry, "occurredAt">[], now = new Date()) {
+  return rule.enabled && new Date(rule.nextDueAt).getTime() <= now.getTime() && (rule.reminderMode === "standard" || !trackerReminderHasEntry(rule, entries));
+}
+
+export function nextTrackerNotification(rule: TrackerReminder, entries: Pick<TrackerEntry, "occurredAt">[], now = new Date()) {
+  let candidate = rule;
+  for (let count = 0; count < 10_000; count += 1) {
+    const past = new Date(candidate.nextDueAt).getTime() <= now.getTime();
+    const skipped = candidate.reminderMode === "missing" && trackerReminderHasEntry(candidate, entries);
+    if (!past && !skipped) return candidate.nextDueAt;
+    candidate = { ...candidate, nextDueAt: trackerReminderNextDueAt(candidate) };
+  }
+  throw new Error("Tracker reminder schedule could not be advanced");
+}
 
 export function effectiveDueAt(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil">) {
   return reminder.snoozedUntil ?? reminder.nextDueAt;

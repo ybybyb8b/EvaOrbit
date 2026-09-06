@@ -15,6 +15,6 @@ export async function GET() {
       listNotificationHistory(),
       listMealReminderRules(),
     ]);
-    return NextResponse.json({ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine"), history, mealRules });
+    return NextResponse.json({ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine" && !item.sourceType?.startsWith("tracker_")), history, mealRules });
   } catch (error) { return apiError(error); }
 }

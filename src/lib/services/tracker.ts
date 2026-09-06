@@ -3,9 +3,10 @@ import "server-only";
 import { getRepository } from "../repositories";
 import type { NewTracker, NewTrackerEntry, NewTrackerField, NewTrackerGoal, NewTrackerReminder } from "../repositories/types";
 import { dateInEvaOrbit, dateRange, weekRange } from "../time";
-import type { TrackerEntry, TrackerField, TrackerReminder, TrackerStats, TrackerSummary } from "../types";
+import type { Reminder, TrackerEntry, TrackerField, TrackerReminder, TrackerStats, TrackerSummary } from "../types";
 import { ValidationError } from "../validation";
 import { buildTrackerInsights } from "../tracker-insights";
+import { nextTrackerNotification, trackerReminderShouldNotify } from "../reminder-engine";
 import { resetTrackerIcon } from "./tracker-icon";
 
 function stats(entries: TrackerEntry[], reminders: TrackerReminder[], now = new Date()): TrackerStats {
@@ -14,11 +15,7 @@ function stats(entries: TrackerEntry[], reminders: TrackerReminder[], now = new 
   const year = today.slice(0, 4);
   const week = weekRange(now);
   const lastOccurredAt = entries[0]?.occurredAt ?? null;
-  const reminderDue = reminders.some((reminder) => {
-    if (!reminder.enabled || reminder.reminderType !== "interval" || !reminder.intervalDays) return false;
-    if (!lastOccurredAt) return true;
-    return now.getTime() - new Date(lastOccurredAt).getTime() >= reminder.intervalDays * 86400000;
-  });
+  const reminderDue = reminders.some((reminder) => trackerReminderShouldNotify(reminder, entries, now));
   return {
     today: entries.filter((entry) => dateInEvaOrbit(new Date(entry.occurredAt)) === today).length,
     week: entries.filter((entry) => entry.occurredAt >= week.from && entry.occurredAt < week.to).length,
@@ -53,10 +50,18 @@ export async function getTrackerDetail(id: number, query = "") {
 }
 
 export async function createTracker(input: NewTracker) { return (await getRepository()).createTracker(input); }
-export async function updateTracker(id: number, input: Record<string, unknown>) { return (await getRepository()).updateTracker(id, input); }
+export async function updateTracker(id: number, input: Record<string, unknown>) {
+  const repository = await getRepository();
+  const tracker = await repository.updateTracker(id, input);
+  if (tracker && input.name !== undefined) {
+    for (const rule of await repository.listTrackerReminders(id)) if (rule.reminderId) await repository.updateReminder(rule.reminderId, { title: tracker.name });
+  }
+  return tracker;
+}
 export async function deleteTracker(id: number) {
   const repository = await getRepository();
   if (!await repository.getTracker(id)) return false;
+  for (const rule of await repository.listTrackerReminders(id)) if (rule.reminderId) await repository.updateReminder(rule.reminderId, { isActive: false, status: "cancelled", cancelledAt: new Date().toISOString(), snoozedUntil: null });
   await resetTrackerIcon(id);
   return repository.deleteTracker(id);
 }
@@ -96,8 +101,48 @@ export async function updateTrackerEntry(id: number, input: Record<string, unkno
 export async function deleteTrackerEntry(id: number) { return (await getRepository()).deleteTrackerEntry(id); }
 export async function createTrackerGoal(input: NewTrackerGoal) { return (await getRepository()).createTrackerGoal(input); }
 export async function deleteTrackerGoal(id: number) { return (await getRepository()).deleteTrackerGoal(id); }
-export async function createTrackerReminder(input: NewTrackerReminder) { return (await getRepository()).createTrackerReminder(input); }
-export async function deleteTrackerReminder(id: number) { return (await getRepository()).deleteTrackerReminder(id); }
+function reminderInput(rule: TrackerReminder, title: string): Omit<Reminder, "id" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt"> {
+  return { title, targetType: "tracker", targetId: rule.trackerId, sourceType: `tracker_${rule.reminderMode}`, sourceId: rule.id, scheduleType: "interval", startsAt: rule.nextDueAt, nextDueAt: rule.nextDueAt, dueHasExplicitTime: true, intervalValue: rule.periodDays, intervalUnit: "day", timesOfDay: [], endsAt: null, timezone: rule.timezone, note: rule.reminderMode === "missing" ? "Only remind when this Tracker has no entry in the current observation period." : "", leadTimeMinutes: 0, status: rule.enabled ? "scheduled" : "cancelled", isActive: rule.enabled };
+}
+
+async function syncTrackerReminder(rule: TrackerReminder) {
+  const repository = await getRepository();
+  const tracker = await repository.getTracker(rule.trackerId);
+  if (!tracker) throw new ValidationError("Tracker 不存在");
+  if (rule.enabled) {
+    const nextDueAt=nextTrackerNotification(rule,await repository.listTrackerEntries(rule.trackerId));
+    if(nextDueAt!==rule.nextDueAt){rule={...rule,nextDueAt};await repository.updateTrackerReminder(rule.id,{nextDueAt});}
+  }
+  if (!rule.reminderId) {
+    const reminder = await repository.createReminder(reminderInput(rule, tracker.name));
+    return repository.updateTrackerReminder(rule.id, { reminderId: reminder.id });
+  }
+  await repository.updateReminder(rule.reminderId, { ...reminderInput(rule, tracker.name), cancelledAt: rule.enabled ? null : new Date().toISOString(), lastNotifiedAt: null, sentAt: null });
+  return rule;
+}
+
+export async function createTrackerReminder(input: NewTrackerReminder) {
+  const repository = await getRepository();
+  if (!await repository.getTracker(input.trackerId)) throw new ValidationError("Tracker 不存在");
+  const rule = await repository.createTrackerReminder(input);
+  return (await syncTrackerReminder(rule)) ?? rule;
+}
+export async function updateTrackerReminder(id: number, input: NewTrackerReminder) {
+  const repository = await getRepository();
+  const existing = await repository.getTrackerReminder(id);
+  if (!existing) return null;
+  const updated = await repository.updateTrackerReminder(id, { ...input, trackerId: undefined, reminderId: existing.reminderId });
+  if (!updated) return null;
+  await syncTrackerReminder(updated);
+  return repository.getTrackerReminder(id);
+}
+export async function deleteTrackerReminder(id: number) {
+  const repository = await getRepository();
+  const rule = await repository.getTrackerReminder(id);
+  if (!rule) return false;
+  if (rule.reminderId) await repository.updateReminder(rule.reminderId, { isActive: false, status: "cancelled", cancelledAt: new Date().toISOString(), snoozedUntil: null });
+  return repository.deleteTrackerReminder(id);
+}
 
 export async function getTodayNativeTrackerEntries() {
   const repository = await getRepository();

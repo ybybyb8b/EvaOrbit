@@ -23,10 +23,17 @@ final class HostConfigurationTests: XCTestCase {
         XCTAssertEqual(NativeBridge.supportedMethods, Set([
             "host.ping", "host.getInfo", "navigation.openExternal",
             "appearance.setPreference",
+            "haptic.play",
             "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
             "healthkit.configureCredential", "healthkit.clearCredential",
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
             "notification.cancel", "notification.listPending", "notification.openSettings"
+        ]))
+    }
+
+    func testHapticKindsStayAClosedBridgeVocabulary() {
+        XCTAssertEqual(Set(HapticFeedbackKind.allCases.map(\.rawValue)), Set([
+            "selection", "light", "medium", "success", "warning", "error"
         ]))
     }
 }
