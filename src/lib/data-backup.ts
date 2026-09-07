@@ -1,5 +1,5 @@
-export const BACKUP_VERSION = 1 as const;
-export const BACKUP_SCHEMA_VERSION = "202609060003_lucius_post_comments";
+export const BACKUP_VERSION = 2 as const;
+export const BACKUP_SCHEMA_VERSION = "202609070001_memory_graph";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -9,6 +9,9 @@ export const BACKUP_TABLES = [
   "ui_preferences",
   "tasks",
   "memories",
+  "memory_entities",
+  "memory_facts",
+  "memory_sources",
   "chat_sessions",
   "chat_messages",
   "inbox_items",
@@ -72,7 +75,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: typeof BACKUP_VERSION;
+  backup_version: 1 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -130,8 +133,8 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== BACKUP_VERSION) {
-    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前仅支持 ${BACKUP_VERSION}）`);
+  if (document.backup_version !== 1 && document.backup_version !== BACKUP_VERSION) {
+    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 和 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {
     throw new Error("备份文件缺少有效的 exported_at");
@@ -142,12 +145,17 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!document.resources || typeof document.resources !== "object" || Array.isArray(document.resources)) {
     throw new Error("备份文件缺少 resources");
   }
-  const resources = document.resources as Record<string, unknown>;
+  const resources = { ...(document.resources as Record<string, unknown>) };
+  if (document.backup_version === 1) {
+    resources.memory_entities ??= [];
+    resources.memory_facts ??= [];
+    resources.memory_sources ??= [];
+  }
   for (const table of BACKUP_TABLES) {
     if (!Array.isArray(resources[table])) throw new Error(`备份不完整：resources.${table} 缺失或格式错误`);
     if (!(resources[table] as unknown[]).every((row) => row && typeof row === "object" && !Array.isArray(row))) {
       throw new Error(`备份格式错误：resources.${table} 必须只包含对象`);
     }
   }
-  return value as EvaOrbitBackup;
+  return { ...(value as EvaOrbitBackup), resources: resources as BackupResources };
 }

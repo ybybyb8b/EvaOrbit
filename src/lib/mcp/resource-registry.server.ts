@@ -16,8 +16,12 @@ import { createProject, createProjectItem, getProject, getProjectItem, listProje
 import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryNote,deleteRelationEvent,getMemoryNote,getRelationEvent,getRelationPersonDetail,listMemoryNotes,listRelationEvents,listRelationPeople,settleAdvance,updateMemoryNote,updateRelationEvent,updateRelationPerson } from "../services/relations";
 import { createResourceRegistry } from "./resource-registry";
 import { createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,updateFoodDish,updateFoodPlace } from "../services/food";
+import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
 
 export const resourceRegistry = createResourceRegistry({
+  memoryEntity:{search:listMemoryEntities,get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
+  memoryFact:{search:listMemoryFacts,get:getMemoryFactDetail,create:createMemoryFact,update:updateMemoryFact,invalidate:invalidateMemoryFact,restore:restoreMemoryFact},
+  memorySource:{search:listMemorySources,get:getMemorySource,create:createMemorySource,update:updateMemorySource,delete:deleteMemorySource},
   inbox: { search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox },
   memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },

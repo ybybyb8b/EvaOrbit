@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -6,6 +6,16 @@ import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
 
 export type TaskFilter = "all" | "open" | "done";
+
+export type NewMemoryEntity = Omit<MemoryEntity, "createdAt" | "updatedAt" | "mergedIntoEntityId">;
+export type MemoryEntityPatch = Partial<Pick<MemoryEntity, "canonicalName" | "entityType" | "aliases" | "description">>;
+export type MemoryEntityListInput = { query?: string; entityType?: string; status?: MemoryEntityStatus; includeMerged?: boolean; limit?: number };
+export type NewMemoryFact = Omit<MemoryFact, "createdAt" | "updatedAt" | "invalidatedAt" | "invalidationReason">;
+export type MemoryFactPatch = Partial<Pick<MemoryFact, "confidence" | "importance" | "validFrom" | "validTo">>;
+export type MemoryFactListInput = { entityId?: string; direction?: "in" | "out" | "both"; predicate?: string; perspectiveEntityId?: string | null; status?: MemoryFactStatus; validOn?: string; limit?: number };
+export type NewMemorySource = Omit<MemorySource, "createdAt" | "updatedAt">;
+export type MemorySourcePatch = Partial<Pick<MemorySource, "sourceUrl" | "excerpt" | "note">>;
+export type MemorySourceListInput = { factId?: string; sourceResource?: string; sourceRecordId?: string; limit?: number };
 
 export type NewTask = {
   title: string;
@@ -104,6 +114,24 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  listMemoryEntities(input?: MemoryEntityListInput): Promise<MemoryEntity[]>;
+  getMemoryEntity(id: string): Promise<MemoryEntity | null>;
+  createMemoryEntity(input: NewMemoryEntity): Promise<MemoryEntity>;
+  updateMemoryEntity(id: string, input: MemoryEntityPatch): Promise<MemoryEntity | null>;
+  setMemoryEntityArchived(id: string, archived: boolean): Promise<MemoryEntity | null>;
+  mergeMemoryEntities(sourceId: string, targetId: string): Promise<MemoryEntityMergeResult | null>;
+  listMemoryFacts(input?: MemoryFactListInput): Promise<MemoryFact[]>;
+  getMemoryFact(id: string): Promise<MemoryFact | null>;
+  createMemoryFact(input: NewMemoryFact): Promise<MemoryFact>;
+  updateMemoryFact(id: string, input: MemoryFactPatch): Promise<MemoryFact | null>;
+  invalidateMemoryFact(id: string, reason: string | null): Promise<MemoryFact | null>;
+  restoreMemoryFact(id: string): Promise<MemoryFact | null>;
+  listMemorySources(input?: MemorySourceListInput): Promise<MemorySource[]>;
+  getMemorySource(id: string): Promise<MemorySource | null>;
+  createMemorySource(input: NewMemorySource): Promise<MemorySource>;
+  updateMemorySource(id: string, input: MemorySourcePatch): Promise<MemorySource | null>;
+  deleteMemorySource(id: string): Promise<boolean>;
+
   listRelationPeople(input?: { query?: string; includeArchived?: boolean; relationshipStatus?: "active" | "ended" }): Promise<RelationPerson[]>;
   getRelationPerson(id: number): Promise<RelationPerson | null>;
   createRelationPerson(input: NewRelationPerson): Promise<RelationPerson>;

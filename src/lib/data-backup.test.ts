@@ -16,6 +16,9 @@ test("backup allowlist excludes credentials and HealthKit/device data", () => {
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
   assert.ok(BACKUP_TABLES.includes("lucius_post_comments"));
+  assert.ok(BACKUP_TABLES.includes("memory_entities"));
+  assert.ok(BACKUP_TABLES.includes("memory_facts"));
+  assert.ok(BACKUP_TABLES.includes("memory_sources"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("ai_providers"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));
@@ -40,11 +43,22 @@ test("backup parser requires a complete current-version document", () => {
     source: { backend: "supabase" },
     resources: emptyBackupResources(),
   };
-  assert.equal(parseBackupDocument(backup), backup);
-  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 2 }), /不支持/);
+  assert.deepEqual(parseBackupDocument(backup), backup);
+  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 3 }), /不支持/);
   const incomplete = { ...backup, resources: { ...backup.resources } };
   delete (incomplete.resources as Partial<typeof incomplete.resources>).projects;
   assert.throws(() => parseBackupDocument(incomplete), /备份不完整/);
+});
+
+test("backup version 1 restores missing Memory Graph resources as empty arrays", () => {
+  const resources=emptyBackupResources() as Record<string,unknown>;
+  delete resources.memory_entities;
+  delete resources.memory_facts;
+  delete resources.memory_sources;
+  const parsed=parseBackupDocument({backup_version:1,exported_at:"2026-09-01T00:00:00Z",schema:{supabase_migration:"legacy"},source:{backend:"supabase"},resources});
+  assert.deepEqual(parsed.resources.memory_entities,[]);
+  assert.deepEqual(parsed.resources.memory_facts,[]);
+  assert.deepEqual(parsed.resources.memory_sources,[]);
 });
 
 test("SQLite conversion preserves scalars and serializes structured values", () => {

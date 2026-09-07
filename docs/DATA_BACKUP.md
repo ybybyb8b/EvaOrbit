@@ -10,11 +10,14 @@ The document shape is:
 
 ```json
 {
-  "backup_version": 1,
+  "backup_version": 2,
   "exported_at": "2026-09-05T08:00:00.000Z",
-  "schema": { "supabase_migration": "202609050001_meal_reminders" },
+  "schema": { "supabase_migration": "202609070001_memory_graph" },
   "source": { "backend": "supabase" },
   "resources": {
+    "memory_entities": [],
+    "memory_facts": [],
+    "memory_sources": [],
     "food_logs": [],
     "food_places": [],
     "food_dishes": []
@@ -23,6 +26,8 @@ The document shape is:
 ```
 
 `resources` contains every table in the explicit allowlist in `src/lib/data-backup.ts`. Rows retain their IDs, foreign-key values, timestamps, date-only anchors, and explicit-time flags. Supabase `user_id` values are removed because a local SQLite database has a fixed local owner.
+
+Version 2 adds `memory_entities`, `memory_facts`, and `memory_sources`. Version 1 backups remain accepted: when those three resources are absent they are normalized to empty arrays before restore, so older backups do not manufacture graph data and do not fail completeness validation.
 
 AI settings/providers/models, API-key ciphertext, push subscriptions, native device credentials, HealthKit aggregates/raw samples, authentication/session/cookie data, and import bookkeeping are excluded. Conversation text is retained, but provider/model foreign keys are set to `null` because the secret-bearing provider tables are excluded. Storage binaries are not embedded; media records and their metadata/path fields are included.
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, Memo, Project, ProjectItem } from "./types.ts";
+import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, Memo, MemoryEntity, MemoryFact, MemorySource, Project, ProjectItem } from "./types.ts";
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {
@@ -14,9 +14,37 @@ function fakeOperations() {
   const luciusState: LuciusState = { currentNote: "", status: "quiet", mood: "composed", updatedAt: null };
   const projects: Project[] = [];
   const projectItems: ProjectItem[] = [];
+  const memoryEntities: MemoryEntity[] = [];
+  const memoryFacts: MemoryFact[] = [];
+  const memorySources: MemorySource[] = [];
   let nextInbox = 0, nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextCase = 0, nextProject = 0, nextProjectItem = 0;
+  let nextMemoryId = 0;
+  const memoryId = () => `00000000-0000-4000-8000-${String(++nextMemoryId).padStart(12,"0")}`;
   const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
   const operations: ResourceRegistryOperations = {
+    memoryEntity: {
+      async search({query,entityType,status,includeMerged,limit=100}) { const needle=query?.toLocaleLowerCase(); return memoryEntities.filter(item=>(includeMerged||status||item.status!=="merged")&&(!status||item.status===status)&&(!entityType||item.entityType===entityType)&&(!needle||item.canonicalName.toLocaleLowerCase().includes(needle)||item.aliases.some(alias=>alias.toLocaleLowerCase().includes(needle)))).slice(0,limit); },
+      async get(id) { const entity=memoryEntities.find(item=>item.id===id); return entity?{entity,facts:memoryFacts.filter(fact=>fact.subjectEntityId===id||fact.objectEntityId===id)}:null; },
+      async create(input) { const item:MemoryEntity={...input,id:memoryId(),status:"active",mergedIntoEntityId:null,createdAt,updatedAt:createdAt};memoryEntities.push(item);return item; },
+      async update(id,input) { const item=memoryEntities.find(entry=>entry.id===id&&entry.status!=="merged");if(!item)return null;Object.assign(item,input,{updatedAt:createdAt});return item; },
+      async setArchived(id,archived) { const item=memoryEntities.find(entry=>entry.id===id&&entry.status!=="merged");if(!item)return null;item.status=archived?"archived":"active";return item; },
+      async merge(sourceId,targetId) { const source=memoryEntities.find(item=>item.id===sourceId&&item.status==="active"),target=memoryEntities.find(item=>item.id===targetId&&item.status==="active");if(!source||!target||source===target)return null;const changed=new Set<string>();for(const fact of memoryFacts){if(fact.subjectEntityId===sourceId){fact.subjectEntityId=targetId;changed.add(fact.id);}if(fact.objectEntityId===sourceId){fact.objectEntityId=targetId;changed.add(fact.id);}if(fact.perspectiveEntityId===sourceId){fact.perspectiveEntityId=targetId;changed.add(fact.id);}}source.status="merged";source.mergedIntoEntityId=targetId;target.aliases=[...new Set([...target.aliases,...source.aliases,source.canonicalName])];return{entity:target,redirectedFacts:changed.size,selfLoops:memoryFacts.filter(f=>f.subjectEntityId===targetId&&f.objectEntityId===targetId).length}; },
+    },
+    memoryFact: {
+      async search({entityId,direction="both",predicate,perspectiveEntityId,status,validOn,limit=100}) { return memoryFacts.filter(item=>(!entityId||(direction!=="in"&&item.subjectEntityId===entityId)||(direction!=="out"&&item.objectEntityId===entityId))&&(!predicate||item.predicate===predicate)&&(perspectiveEntityId===undefined||item.perspectiveEntityId===perspectiveEntityId)&&(!status||item.status===status)&&(!validOn||(!item.validFrom||item.validFrom<=validOn)&&(!item.validTo||item.validTo>=validOn))).slice(0,limit); },
+      async get(id) { const fact=memoryFacts.find(item=>item.id===id);return fact?{fact,sources:memorySources.filter(source=>source.factId===id)}:null; },
+      async create(input) { const item:MemoryFact={...input,id:memoryId(),status:"active",invalidatedAt:null,invalidationReason:null,createdAt,updatedAt:createdAt};memoryFacts.push(item);return item; },
+      async update(id,input) { const item=memoryFacts.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item; },
+      async invalidate(id,reason) { const item=memoryFacts.find(entry=>entry.id===id&&entry.status==="active");if(!item)return null;item.status="invalidated";item.invalidatedAt=createdAt;item.invalidationReason=reason;return item; },
+      async restore(id) { const item=memoryFacts.find(entry=>entry.id===id&&entry.status==="invalidated");if(!item)return null;item.status="active";item.invalidatedAt=null;item.invalidationReason=null;return item; },
+    },
+    memorySource: {
+      async search({factId,sourceResource,sourceRecordId,limit=100}) { return memorySources.filter(item=>(!factId||item.factId===factId)&&(!sourceResource||item.sourceResource===sourceResource)&&(!sourceRecordId||item.sourceRecordId===sourceRecordId)).slice(0,limit); },
+      async get(id) { return memorySources.find(item=>item.id===id)??null; },
+      async create(input) { const item:MemorySource={...input,id:memoryId(),createdAt,updatedAt:createdAt};memorySources.push(item);return item; },
+      async update(id,input) { const item=memorySources.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item; },
+      async delete(id) { const index=memorySources.findIndex(item=>item.id===id);if(index<0)return false;memorySources.splice(index,1);return true; },
+    },
     inbox: {
       async search({ query, status = "inbox", limit = 20 }) { const needle = query?.toLocaleLowerCase(); return inbox.filter((item) => (status === "all" || item.status === status) && (!needle || item.content.toLocaleLowerCase().includes(needle))).slice(0, limit); },
       async get(id) { return inbox.find((item) => item.id === id) ?? null; },
@@ -76,12 +104,12 @@ function fakeOperations() {
     relationEvent:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;},async settle(){throw new Error("unused");}},
     personNote:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;}},
   };
-  return { operations, inbox, chronicles, memos, diary, cases };
+  return { operations, inbox, chronicles, memos, diary, cases, memoryEntities, memoryFacts, memorySources };
 }
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["inbox", "memo", "chronicle", "lucius_diary", "lucius_case", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_entity", "memory_fact", "memory_source", "inbox", "memo", "chronicle", "lucius_diary", "lucius_case", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_case")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
@@ -92,6 +120,8 @@ test("registry exposes long-term memory and project resources without changing g
   assert.deepEqual(registry.schema("lucius_case").supported_actions, ["record_recurrence"]);
   assert.deepEqual(registry.schema("inbox").supported_actions, ["mark_processed", "archive", "restore"]);
   assert.deepEqual(registry.schema("inbox").writable_fields, ["content"]);
+  assert.equal(registry.schema("memory_fact").fields.object_value.type,"json");
+  assert.equal(registry.schema("memory_fact").fields.confidence.type,"number");
   assert.ok(registry.schema("relation_person").writable_fields.includes("closeness_rank"));
   assert.ok(registry.schema("relation_person").writable_fields.includes("relationship_status"));
   assert.equal(registry.schema("relation_person").fields.last_met_at.read_only, true);
@@ -99,6 +129,29 @@ test("registry exposes long-term memory and project resources without changing g
   assert.match(registry.schema("memo").validation_rules.join(" "), /status=active/);
   assert.match(registry.schema("project_item").validation_rules.join(" "), /never automatically promoted to verified/);
   assert.throws(() => registry.schema("media"), /Unknown resource/);
+});
+
+test("Memory Graph resources preserve lifecycle, provenance, and immutable assertion shape", async () => {
+  const registry=createResourceRegistry(fakeOperations().operations);
+  const eva=await registry.create("memory_entity",{canonical_name:"Eva",entity_type:"identity",aliases:["EvaOrbit"]});
+  const project=await registry.create("memory_entity",{canonical_name:"EvaOrbit",entity_type:"project",aliases:["Orbit"]});
+  assert.equal(typeof eva.id,"string");
+  assert.deepEqual((await registry.search("memory_entity",{query:"orbit",filters:{},limit:20})).items.map(item=>item.id),[eva.id,project.id]);
+  const fact=await registry.create("memory_fact",{subject_entity_id:eva.id,predicate:"maintains",object_entity_id:project.id,perspective_entity_id:eva.id,confidence:0.9,importance:5,valid_from:"2026-09-01"});
+  const source=await registry.create("memory_source",{fact_id:fact.id,source_resource:"external",source_record_id:"0007",source_url:"https://example.com/source"});
+  assert.equal(source.source_record_id,"0007");
+  assert.deepEqual((await registry.search("memory_fact",{filters:{entity_id:project.id,direction:"in",predicate:"maintains",status:"active",valid_on:"2026-09-07"},limit:20})).items.map(item=>item.id),[fact.id]);
+  assert.deepEqual((await registry.search("memory_source",{filters:{source_resource:"external",source_record_id:"0007"},limit:20})).items.map(item=>item.id),[source.id]);
+  await assert.rejects(()=>registry.update("memory_fact",fact.id as string,{predicate:"owns"}),/does not accept: predicate/);
+  assert.equal((await registry.action("memory_fact",{id:fact.id as string,action:"invalidate",data:{reason:"corrected"}})).status,"invalidated");
+  assert.equal((await registry.action("memory_fact",{id:fact.id as string,action:"restore",data:{}})).status,"active");
+  const merged=await registry.action("memory_entity",{id:eva.id as string,action:"merge",data:{target_entity_id:project.id}});
+  assert.equal(merged.redirected_facts,1);
+  assert.equal((await registry.get("memory_entity",eva.id as string)).merged_into_entity_id,project.id);
+  const factDetail=await registry.get("memory_fact",fact.id as string);
+  assert.equal((factDetail.sources as Array<Record<string,unknown>>)[0].id,source.id);
+  await assert.rejects(()=>registry.delete("memory_fact",fact.id as string),/does not support delete/);
+  await assert.rejects(()=>registry.search("memory_source",{filters:{source_record_id:7},limit:20}),/opaque string/);
 });
 
 test("optional Web API resources are exposed when production operations are registered", async () => {
@@ -267,7 +320,10 @@ test("production registry delegates every write and action to existing business 
   assert.match(source, /mediaSeries: \{ search: listMediaSeries/);
   assert.match(source, /catRecord: \{ search: catTimeline/);
   assert.match(source, /reminder: \{ search: listReminders/);
-  assert.doesNotMatch(source, /services\/(?:evaorbit|memory)|\btask:\s*\{|\bmemory:\s*\{/i);
+  assert.match(source, /memoryEntity:\{search:listMemoryEntities/);
+  assert.match(source, /memoryFact:\{search:listMemoryFacts/);
+  assert.match(source, /memorySource:\{search:listMemorySources/);
+  assert.doesNotMatch(source, /services\/(?:evaorbit|memory)["']|\btask:\s*\{|\bmemory:\s*\{/i);
   assert.match(source, /inbox: \{ search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox \}/);
   assert.doesNotMatch(source, /\.from\(|DELETE FROM|INSERT INTO|UPDATE\s+\w+/i);
 });

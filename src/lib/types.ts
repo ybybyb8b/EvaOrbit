@@ -21,6 +21,66 @@ export interface Memory {
   updatedAt: string;
 }
 
+export type MemoryEntityStatus = "active" | "archived" | "merged";
+export interface MemoryEntity {
+  id: string;
+  canonicalName: string;
+  entityType: string;
+  aliases: string[];
+  description: string | null;
+  status: MemoryEntityStatus;
+  mergedIntoEntityId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MemoryFactStatus = "active" | "invalidated";
+export interface MemoryFact {
+  id: string;
+  subjectEntityId: string;
+  predicate: string;
+  objectEntityId: string | null;
+  objectValue: unknown | null;
+  perspectiveEntityId: string | null;
+  confidence: number;
+  importance: number;
+  validFrom: string | null;
+  validTo: string | null;
+  status: MemoryFactStatus;
+  invalidatedAt: string | null;
+  invalidationReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemorySource {
+  id: string;
+  factId: string;
+  sourceResource: string;
+  sourceRecordId: string | null;
+  sourceUrl: string | null;
+  excerpt: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryEntityDetail {
+  entity: MemoryEntity;
+  facts: MemoryFact[];
+}
+
+export interface MemoryFactDetail {
+  fact: MemoryFact;
+  sources: MemorySource[];
+}
+
+export interface MemoryEntityMergeResult {
+  entity: MemoryEntity;
+  redirectedFacts: number;
+  selfLoops: number;
+}
+
 export interface DashboardSummary {
   openTasks: number;
   dueToday: number;

@@ -44,6 +44,19 @@ test("restore command targets only an explicit development SQLite and keeps IDs/
     assert.equal(database.prepare("SELECT remind_at FROM meal_reminder_rules WHERE meal_type='breakfast'").get().remind_at, "10:00");
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     database.close();
+
+    const legacyResources=emptyBackupResources();
+    delete legacyResources.memory_entities;
+    delete legacyResources.memory_facts;
+    delete legacyResources.memory_sources;
+    fs.writeFileSync(backupPath,JSON.stringify({backup_version:1,exported_at:"2026-09-01T00:00:00Z",schema:{supabase_migration:"legacy"},source:{backend:"supabase"},resources:legacyResources}));
+    const legacyResult=spawnSync(process.execPath,["scripts/restore-backup.mjs",backupPath],{cwd:process.cwd(),encoding:"utf8",env:{...process.env,NODE_ENV:"development",EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:databasePath,VERCEL:""}});
+    assert.equal(legacyResult.status,0,legacyResult.stderr||legacyResult.stdout);
+    const restoredLegacy=new DatabaseSync(databasePath,{readOnly:true});
+    assert.equal(restoredLegacy.prepare("SELECT count(*) count FROM projects").get().count,0);
+    assert.equal(restoredLegacy.prepare("SELECT count(*) count FROM memory_entities").get().count,0);
+    assert.deepEqual(restoredLegacy.prepare("PRAGMA foreign_key_check").all(),[]);
+    restoredLegacy.close();
   } finally {
     try {
       fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
