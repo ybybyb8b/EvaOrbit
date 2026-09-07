@@ -150,7 +150,7 @@ export interface InboxItem {
   updatedAt: string;
 }
 
-export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "person" | "media" | "chronicle";
+export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "media" | "chronicle";
 
 export interface TimelineEvent {
   id: string;
@@ -166,6 +166,16 @@ export interface TimelineEvent {
   relatedPeople: Array<number | string>;
   relatedPets: Array<number | string>;
   metadata: Record<string, unknown>;
+}
+
+export interface TimelineMonthSummary {
+  month: string;
+  days: Record<string, TimelineDaySummary>;
+}
+
+export interface TimelineDaySummary {
+  count: number;
+  highlighted: boolean;
 }
 
 export type TrackerTimeType = "point" | "range";

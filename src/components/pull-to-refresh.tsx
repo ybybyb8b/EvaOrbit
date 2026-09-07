@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "./locale-controller";
 import {
   getPullRefreshDistance,
@@ -37,13 +37,25 @@ function hasScrollableParent(target: Element) {
 
 export function PullToRefresh({ enabled }: { enabled: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { english } = useLocale();
   const indicatorRef = useRef<HTMLDivElement>(null);
   const spinnerRef = useRef<HTMLSpanElement>(null);
   const phaseRef = useRef<RefreshPhase>("idle");
   const gestureRef = useRef({ tracking: false, startX: 0, startY: 0, startTime: 0, currentDistance: 0, thresholdFeedbackPlayed: false });
-  const reloadTimerRef = useRef<number | null>(null);
+  const refreshStartedRef = useRef(false);
+  const resetRefreshRef = useRef<() => void>(() => undefined);
+  const refreshFallbackRef = useRef<number | null>(null);
   const [phase, setPhaseState] = useState<RefreshPhase>("idle");
+  const [refreshPending, startRefreshTransition] = useTransition();
+
+  useEffect(() => {
+    if (refreshPending || !refreshStartedRef.current) return;
+    refreshStartedRef.current = false;
+    if (refreshFallbackRef.current !== null) window.clearTimeout(refreshFallbackRef.current);
+    refreshFallbackRef.current = null;
+    resetRefreshRef.current();
+  }, [refreshPending]);
 
   useEffect(() => {
     const indicator = indicatorRef.current;
@@ -75,6 +87,7 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       }
       setPhase("idle");
     };
+    resetRefreshRef.current = reset;
     setVisuals(0);
     setPhase("idle");
     const canStart = (target: EventTarget | null) => {
@@ -135,7 +148,12 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       }
       settleTo(54);
       setPhase("refreshing");
-      reloadTimerRef.current = window.setTimeout(() => window.location.reload(), 360);
+      refreshStartedRef.current = true;
+      startRefreshTransition(() => router.refresh());
+      refreshFallbackRef.current = window.setTimeout(() => {
+        refreshStartedRef.current = false;
+        reset();
+      }, 4_000);
     };
     const onTouchCancel = () => reset();
 
@@ -148,9 +166,10 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
       document.removeEventListener("touchcancel", onTouchCancel);
-      if (reloadTimerRef.current !== null) window.clearTimeout(reloadTimerRef.current);
+      resetRefreshRef.current = () => undefined;
+      if (refreshFallbackRef.current !== null) window.clearTimeout(refreshFallbackRef.current);
     };
-  }, [enabled, pathname]);
+  }, [enabled, pathname, router, startRefreshTransition]);
 
   const label = phase === "refreshing"
     ? english ? "Refreshing" : "正在刷新"

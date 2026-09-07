@@ -1,4 +1,4 @@
-import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineEvent, Tracker, TrackerEntry } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 
 export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = []): TimelineEvent[] {
@@ -51,6 +51,31 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
   return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort(compareTimelineEvents);
 }
 
+export function buildTrainingTimelineEvents(logs: TrainingLog[]): TimelineEvent[] {
+  const events: TimelineEvent[] = logs.map((item) => ({
+    id: `training:${item.id}`,
+    eventType: "training.logged",
+    sourceType: "training" as const,
+    sourceId: item.id,
+    title: item.course || "Training",
+    detail: [item.bodyParts.join(" · "), item.teacher, item.durationMinutes ? `${item.durationMinutes} min` : ""].filter(Boolean).join(" · "),
+    occurredAt: item.occurredAt,
+    hasExplicitTime: item.occurredHasExplicitTime,
+    endAt: null,
+    href: `/health?training=${item.id}`,
+    relatedPeople: [],
+    relatedPets: [],
+    metadata: {
+      trainingType: item.trainingType,
+      bodyParts: item.bodyParts,
+      teacher: item.teacher,
+      course: item.course,
+      durationMinutes: item.durationMinutes,
+    },
+  }));
+  return events.sort(compareTimelineEvents);
+}
+
 export function groupMealTimelineEvents(events: TimelineEvent[]) {
   const mealGroups = new Map<string, TimelineEvent[]>();
   const otherEvents: TimelineEvent[] = [];
@@ -73,6 +98,19 @@ export function groupMealTimelineEvents(events: TimelineEvent[]) {
     } satisfies TimelineEvent;
   });
   return [...otherEvents, ...meals].sort(compareTimelineEvents);
+}
+
+export function summarizeTimelineDays(events: TimelineEvent[]) {
+  const days: Record<string, TimelineDaySummary> = {};
+  for (const event of events) {
+    const day = dateInEvaOrbit(new Date(event.occurredAt));
+    const current = days[day] ?? { count: 0, highlighted: false };
+    days[day] = {
+      count: current.count + 1,
+      highlighted: current.highlighted || event.sourceType === "training" || event.sourceType === "health",
+    };
+  }
+  return days;
 }
 
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}

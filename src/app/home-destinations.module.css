@@ -18,11 +18,11 @@
 .copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 21px/1 var(--font-editorial-label); }
 .card > :global(.icon) { width: 14px; color: var(--text-tertiary); }
 .arranging { grid-template-columns: 40px minmax(0, 1fr) auto; background: var(--surface-warm); cursor: grab; }
-.arranging:active { cursor: grabbing; }
-.dragHandle { color: var(--text-tertiary); font-weight: 900; letter-spacing: 2px; transform: rotate(90deg); }
-.orderControls { grid-column: 2 / -1; display: flex; gap: 6px; }
-.orderControls button { width: 34px; height: 34px; border: 0; border-radius: 10px; background: rgb(var(--surface-raised-rgb) / .72); color: var(--green); cursor: pointer; }
-.orderControls button:disabled { opacity: .3; }
+.dragHandle { width: 40px; height: 40px; margin-right: -8px; padding: 0; border: 0; border-radius: 12px; display: grid; place-items: center; touch-action: none; background: transparent; color: var(--text-tertiary); cursor: grab; }
+.dragHandle:active { cursor: grabbing; }
+.dragHandle span { font-weight: 900; letter-spacing: 2px; transform: rotate(90deg); }
+.dragging { opacity: .24; }
+.dragPreview { position: fixed; z-index: 160; margin: 0; pointer-events: none; background: rgb(var(--surface-raised-rgb) / .94); box-shadow: 0 18px 46px rgb(var(--shadow-rgb) / .18); transform: translate3d(0,0,0) scale(1.02); will-change: transform; }
 @media (max-width: 860px) { .favoriteGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .destinations { padding-top: 0; }
@@ -41,5 +41,6 @@
 :global(html[data-mode="dark"]) .card { background: rgb(255 255 255 / .032); }
 :global(html[data-mode="dark"]) .card:hover { background: rgb(255 255 255 / .06); }
 :global(html[data-mode="dark"]) .icon { background: rgb(255 255 255 / .045); }
+:global(html[data-mode="dark"]) .dragPreview { background: rgb(var(--surface-raised-rgb) / .96); box-shadow: 0 18px 44px rgb(0 0 0 / .32); }
 @media (max-width: 370px) { .favoriteGrid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }

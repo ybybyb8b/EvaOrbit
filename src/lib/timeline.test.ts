@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEvents, groupMealTimelineEvents } from "./timeline.ts";
-import type { DrinkLog, FoodLog, HealthRecord, Tracker, TrackerEntry } from "./types.ts";
+import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "./timeline.ts";
+import type { DrinkLog, FoodLog, HealthRecord, TrainingLog, Tracker, TrackerEntry } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
@@ -22,6 +22,10 @@ const trackerEntry: TrackerEntry = {
 const healthRecord: HealthRecord = {
   id: 19, occurredAt: "2026-08-26T08:00:00.000Z", occurredHasExplicitTime: true, type: "symptom", title: "Headache", summary: "Mild",
   status: "active", startedAt: null, startedHasExplicitTime: true, endedAt: null, endedHasExplicitTime: true, details: { severity: "mild" }, createdAt: "", updatedAt: "",
+};
+const trainingLog: TrainingLog = {
+  id: 23, occurredAt: "2026-08-26T05:00:00.000Z", occurredHasExplicitTime: false, trainingType: "strength", bodyParts: ["背", "核心"],
+  teacher: "Eva", course: "Core flow", durationMinutes: 45, notes: "", createdAt: "", updatedAt: "",
 };
 
 test("merges module records into a newest-first timeline contract", () => {
@@ -51,4 +55,23 @@ test("groups food records into one home timeline row per meal", () => {
   assert.equal(events[1].eventType, "food.meal");
   assert.equal(events[1].metadata.count, 2);
   assert.deepEqual(events[1].metadata.foodItems, [{ title: "青菜", detail: "一碟" }, { title: "午饭", detail: "半碗饭" }]);
+});
+
+test("maps training logs into editable date-aware timeline events", () => {
+  const [event] = buildTrainingTimelineEvents([trainingLog]);
+  assert.equal(event.sourceType, "training");
+  assert.equal(event.hasExplicitTime, false);
+  assert.equal(event.href, "/health?training=23");
+  assert.equal(event.metadata.trainingType, "strength");
+  assert.match(event.detail, /45 min/);
+});
+
+test("marks health and training days as important while retaining an accessible count", () => {
+  const ordinary = groupMealTimelineEvents(buildTimelineEvents([food], [drink]));
+  const important = [...buildTimelineEvents([], [], [], [], [healthRecord]), ...buildTrainingTimelineEvents([trainingLog])];
+  const summary = summarizeTimelineDays([...ordinary, ...important]);
+  assert.deepEqual(summary["2026-08-26"], { count: 4, highlighted: true });
+
+  const foodOnly = summarizeTimelineDays(groupMealTimelineEvents(buildTimelineEvents([food], [])));
+  assert.deepEqual(foodOnly["2026-08-26"], { count: 1, highlighted: false });
 });

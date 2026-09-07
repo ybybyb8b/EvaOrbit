@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -40,4 +41,10 @@ test("slow and too-short under-threshold pulls do not trigger", () => {
 
 test("a deliberate half-threshold flick above the velocity threshold triggers", () => {
   assert.equal(shouldTriggerPullRefresh(REFRESH_THRESHOLD / 2, 300), true);
+});
+
+test("pull refresh preserves the current document instead of forcing a white reload frame", () => {
+  const source = readFileSync(new URL("../components/pull-to-refresh.tsx", import.meta.url), "utf8");
+  assert.match(source, /startRefreshTransition\(\(\) => router\.refresh\(\)\)/);
+  assert.doesNotMatch(source, /window\.location\.reload|location\.reload/);
 });

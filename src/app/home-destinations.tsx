@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { homeFavoriteModuleOrder, normalizeHomeModuleOrder, type HomeModuleId } from "@/lib/home-modules";
+import { playNativeHaptic } from "@/lib/native-haptics";
 import styles from "./home-destinations.module.css";
 import { useLocale } from "@/components/locale-controller";
 
@@ -24,6 +25,8 @@ const modules: Record<HomeModuleId, { href: string; name: string; icon: IconName
 };
 
 const FAVORITE_LIMIT = 6;
+type DragPreview = { id: HomeModuleId; left: number; top: number; width: number; height: number };
+const chineseNames: Partial<Record<HomeModuleId, string>> = { inbox: "散落", projects: "工坊", trackers: "观测", food: "吃吃", drinks: "喝喝", health: "体征", cats: "咪子", people: "她们", media: "展架", memo: "碎片", chronicle: "纪事" };
 
 export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[] }) {
   const { english } = useLocale();
@@ -32,6 +35,9 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [dragged, setDragged] = useState<HomeModuleId | null>(null);
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const dragRef = useRef<{ id: HomeModuleId; pointerId: number; startX: number; startY: number } | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const arrangeableOrder = order.filter((id) => id !== "eva");
   const favorites = homeFavoriteModuleOrder(order, FAVORITE_LIMIT);
 
@@ -44,13 +50,55 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
     });
   }
 
-  function moveBefore(target: HomeModuleId) {
-    if (!dragged || dragged === target) return;
+  function moveTo(draggedId: HomeModuleId, target: HomeModuleId) {
+    if (draggedId === target) return;
     setOrder((current) => {
-      const next: HomeModuleId[] = current.filter((item) => item !== dragged && item !== "eva");
-      next.splice(next.indexOf(target), 0, dragged);
+      const next: HomeModuleId[] = current.filter((item) => item !== "eva");
+      const from = next.indexOf(draggedId); const to = next.indexOf(target);
+      if (from < 0 || to < 0 || from === to) return current;
+      next.splice(from, 1); next.splice(to, 0, draggedId);
       return [...next, "eva"];
     });
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, id: HomeModuleId) {
+    if (!event.isPrimary || saving) return;
+    const card = event.currentTarget.closest<HTMLElement>("[data-home-module]");
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
+    setDragged(id);
+    setDragPreview({ id, left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+    playNativeHaptic("selection");
+  }
+
+  function drag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    if (previewRef.current) previewRef.current.style.transform = `translate3d(${event.clientX - current.startX}px,${event.clientY - current.startY}px,0) scale(1.02)`;
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-home-module]")?.dataset.homeModule as HomeModuleId | undefined;
+    if (target) moveTo(current.id, target);
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    dragRef.current = null;
+    setDragged(null);
+    setDragPreview(null);
+    playNativeHaptic("light");
+  }
+
+  function moveWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, id: HomeModuleId) {
+    const offsets: Partial<Record<string, number>> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 };
+    const offset = offsets[event.key];
+    if (!offset) return;
+    event.preventDefault();
+    move(id, offset);
+    playNativeHaptic("selection");
   }
 
   async function finishArranging() {
@@ -64,14 +112,13 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
     finally { setSaving(false); }
   }
 
-  function spaceCard(id: HomeModuleId, index: number) {
+  function spaceCard(id: HomeModuleId) {
     const item = modules[id];
-    const names: Partial<Record<HomeModuleId, string>> = { inbox: "散落", projects: "工坊", trackers: "观测", food: "吃吃", drinks: "喝喝", health: "体征", cats: "咪子", people: "她们", media: "展架", memo: "碎片", chronicle: "纪事" };
-    const displayName = english ? item.name : names[id] ?? item.name;
+    const displayName = english ? item.name : chineseNames[id] ?? item.name;
     const content = <><span className={styles.icon}><Icon name={item.icon} /></span><span className={styles.copy}><strong>{displayName}</strong></span></>;
     if (!arranging) return <Link className={styles.card} href={item.href} key={id}>{content}<Icon name="arrow" /></Link>;
-    return <div className={`${styles.card} ${styles.arranging}`} draggable onDragStart={() => setDragged(id)} onDragEnd={() => setDragged(null)} onDragOver={(event) => { event.preventDefault(); moveBefore(id); }} key={id}>
-      {content}<span className={styles.dragHandle} aria-hidden="true">••</span><div className={styles.orderControls}><button onClick={() => move(id, -1)} disabled={index === 0} aria-label={english ? `Move ${displayName} forward` : `将 ${displayName} 前移`}>↑</button><button onClick={() => move(id, 1)} disabled={index === arrangeableOrder.length - 1} aria-label={english ? `Move ${displayName} back` : `将 ${displayName} 后移`}>↓</button></div>
+    return <div className={`${styles.card} ${styles.arranging} ${dragged === id ? styles.dragging : ""}`} data-home-module={id} key={id}>
+      {content}<button className={styles.dragHandle} type="button" aria-label={english ? `Drag ${displayName}; use arrow keys to move` : `拖动${displayName}；也可使用方向键排序`} onPointerDown={(event) => startDrag(event, id)} onPointerMove={drag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={(event) => moveWithKeyboard(event, id)}><span aria-hidden="true">••</span></button>
     </div>;
   }
 
@@ -83,8 +130,12 @@ export function HomeDestinations({ initialOrder }: { initialOrder: HomeModuleId[
     {error && <p className={styles.error}>{error}</p>}
 
     <nav className={styles.favoriteGrid} aria-label={english ? arranging ? "Arrange Home spaces" : "Favorite spaces" : arranging ? "管理首页驻点" : "驻点"}>
-      {(arranging ? arrangeableOrder : favorites).map((id, index) => spaceCard(id, index))}
+      {(arranging ? arrangeableOrder : favorites).map((id) => spaceCard(id))}
     </nav>
+
+    {dragPreview && <div ref={previewRef} className={`${styles.card} ${styles.dragPreview}`} style={{ left: dragPreview.left, top: dragPreview.top, width: dragPreview.width, height: dragPreview.height }} aria-hidden="true">
+      <span className={styles.icon}><Icon name={modules[dragPreview.id].icon} /></span><span className={styles.copy}><strong>{english ? modules[dragPreview.id].name : chineseNames[dragPreview.id] ?? modules[dragPreview.id].name}</strong></span>
+    </div>}
 
   </section>;
 }
