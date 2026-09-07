@@ -4,7 +4,7 @@
 >
 > 只想安装已经打包好的 IPA 时，先看 [`docs/IOS_IPA_INSTALL_QUICKSTART.md`](./IOS_IPA_INSTALL_QUICKSTART.md)。
 
-本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程只是加载生产站点的轻量 `WKWebView` Host。
+本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程是加载生产站点 `/native` 的轻量 `WKWebView` Host。成功联网一次后，该同源 Shell 可由 Service Worker 离线启动，数据同步仍只经过 Vercel。
 
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库现已加入第一批 HealthKit 能量同步代码；它只读取静息能量和活动能量，并新增原生 SQLite/outbox、设备凭据、同步 API 与独立的 `healthkit_daily_energy` 表。部署这批代码前须先应用 `supabase/migrations/202609010001_healthkit_energy.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
@@ -322,19 +322,22 @@ bash scripts/ios/xtool-install.sh /path/to/new/EvaOrbitHost-ad-hoc.ipa
 
 每次首次安装或 Native Host 升级后至少检查：
 
-- App 能启动并加载 EvaOrbit 生产站点，而不是空白页或循环刷新。
+- App 能启动并加载 EvaOrbit 生产 `/native` Shell，而不是空白页或循环刷新。
 - Supabase 登录、退出、App 重启后的 cookie/session 行为。
 - 内部导航、返回手势、外部链接和新窗口链接。
 - 从 Photos 和 Files 上传头像、关系照片、媒体封面和 tracker 图片。
 - iPhone 16 Pro 的安全区、横竖屏、表单、键盘聚焦和交互式收起。
 - AI streaming，以及 WebKit content process 恢复。
-- 离线启动错误页、重试和恢复联网。
+- 部署 `202609070002_inbox_client_mutation_id.sql` 后，联网打开 `/native` 一次并确认 Inbox 数据已出现；杀掉 App、关闭代理使 Vercel 不可达，再启动时仍应打开 Shell、显示本地 Inbox，并允许新增和修改。
+- 恢复 Vercel 后应自动清空 pending changes；Supabase 中离线 create 只出现一个对应行，修改值与本地一致。首个成功联网启动之前仍允许显示原生错误页，这是当前明确边界。
 - `window.EvaOrbitNative.call("host.ping")` 和 `host.getInfo()` 基础 bridge。
 - 在待办完成、表单提交、选择控件、危险操作、错误提示和下拉刷新阈值上检查触感；确认普通导航、滚动、输入与后台同步不会连续触发。
 
 安装包含 HealthKit 能量同步的新 IPA 后，再进入 EvaOrbit 的 Health 页面并点击 `Connect / Request Access`；仅安装或启动 App 不会主动弹出权限框。授权页只应出现 Resting Energy 与 Active Energy 的读取请求。随后检查 `Data read`、两类 background delivery、pending 数、最近本地同步和最近上传时间。iOS 不向读取方透露每一种类型是否被允许，因此不能把“授权请求已完成”当成“读权限已授予”；`Data read` 只有在 EvaOrbit 实际读到样本后才会变化。
 
 HealthKit 运行时实现不会改变本 runbook 的续签步骤。Web-only/PWA 不显示授权按钮；设备 token、样本 UUID、anchor 和原始样本不会写入 Web 日志，也不会上传原始样本。服务端只接收按自然日、按类型聚合的 kcal 快照。
+
+安装包含自定义本地通知声音的新 IPA 后，在 Notifications 页面确认 `Permission`、`Alerts`、`Sounds` 和 `Scheduled`。Alerts 与 Sounds 都应为 Enabled；旧版 Host 已经授权过的设备可能需要从 `Open iOS Settings` 手动开启 Sounds。点击 `Test notification` 后等待约 5 秒，前台和后台都应出现 banner 并播放 `EvaOrbitNotification.wav`；不会设置 app badge。真实提醒只有在联网成功读取 `/api/notifications` 后才会写入本机，而且 date-only、没有明确时间也没有 snooze 时间的提醒按产品语义不会调度；`Scheduled = 0` 时应先联网 Refresh status 并检查提醒是否有未来明确时间。
 
 ## 常见故障定位
 

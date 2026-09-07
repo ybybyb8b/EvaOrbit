@@ -1,4 +1,5 @@
 const CACHE = "eva-orbit-static-v7";
+const NATIVE_SHELL_CACHE = "eva-orbit-native-shell-v1";
 const ICON_NAMES = [
   "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
 ];
@@ -28,13 +29,39 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))));
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== NATIVE_SHELL_CACHE).map((key) => caches.delete(key)))));
   self.clients.claim();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "CACHE_NATIVE_SHELL" || !Array.isArray(event.data.assets)) return;
+  event.waitUntil((async () => {
+    const assets = [...new Set(event.data.assets)].filter((value) => {
+      if (typeof value !== "string") return false;
+      const url = new URL(value, self.location.origin);
+      return url.origin === self.location.origin && (url.pathname === "/native" || url.pathname.startsWith("/_next/static/") || url.pathname === "/theme-init.js");
+    });
+    if (!assets.includes("/native")) return;
+    const responses = await Promise.all(assets.map(async (asset) => {
+      const response = await fetch(new Request(asset, { credentials: "include", cache: "no-store" }));
+      if (!response.ok) throw new Error(`Could not cache ${asset}`);
+      if (asset === "/native" && (new URL(response.url).pathname !== "/native" || !response.headers.get("content-type")?.includes("text/html"))) throw new Error("Native shell did not return the expected HTML");
+      return [asset, response];
+    }));
+    const cache = await caches.open(NATIVE_SHELL_CACHE);
+    await Promise.all(responses.filter(([asset]) => asset !== "/native").map(([asset, response]) => cache.put(asset, response)));
+    const shell = responses.find(([asset]) => asset === "/native");
+    if (shell) await cache.put(shell[0], shell[1]);
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (event.request.mode === "navigate" && url.pathname === "/native") {
+    event.respondWith(caches.open(NATIVE_SHELL_CACHE).then((cache) => cache.match("/native")).then((cached) => cached || fetch(event.request)));
+    return;
+  }
   // Private HTML and API responses are never cached. This prevents signed-out
   // users from reopening another session's data through the PWA cache.
   if (event.request.mode === "navigate" || url.pathname.startsWith("/api/")) return;

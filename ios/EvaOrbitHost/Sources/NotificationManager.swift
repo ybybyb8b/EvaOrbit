@@ -38,8 +38,14 @@ struct NativePendingNotification: Equatable {
     }
 }
 
+struct NativeNotificationSettings: Equatable {
+    let authorizationStatus: UNAuthorizationStatus
+    let alertSetting: UNNotificationSetting
+    let soundSetting: UNNotificationSetting
+}
+
 protocol LocalNotificationCenter: AnyObject {
-    func authorizationStatus() async -> UNAuthorizationStatus
+    func settings() async -> NativeNotificationSettings
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
     func add(_ request: UNNotificationRequest) async throws
     func pendingRequests() async -> [UNNotificationRequest]
@@ -53,9 +59,13 @@ final class SystemLocalNotificationCenter: LocalNotificationCenter {
         self.center = center
     }
 
-    func authorizationStatus() async -> UNAuthorizationStatus {
+    func settings() async -> NativeNotificationSettings {
         let settings = await center.notificationSettings()
-        return settings.authorizationStatus
+        return NativeNotificationSettings(
+            authorizationStatus: settings.authorizationStatus,
+            alertSetting: settings.alertSetting,
+            soundSetting: settings.soundSetting
+        )
     }
 
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
@@ -78,6 +88,7 @@ final class SystemLocalNotificationCenter: LocalNotificationCenter {
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let reminderIdentifierPrefix = "evaorbit-reminder-"
     static let testIdentifierPrefix = "evaorbit-test-"
+    static let soundFileName = "EvaOrbitNotification.wav"
 
     private let center: LocalNotificationCenter
 
@@ -88,18 +99,21 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func status() async -> [String: Any] {
-        let permission = NativeNotificationPermission(await center.authorizationStatus())
+        let settings = await center.settings()
+        let permission = NativeNotificationPermission(settings.authorizationStatus)
         let pending = await pendingNotifications()
         return [
             "available": true,
             "permission": permission.rawValue,
+            "alertSetting": Self.settingName(settings.alertSetting),
+            "soundSetting": Self.settingName(settings.soundSetting),
             "scheduledCount": pending.count,
         ]
     }
 
     func requestAuthorization() async throws -> [String: Any] {
-        if await center.authorizationStatus() == .notDetermined {
-            _ = try await center.requestAuthorization(options: [.alert])
+        if await center.settings().authorizationStatus == .notDetermined {
+            _ = try await center.requestAuthorization(options: [.alert, .sound])
         }
         return await status()
     }
@@ -111,12 +125,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
         guard triggerAt.timeIntervalSinceNow > 0 else { throw NotificationManagerError.triggerNotInFuture }
 
-        let permission = NativeNotificationPermission(await center.authorizationStatus())
+        let permission = NativeNotificationPermission(await center.settings().authorizationStatus)
         guard permission.canSchedule else { throw NotificationManagerError.notAuthorized }
 
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
+        content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: Self.soundFileName))
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: triggerAt.timeIntervalSinceNow, repeats: false)
         try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
     }
@@ -155,12 +170,21 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         return nil
     }
 
+    private static func settingName(_ setting: UNNotificationSetting) -> String {
+        switch setting {
+        case .enabled: return "enabled"
+        case .disabled: return "disabled"
+        case .notSupported: return "not_supported"
+        @unknown default: return "not_supported"
+        }
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .list])
+        completionHandler([.banner, .list, .sound])
     }
 }
 

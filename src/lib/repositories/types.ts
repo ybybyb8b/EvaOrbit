@@ -49,7 +49,9 @@ export type InternalAiProvider = Omit<AiProvider, "models" | "hasApiKey" | "mask
 export type AiProviderInput = { name: string; providerType: string; baseUrl: string; enabled: boolean; apiKey?: string; clearApiKey: boolean };
 export type AiModelConfigInput = { modelId: string; displayName: string; enabled: boolean; isDefault: boolean; capabilities: Record<string, unknown> };
 
-export type NewInboxItem = Pick<InboxItem, "content" | "source">;
+export type NewInboxItem = Pick<InboxItem, "content" | "source"> & {
+  clientMutationId?: string;
+};
 export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt" | "foodPlaceName" | "foodPlaceBranch" | "foodDishName">;
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
 export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryItem["category"]; limit?: number };
@@ -187,7 +189,7 @@ export interface EvaOrbitRepository {
   listInbox(status?: InboxStatus | "all"): Promise<InboxItem[]>;
   getInboxItem(id: number): Promise<InboxItem | null>;
   createInboxItem(input: NewInboxItem): Promise<InboxItem>;
-  updateInboxItem(id: number, input: Record<string, unknown>): Promise<InboxItem | null>;
+  updateInboxItem(id: number, input: Record<string, unknown>, expectedUpdatedAt?: string | null, clientMutationId?: string | null): Promise<InboxItem | null>;
   deleteInboxItem(id: number): Promise<boolean>;
 
   listFoodLogs(input?: { date?: string; query?: string; mealType?: string; from?: string; to?: string; foodPlaceId?: number; foodDishId?: number; limit?: number }): Promise<FoodLog[]>;

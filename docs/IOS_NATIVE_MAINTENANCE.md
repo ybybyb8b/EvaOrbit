@@ -24,7 +24,7 @@ WKWebView Native Host
 
 - Web / 服务端负责业务规则、数据模型、提醒时间和通知文案；Swift 不复制业务规则，也不建立第二套业务数据库。
 - Swift 只实现必须依赖 iOS 的能力，并通过现有 `NativeBridge` 暴露最小接口。
-- Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app`。Bridge 只允许与该 URL 完全相同的 HTTPS scheme、host 和有效端口。
+- Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app/native`。Bridge 仍按 scheme、host 和有效端口允许同源页面与 API；`/native` 路径不会收窄现有 bridge 的同源范围。
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
@@ -44,6 +44,7 @@ WKWebView Native Host
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
 | Web Push / Cron | `src/lib/push/**`、现有 reminders delivery API / cron 配置 |
+| iOS Local-first Shell / Inbox | `public/sw.js`、`src/lib/local-first-inbox.ts`、`src/app/native/page.tsx` |
 | iOS CI 构建与打包 | `.github/workflows/ios-native-host.yml`、`scripts/ios/package-ad-hoc-ipa.sh` |
 | patched xtool 构建 | `.github/workflows/xtool-patched.yml`、`tools/xtool/patches/**` |
 | Windows / WSL 安装辅助 | `scripts/ios/xtool-env.sh`、`scripts/ios/xtool-install.sh` |
@@ -51,6 +52,15 @@ WKWebView Native Host
 | 完整安装与故障 runbook | `docs/IOS_NATIVE_HOST.md` |
 
 不要依赖旧聊天记录猜测工程状态；先检查以上文件和当前 Git diff。
+
+### 2.1 第一阶段 Local-first 边界
+
+- 用户成功联网打开 `/native` 至少一次后，Service Worker 持久保存同源 Shell 及其静态依赖；其他页面导航、API 响应和私有业务数据不进入 Cache Storage。
+- Inbox 是当前唯一 Local-first 业务资源。其最近数据、乐观写入、pending mutation 与本地/服务端 ID 映射保存在 IndexedDB；其他资源仍保持在线模式。
+- 同步前通过 `/api/sync/status` 实际访问 EvaOrbit API / Supabase，不用系统网络状态代替服务可达性。`online` 事件只负责触发重试。
+- create 使用客户端 mutation UUID 与 `(user_id, client_mutation_id)` 唯一索引避免重复记录；update 使用 `updated_at` 前置条件，冲突返回 409 并保留本地队列。
+- 数据路径仍是 `iOS / Web UI → Vercel → Supabase`。IndexedDB 是离线工作副本，不允许客户端绕过 Vercel 访问 Supabase。
+- 该能力不新增 framework、entitlement、系统权限或 bridge 方法，也不改变 HealthKit、通知、Cookie/session 与签名链。
 
 ## 三、已经验证的构建、打包、免费签名和安装链
 
@@ -193,7 +203,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 
 ### 4.3 Local Notification：当前获取与降级语义
 
-`NotificationManager` 使用 `UNUserNotificationCenter`，当前只请求 `.alert`。状态直接映射为：
+`NotificationManager` 使用 `UNUserNotificationCenter`，请求 `.alert` 和 `.sound`，不请求 `.badge`。聚合授权状态直接映射为：
 
 - `not_determined`
 - `denied`
@@ -204,11 +214,14 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 需要保留的行为：
 
 - `notification.getStatus` 只读取真实状态，不触发弹窗。
+- 状态同时返回 iOS 的 `alertSetting` 和 `soundSetting`，用于识别“总体已授权、但 Alerts 或 Sounds 被单独关闭”的情况。
 - `notification.requestAuthorization` 仅在 `.notDetermined` 时调用系统请求；Denied 时不死循环重试。
-- Denied 时 Settings 提供打开 iOS Settings 的入口，并保留 Web Notifications fallback。
+- Denied、Alerts 关闭或 Sounds 关闭时，Settings 提供打开 iOS Settings 的入口，并保留 Web Notifications fallback。
 - 只有 authorized / provisional / ephemeral 才允许 schedule。
-- 第一版只包含 identifier、title、body、trigger time；不包含 APNs、badge、自定义声音、action、category 或图片。
-- App 在前台收到本地通知时展示 banner/list。
+- 通知包含 identifier、title、body、trigger time 和 `Resources/EvaOrbitNotification.wav` 自定义声音；不包含 APNs、badge、action、category 或图片。
+- App 在前台收到本地通知时展示 banner/list 并播放通知内容关联的声音。
+
+自定义声音必须作为 main bundle resource 被打进 IPA。当前 WAV 是单声道 44.1 kHz Linear PCM，时长约 0.8 秒，满足 iOS 本地通知声音约束。修改文件或声音名后必须同步更新 `project.yml` 与 `NotificationManager.soundFileName`，重新构建并安装 IPA。已经授权过旧版 `.alert`-only Host 的设备不会再次出现系统授权弹窗；若升级后 `soundSetting` 仍显示 Disabled，需要用户在 iOS Settings 中手动打开 EvaOrbit 的 Sounds。
 
 原生通知 identifier 由 Web 稳定生成：
 

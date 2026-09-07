@@ -3,7 +3,7 @@ import XCTest
 
 final class HostConfigurationTests: XCTestCase {
     func testAllowsOnlyTheConfiguredHTTPSOrigin() throws {
-        let configuration = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app")!))
+        let configuration = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app/native")!))
 
         XCTAssertTrue(configuration.allows(URL(string: "https://eva-orbit.vercel.app/login?next=%2F")!))
         XCTAssertTrue(configuration.allows(URL(string: "https://eva-orbit.vercel.app:443/api/tasks")!))

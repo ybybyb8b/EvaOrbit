@@ -1,6 +1,7 @@
 import "server-only";
 
 import * as sqlite from "../db";
+import { ConflictError } from "../errors";
 import type { EvaOrbitRepository } from "./types";
 
 /**
@@ -51,7 +52,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async listInbox(status) { return sqlite.listInbox(status); },
   async getInboxItem(id) { return sqlite.getInboxItem(id); },
   async createInboxItem(input) { return sqlite.createInboxItem(input); },
-  async updateInboxItem(id, input) { return sqlite.updateInboxItem(id, input); },
+  async updateInboxItem(id, input, expectedUpdatedAt) { const current=sqlite.getInboxItem(id);if(expectedUpdatedAt&&current&&current.updatedAt!==expectedUpdatedAt)throw new ConflictError("Inbox 条目已发生变化，本地修改已保留");return sqlite.updateInboxItem(id, input); },
   async deleteInboxItem(id) { return sqlite.deleteInboxItem(id); },
   async listFoodLogs(input) { return sqlite.listFoodLogs(input); },
   async getFoodLog(id) { return sqlite.getFoodLog(id); },

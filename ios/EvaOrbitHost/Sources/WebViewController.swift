@@ -99,7 +99,7 @@ final class WebViewController: UIViewController {
     }
 
     private func loadEvaOrbit() {
-        webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
+        webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .useProtocolCachePolicy))
     }
 
     @objc private func refresh() {

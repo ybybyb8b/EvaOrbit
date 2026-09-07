@@ -27,7 +27,14 @@ export type HealthKitStatus = {
   lastError: string | null;
 };
 export type NativeNotificationPermission = "not_determined" | "denied" | "authorized" | "provisional" | "ephemeral";
-export type NativeNotificationStatus = { available: boolean; permission: NativeNotificationPermission; scheduledCount?: number };
+export type NativeNotificationSetting = "enabled" | "disabled" | "not_supported";
+export type NativeNotificationStatus = {
+  available: boolean;
+  permission: NativeNotificationPermission;
+  alertSetting?: NativeNotificationSetting;
+  soundSetting?: NativeNotificationSetting;
+  scheduledCount?: number;
+};
 export type NativePendingNotification = { id: string; triggerAt?: string };
 export type NativeNotificationSchedule = { id: string; title: string; body: string; triggerAt: string };
 const nativePendingReminderLimit = 48;

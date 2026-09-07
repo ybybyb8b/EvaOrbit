@@ -10,6 +10,8 @@ final class NotificationManagerTests: XCTestCase {
         let status = await manager.status()
 
         XCTAssertEqual(status["permission"] as? String, "denied")
+        XCTAssertEqual(status["alertSetting"] as? String, "disabled")
+        XCTAssertEqual(status["soundSetting"] as? String, "disabled")
         XCTAssertEqual(status["scheduledCount"] as? Int, 0)
     }
 
@@ -22,6 +24,9 @@ final class NotificationManagerTests: XCTestCase {
         let status = await manager.status()
 
         XCTAssertEqual(center.authorizationRequests, 1)
+        XCTAssertTrue(center.requestedOptions.contains(.alert))
+        XCTAssertTrue(center.requestedOptions.contains(.sound))
+        XCTAssertFalse(center.requestedOptions.contains(.badge))
         XCTAssertEqual(status["permission"] as? String, "authorized")
     }
 
@@ -36,6 +41,7 @@ final class NotificationManagerTests: XCTestCase {
         let pending = await manager.pendingNotifications()
         XCTAssertEqual(pending.map(\.identifier), [identifier])
         XCTAssertEqual(center.requests[identifier]?.content.title, "After")
+        XCTAssertNotNil(center.requests[identifier]?.content.sound)
     }
 
     func testCancelRemovesPendingRequest() async throws {
@@ -72,18 +78,29 @@ final class NotificationManagerTests: XCTestCase {
 
 private final class FakeLocalNotificationCenter: LocalNotificationCenter {
     var status: UNAuthorizationStatus
+    var alertSetting: UNNotificationSetting
+    var soundSetting: UNNotificationSetting
     var requests: [String: UNNotificationRequest] = [:]
     var authorizationRequests = 0
+    var requestedOptions: UNAuthorizationOptions = []
 
     init(status: UNAuthorizationStatus) {
         self.status = status
+        let setting: UNNotificationSetting = status == .authorized ? .enabled : .disabled
+        alertSetting = setting
+        soundSetting = setting
     }
 
-    func authorizationStatus() async -> UNAuthorizationStatus { status }
+    func settings() async -> NativeNotificationSettings {
+        NativeNotificationSettings(authorizationStatus: status, alertSetting: alertSetting, soundSetting: soundSetting)
+    }
 
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
         authorizationRequests += 1
+        requestedOptions.formUnion(options)
         status = .authorized
+        alertSetting = .enabled
+        soundSetting = .enabled
         return true
     }
 

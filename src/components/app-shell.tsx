@@ -102,8 +102,9 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </Link>
         <nav className="main-nav" aria-label={english ? "Main navigation" : "主导航"}>
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon name={item.icon} variant="stroke" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            const href = pathname === "/native" && item.href === "/inbox" ? "/native" : item.href;
+            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+            return <Link key={item.href} href={href} className={active ? "active" : ""}><Icon name={item.icon} variant="stroke" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
@@ -128,8 +129,9 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
             {navigationGroups.map((group) => <section key={group.label}>
               <span>{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>
               {group.items.filter((item) => item.href !== "/").map((item) => {
-                const active = pathname.startsWith(item.href);
-                return <Link href={item.href} className={active ? "active" : ""} onClick={closeSpacesDrawer} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
+                const href = pathname === "/native" && item.href === "/inbox" ? "/native" : item.href;
+                const active = pathname.startsWith(href);
+                return <Link href={href} className={active ? "active" : ""} onClick={closeSpacesDrawer} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
               })}
             </section>)}
           </nav>
