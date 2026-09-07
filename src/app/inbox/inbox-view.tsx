@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -23,6 +23,7 @@ export function InboxView({ localFirst = false }: { localFirst?: boolean }) {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [status, setStatus] = useState<InboxStatus | "all">("inbox");
   const [loading, setLoading] = useState(true);
+  const shouldRedirectFromNativeEntry = useRef(localFirst);
   const syncState = useSyncExternalStore(subscribeLocalFirstSync, getLocalFirstSyncState, getLocalFirstSyncState);
 
   const load = useCallback(async () => {
@@ -42,7 +43,12 @@ export function InboxView({ localFirst = false }: { localFirst?: boolean }) {
 
   useEffect(() => {
     if (!localFirst) return;
-    const synchronize = (force = false) => { void syncLocalInbox(force).then(load); };
+    const synchronize = (force = false) => { void syncLocalInbox(force).then(async () => {
+      await load();
+      if (!shouldRedirectFromNativeEntry.current) return;
+      shouldRedirectFromNativeEntry.current = false;
+      if (getLocalFirstSyncState().mode === "online") window.location.replace("/");
+    }); };
     const onOnline = () => synchronize(true);
     const onVisible = () => { if (document.visibilityState === "visible") synchronize(true); };
     const onNativeActive = () => synchronize(true);

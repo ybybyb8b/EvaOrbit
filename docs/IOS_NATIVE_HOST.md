@@ -322,7 +322,7 @@ bash scripts/ios/xtool-install.sh /path/to/new/EvaOrbitHost-ad-hoc.ipa
 
 每次首次安装或 Native Host 升级后至少检查：
 
-- App 能启动并加载 EvaOrbit 生产 `/native` Shell，而不是空白页或循环刷新。
+- App 能启动并加载 EvaOrbit 生产 `/native` Shell；Vercel 可达且首次 Inbox 同步成功时自动进入正常 Home，服务不可达时留在本地 Inbox，而不是空白页或循环刷新。
 - Supabase 登录、退出、App 重启后的 cookie/session 行为。
 - 内部导航、返回手势、外部链接和新窗口链接。
 - 从 Photos 和 Files 上传头像、关系照片、媒体封面和 tracker 图片。
@@ -337,7 +337,7 @@ bash scripts/ios/xtool-install.sh /path/to/new/EvaOrbitHost-ad-hoc.ipa
 
 HealthKit 运行时实现不会改变本 runbook 的续签步骤。Web-only/PWA 不显示授权按钮；设备 token、样本 UUID、anchor 和原始样本不会写入 Web 日志，也不会上传原始样本。服务端只接收按自然日、按类型聚合的 kcal 快照。
 
-安装包含自定义本地通知声音的新 IPA 后，在 Notifications 页面确认 `Permission`、`Alerts`、`Sounds` 和 `Scheduled`。Alerts 与 Sounds 都应为 Enabled；旧版 Host 已经授权过的设备可能需要从 `Open iOS Settings` 手动开启 Sounds。点击 `Test notification` 后等待约 5 秒，前台和后台都应出现 banner 并播放 `EvaOrbitNotification.wav`；不会设置 app badge。真实提醒只有在联网成功读取 `/api/notifications` 后才会写入本机，而且 date-only、没有明确时间也没有 snooze 时间的提醒按产品语义不会调度；`Scheduled = 0` 时应先联网 Refresh status 并检查提醒是否有未来明确时间。
+安装包含系统默认本地通知声音的新 IPA 后，在 Notifications 页面确认 `Permission`、`Alerts`、`Sounds` 和 `Scheduled`。Alerts 与 Sounds 都应为 Enabled；旧版 Host 已经授权过的设备可能需要从 `Open iOS Settings` 手动开启 Sounds。点击 `Test notification` 后等待约 5 秒，前台和后台都应出现 banner 并播放 iOS 默认通知音；不会设置 app badge。真实提醒只有在联网成功读取 `/api/notifications` 后才会写入本机，而且 date-only、没有明确时间也没有 snooze 时间的提醒按产品语义不会调度；`Scheduled = 0` 时应先联网 Refresh status 并检查提醒是否有未来明确时间。
 
 ## 常见故障定位
 

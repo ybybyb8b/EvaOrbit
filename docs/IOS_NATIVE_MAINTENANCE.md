@@ -55,7 +55,7 @@ WKWebView Native Host
 
 ### 2.1 第一阶段 Local-first 边界
 
-- 用户成功联网打开 `/native` 至少一次后，Service Worker 持久保存同源 Shell 及其静态依赖；其他页面导航、API 响应和私有业务数据不进入 Cache Storage。
+- 用户成功联网打开 `/native` 至少一次后，Service Worker 持久保存同源 Shell 及其静态依赖；首次同步确认 Vercel 可达时自动进入正常 Home，探测失败时留在本地 Inbox。其他页面导航、API 响应和私有业务数据不进入 Cache Storage。
 - Inbox 是当前唯一 Local-first 业务资源。其最近数据、乐观写入、pending mutation 与本地/服务端 ID 映射保存在 IndexedDB；其他资源仍保持在线模式。
 - 同步前通过 `/api/sync/status` 实际访问 EvaOrbit API / Supabase，不用系统网络状态代替服务可达性。`online` 事件只负责触发重试。
 - create 使用客户端 mutation UUID 与 `(user_id, client_mutation_id)` 唯一索引避免重复记录；update 使用 `updated_at` 前置条件，冲突返回 409 并保留本地队列。
@@ -218,10 +218,10 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 - `notification.requestAuthorization` 仅在 `.notDetermined` 时调用系统请求；Denied 时不死循环重试。
 - Denied、Alerts 关闭或 Sounds 关闭时，Settings 提供打开 iOS Settings 的入口，并保留 Web Notifications fallback。
 - 只有 authorized / provisional / ephemeral 才允许 schedule。
-- 通知包含 identifier、title、body、trigger time 和 `Resources/EvaOrbitNotification.wav` 自定义声音；不包含 APNs、badge、action、category 或图片。
+- 通知包含 identifier、title、body、trigger time，并使用 iOS 系统默认通知音；不包含 APNs、badge、action、category、图片或自定义声音资源。
 - App 在前台收到本地通知时展示 banner/list 并播放通知内容关联的声音。
 
-自定义声音必须作为 main bundle resource 被打进 IPA。当前 WAV 是单声道 44.1 kHz Linear PCM，时长约 0.8 秒，满足 iOS 本地通知声音约束。修改文件或声音名后必须同步更新 `project.yml` 与 `NotificationManager.soundFileName`，重新构建并安装 IPA。已经授权过旧版 `.alert`-only Host 的设备不会再次出现系统授权弹窗；若升级后 `soundSetting` 仍显示 Disabled，需要用户在 iOS Settings 中手动打开 EvaOrbit 的 Sounds。
+已经授权过旧版 `.alert`-only Host 的设备不会再次出现系统授权弹窗；若 `soundSetting` 显示 Disabled，需要用户在 iOS Settings 中手动打开 EvaOrbit 的 Sounds。
 
 原生通知 identifier 由 Web 稳定生成：
 

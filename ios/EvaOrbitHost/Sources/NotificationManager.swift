@@ -88,7 +88,6 @@ final class SystemLocalNotificationCenter: LocalNotificationCenter {
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     static let reminderIdentifierPrefix = "evaorbit-reminder-"
     static let testIdentifierPrefix = "evaorbit-test-"
-    static let soundFileName = "EvaOrbitNotification.wav"
 
     private let center: LocalNotificationCenter
 
@@ -131,7 +130,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = UNNotificationSound(named: UNNotificationSoundName(rawValue: Self.soundFileName))
+        content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: triggerAt.timeIntervalSinceNow, repeats: false)
         try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
     }
