@@ -25,6 +25,7 @@ WKWebView Native Host
 - Web / 服务端负责业务规则、数据模型、提醒时间和通知文案；Swift 不复制业务规则，也不建立第二套业务数据库。
 - Swift 只实现必须依赖 iOS 的能力，并通过现有 `NativeBridge` 暴露最小接口。
 - Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app/native`。Bridge 仍按 scheme、host 和有效端口允许同源页面与 API；`/native` 路径不会收窄现有 bridge 的同源范围。
+- Native Host 将 `eva-orbit.vercel.app` 声明为唯一 `WKAppBoundDomains`，并在 `WKWebViewConfiguration` 开启 `limitsNavigationsToAppBoundDomains`，使该生产域可在持久 `WKWebsiteDataStore` 中注册 Service Worker。站外链接继续由 Host 交给系统打开。
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
@@ -60,7 +61,7 @@ WKWebView Native Host
 - 同步前通过 `/api/sync/status` 实际访问 EvaOrbit API / Supabase，不用系统网络状态代替服务可达性。`online` 事件只负责触发重试。
 - create 使用客户端 mutation UUID 与 `(user_id, client_mutation_id)` 唯一索引避免重复记录；update 使用 `updated_at` 前置条件，冲突返回 409 并保留本地队列。
 - 数据路径仍是 `iOS / Web UI → Vercel → Supabase`。IndexedDB 是离线工作副本，不允许客户端绕过 Vercel 访问 Supabase。
-- 该能力不新增 framework、entitlement、系统权限或 bridge 方法，也不改变 HealthKit、通知、Cookie/session 与签名链。
+- 该能力新增 `WKAppBoundDomains` Info.plist 配置，但不新增 framework、entitlement、系统权限或 bridge 方法，也不改变 HealthKit、通知、Cookie/session 与签名链。
 
 ## 三、已经验证的构建、打包、免费签名和安装链
 

@@ -35,23 +35,30 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data?.type !== "CACHE_NATIVE_SHELL" || !Array.isArray(event.data.assets)) return;
+  const reply = event.ports[0];
   event.waitUntil((async () => {
-    const assets = [...new Set(event.data.assets)].filter((value) => {
-      if (typeof value !== "string") return false;
-      const url = new URL(value, self.location.origin);
-      return url.origin === self.location.origin && (url.pathname === "/native" || url.pathname.startsWith("/_next/static/") || url.pathname === "/theme-init.js");
-    });
-    if (!assets.includes("/native")) return;
-    const responses = await Promise.all(assets.map(async (asset) => {
-      const response = await fetch(new Request(asset, { credentials: "include", cache: "no-store" }));
-      if (!response.ok) throw new Error(`Could not cache ${asset}`);
-      if (asset === "/native" && (new URL(response.url).pathname !== "/native" || !response.headers.get("content-type")?.includes("text/html"))) throw new Error("Native shell did not return the expected HTML");
-      return [asset, response];
-    }));
-    const cache = await caches.open(NATIVE_SHELL_CACHE);
-    await Promise.all(responses.filter(([asset]) => asset !== "/native").map(([asset, response]) => cache.put(asset, response)));
-    const shell = responses.find(([asset]) => asset === "/native");
-    if (shell) await cache.put(shell[0], shell[1]);
+    try {
+      const assets = [...new Set(event.data.assets)].filter((value) => {
+        if (typeof value !== "string") return false;
+        const url = new URL(value, self.location.origin);
+        return url.origin === self.location.origin && (url.pathname === "/native" || url.pathname.startsWith("/_next/static/") || url.pathname === "/theme-init.js");
+      });
+      if (!assets.includes("/native")) throw new Error("Native shell was not requested");
+      const responses = await Promise.all(assets.map(async (asset) => {
+        const response = await fetch(new Request(asset, { credentials: "include", cache: "no-store" }));
+        if (!response.ok) throw new Error(`Could not cache ${asset}`);
+        if (asset === "/native" && (new URL(response.url).pathname !== "/native" || !response.headers.get("content-type")?.includes("text/html"))) throw new Error("Native shell did not return the expected HTML");
+        return [asset, response];
+      }));
+      const cache = await caches.open(NATIVE_SHELL_CACHE);
+      await Promise.all(responses.filter(([asset]) => asset !== "/native").map(([asset, response]) => cache.put(asset, response)));
+      const shell = responses.find(([asset]) => asset === "/native");
+      if (shell) await cache.put(shell[0], shell[1]);
+      reply?.postMessage({ ok: true });
+    } catch (error) {
+      reply?.postMessage({ ok: false });
+      throw error;
+    }
   })());
 });
 

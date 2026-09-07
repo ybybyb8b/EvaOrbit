@@ -6,6 +6,8 @@
 
 本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程是加载生产站点 `/native` 的轻量 `WKWebView` Host。成功联网一次后，该同源 Shell 可由 Service Worker 离线启动，数据同步仍只经过 Vercel。
 
+为允许 `WKWebView` 使用 Service Worker，Host 在 Info.plist 的 `WKAppBoundDomains` 中只声明 `eva-orbit.vercel.app`，并开启 `limitsNavigationsToAppBoundDomains`。它复用持久的默认 website data store，不新增 entitlement、系统权限或 bridge；站外链接仍由 Host 交给系统打开。Web 端会等待当前 Service Worker 激活，并在 Shell 与静态依赖真正写入 Cache Storage 后收到确认。修改这些原生配置后必须重新构建并安装 IPA，仅部署 Web 不足以修复旧 Host。
+
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库现已加入第一批 HealthKit 能量同步代码；它只读取静息能量和活动能量，并新增原生 SQLite/outbox、设备凭据、同步 API 与独立的 `healthkit_daily_energy` 表。部署这批代码前须先应用 `supabase/migrations/202609010001_healthkit_energy.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
 ## 已验证基线
@@ -329,6 +331,7 @@ bash scripts/ios/xtool-install.sh /path/to/new/EvaOrbitHost-ad-hoc.ipa
 - iPhone 16 Pro 的安全区、横竖屏、表单、键盘聚焦和交互式收起。
 - AI streaming，以及 WebKit content process 恢复。
 - 部署 `202609070002_inbox_client_mutation_id.sql` 后，联网打开 `/native` 一次并确认 Inbox 数据已出现；杀掉 App、关闭代理使 Vercel 不可达，再启动时仍应打开 Shell、显示本地 Inbox，并允许新增和修改。
+- 首次联网时应让 `/native` 完整加载一次再杀掉 App；缓存写入由 Service Worker 完成确认。若新 IPA 仍直接显示原生 `Connection failed`，应采集真机 WebKit 日志确认 Service Worker 注册或 Cache Storage 写入错误，而不是反复清除 App 数据。
 - 恢复 Vercel 后应自动清空 pending changes；Supabase 中离线 create 只出现一个对应行，修改值与本地一致。首个成功联网启动之前仍允许显示原生错误页，这是当前明确边界。
 - `window.EvaOrbitNative.call("host.ping")` 和 `host.getInfo()` 基础 bridge。
 - 在待办完成、表单提交、选择控件、危险操作、错误提示和下拉刷新阈值上检查触感；确认普通导航、滚动、输入与后台同步不会连续触发。

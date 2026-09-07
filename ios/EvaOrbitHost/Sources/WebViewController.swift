@@ -34,6 +34,7 @@ final class WebViewController: UIViewController {
 
         let webConfiguration = WKWebViewConfiguration()
         webConfiguration.websiteDataStore = .default()
+        webConfiguration.limitsNavigationsToAppBoundDomains = true
         webConfiguration.userContentController = userContentController
         webConfiguration.applicationNameForUserAgent = "EvaOrbitNative/0.1"
         webConfiguration.defaultWebpagePreferences.allowsContentJavaScript = true

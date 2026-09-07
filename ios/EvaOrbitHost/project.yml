@@ -34,6 +34,8 @@ targets:
         EvaOrbitBaseURL: https://eva-orbit.vercel.app/native
         ITSAppUsesNonExemptEncryption: false
         NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
+        WKAppBoundDomains:
+          - eva-orbit.vercel.app
         UILaunchScreen:
           UIColorName: LoadingBackground
         UIRequiresFullScreen: true
