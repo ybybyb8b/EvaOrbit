@@ -34,6 +34,8 @@ test("native notification identifiers are stable across reminder edits", () => {
 
 test("native schedules reuse reminder timing rules and exclude date-only reminders", () => {
   assert.equal(nativeNotificationSchedule(scheduled)?.triggerAt, "2099-09-10T08:00:00.000Z");
+  assert.equal(nativeNotificationSchedule(scheduled)?.title, "Medication");
+  assert.match(nativeNotificationSchedule(scheduled)?.body ?? "", /^到期：/);
   assert.equal(nativeNotificationSchedule({ ...scheduled, snoozedUntil: "2099-09-10T10:30:00.000Z" })?.triggerAt, "2099-09-10T10:30:00.000Z");
   assert.equal(nativeNotificationSchedule({ ...scheduled, dueHasExplicitTime: false }), null);
   assert.equal(nativeNotificationSchedule({ ...scheduled, isActive: false }), null);

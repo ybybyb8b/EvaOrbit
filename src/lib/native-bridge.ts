@@ -1,5 +1,6 @@
 import type { ScheduledNotification } from "./types";
 import { notificationSendAt } from "./reminder-engine.ts";
+import { reminderNotificationCopy } from "./notification-copy.ts";
 
 export type NativeBridgeResponse<T> = { ok: true; result: T } | { ok: false; error: { code: string; message: string } };
 export type NativeBridge = { version: number; call<T>(method: string, params?: Record<string, unknown>): Promise<NativeBridgeResponse<T>> };
@@ -84,10 +85,11 @@ export function nativeNotificationIdentifier(reminderId: number) {
 export function nativeNotificationSchedule(item: ScheduledNotification): NativeNotificationSchedule | null {
   const triggerAt = notificationSendAt(item);
   if (!item.isActive || !triggerAt || new Date(triggerAt).getTime() <= Date.now()) return null;
+  const copy = reminderNotificationCopy(item, typeof document === "undefined" ? "zh-CN" : document.documentElement.lang || navigator.language);
   return {
     id: nativeNotificationIdentifier(item.id),
-    title: item.title,
-    body: (item.note || `${item.subjectLabel} · ${item.sourceLabel}`).slice(0, 1_000),
+    title: copy.title,
+    body: copy.body.slice(0, 1_000),
     triggerAt,
   };
 }

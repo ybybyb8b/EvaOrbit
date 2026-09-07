@@ -24,8 +24,8 @@ WKWebView Native Host
 
 - Web / 服务端负责业务规则、数据模型、提醒时间和通知文案；Swift 不复制业务规则，也不建立第二套业务数据库。
 - Swift 只实现必须依赖 iOS 的能力，并通过现有 `NativeBridge` 暴露最小接口。
-- Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app/native`。Bridge 仍按 scheme、host 和有效端口允许同源页面与 API；`/native` 路径不会收窄现有 bridge 的同源范围。
-- Native Host 将 `eva-orbit.vercel.app` 声明为唯一 `WKAppBoundDomains`，并在 `WKWebViewConfiguration` 开启 `limitsNavigationsToAppBoundDomains`，使该生产域可在持久 `WKWebsiteDataStore` 中注册 Service Worker。站外链接继续由 Host 交给系统打开。
+- Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app`。Bridge 只允许与该 URL 完全相同的 HTTPS scheme、host 和有效端口。
+- `/native` 仅保留为旧版 Host 的在线兼容跳转并立即回到 `/`；不承载 Service Worker 离线 Shell、IndexedDB Inbox 或同步队列。
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
@@ -45,7 +45,6 @@ WKWebView Native Host
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
 | Web Push / Cron | `src/lib/push/**`、现有 reminders delivery API / cron 配置 |
-| iOS Local-first Shell / Inbox | `public/sw.js`、`src/lib/local-first-inbox.ts`、`src/app/native/page.tsx` |
 | iOS CI 构建与打包 | `.github/workflows/ios-native-host.yml`、`scripts/ios/package-ad-hoc-ipa.sh` |
 | patched xtool 构建 | `.github/workflows/xtool-patched.yml`、`tools/xtool/patches/**` |
 | Windows / WSL 安装辅助 | `scripts/ios/xtool-env.sh`、`scripts/ios/xtool-install.sh` |
@@ -53,15 +52,6 @@ WKWebView Native Host
 | 完整安装与故障 runbook | `docs/IOS_NATIVE_HOST.md` |
 
 不要依赖旧聊天记录猜测工程状态；先检查以上文件和当前 Git diff。
-
-### 2.1 第一阶段 Local-first 边界
-
-- 用户成功联网打开 `/native` 至少一次后，Service Worker 持久保存同源 Shell 及其静态依赖；首次同步确认 Vercel 可达时自动进入正常 Home，探测失败时留在本地 Inbox。其他页面导航、API 响应和私有业务数据不进入 Cache Storage。
-- Inbox 是当前唯一 Local-first 业务资源。其最近数据、乐观写入、pending mutation 与本地/服务端 ID 映射保存在 IndexedDB；其他资源仍保持在线模式。
-- 同步前通过 `/api/sync/status` 实际访问 EvaOrbit API / Supabase，不用系统网络状态代替服务可达性。`online` 事件只负责触发重试。
-- create 使用客户端 mutation UUID 与 `(user_id, client_mutation_id)` 唯一索引避免重复记录；update 使用 `updated_at` 前置条件，冲突返回 409 并保留本地队列。
-- 数据路径仍是 `iOS / Web UI → Vercel → Supabase`。IndexedDB 是离线工作副本，不允许客户端绕过 Vercel 访问 Supabase。
-- 该能力新增 `WKAppBoundDomains` Info.plist 配置，但不新增 framework、entitlement、系统权限或 bridge 方法，也不改变 HealthKit、通知、Cookie/session 与签名链。
 
 ## 三、已经验证的构建、打包、免费签名和安装链
 

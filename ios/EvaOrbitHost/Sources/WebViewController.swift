@@ -34,7 +34,6 @@ final class WebViewController: UIViewController {
 
         let webConfiguration = WKWebViewConfiguration()
         webConfiguration.websiteDataStore = .default()
-        webConfiguration.limitsNavigationsToAppBoundDomains = true
         webConfiguration.userContentController = userContentController
         webConfiguration.applicationNameForUserAgent = "EvaOrbitNative/0.1"
         webConfiguration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -100,7 +99,7 @@ final class WebViewController: UIViewController {
     }
 
     private func loadEvaOrbit() {
-        webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .useProtocolCachePolicy))
+        webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
     }
 
     @objc private func refresh() {

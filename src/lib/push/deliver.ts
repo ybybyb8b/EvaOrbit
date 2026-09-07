@@ -6,6 +6,7 @@ import { supabaseConfig } from "../config";
 import { dateInEvaOrbit } from "../time";
 import { isMealReminderType, MEAL_REMINDER_TARGET_IDS, mealReminderWindow } from "../meal-reminders";
 import { nextTrackerNotification, notificationShouldSend, trackerReminderShouldNotify } from "../reminder-engine";
+import { reminderNotificationCopy } from "../notification-copy";
 import type { TrackerReminder } from "../types";
 import type { EvaPushPayload } from "./types";
 
@@ -46,6 +47,10 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date) {
     leadTimeMinutes: Number(row.lead_time_minutes ?? 0),
     lastNotifiedAt: row.last_notified_at ? String(row.last_notified_at) : null,
   }, now));
+  const preferencesResult = due.length
+    ? await client.from("ui_preferences").select("user_id,ui_language").in("user_id", [...new Set(due.map((row) => String(row.user_id)))])
+    : { data: [] };
+  const languages = new Map(((preferencesResult.data ?? []) as Row[]).map((row) => [String(row.user_id), String(row.ui_language)]));
   let sent = 0;
   for (const reminder of due) {
     let trackerRule: TrackerReminder | null = null;
@@ -80,10 +85,17 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date) {
         trackerDeliveryId=Number(reservation.data.id);
       }
     }
+    const copy = reminderNotificationCopy({
+      title: String(reminder.title),
+      sourceType: reminder.source_type ? String(reminder.source_type) : null,
+      intervalValue: reminder.interval_value === null ? null : Number(reminder.interval_value),
+      nextDueAt: reminder.next_due_at ? String(reminder.next_due_at) : null,
+      timezone: reminder.timezone ? String(reminder.timezone) : null,
+    }, languages.get(String(reminder.user_id)) === "en" ? "en-US" : "zh-CN");
     const delivery = await sendToUser(client, String(reminder.user_id), {
       kind: "reminder_due",
-      title: String(reminder.title),
-      body: "时间到了 搞快处理喔！",
+      title: copy.title,
+      body: copy.body,
       url: "/notifications",
       tag: `reminder-${reminder.id}`,
     });

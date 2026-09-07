@@ -1,109 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
-import {
-  createLocalInbox,
-  deleteLocalInbox,
-  getLocalFirstSyncState,
-  listLocalInbox,
-  subscribeLocalFirstSync,
-  syncLocalInbox,
-  updateLocalInbox,
-} from "@/lib/local-first-inbox";
 import type { InboxItem, InboxStatus } from "@/lib/types";
 import { InboxCaptureForm } from "./inbox-capture-form";
 
-export function InboxView({ localFirst = false }: { localFirst?: boolean }) {
+export function InboxView() {
   const { english } = useLocale();
   const filters = [["inbox", english ? "Unsorted" : "没整理"], ["processed", english ? "Processed" : "处理过"], ["archived", english ? "Archived" : "归档"], ["all", english ? "All" : "全部"]] as const;
   const statusLabels: Record<InboxStatus, string> = { inbox: english ? "Unsorted" : "没整理", processed: english ? "Processed" : "处理过", archived: english ? "Archived" : "已归档" };
   const [items, setItems] = useState<InboxItem[]>([]);
   const [status, setStatus] = useState<InboxStatus | "all">("inbox");
   const [loading, setLoading] = useState(true);
-  const shouldRedirectFromNativeEntry = useRef(localFirst);
-  const syncState = useSyncExternalStore(subscribeLocalFirstSync, getLocalFirstSyncState, getLocalFirstSyncState);
 
   const load = useCallback(async () => {
     setLoading(true);
-    if (localFirst) setItems(await listLocalInbox(status));
-    else {
-      const response = await fetch(`/api/inbox?status=${status}`);
-      setItems(response.ok ? await response.json() : []);
-    }
+    const response = await fetch(`/api/inbox?status=${status}`);
+    setItems(response.ok ? await response.json() : []);
     setLoading(false);
-  }, [localFirst, status]);
+  }, [status]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => void load(), 0);
-    return () => clearTimeout(timer);
-  }, [load]);
+  useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
 
-  useEffect(() => {
-    if (!localFirst) return;
-    const synchronize = (force = false) => { void syncLocalInbox(force).then(async () => {
-      await load();
-      if (!shouldRedirectFromNativeEntry.current) return;
-      shouldRedirectFromNativeEntry.current = false;
-      if (getLocalFirstSyncState().mode === "online") window.location.replace("/");
-    }); };
-    const onOnline = () => synchronize(true);
-    const onVisible = () => { if (document.visibilityState === "visible") synchronize(true); };
-    const onNativeActive = () => synchronize(true);
-    synchronize(true);
-    window.addEventListener("online", onOnline);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("evaorbit:native-active", onNativeActive);
-    const interval = window.setInterval(() => { if (document.visibilityState === "visible" && getLocalFirstSyncState().pending > 0) synchronize(); }, 30_000);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("evaorbit:native-active", onNativeActive);
-      window.clearInterval(interval);
-    };
-  }, [load, localFirst]);
-
-  async function patch(id: number, body: Partial<Pick<InboxItem, "content" | "status">>) {
-    if (localFirst) {
-      await updateLocalInbox(id, body);
-      await load();
-      void syncLocalInbox(true).then(load);
-      return;
-    }
+  async function patch(id: number, body: object) {
     await fetch(`/api/inbox/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     await load();
   }
 
   async function remove(id: number) {
     if (!confirm(english ? "Delete this temporary record?" : "删掉这条临时记录？")) return;
-    if (localFirst) {
-      await deleteLocalInbox(id);
-      await load();
-      void syncLocalInbox(true).then(load);
-      return;
-    }
     await fetch(`/api/inbox/${id}`, { method: "DELETE" });
     await load();
   }
 
-  const syncLabels = {
-    checking: english ? "Checking EO…" : "正在检查 EO…",
-    online: english ? "Online" : "已在线",
-    offline: english ? "Offline · local mode" : "离线 · 本地模式",
-    syncing: english ? "Syncing…" : "正在同步…",
-    failed: english ? "Sync failed" : "同步失败",
-    conflict: english ? "Conflict needs review" : "存在待处理冲突",
-  } as const;
-
   return <div className="page inbox-page">
     <PageHeader eyebrow={english ? "SPACE" : "空间"} title="Inbox" />
-    {localFirst && <div className="inbox-local-status" role="status">
-      <span className={`status-pill ${syncState.mode === "offline" || syncState.mode === "failed" || syncState.mode === "conflict" ? "disabled" : ""}`}>{syncLabels[syncState.mode]}</span>
-      {syncState.pending > 0 && <span className="result-count">{english ? `${syncState.pending} pending change${syncState.pending === 1 ? "" : "s"}` : `${syncState.pending} 项待同步`}</span>}
-    </div>}
-    <InboxCaptureForm onCapture={localFirst ? async (content) => { await createLocalInbox(content); } : undefined} onSaved={async()=>{setStatus("inbox");await load();if(localFirst)void syncLocalInbox(true).then(load);}} />
+    <InboxCaptureForm onSaved={async()=>{setStatus("inbox");await load();}} />
     <div className="toolbar inbox-toolbar">
       <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
       <span className="result-count">{english ? `${items.length} ${items.length === 1 ? "entry" : "entries"}` : `${items.length} 条`}</span>
@@ -113,11 +47,11 @@ export function InboxView({ localFirst = false }: { localFirst?: boolean }) {
       <div className="inbox-row-footer">
         <div className="inbox-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(english ? "en-US" : "zh-CN")}</time><span>{statusLabels[item.status]}</span>{item.convertedType && <span>{english ? "Converted from legacy" : "旧版已转为"} {item.convertedType}</span>}</div>
         <div className="row-actions">
-          {item.status === "inbox" && <><button type="button" onClick={() => void patch(item.id, { status: "processed" })}>{english ? "Mark processed" : "处理好了"}</button><button type="button" onClick={() => void patch(item.id, { status: "archived" })}>{english ? "Archive" : "归档"}</button></>}
-          {item.status !== "inbox" && <button type="button" onClick={() => void patch(item.id, { status: "inbox" })}>{english ? "Move to unsorted" : "放回未整理"}</button>}
-          <button className="danger inbox-delete" type="button" aria-label={english ? "Delete Inbox item" : "删除这条 Inbox"} title={english ? "Delete" : "删除"} onClick={() => void remove(item.id)}><Icon name="trash" /></button>
+          {item.status === "inbox" && <><button type="button" onClick={() => patch(item.id, { status: "processed" })}>{english ? "Mark processed" : "处理好了"}</button><button type="button" onClick={() => patch(item.id, { status: "archived" })}>{english ? "Archive" : "归档"}</button></>}
+          {item.status !== "inbox" && <button type="button" onClick={() => patch(item.id, { status: "inbox" })}>{english ? "Move to unsorted" : "放回未整理"}</button>}
+          <button className="danger inbox-delete" type="button" aria-label={english ? "Delete Inbox item" : "删除这条 Inbox"} title={english ? "Delete" : "删除"} onClick={() => remove(item.id)}><Icon name="trash" /></button>
         </div>
       </div>
-    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="inbox" /></span><h2>{english ? "Inbox is clear" : "Inbox 已清空"}</h2><p>{english ? "New captures will wait here until you sort them." : "新的想法会先停在这里，等你慢慢整理。"}</p></div>}
+    </article>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="check" /></span><h2>{english ? "Inbox is empty" : "Inbox 为空"}</h2></div>}
   </div>;
 }

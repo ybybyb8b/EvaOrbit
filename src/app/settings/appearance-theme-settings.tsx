@@ -71,11 +71,11 @@ export function AppearanceThemeSettings() {
     </div>
     <div className="appearance-setting-group">
       <strong>{english ? "Chinese typeface" : "中文字体"}</strong>
-      <div className="appearance-option-grid font-options">{CHINESE_FONTS.map((value) => <button type="button" key={value} className={chineseFont === value ? "active" : ""} aria-pressed={chineseFont === value} disabled={saving} onClick={() => void save(appearanceMode, colorTheme, language, value, englishFont)}><b className={`font-sample font-${value}`}>{({ canger: "仓耳华新体", lxgw: "霞鹜文楷", alimama: "阿里妈妈方圆体", ibm: "IBM Plex Sans SC" } as const)[value]}</b><small>{english ? "Chinese interface" : "中文界面"}</small></button>)}</div>
+      <div className="appearance-option-grid font-options">{CHINESE_FONTS.map((value) => <button type="button" key={value} className={chineseFont === value ? "active" : ""} aria-pressed={chineseFont === value} disabled={saving} onClick={() => void save(appearanceMode, colorTheme, language, value, englishFont)}><b className={`font-sample font-${value}`}>{({ canger: "仓耳华新体", lxgw: "霞鹜文楷", alimama: "刻宋", ibm: "New York" } as const)[value]}</b><small>{english ? "Chinese interface" : "中文界面"}</small></button>)}</div>
     </div>
     <div className="appearance-setting-group">
       <strong>{english ? "English typeface" : "英文字体"}</strong>
-      <div className="appearance-option-grid font-options">{ENGLISH_FONTS.map((value) => <button type="button" key={value} className={englishFont === value ? "active" : ""} aria-pressed={englishFont === value} disabled={saving} onClick={() => void save(appearanceMode, colorTheme, language, chineseFont, value)}><b className={`font-sample font-${value}`}>{({ zen: "ZEN Serif", ibm: "IBM Plex Sans SC", polyamine: "Polyamine", cormorant: "Cormorant Garamond" } as const)[value]}</b><small>{english ? "English interface" : "英文界面"}</small></button>)}</div>
+      <div className="appearance-option-grid font-options">{ENGLISH_FONTS.map((value) => <button type="button" key={value} className={englishFont === value ? "active" : ""} aria-pressed={englishFont === value} disabled={saving} onClick={() => void save(appearanceMode, colorTheme, language, chineseFont, value)}><b className={`font-sample font-${value}`}>{({ zen: "ZEN Serif", ibm: "New York", polyamine: "Polyamine", cormorant: "Cormorant Garamond" } as const)[value]}</b><small>{english ? "English interface" : "英文界面"}</small></button>)}</div>
     </div>
     <div className="appearance-setting-group">
       <strong>{english ? "Display mode" : "显示模式"}</strong>

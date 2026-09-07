@@ -88,9 +88,9 @@
 }
 
 html[data-chinese-font="lxgw"] { --font-selected-zh: var(--font-lxgw); }
-html[data-chinese-font="alimama"] { --font-selected-zh: var(--font-alimama); }
-html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-ibm-plex); }
-html[data-english-font="ibm"] { --font-selected-en: var(--font-ibm-plex); }
+html[data-chinese-font="alimama"] { --font-selected-zh: var(--font-ke-song); }
+html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-new-york); }
+html[data-english-font="ibm"] { --font-selected-en: var(--font-new-york); }
 html[data-english-font="polyamine"] { --font-selected-en: var(--font-polyamine); }
 html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant); }
 
@@ -107,8 +107,8 @@ html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant);
 .font-sample { font-size: 14px!important; font-weight: 400!important; }
 .font-sample.font-canger { font-family: var(--font-canger-huaxin); }
 .font-sample.font-lxgw { font-family: var(--font-lxgw); }
-.font-sample.font-alimama { font-family: var(--font-alimama); }
-.font-sample.font-ibm { font-family: var(--font-ibm-plex); }
+.font-sample.font-alimama { font-family: var(--font-ke-song); }
+.font-sample.font-ibm { font-family: var(--font-new-york); }
 .font-sample.font-zen { font-family: var(--font-zen-serif); }
 .font-sample.font-polyamine { font-family: var(--font-polyamine); }
 .font-sample.font-cormorant { font-family: var(--font-cormorant); }
@@ -1178,7 +1178,6 @@ html[data-mode="dark"] .field select { background-image: url("data:image/svg+xml
 .inbox-page .inbox-toolbar .segmented { min-width: 0; padding: 3px; border-radius: 10px; }
 .inbox-page .inbox-toolbar .segmented button { min-height: 32px; padding: 5px 11px; }
 .inbox-page .result-count { flex: 0 0 auto; }
-.inbox-local-status { margin:-10px 0 14px;display:flex;align-items:center;gap:10px; }
 .inbox-page .inbox-list { gap: 8px; }
 .inbox-page .inbox-row { display: block; padding: 14px 15px; border-radius: 16px; }
 .inbox-page .inbox-row > p { margin: 0; font-size: 16px; line-height: 1.5; }

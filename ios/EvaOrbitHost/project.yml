@@ -31,11 +31,9 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: EvaOrbit
-        EvaOrbitBaseURL: https://eva-orbit.vercel.app/native
+        EvaOrbitBaseURL: https://eva-orbit.vercel.app
         ITSAppUsesNonExemptEncryption: false
         NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
-        WKAppBoundDomains:
-          - eva-orbit.vercel.app
         UILaunchScreen:
           UIColorName: LoadingBackground
         UIRequiresFullScreen: true

@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { InboxView } from "../inbox/inbox-view";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "EvaOrbit Local" };
-
-export default function NativePage() {
-  return <InboxView localFirst />;
+export default function NativeCompatibilityRedirect() {
+  redirect("/");
 }
