@@ -7,6 +7,7 @@ import type { UiLanguage } from "@/lib/locale";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
 import type { TimelineEvent, TimelineMonthSummary } from "@/lib/types";
+import { HomeQuickLog } from "./home-quick-log";
 
 const sourceMeta: Record<TimelineEvent["sourceType"], { en: string; zh: string }> = {
   food: { en: "Food", zh: "吃吃" }, drink: { en: "Drinks", zh: "喝喝" }, tracker: { en: "Trackers", zh: "观测" }, cat: { en: "Cats", zh: "咪子" },
@@ -83,6 +84,17 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
     finally { if (dayRequest.current === controller) setLoadingDate(null); }
   }
 
+  async function refreshSelectedDate() {
+    const date = selected;
+    try {
+      const [dayResponse, summaryResponse] = await Promise.all([fetch(`/api/timeline?date=${encodeURIComponent(date)}`, { cache: "no-store" }), fetch(`/api/timeline?month=${encodeURIComponent(date.slice(0, 7))}`, { cache: "no-store" })]);
+      if (!dayResponse.ok || !summaryResponse.ok) throw new Error();
+      const [day, summary] = await Promise.all([dayResponse.json() as Promise<{ events: TimelineEvent[] }>, summaryResponse.json() as Promise<TimelineMonthSummary>]);
+      setEventsByDate((current) => ({ ...current, [date]: day.events }));
+      setSummaries((current) => ({ ...current, [summary.month]: summary }));
+    } catch { setError(english ? "Saved, but the timeline could not refresh" : "已保存，但时间线刷新失败"); }
+  }
+
   async function changeMonth(nextMonth: string) {
     monthRequest.current?.abort(); const controller = new AbortController(); monthRequest.current = controller; setLoadingMonth(true); setError("");
     try {
@@ -142,7 +154,7 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
         </div>
       </section>
       <section className="home-day-timeline" aria-busy={loadingDate === selected}>
-        <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
+        <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2><HomeQuickLog selectedDate={selected} onSaved={refreshSelectedDate} /></header>
         {error && <p className="form-error" role="alert">{error}</p>}
         {loadingDate === selected ? <div className="home-timeline-loading" aria-label={english ? "Loading timeline" : "正在读取时间线"}><span /><span /><span /></div> : events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.map((item) => { const source = sourceMeta[item.sourceType]; return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}><time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}</span><strong className="user-content">{titleFor(item, english)}</strong>{item.detail && <small className="user-content">{item.detail}</small>}</span></Link>; })}</div> : <p className="home-today-empty">{english ? "No records on this day" : "这一天还没有记录"}</p>}
       </section>

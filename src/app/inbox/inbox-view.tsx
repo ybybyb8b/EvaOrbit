@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
-import type { ApiError, InboxItem, InboxStatus } from "@/lib/types";
+import type { InboxItem, InboxStatus } from "@/lib/types";
+import { InboxCaptureForm } from "./inbox-capture-form";
 
 export function InboxView() {
   const { english } = useLocale();
@@ -12,9 +13,7 @@ export function InboxView() {
   const statusLabels: Record<InboxStatus, string> = { inbox: english ? "Unsorted" : "没整理", processed: english ? "Processed" : "处理过", archived: english ? "Archived" : "已归档" };
   const [items, setItems] = useState<InboxItem[]>([]);
   const [status, setStatus] = useState<InboxStatus | "all">("inbox");
-  const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -24,16 +23,6 @@ export function InboxView() {
   }, [status]);
 
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setError("");
-    const response = await fetch("/api/inbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content, source: "manual" }) });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-    setContent("");
-    setStatus("inbox");
-    await load();
-  }
 
   async function patch(id: number, body: object) {
     await fetch(`/api/inbox/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -48,10 +37,7 @@ export function InboxView() {
 
   return <div className="page inbox-page">
     <PageHeader eyebrow={english ? "SPACE" : "空间"} title="Inbox" />
-    <form className="capture-card inbox-capture" onSubmit={submit}>
-      <textarea autoFocus required rows={3} maxLength={10000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={english ? "What's on your mind?\nNo need to organize it." : "脑子里刚冒出来什么？\n随便写，不用整理"} />
-      <div>{error && <p className="form-error">{error}</p>}<button className="button primary" type="submit">{english ? "Capture here" : "先放这里"}</button></div>
-    </form>
+    <InboxCaptureForm onSaved={async()=>{setStatus("inbox");await load();}} />
     <div className="toolbar inbox-toolbar">
       <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
       <span className="result-count">{english ? `${items.length} ${items.length === 1 ? "entry" : "entries"}` : `${items.length} 条`}</span>

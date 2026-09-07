@@ -4,11 +4,11 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
-import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import { TrackerEntryEditor } from "../tracker-entry-editor";
 import type { ApiError, Tracker, TrackerEntry, TrackerField, TrackerFieldType, TrackerGoal, TrackerGoalOperator, TrackerInsights, TrackerPeriodType, TrackerReminder, TrackerReminderMode, TrackerStats } from "@/lib/types";
 
 type Detail = { tracker: Tracker; fields: TrackerField[]; entries: TrackerEntry[]; goals: TrackerGoal[]; reminders: TrackerReminder[]; stats: TrackerStats; insights: TrackerInsights };
@@ -19,7 +19,6 @@ const emptyField = { name:"", type:"text" as TrackerFieldType, options:"", requi
 const emptyGoal = { operator:"<=" as TrackerGoalOperator, targetValue:"", periodType:"monthly" as TrackerPeriodType, customPeriod:"" };
 const emptyReminder = { reminderMode:"missing" as TrackerReminderMode, periodDays:"1", configuredTime:"20:00", anchorDate:new Date().toLocaleDateString("en-CA") };
 
-function localDateTime() { const date=new Date();date.setMinutes(date.getMinutes()-date.getTimezoneOffset());return date.toISOString().slice(0,16); }
 function elapsed(value:string|null){if(!value)return"No records yet";const difference=Date.now()-new Date(value).getTime();const days=Math.floor(difference/86400000);if(days)return`${days}d ago`;const hours=Math.floor(difference/3600000);if(hours)return`${hours}h ago`;return`${Math.max(1,Math.floor(difference/60000))}m ago`;}
 function periodLabel(value:TrackerPeriodType){return{daily:"Daily",weekly:"Weekly",monthly:"Monthly",yearly:"Yearly",custom:"Custom"}[value];}
 function shownValue(value:unknown){return Array.isArray(value)?value.join(", "):typeof value==="boolean"?value?"Yes":"No":String(value??"");}
@@ -31,7 +30,6 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
   const [detail,setDetail]=useState<Detail|null>(null),[loading,setLoading]=useState(true),[working,setWorking]=useState(false),[error,setError]=useState(""),[query,setQuery]=useState(""),[appliedQuery,setAppliedQuery]=useState(""),[tab,setTab]=useState<Tab>(openDetailedRecord?"timeline":"insights");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[showRules,setShowRules]=useState(false);
   const [periodFilter,setPeriodFilter]=useState<TimelinePeriod>("all"),[fieldFilter,setFieldFilter]=useState(""),[fieldValueFilter,setFieldValueFilter]=useState("");
-  const [occurredAt,setOccurredAt]=useState(localDateTime),[note,setNote]=useState(""),[values,setValues]=useState<Record<string,unknown>>({});
   const [fieldDraft,setFieldDraft]=useState(emptyField),[goalDraft,setGoalDraft]=useState(emptyGoal),[reminderDraft,setReminderDraft]=useState(emptyReminder);
   const [editingReminderId,setEditingReminderId]=useState<number|null>(null);
   const load=useCallback(async(search="")=>{setLoading(true);const response=await fetch(`/api/trackers/${trackerId}${search?`?query=${encodeURIComponent(search)}`:""}`,{cache:"no-store"});if(response.ok)setDetail(await response.json());else setError(((await response.json())as ApiError).error);setLoading(false);},[trackerId]);
@@ -39,7 +37,6 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
   async function request(url:string,options:RequestInit){setWorking(true);setError("");const response=await fetch(url,options);if(!response.ok){setError(((await response.json())as ApiError).error);setWorking(false);return false;}await load(appliedQuery);try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}setWorking(false);return true;}
   async function quick(){if(await request(`/api/trackers/${trackerId}/entries`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:new Date().toISOString(),values:{},note:""})})){playNativeHaptic("light");setShowEntry(false);}}
   function openEntryForm(){setTab("timeline");setShowEntry(true);}
-  async function addEntry(event:FormEvent){event.preventDefault();const ok=await request(`/api/trackers/${trackerId}/entries`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:new Date(occurredAt).toISOString(),values,note})});if(ok){setOccurredAt(localDateTime());setNote("");setValues({});setShowEntry(false);}}
   async function addField(event:FormEvent){event.preventDefault();const activeCount=detail?.fields.filter((field)=>!field.archivedAt).length??0;const ok=await request(`/api/trackers/${trackerId}/fields`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...fieldDraft,precision:Number(fieldDraft.precision),options:fieldDraft.options.split(/[，,]/).map(item=>item.trim()).filter(Boolean),defaultValue:null,sortOrder:activeCount})});if(ok){setFieldDraft(emptyField);setShowField(false);}}
   async function addGoal(event:FormEvent){event.preventDefault();const ok=await request(`/api/trackers/${trackerId}/goals`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...goalDraft,targetValue:Number(goalDraft.targetValue),enabled:true})});if(ok)setGoalDraft(emptyGoal);}
   function trackerReminderPayload(reminder:typeof reminderDraft,enabled=true){return{...reminder,periodDays:Number(reminder.periodDays),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,enabled};}
@@ -48,7 +45,6 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
   function editTrackerReminder(reminder:TrackerReminder){setReminderDraft({reminderMode:reminder.reminderMode,periodDays:String(reminder.periodDays),configuredTime:reminder.configuredTime,anchorDate:reminder.anchorDate});setEditingReminderId(reminder.id);setShowRules(true);}
   async function uploadIcon(file:File|undefined){if(!file)return;if(file.size>4*1024*1024){setError("The image must be smaller than 4 MB.");return;}if(!["image/jpeg","image/png","image/webp"].includes(file.type)){setError("Use a JPG, PNG or WebP image.");return;}setWorking(true);const body=new FormData();body.set("file",file);const response=await fetch(`/api/trackers/${trackerId}/icon`,{method:"POST",body});if(!response.ok)setError(((await response.json())as ApiError).error);else await load(appliedQuery);setWorking(false);}
   async function removeTracker(){if(!confirm(`Delete “${detail?.tracker.name}” and every record inside it?`))return;const response=await fetch(`/api/trackers/${trackerId}`,{method:"DELETE"});if(response.ok){try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}router.push("/trackers");router.refresh();}else setError(((await response.json())as ApiError).error);}
-  function setFieldValue(field:TrackerField,value:unknown){setValues(current=>({...current,[field.key]:value}));}
   if(loading&&!detail)return <div className="page"><div className="loading-state">Opening Tracker…</div></div>;
   if(!detail)return <div className="page"><PageHeader eyebrow="TRACKER" title="Tracker not found" description={error}/><Link className="button secondary" href="/trackers">Back to Trackers</Link></div>;
   const {tracker,stats,insights}=detail;
@@ -80,9 +76,7 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
 
     {tab==="timeline"&&<>
       <section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">CAPTURE</span><h2>Add details</h2></div><button className="text-button" onClick={()=>setShowEntry(value=>!value)}>{showEntry?"Close":"New record"}</button></div>
-        {showEntry&&<FormSheet title="Add details" onClose={()=>setShowEntry(false)} formId="tracker-entry-form" submitLabel="Save record" busy={working}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={addEntry}><label className="field"><span>When</span><input required type="datetime-local" value={occurredAt} onChange={event=>setOccurredAt(event.target.value)}/></label>
-        {activeFields.length>0&&<div className="tracker-values-grid">{activeFields.map(field=><FieldInput field={field} value={values[field.key]} onChange={value=>setFieldValue(field,value)} key={field.id}/>)}</div>}
-        <label className="field"><span>Note</span><textarea rows={3} maxLength={5000} value={note} onChange={event=>setNote(event.target.value)} placeholder="Optional"/></label><button className="button primary" disabled={working}>Save record</button></form></FormSheet>}
+        {showEntry&&<TrackerEntryEditor trackerId={trackerId} fields={activeFields} onClose={()=>setShowEntry(false)} onSaved={()=>load(appliedQuery)}/>}
       </section>
       <section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">TIMELINE</span><h2>Every record</h2></div><span>{filtersActive?`${timelineEntries.length} / ${stats.total}`:stats.total}</span></div><form className="tracker-search" onSubmit={event=>{event.preventDefault();setAppliedQuery(query);void load(query);}}><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search notes or properties"/><button>Search</button></form>
         <div className="tracker-filters"><label><span>Time</span><select value={periodFilter} onChange={event=>setPeriodFilter(event.target.value as TimelinePeriod)}><option value="all">Any time</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="year">This year</option></select></label>{activeFields.length>0&&<label><span>Property</span><select value={fieldFilter} onChange={event=>{setFieldFilter(event.target.value);setFieldValueFilter("");}}><option value="">Any property</option>{activeFields.map(field=><option value={field.key} key={field.key}>{field.name}</option>)}</select></label>}{selectedFilterField&&<FieldFilter field={selectedFilterField} value={fieldValueFilter} onChange={setFieldValueFilter}/>} {filtersActive&&<button type="button" onClick={()=>{setQuery("");setAppliedQuery("");setPeriodFilter("all");setFieldFilter("");setFieldValueFilter("");void load("");}}>Clear</button>}</div>
@@ -116,14 +110,6 @@ function TrackerHeatmap({insights}:{insights:TrackerInsights}) {
 function BarChart({items}:{items:TrackerInsights["monthly"]}) {
   const maximum=Math.max(1,...items.map((item)=>item.count));
   return <div className="tracker-bars">{items.map((item)=><div key={item.key}><span title={`${item.label}: ${item.count}`} style={{height:`${Math.max(item.count?8:2,item.count/maximum*100)}%`}}/><small>{item.label}</small></div>)}</div>;
-}
-
-function FieldInput({field,value,onChange}:{field:TrackerField;value:unknown;onChange:(value:unknown)=>void}){
-  if(field.type==="boolean")return <label className="tracker-check field-check"><input type="checkbox" checked={Boolean(value)} onChange={event=>onChange(event.target.checked)}/>{field.name}</label>;
-  if(field.type==="single_select")return <label className="field"><span>{field.name}</span><select required={field.required} value={typeof value==="string"?value:""} onChange={event=>onChange(event.target.value)}><option value="">Not selected</option>{field.options.map(option=><option key={option}>{option}</option>)}</select></label>;
-  if(field.type==="multi_select")return <fieldset className="tracker-multi-field"><legend>{field.name}</legend>{field.options.map(option=><label key={option}><input type="checkbox" checked={Array.isArray(value)&&value.includes(option)} onChange={event=>{const current=Array.isArray(value)?value as string[]:[];onChange(event.target.checked?[...current,option]:current.filter(item=>item!==option));}}/>{option}</label>)}</fieldset>;
-  if(field.type==="rating")return <label className="field"><span>{field.name}</span><select required={field.required} value={typeof value==="number"?value:""} onChange={event=>onChange(event.target.value?Number(event.target.value):null)}><option value="">Not rated</option>{[1,2,3,4,5].map(score=><option key={score} value={score}>{"★".repeat(score)}</option>)}</select></label>;
-  return <label className="field"><span>{field.name}{field.unit&&` (${field.unit})`}</span><input required={field.required} type={field.type==="number"?"number":"text"} step={field.type==="number"?10**-field.precision:undefined} value={typeof value==="string"||typeof value==="number"?String(value):""} onChange={event=>onChange(field.type==="number"?(event.target.value?Number(event.target.value):null):event.target.value)}/></label>;
 }
 
 function FieldFilter({field,value,onChange}:{field:TrackerField;value:string;onChange:(value:string)=>void}){
