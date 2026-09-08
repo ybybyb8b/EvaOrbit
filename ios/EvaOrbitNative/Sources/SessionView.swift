@@ -5,31 +5,52 @@ struct SessionView: View {
     @ObservedObject var permissions: PermissionModel
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch session.phase {
-                case .checking:
-                    ProgressView("正在检查登录状态…")
-                case .signedOut:
+        Group {
+            switch session.phase {
+            case .checking:
+                ProgressView("正在检查登录状态…")
+            case .signedOut:
+                NavigationStack {
                     LoginView(model: session)
-                case let .signedIn(email):
-                    PermissionView(model: permissions)
-                        .navigationTitle("EvaOrbit Native")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Text(email)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("退出") { Task { await session.signOut() } }
-                                    .disabled(session.isWorking)
-                            }
-                        }
-                        .task { await permissions.refresh() }
                 }
+            case let .signedIn(email):
+                AuthenticatedView(session: session, permissions: permissions, email: email)
             }
+        }
+    }
+}
+
+private struct AuthenticatedView: View {
+    @ObservedObject var session: SessionModel
+    @ObservedObject var permissions: PermissionModel
+    let email: String
+    @StateObject private var dailyEnergy = DailyEnergyModel()
+
+    var body: some View {
+        TabView {
+            NavigationStack {
+                DailyEnergyView(model: dailyEnergy)
+            }
+            .tabItem { Label("Energy", systemImage: "bolt.heart") }
+
+            NavigationStack {
+                PermissionView(model: permissions)
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Text(email)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("退出") { Task { await session.signOut() } }
+                                .disabled(session.isWorking)
+                        }
+                    }
+                    .task { await permissions.refresh() }
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
     }
 }

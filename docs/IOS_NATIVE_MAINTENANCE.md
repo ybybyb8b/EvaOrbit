@@ -29,7 +29,7 @@ WKWebView Native Host
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
-`ios/EvaOrbitNative` 是并行开发的独立 SwiftUI 客户端，使用开发专用 Bundle ID，可与正式 `EvaOrbitHost` 同时安装。它拥有独立工程、测试和 CI artifact；在明确完成替换验收前，不得改变或取代上述正式 Host 链路。Stage A 只通过可见按钮验证 Notifications 与 HealthKit 权限，不调度提醒、不读取或上传健康数据，也不连接 Vercel/Supabase。
+`ios/EvaOrbitNative` 是并行开发的独立 SwiftUI 客户端，使用开发专用 Bundle ID，可与正式 `EvaOrbitHost` 同时安装。它拥有独立工程、测试和 CI artifact；在明确完成替换验收前，不得改变或取代上述正式 Host 链路。Stage A 通过可见按钮验证 Notifications 与 HealthKit 权限；Stage B 通过 Vercel Session API 建立 Cookie 会话；Stage C 复用现有受保护 API 提供在线 Daily Energy 读写。当前仍不调度原生提醒、不读取或上传健康数据，也没有本地业务数据库或离线队列。
 
 ## 二、事实来源
 

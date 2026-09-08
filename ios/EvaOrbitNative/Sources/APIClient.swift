@@ -5,6 +5,27 @@ struct NativeSessionResponse: Decodable, Equatable {
     let email: String?
 }
 
+struct DailyEnergySummary: Decodable, Equatable {
+    let date: String
+    let estimatedIntakeKcal: Double
+    let restingEnergyKcal: Double?
+    let activeEnergyKcal: Double?
+    let totalExpenditureKcal: Double?
+    let energyBalance: Double?
+    let notes: String
+    let manualRestingEnergyKcal: Double?
+    let manualActiveEnergyKcal: Double?
+    let restingEnergySource: String?
+    let activeEnergySource: String?
+}
+
+struct DailyEnergyUpdate: Encodable, Equatable {
+    let date: String
+    let restingEnergyKcal: Double?
+    let activeEnergyKcal: Double?
+    let notes: String
+}
+
 enum APIClientError: LocalizedError, Equatable {
     case invalidConfiguration
     case invalidResponse
@@ -49,6 +70,16 @@ struct APIConfiguration: Equatable {
 
     var sessionURL: URL {
         baseURL.appending(path: "api/native/session")
+    }
+
+    func dailyEnergyURL(date: String) -> URL {
+        baseURL
+            .appending(path: "api/nutrition/daily")
+            .appending(queryItems: [URLQueryItem(name: "date", value: date)])
+    }
+
+    var dailyEnergyURL: URL {
+        baseURL.appending(path: "api/nutrition/daily")
     }
 }
 
@@ -96,8 +127,19 @@ final class APIClient {
         }
     }
 
-    private func makeRequest(method: String = "GET") -> URLRequest {
-        var request = URLRequest(url: configuration.sessionURL)
+    func dailyEnergy(date: String) async throws -> DailyEnergySummary {
+        try await send(makeRequest(url: configuration.dailyEnergyURL(date: date)), response: DailyEnergySummary.self)
+    }
+
+    func saveDailyEnergy(_ update: DailyEnergyUpdate) async throws -> DailyEnergySummary {
+        var request = makeRequest(url: configuration.dailyEnergyURL, method: "PUT")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(update)
+        return try await send(request, response: DailyEnergySummary.self)
+    }
+
+    private func makeRequest(url: URL? = nil, method: String = "GET") -> URLRequest {
+        var request = URLRequest(url: url ?? configuration.sessionURL)
         request.httpMethod = method
         request.timeoutInterval = 15
         return request

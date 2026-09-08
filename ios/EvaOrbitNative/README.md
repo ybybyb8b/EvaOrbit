@@ -14,6 +14,13 @@ Stage B adds the smallest online session foundation:
 - App launch checks the existing cookie session, and the signed-in screen can log out.
 - Existing web login and protected business APIs remain unchanged. No business-resource UI is included yet.
 
+Stage C adds the first online business slice:
+
+- Daily Energy loads a selected EvaOrbit calendar date through the existing Vercel API.
+- Manual resting energy, active energy, and notes save through the existing validated upsert path.
+- Effective values still come from the server, so blank manual fields continue to fall back to Apple Health when available.
+- This stage does not add local persistence, an offline queue, or any new database migration.
+
 The existing WebView host, JS bridge, Vercel API, Supabase integration, notifications, HealthKit upload pipeline, signing patches, and installation transport are unchanged.
 
 Generate the Xcode project on macOS with:
