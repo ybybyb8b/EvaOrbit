@@ -29,7 +29,7 @@ WKWebView Native Host
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
-`ios/EvaOrbitNative` 是并行开发的独立 SwiftUI 客户端，使用开发专用 Bundle ID，可与正式 `EvaOrbitHost` 同时安装。它拥有独立工程、测试和 CI artifact；在明确完成替换验收前，不得改变或取代上述正式 Host 链路。Stage A 通过可见按钮验证 Notifications 与 HealthKit 权限；Stage B 通过 Vercel Session API 建立 Cookie 会话；Stage C 复用现有受保护 API 提供在线 Daily Energy 读写；Stage D 建立接近 Web 视觉语言的原生 Home / Health / Settings 外壳，并把 Daily Energy 编辑迁入原生 sheet。当前仍不调度原生提醒、不读取或上传健康数据，也没有本地业务数据库或离线队列。
+独立 SwiftUI 客户端已迁移到单独的 `EvaOrbit-iOS` 仓库。本仓库继续提供 Web、正式 `EvaOrbitHost` 和客户端所需的 Vercel API；在独立客户端完成替换验收前，不得改变上述正式 Host 链路。客户端不得直接访问 Supabase，也不得把服务端业务规则复制到 Swift。
 
 ## 二、事实来源
 
@@ -48,7 +48,6 @@ WKWebView Native Host
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
 | Web Push / Cron | `src/lib/push/**`、现有 reminders delivery API / cron 配置 |
 | iOS CI 构建与打包 | `.github/workflows/ios-native-host.yml`、`scripts/ios/package-ad-hoc-ipa.sh` |
-| SwiftUI 客户端 | `ios/EvaOrbitNative/project.yml`、`ios/EvaOrbitNative/Sources/**`、`.github/workflows/ios-swiftui-foundation.yml`、`scripts/ios/package-native-ipa.sh` |
 | patched xtool 构建 | `.github/workflows/xtool-patched.yml`、`tools/xtool/patches/**` |
 | Windows / WSL 安装辅助 | `scripts/ios/xtool-env.sh`、`scripts/ios/xtool-install.sh` |
 | IPA 简易安装 | `docs/IOS_IPA_INSTALL_QUICKSTART.md` |
