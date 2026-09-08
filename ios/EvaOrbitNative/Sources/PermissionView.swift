@@ -68,6 +68,14 @@ struct PermissionView: View {
             return model.notifications.alertsEnabled && model.notifications.soundsEnabled ? "打开系统设置" : "检查系统设置"
         }
     }
+
+    private var healthDetail: String {
+        guard model.health.available else { return "这台设备不支持 Apple Health" }
+        if model.health.authorizationRequested {
+            return "授权流程已完成 · 只读活动能量与静息能量"
+        }
+        return "尚未请求 · 只读活动能量与静息能量"
+    }
 }
 
 private struct PermissionCard: View {

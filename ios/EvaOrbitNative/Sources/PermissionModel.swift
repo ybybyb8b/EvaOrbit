@@ -3,6 +3,8 @@ import HealthKit
 import UIKit
 import UserNotifications
 
+private let healthAuthorizationRequestedKey = "health.authorizationRequested"
+
 enum NotificationAuthorization: String, Equatable {
     case loading
     case notDetermined
@@ -33,12 +35,11 @@ struct NotificationAccess: Equatable {
 
 struct HealthAccess: Equatable {
     var available = HKHealthStore.isHealthDataAvailable()
-    var authorizationRequested = UserDefaults.standard.bool(forKey: PermissionModel.healthAuthorizationRequestedKey)
+    var authorizationRequested = UserDefaults.standard.bool(forKey: healthAuthorizationRequestedKey)
 }
 
 @MainActor
 final class PermissionModel: ObservableObject {
-    static let healthAuthorizationRequestedKey = "health.authorizationRequested"
     static let notificationOptions: UNAuthorizationOptions = [.alert, .sound]
 
     @Published private(set) var notifications = NotificationAccess()
@@ -77,7 +78,7 @@ final class PermissionModel: ObservableObject {
                 energyType(.basalEnergyBurned),
             ] as [HKObjectType])
             try await requestHealthAuthorization(readTypes: readTypes)
-            UserDefaults.standard.set(true, forKey: Self.healthAuthorizationRequestedKey)
+            UserDefaults.standard.set(true, forKey: healthAuthorizationRequestedKey)
         }
     }
 
