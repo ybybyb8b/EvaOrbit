@@ -215,7 +215,7 @@ private struct DailyEnergyEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("手动记录") {
+                Section {
                     TextField("静息 kcal（选填）", text: $model.restingEnergy)
                         .keyboardType(.decimalPad)
                         .focused($focusedField, equals: .resting)
@@ -225,6 +225,8 @@ private struct DailyEnergyEditorView: View {
                     TextField("备注（选填）", text: $model.notes, axis: .vertical)
                         .lineLimit(2...5)
                         .focused($focusedField, equals: .notes)
+                } header: {
+                    Text("手动记录")
                 } footer: {
                     Text("留空时优先使用 Apple Health；填写数值会作为该项的手动覆盖。")
                 }
