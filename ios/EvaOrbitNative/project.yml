@@ -19,6 +19,8 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - sdk: HealthKit.framework
       - sdk: UserNotifications.framework
@@ -26,6 +28,7 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: EvaOrbit Native
+        EvaOrbitAPIBaseURL: https://eva-orbit.vercel.app
         ITSAppUsesNonExemptEncryption: false
         NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
         UILaunchScreen: {}
@@ -41,6 +44,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.native.dev
         PRODUCT_NAME: EvaOrbitNative
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: false
 

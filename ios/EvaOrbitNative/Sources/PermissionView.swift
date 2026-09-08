@@ -4,47 +4,45 @@ struct PermissionView: View {
     @ObservedObject var model: PermissionModel
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("EvaOrbit Native")
-                            .font(.largeTitle.bold())
-                        Text("SwiftUI 基础环境")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    PermissionCard(
-                        title: "Notifications",
-                        detail: notificationDetail,
-                        buttonTitle: notificationButtonTitle,
-                        buttonDisabled: model.isWorking || model.notifications.authorization == .loading,
-                        action: { Task { await model.requestNotifications() } }
-                    )
-
-                    PermissionCard(
-                        title: "Apple Health",
-                        detail: healthDetail,
-                        buttonTitle: model.health.authorizationRequested ? "再次请求" : "连接 Apple Health",
-                        buttonDisabled: model.isWorking || !model.health.available,
-                        action: { Task { await model.requestHealthAuthorization() } }
-                    )
-
-                    if let error = model.errorMessage {
-                        Text(error)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .accessibilityLabel("错误：\(error)")
-                    }
-
-                    Text("权限只会在点击按钮后请求。本阶段不会调度通知，也不会读取或上传健康数据。")
-                        .font(.footnote)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Native 基础环境")
+                        .font(.largeTitle.bold())
+                    Text("Vercel 会话与原生权限")
                         .foregroundStyle(.secondary)
                 }
-                .padding(20)
+
+                PermissionCard(
+                    title: "Notifications",
+                    detail: notificationDetail,
+                    buttonTitle: notificationButtonTitle,
+                    buttonDisabled: model.isWorking || model.notifications.authorization == .loading,
+                    action: { Task { await model.requestNotifications() } }
+                )
+
+                PermissionCard(
+                    title: "Apple Health",
+                    detail: healthDetail,
+                    buttonTitle: model.health.authorizationRequested ? "再次请求" : "连接 Apple Health",
+                    buttonDisabled: model.isWorking || !model.health.available,
+                    action: { Task { await model.requestHealthAuthorization() } }
+                )
+
+                if let error = model.errorMessage {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("错误：\(error)")
+                }
+
+                Text("权限只会在点击按钮后请求。本阶段不会调度通知，也不会读取或上传健康数据。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .padding(20)
         }
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private var notificationDetail: String {
