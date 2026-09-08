@@ -89,8 +89,8 @@
 
 html[data-chinese-font="lxgw"] { --font-selected-zh: var(--font-lxgw); }
 html[data-chinese-font="alimama"] { --font-selected-zh: var(--font-ke-song); }
-html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-new-york); }
-html[data-english-font="ibm"] { --font-selected-en: var(--font-new-york); }
+html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-canger-xuansan); }
+html[data-english-font="ibm"] { --font-selected-en: var(--font-august-stories); }
 html[data-english-font="polyamine"] { --font-selected-en: var(--font-polyamine); }
 html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant); }
 
@@ -108,7 +108,8 @@ html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant);
 .font-sample.font-canger { font-family: var(--font-canger-huaxin); }
 .font-sample.font-lxgw { font-family: var(--font-lxgw); }
 .font-sample.font-alimama { font-family: var(--font-ke-song); }
-.font-sample.font-ibm { font-family: var(--font-new-york); }
+.font-sample-zh.font-ibm { font-family: var(--font-canger-xuansan); }
+.font-sample-en.font-ibm { font-family: var(--font-august-stories); }
 .font-sample.font-zen { font-family: var(--font-zen-serif); }
 .font-sample.font-polyamine { font-family: var(--font-polyamine); }
 .font-sample.font-cormorant { font-family: var(--font-cormorant); }
@@ -3290,9 +3291,9 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 .home-calendar-grid { display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;opacity:1;transform:translateY(0);transition:opacity 160ms cubic-bezier(.23,1,.32,1),transform 160ms cubic-bezier(.23,1,.32,1); }
 @starting-style { .home-calendar-grid { opacity:0;transform:translateY(3px); } }
 .home-calendar-weekday { min-height:25px;display:grid;place-items:center;color:var(--text-secondary);font-size:11px;font-weight:700; }
-.home-calendar-blank { min-height:48px; }
+.home-calendar-blank { min-height:52px; }
 .home-calendar-grid > button {
-  min-width:0;min-height:48px;padding:5px 3px;border:0;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  min-width:0;min-height:52px;padding:5px 3px;border:0;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
   background:transparent;color:var(--text-primary);cursor:pointer;
   transition:background-color 150ms var(--motion-ease),color 150ms var(--motion-ease),transform 100ms cubic-bezier(.23,1,.32,1),box-shadow 150ms var(--motion-ease);
 }
@@ -3301,9 +3302,9 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 .home-calendar-grid > button.selected { color:var(--text-primary);box-shadow:none; }
 .home-calendar-grid > button.selected strong { background:var(--accent-primary);color:var(--accent-on); }
 .home-calendar-grid > button[data-outside-month="true"]:not(.selected) { color:var(--text-secondary); }
-.home-calendar-indicator { height:5px;display:grid;place-items:center; }
+.home-calendar-indicator { height:6px;display:grid;place-items:center; }
 .home-calendar-indicator i { width:5px;height:5px;border-radius:50%;display:block;background:var(--text-tertiary);opacity:.58; }
-.home-calendar-grid > button[data-highlighted="true"] .home-calendar-indicator i { width:11px;background:var(--accent-primary);opacity:.82; }
+.home-calendar-grid > button[data-highlighted="true"] .home-calendar-indicator i { width:14px;height:6px;border-radius:5px;background:var(--accent-primary);opacity:.82; }
 .home-calendar-actions button:focus-visible,.home-calendar-grid > button:focus-visible { outline:0; }
 .home-calendar-actions button:focus-visible { box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .13); }
 .home-calendar-grid > button:focus-visible strong { box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .14); }
@@ -3389,7 +3390,7 @@ html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-
   .home-calendar-actions .home-calendar-today { width:auto;min-width:42px; }
   .home-calendar-grid { gap:3px; }
   .home-calendar-weekday { font-size:12px; }
-  .home-calendar-blank,.home-calendar-grid > button { min-height:50px; }
+  .home-calendar-blank,.home-calendar-grid > button { min-height:54px; }
   .home-calendar-grid > button strong { font-size:15px; }
   .home-day-timeline { padding:6px 0 0; }
   .home-day-heading { min-height:34px;margin-bottom:8px; }
