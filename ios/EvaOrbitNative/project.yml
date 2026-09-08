@@ -1,0 +1,67 @@
+name: EvaOrbitNative
+
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: zh-Hans
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  EvaOrbitNative:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - sdk: HealthKit.framework
+      - sdk: UserNotifications.framework
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: EvaOrbit Native
+        ITSAppUsesNonExemptEncryption: false
+        NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    entitlements:
+      path: Generated/EvaOrbitNative.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.native.dev
+        PRODUCT_NAME: EvaOrbitNative
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+
+  EvaOrbitNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: EvaOrbitNative
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.native.dev.tests
+        GENERATE_INFOPLIST_FILE: true
+
+schemes:
+  EvaOrbitNative:
+    build:
+      targets:
+        EvaOrbitNative: all
+        EvaOrbitNativeTests: [test]
+    test:
+      targets:
+        - EvaOrbitNativeTests

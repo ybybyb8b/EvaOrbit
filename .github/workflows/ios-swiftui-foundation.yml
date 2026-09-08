@@ -1,0 +1,93 @@
+name: iOS SwiftUI Foundation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ios/EvaOrbitNative/**"
+      - "scripts/ios/package-native-ipa.sh"
+      - ".github/workflows/ios-swiftui-foundation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        working-directory: ios/EvaOrbitNative
+        run: xcodegen generate
+
+      - name: Compile app and tests for Simulator
+        working-directory: ios/EvaOrbitNative
+        run: |
+          xcodebuild \
+            -project EvaOrbitNative.xcodeproj \
+            -scheme EvaOrbitNative \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitNative-Simulator" \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing
+
+      - name: Run unit tests on iPhone 16 Pro Simulator
+        working-directory: ios/EvaOrbitNative
+        run: |
+          xcodebuild \
+            -project EvaOrbitNative.xcodeproj \
+            -scheme EvaOrbitNative \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitNative-Tests" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Build ad-hoc signed device app
+        working-directory: ios/EvaOrbitNative
+        run: |
+          xcodebuild \
+            -project EvaOrbitNative.xcodeproj \
+            -scheme EvaOrbitNative \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitNative-Device" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            build
+
+      - name: Verify entitlements and package IPA
+        run: |
+          app="$RUNNER_TEMP/EvaOrbitNative-Device/Build/Products/Release-iphoneos/EvaOrbitNative.app"
+          bash scripts/ios/package-native-ipa.sh "$app" "$RUNNER_TEMP/EvaOrbitNative-Artifact"
+          dsym="$RUNNER_TEMP/EvaOrbitNative-Device/Build/Products/Release-iphoneos/EvaOrbitNative.app.dSYM"
+          if [[ -d "$dsym" ]]; then
+            ditto "$dsym" "$RUNNER_TEMP/EvaOrbitNative-Artifact/EvaOrbitNative.app.dSYM"
+          fi
+          xcodebuild -version > "$RUNNER_TEMP/EvaOrbitNative-Artifact/XCODE_VERSION.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/EvaOrbitNative-Artifact/GIT_SHA.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EvaOrbitNative-ad-hoc-${{ github.run_number }}
+          path: ${{ runner.temp }}/EvaOrbitNative-Artifact
+          if-no-files-found: error
+          retention-days: 14
