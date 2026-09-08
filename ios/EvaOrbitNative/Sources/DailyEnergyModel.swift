@@ -71,8 +71,9 @@ final class DailyEnergyModel: ObservableObject {
 
     private let client: APIClient?
 
-    init(client: APIClient? = try? APIClient()) {
+    init(client: APIClient? = try? APIClient(), initialSummary: DailyEnergySummary? = nil) {
         self.client = client
+        if let initialSummary { apply(initialSummary) }
     }
 
     func load(date: String? = nil) async {
@@ -124,6 +125,14 @@ final class DailyEnergyModel: ObservableObject {
             activeEnergyKcal: try energyValue(activeEnergy),
             notes: notes
         )
+    }
+
+    func resetDraft() {
+        guard let summary else { return }
+        restingEnergy = inputText(summary.manualRestingEnergyKcal)
+        activeEnergy = inputText(summary.manualActiveEnergyKcal)
+        notes = summary.notes
+        errorMessage = nil
     }
 
     private func energyValue(_ value: String) throws -> Double? {

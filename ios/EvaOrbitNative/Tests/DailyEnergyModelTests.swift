@@ -31,3 +31,29 @@ import Testing
         try model.validatedUpdate()
     }
 }
+
+@Test @MainActor func dailyEnergyResetRestoresTheLoadedSummary() {
+    let summary = DailyEnergySummary(
+        date: "2026-09-08",
+        estimatedIntakeKcal: 1200,
+        restingEnergyKcal: 1500,
+        activeEnergyKcal: 300,
+        totalExpenditureKcal: 1800,
+        energyBalance: -600,
+        notes: "已保存",
+        manualRestingEnergyKcal: 1500,
+        manualActiveEnergyKcal: 300,
+        restingEnergySource: "manual",
+        activeEnergySource: "manual"
+    )
+    let model = DailyEnergyModel(client: nil, initialSummary: summary)
+    model.restingEnergy = "1600"
+    model.activeEnergy = "400"
+    model.notes = "未保存"
+
+    model.resetDraft()
+
+    #expect(model.restingEnergy == "1500")
+    #expect(model.activeEnergy == "300")
+    #expect(model.notes == "已保存")
+}
