@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -64,6 +64,9 @@ export type HealthRecordListInput = { status?: HealthRecordStatus; type?: Health
 export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt">;
 export type TrainingLogPatch = Partial<NewTrainingLog>;
 export type TrainingLogListInput = { from?: string; to?: string; limit?: number };
+export type NewWeightRecord = Pick<WeightRecord, "occurredAt" | "occurredHasExplicitTime" | "weightKg">;
+export type WeightRecordPatch = Partial<NewWeightRecord>;
+export type WeightRecordListInput = { from?: string; to?: string; limit?: number };
 export type NewMediaItem = Pick<MediaItem, "title" | "originalTitle" | "translatedTitle" | "mediaType" | "status" | "rating" | "isFavorite" | "note" | "coverUrl" | "seriesId" | "seasonNumber" | "seasonTitle">;
 export type NewMediaDraft = Omit<NewMediaItem,"title">;
 export type MediaListInput = { query?: string; mediaType?: MediaType; status?: MediaStatus; rating?: MediaRating; seriesId?: number; favorite?: boolean; rewatched?: boolean; limit?: number };
@@ -222,6 +225,14 @@ export interface EvaOrbitRepository {
   createTrainingLog(input: NewTrainingLog): Promise<TrainingLog>;
   updateTrainingLog(id: number, input: TrainingLogPatch): Promise<TrainingLog | null>;
   deleteTrainingLog(id: number): Promise<boolean>;
+
+  listWeightRecords(input?: WeightRecordListInput): Promise<WeightRecord[]>;
+  getWeightRecord(id: number): Promise<WeightRecord | null>;
+  createWeightRecord(input: NewWeightRecord): Promise<WeightRecord>;
+  updateWeightRecord(id: number, input: WeightRecordPatch): Promise<WeightRecord | null>;
+  deleteWeightRecord(id: number): Promise<boolean>;
+  getWeightSettings(): Promise<WeightSettings>;
+  updateWeightSettings(input: Pick<WeightSettings, "targetWeightKg" | "reminderEnabled" | "reminderTime">): Promise<WeightSettings>;
 
   listMediaItems(input?: MediaListInput): Promise<MediaItem[]>;
   listMediaSeries(): Promise<MediaSeries[]>;

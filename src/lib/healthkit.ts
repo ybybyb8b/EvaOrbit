@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { ValidationError } from "./validation.ts";
 
 export const HEALTHKIT_ENERGY_SCOPE = "healthkit:energy:write";
+export const HEALTHKIT_BODY_MASS_SCOPE = "healthkit:body-mass:write";
 export const HEALTHKIT_INGEST_BATCH_LIMIT = 50;
 
 export type HealthKitEnergyMetric = "resting" | "active";
@@ -12,6 +13,16 @@ export type HealthKitEnergySnapshot = {
   revision: number;
   sampleCount: number;
   calculatedAt: string;
+};
+export type HealthKitBodyMassChange = {
+  operation: "upsert" | "delete";
+  sampleId: string;
+  occurredAt?: string;
+  weightKg?: number;
+  sourceBundle?: string;
+  sourceName?: string;
+  syncIdentifier?: string;
+  syncVersion?: number;
 };
 
 export type NativeDeviceAccessRecord = { revoked_at?: unknown; scopes?: unknown } | null;
@@ -68,6 +79,31 @@ export function parseHealthKitEnergySnapshots(value: unknown): HealthKitEnergySn
   return coalesceHealthKitEnergySnapshots(snapshots);
 }
 
+export function parseHealthKitUpload(value: unknown) {
+  const body = record(value);
+  const snapshots = Array.isArray(body.snapshots) && body.snapshots.length === 0
+    ? []
+    : body.snapshots === undefined ? [] : parseHealthKitEnergySnapshots({ snapshots: body.snapshots });
+  if (!Array.isArray(body.bodyMassChanges) || body.bodyMassChanges.length > 100) {
+    if (body.bodyMassChanges === undefined && snapshots.length) return { snapshots, bodyMassChanges: [] };
+    throw new ValidationError("HealthKit body mass batch is invalid");
+  }
+  const bodyMassChanges = body.bodyMassChanges.map((raw): HealthKitBodyMassChange => {
+    const change = record(raw);
+    if (change.operation !== "upsert" && change.operation !== "delete") throw new ValidationError("HealthKit body mass operation is invalid");
+    const sampleId = parseInstallationId(change.sampleId);
+    if (change.operation === "delete") return { operation: "delete", sampleId };
+    if (typeof change.occurredAt !== "string" || !Number.isFinite(Date.parse(change.occurredAt))) throw new ValidationError("HealthKit body mass time is invalid");
+    const sourceBundle = typeof change.sourceBundle === "string" ? change.sourceBundle.slice(0, 255) : "";
+    const sourceName = typeof change.sourceName === "string" ? change.sourceName.slice(0, 255) : "";
+    const syncIdentifier = typeof change.syncIdentifier === "string" ? change.syncIdentifier.slice(0, 255) : undefined;
+    const syncVersion = change.syncVersion === undefined ? undefined : safeInteger(change.syncVersion, "HealthKit sync version", 1, 2_147_483_647);
+    return { operation: "upsert", sampleId, occurredAt: change.occurredAt, weightKg: finiteNumber(change.weightKg, "HealthKit body mass", 20, 500), sourceBundle, sourceName, ...(syncIdentifier ? { syncIdentifier } : {}), ...(syncVersion ? { syncVersion } : {}) };
+  });
+  if (!snapshots.length && !bodyMassChanges.length) throw new ValidationError("HealthKit upload is empty");
+  return { snapshots, bodyMassChanges };
+}
+
 export function coalesceHealthKitEnergySnapshots(snapshots: HealthKitEnergySnapshot[]) {
   const newest = new Map<string, HealthKitEnergySnapshot>();
   for (const snapshot of snapshots) {
@@ -95,7 +131,7 @@ export function hasHealthKitEnergyScope(scopes: unknown): scopes is string[] {
   return Array.isArray(scopes) && scopes.includes(HEALTHKIT_ENERGY_SCOPE);
 }
 
-export function nativeDeviceAccessStatus(device: NativeDeviceAccessRecord): 200 | 401 | 403 {
+export function nativeDeviceAccessStatus(device: NativeDeviceAccessRecord, requiredScope = HEALTHKIT_ENERGY_SCOPE): 200 | 401 | 403 {
   if (!device || device.revoked_at) return 401;
-  return hasHealthKitEnergyScope(device.scopes) ? 200 : 403;
+  return Array.isArray(device.scopes) && device.scopes.includes(requiredScope) ? 200 : 403;
 }

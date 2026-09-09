@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildHistorySuggestions } from "./history-suggestions.ts";
+import { buildTrainingPresets } from "./training-presets.ts";
 import { parseNewTrainingLog, parseTrainingLogPatch, ValidationError } from "./validation.ts";
 
 test("validates a date-only Training Log and trims free suggestion fields", () => {
@@ -22,6 +23,15 @@ test("shared history suggestions rank frequency before recency and keep free cas
     { value: "eva", at: "2026-08-31T00:00:00Z" },
   ];
   assert.deepEqual(buildHistorySuggestions(records, (item) => item.value, (item) => item.at), ["eva", "Mia"]);
+});
+
+test("training presets group complete field snapshots and rank common combinations",()=>{
+  const base={id:1,occurredAt:"2026-09-01T04:00:00Z",occurredHasExplicitTime:false,trainingType:"strength" as const,bodyParts:["背","核心"] as const,teacher:"Eva",course:"Core",durationMinutes:45,notes:"one-off",createdAt:"",updatedAt:""};
+  const presets=buildTrainingPresets([{...base,bodyParts:[...base.bodyParts]},{...base,id:2,occurredAt:"2026-09-02T04:00:00Z",bodyParts:["核心","背"]},{...base,id:3,course:"Legs",bodyParts:["腿"]}]);
+  assert.equal(presets[0].useCount,2);
+  assert.deepEqual(presets[0].bodyParts,["核心","背"]);
+  assert.equal("notes" in presets[0],false);
+  assert.equal("occurredAt" in presets[0],false);
 });
 
 test("Training migrations define independent owner-scoped storage for Supabase and SQLite", () => {

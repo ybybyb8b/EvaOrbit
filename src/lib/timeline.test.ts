@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "./timeline.ts";
-import type { DrinkLog, FoodLog, HealthRecord, TrainingLog, Tracker, TrackerEntry } from "./types.ts";
+import type { DrinkLog, FoodLog, HealthRecord, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
@@ -27,6 +27,7 @@ const trainingLog: TrainingLog = {
   id: 23, occurredAt: "2026-08-26T05:00:00.000Z", occurredHasExplicitTime: false, trainingType: "strength", bodyParts: ["背", "核心"],
   teacher: "Eva", course: "Core flow", durationMinutes: 45, notes: "", createdAt: "", updatedAt: "",
 };
+const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.2,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
 
 test("merges module records into a newest-first timeline contract", () => {
   const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker], [healthRecord]);
@@ -64,6 +65,14 @@ test("maps training logs into editable date-aware timeline events", () => {
   assert.equal(event.href, "/health?training=23");
   assert.equal(event.metadata.trainingType, "strength");
   assert.match(event.detail, /45 min/);
+});
+
+test("maps every weight sample into the Health timeline without daily deduplication",()=>{
+  const events=buildTimelineEvents([],[],[],[],[],[weightRecord,{...weightRecord,id:30,weightKg:64.4}]);
+  assert.deepEqual(events.map(item=>item.id),["weight:30","weight:29"]);
+  assert.equal(events[0].eventType,"health.weight");
+  assert.equal(events[0].href,"/health#weight-title");
+  assert.match(events[0].detail!,/Health/);
 });
 
 test("marks health and training days as important while retaining an accessible count", () => {

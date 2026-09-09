@@ -3,12 +3,14 @@ import HealthKit
 
 protocol HealthKitReading: AnyObject {
     var isAvailable: Bool { get }
-    func requestEnergyAuthorization() async throws
+    func requestAuthorization() async throws
     func startObserver(for metric: HealthMetric, handler: @escaping (@escaping () -> Void) -> Void) throws
     func enableBackgroundDelivery(for metric: HealthMetric) async throws
     func anchoredDelta(for metric: HealthMetric, encodedAnchor: Data?, initialStart: Date?) async throws -> HealthAnchorDelta
     func recentSamples(for metric: HealthMetric, window: HealthDateWindow) async throws -> [HealthEnergySample]
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double
+    func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta
+    func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws
 }
 
 final class SystemHealthKitClient: HealthKitReading {
@@ -24,10 +26,11 @@ final class SystemHealthKitClient: HealthKitReading {
         return type
     }
 
-    func requestEnergyAuthorization() async throws {
+    func requestAuthorization() async throws {
         let read = try Set(HealthMetric.allCases.map { try quantityType(for: $0) as HKObjectType })
+        let share = Set([try quantityType(for: .bodyMass) as HKSampleType])
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            store.requestAuthorization(toShare: [], read: read) { success, error in
+            store.requestAuthorization(toShare: share, read: read) { success, error in
                 if let error { continuation.resume(throwing: error) }
                 else if success { continuation.resume() }
                 else { continuation.resume(throwing: HealthKitClientError.authorizationFailed) }
@@ -62,6 +65,7 @@ final class SystemHealthKitClient: HealthKitReading {
     }
 
     func anchoredDelta(for metric: HealthMetric, encodedAnchor: Data?, initialStart: Date?) async throws -> HealthAnchorDelta {
+        precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
         let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
@@ -93,6 +97,7 @@ final class SystemHealthKitClient: HealthKitReading {
     }
 
     func recentSamples(for metric: HealthMetric, window: HealthDateWindow) async throws -> [HealthEnergySample] {
+        precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
         let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
         return try await withCheckedThrowingContinuation { continuation in
@@ -114,6 +119,7 @@ final class SystemHealthKitClient: HealthKitReading {
     }
 
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double {
+        precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
         let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: [.strictStartDate, .strictEndDate])
         return try await withCheckedThrowingContinuation { continuation in
@@ -123,6 +129,39 @@ final class SystemHealthKitClient: HealthKitReading {
             }
             store.execute(query)
         }
+    }
+
+    func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta {
+        let type = try quantityType(for: .bodyMass)
+        let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
+        let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
+                if let error { continuation.resume(throwing: error); return }
+                guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
+                do {
+                    let added = (samples as? [HKQuantitySample] ?? []).map { sample in
+                        HealthBodyMassSample(
+                            uuid: sample.uuid.uuidString.lowercased(),
+                            occurredAt: sample.startDate,
+                            kilograms: sample.quantity.doubleValue(for: .gramUnit(with: .kilo)),
+                            sourceBundle: sample.sourceRevision.source.bundleIdentifier,
+                            sourceName: sample.sourceRevision.source.name,
+                            syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String,
+                            syncVersion: sample.metadata?[HKMetadataKeySyncVersion] as? Int
+                        )
+                    }
+                    continuation.resume(returning: HealthBodyMassDelta(added: added, deletedUUIDs: (deleted ?? []).map { $0.uuid.uuidString.lowercased() }, encodedAnchor: try HealthAnchorCodec.encode(newAnchor)))
+                } catch { continuation.resume(throwing: error) }
+            }
+            store.execute(query)
+        }
+    }
+
+    func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws {
+        let type = try quantityType(for: .bodyMass)
+        let sample = HKQuantitySample(type: type, quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: kilograms), start: occurredAt, end: occurredAt, metadata: [HKMetadataKeySyncIdentifier: syncIdentifier, HKMetadataKeySyncVersion: syncVersion])
+        try await store.save(sample)
     }
 
 }

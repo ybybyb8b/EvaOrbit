@@ -26,6 +26,7 @@ function startOfWeek(date: string) { const value = new Date(`${date}T12:00:00Z`)
 function dateFor(month: string, day: number) { return `${month}-${String(day).padStart(2, "0")}`; }
 function timeLabel(value: string) { return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(value)); }
 function titleFor(item: TimelineEvent, english: boolean) {
+  if (item.eventType === "health.weight") return english ? "Weight" : "体重";
   if (item.sourceType === "food" && typeof item.metadata.mealType === "string") { const meal = mealLabels[item.metadata.mealType]; if (meal) return english ? meal.en : meal.zh; }
   if (item.sourceType === "training") {
     const course = typeof item.metadata.course === "string" ? item.metadata.course.trim() : "";

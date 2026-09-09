@@ -18,7 +18,7 @@ export type HealthKitStatus = {
   installationId: string;
   authorizationRequested: boolean;
   hasReadData: boolean;
-  metrics: Array<{ metric: "resting" | "active"; name: string }>;
+  metrics: Array<{ metric: "resting" | "active" | "body_mass"; name: string }>;
   backgroundDelivery: Record<string, "enabled" | "failed" | "not_requested">;
   lastLocalSync: string | null;
   lastSuccessfulUpload: string | null;

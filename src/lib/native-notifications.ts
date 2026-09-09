@@ -1,7 +1,8 @@
-import type { FoodLog, MealReminderRule, NativeNotificationSchedule, ScheduledNotification } from "./types";
+import type { FoodLog, MealReminderRule, NativeNotificationSchedule, ScheduledNotification, WeightRecord, WeightSettings } from "./types";
 import { notificationSendAt } from "./reminder-engine.ts";
 import { reminderNotificationCopy } from "./notification-copy.ts";
 import { dateInEvaOrbit, shiftDate, zonedDateParts, zonedDateTimeToUtc } from "./time.ts";
+import { weightReminderSchedules } from "./weight.ts";
 
 const managedPrefix = "evaorbit-scheduled-";
 
@@ -47,10 +48,14 @@ export function nativeMealNotifications(
   });
 }
 
+export function nativeWeightNotifications(settings:WeightSettings,records:Pick<WeightRecord,"occurredAt">[],locale="zh-CN",now=new Date(),days=7):NativeNotificationSchedule[]{const english=locale.toLowerCase().startsWith("en");return weightReminderSchedules(settings,records,now,days).map(item=>({id:nativeNotificationIdentifier("weight",item.date),title:english?"Log today’s weight":"记录今天的体重",body:english?"No weight has been recorded today.":"今天还没有体重记录。",triggerAt:item.triggerAt}));}
+
 export function buildNativeNotificationSchedules(input: {
   upcoming: ScheduledNotification[];
   mealRules: MealReminderRule[];
   foodLogs: Pick<FoodLog, "occurredAt" | "mealType">[];
+  weightSettings?: WeightSettings;
+  weightRecords?: Pick<WeightRecord,"occurredAt">[];
   locale?: string;
   now?: Date;
 }) {
@@ -58,5 +63,6 @@ export function buildNativeNotificationSchedules(input: {
   return [
     ...input.upcoming.map((item) => nativeReminderNotification(item, input.locale, now)).filter((item): item is NativeNotificationSchedule => item !== null),
     ...nativeMealNotifications(input.mealRules, input.foodLogs, input.locale, now),
+    ...(input.weightSettings ? nativeWeightNotifications(input.weightSettings,input.weightRecords??[],input.locale,now) : []),
   ].sort((a, b) => a.triggerAt.localeCompare(b.triggerAt));
 }

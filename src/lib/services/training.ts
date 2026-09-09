@@ -4,6 +4,7 @@ import { buildHistorySuggestions } from "../history-suggestions";
 import { getRepository } from "../repositories";
 import type { NewTrainingLog, TrainingLogListInput, TrainingLogPatch } from "../repositories/types";
 import { dateRange } from "../time";
+import { buildTrainingPresets } from "../training-presets";
 
 function monthRange(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -27,5 +28,6 @@ export async function getTrainingInputSuggestions() {
   return {
     teachers: buildHistorySuggestions(logs, (log) => log.teacher, (log) => log.occurredAt),
     courses: buildHistorySuggestions(logs, (log) => log.course, (log) => log.occurredAt),
+    presets: buildTrainingPresets(logs),
   };
 }

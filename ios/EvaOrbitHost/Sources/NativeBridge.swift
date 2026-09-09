@@ -10,6 +10,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         "haptic.play",
         "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
         "healthkit.configureCredential", "healthkit.clearCredential",
+        "healthkit.saveBodyMass",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
         "notification.cancel", "notification.listPending", "notification.openSettings"
     ]
@@ -112,6 +113,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         case "healthkit.clearCredential":
             healthKitCoordinator.clearCredential()
             replyHandler(success(id: identifier, result: ["configured": false]), nil)
+        case "healthkit.saveBodyMass":
+            saveBodyMass(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "notification.getStatus":
             Task { replyOnMain(replyHandler, value: success(id: identifier, result: await notificationManager.status())) }
         case "notification.requestAuthorization":
@@ -256,6 +259,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
+    private func saveBodyMass(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){
+        guard let kilograms=(parameters["weightKg"] as? NSNumber)?.doubleValue,kilograms>=20,kilograms<=500,
+              let rawDate=parameters["occurredAt"] as? String,let occurredAt=Self.parseISO8601(rawDate),
+              let syncIdentifier=parameters["syncIdentifier"] as? String,
+              syncIdentifier.range(of: #"^evaorbit\.weight\.[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#, options: [.regularExpression, .caseInsensitive]) != nil,
+              let syncVersion=(parameters["syncVersion"] as? NSNumber)?.intValue,syncVersion>=1 else {
+            replyHandler(failure(id:id,code:"invalid_body_mass",message:"Body mass parameters are invalid."),nil);return
+        }
+        Task { do { try await healthKitCoordinator.saveBodyMass(kilograms:kilograms,occurredAt:occurredAt,syncIdentifier:syncIdentifier,syncVersion:syncVersion);replyOnMain(replyHandler,value:success(id:id,result:["saved":true])) } catch { replyOnMain(replyHandler,value:failure(id:id,code:"healthkit_body_mass_write_failed",message:HealthDiagnostics.safe(error))) } }
+    }
+
     private func replyOnMain(_ replyHandler: @escaping (Any?, String?) -> Void, value: [String: Any]) {
         DispatchQueue.main.async { replyHandler(value, nil) }
     }
@@ -285,7 +299,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "bridgeVersion": Self.protocolVersion,
             "appVersion": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             "buildVersion": bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
-            "healthKitPipeline": "energy-v1",
+            "healthKitPipeline": "energy-body-mass-v2",
             "notificationPipeline": "local-v1",
             "hapticPipeline": "feedback-v1",
             "methods": Self.supportedMethods.sorted()

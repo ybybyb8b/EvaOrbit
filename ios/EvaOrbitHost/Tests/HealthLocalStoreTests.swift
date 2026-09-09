@@ -67,6 +67,35 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertNotNil(store.metadata("lastSuccessfulUpload"))
     }
 
+    func testBodyMassOutboxPreservesSourceIdentityAndRecovers() throws {
+        let occurredAt = Date(timeIntervalSince1970: 1_788_912_000)
+        let sample = HealthBodyMassSample(
+            uuid: "946e6cf1-96f2-4e47-9d45-b0fab32db24d",
+            occurredAt: occurredAt,
+            kilograms: 64.2,
+            sourceBundle: "com.example.scale",
+            sourceName: "Scale",
+            syncIdentifier: "evaorbit.weight.946e6cf1-96f2-4e47-9d45-b0fab32db24d",
+            syncVersion: 2
+        )
+        try store.commitBodyMassDelta(samples: [sample], deletedUUIDs: [], encodedAnchor: Data("body-one".utf8), now: occurredAt)
+        let first = try store.takePendingBodyMassBatch(limit: 10, now: occurredAt)
+        XCTAssertEqual(first.count, 1)
+        XCTAssertEqual(first[0].weightKg, 64.2)
+        XCTAssertEqual(first[0].sourceBundle, "com.example.scale")
+        XCTAssertEqual(first[0].syncVersion, 2)
+        try store.recoverInflight(now: occurredAt)
+        let recovered = try store.takePendingBodyMassBatch(limit: 10, now: occurredAt)
+        XCTAssertEqual(recovered.map(\.id), first.map(\.id))
+        try store.completeBodyMassUpload(ids: recovered.map(\.id), now: occurredAt)
+        XCTAssertEqual(store.pendingCount(), 0)
+
+        try store.commitBodyMassDelta(samples: [], deletedUUIDs: [sample.uuid], encodedAnchor: Data("body-two".utf8), now: occurredAt)
+        let deletion = try store.takePendingBodyMassBatch(limit: 10, now: occurredAt)
+        XCTAssertEqual(deletion.first?.operation, .delete)
+        XCTAssertEqual(deletion.first?.sampleId, sample.uuid)
+    }
+
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
@@ -82,6 +111,9 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertEqual(Set(healthKit.backgroundMetrics), Set(HealthMetric.allCases))
 
         let noon = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-01T04:00:00Z"))
+        try await coordinator.saveBodyMass(kilograms: 64.2, occurredAt: noon, syncIdentifier: "evaorbit.weight.test", syncVersion: 1)
+        XCTAssertEqual(healthKit.savedBodyMass, 64.2)
+
         let window = coordinator.initialWindow(now: noon)
         XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.start), "2026-08-30T16:00:00.000Z")
         XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.end), "2026-09-01T16:00:00.000Z")
@@ -92,8 +124,9 @@ private final class FakeHealthKitClient: HealthKitReading {
     var isAvailable = true
     var authorizationRequests = 0
     var backgroundMetrics: [HealthMetric] = []
+    var savedBodyMass: Double?
 
-    func requestEnergyAuthorization() async throws { authorizationRequests += 1 }
+    func requestAuthorization() async throws { authorizationRequests += 1 }
     func startObserver(for metric: HealthMetric, handler: @escaping (@escaping () -> Void) -> Void) throws {}
     func enableBackgroundDelivery(for metric: HealthMetric) async throws { backgroundMetrics.append(metric) }
     func anchoredDelta(for metric: HealthMetric, encodedAnchor: Data?, initialStart: Date?) async throws -> HealthAnchorDelta {
@@ -101,4 +134,6 @@ private final class FakeHealthKitClient: HealthKitReading {
     }
     func recentSamples(for metric: HealthMetric, window: HealthDateWindow) async throws -> [HealthEnergySample] { [] }
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double { 0 }
+    func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta { HealthBodyMassDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("body_mass".utf8)) }
+    func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws { savedBodyMass = kilograms }
 }

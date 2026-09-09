@@ -1,5 +1,5 @@
-export const BACKUP_VERSION = 2 as const;
-export const BACKUP_SCHEMA_VERSION = "202609070001_memory_graph";
+export const BACKUP_VERSION = 3 as const;
+export const BACKUP_SCHEMA_VERSION = "202609090002_weight";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -38,6 +38,8 @@ export const BACKUP_TABLES = [
   "reminder_occurrences",
   "health_records",
   "training_logs",
+  "weight_records",
+  "weight_settings",
   "media_series",
   "media_items",
   "media_viewings",
@@ -75,7 +77,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -102,6 +104,9 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
   if (table === "meal_reminder_rules" && typeof row.remind_at === "string") {
     row.remind_at = normalizeLocalTime(row.remind_at);
   }
+  if (table === "weight_settings" && typeof row.reminder_time === "string") {
+    row.reminder_time = normalizeLocalTime(row.reminder_time);
+  }
   return row;
 }
 
@@ -114,6 +119,9 @@ export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRo
   }
   if (table === "meal_reminder_rules" && typeof row.remind_at === "string") {
     row.remind_at = normalizeLocalTime(row.remind_at);
+  }
+  if (table === "weight_settings" && typeof row.reminder_time === "string") {
+    row.reminder_time = normalizeLocalTime(row.reminder_time);
   }
   return row;
 }
@@ -133,8 +141,8 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== BACKUP_VERSION) {
-    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 和 ${BACKUP_VERSION}）`);
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== BACKUP_VERSION) {
+    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1、2 和 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {
     throw new Error("备份文件缺少有效的 exported_at");
@@ -150,6 +158,10 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
     resources.memory_entities ??= [];
     resources.memory_facts ??= [];
     resources.memory_sources ??= [];
+  }
+  if (document.backup_version === 1 || document.backup_version === 2) {
+    resources.weight_records ??= [];
+    resources.weight_settings ??= [];
   }
   for (const table of BACKUP_TABLES) {
     if (!Array.isArray(resources[table])) throw new Error(`备份不完整：resources.${table} 缺失或格式错误`);

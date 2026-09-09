@@ -2,6 +2,7 @@ import Foundation
 
 private struct HealthUploadEnvelope: Encodable {
     let snapshots: [HealthOutboxSnapshot]
+    let bodyMassChanges: [HealthBodyMassChange]
 }
 
 final class HealthUploadManager: NSObject {
@@ -51,25 +52,28 @@ final class HealthUploadManager: NSObject {
         guard !uploadInProgress else { return }
         guard let credential = credentialStore.credential, let ingestURL = credentialStore.ingestURL else { return }
         var claimed: [HealthOutboxSnapshot] = []
+        var bodyMass: [HealthBodyMassChange] = []
         do {
             claimed = try store.takePendingBatch(limit: 50)
-            guard !claimed.isEmpty else { return }
+            bodyMass = try store.takePendingBodyMassBatch(limit: max(0, 50 - claimed.count))
+            guard !claimed.isEmpty || !bodyMass.isEmpty else { return }
             uploadInProgress = true
             let batchID = UUID().uuidString.lowercased()
             let fileURL = try uploadFileURL(batchID: batchID)
-            try JSONEncoder().encode(HealthUploadEnvelope(snapshots: claimed)).write(to: fileURL, options: .atomic)
+            try JSONEncoder().encode(HealthUploadEnvelope(snapshots: claimed, bodyMassChanges: bodyMass)).write(to: fileURL, options: .atomic)
             var request = URLRequest(url: ingestURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization")
             request.setValue(credentialStore.installationID, forHTTPHeaderField: "X-EvaOrbit-Installation-Id")
             let task = session.uploadTask(with: request, fromFile: fileURL)
-            task.taskDescription = "\(batchID)|\(claimed.map { String($0.id) }.joined(separator: ","))"
-            HealthDiagnostics.log("upload=start count=\(claimed.count) pending=\(store.pendingCount())")
+            task.taskDescription = "\(batchID)|\(claimed.map { String($0.id) }.joined(separator: ","))|\(bodyMass.map { String($0.id) }.joined(separator: ","))"
+            HealthDiagnostics.log("upload=start energy=\(claimed.count) body-mass=\(bodyMass.count) pending=\(store.pendingCount())")
             task.resume()
         } catch {
             uploadInProgress = false
             if !claimed.isEmpty { try? store.failUpload(ids: claimed.map(\.id), reason: "upload preparation failed") }
+            if !bodyMass.isEmpty { try? store.failBodyMassUpload(ids: bodyMass.map(\.id), reason: "upload preparation failed") }
             HealthDiagnostics.log("upload=prepare-failed error=\(HealthDiagnostics.safe(error))")
         }
     }
@@ -81,10 +85,10 @@ final class HealthUploadManager: NSObject {
         return root.appendingPathComponent("\(batchID).json")
     }
 
-    private func parseTask(_ task: URLSessionTask) -> (batchID: String, ids: [Int64]) {
-        let parts = (task.taskDescription ?? "").split(separator: "|", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return ("", []) }
-        return (parts[0], parts[1].split(separator: ",").compactMap { Int64($0) })
+    private func parseTask(_ task: URLSessionTask) -> (batchID: String, energyIDs: [Int64], bodyMassIDs: [Int64]) {
+        let parts = (task.taskDescription ?? "").split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3 else { return ("", [], []) }
+        return (parts[0], parts[1].split(separator: ",").compactMap { Int64($0) }, parts[2].split(separator: ",").compactMap { Int64($0) })
     }
 
     private func removeUploadFile(batchID: String) {
@@ -103,13 +107,15 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
             defer { self.removeUploadFile(batchID: description.batchID) }
             do {
                 if error == nil, let status, (200..<300).contains(status) {
-                    try self.store.completeUpload(ids: description.ids)
-                    HealthDiagnostics.log("upload=success status=\(status) count=\(description.ids.count) pending=\(self.store.pendingCount())")
+                    try self.store.completeUpload(ids: description.energyIDs)
+                    try self.store.completeBodyMassUpload(ids: description.bodyMassIDs)
+                    HealthDiagnostics.log("upload=success status=\(status) count=\(description.energyIDs.count + description.bodyMassIDs.count) pending=\(self.store.pendingCount())")
                     self.startNextBatch()
                 } else {
                     let reason = status.map { "HTTP \($0)" } ?? "network failure"
-                    try self.store.failUpload(ids: description.ids, reason: reason)
-                    HealthDiagnostics.log("upload=failed status=\(status.map { String($0) } ?? "none") count=\(description.ids.count)")
+                    try self.store.failUpload(ids: description.energyIDs, reason: reason)
+                    try self.store.failBodyMassUpload(ids: description.bodyMassIDs, reason: reason)
+                    HealthDiagnostics.log("upload=failed status=\(status.map { String($0) } ?? "none") count=\(description.energyIDs.count + description.bodyMassIDs.count)")
                 }
             } catch {
                 HealthDiagnostics.log("upload=state-failed error=\(HealthDiagnostics.safe(error))")

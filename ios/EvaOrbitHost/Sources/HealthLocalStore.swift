@@ -81,6 +81,17 @@ final class HealthLocalStore {
           UNIQUE(local_date, metric, revision)
         );
         CREATE INDEX IF NOT EXISTS idx_outbox_ready ON outbox(state, next_retry, id);
+        CREATE TABLE IF NOT EXISTS body_mass_samples (
+          uuid TEXT PRIMARY KEY, occurred_at REAL NOT NULL, kilograms REAL NOT NULL,
+          source_bundle TEXT NOT NULL, source_name TEXT NOT NULL, sync_identifier TEXT, sync_version INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS body_mass_outbox (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, operation TEXT NOT NULL CHECK(operation IN ('upsert','delete')),
+          sample_id TEXT NOT NULL, occurred_at TEXT, weight_kg REAL, source_bundle TEXT, source_name TEXT,
+          sync_identifier TEXT, sync_version INTEGER, state TEXT NOT NULL CHECK(state IN ('pending','inflight')),
+          attempt INTEGER NOT NULL DEFAULT 0, next_retry REAL NOT NULL DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_body_mass_outbox_ready ON body_mass_outbox(state,next_retry,id);
         CREATE TABLE IF NOT EXISTS metadata (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
@@ -186,6 +197,121 @@ final class HealthLocalStore {
             sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
             try stepDone(statement)
             sqlite3_finalize(statement)
+            let bodyMass = try prepare("UPDATE body_mass_outbox SET state='pending',next_retry=0,updated_at=? WHERE state='inflight'")
+            sqlite3_bind_double(bodyMass, 1, now.timeIntervalSince1970)
+            try stepDone(bodyMass)
+            sqlite3_finalize(bodyMass)
+        }
+    }
+
+    func commitBodyMassDelta(samples: [HealthBodyMassSample], deletedUUIDs: [String], encodedAnchor: Data, now: Date = Date()) throws {
+        try locked {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let removeSample = try prepare("DELETE FROM body_mass_samples WHERE uuid=?")
+                let clearPending = try prepare("DELETE FROM body_mass_outbox WHERE sample_id=? AND state='pending'")
+                let deletion = try prepare("INSERT INTO body_mass_outbox(operation,sample_id,state,attempt,next_retry,created_at,updated_at) VALUES('delete',?,'pending',0,0,?,?)")
+                for uuid in deletedUUIDs {
+                    for statement in [removeSample, clearPending] { sqlite3_reset(statement); sqlite3_clear_bindings(statement); bind(uuid, at: 1, in: statement); try stepDone(statement) }
+                    sqlite3_reset(deletion); sqlite3_clear_bindings(deletion); bind(uuid, at: 1, in: deletion); sqlite3_bind_double(deletion, 2, now.timeIntervalSince1970); sqlite3_bind_double(deletion, 3, now.timeIntervalSince1970); try stepDone(deletion)
+                }
+                sqlite3_finalize(removeSample); sqlite3_finalize(clearPending); sqlite3_finalize(deletion)
+                let upsert = try prepare("INSERT INTO body_mass_samples(uuid,occurred_at,kilograms,source_bundle,source_name,sync_identifier,sync_version) VALUES(?,?,?,?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET occurred_at=excluded.occurred_at,kilograms=excluded.kilograms,source_bundle=excluded.source_bundle,source_name=excluded.source_name,sync_identifier=excluded.sync_identifier,sync_version=excluded.sync_version")
+                let enqueue = try prepare("INSERT INTO body_mass_outbox(operation,sample_id,occurred_at,weight_kg,source_bundle,source_name,sync_identifier,sync_version,state,attempt,next_retry,created_at,updated_at) VALUES('upsert',?,?,?,?,?,?,?,'pending',0,0,?,?)")
+                let clearUpsert = try prepare("DELETE FROM body_mass_outbox WHERE sample_id=? AND state='pending'")
+                for sample in samples {
+                    sqlite3_reset(upsert); sqlite3_clear_bindings(upsert); bind(sample.uuid, at: 1, in: upsert); sqlite3_bind_double(upsert, 2, sample.occurredAt.timeIntervalSince1970); sqlite3_bind_double(upsert, 3, sample.kilograms); bind(sample.sourceBundle, at: 4, in: upsert); bind(sample.sourceName, at: 5, in: upsert); bindOptional(sample.syncIdentifier, at: 6, in: upsert); bindOptionalInteger(sample.syncVersion, at: 7, in: upsert); try stepDone(upsert)
+                    sqlite3_reset(clearUpsert); sqlite3_clear_bindings(clearUpsert); bind(sample.uuid, at: 1, in: clearUpsert); try stepDone(clearUpsert)
+                    sqlite3_reset(enqueue); sqlite3_clear_bindings(enqueue); bind(sample.uuid, at: 1, in: enqueue); bind(HealthDateFormatter.iso8601.string(from: sample.occurredAt), at: 2, in: enqueue); sqlite3_bind_double(enqueue, 3, sample.kilograms); bind(sample.sourceBundle, at: 4, in: enqueue); bind(sample.sourceName, at: 5, in: enqueue); bindOptional(sample.syncIdentifier, at: 6, in: enqueue); bindOptionalInteger(sample.syncVersion, at: 7, in: enqueue); sqlite3_bind_double(enqueue, 8, now.timeIntervalSince1970); sqlite3_bind_double(enqueue, 9, now.timeIntervalSince1970); try stepDone(enqueue)
+                }
+                sqlite3_finalize(upsert); sqlite3_finalize(enqueue); sqlite3_finalize(clearUpsert)
+                let anchor = try prepare("INSERT INTO anchors(metric,anchor,updated_at) VALUES('body_mass',?,?) ON CONFLICT(metric) DO UPDATE SET anchor=excluded.anchor,updated_at=excluded.updated_at")
+                encodedAnchor.withUnsafeBytes { sqlite3_bind_blob(anchor, 1, $0.baseAddress, Int32($0.count), evaOrbitSQLiteTransient) }; sqlite3_bind_double(anchor, 2, now.timeIntervalSince1970); try stepDone(anchor); sqlite3_finalize(anchor)
+                if !samples.isEmpty { try setMetadataUnlocked("hasReadData", value: "true") }
+                try setMetadataUnlocked("lastLocalSync", value: HealthDateFormatter.iso8601.string(from: now)); try setMetadataUnlocked("lastError", value: ""); try execute("COMMIT")
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
+
+    func takePendingBodyMassBatch(limit: Int, now: Date = Date()) throws -> [HealthBodyMassChange] {
+        try locked {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let statement = try prepare("SELECT id,operation,sample_id,occurred_at,weight_kg,source_bundle,source_name,sync_identifier,sync_version FROM body_mass_outbox WHERE state='pending' AND next_retry<=? ORDER BY id LIMIT ?")
+                sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
+                sqlite3_bind_int(statement, 2, Int32(limit))
+                var changes: [HealthBodyMassChange] = []
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    guard let operation = HealthBodyMassChange.Operation(rawValue: columnText(statement, 1)) else { continue }
+                    changes.append(HealthBodyMassChange(
+                        id: sqlite3_column_int64(statement, 0),
+                        operation: operation,
+                        sampleId: columnText(statement, 2),
+                        occurredAt: columnOptionalText(statement, 3),
+                        weightKg: sqlite3_column_type(statement, 4) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 4),
+                        sourceBundle: columnOptionalText(statement, 5),
+                        sourceName: columnOptionalText(statement, 6),
+                        syncIdentifier: columnOptionalText(statement, 7),
+                        syncVersion: sqlite3_column_type(statement, 8) == SQLITE_NULL ? nil : Int(sqlite3_column_int(statement, 8))
+                    ))
+                }
+                sqlite3_finalize(statement)
+                let update = try prepare("UPDATE body_mass_outbox SET state='inflight',updated_at=? WHERE id=?")
+                for change in changes {
+                    sqlite3_reset(update)
+                    sqlite3_clear_bindings(update)
+                    sqlite3_bind_double(update, 1, now.timeIntervalSince1970)
+                    sqlite3_bind_int64(update, 2, change.id)
+                    try stepDone(update)
+                }
+                sqlite3_finalize(update)
+                try execute("COMMIT")
+                return changes
+            } catch {
+                try? execute("ROLLBACK")
+                throw error
+            }
+        }
+    }
+
+    func completeBodyMassUpload(ids: [Int64], now: Date = Date()) throws {
+        try locked {
+            let statement = try prepare("DELETE FROM body_mass_outbox WHERE id=? AND state='inflight'")
+            defer { sqlite3_finalize(statement) }
+            for id in ids {
+                sqlite3_reset(statement)
+                sqlite3_clear_bindings(statement)
+                sqlite3_bind_int64(statement, 1, id)
+                try stepDone(statement)
+            }
+            if !ids.isEmpty {
+                try setMetadataUnlocked("lastSuccessfulUpload", value: HealthDateFormatter.iso8601.string(from: now))
+                try setMetadataUnlocked("lastError", value: "")
+            }
+        }
+    }
+
+    func failBodyMassUpload(ids: [Int64], reason: String, now: Date = Date()) throws {
+        try locked {
+            let select = try prepare("SELECT attempt FROM body_mass_outbox WHERE id=?")
+            let update = try prepare("UPDATE body_mass_outbox SET state='pending',attempt=?,next_retry=?,updated_at=? WHERE id=?")
+            defer { sqlite3_finalize(select); sqlite3_finalize(update) }
+            for id in ids {
+                sqlite3_reset(select)
+                sqlite3_clear_bindings(select)
+                sqlite3_bind_int64(select, 1, id)
+                let currentAttempt = sqlite3_step(select) == SQLITE_ROW ? Int(sqlite3_column_int(select, 0)) : 0
+                let attempt = min(currentAttempt + 1, 20)
+                let delay = min(15.0 * pow(2.0, Double(min(attempt - 1, 10))), 21_600.0)
+                sqlite3_reset(update)
+                sqlite3_clear_bindings(update)
+                sqlite3_bind_int(update, 1, Int32(attempt))
+                sqlite3_bind_double(update, 2, now.addingTimeInterval(delay).timeIntervalSince1970)
+                sqlite3_bind_double(update, 3, now.timeIntervalSince1970)
+                sqlite3_bind_int64(update, 4, id)
+                try stepDone(update)
+            }
+            if !ids.isEmpty { try setMetadataUnlocked("lastError", value: String(reason.prefix(240))) }
         }
     }
 
@@ -271,7 +397,9 @@ final class HealthLocalStore {
         (try? locked {
             let statement = try prepare("SELECT count(*) FROM outbox")
             defer { sqlite3_finalize(statement) }
-            return sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int(statement, 0)) : 0
+            let energy = sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int(statement, 0)) : 0
+            let bodyMass = try prepare("SELECT count(*) FROM body_mass_outbox"); defer { sqlite3_finalize(bodyMass) }
+            return energy + (sqlite3_step(bodyMass) == SQLITE_ROW ? Int(sqlite3_column_int(bodyMass, 0)) : 0)
         }) ?? 0
     }
 
@@ -390,6 +518,9 @@ final class HealthLocalStore {
             sqlite3_bind_text(statement, index, pointer, -1, evaOrbitSQLiteTransient)
         }
     }
+    private func bindOptional(_ value:String?,at index:Int32,in statement:OpaquePointer){if let value{bind(value,at:index,in:statement)}else{sqlite3_bind_null(statement,index)}}
+    private func bindOptionalInteger(_ value:Int?,at index:Int32,in statement:OpaquePointer){if let value{sqlite3_bind_int(statement,index,Int32(value))}else{sqlite3_bind_null(statement,index)}}
+    private func columnOptionalText(_ statement:OpaquePointer,_ index:Int32)->String?{sqlite3_column_type(statement,index)==SQLITE_NULL ? nil:columnText(statement,index)}
 
     private func columnText(_ statement: OpaquePointer, _ index: Int32) -> String {
         sqlite3_column_text(statement, index).map { String(cString: $0) } ?? ""

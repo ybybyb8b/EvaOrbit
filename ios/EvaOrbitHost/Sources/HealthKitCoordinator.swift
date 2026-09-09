@@ -54,7 +54,7 @@ final class HealthKitCoordinator {
     func requestAuthorization() async throws -> HealthRuntimeStatus {
         guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
         do {
-            try await healthKit.requestEnergyAuthorization()
+            try await healthKit.requestAuthorization()
             try store.setMetadata("authorizationRequested", value: "true")
             await enableBackgroundDelivery()
             _ = await syncNow()
@@ -82,6 +82,13 @@ final class HealthKitCoordinator {
     }
 
     func clearCredential() { uploader.clearCredential() }
+
+    func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws {
+        guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
+        try await healthKit.saveBodyMass(kilograms: kilograms, occurredAt: occurredAt, syncIdentifier: syncIdentifier, syncVersion: syncVersion)
+        _ = await withCheckedContinuation { continuation in enqueueSync(metric: .bodyMass) { continuation.resume(returning: $0) } }
+        uploader.flush()
+    }
 
     func handleBackgroundSessionEvents(completionHandler: @escaping () -> Void) {
         uploader.handleEvents(completionHandler: completionHandler)
@@ -157,6 +164,7 @@ final class HealthKitCoordinator {
     }
 
     private func performSync(metric: HealthMetric) async -> Bool {
+        if metric == .bodyMass { return await performBodyMassSync() }
         do {
             let encodedAnchor = try store.anchor(for: metric)
             let initialStart = encodedAnchor == nil ? initialWindow().start : nil
@@ -193,6 +201,20 @@ final class HealthKitCoordinator {
         } catch {
             recordError(error)
             HealthDiagnostics.log("metric=\(metric.rawValue) query=failed anchor-advanced=false error=\(HealthDiagnostics.safe(error))")
+            return false
+        }
+    }
+
+    private func performBodyMassSync() async -> Bool {
+        do {
+            let encodedAnchor = try store.anchor(for: .bodyMass)
+            let delta = try await healthKit.anchoredBodyMassDelta(encodedAnchor: encodedAnchor, initialStart: nil)
+            try store.commitBodyMassDelta(samples: delta.added, deletedUUIDs: delta.deletedUUIDs, encodedAnchor: delta.encodedAnchor)
+            HealthDiagnostics.log("metric=body_mass query=success added=\(delta.added.count) deleted=\(delta.deletedUUIDs.count) anchor-advanced=true pending=\(store.pendingCount())")
+            return true
+        } catch {
+            recordError(error)
+            HealthDiagnostics.log("metric=body_mass query=failed anchor-advanced=false error=\(HealthDiagnostics.safe(error))")
             return false
         }
     }

@@ -33,7 +33,8 @@ targets:
         CFBundleDisplayName: EvaOrbit
         EvaOrbitBaseURL: https://eva-orbit.vercel.app
         ITSAppUsesNonExemptEncryption: false
-        NSHealthShareUsageDescription: EvaOrbit reads resting and active energy that you choose to share from Apple Health.
+        NSHealthShareUsageDescription: EvaOrbit reads resting energy, active energy, and body weight that you choose to share from Apple Health.
+        NSHealthUpdateUsageDescription: EvaOrbit writes body weight records that you save in EvaOrbit to Apple Health.
         UILaunchScreen:
           UIColorName: LoadingBackground
         UIRequiresFullScreen: true

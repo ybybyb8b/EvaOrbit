@@ -98,7 +98,7 @@ export function AppleHealthSection() {
 
   return <section className="apple-health-section" aria-labelledby="apple-health-title">
     <div className="apple-health-heading">
-      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy sync</h2><p>Resting and Active Energy only. EvaOrbit never uploads raw HealthKit samples.</p></div>
+      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy & weight sync</h2><p>Resting Energy, Active Energy and Body Mass. Energy is aggregated by day; weight keeps its sample and source identifiers.</p></div>
       <span className={`status-pill ${nativeHost ? "" : "disabled"}`}>{nativeHost ? "Native Host" : "Web only"}</span>
     </div>
     {!nativeHost && <p className="apple-health-fallback">Open this page inside the EvaOrbit iOS app to connect Apple Health.</p>}

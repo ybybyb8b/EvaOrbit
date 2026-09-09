@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   HEALTHKIT_ENERGY_SCOPE,
+  HEALTHKIT_BODY_MASS_SCOPE,
   bearerCredential,
   createNativeDeviceCredential,
   hashNativeDeviceCredential,
   hasHealthKitEnergyScope,
   nativeDeviceAccessStatus,
   parseHealthKitEnergySnapshots,
+  parseHealthKitUpload,
   parseInstallationId,
 } from "./healthkit.ts";
 import { ValidationError } from "./validation.ts";
@@ -59,11 +61,22 @@ test("duplicate and out-of-order snapshots collapse to the newest revision", () 
   assert.deepEqual(parsed.find((item) => item.metric === "active"), { ...validSnapshot, revision: 5, kcal: 400 });
 });
 
+test("HealthKit upload accepts body mass source and EO sync identity while validating writes",()=>{
+  const sampleId="946e6cf1-96f2-4e47-9d45-b0fab32db24d";
+  const upload=parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"2026-09-09T00:30:00Z",weightKg:64.2,sourceBundle:"com.eva.scale",sourceName:"Scale",syncIdentifier:"evaorbit.weight.12",syncVersion:2},{operation:"delete",sampleId}]});
+  assert.equal(upload.bodyMassChanges[0].syncIdentifier,"evaorbit.weight.12");
+  assert.equal(upload.bodyMassChanges[0].sourceBundle,"com.eva.scale");
+  assert.deepEqual(upload.bodyMassChanges[1],{operation:"delete",sampleId});
+  assert.throws(()=>parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"bad",weightKg:64}]}),ValidationError);
+});
+
 test("native device access rejects revocation and wrong scope", () => {
   assert.equal(nativeDeviceAccessStatus(null), 401);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: "2026-09-01T00:00:00Z", scopes: [HEALTHKIT_ENERGY_SCOPE] }), 401);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: ["tasks:write"] }), 403);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_ENERGY_SCOPE] }), 200);
+  assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_ENERGY_SCOPE] },HEALTHKIT_BODY_MASS_SCOPE),403);
+  assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_BODY_MASS_SCOPE] },HEALTHKIT_BODY_MASS_SCOPE),200);
 });
 
 test("HealthKit migration separates sources and enforces scope and revision idempotency", () => {
@@ -87,7 +100,7 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   const bridge = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/NativeBridge.swift", import.meta.url), "utf8");
   assert.match(ingest, /bearerCredential/);
   assert.match(ingest, /status: 401/);
-  assert.match(ingest, /result\.status === 403/);
+  assert.match(ingest, /denied\.status === 403/);
   assert.match(devices, /registerNativeDevice/);
   assert.match(devices, /revokeNativeDevice/);
   assert.match(proxy, /\/api\/healthkit\/energy\/ingest/);

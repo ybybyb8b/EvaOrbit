@@ -4,11 +4,13 @@ import HealthKit
 enum HealthMetric: String, CaseIterable, Codable {
     case resting
     case active
+    case bodyMass = "body_mass"
 
     var healthKitIdentifier: HKQuantityTypeIdentifier {
         switch self {
         case .resting: return .basalEnergyBurned
         case .active: return .activeEnergyBurned
+        case .bodyMass: return .bodyMass
         }
     }
 
@@ -16,8 +18,11 @@ enum HealthMetric: String, CaseIterable, Codable {
         switch self {
         case .resting: return "Resting Energy"
         case .active: return "Active Energy"
+        case .bodyMass: return "Body Mass"
         }
     }
+
+    var isEnergy: Bool { self != .bodyMass }
 }
 
 struct HealthEnergySample: Equatable {
@@ -46,6 +51,37 @@ struct HealthAnchorDelta {
     let added: [HealthEnergySample]
     let deletedUUIDs: [String]
     let encodedAnchor: Data
+}
+
+struct HealthBodyMassSample: Equatable {
+    let uuid: String
+    let occurredAt: Date
+    let kilograms: Double
+    let sourceBundle: String
+    let sourceName: String
+    let syncIdentifier: String?
+    let syncVersion: Int?
+}
+
+struct HealthBodyMassDelta {
+    let added: [HealthBodyMassSample]
+    let deletedUUIDs: [String]
+    let encodedAnchor: Data
+}
+
+struct HealthBodyMassChange: Encodable, Equatable {
+    enum Operation: String, Encodable { case upsert, delete }
+    let id: Int64
+    let operation: Operation
+    let sampleId: String
+    let occurredAt: String?
+    let weightKg: Double?
+    let sourceBundle: String?
+    let sourceName: String?
+    let syncIdentifier: String?
+    let syncVersion: Int?
+
+    enum CodingKeys: String, CodingKey { case operation, sampleId, occurredAt, weightKg, sourceBundle, sourceName, syncIdentifier, syncVersion }
 }
 
 struct HealthDateWindow {

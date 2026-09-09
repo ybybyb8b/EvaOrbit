@@ -17,7 +17,7 @@ import { TrackerIcon } from "@/components/tracker-icon";
 
 type QuickKind = "picker" | "food" | "drink" | "training" | "tracker" | "cats" | "inbox";
 const emptyDrinkSuggestions: DrinkInputSuggestions = { names: [], brands: [] };
-const emptyTrainingSuggestions: TrainingInputSuggestions = { teachers: [], courses: [] };
+const emptyTrainingSuggestions: TrainingInputSuggestions = { teachers: [], courses: [], presets: [] };
 
 export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; onSaved: () => Promise<void> }) {
   const { english } = useLocale();

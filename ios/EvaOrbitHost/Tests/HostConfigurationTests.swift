@@ -26,6 +26,7 @@ final class HostConfigurationTests: XCTestCase {
             "haptic.play",
             "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
             "healthkit.configureCredential", "healthkit.clearCredential",
+            "healthkit.saveBodyMass",
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
             "notification.cancel", "notification.listPending", "notification.openSettings"
         ]))

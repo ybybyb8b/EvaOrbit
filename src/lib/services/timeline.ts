@@ -18,7 +18,7 @@ function monthDateRange(month: string) {
 
 async function loadSources(range: { from: string; to: string }) {
   const repository = await getRepository();
-  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -26,13 +26,14 @@ async function loadSources(range: { from: string; to: string }) {
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
+    repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
   ]);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs };
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords };
 }
 
 function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, cats: Awaited<ReturnType<typeof catTimeline>>, range: { from: string; to: string }) {
   return [
-    ...buildTimelineEvents(sources.foods, sources.drinks, sources.trackerEntries, sources.trackers, sources.healthRecords),
+    ...buildTimelineEvents(sources.foods, sources.drinks, sources.trackerEntries, sources.trackers, sources.healthRecords, sources.weightRecords),
     ...buildTrainingTimelineEvents(sources.trainingLogs),
     ...buildRelationTimelineEvents(sources.relationEvents),
     ...catsInRange(cats, range),
@@ -58,7 +59,7 @@ export async function listTimeline(input: { date?: string; limit?: number } = {}
 export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs, weightRecords] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -68,10 +69,11 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
+    repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
   ]);
   return {
     date,
-    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)]),
+    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)]),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

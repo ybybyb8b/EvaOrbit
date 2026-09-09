@@ -165,7 +165,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 
 | 能力 | Framework | Info.plist 用途文案 | Entitlement / capability | 权限请求时机 |
 | --- | --- | --- | --- | --- |
-| HealthKit 能量读取 | `HealthKit.framework` | `NSHealthShareUsageDescription` | `com.apple.developer.healthkit`、`com.apple.developer.healthkit.background-delivery` | 用户在界面明确点击连接/授权后 |
+| HealthKit 能量读取与体重双向同步 | `HealthKit.framework` | `NSHealthShareUsageDescription`、`NSHealthUpdateUsageDescription` | `com.apple.developer.healthkit`、`com.apple.developer.healthkit.background-delivery` | 用户在界面明确点击连接/授权后；写入仅发生在用户保存体重时 |
 | 原生本地通知 | `UserNotifications.framework` | 无额外用途文案 | 无 APNs entitlement | 仅当状态为 `not_determined` 且用户点击 Request Access |
 | HealthKit 凭据安全存储 | `Security.framework` | 无 | 当前无需 Keychain Sharing capability | Web 注册完成后写入 app 自有 Keychain |
 | Web Push | Web Service Worker / Push API | 浏览器管理 | 不属于 Native Host entitlement | 由浏览器设置中的独立按钮请求 |
@@ -175,20 +175,22 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 
 ### 4.2 HealthKit：当前获取与状态语义
 
-当前只读取：
+当前读取：
 
 - Resting Energy
 - Active Energy
+- Body Mass
 
-安装或启动 App 不会自动弹出 HealthKit 授权。用户从现有 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才调用 `HKHealthStore.requestAuthorization(toShare: [], read: ...)`。
+Body Mass 同时是 EvaOrbit 唯一写入 HealthKit 的类型。安装或启动 App 不会自动弹出 HealthKit 授权。用户从现有 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才请求三种读取类型与 Body Mass share 权限。用户在 EvaOrbit 手动保存体重时，Web 通过能力检测后的 `healthkit.saveBodyMass` 写入；旧 IPA 和普通浏览器静默保留 EO 记录。
 
 需要保留的语义：
 
-- EvaOrbit 只读，不请求向 Health 写入数据。
+- 静息和活动能量保持只读；只向 HealthKit 写入用户在 EvaOrbit 明确保存的体重。
 - iOS 不向 App 公开各读取类型是否被用户明确拒绝。因此 `authorizationRequested` 只表示系统授权流程已完成，不能写成“读取权限已授权”。
 - `hasReadData` 只有在 EvaOrbit 实际读到 HealthKit 样本后才会变为真。
 - App 启动时恢复 observer；已经请求过授权时再恢复 `.immediate` background delivery 并执行 anchored query。首次授权完成后也会开启 background delivery 并立即同步。
-- 原始 HealthKit 样本、sample UUID 和 query anchor 保留在 Native 本地；上传的是按本地日期聚合的 resting/active kcal 快照。
+- 能量原始样本保留在 Native 本地，上传按本地日期聚合的 resting/active kcal 快照。Body Mass 上传逐样本的 sample UUID、发生时间、kg、source 与 HealthKit sync identifier/version，以保留多条同日记录和幂等语义。
+- EO 手动体重使用稳定的 `evaorbit.weight.{uuid}` sync identifier；写回产生的新 HealthKit sample 再被 anchored query 读到时，服务端按该 identifier 更新原 EO 行，不创建重复记录。HealthKit 删除事件按 sample UUID 清理 Apple Health 导入记录；HealthKit 在版本替换时发出的旧 sample 删除不会删除 EO 原始行。
 - Native 使用 SQLite/outbox 保证上传；设备级 opaque credential 和 ingest URL 保存在 app 自有 Keychain，accessibility 为 `AfterFirstUnlock`。
 - Bridge 只接受同源且路径严格为 `/api/healthkit/energy/ingest` 的 ingest URL；请求使用 Bearer credential 和 installation ID。
 
@@ -227,10 +229,10 @@ evaorbit-reminder-{reminder.id}
 Web 侧 `reconcileNativeNotifications()` 才是校准逻辑：
 
 1. 先检测完整 bridge capability；普通浏览器/PWA 没有 bridge 时直接返回，不调用 Native API。
-2. 权限可调度时从 `/api/notifications` 获取现有有效 reminders。
-3. 复用 `notificationSendAt()` 计算明确触发时间；date-only 且没有 snooze 时间的提醒不调度。
+2. 权限可调度时从 `/api/notifications` 获取现有有效 reminders、三餐缺失提醒和独立的体重缺失提醒。
+3. 复用现有 wall-clock 时区计算；体重当天已有任意记录时不生成当天提醒，date-only 且没有 snooze 时间的普通 reminder 不调度。
 4. 排序后最多保留 48 条即将发生的 Native pending reminders。
-5. 取消 iOS 中已不在 Web desired set 的 `evaorbit-reminder-*`。
+5. 取消 iOS 中已不在 Web desired set 的 `evaorbit-scheduled-*`（同时兼容旧 `evaorbit-reminder-*`）。
 6. 重新 schedule desired set；稳定 identifier 使缺失项补建、修改项覆盖、相同项不产生重复。
 
 reconcile 在 App shell 初始化、`evaorbit:native-ready`、`evaorbit:native-active`、页面重新可见、用户 Refresh status，以及相关 reminder 创建/修改/完成/删除操作后触发。业务 source of truth 仍是 Web/API，不得在 Swift 再建 reminder 数据库。

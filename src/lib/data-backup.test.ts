@@ -12,7 +12,7 @@ import {
   toSqliteValue,
 } from "./data-backup.ts";
 
-test("backup allowlist excludes credentials and HealthKit/device data", () => {
+test("backup allowlist excludes credentials and HealthKit energy infrastructure", () => {
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
   assert.ok(BACKUP_TABLES.includes("lucius_post_comments"));
@@ -44,7 +44,7 @@ test("backup parser requires a complete current-version document", () => {
     resources: emptyBackupResources(),
   };
   assert.deepEqual(parseBackupDocument(backup), backup);
-  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 3 }), /不支持/);
+  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 4 }), /不支持/);
   const incomplete = { ...backup, resources: { ...backup.resources } };
   delete (incomplete.resources as Partial<typeof incomplete.resources>).projects;
   assert.throws(() => parseBackupDocument(incomplete), /备份不完整/);
@@ -61,6 +61,15 @@ test("backup version 1 restores missing Memory Graph resources as empty arrays",
   assert.deepEqual(parsed.resources.memory_sources,[]);
 });
 
+test("backup version 2 remains restorable before Weight resources existed", () => {
+  const resources=emptyBackupResources() as Record<string,unknown>;
+  delete resources.weight_records;
+  delete resources.weight_settings;
+  const parsed=parseBackupDocument({backup_version:2,exported_at:"2026-09-01T00:00:00Z",schema:{supabase_migration:"legacy-v2"},source:{backend:"supabase"},resources});
+  assert.deepEqual(parsed.resources.weight_records,[]);
+  assert.deepEqual(parsed.resources.weight_settings,[]);
+});
+
 test("SQLite conversion preserves scalars and serializes structured values", () => {
   assert.equal(toSqliteValue(true), 1);
   assert.equal(toSqliteValue(false), 0);
@@ -73,4 +82,5 @@ test("Postgres time values are compatible with the local minute-only reminder sc
   assert.equal(sanitizeExportRow("meal_reminder_rules", { remind_at: "10:30:00" }).remind_at, "10:30");
   assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "20:15:00.000000" }).remind_at, "20:15");
   assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "08:05" }).remind_at, "08:05");
+  assert.equal(sanitizeExportRow("weight_settings", { reminder_time: "08:30:00" }).reminder_time, "08:30");
 });

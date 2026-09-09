@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { createTrainingLog, listTrainingLogs } from "@/lib/services/training";
 import { parseNewTrainingLog, ValidationError } from "@/lib/validation";
+import { dateRange } from "@/lib/time";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,10 @@ function optionalMonth(value: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  try { return NextResponse.json(await listTrainingLogs({ date: optionalDate(request.nextUrl.searchParams.get("date")), month: optionalMonth(request.nextUrl.searchParams.get("month")), limit: 100 })); }
+  try {
+    const from=optionalDate(request.nextUrl.searchParams.get("from")),to=optionalDate(request.nextUrl.searchParams.get("to"));
+    return NextResponse.json(await listTrainingLogs({ date: optionalDate(request.nextUrl.searchParams.get("date")), month: optionalMonth(request.nextUrl.searchParams.get("month")), from:from?dateRange(from).from:undefined, to:to?dateRange(to).from:undefined, limit: 100 }));
+  }
   catch (error) { return apiError(error); }
 }
 

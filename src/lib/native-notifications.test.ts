@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildNativeNotificationSchedules, isManagedNativeNotification, nativeMealNotifications } from "./native-notifications.ts";
+import { buildNativeNotificationSchedules, isManagedNativeNotification, nativeMealNotifications, nativeWeightNotifications } from "./native-notifications.ts";
 import type { MealReminderRule, ScheduledNotification } from "./types.ts";
 
 const rules = [
@@ -27,4 +27,10 @@ test("one native schedule aggregates reminder and meal producers", () => {
   assert.equal(result.every((item) => isManagedNativeNotification(item.id)), true);
   assert.equal(isManagedNativeNotification("evaorbit-test-1"), false);
   assert.equal(isManagedNativeNotification("evaorbit-reminder-42"), true);
+});
+
+test("native weight reminders are independent and skip dates with an existing weight",()=>{
+  const settings={targetWeightKg:null,reminderEnabled:true,reminderTime:"08:00",updatedAt:""};
+  const result=nativeWeightNotifications(settings,[{occurredAt:"2026-09-05T02:00:00.000Z"}],"zh-CN",new Date("2026-09-05T00:00:00.000Z"),2);
+  assert.deepEqual(result.map(item=>item.id),["evaorbit-scheduled-weight-2026-09-06"]);
 });

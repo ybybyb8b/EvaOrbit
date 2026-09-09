@@ -1,7 +1,7 @@
-import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 
-export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = []): TimelineEvent[] {
+export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = [], weightRecords: WeightRecord[] = []): TimelineEvent[] {
   const foodEvents: TimelineEvent[] = foods.map((item) => ({
     id: `food:${item.id}`,
     eventType: "food.logged",
@@ -48,7 +48,11 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     occurredAt: item.occurredAt, hasExplicitTime: item.occurredHasExplicitTime, endAt: item.endedAt, href: `/health/records/${item.id}`,
     relatedPeople: [], relatedPets: [], metadata: { type: item.type, status: item.status, details: item.details },
   }));
-  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents].sort(compareTimelineEvents);
+  const weightEvents: TimelineEvent[] = weightRecords.map((item) => ({
+    id:`weight:${item.id}`,eventType:"health.weight",sourceType:"health",sourceId:item.id,title:"Weight",detail:`${item.weightKg.toFixed(1)} kg · ${item.healthKitSourceName || item.healthKitSourceBundle || (item.source === "apple_health" ? "Apple Health" : "EvaOrbit")}`,
+    occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:"/health#weight-title",relatedPeople:[],relatedPets:[],metadata:{weightKg:item.weightKg,source:item.source},
+  }));
+  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents, ...weightEvents].sort(compareTimelineEvents);
 }
 
 export function buildTrainingTimelineEvents(logs: TrainingLog[]): TimelineEvent[] {

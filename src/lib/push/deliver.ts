@@ -8,6 +8,7 @@ import { isMealReminderType, MEAL_REMINDER_TARGET_IDS, mealReminderWindow } from
 import { nextTrackerNotification, notificationShouldSend, trackerReminderShouldNotify } from "../reminder-engine";
 import { reminderNotificationCopy } from "../notification-copy";
 import type { TrackerReminder } from "../types";
+import { weightReminderWindow } from "../weight";
 import type { EvaPushPayload } from "./types";
 
 type Row = Record<string, unknown>;
@@ -219,6 +220,14 @@ async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
   return { due, sent };
 }
 
+async function deliverMissingWeightPushes(client:DeliveryClient,now:Date){
+  const{data,error}=await client.from("weight_settings").select("user_id,reminder_enabled,reminder_time").eq("reminder_enabled",true);if(error)throw new Error("Could not read weight reminder settings");const date=dateInEvaOrbit(now);let due=0,sent=0;
+  for(const row of (data??[]) as Row[]){const userId=String(row.user_id);const window=weightReminderWindow({targetWeightKg:null,reminderEnabled:true,reminderTime:String(row.reminder_time).slice(0,5),updatedAt:""},date,now);if(!window)continue;const existing=await client.from("notification_deliveries").select("id,status").eq("user_id",userId).eq("source_type","weight_missing").eq("scheduled_at",window.scheduledAt).maybeSingle();if(existing.error)throw new Error("Could not check weight notification history");if(existing.data?.status==="sent")continue;const logged=await client.from("weight_records").select("id").eq("user_id",userId).gte("occurred_at",window.from).lt("occurred_at",window.to).limit(1);if(logged.error)throw new Error("Could not check weight records");if(logged.data?.length)continue;due+=1;
+    const preference=await client.from("ui_preferences").select("ui_language").eq("user_id",userId).maybeSingle();const english=preference.data?.ui_language==="en",title=english?"Log today’s weight":"记录今天的体重";let deliveryId=existing.data?.id?Number(existing.data.id):null;if(deliveryId===null){const reservation=await client.from("notification_deliveries").insert({user_id:userId,reminder_id:null,title,source_type:"weight_missing",source_id:1,target_type:"health",target_id:1,scheduled_at:window.scheduledAt,scheduled_has_explicit_time:true,sent_at:null,status:"failed"}).select("id").single();if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve weight notification");}deliveryId=Number(reservation.data.id);}
+    const delivery=await sendToUser(client,userId,{kind:"weight_missing",title,body:english?"No weight has been recorded today.":"今天还没有体重记录。",url:"/health",tag:`weight-${date}`});sent+=delivery.sent;await client.from("notification_deliveries").update({title,status:delivery.delivered?"sent":"failed",sent_at:delivery.delivered?now.toISOString():null}).eq("id",deliveryId);
+  }return{due,sent};
+}
+
 export async function deliverDueReminderPushes(now = new Date()) {
   const secret = process.env.SUPABASE_SECRET_KEY?.trim();
   const privateKey = process.env.EVAORBIT_VAPID_PRIVATE_KEY?.trim();
@@ -228,6 +237,6 @@ export async function deliverDueReminderPushes(now = new Date()) {
   const { url } = supabaseConfig();
   const client = createDeliveryClient(url, secret);
   webpush.setVapidDetails(subject, publicKey, privateKey);
-  const [reminders, meals] = await Promise.all([deliverReminderPushes(client, now), deliverMissingMealPushes(client, now)]);
-  return { due: reminders.due, sent: reminders.sent, mealDue: meals.due, mealSent: meals.sent };
+  const [reminders, meals, weights] = await Promise.all([deliverReminderPushes(client, now), deliverMissingMealPushes(client, now), deliverMissingWeightPushes(client,now)]);
+  return { due: reminders.due, sent: reminders.sent, mealDue: meals.due, mealSent: meals.sent, weightDue:weights.due, weightSent:weights.sent };
 }

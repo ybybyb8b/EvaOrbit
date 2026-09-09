@@ -500,6 +500,38 @@ export interface TrainingLog {
 export interface TrainingInputSuggestions {
   teachers: string[];
   courses: string[];
+  presets: TrainingPreset[];
+}
+export interface TrainingPreset {
+  trainingType: TrainingType;
+  bodyParts: TrainingBodyPart[];
+  teacher: string;
+  course: string;
+  durationMinutes: number | null;
+  useCount: number;
+  lastUsedAt: string;
+}
+
+export type WeightSource = "manual" | "apple_health";
+export interface WeightRecord {
+  id: number;
+  occurredAt: string;
+  occurredHasExplicitTime: boolean;
+  weightKg: number;
+  source: WeightSource;
+  healthKitSampleId: string | null;
+  healthKitSourceBundle: string | null;
+  healthKitSourceName: string | null;
+  healthKitSyncIdentifier: string | null;
+  healthKitSyncVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface WeightSettings {
+  targetWeightKg: number | null;
+  reminderEnabled: boolean;
+  reminderTime: string;
+  updatedAt: string;
 }
 
 export type MediaType = "movie" | "tv" | "anime" | "documentary" | "other";

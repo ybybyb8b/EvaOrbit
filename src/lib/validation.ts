@@ -933,6 +933,38 @@ export function parseTrainingLogPatch(value: unknown) {
   return result;
 }
 
+export function parseNewWeightRecord(value: unknown) {
+  const body = objectValue(value);
+  const weightKg = optionalNumber(body.weightKg, "体重", 20, 500);
+  if (weightKg === null) throw new ValidationError("体重不能为空");
+  return {
+    occurredAt: timestamp(body.occurredAt, "体重记录时间"),
+    occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "体重记录时间精度", true),
+    weightKg,
+  };
+}
+
+export function parseWeightRecordPatch(value: unknown) {
+  const body = objectValue(value);
+  const weightKg = body.weightKg === undefined ? undefined : optionalNumber(body.weightKg, "体重", 20, 500);
+  if (weightKg === null) throw new ValidationError("体重不能为空");
+  const result = {
+    occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt, "体重记录时间"),
+    occurredHasExplicitTime: body.occurredHasExplicitTime === undefined ? undefined : booleanValue(body.occurredHasExplicitTime, "体重记录时间精度", true),
+    weightKg,
+  };
+  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的体重字段");
+  return result;
+}
+
+export function parseWeightSettings(value: unknown) {
+  const body = objectValue(value);
+  const targetWeightKg = optionalNumber(body.targetWeightKg, "目标体重", 20, 500);
+  const reminderEnabled = booleanValue(body.reminderEnabled, "体重提醒状态", false);
+  if (typeof body.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime)) throw new ValidationError("体重提醒时间不正确");
+  return { targetWeightKg, reminderEnabled, reminderTime: body.reminderTime };
+}
+
 export function parseNewDrinkLog(value: unknown) {
   const body = objectValue(value);
   const kcalMin = optionalNumber(body.kcalMin, "热量下限");

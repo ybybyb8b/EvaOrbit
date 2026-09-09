@@ -5,10 +5,12 @@ import { allowedEmail, supabaseConfig, usesSupabase } from "../config";
 import { HttpError } from "../errors";
 import {
   HEALTHKIT_ENERGY_SCOPE,
+  HEALTHKIT_BODY_MASS_SCOPE,
   createNativeDeviceCredential,
   hashNativeDeviceCredential,
   nativeDeviceAccessStatus,
   type HealthKitEnergySnapshot,
+  type HealthKitBodyMassChange,
 } from "../healthkit";
 import { createSupabaseServerClient } from "../supabase/server";
 
@@ -79,6 +81,13 @@ export async function ingestHealthKitEnergy(
   await client.from("native_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
   const result = (data ?? {}) as Row;
   return { ok: true, accepted: Number(result.accepted ?? 0), received: Number(result.received ?? snapshots.length) };
+}
+
+export async function ingestHealthKitBodyMass(installationId:string,credential:string,changes:HealthKitBodyMassChange[]):Promise<NativeIngestResult>{
+  const client=adminClient();const tokenHash=hashNativeDeviceCredential(credential);const{data:device,error}=await client.from("native_devices").select("id,user_id,scopes,revoked_at").eq("installation_id",installationId).eq("token_hash",tokenHash).maybeSingle();
+  if(error)throw new Error("Could not authenticate native device");if(!device)return{ok:false,status:401};const accessStatus=nativeDeviceAccessStatus(device,HEALTHKIT_BODY_MASS_SCOPE);if(accessStatus!==200)return{ok:false,status:accessStatus};
+  const{data,error:ingestError}=await client.rpc("ingest_healthkit_body_mass_changes",{p_user_id:String(device.user_id),p_changes:changes});if(ingestError)throw new Error("Could not ingest HealthKit body mass");
+  await client.from("native_devices").update({last_seen_at:new Date().toISOString()}).eq("id",device.id);const result=(data??{}) as Row;return{ok:true,accepted:Number(result.accepted??0),received:Number(result.received??changes.length)};
 }
 
 export type HealthKitDailyEnergy = {
