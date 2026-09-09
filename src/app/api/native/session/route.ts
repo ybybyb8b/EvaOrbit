@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { allowedEmail, usesSupabase } from "@/lib/config";
 import { HttpError } from "@/lib/errors";
+import { currentNativeAccount } from "@/lib/native-account";
 import { parseNativeLoginCredentials } from "@/lib/native-session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ValidationError } from "@/lib/validation";
@@ -11,9 +12,9 @@ export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
 
-function sessionResponse(authenticated: boolean, email?: string) {
+function sessionResponse(authenticated: boolean, account?: { id: string; email: string }) {
   return NextResponse.json(
-    { authenticated, ...(email ? { email } : {}) },
+    { authenticated, ...(account ? { accountId: account.id, email: account.email } : {}) },
     { headers: noStoreHeaders },
   );
 }
@@ -24,23 +25,10 @@ function noStoreError(error: unknown) {
   return response;
 }
 
-async function currentAccount() {
-  if (!usesSupabase()) return null;
-  const expectedEmail = allowedEmail();
-  if (!expectedEmail) throw new HttpError("服务器登录配置不可用", 503);
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getClaims();
-  const subject = typeof data?.claims?.sub === "string" ? data.claims.sub : "";
-  const email = typeof data?.claims?.email === "string" ? data.claims.email.toLocaleLowerCase() : "";
-  if (error || !subject || email !== expectedEmail) return null;
-  return email;
-}
-
 export async function GET() {
   try {
-    const email = await currentAccount();
-    return email ? sessionResponse(true, email) : sessionResponse(false);
+    const account = await currentNativeAccount();
+    return account ? sessionResponse(true, account) : sessionResponse(false);
   } catch (error) {
     return noStoreError(error);
   }
@@ -67,7 +55,7 @@ export async function POST(request: Request) {
       await supabase.auth.signOut();
       throw new HttpError("邮箱或密码不正确", 401);
     }
-    return sessionResponse(true, email);
+    return sessionResponse(true, { id: data.user.id, email });
   } catch (error) {
     return noStoreError(error);
   }

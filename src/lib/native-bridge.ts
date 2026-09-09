@@ -1,6 +1,5 @@
-import type { ScheduledNotification } from "./types";
-import { notificationSendAt } from "./reminder-engine.ts";
-import { reminderNotificationCopy } from "./notification-copy.ts";
+import type { NativeNotificationSchedule, ScheduledNotification } from "./types";
+import { isManagedNativeNotification, nativeNotificationIdentifier as managedIdentifier, nativeReminderNotification } from "./native-notifications.ts";
 
 export type NativeBridgeResponse<T> = { ok: true; result: T } | { ok: false; error: { code: string; message: string } };
 export type NativeBridge = { version: number; call<T>(method: string, params?: Record<string, unknown>): Promise<NativeBridgeResponse<T>> };
@@ -37,7 +36,6 @@ export type NativeNotificationStatus = {
   scheduledCount?: number;
 };
 export type NativePendingNotification = { id: string; triggerAt?: string };
-export type NativeNotificationSchedule = { id: string; title: string; body: string; triggerAt: string };
 const nativePendingReminderLimit = 48;
 
 declare global {
@@ -79,52 +77,43 @@ export function nativeHapticsSupported(info: NativeHostInfo | null) {
 }
 
 export function nativeNotificationIdentifier(reminderId: number) {
-  return `evaorbit-reminder-${reminderId}`;
+  return managedIdentifier("reminder", reminderId);
 }
 
 export function nativeNotificationSchedule(item: ScheduledNotification): NativeNotificationSchedule | null {
-  const triggerAt = notificationSendAt(item);
-  if (!item.isActive || !triggerAt || new Date(triggerAt).getTime() <= Date.now()) return null;
-  const copy = reminderNotificationCopy(item, typeof document === "undefined" ? "zh-CN" : document.documentElement.lang || navigator.language);
-  return {
-    id: nativeNotificationIdentifier(item.id),
-    title: copy.title,
-    body: copy.body.slice(0, 1_000),
-    triggerAt,
-  };
+  return nativeReminderNotification(item, typeof document === "undefined" ? "zh-CN" : document.documentElement.lang || navigator.language);
 }
 
 let reconcileQueue: Promise<void> = Promise.resolve();
 
-export function reconcileNativeNotifications(items?: ScheduledNotification[]) {
-  const next = reconcileQueue.then(() => performNativeNotificationReconcile(items));
+export function reconcileNativeNotifications() {
+  const next = reconcileQueue.then(() => performNativeNotificationReconcile());
   reconcileQueue = next.then(() => undefined, () => undefined);
   return next;
 }
 
-async function performNativeNotificationReconcile(items?: ScheduledNotification[]) {
+async function performNativeNotificationReconcile() {
   const info = await getNativeHostInfo();
   if (!nativeNotificationsSupported(info)) return { supported: false, authorized: false, scheduled: 0 };
   const status = await nativeCall<NativeNotificationStatus>("notification.getStatus");
   if (!["authorized", "provisional", "ephemeral"].includes(status.permission)) {
     return { supported: true, authorized: false, scheduled: status.scheduledCount ?? 0 };
   }
-  const source: ScheduledNotification[] = items ?? await fetch("/api/notifications", { cache: "no-store" }).then(async (response) => {
+  const desired = await fetch("/api/notifications", { cache: "no-store" }).then(async (response) => {
     if (!response.ok) throw new Error("Could not load reminders for native notifications");
-    return (await response.json() as { upcoming: ScheduledNotification[] }).upcoming;
-  });
-  const desired = source.map(nativeNotificationSchedule)
-    .filter((item): item is NativeNotificationSchedule => item !== null)
+    return (await response.json() as { nativeNotifications: NativeNotificationSchedule[] }).nativeNotifications;
+  }).then((items) => items
+    .filter((item) => new Date(item.triggerAt).getTime() > Date.now())
     .sort((a, b) => a.triggerAt.localeCompare(b.triggerAt))
-    .slice(0, nativePendingReminderLimit);
+    .slice(0, nativePendingReminderLimit));
   const pendingResult = await nativeCall<NativePendingNotification[] | { notifications: NativePendingNotification[] }>("notification.listPending");
   const pending = Array.isArray(pendingResult) ? pendingResult : pendingResult.notifications;
   const desiredIds = new Set(desired.map((item) => item.id));
   for (const item of pending) {
-    if (item.id.startsWith("evaorbit-reminder-") && !desiredIds.has(item.id)) await nativeCall("notification.cancel", { id: item.id });
+    if (isManagedNativeNotification(item.id) && !desiredIds.has(item.id)) await nativeCall("notification.cancel", { id: item.id });
   }
   for (const item of desired) {
-    await nativeCall("notification.schedule", item);
+    await nativeCall("notification.schedule", { ...item });
   }
   return { supported: true, authorized: true, scheduled: desired.length };
 }

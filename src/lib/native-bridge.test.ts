@@ -28,7 +28,7 @@ const scheduled = {
 } as ScheduledNotification;
 
 test("native notification identifiers are stable across reminder edits", () => {
-  assert.equal(nativeNotificationIdentifier(42), "evaorbit-reminder-42");
+  assert.equal(nativeNotificationIdentifier(42), "evaorbit-scheduled-reminder-42");
   assert.equal(nativeNotificationSchedule(scheduled)?.id, nativeNotificationSchedule({ ...scheduled, title: "Updated" })?.id);
 });
 

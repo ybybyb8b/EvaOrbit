@@ -3,18 +3,27 @@ import { apiError } from "@/lib/api";
 import { listNotificationHistory, listReminders, listScheduledNotifications } from "@/lib/services/reminder";
 import { listCatRoutines } from "@/lib/services/cat-routine";
 import { listMealReminderRules } from "@/lib/services/meal-reminder";
+import { listFoodLogs } from "@/lib/services/food";
+import { getUiPreferences } from "@/lib/services/evaorbit";
+import { buildNativeNotificationSchedules } from "@/lib/native-notifications";
+import { dateInEvaOrbit, dateRange, shiftDate } from "@/lib/time";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const [upcoming, routines, reminders, history, mealRules] = await Promise.all([
+    const now = new Date();
+    const firstDate = dateInEvaOrbit(now);
+    const [upcoming, routines, reminders, history, mealRules, foodLogs, preferences] = await Promise.all([
       listScheduledNotifications(),
       listCatRoutines(),
       listReminders(),
       listNotificationHistory(),
       listMealReminderRules(),
+      listFoodLogs({ from: dateRange(firstDate).from, to: dateRange(shiftDate(firstDate, 7)).from }),
+      getUiPreferences(),
     ]);
-    return NextResponse.json({ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine" && !item.sourceType?.startsWith("tracker_")), history, mealRules });
+    const nativeNotifications = buildNativeNotificationSchedules({ upcoming, mealRules, foodLogs, locale: preferences.uiLanguage === "en" ? "en" : "zh-CN", now });
+    return NextResponse.json({ upcoming, routines, reminders: reminders.filter(item => item.sourceType !== "cat_routine" && !item.sourceType?.startsWith("tracker_")), history, mealRules, nativeNotifications });
   } catch (error) { return apiError(error); }
 }

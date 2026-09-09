@@ -20,10 +20,12 @@ test("rejects malformed native login credentials", () => {
 
 test("native session is the only unauthenticated entry point added for SwiftUI login", () => {
   const route = readFileSync(new URL("../app/api/native/session/route.ts", import.meta.url), "utf8");
+  const account = readFileSync(new URL("native-account.ts", import.meta.url), "utf8");
   const proxy = readFileSync(new URL("../proxy.ts", import.meta.url), "utf8");
   assert.match(proxy, /pathname === "\/api\/native\/session"/);
   assert.match(route, /signInWithPassword/);
-  assert.match(route, /getClaims/);
+  assert.match(route, /currentNativeAccount/);
+  assert.match(account, /getClaims/);
   assert.match(route, /signOut/);
   assert.match(route, /"Cache-Control": "no-store"/);
   assert.doesNotMatch(route, /SUPABASE_PUBLISHABLE_KEY|SUPABASE_URL/);

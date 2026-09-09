@@ -946,6 +946,13 @@ export interface ScheduledNotification extends Reminder {
   isRoutine: boolean;
 }
 
+export interface NativeNotificationSchedule {
+  id: string;
+  title: string;
+  body: string;
+  triggerAt: string;
+}
+
 export interface NotificationDelivery {
   id: number;
   reminderId: number | null;

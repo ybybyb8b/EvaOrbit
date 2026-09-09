@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import postgres from "postgres";
+import { migrationChecksums, normalizeMigrationSource } from "./migration-checksum.mjs";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
 if (!databaseUrl) throw new Error("缺少 DATABASE_URL；未连接任何数据库。");
@@ -27,11 +27,12 @@ try {
     )
   `;
   for (const file of files) {
-    const source = fs.readFileSync(path.join(directory, file), "utf8");
-    const checksum = createHash("sha256").update(source).digest("hex");
+    const source = normalizeMigrationSource(fs.readFileSync(path.join(directory, file), "utf8"));
+    const checksums = migrationChecksums(source);
+    const checksum = checksums.canonical;
     const [applied] = await sql`select checksum from public.evaorbit_schema_migrations where filename = ${file}`;
     if (applied) {
-      if (applied.checksum !== checksum) throw new Error(`已应用的 migration ${file} 内容发生变化；请新增 migration，不要改写历史。`);
+      if (!checksums.compatible.has(applied.checksum)) throw new Error(`已应用的 migration ${file} 内容发生变化；请新增 migration，不要改写历史。`);
       console.log(`Skipping ${file}... already applied`);
       continue;
     }
