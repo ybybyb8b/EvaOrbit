@@ -3,8 +3,9 @@ import "server-only";
 import { isDeepStrictEqual } from "node:util";
 import { getRepository } from "./repositories";
 import { createSupabaseServerClient } from "./supabase/server";
-import { createTracker, createTrackerEntry, deleteTracker, deleteTrackerEntry, getTrackerDetail, listTrackerSummaries, updateTracker, updateTrackerEntry } from "./services/tracker";
-import { parseNewTracker, parseNewTrackerEntry, parseTrackerEntryPatch, parseTrackerPatch, ValidationError } from "./validation";
+import { createTracker, createTrackerEntry, createTrackerField, createTrackerGoal, createTrackerReminder, deleteTracker, deleteTrackerEntry, deleteTrackerField, deleteTrackerGoal, deleteTrackerReminder, getTrackerDetail, listTrackerSummaries, updateTracker, updateTrackerEntry, updateTrackerReminder } from "./services/tracker";
+import { resetTrackerIcon, saveTrackerIcon } from "./services/tracker-icon";
+import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseTrackerEntryPatch, parseTrackerPatch, parseTrackerReminderPatch, ValidationError } from "./validation";
 import { applyIdempotently, type MutationClaim, type MutationReceiptStore } from "./native-sync-idempotency";
 import { conflictFor, type NativeSyncMutation, type NativeSyncRequest, type NativeSyncResult } from "./native-sync-contract";
 
@@ -26,9 +27,19 @@ function record(value: object): Record<string, unknown> {
 
 async function applyMutation(mutation: NativeSyncMutation): Promise<NativeSyncResult> {
   const repository = await getRepository();
-  const current = mutation.resourceType === "tracker"
-    ? mutation.serverId ? await repository.getTracker(mutation.serverId) : null
-    : mutation.serverId ? await repository.getTrackerEntry(mutation.serverId) : null;
+  let current: { id: number; updatedAt: string } | null = null;
+  if (mutation.serverId) {
+    if (mutation.resourceType === "tracker" || mutation.resourceType === "tracker_icon") current = await repository.getTracker(mutation.serverId);
+    else if (mutation.resourceType === "tracker_entry") current = await repository.getTrackerEntry(mutation.serverId);
+    else if (mutation.resourceType === "tracker_reminder") current = await repository.getTrackerReminder(mutation.serverId);
+    else {
+      for (const tracker of await repository.listTrackers()) {
+        const values = mutation.resourceType === "tracker_field" ? await repository.listTrackerFields(tracker.id) : await repository.listTrackerGoals(tracker.id);
+        const found = values.find((value) => value.id === mutation.serverId);
+        if (found) { current = found; break; }
+      }
+    }
+  }
 
   if (mutation.operation !== "create") {
     const conflictKind = conflictFor(mutation.baseUpdatedAt, current);
@@ -48,16 +59,64 @@ async function applyMutation(mutation: NativeSyncMutation): Promise<NativeSyncRe
     return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
   }
 
-  if (mutation.operation === "create") {
+  if (mutation.resourceType === "tracker_entry" && mutation.operation === "create") {
     const created = await createTrackerEntry(parseNewTrackerEntry(mutation.payload));
     return { ...baseResult(mutation), status: "applied", serverId: created.id, serverUpdatedAt: created.updatedAt };
   }
-  if (mutation.operation === "update") {
+  if (mutation.resourceType === "tracker_entry" && mutation.operation === "update") {
     const updated = await updateTrackerEntry(mutation.serverId!, parseTrackerEntryPatch(mutation.payload));
     return updated ? { ...baseResult(mutation), status: "applied", serverId: updated.id, serverUpdatedAt: updated.updatedAt } : { ...baseResult(mutation), status: "conflict", serverId: mutation.serverId, conflictKind: "remote_deleted" };
   }
-  await deleteTrackerEntry(mutation.serverId!);
-  return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
+  if (mutation.resourceType === "tracker_entry") {
+    await deleteTrackerEntry(mutation.serverId!);
+    return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
+  }
+
+  if (mutation.resourceType === "tracker_field") {
+    if (mutation.operation === "create") {
+      const created = await createTrackerField(parseNewTrackerField(mutation.payload));
+      return { ...baseResult(mutation), status: "applied", serverId: created.id, serverUpdatedAt: created.updatedAt };
+    }
+    if (mutation.operation === "update") throw new ValidationError("Tracker 字段不支持直接修改");
+    await deleteTrackerField(mutation.serverId!);
+    return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
+  }
+
+  if (mutation.resourceType === "tracker_goal") {
+    if (mutation.operation === "create") {
+      const created = await createTrackerGoal(parseNewTrackerGoal(mutation.payload));
+      return { ...baseResult(mutation), status: "applied", serverId: created.id, serverUpdatedAt: created.updatedAt };
+    }
+    if (mutation.operation === "update") throw new ValidationError("Tracker Goal 不支持直接修改");
+    await deleteTrackerGoal(mutation.serverId!);
+    return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
+  }
+
+  if (mutation.resourceType === "tracker_reminder") {
+    if (mutation.operation === "create") {
+      const created = await createTrackerReminder(parseNewTrackerReminder(mutation.payload));
+      return { ...baseResult(mutation), status: "applied", serverId: created.id, serverUpdatedAt: created.updatedAt };
+    }
+    if (mutation.operation === "update") {
+      const updated = await updateTrackerReminder(mutation.serverId!, parseTrackerReminderPatch(mutation.payload));
+      return updated ? { ...baseResult(mutation), status: "applied", serverId: updated.id, serverUpdatedAt: updated.updatedAt } : { ...baseResult(mutation), status: "conflict", serverId: mutation.serverId, conflictKind: "remote_deleted" };
+    }
+    await deleteTrackerReminder(mutation.serverId!);
+    return { ...baseResult(mutation), status: "applied", serverId: mutation.serverId };
+  }
+
+  if (mutation.operation === "delete") {
+    const tracker = await resetTrackerIcon(mutation.serverId!);
+    return tracker ? { ...baseResult(mutation), status: "applied", serverId: tracker.id, serverUpdatedAt: tracker.updatedAt } : { ...baseResult(mutation), status: "conflict", serverId: mutation.serverId, conflictKind: "remote_deleted" };
+  }
+  if (mutation.operation !== "update") throw new ValidationError("Tracker 图片操作不受支持");
+  const data = mutation.payload.dataBase64;
+  const mime = mutation.payload.mime;
+  if (typeof data !== "string" || data.length > 1_400_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw new ValidationError("Tracker 图片数据格式不正确");
+  if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") throw new ValidationError("Tracker 图片类型不受支持");
+  const bytes = Buffer.from(data, "base64");
+  const tracker = await saveTrackerIcon(mutation.serverId!, new File([bytes], "tracker-image", { type: mime }));
+  return tracker ? { ...baseResult(mutation), status: "applied", serverId: tracker.id, serverUpdatedAt: tracker.updatedAt } : { ...baseResult(mutation), status: "conflict", serverId: mutation.serverId, conflictKind: "remote_deleted" };
 }
 
 async function snapshot(): Promise<NativeSyncSnapshot> {

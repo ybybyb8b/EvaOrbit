@@ -1,7 +1,7 @@
 import { ValidationError } from "./validation.ts";
 
 export const NATIVE_SYNC_PROTOCOL_VERSION = 1;
-export const nativeSyncResourceTypes = ["tracker", "tracker_entry"] as const;
+export const nativeSyncResourceTypes = ["tracker", "tracker_field", "tracker_goal", "tracker_reminder", "tracker_entry", "tracker_icon"] as const;
 export const nativeSyncOperations = ["create", "update", "delete"] as const;
 
 export type NativeSyncResourceType = typeof nativeSyncResourceTypes[number];
