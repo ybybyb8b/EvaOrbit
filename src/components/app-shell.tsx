@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { Sidebar2 } from "reicon-react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
@@ -113,7 +114,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      <button type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><span className="spaces-menu-lines" aria-hidden="true"><i /><i /><i /></span></button>
+      <button type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Sidebar2 className="spaces-drawer-icon" size={22} weight="Outline" aria-hidden="true" /></button>
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>

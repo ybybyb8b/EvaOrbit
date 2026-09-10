@@ -28,6 +28,12 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   assert.match(healthQuickLog, /TrainingLogEditor/);
   assert.match(healthQuickLog, /WeightEditor/);
   assert.match(healthQuickLog, /HealthRecordEditor/);
+  assert.match(healthQuickLog, /kind: "training", icon: Dumbbell/);
+  assert.match(healthQuickLog, /kind: "weight", icon: Weight/);
+  assert.match(healthQuickLog, /kind: "health-record", icon: Health/);
+  assert.match(quickLog, /from "reicon-react"/);
+  assert.match(quickLog, /icon: LogIcon/);
+  assert.match(quickLog, /<LogIcon className="home-quick-log-icon"/);
   assert.equal(healthQuickLog.match(/initialDate=\{initialDate\}/g)?.length, 3);
   assert.match(healthQuickLog, /\/api\/health\/weight\?limit=1/);
   assert.doesNotMatch(healthQuickLog, /AppleHealthSection|WeightSettingsSheet|DailyEnergyCard/);

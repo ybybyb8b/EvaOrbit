@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, type ComponentType } from "react";
+import { Dumbbell, Health, Weight, type IconComponent } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
-import type { IconName } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import type { TrainingInputSuggestions, WeightRecord } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
@@ -17,7 +17,7 @@ type HealthQuickLogEditorProps = {
 
 type HealthQuickLogDefinition = {
   kind: string;
-  icon: IconName;
+  icon: IconComponent;
   en: string;
   zh: string;
   Editor: ComponentType<HealthQuickLogEditorProps>;
@@ -72,9 +72,9 @@ function HealthRecordQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogE
 }
 
 export const HEALTH_QUICK_LOGS = [
-  { kind: "training", icon: "health", en: "Training", zh: "训练", Editor: TrainingQuickLog },
-  { kind: "weight", icon: "health", en: "Weight", zh: "体重", Editor: WeightQuickLog },
-  { kind: "health-record", icon: "health", en: "Health record", zh: "健康记录", Editor: HealthRecordQuickLog },
+  { kind: "training", icon: Dumbbell, en: "Training", zh: "训练", Editor: TrainingQuickLog },
+  { kind: "weight", icon: Weight, en: "Weight", zh: "体重", Editor: WeightQuickLog },
+  { kind: "health-record", icon: Health, en: "Health record", zh: "健康记录", Editor: HealthRecordQuickLog },
 ] as const satisfies readonly HealthQuickLogDefinition[];
 
 export type HealthQuickLogKind = typeof HEALTH_QUICK_LOGS[number]["kind"];

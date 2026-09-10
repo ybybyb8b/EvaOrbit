@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Activity, Cat, Cup, ForkKnife, Inbox, type IconComponent } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
-import { Icon, type IconName } from "@/components/icons";
+import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import type { DrinkInputSuggestions, Pet, TrackerField, TrackerSummary } from "@/lib/types";
@@ -50,15 +51,15 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
     catch { setError(english ? "Could not open this Tracker" : "暂时无法打开此观测"); }
     finally { setLoading(false); }
   }
-  const options: Array<{ kind: QuickEntryKind; icon: IconName; en: string; zh: string }> = [
-    { kind: "food", icon: "food", en: "Food", zh: "饮食" }, { kind: "drink", icon: "drink", en: "Drink", zh: "饮品" }, ...HEALTH_QUICK_LOGS,
-    { kind: "tracker", icon: "tracker", en: "Tracker", zh: "观测" }, { kind: "cats", icon: "cats", en: "Cats", zh: "猫咪" }, { kind: "inbox", icon: "inbox", en: "Inbox", zh: "散落" },
+  const options: Array<{ kind: QuickEntryKind; icon: IconComponent; en: string; zh: string }> = [
+    { kind: "food", icon: ForkKnife, en: "Food", zh: "饮食" }, { kind: "drink", icon: Cup, en: "Drink", zh: "饮品" }, ...HEALTH_QUICK_LOGS,
+    { kind: "tracker", icon: Activity, en: "Tracker", zh: "观测" }, { kind: "cats", icon: Cat, en: "Cats", zh: "猫咪" }, { kind: "inbox", icon: Inbox, en: "Inbox", zh: "散落" },
   ];
   const healthQuickLog = getHealthQuickLog(active);
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
     <button type="button" className="home-quick-log-trigger" onClick={() => { playNativeHaptic("light"); setActive("picker"); }}><Icon name="plus" variant="stroke" /><span>Log</span></button>
-    {active === "picker" && <FormSheet title={english ? "Quick Log" : "快速记录"} onClose={close}><div className="home-quick-log-grid">{options.map((option) => <button type="button" key={option.kind} disabled={loading} onClick={() => void choose(option.kind)}><Icon name={option.icon} /><strong>{english ? option.en : option.zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
+    {active === "picker" && <FormSheet title={english ? "Quick Log" : "快速记录"} onClose={close}><div className="home-quick-log-grid">{options.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} suggestions={drinkSuggestions} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
