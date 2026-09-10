@@ -61,11 +61,12 @@ test("duplicate and out-of-order snapshots collapse to the newest revision", () 
   assert.deepEqual(parsed.find((item) => item.metric === "active"), { ...validSnapshot, revision: 5, kcal: 400 });
 });
 
-test("HealthKit upload accepts body mass source and EO sync identity while validating writes",()=>{
+test("HealthKit upload accepts body mass source and EO sync identity while preserving 0.05 kg precision",()=>{
   const sampleId="946e6cf1-96f2-4e47-9d45-b0fab32db24d";
-  const upload=parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"2026-09-09T00:30:00Z",weightKg:64.2,sourceBundle:"com.eva.scale",sourceName:"Scale",syncIdentifier:"evaorbit.weight.12",syncVersion:2},{operation:"delete",sampleId}]});
+  const upload=parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"2026-09-09T00:30:00Z",weightKg:64.23,sourceBundle:"com.eva.scale",sourceName:"Scale",syncIdentifier:"evaorbit.weight.12",syncVersion:2},{operation:"delete",sampleId}]});
   assert.equal(upload.bodyMassChanges[0].syncIdentifier,"evaorbit.weight.12");
   assert.equal(upload.bodyMassChanges[0].sourceBundle,"com.eva.scale");
+  assert.equal(upload.bodyMassChanges[0].weightKg,64.25);
   assert.deepEqual(upload.bodyMassChanges[1],{operation:"delete",sampleId});
   assert.throws(()=>parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"bad",weightKg:64}]}),ValidationError);
 });

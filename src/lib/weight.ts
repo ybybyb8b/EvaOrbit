@@ -3,6 +3,16 @@ import type { WeightRecord, WeightSettings } from "./types.ts";
 
 export type WeightRange = "7d" | "30d" | "90d" | "1y" | "all";
 
+export const WEIGHT_STEP_KG = 0.05;
+
+export function normalizeWeightKg(value: number) {
+  return Math.round(value / WEIGHT_STEP_KG) * WEIGHT_STEP_KG;
+}
+
+export function formatWeightKg(value: number) {
+  return value.toFixed(2);
+}
+
 export function weightRecordsInRange(records: WeightRecord[], range: WeightRange, now = new Date()) {
   if (range === "all") return records;
   const days = range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 365;

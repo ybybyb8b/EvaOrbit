@@ -1,6 +1,7 @@
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
+import { normalizeWeightKg } from "./weight.ts";
 
 export class ValidationError extends Error {}
 
@@ -937,6 +938,7 @@ export function parseNewWeightRecord(value: unknown) {
   const body = objectValue(value);
   const weightKg = optionalNumber(body.weightKg, "体重", 20, 500);
   if (weightKg === null) throw new ValidationError("体重不能为空");
+  if (Math.abs(normalizeWeightKg(weightKg) - weightKg) > 1e-8) throw new ValidationError("体重必须以 0.05 kg 为步进");
   return {
     occurredAt: timestamp(body.occurredAt, "体重记录时间"),
     occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "体重记录时间精度", true),
@@ -948,6 +950,7 @@ export function parseWeightRecordPatch(value: unknown) {
   const body = objectValue(value);
   const weightKg = body.weightKg === undefined ? undefined : optionalNumber(body.weightKg, "体重", 20, 500);
   if (weightKg === null) throw new ValidationError("体重不能为空");
+  if (weightKg !== undefined && Math.abs(normalizeWeightKg(weightKg) - weightKg) > 1e-8) throw new ValidationError("体重必须以 0.05 kg 为步进");
   const result = {
     occurredAt: body.occurredAt === undefined ? undefined : timestamp(body.occurredAt, "体重记录时间"),
     occurredHasExplicitTime: body.occurredHasExplicitTime === undefined ? undefined : booleanValue(body.occurredHasExplicitTime, "体重记录时间精度", true),
@@ -960,6 +963,7 @@ export function parseWeightRecordPatch(value: unknown) {
 export function parseWeightSettings(value: unknown) {
   const body = objectValue(value);
   const targetWeightKg = optionalNumber(body.targetWeightKg, "目标体重", 20, 500);
+  if (targetWeightKg !== null && Math.abs(normalizeWeightKg(targetWeightKg) - targetWeightKg) > 1e-8) throw new ValidationError("目标体重必须以 0.05 kg 为步进");
   const reminderEnabled = booleanValue(body.reminderEnabled, "体重提醒状态", false);
   if (typeof body.reminderTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.reminderTime)) throw new ValidationError("体重提醒时间不正确");
   return { targetWeightKg, reminderEnabled, reminderTime: body.reminderTime };

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseWeightRecordPatch, parseWeightSettings, ValidationError } from "./validation.ts";
-import { weightRecordsInRange, weightReminderSchedules, weightTrend } from "./weight.ts";
+import { parseNewWeightRecord, parseWeightRecordPatch, parseWeightSettings, ValidationError } from "./validation.ts";
+import { formatWeightKg, normalizeWeightKg, weightRecordsInRange, weightReminderSchedules, weightTrend } from "./weight.ts";
 import type { WeightRecord, WeightSettings } from "./types.ts";
 
 function record(id:number,occurredAt:string,weightKg:number):WeightRecord{return{id,occurredAt,occurredHasExplicitTime:true,weightKg,source:"manual",healthKitSampleId:null,healthKitSourceBundle:null,healthKitSourceName:null,healthKitSyncIdentifier:`evaorbit.weight.${id}`,healthKitSyncVersion:1,createdAt:"",updatedAt:""};}
@@ -29,9 +29,18 @@ test("weight validation keeps nullable goals but never accepts a null record wei
   assert.throws(()=>parseWeightRecordPatch({weightKg:null}),ValidationError);
 });
 
+test("weight precision snaps and validates at 0.05 kg while formatting two decimals",()=>{
+  assert.equal(formatWeightKg(normalizeWeightKg(57.47)),"57.45");
+  assert.equal(formatWeightKg(normalizeWeightKg(57.5)),"57.50");
+  assert.equal(parseNewWeightRecord({occurredAt:"2026-09-10T08:00:00Z",occurredHasExplicitTime:true,weightKg:57.45}).weightKg,57.45);
+  assert.throws(()=>parseNewWeightRecord({occurredAt:"2026-09-10T08:00:00Z",occurredHasExplicitTime:true,weightKg:57.43}),ValidationError);
+  assert.throws(()=>parseWeightSettings({targetWeightKg:57.43,reminderEnabled:false,reminderTime:"08:30"}),ValidationError);
+});
+
 test("weight migration preserves multiple daily samples, ownership, source identity and HealthKit idempotency",()=>{
   const sql=readFileSync(new URL("../../supabase/migrations/202609090002_weight.sql",import.meta.url),"utf8");
   assert.match(sql,/create table if not exists public\.weight_records/i);
+  assert.match(sql,/weight_kg numeric\(6,2\)/i);
   assert.doesNotMatch(sql,/unique[^;]*occurred_at/i);
   assert.match(sql,/healthkit_sample_id uuid/);
   assert.match(sql,/healthkit_sync_identifier text/);

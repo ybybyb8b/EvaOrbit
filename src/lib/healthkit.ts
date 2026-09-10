@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { ValidationError } from "./validation.ts";
+import { normalizeWeightKg } from "./weight.ts";
 
 export const HEALTHKIT_ENERGY_SCOPE = "healthkit:energy:write";
 export const HEALTHKIT_BODY_MASS_SCOPE = "healthkit:body-mass:write";
@@ -98,7 +99,7 @@ export function parseHealthKitUpload(value: unknown) {
     const sourceName = typeof change.sourceName === "string" ? change.sourceName.slice(0, 255) : "";
     const syncIdentifier = typeof change.syncIdentifier === "string" ? change.syncIdentifier.slice(0, 255) : undefined;
     const syncVersion = change.syncVersion === undefined ? undefined : safeInteger(change.syncVersion, "HealthKit sync version", 1, 2_147_483_647);
-    return { operation: "upsert", sampleId, occurredAt: change.occurredAt, weightKg: finiteNumber(change.weightKg, "HealthKit body mass", 20, 500), sourceBundle, sourceName, ...(syncIdentifier ? { syncIdentifier } : {}), ...(syncVersion ? { syncVersion } : {}) };
+    return { operation: "upsert", sampleId, occurredAt: change.occurredAt, weightKg: normalizeWeightKg(finiteNumber(change.weightKg, "HealthKit body mass", 20, 500)), sourceBundle, sourceName, ...(syncIdentifier ? { syncIdentifier } : {}), ...(syncVersion ? { syncVersion } : {}) };
   });
   if (!snapshots.length && !bodyMassChanges.length) throw new ValidationError("HealthKit upload is empty");
   return { snapshots, bodyMassChanges };

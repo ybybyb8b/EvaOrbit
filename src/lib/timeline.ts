@@ -1,5 +1,6 @@
 import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
+import { formatWeightKg } from "./weight.ts";
 
 export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = [], weightRecords: WeightRecord[] = []): TimelineEvent[] {
   const foodEvents: TimelineEvent[] = foods.map((item) => ({
@@ -49,7 +50,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     relatedPeople: [], relatedPets: [], metadata: { type: item.type, status: item.status, details: item.details },
   }));
   const weightEvents: TimelineEvent[] = weightRecords.map((item) => ({
-    id:`weight:${item.id}`,eventType:"health.weight",sourceType:"health",sourceId:item.id,title:"Weight",detail:`${item.weightKg.toFixed(1)} kg · ${item.healthKitSourceName || item.healthKitSourceBundle || (item.source === "apple_health" ? "Apple Health" : "EvaOrbit")}`,
+    id:`weight:${item.id}`,eventType:"health.weight",sourceType:"health",sourceId:item.id,title:"Weight",detail:`${formatWeightKg(item.weightKg)} kg · ${item.healthKitSourceName || item.healthKitSourceBundle || (item.source === "apple_health" ? "Apple Health" : "EvaOrbit")}`,
     occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:"/health#weight-title",relatedPeople:[],relatedPets:[],metadata:{weightKg:item.weightKg,source:item.source},
   }));
   return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents, ...weightEvents].sort(compareTimelineEvents);

@@ -27,7 +27,7 @@ const trainingLog: TrainingLog = {
   id: 23, occurredAt: "2026-08-26T05:00:00.000Z", occurredHasExplicitTime: false, trainingType: "strength", bodyParts: ["背", "核心"],
   teacher: "Eva", course: "Core flow", durationMinutes: 45, notes: "", createdAt: "", updatedAt: "",
 };
-const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.2,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
+const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.25,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
 
 test("merges module records into a newest-first timeline contract", () => {
   const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker], [healthRecord]);
@@ -73,6 +73,7 @@ test("maps every weight sample into the Health timeline without daily deduplicat
   assert.equal(events[0].eventType,"health.weight");
   assert.equal(events[0].href,"/health#weight-title");
   assert.match(events[0].detail!,/Health/);
+  assert.match(events[1].detail!,/^64\.25 kg/);
 });
 
 test("marks health and training days as important while retaining an accessible count", () => {
