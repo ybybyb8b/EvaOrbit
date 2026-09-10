@@ -32,7 +32,7 @@ function timeLabel(value: string) {
 }
 
 export default async function HomePage() {
-  const [inbox, today, monthSummary, preferences, due] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getTimelineMonthSummary(), getUiPreferences(), getDueReminders(3)]);
+  const [inbox, today, monthSummary, preferences, due] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getTimelineMonthSummary(), getUiPreferences(), getDueReminders()]);
   const latestInbox = inbox[0];
   const english = preferences.uiLanguage === "en";
 

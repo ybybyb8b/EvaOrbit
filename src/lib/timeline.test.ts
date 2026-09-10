@@ -84,4 +84,7 @@ test("marks health and training days as important while retaining an accessible 
 
   const foodOnly = summarizeTimelineDays(groupMealTimelineEvents(buildTimelineEvents([food], [])));
   assert.deepEqual(foodOnly["2026-08-26"], { count: 1, highlighted: false });
+
+  const weightOnly = summarizeTimelineDays(buildTimelineEvents([], [], [], [], [], [weightRecord]));
+  assert.deepEqual(weightOnly["2026-08-26"], { count: 1, highlighted: false });
 });

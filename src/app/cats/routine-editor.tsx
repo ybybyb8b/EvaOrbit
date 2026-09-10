@@ -15,7 +15,7 @@ type Props = {
   onSaved: (message: string) => void;
   onSavingChange?: (saving: boolean) => void;
 };
-type RoutineDraft = { scope: CatRoutine["scope"]; petId: number | null; title: string; intervalValue: number; intervalUnit: CatRoutine["intervalUnit"]; recurrenceMode: CatRoutine["recurrenceMode"]; anchorDate: string; firstDueDate: string; nextDueDate: string; configuredReminderTime: string; reminderLeadMinutes: number; notes: string; enabled: boolean };
+type RoutineDraft = { scope: CatRoutine["scope"]; petId: number | null; title: string; intervalValue: number; intervalUnit: CatRoutine["intervalUnit"]; recurrenceMode: CatRoutine["recurrenceMode"]; anchorDate: string; firstDueDate: string; nextDueDate: string; configuredReminderTime: string; reminderLeadMinutes: number; repeatWhileOverdue: boolean; notes: string; enabled: boolean };
 
 function localInput(value?: string) {
   const date = value ? new Date(value) : new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -36,6 +36,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
     nextDueDate: editing?.nextDueDate ?? localInput(editing?.nextDueAt),
     configuredReminderTime: editing?.configuredReminderTime ?? "20:00",
     reminderLeadMinutes: editing?.reminderLeadMinutes ?? 1440,
+    repeatWhileOverdue: editing?.repeatWhileOverdue ?? false,
     notes: editing?.notes ?? "",
     enabled: editing?.enabled ?? true,
   }), [editing, initialPetId, initialScope, pets]);
@@ -64,6 +65,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
       <label className="field"><span>{editing ? "Next reminder date" : "First reminder date"}</span><input type="date" required value={editing ? draft.nextDueDate : draft.firstDueDate} onInput={e => setDraft(editing ? { ...draft, nextDueDate: e.currentTarget.value, anchorDate: e.currentTarget.value } : { ...draft, firstDueDate: e.currentTarget.value, nextDueDate: e.currentTarget.value, anchorDate: e.currentTarget.value })}/></label>
       <label className="field"><span>Reminder time</span><input type="time" required value={draft.configuredReminderTime} onChange={e=>setDraft({...draft,configuredReminderTime:e.target.value})}/></label>
       <label className="field"><span>Remind</span><select value={draft.reminderLeadMinutes} onChange={e => setDraft({ ...draft, reminderLeadMinutes: Number(e.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></select></label>
+      <label className="check-row wide"><input type="checkbox" checked={draft.repeatWhileOverdue} onChange={e=>setDraft({...draft,repeatWhileOverdue:e.target.checked})}/><span>Remind me daily while overdue</span></label>
       <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={3} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label>
       {editing && <label className="check-row wide"><input type="checkbox" checked={draft.enabled} onChange={e => setDraft({ ...draft, enabled: e.target.checked })}/><span>Routine enabled</span></label>}
     </div>

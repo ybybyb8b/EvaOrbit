@@ -920,6 +920,7 @@ export interface CatRoutine {
   lastCompletedAt: string | null;
   nextDueAt: string;
   reminderLeadMinutes: number;
+  repeatWhileOverdue: boolean;
   notes: string;
   enabled: boolean;
   reminderId: number | null;
@@ -944,6 +945,7 @@ export interface Reminder {
   timezone: string;
   note: string;
   leadTimeMinutes: number;
+  repeatWhileOverdue: boolean;
   status: NotificationStatus;
   isActive: boolean;
   lastCompletedAt: string | null;

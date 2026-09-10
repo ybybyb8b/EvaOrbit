@@ -21,6 +21,28 @@ export function nativeReminderNotification(item: ScheduledNotification, locale =
   return { id: nativeNotificationIdentifier("reminder", item.id), title: copy.title, body: copy.body.slice(0, 1_000), triggerAt };
 }
 
+export function nativeReminderNotifications(item: ScheduledNotification, locale = "zh-CN", now = new Date(), days = 7): NativeNotificationSchedule[] {
+  if (!item.isActive || !item.dueHasExplicitTime) return [];
+  const copy = reminderNotificationCopy(item, locale);
+  const initial = nativeReminderNotification(item, locale, now);
+  const dueAt = item.snoozedUntil ?? item.nextDueAt;
+  if (!dueAt) return initial ? [initial] : [];
+  const due = zonedDateParts(dueAt, item.timezone);
+  const today = zonedDateParts(now, item.timezone).date;
+  const followUps = item.repeatWhileOverdue ? Array.from({ length: days }, (_, offset) => shiftDate(today, offset)).flatMap((date) => {
+    if (date <= due.date) return [];
+    const triggerAt = zonedDateTimeToUtc(date, due.time, item.timezone);
+    if (new Date(triggerAt).getTime() <= now.getTime()) return [];
+    return [{
+      id: nativeNotificationIdentifier("reminder", `${item.id}-${date}`),
+      title: copy.title,
+      body: copy.body.slice(0, 1_000),
+      triggerAt,
+    }];
+  }) : [];
+  return initial ? [initial, ...followUps] : followUps;
+}
+
 export function nativeMealNotifications(
   rules: MealReminderRule[],
   logs: Pick<FoodLog, "occurredAt" | "mealType">[],
@@ -61,7 +83,7 @@ export function buildNativeNotificationSchedules(input: {
 }) {
   const now = input.now ?? new Date();
   return [
-    ...input.upcoming.map((item) => nativeReminderNotification(item, input.locale, now)).filter((item): item is NativeNotificationSchedule => item !== null),
+    ...input.upcoming.flatMap((item) => nativeReminderNotifications(item, input.locale, now)),
     ...nativeMealNotifications(input.mealRules, input.foodLogs, input.locale, now),
     ...(input.weightSettings ? nativeWeightNotifications(input.weightSettings,input.weightRecords??[],input.locale,now) : []),
   ].sort((a, b) => a.triggerAt.localeCompare(b.triggerAt));

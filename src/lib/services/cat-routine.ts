@@ -46,6 +46,7 @@ function reminderInput(routine: CatRoutine): Omit<Reminder, "id" | "lastComplete
     timezone: routine.timezone,
     note: routine.notes,
     leadTimeMinutes: routine.reminderLeadMinutes,
+    repeatWhileOverdue: routine.repeatWhileOverdue,
     status: routine.enabled ? "scheduled" : "cancelled",
     isActive: routine.enabled,
   };
@@ -66,6 +67,7 @@ async function syncReminder(routine: CatRoutine) {
     dueHasExplicitTime: true,
     note: routine.notes,
     leadTimeMinutes: routine.reminderLeadMinutes,
+    repeatWhileOverdue: routine.repeatWhileOverdue,
     timezone: routine.timezone,
     isActive: routine.enabled,
     ...(routine.enabled ? RESET_NOTIFICATION : { status: "cancelled" as const, cancelledAt: new Date().toISOString(), snoozedUntil: null }),

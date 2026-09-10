@@ -27,11 +27,23 @@ test("shared history suggestions rank frequency before recency and keep free cas
 
 test("training presets group complete field snapshots and rank common combinations",()=>{
   const base={id:1,occurredAt:"2026-09-01T04:00:00Z",occurredHasExplicitTime:false,trainingType:"strength" as const,bodyParts:["背","核心"] as const,teacher:"Eva",course:"Core",durationMinutes:45,notes:"one-off",createdAt:"",updatedAt:""};
-  const presets=buildTrainingPresets([{...base,bodyParts:[...base.bodyParts]},{...base,id:2,occurredAt:"2026-09-02T04:00:00Z",bodyParts:["核心","背"]},{...base,id:3,course:"Legs",bodyParts:["腿"]}]);
+  const presets=buildTrainingPresets([{...base,bodyParts:[...base.bodyParts]},{...base,id:2,occurredAt:"2026-09-02T04:00:00Z",bodyParts:["核心","背"]},{...base,id:3,course:"Legs",bodyParts:["腿"]}],5,new Date("2026-09-10T04:00:00Z"));
   assert.equal(presets[0].useCount,2);
   assert.deepEqual(presets[0].bodyParts,["核心","背"]);
   assert.equal("notes" in presets[0],false);
   assert.equal("occurredAt" in presets[0],false);
+});
+
+test("training presets decay out of dynamic history and can re-enter after reuse",()=>{
+  const base={id:1,occurredAt:"2026-09-09T04:00:00Z",occurredHasExplicitTime:false,trainingType:"strength" as const,bodyParts:["背"] as Array<"背">,teacher:"Eva",course:"Current",durationMinutes:45,notes:"",createdAt:"",updatedAt:""};
+  const stale={...base,id:2,occurredAt:"2026-06-01T04:00:00Z",course:"Stale"};
+  const frequent=[1,2,3].map(id=>({...base,id:id+2,occurredAt:`2026-09-0${id}T04:00:00Z`,course:"Frequent"}));
+  const now=new Date("2026-09-10T04:00:00Z");
+  const presets=buildTrainingPresets([base,stale,...frequent],5,now);
+  assert.deepEqual(presets.map(item=>item.course),["Frequent","Current"]);
+  assert.equal(presets.some(item=>item.course==="Stale"),false);
+  const reused=buildTrainingPresets([{...stale,id:9,occurredAt:"2026-09-10T04:00:00Z"},base,...frequent],5,now);
+  assert.equal(reused.some(item=>item.course==="Stale"),true);
 });
 
 test("Training migrations define independent owner-scoped storage for Supabase and SQLite", () => {

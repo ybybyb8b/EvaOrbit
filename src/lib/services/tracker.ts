@@ -102,7 +102,7 @@ export async function deleteTrackerEntry(id: number) { return (await getReposito
 export async function createTrackerGoal(input: NewTrackerGoal) { return (await getRepository()).createTrackerGoal(input); }
 export async function deleteTrackerGoal(id: number) { return (await getRepository()).deleteTrackerGoal(id); }
 function reminderInput(rule: TrackerReminder, title: string): Omit<Reminder, "id" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt"> {
-  return { title, targetType: "tracker", targetId: rule.trackerId, sourceType: `tracker_${rule.reminderMode}`, sourceId: rule.id, scheduleType: "interval", startsAt: rule.nextDueAt, nextDueAt: rule.nextDueAt, dueHasExplicitTime: true, intervalValue: rule.periodDays, intervalUnit: "day", timesOfDay: [], endsAt: null, timezone: rule.timezone, note: rule.reminderMode === "missing" ? "Only remind when this Tracker has no entry in the current observation period." : "", leadTimeMinutes: 0, status: rule.enabled ? "scheduled" : "cancelled", isActive: rule.enabled };
+  return { title, targetType: "tracker", targetId: rule.trackerId, sourceType: `tracker_${rule.reminderMode}`, sourceId: rule.id, scheduleType: "interval", startsAt: rule.nextDueAt, nextDueAt: rule.nextDueAt, dueHasExplicitTime: true, intervalValue: rule.periodDays, intervalUnit: "day", timesOfDay: [], endsAt: null, timezone: rule.timezone, note: rule.reminderMode === "missing" ? "Only remind when this Tracker has no entry in the current observation period." : "", leadTimeMinutes: 0, repeatWhileOverdue: false, status: rule.enabled ? "scheduled" : "cancelled", isActive: rule.enabled };
 }
 
 async function syncTrackerReminder(rule: TrackerReminder) {

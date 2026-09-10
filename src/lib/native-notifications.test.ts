@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildNativeNotificationSchedules, isManagedNativeNotification, nativeMealNotifications, nativeWeightNotifications } from "./native-notifications.ts";
+import { buildNativeNotificationSchedules, isManagedNativeNotification, nativeMealNotifications, nativeReminderNotifications, nativeWeightNotifications } from "./native-notifications.ts";
 import type { MealReminderRule, ScheduledNotification } from "./types.ts";
 
 const rules = [
@@ -27,6 +27,18 @@ test("one native schedule aggregates reminder and meal producers", () => {
   assert.equal(result.every((item) => isManagedNativeNotification(item.id)), true);
   assert.equal(isManagedNativeNotification("evaorbit-test-1"), false);
   assert.equal(isManagedNativeNotification("evaorbit-reminder-42"), true);
+});
+
+test("native reminders stage daily follow-ups after the due date",()=>{
+  const reminder={id:42,title:"Medication",note:"",sourceType:"cat_routine",subjectLabel:"Momo",sourceLabel:"Cats",nextDueAt:"2026-09-05T01:00:00.000Z",scheduledAt:"2026-09-05T01:00:00.000Z",snoozedUntil:null,leadTimeMinutes:0,dueHasExplicitTime:true,isActive:true,timezone:"Asia/Shanghai",repeatWhileOverdue:true} as ScheduledNotification;
+  const result=nativeReminderNotifications(reminder,"zh-CN",new Date("2026-09-05T02:00:00.000Z"),3);
+  assert.deepEqual(result.map(item=>item.id),["evaorbit-scheduled-reminder-42-2026-09-06","evaorbit-scheduled-reminder-42-2026-09-07"]);
+  assert.deepEqual(result.map(item=>item.triggerAt),["2026-09-06T01:00:00.000Z","2026-09-07T01:00:00.000Z"]);
+});
+
+test("native overdue follow-ups are opt-in",()=>{
+  const reminder={id:43,title:"Medication",note:"",sourceType:null,subjectLabel:"",sourceLabel:"",nextDueAt:"2026-09-05T01:00:00.000Z",scheduledAt:"2026-09-05T01:00:00.000Z",snoozedUntil:null,leadTimeMinutes:0,dueHasExplicitTime:true,isActive:true,timezone:"Asia/Shanghai",repeatWhileOverdue:false} as ScheduledNotification;
+  assert.deepEqual(nativeReminderNotifications(reminder,"zh-CN",new Date("2026-09-05T02:00:00.000Z"),3),[]);
 });
 
 test("native weight reminders are independent and skip dates with an existing weight",()=>{
