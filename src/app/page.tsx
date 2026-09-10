@@ -3,7 +3,6 @@ import { getUiPreferences } from "@/lib/services/evaorbit";
 import { listInbox } from "@/lib/services/inbox";
 import { getDailyTimelineOverview, getTimelineMonthSummary } from "@/lib/services/timeline";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
-import { HomeDestinations } from "./home-destinations";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import { DueReminders } from "@/components/due-reminders";
 import { getDueReminders } from "@/lib/services/reminder";
@@ -54,7 +53,5 @@ export default async function HomePage() {
         {latestInbox && <Link className="home-inbox-preview user-content" href="/inbox"><strong>{latestInbox.content}</strong><time dateTime={latestInbox.createdAt}>{timeLabel(latestInbox.createdAt)}</time></Link>}
       </section>
     </section>
-
-    <HomeDestinations initialOrder={preferences.homeModuleOrder} />
   </div>;
 }

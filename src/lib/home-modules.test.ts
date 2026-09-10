@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { HOME_MODULE_IDS, homeFavoriteModuleOrder, normalizeHomeModuleOrder } from "./home-modules.ts";
+import { HOME_MODULE_IDS, normalizeHomeModuleOrder } from "./home-modules.ts";
 
 test("normalizes a partial home module order without losing new modules", () => {
   const result = normalizeHomeModuleOrder(["cats", "food", "cats", "unknown"]);
@@ -15,7 +16,19 @@ test("drops the legacy Settings entry from saved Home orders", () => {
   assert.deepEqual(result.slice(0, 2), ["eva", "inbox"]);
 });
 
-test("keeps Eva available without placing it in Home favorites", () => {
-  const result = homeFavoriteModuleOrder(["eva", "cats", "food", "inbox", "projects", "health", "media"]);
-  assert.deepEqual(result, ["cats", "food", "inbox", "projects", "health", "media"]);
+test("Home keeps quick capture in the universal Log without favorite shortcuts", () => {
+  const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const calendar = readFileSync(new URL("../app/home-calendar-timeline.tsx", import.meta.url), "utf8");
+  const quickLog = readFileSync(new URL("../app/home-quick-log.tsx", import.meta.url), "utf8");
+  const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
+  assert.match(calendar, /<HomeQuickLog/);
+  assert.match(quickLog, /\.\.\.HEALTH_QUICK_LOGS/);
+  for (const kind of ["training", "weight", "health-record"]) assert.match(healthQuickLog, new RegExp(`kind: "${kind}"`));
+  assert.match(healthQuickLog, /TrainingLogEditor/);
+  assert.match(healthQuickLog, /WeightEditor/);
+  assert.match(healthQuickLog, /HealthRecordEditor/);
+  assert.equal(healthQuickLog.match(/initialDate=\{initialDate\}/g)?.length, 3);
+  assert.match(healthQuickLog, /\/api\/health\/weight\?limit=1/);
+  assert.doesNotMatch(healthQuickLog, /AppleHealthSection|WeightSettingsSheet|DailyEnergyCard/);
 });

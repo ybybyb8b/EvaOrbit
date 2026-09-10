@@ -52,7 +52,6 @@ test("Health API and navigation expose the requested record surfaces", () => {
   const collectionRoute = readFileSync(new URL("../app/api/health/records/route.ts", import.meta.url), "utf8");
   const detailRoute = readFileSync(new URL("../app/api/health/records/[id]/route.ts", import.meta.url), "utf8");
   const homeModules = readFileSync(new URL("./home-modules.ts", import.meta.url), "utf8");
-  const destinations = readFileSync(new URL("../app/home-destinations.tsx", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   assert.match(collectionRoute, /export async function GET/);
   assert.match(collectionRoute, /export async function POST/);
@@ -63,6 +62,5 @@ test("Health API and navigation expose the requested record surfaces", () => {
   assert.match(detailRoute, /export async function DELETE/);
   assert.match(detailRoute, /parseHealthRecordPatch/);
   assert.match(homeModules, /"health"/);
-  assert.match(destinations, /href: "\/health"/);
   assert.match(shell, /href: "\/health"/);
 });

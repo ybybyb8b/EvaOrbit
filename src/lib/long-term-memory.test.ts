@@ -77,7 +77,6 @@ test("migration adds three independent owner-scoped models without touching Chro
 
 test("navigation and route surfaces expose Memo plus the Lucius container", () => {
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
-  const destinations = readFileSync(new URL("../app/home-destinations.tsx", import.meta.url), "utf8");
   const memoRoute = readFileSync(new URL("../app/api/memos/route.ts", import.meta.url), "utf8");
   const diaryRoute = readFileSync(new URL("../app/api/lucius/diary/route.ts", import.meta.url), "utf8");
   const casesRoute = readFileSync(new URL("../app/api/lucius/cases/route.ts", import.meta.url), "utf8");
@@ -89,8 +88,6 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   assert.match(shell, /href: "\/memo"/);
   assert.match(shell, /href: "\/lucius"/);
   assert.match(shell, /<Link href="\/lucius"[\s\S]*?<span>Lucius<\/span><\/Link>/);
-  assert.match(destinations, /href: "\/memo"/);
-  assert.match(destinations, /href: "\/lucius"/);
   for (const route of [memoRoute, diaryRoute, casesRoute, postsRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
   assert.match(commentsRoute, /export async function GET/);
   assert.match(commentsRoute, /export async function POST/);

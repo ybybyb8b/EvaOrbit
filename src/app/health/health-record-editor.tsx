@@ -17,8 +17,8 @@ type Draft = {
   details: HealthRecordDetails;
 };
 
-function emptyDraft(): Draft {
-  return { type: "note", title: "", summary: "", occurredAt: currentLocalDate(), status: defaultStatusForType("note"), startedAt: "", endedAt: "", details: {} };
+function emptyDraft(initialDate?: string): Draft {
+  return { type: "note", title: "", summary: "", occurredAt: initialDate ?? currentLocalDate(), status: defaultStatusForType("note"), startedAt: "", endedAt: "", details: {} };
 }
 
 function defaultStatusForType(type: HealthRecordType): HealthRecordStatus {
@@ -29,8 +29,8 @@ function draftFromRecord(record: HealthRecord): Draft {
   return { type: record.type, title: record.title, summary: record.summary, occurredAt: compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime), status: record.status, startedAt: compactDateTimeValue(record.startedAt, record.startedHasExplicitTime), endedAt: compactDateTimeValue(record.endedAt, record.endedHasExplicitTime), details: record.details };
 }
 
-export function HealthRecordEditor({ editing, onCancel, onSaved, formId, onSavingChange }: { editing?: HealthRecord; onCancel: () => void; onSaved: (record: HealthRecord) => void; formId?: string; onSavingChange?: (saving: boolean) => void }) {
-  const [draft, setDraft] = useState<Draft>(() => editing ? draftFromRecord(editing) : emptyDraft());
+export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, formId, onSavingChange }: { editing?: HealthRecord; initialDate?: string; onCancel: () => void; onSaved: (record: HealthRecord) => void | Promise<void>; formId?: string; onSavingChange?: (saving: boolean) => void }) {
+  const [draft, setDraft] = useState<Draft>(() => editing ? draftFromRecord(editing) : emptyDraft(initialDate));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -65,7 +65,7 @@ export function HealthRecordEditor({ editing, onCancel, onSaved, formId, onSavin
       });
       const result = await response.json().catch(() => null) as HealthRecord | { error?: string } | null;
       if (!response.ok) { setError(result && "error" in result ? result.error || "Could not save this record" : "Could not save this record"); return; }
-      onSaved(result as HealthRecord);
+      await onSaved(result as HealthRecord);
     } catch { setError("Could not save this record"); }
     finally { setSaving(false); onSavingChange?.(false); }
   }
