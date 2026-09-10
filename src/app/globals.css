@@ -3069,9 +3069,9 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 
 @media (max-width:720px) {
   .mobile-nav { border-top:0; grid-template-columns:repeat(3,minmax(0,1fr)); box-shadow:0 -10px 30px rgb(var(--shadow-rgb) / .055); }
-  .spaces-drawer-trigger { width:42px; height:42px; padding:0; border:0; border-radius:0; position:fixed; z-index:70; top:max(14px,env(safe-area-inset-top)); right:max(14px,env(safe-area-inset-right)); display:grid; place-items:center; background:transparent; color:var(--green); box-shadow:none; cursor:pointer; }
-  .spaces-drawer-icon { width:22px;height:22px; }
-  .spaces-drawer-trigger:hover { opacity:.72; }
+  .spaces-drawer-trigger { width:42px; height:42px; padding:0; border:0; border-radius:0; position:fixed; z-index:70; top:max(14px,env(safe-area-inset-top)); right:max(14px,env(safe-area-inset-right)); display:grid; place-items:center; background:transparent; color:var(--text-secondary); box-shadow:none; cursor:pointer; }
+  .spaces-drawer-icon { width:20px;height:20px; }
+  .spaces-drawer-trigger:hover { color:var(--text-primary); }
   .spaces-drawer-trigger:active { transform:scale(.94); }
   .spaces-drawer-trigger:focus-visible { outline:3px solid rgb(var(--accent-rgb) / .24); outline-offset:2px; }
   .spaces-drawer-trigger.active { opacity:0; pointer-events:none; }
