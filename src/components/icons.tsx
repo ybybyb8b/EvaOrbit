@@ -1,3 +1,5 @@
+import { Edit2 } from "reicon-react";
+
 export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
@@ -50,7 +52,6 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   plus: <path d="M12 5v14M5 12h14"/>,
   search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
   trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
-  edit: <><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10z"/><path d="m13.5 7 3.5 3.5"/></>,
   check: <path d="m5 12 4 4L19 6"/>,
   spark: <><path d="m12 2 1.4 5.1L18 9l-4.6 1.9L12 16l-1.4-5.1L6 9l4.6-1.9z"/><path d="m19 15 .6 2.4L22 18l-2.4.6L19 21l-.6-2.4L16 18l2.4-.6z"/></>,
   history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
@@ -70,6 +71,7 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
 };
 
 export function Icon({ name, variant = "feature" }: IconProps) {
+  if (name === "edit") return <Edit2 className="icon" weight="Outline" aria-hidden="true" />;
   const featureSource = featureIconSources[name];
   const navSource = navIconSources[name];
   if (navSource && variant === "nav") return <span className="icon nav-icon" style={iconSourceStyle(navSource)} aria-hidden="true" />;
