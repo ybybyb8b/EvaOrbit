@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "@/components/icons";
+import { ArrowDown5, ArrowLeft2, ArrowRight2 } from "reicon-react";
 import type { UiLanguage } from "@/lib/locale";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
@@ -143,9 +143,9 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
           <h2>{monthLabel}</h2>
           <div className="home-calendar-actions">
             {selected !== today && <button type="button" className="home-calendar-today" onClick={returnToToday} disabled={loadingMonth}>{english ? "Today" : "今天"}</button>}
-            <button type="button" className="home-calendar-previous" aria-label={expanded ? english ? "Previous month" : "上个月" : english ? "Previous week" : "上一周"} disabled={loadingMonth} onClick={() => moveCalendar(-1)}><Icon name="arrow" variant="stroke" /></button>
-            <button type="button" className="home-calendar-next" aria-label={expanded ? english ? "Next month" : "下个月" : english ? "Next week" : "下一周"} disabled={loadingMonth} onClick={() => moveCalendar(1)}><Icon name="arrow" variant="stroke" /></button>
-            <button type="button" className="home-calendar-toggle" aria-label={expanded ? english ? "Show week" : "收起为周" : english ? "Show month" : "展开月份"} aria-expanded={expanded} onClick={toggleCalendar}><Icon name="arrow" variant="stroke" /></button>
+            <button type="button" className="home-calendar-previous" aria-label={expanded ? english ? "Previous month" : "上个月" : english ? "Previous week" : "上一周"} disabled={loadingMonth} onClick={() => moveCalendar(-1)}><ArrowLeft2 className="home-calendar-action-icon" size={15} weight="Outline" aria-hidden="true" /></button>
+            <button type="button" className="home-calendar-next" aria-label={expanded ? english ? "Next month" : "下个月" : english ? "Next week" : "下一周"} disabled={loadingMonth} onClick={() => moveCalendar(1)}><ArrowRight2 className="home-calendar-action-icon" size={15} weight="Outline" aria-hidden="true" /></button>
+            <button type="button" className="home-calendar-toggle" aria-label={expanded ? english ? "Show week" : "收起为周" : english ? "Show month" : "展开月份"} aria-expanded={expanded} onClick={toggleCalendar}><ArrowDown5 className="home-calendar-action-icon" size={14} weight="Outline" aria-hidden="true" /></button>
           </div>
         </header>
         <div className="home-calendar-grid" data-expanded={expanded} key={expanded ? month : selectedWeekStart}>
