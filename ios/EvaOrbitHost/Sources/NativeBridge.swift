@@ -10,7 +10,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         "haptic.play",
         "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
         "healthkit.configureCredential", "healthkit.clearCredential",
-        "healthkit.saveBodyMass",
+        "healthkit.saveBodyMass", "healthkit.saveMenstrualFlow", "healthkit.deleteMenstrualFlow",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
         "notification.cancel", "notification.listPending", "notification.openSettings"
     ]
@@ -115,6 +115,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(success(id: identifier, result: ["configured": false]), nil)
         case "healthkit.saveBodyMass":
             saveBodyMass(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "healthkit.saveMenstrualFlow":
+            saveMenstrualFlow(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "healthkit.deleteMenstrualFlow":
+            deleteMenstrualFlow(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "notification.getStatus":
             Task { replyOnMain(replyHandler, value: success(id: identifier, result: await notificationManager.status())) }
         case "notification.requestAuthorization":
@@ -270,6 +274,22 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         Task { do { try await healthKitCoordinator.saveBodyMass(kilograms:kilograms,occurredAt:occurredAt,syncIdentifier:syncIdentifier,syncVersion:syncVersion);replyOnMain(replyHandler,value:success(id:id,result:["saved":true])) } catch { replyOnMain(replyHandler,value:failure(id:id,code:"healthkit_body_mass_write_failed",message:HealthDiagnostics.safe(error))) } }
     }
 
+    private func saveMenstrualFlow(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){
+        guard let rawStart=parameters["startAt"] as? String,let startAt=Self.parseISO8601(rawStart),let rawEnd=parameters["endAt"] as? String,let endAt=Self.parseISO8601(rawEnd),endAt>=startAt,
+              let rawFlow=parameters["flow"] as? String,let flow=HealthMenstrualFlowValue(rawValue:rawFlow),let cycleStart=parameters["cycleStart"] as? Bool,
+              let syncIdentifier=parameters["syncIdentifier"] as? String,syncIdentifier.range(of:#"^evaorbit\.menstrual_flow\.[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#,options:[.regularExpression,.caseInsensitive]) != nil,
+              let syncVersion=(parameters["syncVersion"] as? NSNumber)?.intValue,syncVersion>=1 else { replyHandler(failure(id:id,code:"invalid_menstrual_flow",message:"Menstrual flow parameters are invalid."),nil);return }
+        Task { do { try await healthKitCoordinator.saveMenstrualFlow(startAt:startAt,endAt:endAt,flow:flow,cycleStart:cycleStart,syncIdentifier:syncIdentifier,syncVersion:syncVersion);replyOnMain(replyHandler,value:success(id:id,result:["saved":true])) } catch { replyOnMain(replyHandler,value:failure(id:id,code:"healthkit_menstrual_flow_write_failed",message:HealthDiagnostics.safe(error))) } }
+    }
+
+    private func deleteMenstrualFlow(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){
+        let sampleID=parameters["sampleId"] as? String,syncIdentifier=parameters["syncIdentifier"] as? String
+        let validSample=sampleID.flatMap(UUID.init(uuidString:)) != nil
+        let validSync=syncIdentifier?.range(of:#"^evaorbit\.menstrual_flow\.[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#,options:[.regularExpression,.caseInsensitive]) != nil
+        guard validSample||validSync else { replyHandler(failure(id:id,code:"invalid_menstrual_flow_delete",message:"Menstrual flow deletion identity is invalid."),nil);return }
+        Task { do { try await healthKitCoordinator.deleteMenstrualFlow(sampleID:validSample ? sampleID:nil,syncIdentifier:validSync ? syncIdentifier:nil);replyOnMain(replyHandler,value:success(id:id,result:["deleted":true])) } catch { replyOnMain(replyHandler,value:failure(id:id,code:"healthkit_menstrual_flow_delete_failed",message:HealthDiagnostics.safe(error))) } }
+    }
+
     private func replyOnMain(_ replyHandler: @escaping (Any?, String?) -> Void, value: [String: Any]) {
         DispatchQueue.main.async { replyHandler(value, nil) }
     }
@@ -299,7 +319,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "bridgeVersion": Self.protocolVersion,
             "appVersion": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             "buildVersion": bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
-            "healthKitPipeline": "energy-body-mass-v2",
+            "healthKitPipeline": "energy-body-mass-menstrual-flow-v3",
             "notificationPipeline": "local-v1",
             "hapticPipeline": "feedback-v1",
             "methods": Self.supportedMethods.sorted()

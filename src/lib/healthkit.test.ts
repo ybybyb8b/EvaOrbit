@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   HEALTHKIT_ENERGY_SCOPE,
   HEALTHKIT_BODY_MASS_SCOPE,
+  HEALTHKIT_MENSTRUAL_FLOW_SCOPE,
   bearerCredential,
   createNativeDeviceCredential,
   hashNativeDeviceCredential,
@@ -71,6 +72,17 @@ test("HealthKit upload accepts body mass source and EO sync identity while prese
   assert.throws(()=>parseHealthKitUpload({snapshots:[],bodyMassChanges:[{operation:"upsert",sampleId,occurredAt:"bad",weightKg:64}]}),ValidationError);
 });
 
+test("HealthKit upload preserves menstrual flow category, cycle start, source and sync identity",()=>{
+  const sampleId="946e6cf1-96f2-4e47-9d45-b0fab32db24d";
+  const upload=parseHealthKitUpload({menstrualFlowChanges:[{operation:"upsert",sampleId,startAt:"2026-09-13T04:00:00.000Z",endAt:"2026-09-13T04:00:00.000Z",flow:"heavy",cycleStart:true,sourceBundle:"com.apple.Health",sourceName:"Health",syncIdentifier:"evaorbit.menstrual_flow.12",syncVersion:3},{operation:"delete",sampleId}]});
+  assert.equal(upload.menstrualFlowChanges[0].flow,"heavy");
+  assert.equal(upload.menstrualFlowChanges[0].cycleStart,true);
+  assert.equal(upload.menstrualFlowChanges[0].syncVersion,3);
+  assert.deepEqual(upload.menstrualFlowChanges[1],{operation:"delete",sampleId});
+  assert.throws(()=>parseHealthKitUpload({menstrualFlowChanges:[{operation:"upsert",sampleId,startAt:"bad",endAt:"2026-09-13T04:00:00Z",flow:"heavy",cycleStart:true}]}),ValidationError);
+  assert.throws(()=>parseHealthKitUpload({menstrualFlowChanges:[{operation:"upsert",sampleId,startAt:"2026-09-13T04:00:00Z",endAt:"2026-09-13T04:00:00Z",flow:"invalid",cycleStart:true}]}),ValidationError);
+});
+
 test("native device access rejects revocation and wrong scope", () => {
   assert.equal(nativeDeviceAccessStatus(null), 401);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: "2026-09-01T00:00:00Z", scopes: [HEALTHKIT_ENERGY_SCOPE] }), 401);
@@ -78,6 +90,21 @@ test("native device access rejects revocation and wrong scope", () => {
   assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_ENERGY_SCOPE] }), 200);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_ENERGY_SCOPE] },HEALTHKIT_BODY_MASS_SCOPE),403);
   assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_BODY_MASS_SCOPE] },HEALTHKIT_BODY_MASS_SCOPE),200);
+  assert.equal(nativeDeviceAccessStatus({ revoked_at: null, scopes: [HEALTHKIT_MENSTRUAL_FLOW_SCOPE] },HEALTHKIT_MENSTRUAL_FLOW_SCOPE),200);
+});
+
+test("menstrual flow migration keeps sync identity and server-side cycle association",()=>{
+  const sql=readFileSync(new URL("../../supabase/migrations/202609130003_healthkit_menstrual_flow.sql",import.meta.url),"utf8");
+  assert.match(sql,/healthkit:menstrual-flow:write/);
+  assert.match(sql,/ingest_healthkit_menstrual_flow_changes/);
+  assert.match(sql,/healthkit_sync_identifier/);
+  assert.match(sql,/healthkit_sync_version/);
+  assert.match(sql,/healthkit_sample_id=sample_id/);
+  assert.match(sql,/insert into public\.menstrual_periods/);
+  assert.match(sql,/source='apple_health'/);
+  const retry=readFileSync(new URL("./healthkit-menstrual-flow.ts",import.meta.url),"utf8");
+  assert.match(retry,/record\.source!=="manual"/);
+  assert.match(retry,/pending_delete|record\.deletedAt/);
 });
 
 test("HealthKit migration separates sources and enforces scope and revision idempotency", () => {
@@ -108,4 +135,14 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   assert.match(bridge, /message\.frameInfo\.isMainFrame/);
   assert.match(bridge, /hostConfiguration\.allows\(sourceURL\)/);
   assert.match(bridge, /supportedMethods/);
+  assert.match(bridge, /healthkit\.saveMenstrualFlow/);
+  assert.match(bridge, /healthkit\.deleteMenstrualFlow/);
+  const client = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthKitClient.swift", import.meta.url), "utf8");
+  const localStore = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthLocalStore.swift", import.meta.url), "utf8");
+  assert.match(client, /HKCategorySample/);
+  assert.match(client, /HKMetadataKeyMenstrualCycleStart/);
+  assert.match(client, /HKMetadataKeySyncIdentifier/);
+  assert.match(client, /anchoredMenstrualFlowDelta/);
+  assert.match(localStore, /menstrual_flow_outbox/);
+  assert.match(localStore, /menstrualFlowAnchor/);
 });

@@ -4,6 +4,7 @@ import { normalizeWeightKg } from "./weight.ts";
 
 export const HEALTHKIT_ENERGY_SCOPE = "healthkit:energy:write";
 export const HEALTHKIT_BODY_MASS_SCOPE = "healthkit:body-mass:write";
+export const HEALTHKIT_MENSTRUAL_FLOW_SCOPE = "healthkit:menstrual-flow:write";
 export const HEALTHKIT_INGEST_BATCH_LIMIT = 50;
 
 export type HealthKitEnergyMetric = "resting" | "active";
@@ -20,6 +21,18 @@ export type HealthKitBodyMassChange = {
   sampleId: string;
   occurredAt?: string;
   weightKg?: number;
+  sourceBundle?: string;
+  sourceName?: string;
+  syncIdentifier?: string;
+  syncVersion?: number;
+};
+export type HealthKitMenstrualFlowChange = {
+  operation: "upsert" | "delete";
+  sampleId: string;
+  startAt?: string;
+  endAt?: string;
+  flow?: "none" | "unspecified" | "light" | "medium" | "heavy";
+  cycleStart?: boolean;
   sourceBundle?: string;
   sourceName?: string;
   syncIdentifier?: string;
@@ -85,11 +98,8 @@ export function parseHealthKitUpload(value: unknown) {
   const snapshots = Array.isArray(body.snapshots) && body.snapshots.length === 0
     ? []
     : body.snapshots === undefined ? [] : parseHealthKitEnergySnapshots({ snapshots: body.snapshots });
-  if (!Array.isArray(body.bodyMassChanges) || body.bodyMassChanges.length > 100) {
-    if (body.bodyMassChanges === undefined && snapshots.length) return { snapshots, bodyMassChanges: [] };
-    throw new ValidationError("HealthKit body mass batch is invalid");
-  }
-  const bodyMassChanges = body.bodyMassChanges.map((raw): HealthKitBodyMassChange => {
+  if (body.bodyMassChanges !== undefined && (!Array.isArray(body.bodyMassChanges) || body.bodyMassChanges.length > 100)) throw new ValidationError("HealthKit body mass batch is invalid");
+  const bodyMassChanges = (body.bodyMassChanges as unknown[] | undefined ?? []).map((raw): HealthKitBodyMassChange => {
     const change = record(raw);
     if (change.operation !== "upsert" && change.operation !== "delete") throw new ValidationError("HealthKit body mass operation is invalid");
     const sampleId = parseInstallationId(change.sampleId);
@@ -101,8 +111,27 @@ export function parseHealthKitUpload(value: unknown) {
     const syncVersion = change.syncVersion === undefined ? undefined : safeInteger(change.syncVersion, "HealthKit sync version", 1, 2_147_483_647);
     return { operation: "upsert", sampleId, occurredAt: change.occurredAt, weightKg: normalizeWeightKg(finiteNumber(change.weightKg, "HealthKit body mass", 20, 500)), sourceBundle, sourceName, ...(syncIdentifier ? { syncIdentifier } : {}), ...(syncVersion ? { syncVersion } : {}) };
   });
-  if (!snapshots.length && !bodyMassChanges.length) throw new ValidationError("HealthKit upload is empty");
-  return { snapshots, bodyMassChanges };
+  if (!Array.isArray(body.menstrualFlowChanges) || body.menstrualFlowChanges.length > 100) {
+    if (body.menstrualFlowChanges !== undefined) throw new ValidationError("HealthKit menstrual flow batch is invalid");
+  }
+  const menstrualFlowChanges = (body.menstrualFlowChanges as unknown[] | undefined ?? []).map((raw): HealthKitMenstrualFlowChange => {
+    const change = record(raw);
+    if (change.operation !== "upsert" && change.operation !== "delete") throw new ValidationError("HealthKit menstrual flow operation is invalid");
+    const sampleId = parseInstallationId(change.sampleId);
+    if (change.operation === "delete") return { operation: "delete", sampleId };
+    if (typeof change.startAt !== "string" || typeof change.endAt !== "string") throw new ValidationError("HealthKit menstrual flow time is invalid");
+    const start = Date.parse(change.startAt), end = Date.parse(change.endAt);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) throw new ValidationError("HealthKit menstrual flow time is invalid");
+    if (!['none','unspecified','light','medium','heavy'].includes(String(change.flow))) throw new ValidationError("HealthKit menstrual flow value is invalid");
+    if (typeof change.cycleStart !== "boolean") throw new ValidationError("HealthKit cycle start metadata is invalid");
+    const sourceBundle = typeof change.sourceBundle === "string" ? change.sourceBundle.slice(0,255) : "";
+    const sourceName = typeof change.sourceName === "string" ? change.sourceName.slice(0,255) : "";
+    const syncIdentifier = typeof change.syncIdentifier === "string" ? change.syncIdentifier.slice(0,255) : undefined;
+    const syncVersion = change.syncVersion === undefined ? undefined : safeInteger(change.syncVersion,"HealthKit sync version",1,2_147_483_647);
+    return { operation:"upsert", sampleId, startAt:change.startAt, endAt:change.endAt, flow:change.flow as HealthKitMenstrualFlowChange["flow"], cycleStart:change.cycleStart, sourceBundle, sourceName, ...(syncIdentifier?{syncIdentifier}:{}), ...(syncVersion?{syncVersion}:{}) };
+  });
+  if (!snapshots.length && !bodyMassChanges.length && !menstrualFlowChanges.length) throw new ValidationError("HealthKit upload is empty");
+  return { snapshots, bodyMassChanges, menstrualFlowChanges };
 }
 
 export function coalesceHealthKitEnergySnapshots(snapshots: HealthKitEnergySnapshot[]) {

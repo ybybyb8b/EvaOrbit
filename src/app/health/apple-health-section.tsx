@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getNativeHostInfo, healthKitSupported, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import { flushPendingMenstrualFlowToHealthKit } from "@/lib/healthkit-menstrual-flow";
 
 function formatTime(value: string | null) {
   if (!value) return "Not yet";
@@ -57,6 +58,7 @@ export function AppleHealthSection() {
         ingestUrl: `${window.location.origin}/api/healthkit/energy/ingest`,
       });
       await nativeCall<HealthKitStatus>("healthkit.requestAuthorization");
+      await flushPendingMenstrualFlowToHealthKit();
       setMessage("Apple Health connection requested");
       await refresh();
     } catch (cause) {
@@ -67,9 +69,10 @@ export function AppleHealthSection() {
   async function syncNow() {
     setBusy(true); setError(""); setMessage("");
     try {
+      const pending = await flushPendingMenstrualFlowToHealthKit();
       const result = await nativeCall<{ synced: boolean }>("healthkit.syncNow");
-      playNativeHaptic(result.synced ? "success" : "warning");
-      setMessage(result.synced ? "Local Apple Health sync completed" : "Sync finished with an error; data remains queued safely");
+      playNativeHaptic(result.synced && pending.failed===0 ? "success" : "warning");
+      setMessage(result.synced && pending.failed===0 ? "Local Apple Health sync completed" : "Sync finished with an error; data remains queued safely");
       await refresh();
     } catch (cause) {
       playNativeHaptic("error");
@@ -98,7 +101,7 @@ export function AppleHealthSection() {
 
   return <section className="apple-health-section" aria-labelledby="apple-health-title">
     <div className="apple-health-heading">
-      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy & weight sync</h2><p>Resting Energy, Active Energy and Body Mass. Energy is aggregated by day; weight keeps its sample and source identifiers.</p></div>
+      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy, weight & menstrual flow</h2><p>Energy is aggregated by day. Weight and menstrual flow retain sample, source and sync identity.</p></div>
       <span className={`status-pill ${nativeHost ? "" : "disabled"}`}>{nativeHost ? "Native Host" : "Web only"}</span>
     </div>
     {!nativeHost && <p className="apple-health-fallback">Open this page inside the EvaOrbit iOS app to connect Apple Health.</p>}

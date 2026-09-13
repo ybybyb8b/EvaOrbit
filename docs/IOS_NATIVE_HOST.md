@@ -6,7 +6,7 @@
 
 本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程只是加载生产站点的轻量 `WKWebView` Host。
 
-本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取与 Body Mass 双向同步：能量按日聚合，体重逐样本保留 source/sample/sync identity，并复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql` 与 `supabase/migrations/202609090002_weight.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
+本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取、Body Mass 与 Menstrual Flow 双向同步：能量按日聚合，体重逐样本处理，经量使用独立 CategorySample 路径并保留 source/sample/sync identity。三者复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql`、`supabase/migrations/202609090002_weight.sql`、`supabase/migrations/202609130001_period_medication.sql`、`supabase/migrations/202609130002_period_medication_reminder_projection.sql` 与 `supabase/migrations/202609130003_healthkit_menstrual_flow.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
 ## 已验证基线
 
@@ -334,9 +334,9 @@ Local-first 试验回退后，新 Host 再次直接加载生产根页面；`/nat
 - `window.EvaOrbitNative.call("host.ping")` 和 `host.getInfo()` 基础 bridge。
 - 在待办完成、表单提交、选择控件、危险操作、错误提示和下拉刷新阈值上检查触感；确认普通导航、滚动、输入与后台同步不会连续触发。
 
-安装包含当前 HealthKit 同步的新 IPA 后，再进入 EvaOrbit 的 Health 页面并点击 `Connect / Request Access`；仅安装或启动 App 不会主动弹出权限框。授权页应出现 Resting Energy、Active Energy、Body Mass 的读取请求，以及 Body Mass 的写入请求。随后检查 `Data read`、三类 background delivery、pending 数、最近本地同步和最近上传时间。再分别验证 Apple Health 新增体重可进入 EO、EO 手动新增/编辑可写回 Apple Health、写回样本再次读取不会重复。iOS 不向读取方透露每一种类型是否被允许，因此不能把“授权请求已完成”当成“读权限已授予”；`Data read` 只有在 EvaOrbit 实际读到样本后才会变化。
+安装包含当前 HealthKit 同步的新 IPA 后，再进入 EvaOrbit 的 Health 页面并点击 `Connect / Request Access`；仅安装或启动 App 不会主动弹出权限框。授权页应出现 Resting Energy、Active Energy、Body Mass 和 Menstrual Flow 的读取请求，以及 Body Mass、Menstrual Flow 的写入请求。随后检查 `Data read`、四类 background delivery、pending 数、最近本地同步和最近上传时间。除体重回归外，还需验证：Apple Health 新增经量可进入 EO；cycle-start 能建立/关联 Period；EO 自己创建的记录新增、编辑、删除可反映到 Apple Health；EO 写入回读不重复；Apple Health 来源记录在 EO 中只读；date-only 记录按 EO 的日期锚点落入正确自然日。iOS 不向读取方透露每一种类型是否被允许，因此不能把“授权请求已完成”当成“读权限已授予”；`Data read` 只有在 EvaOrbit 实际读到样本后才会变化。
 
-HealthKit 运行时实现不会改变本 runbook 的续签步骤。Web-only/PWA 不显示授权按钮；设备 token 和 anchor 不写入 Web 日志。服务端接收按自然日、按类型聚合的 kcal 快照，以及同步 Body Mass 所需的逐样本 UUID、发生时间、kg、source 和 sync identity；不接收能量原始样本。
+HealthKit 运行时实现不会改变本 runbook 的续签步骤。Web-only/PWA 不显示授权按钮；设备 token 和 anchor 不写入 Web 日志。服务端接收按自然日、按类型聚合的 kcal 快照、Body Mass 逐样本变化，以及 Menstrual Flow 的 start/end、分类、cycle-start、UUID、source 和 sync identity；不接收能量原始样本。
 
 安装包含系统默认本地通知声音的新 IPA 后，在 Notifications 页面确认 `Permission`、`Alerts`、`Sounds` 和 `Scheduled`。Alerts 与 Sounds 都应为 Enabled；旧版 Host 已经授权过的设备可能需要从 `Open iOS Settings` 手动开启 Sounds。点击 `Test notification` 后等待约 5 秒，前台和后台都应出现 banner 并播放 iOS 默认通知音；不会设置 app badge。真实提醒只有在联网成功读取 `/api/notifications` 后才会写入本机，而且 date-only、没有明确时间也没有 snooze 时间的提醒按产品语义不会调度；`Scheduled = 0` 时应先联网 Refresh status 并检查提醒是否有未来明确时间。
 

@@ -12,6 +12,9 @@ final class HealthKitCoordinator {
     private var syncing = Set<HealthMetric>()
     private var needsResync = Set<HealthMetric>()
     private var waiters: [HealthMetric: [(Bool) -> Void]] = [:]
+    private var menstrualFlowSyncing = false
+    private var menstrualFlowNeedsResync = false
+    private var menstrualFlowWaiters: [(Bool) -> Void] = []
 
     init(
         healthKit: HealthKitReading,
@@ -42,6 +45,12 @@ final class HealthKitCoordinator {
                 recordError(error)
             }
         }
+        do {
+            try healthKit.startMenstrualFlowObserver { [weak self] completion in
+                self?.enqueueMenstrualFlowSync { _ in completion(); self?.uploader.flush() }
+            }
+            HealthDiagnostics.log("metric=menstrual_flow observer=registered")
+        } catch { recordError(error) }
         if store.metadata("authorizationRequested") == "true" {
             Task { [weak self] in
                 await self?.enableBackgroundDelivery()
@@ -73,6 +82,10 @@ final class HealthKitCoordinator {
             }
             success = success && metricSuccess
         }
+        let menstrualFlowSuccess = await withCheckedContinuation { continuation in
+            enqueueMenstrualFlowSync { continuation.resume(returning: $0) }
+        }
+        success = success && menstrualFlowSuccess
         uploader.flush()
         return success
     }
@@ -87,6 +100,20 @@ final class HealthKitCoordinator {
         guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
         try await healthKit.saveBodyMass(kilograms: kilograms, occurredAt: occurredAt, syncIdentifier: syncIdentifier, syncVersion: syncVersion)
         _ = await withCheckedContinuation { continuation in enqueueSync(metric: .bodyMass) { continuation.resume(returning: $0) } }
+        uploader.flush()
+    }
+
+    func saveMenstrualFlow(startAt: Date, endAt: Date, flow: HealthMenstrualFlowValue, cycleStart: Bool, syncIdentifier: String, syncVersion: Int) async throws {
+        guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
+        try await healthKit.saveMenstrualFlow(startAt: startAt, endAt: endAt, flow: flow, cycleStart: cycleStart, syncIdentifier: syncIdentifier, syncVersion: syncVersion)
+        _ = await withCheckedContinuation { continuation in enqueueMenstrualFlowSync { continuation.resume(returning: $0) } }
+        uploader.flush()
+    }
+
+    func deleteMenstrualFlow(sampleID: String?, syncIdentifier: String?) async throws {
+        guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
+        try await healthKit.deleteMenstrualFlow(sampleID: sampleID, syncIdentifier: syncIdentifier)
+        _ = await withCheckedContinuation { continuation in enqueueMenstrualFlowSync { continuation.resume(returning: $0) } }
         uploader.flush()
     }
 
@@ -110,7 +137,7 @@ final class HealthKitCoordinator {
             hasReadData: store.metadata("hasReadData") == "true",
             backgroundDelivery: Dictionary(uniqueKeysWithValues: HealthMetric.allCases.map { metric in
                 (metric.rawValue, store.metadata("background.\(metric.rawValue)") ?? "not_requested")
-            }),
+            } + [("menstrual_flow", store.metadata("background.menstrual_flow") ?? "not_requested")]),
             lastLocalSync: nonemptyMetadata("lastLocalSync"),
             lastSuccessfulUpload: nonemptyMetadata("lastSuccessfulUpload"),
             pendingCount: store.pendingCount(),
@@ -130,6 +157,15 @@ final class HealthKitCoordinator {
                 recordError(error)
                 HealthDiagnostics.log("metric=\(metric.rawValue) background-delivery=failed error=\(HealthDiagnostics.safe(error))")
             }
+        }
+        do {
+            try await healthKit.enableMenstrualFlowBackgroundDelivery()
+            try? store.setMetadata("background.menstrual_flow", value: "enabled")
+            HealthDiagnostics.log("metric=menstrual_flow background-delivery=enabled")
+        } catch {
+            try? store.setMetadata("background.menstrual_flow", value: "failed")
+            recordError(error)
+            HealthDiagnostics.log("metric=menstrual_flow background-delivery=failed error=\(HealthDiagnostics.safe(error))")
         }
     }
 
@@ -156,6 +192,29 @@ final class HealthKitCoordinator {
                 }
                 self.syncing.remove(metric)
                 let callbacks = self.waiters.removeValue(forKey: metric) ?? []
+                self.stateLock.unlock()
+                callbacks.forEach { $0(succeeded) }
+                break
+            }
+        }
+    }
+
+    private func enqueueMenstrualFlowSync(completion: @escaping (Bool) -> Void) {
+        stateLock.lock()
+        menstrualFlowWaiters.append(completion)
+        if menstrualFlowSyncing { menstrualFlowNeedsResync = true; stateLock.unlock(); return }
+        menstrualFlowSyncing = true
+        stateLock.unlock()
+        Task { [weak self] in
+            guard let self else { return }
+            var succeeded = true
+            while true {
+                succeeded = await self.performMenstrualFlowSync() && succeeded
+                self.stateLock.lock()
+                if self.menstrualFlowNeedsResync { self.menstrualFlowNeedsResync = false; self.stateLock.unlock(); continue }
+                self.menstrualFlowSyncing = false
+                let callbacks = self.menstrualFlowWaiters
+                self.menstrualFlowWaiters = []
                 self.stateLock.unlock()
                 callbacks.forEach { $0(succeeded) }
                 break
@@ -215,6 +274,20 @@ final class HealthKitCoordinator {
         } catch {
             recordError(error)
             HealthDiagnostics.log("metric=body_mass query=failed anchor-advanced=false error=\(HealthDiagnostics.safe(error))")
+            return false
+        }
+    }
+
+    private func performMenstrualFlowSync() async -> Bool {
+        do {
+            let anchor = try store.menstrualFlowAnchor()
+            let delta = try await healthKit.anchoredMenstrualFlowDelta(encodedAnchor: anchor, initialStart: nil)
+            try store.commitMenstrualFlowDelta(samples: delta.added, deletedUUIDs: delta.deletedUUIDs, encodedAnchor: delta.encodedAnchor)
+            HealthDiagnostics.log("metric=menstrual_flow query=success added=\(delta.added.count) deleted=\(delta.deletedUUIDs.count) anchor-advanced=true pending=\(store.pendingCount())")
+            return true
+        } catch {
+            recordError(error)
+            HealthDiagnostics.log("metric=menstrual_flow query=failed anchor-advanced=false error=\(HealthDiagnostics.safe(error))")
             return false
         }
     }

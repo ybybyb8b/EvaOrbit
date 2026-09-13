@@ -14,6 +14,11 @@ test("period and menstrual flow validation preserve date-only and category seman
   assert.throws(()=>parseNewMenstrualPeriod({startedOn:"2026-09-14",endedOn:"2026-09-13"}),ValidationError);
 });
 
+test("medication dose requires an explicit taken date and time",()=>{
+  assert.throws(()=>parseNewMedicationDoseEvent({medicationPresetId:1,periodId:null,takenAt:"2026-09-13",doseText:"2片",notes:""}),ValidationError);
+  assert.equal(parseNewMedicationDoseEvent({medicationPresetId:1,periodId:null,takenAt:"2026-09-13T08:30:00+08:00",doseText:"2片",notes:""}).doseText,"2片");
+});
+
 test("medication inputs are user configured facts without name-based inference",()=>{
   const preset=parseNewMedicationPreset({name:"User supplied name",defaultDoseText:"User supplied amount",minReminderIntervalMinutes:375,reminderEnabled:true,periodLinkEnabled:true,notes:""});
   assert.equal(preset.minReminderIntervalMinutes,375);
@@ -21,6 +26,17 @@ test("medication inputs are user configured facts without name-based inference",
   assert.throws(()=>parseNewMedicationPreset({...preset,minReminderIntervalMinutes:0}),ValidationError);
   const dose=parseNewMedicationDoseEvent({medicationPresetId:4,periodId:2,takenAt:"2026-09-13T06:30:00.000Z",doseText:"one record",notes:""});
   assert.deepEqual(Object.keys(dose).sort(),["doseText","medicationPresetId","notes","periodId","takenAt"]);
+});
+
+test("phase 2.5 keeps period association in the business service and the empty Health state explicit",()=>{
+  const service=readFileSync(new URL("./services/period-medication.ts",import.meta.url),"utf8");
+  const section=readFileSync(new URL("../app/health/period-medication-section.tsx",import.meta.url),"utf8");
+  assert.match(service,/activePeriodFor\(input\.occurredAt\)/);
+  assert.match(service,/activePeriodFor\(input\.takenAt\)/);
+  assert.match(section,/StartPeriodEditor/);
+  assert.match(section,/Taken date/);
+  assert.match(section,/Taken time/);
+  assert.doesNotMatch(section,/setDoseText\(presets\.find/);
 });
 
 test("phase one migration separates business facts and adds no notification schedule table",()=>{

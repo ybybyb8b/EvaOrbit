@@ -28,7 +28,7 @@ const trainingLog: TrainingLog = {
   teacher: "Eva", course: "Core flow", durationMinutes: 45, notes: "", createdAt: "", updatedAt: "",
 };
 const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.25,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
-const menstrualFlow:MenstrualFlowRecord={id:31,periodId:5,occurredAt:"2026-08-26T10:00:00.000Z",occurredHasExplicitTime:false,flow:"medium",isCycleStart:true,notes:"",createdAt:"",updatedAt:""};
+const menstrualFlow:MenstrualFlowRecord={id:31,periodId:5,occurredAt:"2026-08-26T10:00:00.000Z",endedAt:"2026-08-26T10:00:00.000Z",occurredHasExplicitTime:false,flow:"medium",isCycleStart:true,notes:"",source:"manual",healthKitSampleId:null,healthKitSourceBundle:null,healthKitSourceName:null,healthKitSyncIdentifier:"evaorbit.menstrual_flow.test",healthKitSyncVersion:1,healthKitSyncStatus:"pending",deletedAt:null,createdAt:"",updatedAt:""};
 const medicationDose:MedicationDoseEvent={id:32,medicationPresetId:6,periodId:5,takenAt:"2026-08-26T11:00:00.000Z",medicationNameSnapshot:"My medication",doseText:"1 tablet",notes:"",createdAt:"",updatedAt:""};
 
 test("merges module records into a newest-first timeline contract", () => {

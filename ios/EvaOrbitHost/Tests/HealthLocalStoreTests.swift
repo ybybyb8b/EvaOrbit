@@ -96,6 +96,18 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertEqual(deletion.first?.sampleId, sample.uuid)
     }
 
+    func testMenstrualFlowOutboxPreservesCategoryMetadataAndDeletion() throws {
+        let start=Date(timeIntervalSince1970:1_788_912_000)
+        let sample=HealthMenstrualFlowSample(uuid:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",startDate:start,endDate:start,flow:.heavy,cycleStart:true,sourceBundle:"com.apple.Health",sourceName:"Health",syncIdentifier:"evaorbit.menstrual_flow.946e6cf1-96f2-4e47-9d45-b0fab32db24d",syncVersion:2)
+        try store.commitMenstrualFlowDelta(samples:[sample],deletedUUIDs:[],encodedAnchor:Data("flow-one".utf8),now:start)
+        let upserts=try store.takePendingMenstrualFlowBatch(limit:10,now:start)
+        XCTAssertEqual(upserts.count,1);XCTAssertEqual(upserts[0].flow,.heavy);XCTAssertEqual(upserts[0].cycleStart,true);XCTAssertEqual(upserts[0].syncVersion,2)
+        try store.completeMenstrualFlowUpload(ids:upserts.map(\.id),now:start)
+        try store.commitMenstrualFlowDelta(samples:[],deletedUUIDs:[sample.uuid],encodedAnchor:Data("flow-two".utf8),now:start)
+        let deletion=try store.takePendingMenstrualFlowBatch(limit:10,now:start)
+        XCTAssertEqual(deletion.first?.operation,.delete);XCTAssertEqual(deletion.first?.sampleId,sample.uuid)
+    }
+
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
@@ -125,6 +137,7 @@ private final class FakeHealthKitClient: HealthKitReading {
     var authorizationRequests = 0
     var backgroundMetrics: [HealthMetric] = []
     var savedBodyMass: Double?
+    var savedMenstrualFlow: HealthMenstrualFlowValue?
 
     func requestAuthorization() async throws { authorizationRequests += 1 }
     func startObserver(for metric: HealthMetric, handler: @escaping (@escaping () -> Void) -> Void) throws {}
@@ -136,4 +149,9 @@ private final class FakeHealthKitClient: HealthKitReading {
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double { 0 }
     func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta { HealthBodyMassDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("body_mass".utf8)) }
     func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws { savedBodyMass = kilograms }
+    func startMenstrualFlowObserver(handler: @escaping (@escaping () -> Void) -> Void) throws {}
+    func enableMenstrualFlowBackgroundDelivery() async throws {}
+    func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta { HealthMenstrualFlowDelta(added:[],deletedUUIDs:[],encodedAnchor:Data("menstrual_flow".utf8)) }
+    func saveMenstrualFlow(startAt: Date, endAt: Date, flow: HealthMenstrualFlowValue, cycleStart: Bool, syncIdentifier: String, syncVersion: Int) async throws { savedMenstrualFlow=flow }
+    func deleteMenstrualFlow(sampleID: String?, syncIdentifier: String?) async throws {}
 }

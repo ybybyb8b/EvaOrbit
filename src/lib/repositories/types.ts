@@ -72,7 +72,7 @@ export type MenstrualPeriodPatch = Partial<NewMenstrualPeriod>;
 export type MenstrualPeriodListInput = { from?: string; to?: string; limit?: number };
 export type NewMenstrualFlowRecord = Pick<MenstrualFlowRecord, "periodId" | "occurredAt" | "occurredHasExplicitTime" | "flow" | "isCycleStart" | "notes">;
 export type MenstrualFlowRecordPatch = Partial<NewMenstrualFlowRecord>;
-export type MenstrualFlowRecordListInput = { periodId?: number; from?: string; to?: string; limit?: number };
+export type MenstrualFlowRecordListInput = { periodId?: number; from?: string; to?: string; includeDeleted?: boolean; limit?: number };
 export type NewMedicationPreset = Pick<MedicationPreset, "name" | "defaultDoseText" | "minReminderIntervalMinutes" | "reminderEnabled" | "periodLinkEnabled" | "notes">;
 export type MedicationPresetPatch = Partial<NewMedicationPreset> & { archivedAt?: string | null };
 export type MedicationPresetListInput = { includeArchived?: boolean; limit?: number };
@@ -256,6 +256,7 @@ export interface EvaOrbitRepository {
   createMenstrualFlowRecord(input: NewMenstrualFlowRecord): Promise<MenstrualFlowRecord>;
   updateMenstrualFlowRecord(id: number, input: MenstrualFlowRecordPatch): Promise<MenstrualFlowRecord | null>;
   deleteMenstrualFlowRecord(id: number): Promise<boolean>;
+  finalizeMenstrualFlowRecordDeletion(id: number): Promise<boolean>;
   listMedicationPresets(input?: MedicationPresetListInput): Promise<MedicationPreset[]>;
   getMedicationPreset(id: number): Promise<MedicationPreset | null>;
   createMedicationPreset(input: NewMedicationPreset): Promise<MedicationPreset>;

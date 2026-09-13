@@ -14,7 +14,7 @@ Next.js / Supabase（业务 source of truth）
           ▼
 WKWebView Native Host
           │ 单一、版本化、白名单 JS↔Swift bridge
-          ├─ HealthKit：读取与聚合能量、可靠上传
+          ├─ HealthKit：能量、体重与 Menstrual Flow CategorySample 双向同步
           ├─ UserNotifications：本地提醒调度
           ├─ UIKit Haptics：按 Web 语义播放原生触感
           └─ Native loading / appearance：启动体验
@@ -40,7 +40,7 @@ WKWebView Native Host
 | WebView 与 bridge 注入 | `ios/EvaOrbitHost/Sources/WebViewController.swift` |
 | Bridge 协议、白名单和参数校验 | `ios/EvaOrbitHost/Sources/NativeBridge.swift` |
 | Web bridge 类型、能力检测和通知 reconcile | `src/lib/native-bridge.ts` |
-| HealthKit 实现 | `ios/EvaOrbitHost/Sources/HealthKit*.swift`、`HealthLocalStore.swift`、`HealthUploadManager.swift` |
+| HealthKit 实现 | `ios/EvaOrbitHost/Sources/HealthKit*.swift`、`HealthLocalStore.swift`、`HealthUploadManager.swift`；Menstrual Flow 使用独立 CategorySample DTO/路径 |
 | Local Notification 实现 | `ios/EvaOrbitHost/Sources/NotificationManager.swift` |
 | 原生触感执行器 | `ios/EvaOrbitHost/Sources/HapticFeedbackManager.swift`、`src/lib/native-haptics.ts` |
 | 原生启动核心图 | `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`、`ios/EvaOrbitHost/Sources/OrbitArtworkView.swift` |
@@ -165,7 +165,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 
 | 能力 | Framework | Info.plist 用途文案 | Entitlement / capability | 权限请求时机 |
 | --- | --- | --- | --- | --- |
-| HealthKit 能量读取与体重双向同步 | `HealthKit.framework` | `NSHealthShareUsageDescription`、`NSHealthUpdateUsageDescription` | `com.apple.developer.healthkit`、`com.apple.developer.healthkit.background-delivery` | 用户在界面明确点击连接/授权后；写入仅发生在用户保存体重时 |
+| HealthKit 能量读取、体重与 Menstrual Flow 双向同步 | `HealthKit.framework` | `NSHealthShareUsageDescription`、`NSHealthUpdateUsageDescription` | `com.apple.developer.healthkit`、`com.apple.developer.healthkit.background-delivery` | 用户明确连接后请求授权；写入发生在用户保存经量/体重或主动重试待同步操作时 |
 | 原生本地通知 | `UserNotifications.framework` | 无额外用途文案 | 无 APNs entitlement | 仅当状态为 `not_determined` 且用户点击 Request Access |
 | HealthKit 凭据安全存储 | `Security.framework` | 无 | 当前无需 Keychain Sharing capability | Web 注册完成后写入 app 自有 Keychain |
 | Web Push | Web Service Worker / Push API | 浏览器管理 | 不属于 Native Host entitlement | 由浏览器设置中的独立按钮请求 |
@@ -180,8 +180,9 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 - Resting Energy
 - Active Energy
 - Body Mass
+- Menstrual Flow（`HKCategorySample`，保留 flow 分类与 cycle-start metadata）
 
-Body Mass 同时是 EvaOrbit 唯一写入 HealthKit 的类型。安装或启动 App 不会自动弹出 HealthKit 授权。用户从现有 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才请求三种读取类型与 Body Mass share 权限。用户在 EvaOrbit 手动保存体重时，Web 通过能力检测后的 `healthkit.saveBodyMass` 写入；旧 IPA 和普通浏览器静默保留 EO 记录。
+Body Mass 和 Menstrual Flow 可以由 EvaOrbit 写入 HealthKit。安装或启动 App 不会自动弹出 HealthKit 授权。用户从 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才请求读取与 share 权限。用户保存经量或体重时，Web 先保存 EO 业务事实，再通过 capability detection 调用对应写入方法；旧 IPA 和普通浏览器保留 EO 记录为待同步。
 
 需要保留的语义：
 
@@ -190,6 +191,10 @@ Body Mass 同时是 EvaOrbit 唯一写入 HealthKit 的类型。安装或启动 
 - `hasReadData` 只有在 EvaOrbit 实际读到 HealthKit 样本后才会变为真。
 - App 启动时恢复 observer；已经请求过授权时再恢复 `.immediate` background delivery 并执行 anchored query。首次授权完成后也会开启 background delivery 并立即同步。
 - 能量原始样本保留在 Native 本地，上传按本地日期聚合的 resting/active kcal 快照。Body Mass 上传逐样本的 sample UUID、发生时间、kg、source 与 HealthKit sync identifier/version，以保留多条同日记录和幂等语义。
+- Menstrual Flow 使用独立 anchored query、本地 sample/outbox 和 ingest DTO，保留 start/end、分类值、cycle-start、sample UUID、source 与 sync identifier/version；Swift 不建立或关联 Period。
+- 来源归属不可混用：EO 创建的 Menstrual Flow 由 EO 用稳定 sync identifier/version 更新或删除；Apple Health 导入样本在 EO 中只读，修改或删除应在 Apple Health 完成，再由 anchored query 同步。
+- EO 写入失败时，业务记录保留 `pending`；稳定 sync identity 使手动 `Sync Now` 重试不会新建第二条 EO 事实。EO 删除先保留 `pending_delete` tombstone，HealthKit 删除成功后再完成硬删除。
+- EO 经量使用稳定的 `evaorbit.menstrual_flow.{uuid}` 标识与递增版本。回读通过 sync identifier 更新原记录；明确 cycle-start 时由服务端建立或关联 Period。
 - EO 手动体重使用稳定的 `evaorbit.weight.{uuid}` sync identifier；写回产生的新 HealthKit sample 再被 anchored query 读到时，服务端按该 identifier 更新原 EO 行，不创建重复记录。HealthKit 删除事件按 sample UUID 清理 Apple Health 导入记录；HealthKit 在版本替换时发出的旧 sample 删除不会删除 EO 原始行。
 - Native 使用 SQLite/outbox 保证上传；设备级 opaque credential 和 ingest URL 保存在 app 自有 Keychain，accessibility 为 `AfterFirstUnlock`。
 - Bridge 只接受同源且路径严格为 `/api/healthkit/energy/ingest` 的 ingest URL；请求使用 Bearer credential 和 installation ID。
@@ -229,8 +234,8 @@ evaorbit-scheduled-{source}-{stable-id}
 Web 侧 `reconcileNativeNotifications()` 才是校准逻辑：
 
 1. 先检测完整 bridge capability；普通浏览器/PWA 没有 bridge 时直接返回，不调用 Native API。
-2. 权限可调度时从 `/api/notifications` 获取现有有效 reminders、三餐缺失提醒和独立的体重缺失提醒。
-3. 复用现有 wall-clock 时区计算；体重当天已有任意记录时不生成当天提醒，date-only 且没有 snooze 时间的普通 reminder 不调度。
+2. 权限可调度时从 `/api/notifications` 获取 Reminder Source Registry 允许 `native_local` 的确定性投影。
+3. 条件型未记录提醒与经期用药提醒只由服务端 Cron/Web Push 判断；date-only 且没有 snooze 时间的普通 reminder 不调度。
 4. 排序后最多保留 48 条即将发生的 Native pending reminders。
 5. 取消 iOS 中已不在 Web desired set 的 `evaorbit-scheduled-*`（同时兼容旧 `evaorbit-reminder-*`）。
 6. 重新 schedule desired set；稳定 identifier 使缺失项补建、修改项覆盖、相同项不产生重复。

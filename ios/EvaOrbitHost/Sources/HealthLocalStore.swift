@@ -92,11 +92,21 @@ final class HealthLocalStore {
           attempt INTEGER NOT NULL DEFAULT 0, next_retry REAL NOT NULL DEFAULT 0, created_at REAL NOT NULL, updated_at REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_body_mass_outbox_ready ON body_mass_outbox(state,next_retry,id);
+        CREATE TABLE IF NOT EXISTS menstrual_flow_samples (
+          uuid TEXT PRIMARY KEY,start_at REAL NOT NULL,end_at REAL NOT NULL,flow TEXT NOT NULL,cycle_start INTEGER NOT NULL,
+          source_bundle TEXT NOT NULL,source_name TEXT NOT NULL,sync_identifier TEXT,sync_version INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS menstrual_flow_outbox (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,operation TEXT NOT NULL CHECK(operation IN ('upsert','delete')),sample_id TEXT NOT NULL,
+          start_at TEXT,end_at TEXT,flow TEXT,cycle_start INTEGER,source_bundle TEXT,source_name TEXT,sync_identifier TEXT,sync_version INTEGER,
+          state TEXT NOT NULL CHECK(state IN ('pending','inflight')),attempt INTEGER NOT NULL DEFAULT 0,next_retry REAL NOT NULL DEFAULT 0,created_at REAL NOT NULL,updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_menstrual_flow_outbox_ready ON menstrual_flow_outbox(state,next_retry,id);
         CREATE TABLE IF NOT EXISTS metadata (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
-        PRAGMA user_version=1;
+        PRAGMA user_version=2;
         """)
     }
 
@@ -201,6 +211,18 @@ final class HealthLocalStore {
             sqlite3_bind_double(bodyMass, 1, now.timeIntervalSince1970)
             try stepDone(bodyMass)
             sqlite3_finalize(bodyMass)
+            let menstrualFlow = try prepare("UPDATE menstrual_flow_outbox SET state='pending',next_retry=0,updated_at=? WHERE state='inflight'")
+            sqlite3_bind_double(menstrualFlow, 1, now.timeIntervalSince1970)
+            try stepDone(menstrualFlow)
+            sqlite3_finalize(menstrualFlow)
+        }
+    }
+
+    func menstrualFlowAnchor() throws -> Data? {
+        try locked {
+            let statement=try prepare("SELECT anchor FROM anchors WHERE metric='menstrual_flow'");defer{sqlite3_finalize(statement)}
+            guard sqlite3_step(statement)==SQLITE_ROW,let bytes=sqlite3_column_blob(statement,0) else{return nil}
+            return Data(bytes:bytes,count:Int(sqlite3_column_bytes(statement,0)))
         }
     }
 
@@ -315,6 +337,61 @@ final class HealthLocalStore {
         }
     }
 
+    func commitMenstrualFlowDelta(samples: [HealthMenstrualFlowSample], deletedUUIDs: [String], encodedAnchor: Data, now: Date = Date()) throws {
+        try locked {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let remove = try prepare("DELETE FROM menstrual_flow_samples WHERE uuid=?")
+                let clear = try prepare("DELETE FROM menstrual_flow_outbox WHERE sample_id=? AND state='pending'")
+                let deletion = try prepare("INSERT INTO menstrual_flow_outbox(operation,sample_id,state,attempt,next_retry,created_at,updated_at) VALUES('delete',?,'pending',0,0,?,?)")
+                for uuid in deletedUUIDs {
+                    for statement in [remove,clear] { sqlite3_reset(statement); sqlite3_clear_bindings(statement); bind(uuid,at:1,in:statement); try stepDone(statement) }
+                    sqlite3_reset(deletion); sqlite3_clear_bindings(deletion); bind(uuid,at:1,in:deletion); sqlite3_bind_double(deletion,2,now.timeIntervalSince1970); sqlite3_bind_double(deletion,3,now.timeIntervalSince1970); try stepDone(deletion)
+                }
+                sqlite3_finalize(remove); sqlite3_finalize(clear); sqlite3_finalize(deletion)
+                let upsert = try prepare("INSERT INTO menstrual_flow_samples(uuid,start_at,end_at,flow,cycle_start,source_bundle,source_name,sync_identifier,sync_version) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(uuid) DO UPDATE SET start_at=excluded.start_at,end_at=excluded.end_at,flow=excluded.flow,cycle_start=excluded.cycle_start,source_bundle=excluded.source_bundle,source_name=excluded.source_name,sync_identifier=excluded.sync_identifier,sync_version=excluded.sync_version")
+                let clearUpsert = try prepare("DELETE FROM menstrual_flow_outbox WHERE sample_id=? AND state='pending'")
+                let enqueue = try prepare("INSERT INTO menstrual_flow_outbox(operation,sample_id,start_at,end_at,flow,cycle_start,source_bundle,source_name,sync_identifier,sync_version,state,attempt,next_retry,created_at,updated_at) VALUES('upsert',?,?,?,?,?,?,?,?,?,'pending',0,0,?,?)")
+                for sample in samples {
+                    sqlite3_reset(upsert); sqlite3_clear_bindings(upsert); bind(sample.uuid,at:1,in:upsert); sqlite3_bind_double(upsert,2,sample.startDate.timeIntervalSince1970); sqlite3_bind_double(upsert,3,sample.endDate.timeIntervalSince1970); bind(sample.flow.rawValue,at:4,in:upsert); sqlite3_bind_int(upsert,5,sample.cycleStart ? 1:0); bind(sample.sourceBundle,at:6,in:upsert); bind(sample.sourceName,at:7,in:upsert); bindOptional(sample.syncIdentifier,at:8,in:upsert); bindOptionalInteger(sample.syncVersion,at:9,in:upsert); try stepDone(upsert)
+                    sqlite3_reset(clearUpsert); sqlite3_clear_bindings(clearUpsert); bind(sample.uuid,at:1,in:clearUpsert); try stepDone(clearUpsert)
+                    sqlite3_reset(enqueue); sqlite3_clear_bindings(enqueue); bind(sample.uuid,at:1,in:enqueue); bind(HealthDateFormatter.iso8601.string(from:sample.startDate),at:2,in:enqueue); bind(HealthDateFormatter.iso8601.string(from:sample.endDate),at:3,in:enqueue); bind(sample.flow.rawValue,at:4,in:enqueue); sqlite3_bind_int(enqueue,5,sample.cycleStart ? 1:0); bind(sample.sourceBundle,at:6,in:enqueue); bind(sample.sourceName,at:7,in:enqueue); bindOptional(sample.syncIdentifier,at:8,in:enqueue); bindOptionalInteger(sample.syncVersion,at:9,in:enqueue); sqlite3_bind_double(enqueue,10,now.timeIntervalSince1970); sqlite3_bind_double(enqueue,11,now.timeIntervalSince1970); try stepDone(enqueue)
+                }
+                sqlite3_finalize(upsert); sqlite3_finalize(clearUpsert); sqlite3_finalize(enqueue)
+                let anchor = try prepare("INSERT INTO anchors(metric,anchor,updated_at) VALUES('menstrual_flow',?,?) ON CONFLICT(metric) DO UPDATE SET anchor=excluded.anchor,updated_at=excluded.updated_at")
+                encodedAnchor.withUnsafeBytes { sqlite3_bind_blob(anchor,1,$0.baseAddress,Int32($0.count),evaOrbitSQLiteTransient) }; sqlite3_bind_double(anchor,2,now.timeIntervalSince1970); try stepDone(anchor); sqlite3_finalize(anchor)
+                if !samples.isEmpty { try setMetadataUnlocked("hasReadData",value:"true") }
+                try setMetadataUnlocked("lastLocalSync",value:HealthDateFormatter.iso8601.string(from:now)); try setMetadataUnlocked("lastError",value:""); try execute("COMMIT")
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
+
+    func takePendingMenstrualFlowBatch(limit:Int,now:Date=Date()) throws -> [HealthMenstrualFlowChange] {
+        try locked {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let statement=try prepare("SELECT id,operation,sample_id,start_at,end_at,flow,cycle_start,source_bundle,source_name,sync_identifier,sync_version FROM menstrual_flow_outbox WHERE state='pending' AND next_retry<=? ORDER BY id LIMIT ?")
+                sqlite3_bind_double(statement,1,now.timeIntervalSince1970); sqlite3_bind_int(statement,2,Int32(limit)); var changes:[HealthMenstrualFlowChange]=[]
+                while sqlite3_step(statement)==SQLITE_ROW {
+                    guard let operation=HealthMenstrualFlowChange.Operation(rawValue:columnText(statement,1)) else { continue }
+                    changes.append(HealthMenstrualFlowChange(id:sqlite3_column_int64(statement,0),operation:operation,sampleId:columnText(statement,2),startAt:columnOptionalText(statement,3),endAt:columnOptionalText(statement,4),flow:columnOptionalText(statement,5).flatMap { HealthMenstrualFlowValue(rawValue:$0) },cycleStart:sqlite3_column_type(statement,6)==SQLITE_NULL ? nil:sqlite3_column_int(statement,6)==1,sourceBundle:columnOptionalText(statement,7),sourceName:columnOptionalText(statement,8),syncIdentifier:columnOptionalText(statement,9),syncVersion:sqlite3_column_type(statement,10)==SQLITE_NULL ? nil:Int(sqlite3_column_int(statement,10))))
+                }
+                sqlite3_finalize(statement)
+                let update=try prepare("UPDATE menstrual_flow_outbox SET state='inflight',updated_at=? WHERE id=?")
+                for change in changes { sqlite3_reset(update); sqlite3_clear_bindings(update); sqlite3_bind_double(update,1,now.timeIntervalSince1970); sqlite3_bind_int64(update,2,change.id); try stepDone(update) }
+                sqlite3_finalize(update); try execute("COMMIT"); return changes
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
+
+    func completeMenstrualFlowUpload(ids:[Int64],now:Date=Date()) throws {
+        try locked { let statement=try prepare("DELETE FROM menstrual_flow_outbox WHERE id=? AND state='inflight'"); defer{sqlite3_finalize(statement)}; for id in ids{sqlite3_reset(statement);sqlite3_clear_bindings(statement);sqlite3_bind_int64(statement,1,id);try stepDone(statement)};if !ids.isEmpty{try setMetadataUnlocked("lastSuccessfulUpload",value:HealthDateFormatter.iso8601.string(from:now));try setMetadataUnlocked("lastError",value:"")} }
+    }
+
+    func failMenstrualFlowUpload(ids:[Int64],reason:String,now:Date=Date()) throws {
+        try locked { let select=try prepare("SELECT attempt FROM menstrual_flow_outbox WHERE id=?"),update=try prepare("UPDATE menstrual_flow_outbox SET state='pending',attempt=?,next_retry=?,updated_at=? WHERE id=?");defer{sqlite3_finalize(select);sqlite3_finalize(update)};for id in ids{sqlite3_reset(select);sqlite3_clear_bindings(select);sqlite3_bind_int64(select,1,id);let current=sqlite3_step(select)==SQLITE_ROW ? Int(sqlite3_column_int(select,0)):0,attempt=min(current+1,20),delay=min(15.0*pow(2.0,Double(min(attempt-1,10))),21_600.0);sqlite3_reset(update);sqlite3_clear_bindings(update);sqlite3_bind_int(update,1,Int32(attempt));sqlite3_bind_double(update,2,now.addingTimeInterval(delay).timeIntervalSince1970);sqlite3_bind_double(update,3,now.timeIntervalSince1970);sqlite3_bind_int64(update,4,id);try stepDone(update)};if !ids.isEmpty{try setMetadataUnlocked("lastError",value:String(reason.prefix(240)))} }
+    }
+
     func takePendingBatch(limit: Int, now: Date = Date()) throws -> [HealthOutboxSnapshot] {
         try locked {
             try execute("BEGIN IMMEDIATE")
@@ -399,7 +476,9 @@ final class HealthLocalStore {
             defer { sqlite3_finalize(statement) }
             let energy = sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int(statement, 0)) : 0
             let bodyMass = try prepare("SELECT count(*) FROM body_mass_outbox"); defer { sqlite3_finalize(bodyMass) }
-            return energy + (sqlite3_step(bodyMass) == SQLITE_ROW ? Int(sqlite3_column_int(bodyMass, 0)) : 0)
+            let bodyMassCount = sqlite3_step(bodyMass) == SQLITE_ROW ? Int(sqlite3_column_int(bodyMass, 0)) : 0
+            let menstrualFlow = try prepare("SELECT count(*) FROM menstrual_flow_outbox"); defer { sqlite3_finalize(menstrualFlow) }
+            return energy + bodyMassCount + (sqlite3_step(menstrualFlow) == SQLITE_ROW ? Int(sqlite3_column_int(menstrualFlow, 0)) : 0)
         }) ?? 0
     }
 

@@ -11,11 +11,17 @@ protocol HealthKitReading: AnyObject {
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double
     func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta
     func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws
+    func startMenstrualFlowObserver(handler: @escaping (@escaping () -> Void) -> Void) throws
+    func enableMenstrualFlowBackgroundDelivery() async throws
+    func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta
+    func saveMenstrualFlow(startAt: Date, endAt: Date, flow: HealthMenstrualFlowValue, cycleStart: Bool, syncIdentifier: String, syncVersion: Int) async throws
+    func deleteMenstrualFlow(sampleID: String?, syncIdentifier: String?) async throws
 }
 
 final class SystemHealthKitClient: HealthKitReading {
     private let store = HKHealthStore()
     private var observers: [HealthMetric: HKObserverQuery] = [:]
+    private var menstrualFlowObserver: HKObserverQuery?
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -26,9 +32,15 @@ final class SystemHealthKitClient: HealthKitReading {
         return type
     }
 
+    private func menstrualFlowType() throws -> HKCategoryType {
+        guard let type = HKObjectType.categoryType(forIdentifier: .menstrualFlow) else { throw HealthKitClientError.typeUnavailable("menstrual_flow") }
+        return type
+    }
+
     func requestAuthorization() async throws {
-        let read = try Set(HealthMetric.allCases.map { try quantityType(for: $0) as HKObjectType })
-        let share = Set([try quantityType(for: .bodyMass) as HKSampleType])
+        let menstrualFlow = try menstrualFlowType()
+        let read = try Set(HealthMetric.allCases.map { try quantityType(for: $0) as HKObjectType } + [menstrualFlow])
+        let share = Set([try quantityType(for: .bodyMass) as HKSampleType, menstrualFlow])
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             store.requestAuthorization(toShare: share, read: read) { success, error in
                 if let error { continuation.resume(throwing: error) }
@@ -164,6 +176,72 @@ final class SystemHealthKitClient: HealthKitReading {
         try await store.save(sample)
     }
 
+    func startMenstrualFlowObserver(handler: @escaping (@escaping () -> Void) -> Void) throws {
+        guard menstrualFlowObserver == nil else { return }
+        let type = try menstrualFlowType()
+        let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
+            if let error { HealthDiagnostics.log("metric=menstrual_flow observer=failed error=\(HealthDiagnostics.safe(error))"); completion(); return }
+            handler(completion)
+        }
+        menstrualFlowObserver = query
+        store.execute(query)
+    }
+
+    func enableMenstrualFlowBackgroundDelivery() async throws {
+        let type = try menstrualFlowType()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            store.enableBackgroundDelivery(for: type, frequency: .immediate) { success, error in
+                if let error { continuation.resume(throwing: error) }
+                else if success { continuation.resume() }
+                else { continuation.resume(throwing: HealthKitClientError.backgroundDeliveryFailed) }
+            }
+        }
+    }
+
+    func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta {
+        let type = try menstrualFlowType(), anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
+        let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
+                if let error { continuation.resume(throwing: error); return }
+                guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
+                do {
+                    let added = try (samples as? [HKCategorySample] ?? []).map { sample in
+                        guard let value = Self.flowValue(sample.value) else { throw HealthKitClientError.invalidMenstrualFlowValue }
+                        return HealthMenstrualFlowSample(uuid: sample.uuid.uuidString.lowercased(), startDate: sample.startDate, endDate: sample.endDate, flow: value, cycleStart: (sample.metadata?[HKMetadataKeyMenstrualCycleStart] as? NSNumber)?.boolValue ?? false, sourceBundle: sample.sourceRevision.source.bundleIdentifier, sourceName: sample.sourceRevision.source.name, syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String, syncVersion: (sample.metadata?[HKMetadataKeySyncVersion] as? NSNumber)?.intValue)
+                    }
+                    continuation.resume(returning: HealthMenstrualFlowDelta(added: added, deletedUUIDs: (deleted ?? []).map { $0.uuid.uuidString.lowercased() }, encodedAnchor: try HealthAnchorCodec.encode(newAnchor)))
+                } catch { continuation.resume(throwing: error) }
+            }
+            store.execute(query)
+        }
+    }
+
+    func saveMenstrualFlow(startAt: Date, endAt: Date, flow: HealthMenstrualFlowValue, cycleStart: Bool, syncIdentifier: String, syncVersion: Int) async throws {
+        let sample = HKCategorySample(type: try menstrualFlowType(), value: Self.healthKitFlowValue(flow), start: startAt, end: endAt, metadata: [HKMetadataKeyMenstrualCycleStart: cycleStart, HKMetadataKeySyncIdentifier: syncIdentifier, HKMetadataKeySyncVersion: syncVersion])
+        try await store.save(sample)
+    }
+
+    func deleteMenstrualFlow(sampleID: String?, syncIdentifier: String?) async throws {
+        let type = try menstrualFlowType()
+        let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, values, error in
+                if let error { continuation.resume(throwing: error); return }
+                continuation.resume(returning: (values as? [HKCategorySample] ?? []).filter { sample in sample.uuid.uuidString.caseInsensitiveCompare(sampleID ?? "") == .orderedSame || (syncIdentifier != nil && sample.metadata?[HKMetadataKeySyncIdentifier] as? String == syncIdentifier) })
+            }
+            store.execute(query)
+        }
+        if !samples.isEmpty { try await store.delete(samples) }
+    }
+
+    private static func flowValue(_ value: Int) -> HealthMenstrualFlowValue? {
+        switch value { case HKCategoryValueMenstrualFlow.none.rawValue: return .none; case HKCategoryValueMenstrualFlow.unspecified.rawValue: return .unspecified; case HKCategoryValueMenstrualFlow.light.rawValue: return .light; case HKCategoryValueMenstrualFlow.medium.rawValue: return .medium; case HKCategoryValueMenstrualFlow.heavy.rawValue: return .heavy; default: return nil }
+    }
+
+    private static func healthKitFlowValue(_ value: HealthMenstrualFlowValue) -> Int {
+        switch value { case .none: return HKCategoryValueMenstrualFlow.none.rawValue; case .unspecified: return HKCategoryValueMenstrualFlow.unspecified.rawValue; case .light: return HKCategoryValueMenstrualFlow.light.rawValue; case .medium: return HKCategoryValueMenstrualFlow.medium.rawValue; case .heavy: return HKCategoryValueMenstrualFlow.heavy.rawValue }
+    }
+
 }
 
 enum HealthAnchorCodec {
@@ -185,6 +263,7 @@ enum HealthKitClientError: LocalizedError {
     case backgroundDeliveryFailed
     case missingAnchor
     case invalidAnchor
+    case invalidMenstrualFlowValue
 
     var errorDescription: String? {
         switch self {
@@ -193,6 +272,7 @@ enum HealthKitClientError: LocalizedError {
         case .backgroundDeliveryFailed: return "HealthKit background delivery was not enabled"
         case .missingAnchor: return "HealthKit did not return an anchor"
         case .invalidAnchor: return "Stored HealthKit anchor is invalid"
+        case .invalidMenstrualFlowValue: return "HealthKit menstrual flow value is invalid"
         }
     }
 }

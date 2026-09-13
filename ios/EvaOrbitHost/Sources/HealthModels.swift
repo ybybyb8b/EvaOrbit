@@ -69,6 +69,45 @@ struct HealthBodyMassDelta {
     let encodedAnchor: Data
 }
 
+enum HealthMenstrualFlowValue: String, Codable, CaseIterable {
+    case none, unspecified, light, medium, heavy
+}
+
+struct HealthMenstrualFlowSample: Equatable {
+    let uuid: String
+    let startDate: Date
+    let endDate: Date
+    let flow: HealthMenstrualFlowValue
+    let cycleStart: Bool
+    let sourceBundle: String
+    let sourceName: String
+    let syncIdentifier: String?
+    let syncVersion: Int?
+}
+
+struct HealthMenstrualFlowDelta {
+    let added: [HealthMenstrualFlowSample]
+    let deletedUUIDs: [String]
+    let encodedAnchor: Data
+}
+
+struct HealthMenstrualFlowChange: Encodable, Equatable {
+    enum Operation: String, Encodable { case upsert, delete }
+    let id: Int64
+    let operation: Operation
+    let sampleId: String
+    let startAt: String?
+    let endAt: String?
+    let flow: HealthMenstrualFlowValue?
+    let cycleStart: Bool?
+    let sourceBundle: String?
+    let sourceName: String?
+    let syncIdentifier: String?
+    let syncVersion: Int?
+
+    enum CodingKeys: String, CodingKey { case operation, sampleId, startAt, endAt, flow, cycleStart, sourceBundle, sourceName, syncIdentifier, syncVersion }
+}
+
 struct HealthBodyMassChange: Encodable, Equatable {
     enum Operation: String, Encodable { case upsert, delete }
     let id: Int64
@@ -127,7 +166,7 @@ struct HealthRuntimeStatus {
             "installationId": installationID,
             "authorizationRequested": authorizationRequested,
             "hasReadData": hasReadData,
-            "metrics": HealthMetric.allCases.map { ["metric": $0.rawValue, "name": $0.displayName] },
+            "metrics": HealthMetric.allCases.map { ["metric": $0.rawValue, "name": $0.displayName] } + [["metric": "menstrual_flow", "name": "Menstrual Flow"]],
             "backgroundDelivery": backgroundDelivery,
             "lastLocalSync": nullable(lastLocalSync),
             "lastSuccessfulUpload": nullable(lastSuccessfulUpload),

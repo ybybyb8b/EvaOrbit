@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { bearerCredential, parseHealthKitUpload, parseInstallationId } from "@/lib/healthkit";
-import { ingestHealthKitBodyMass, ingestHealthKitEnergy } from "@/lib/services/healthkit";
+import { ingestHealthKitBodyMass, ingestHealthKitEnergy, ingestHealthKitMenstrualFlow } from "@/lib/services/healthkit";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     const results = await Promise.all([
       upload.snapshots.length ? ingestHealthKitEnergy(installationId, credential, upload.snapshots) : Promise.resolve({ ok: true as const, accepted: 0, received: 0 }),
       upload.bodyMassChanges.length ? ingestHealthKitBodyMass(installationId, credential, upload.bodyMassChanges) : Promise.resolve({ ok: true as const, accepted: 0, received: 0 }),
+      upload.menstrualFlowChanges.length ? ingestHealthKitMenstrualFlow(installationId, credential, upload.menstrualFlowChanges) : Promise.resolve({ ok: true as const, accepted: 0, received: 0 }),
     ]);
     const denied = results.find((result) => !result.ok);
     if (denied && !denied.ok) return NextResponse.json({ error: denied.status === 403 ? "Forbidden" : "Unauthorized" }, { status: denied.status });

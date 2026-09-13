@@ -544,14 +544,25 @@ export interface MenstrualPeriod {
 }
 
 export type MenstrualFlow = "none" | "unspecified" | "light" | "medium" | "heavy";
+export type MenstrualFlowSource = "manual" | "apple_health";
+export type MenstrualFlowHealthKitSyncStatus = "pending" | "synced" | "pending_delete";
 export interface MenstrualFlowRecord {
   id: number;
   periodId: number | null;
   occurredAt: string;
+  endedAt: string;
   occurredHasExplicitTime: boolean;
   flow: MenstrualFlow;
   isCycleStart: boolean;
   notes: string;
+  source: MenstrualFlowSource;
+  healthKitSampleId: string | null;
+  healthKitSourceBundle: string | null;
+  healthKitSourceName: string | null;
+  healthKitSyncIdentifier: string | null;
+  healthKitSyncVersion: number;
+  healthKitSyncStatus: MenstrualFlowHealthKitSyncStatus;
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -8,7 +8,7 @@ import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, Weigh
 import { HealthRecordEditor } from "./health-record-editor";
 import { TrainingLogEditor } from "./training-log-editor";
 import { WeightEditor } from "./weight-section";
-import { MedicationDoseEditor, PeriodFlowEditor } from "./period-medication-section";
+import { MedicationDoseEditor, PeriodFlowEditor, StartPeriodEditor } from "./period-medication-section";
 
 type HealthQuickLogEditorProps = {
   initialDate: string;
@@ -72,7 +72,7 @@ function HealthRecordQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogE
   </FormSheet>;
 }
 
-function PeriodQuickLog({initialDate,onClose,onSaved}:HealthQuickLogEditorProps){const request=useRemoteJson<MenstrualPeriod[]>("/api/health/periods?limit=30");if(!request.data)return <LoadSheet title="记录经期 / 经量" error={request.error} onClose={onClose} onRetry={request.retry}/>;return <PeriodFlowEditor initialDate={initialDate} periods={request.data} onClose={onClose} onSaved={async()=>{await onSaved();onClose();}}/>;}
+function PeriodQuickLog({initialDate,onClose,onSaved}:HealthQuickLogEditorProps){const request=useRemoteJson<MenstrualPeriod[]>("/api/health/periods?limit=30");if(!request.data)return <LoadSheet title="记录经期 / 经量" error={request.error} onClose={onClose} onRetry={request.retry}/>;const saved=async()=>{await onSaved();onClose();};return request.data.some(item=>!item.endedOn)?<PeriodFlowEditor initialDate={initialDate} periods={request.data} onClose={onClose} onSaved={saved}/>:<StartPeriodEditor initialDate={initialDate} onClose={onClose} onSaved={saved}/>;}
 function MedicationDoseQuickLog({initialDate,onClose,onSaved}:HealthQuickLogEditorProps){const periods=useRemoteJson<MenstrualPeriod[]>("/api/health/periods?limit=30"),presets=useRemoteJson<MedicationPreset[]>("/api/health/medications?limit=100");if(!periods.data||!presets.data)return <LoadSheet title="记录服药" error={periods.error||presets.error} onClose={onClose} onRetry={()=>{periods.retry();presets.retry();}}/>;return <MedicationDoseEditor initialDate={initialDate} periods={periods.data} presets={presets.data} onClose={onClose} onSaved={async()=>{await onSaved();onClose();}}/>;}
 
 export const HEALTH_QUICK_LOGS = [
