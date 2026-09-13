@@ -2,6 +2,7 @@ import Foundation
 
 final class HealthKitCoordinator {
     static let defaultInitialLookbackDays = 1
+    static let authorizationRevision = "2"
 
     private let healthKit: HealthKitReading
     private let store: HealthLocalStore
@@ -65,6 +66,7 @@ final class HealthKitCoordinator {
         do {
             try await healthKit.requestAuthorization()
             try store.setMetadata("authorizationRequested", value: "true")
+            try store.setMetadata("authorizationRevision", value: Self.authorizationRevision)
             await enableBackgroundDelivery()
             _ = await syncNow()
             return status()
@@ -133,7 +135,7 @@ final class HealthKitCoordinator {
         HealthRuntimeStatus(
             available: healthKit.isAvailable,
             installationID: uploader.installationID,
-            authorizationRequested: store.metadata("authorizationRequested") == "true",
+            authorizationRequested: store.metadata("authorizationRevision") == Self.authorizationRevision,
             hasReadData: store.metadata("hasReadData") == "true",
             backgroundDelivery: Dictionary(uniqueKeysWithValues: HealthMetric.allCases.map { metric in
                 (metric.rawValue, store.metadata("background.\(metric.rawValue)") ?? "not_requested")

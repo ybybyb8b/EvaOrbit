@@ -184,6 +184,8 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 
 Body Mass 和 Menstrual Flow 可以由 EvaOrbit 写入 HealthKit。安装或启动 App 不会自动弹出 HealthKit 授权。用户从 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才请求读取与 share 权限。用户保存经量或体重时，Web 先保存 EO 业务事实，再通过 capability detection 调用对应写入方法；旧 IPA 和普通浏览器保留 EO 记录为待同步。
 
+HealthKit 请求的数据类型集合有独立 `authorizationRevision`。新版 Host 增加类型时必须提升该 revision，使已授权用户看到 `Update Health Access`，不能只依赖历史 `authorizationRequested=true`。
+
 需要保留的语义：
 
 - 静息和活动能量保持只读；只向 HealthKit 写入用户在 EvaOrbit 明确保存的体重。

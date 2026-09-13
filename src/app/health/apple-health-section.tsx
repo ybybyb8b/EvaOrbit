@@ -119,7 +119,7 @@ export function AppleHealthSection() {
       {error && <p className="form-error">{error}</p>}
       {message && <p className="form-success" role="status">{message}</p>}
       <div className="apple-health-actions">
-        {status.available && (!status.authorizationRequested || !status.credentialConfigured) && <button className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? "Connecting…" : "Connect / Request Access"}</button>}
+        {status.available && (!status.authorizationRequested || !status.credentialConfigured) && <button className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? "Connecting…" : status.credentialConfigured ? "Update Health Access" : "Connect / Request Access"}</button>}
         {status.available && status.authorizationRequested && <button className="button secondary" disabled={busy} onClick={() => void syncNow()}>{busy ? "Syncing…" : "Sync Now"}</button>}
         {status.credentialConfigured && <button className="text-button" disabled={busy} onClick={() => void disconnect()}>Revoke native upload</button>}
       </div>

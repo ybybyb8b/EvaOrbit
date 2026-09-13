@@ -138,11 +138,14 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   assert.match(bridge, /healthkit\.saveMenstrualFlow/);
   assert.match(bridge, /healthkit\.deleteMenstrualFlow/);
   const client = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthKitClient.swift", import.meta.url), "utf8");
+  const coordinator = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthKitCoordinator.swift", import.meta.url), "utf8");
   const localStore = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthLocalStore.swift", import.meta.url), "utf8");
   assert.match(client, /HKCategorySample/);
   assert.match(client, /HKMetadataKeyMenstrualCycleStart/);
   assert.match(client, /HKMetadataKeySyncIdentifier/);
   assert.match(client, /anchoredMenstrualFlowDelta/);
+  assert.match(coordinator, /authorizationRevision = "2"/);
+  assert.match(coordinator, /metadata\("authorizationRevision"\) == Self\.authorizationRevision/);
   assert.match(localStore, /menstrual_flow_outbox/);
   assert.match(localStore, /menstrualFlowAnchor/);
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/locale-controller";
+
 export type DateTimeDraft = { date: string; time: string };
 
 export function currentLocalDate() {
@@ -33,8 +35,9 @@ export function compactDateTimePayload(value: string) {
 }
 
 export function DateTimeField({ label, value, onChange, optionalDate = false }: { label: string; value: DateTimeDraft; onChange: (value: DateTimeDraft) => void; optionalDate?: boolean }) {
+  const { english } = useLocale();
   return <div className="date-time-field">
     <label className="field"><span>{label}</span><input type="date" required={!optionalDate} value={value.date} onChange={(event) => onChange({ date: event.target.value, time: event.target.value ? value.time : "" })}/></label>
-    {value.date && (value.time ? <label className="field date-time-clock"><span>Time <small>Optional</small></span><span className="date-time-clock-row"><input type="time" value={value.time} onChange={(event) => onChange({ ...value, time: event.target.value })}/><button type="button" className="text-button" onClick={() => onChange({ ...value, time: "" })}>Remove time</button></span></label> : <button type="button" className="date-time-add" onClick={() => onChange({ ...value, time: "09:00" })}>+ Add time</button>)}
+    {value.date && (value.time ? <label className="field date-time-clock"><span>{english ? "Time" : "时间"} <small>{english ? "Optional" : "可选"}</small></span><span className="date-time-clock-row"><input type="time" value={value.time} onChange={(event) => onChange({ ...value, time: event.target.value })}/><button type="button" className="text-button" onClick={() => onChange({ ...value, time: "" })}>{english ? "Remove time" : "移除时间"}</button></span></label> : <button type="button" className="date-time-add" onClick={() => onChange({ ...value, time: "09:00" })}>{english ? "+ Add time" : "+ 添加时间"}</button>)}
   </div>;
 }

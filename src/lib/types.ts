@@ -231,6 +231,7 @@ export interface TimelineEvent {
 export interface TimelineMonthSummary {
   month: string;
   days: Record<string, TimelineDaySummary>;
+  periods: MenstrualPeriod[];
 }
 
 export interface TimelineDaySummary {

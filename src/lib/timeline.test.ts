@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "./timeline.ts";
-import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
+import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, summarizeTimelineDays } from "./timeline.ts";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
@@ -97,4 +97,10 @@ test("marks health and training days as important while retaining an accessible 
 
   const weightOnly = summarizeTimelineDays(buildTimelineEvents([], [], [], [], [], [weightRecord]));
   assert.deepEqual(weightOnly["2026-08-26"], { count: 1, highlighted: false });
+});
+
+test("finds a period day without extending an active period beyond today", () => {
+  const active: MenstrualPeriod = { id: 5, startedOn: "2026-08-26", endedOn: null, notes: "", createdAt: "", updatedAt: "" };
+  assert.equal(periodDayForDate([active], "2026-08-27", "2026-08-28")?.day, 2);
+  assert.equal(periodDayForDate([active], "2026-08-29", "2026-08-28"), null);
 });

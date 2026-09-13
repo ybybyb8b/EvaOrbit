@@ -1,4 +1,4 @@
-import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 import { formatWeightKg } from "./weight.ts";
 
@@ -119,6 +119,13 @@ export function summarizeTimelineDays(events: TimelineEvent[]) {
     };
   }
   return days;
+}
+
+export function periodDayForDate(periods: MenstrualPeriod[], date: string, today = dateInEvaOrbit()) {
+  const period = periods.find((item) => item.startedOn <= date && date <= (item.endedOn ?? today));
+  if (!period) return null;
+  const day = Math.floor((Date.parse(`${date}T12:00:00Z`) - Date.parse(`${period.startedOn}T12:00:00Z`)) / 86_400_000) + 1;
+  return { period, day };
 }
 
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
+import { useLocale } from "@/components/locale-controller";
 import { PageHeader } from "@/components/page-header";
 import { buildHealthDashboard } from "@/lib/health-dashboard";
 import type { DailyNutritionSummary, HealthRecord, MedicationDoseEvent, MedicationPreset, MenstrualFlowRecord, MenstrualPeriod, ScheduledNotification, TrainingInputSuggestions, TrainingLog, WeightRecord, WeightSettings } from "@/lib/types";
@@ -17,6 +18,7 @@ import { PeriodMedicationSection } from "./period-medication-section";
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 
 export function HealthView({ initial, initialEnergy, initialEnergyHistory, initialTraining, initialRecentTraining, initialTrainingSuggestions, initialFocusedTraining, initialWeights, initialWeightSettings, initialFocusedWeight, initialPeriods, initialMenstrualFlows, initialMedicationPresets, initialMedicationDoses, initialMedicationReminders, today }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialRecentTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; initialFocusedTraining?: TrainingLog; initialWeights: WeightRecord[]; initialWeightSettings: WeightSettings; initialFocusedWeight?: WeightRecord; initialPeriods:MenstrualPeriod[]; initialMenstrualFlows:MenstrualFlowRecord[]; initialMedicationPresets:MedicationPreset[]; initialMedicationDoses:MedicationDoseEvent[]; initialMedicationReminders:ScheduledNotification[]; today: string }) {
+  const { english } = useLocale();
   const [dashboard, setDashboard] = useState(initial);
   const [editing, setEditing] = useState<HealthRecord | undefined>();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -33,17 +35,17 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory, initi
   function openCreate() { setError(""); setMessage(""); setEditing(undefined); setEditorOpen(true); }
   function openEdit(record: HealthRecord) { setError(""); setMessage(""); setEditing(record); setEditorOpen(true); }
 
-  return <div className="page health-page">
+  return <div className="page health-page" data-has-current={dashboard.current.length > 0}>
     <PageHeader eyebrow="生活" title="Health" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
     {message && <p className="success-banner" role="status">{message}</p>}
     {error && <p className="form-error">{error}</p>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}
-    <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>Worth keeping in view</h2></div><span>Active</span></div>{dashboard.current.length ? <div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div> : <p className="health-inline-empty">Nothing active right now.</p>}</section>
+    {dashboard.current.length > 0 && <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>{english ? "In view now" : "当前关注"}</h2></div><span>{dashboard.current.length}</span></div><div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div></section>}
     <PeriodMedicationSection initialPeriods={initialPeriods} initialFlows={initialMenstrualFlows} initialPresets={initialMedicationPresets} initialDoses={initialMedicationDoses} initialReminders={initialMedicationReminders}/>
     <WeightSection initialRecords={initialWeights} initialSettings={initialWeightSettings} initialFocused={initialFocusedWeight} />
     <TrainingSection initial={initialTraining} initialRecent={initialRecentTraining} initialSuggestions={initialTrainingSuggestions} initialFocused={initialFocusedTraining} today={today} />
     <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />
-    <section className="health-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Health records</h2></div><Link href="/health/records">View all <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>
+    <section className="health-section health-records-section"><div className="section-heading"><div><span className="eyebrow">RECORDS</span><h2>{english ? "Health records" : "健康记录"}</h2></div><Link href="/health/records">{english ? "View all" : "查看全部"} <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>
   </div>;
 }
 

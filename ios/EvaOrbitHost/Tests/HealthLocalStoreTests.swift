@@ -116,9 +116,11 @@ final class HealthLocalStoreTests: XCTestCase {
         let healthKit = FakeHealthKitClient()
         let coordinator = HealthKitCoordinator(healthKit: healthKit, store: store, uploader: uploader, calendar: calendar)
 
+        try store.setMetadata("authorizationRequested", value: "true")
         XCTAssertFalse(coordinator.status().authorizationRequested)
         let status = try await coordinator.requestAuthorization()
         XCTAssertTrue(status.authorizationRequested)
+        XCTAssertEqual(store.metadata("authorizationRevision"), HealthKitCoordinator.authorizationRevision)
         XCTAssertEqual(healthKit.authorizationRequests, 1)
         XCTAssertEqual(Set(healthKit.backgroundMetrics), Set(HealthMetric.allCases))
 

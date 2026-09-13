@@ -6,6 +6,7 @@ import { ArrowDown5, ArrowLeft2, ArrowRight2 } from "reicon-react";
 import type { UiLanguage } from "@/lib/locale";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
+import { periodDayForDate } from "@/lib/timeline";
 import type { TimelineEvent, TimelineMonthSummary } from "@/lib/types";
 import { HomeQuickLog } from "./home-quick-log";
 
@@ -18,6 +19,9 @@ const mealLabels: Record<string, { en: string; zh: string }> = {
 };
 const trainingLabels: Record<string, { en: string; zh: string }> = {
   cardio: { en: "Cardio", zh: "有氧训练" }, strength: { en: "Strength", zh: "无氧训练" }, mixed: { en: "Mixed training", zh: "混合训练" },
+};
+const flowLabels: Record<string, { en: string; zh: string }> = {
+  none: { en: "No flow", zh: "无经量" }, unspecified: { en: "Flow not specified", zh: "经量未指定" }, light: { en: "Light", zh: "少量" }, medium: { en: "Medium", zh: "中等" }, heavy: { en: "Heavy", zh: "大量" },
 };
 
 function shiftMonth(month: string, offset: number) { const [year, value] = month.split("-").map(Number); return new Date(Date.UTC(year, value - 1 + offset, 1, 12)).toISOString().slice(0, 7); }
@@ -60,6 +64,10 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
   const monthLabel = new Intl.DateTimeFormat(english ? "en" : "zh-CN", { year: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`));
   const selectedLabel = new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "long", day: "numeric", weekday: "long", timeZone: "UTC" }).format(new Date(`${selected}T12:00:00Z`));
   const events = eventsByDate[selected] ?? [];
+  const periods = useMemo(() => [...new Map(Object.values(summaries).flatMap((summary) => summary.periods ?? []).map((period) => [period.id, period])).values()], [summaries]);
+  const periodContext = periodDayForDate(periods, selected, today);
+  const periodFlow = events.find((item) => item.eventType === "health.menstrual_flow" && item.metadata.periodId === periodContext?.period.id);
+  const periodDose = events.find((item) => item.eventType === "health.medication_dose" && item.metadata.periodId === periodContext?.period.id);
 
   useEffect(() => {
     const requiredMonths = expanded ? [month] : [...new Set(visibleWeek.map((date) => date.slice(0, 7)))];
@@ -132,10 +140,16 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
     setExpanded((current) => !current);
   }
 
-  function calendarDay(date: string) {
+  function calendarDay(date: string, index: number) {
     const daySummary = summaries[date.slice(0, 7)]?.days[date];
+    const context = periodDayForDate(summaries[date.slice(0, 7)]?.periods ?? [], date, today);
     const count = daySummary?.count ?? 0;
-    return <button type="button" key={date} className={selected === date ? "selected" : ""} data-today={date === today} data-has-record={count > 0} data-highlighted={daySummary?.highlighted === true} data-outside-month={date.slice(0, 7) !== month} aria-current={date === today ? "date" : undefined} aria-pressed={selected === date} aria-label={`${date}${count ? english ? `, ${count} entries` : `，${count} 条记录` : english ? ", no entries" : "，没有记录"}`} onClick={() => selectCalendarDate(date)}><strong>{Number(date.slice(-2))}</strong><span className="home-calendar-indicator" aria-hidden="true">{count > 0 && <i />}</span></button>;
+    const gridIndex = expanded ? leading + Number(date.slice(-2)) - 1 : index;
+    const periodEnd = context?.period.endedOn ?? today;
+    const periodStart = Boolean(context && (date === context.period.startedOn || gridIndex % 7 === 0 || expanded && index === 0));
+    const periodFinish = Boolean(context && (date === periodEnd || gridIndex % 7 === 6 || expanded && index === dayCount - 1));
+    const periodLabel = context ? english ? `, period day ${context.day}` : `，经期第 ${context.day} 天` : "";
+    return <button type="button" key={date} className={selected === date ? "selected" : ""} data-today={date === today} data-has-record={count > 0} data-highlighted={daySummary?.highlighted === true} data-outside-month={date.slice(0, 7) !== month} data-period={Boolean(context)} data-period-start={periodStart} data-period-end={periodFinish} data-period-day-one={context?.day === 1} aria-current={date === today ? "date" : undefined} aria-pressed={selected === date} aria-label={`${date}${periodLabel}${count ? english ? `, ${count} entries` : `，${count} 条记录` : english ? ", no entries" : "，没有记录"}`} onClick={() => selectCalendarDate(date)}><strong>{Number(date.slice(-2))}</strong><span className="home-calendar-indicator" aria-hidden="true">{count > 0 && <i />}</span></button>;
   }
 
   return <section className="today-focus home-calendar-card" aria-label={english ? "Calendar and daily timeline" : "日历与每日时间线"}>
@@ -158,6 +172,7 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
       </section>
       <section className="home-day-timeline" aria-busy={loadingDate === selected}>
         <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2><HomeQuickLog selectedDate={selected} onSaved={refreshSelectedDate} /></header>
+        {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {loadingDate === selected ? <div className="home-timeline-loading" aria-label={english ? "Loading timeline" : "正在读取时间线"}><span /><span /><span /></div> : events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.map((item) => { const source = sourceMeta[item.sourceType]; return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}><time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}</span><strong className="user-content">{titleFor(item, english)}</strong>{item.detail && <small className="user-content">{item.detail}</small>}</span></Link>; })}</div> : <p className="home-today-empty">{english ? "No records on this day" : "这一天还没有记录"}</p>}
       </section>

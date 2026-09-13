@@ -87,5 +87,10 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
 export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 7)): Promise<TimelineMonthSummary> {
   const range = monthDateRange(month);
   const [sources, cats] = await Promise.all([loadSources(range), catTimeline()]);
-  return { month, days: summarizeTimelineDays(groupMealsByDay(mergeTimelineSources(sources, cats, range))) };
+  const first = `${month}-01`;
+  const next = new Date(`${first}T12:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const nextMonth = next.toISOString().slice(0, 10);
+  const periods = (await sources.repository.listMenstrualPeriods({ limit: 500 })).filter((item) => item.startedOn < nextMonth && (!item.endedOn || item.endedOn >= first));
+  return { month, days: summarizeTimelineDays(groupMealsByDay(mergeTimelineSources(sources, cats, range))), periods };
 }

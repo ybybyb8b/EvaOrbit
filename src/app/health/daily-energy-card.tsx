@@ -160,7 +160,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
   const isToday = selectedDate === today;
   const sourceLabel = energySourceLabel(summary);
 
-  return <section className="daily-energy-card" aria-labelledby="daily-energy-title">
+  return <section className="daily-energy-card health-section health-energy-section" aria-labelledby="daily-energy-title">
     <div className="daily-energy-heading">
       <div><span className="eyebrow">{isToday ? "TODAY · IN PROGRESS" : "ENERGY REVIEW"}</span><h2 id="daily-energy-title">{shortDate(selectedDate)}</h2></div>
       {!editing && <button className="text-button daily-energy-edit" onClick={openEditor}>Edit</button>}
