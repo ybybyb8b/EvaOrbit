@@ -24,7 +24,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
   assert.match(calendar, /<HomeQuickLog/);
   assert.match(quickLog, /\.\.\.HEALTH_QUICK_LOGS/);
-  for (const kind of ["training", "weight", "health-record"]) assert.match(healthQuickLog, new RegExp(`kind: "${kind}"`));
+  for (const kind of ["training", "weight", "period", "medication-dose", "health-record"]) assert.match(healthQuickLog, new RegExp(`kind: "${kind}"`));
   assert.match(healthQuickLog, /TrainingLogEditor/);
   assert.match(healthQuickLog, /WeightEditor/);
   assert.match(healthQuickLog, /HealthRecordEditor/);
@@ -34,7 +34,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   assert.match(quickLog, /from "reicon-react"/);
   assert.match(quickLog, /icon: LogIcon/);
   assert.match(quickLog, /<LogIcon className="home-quick-log-icon"/);
-  assert.equal(healthQuickLog.match(/initialDate=\{initialDate\}/g)?.length, 3);
+  assert.equal(healthQuickLog.match(/initialDate=\{initialDate\}/g)?.length, 5);
   assert.match(healthQuickLog, /\/api\/health\/weight\?limit=1/);
   assert.doesNotMatch(healthQuickLog, /AppleHealthSection|WeightSettingsSheet|DailyEnergyCard/);
 });

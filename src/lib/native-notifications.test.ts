@@ -1,48 +1,35 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { buildNativeNotificationSchedules, isManagedNativeNotification, nativeMealNotifications, nativeReminderNotifications, nativeWeightNotifications } from "./native-notifications.ts";
-import type { MealReminderRule, ScheduledNotification } from "./types.ts";
+import { buildNativeNotificationSchedules, isManagedNativeNotification, MANAGED_NATIVE_NOTIFICATION_PREFIX, nativeReminderNotification, nativeReminderNotifications } from "./native-notifications.ts";
+import type { ScheduledNotification } from "./types.ts";
 
-const rules = [
-  { mealType: "breakfast", remindAt: "10:00", enabled: true, updatedAt: "" },
-  { mealType: "lunch", remindAt: "14:00", enabled: true, updatedAt: "" },
-  { mealType: "dinner", remindAt: "20:00", enabled: false, updatedAt: "" },
-] satisfies MealReminderRule[];
+function reminder(sourceType: string | null, id = 42): ScheduledNotification {
+  return { id, title: "Reminder", note: "", sourceType, subjectLabel: "", sourceLabel: "", nextDueAt: "2099-09-05T03:00:00.000Z", scheduledAt: "2099-09-05T03:00:00.000Z", snoozedUntil: null, leadTimeMinutes: 0, dueHasExplicitTime: true, isActive: true, timezone: "Asia/Shanghai", repeatWhileOverdue: false } as ScheduledNotification;
+}
 
-test("native meal schedules skip past, disabled, and already-recorded meals", () => {
-  const now = new Date("2026-09-05T01:00:00.000Z");
-  const result = nativeMealNotifications(rules, [{ occurredAt: "2026-09-05T04:00:00.000Z", mealType: "lunch" }], "zh-CN", now, 2);
-  assert.deepEqual(result.map((item) => item.id), [
-    "evaorbit-scheduled-meal-breakfast-2026-09-05",
-    "evaorbit-scheduled-meal-breakfast-2026-09-06",
-    "evaorbit-scheduled-meal-lunch-2026-09-06",
-  ]);
-  assert.equal(result[0].triggerAt, "2026-09-05T02:00:00.000Z");
-});
-
-test("one native schedule aggregates reminder and meal producers", () => {
-  const reminder = { id: 42, title: "Medication", note: "", sourceType: "cat_routine", subjectLabel: "Momo", sourceLabel: "Cats", nextDueAt: "2026-09-05T03:00:00.000Z", scheduledAt: "2026-09-05T03:00:00.000Z", snoozedUntil: null, leadTimeMinutes: 0, dueHasExplicitTime: true, isActive: true } as ScheduledNotification;
-  const result = buildNativeNotificationSchedules({ upcoming: [reminder], mealRules: rules.slice(0, 1), foodLogs: [], now: new Date("2026-09-05T01:00:00.000Z") });
-  assert.deepEqual(result.slice(0, 2).map((item) => item.id), ["evaorbit-scheduled-meal-breakfast-2026-09-05", "evaorbit-scheduled-reminder-42"]);
-  assert.equal(result.every((item) => isManagedNativeNotification(item.id)), true);
-  assert.equal(isManagedNativeNotification("evaorbit-test-1"), false);
+test("web and native host share the managed notification identifier contract", () => {
+  const swift = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/NotificationManager.swift", import.meta.url), "utf8");
+  assert.match(swift, new RegExp(`scheduledIdentifierPrefix\\s*=\\s*"${MANAGED_NATIVE_NOTIFICATION_PREFIX}"`));
   assert.equal(isManagedNativeNotification("evaorbit-reminder-42"), true);
+  assert.equal(isManagedNativeNotification("evaorbit-test-1"), false);
 });
 
-test("native reminders stage daily follow-ups after the due date",()=>{
-  const reminder={id:42,title:"Medication",note:"",sourceType:"cat_routine",subjectLabel:"Momo",sourceLabel:"Cats",nextDueAt:"2026-09-05T01:00:00.000Z",scheduledAt:"2026-09-05T01:00:00.000Z",snoozedUntil:null,leadTimeMinutes:0,dueHasExplicitTime:true,isActive:true,timezone:"Asia/Shanghai",repeatWhileOverdue:true} as ScheduledNotification;
-  const result=nativeReminderNotifications(reminder,"zh-CN",new Date("2026-09-05T02:00:00.000Z"),3);
-  assert.deepEqual(result.map(item=>item.id),["evaorbit-scheduled-reminder-42-2026-09-06","evaorbit-scheduled-reminder-42-2026-09-07"]);
-  assert.deepEqual(result.map(item=>item.triggerAt),["2026-09-06T01:00:00.000Z","2026-09-07T01:00:00.000Z"]);
+test("native schedules only deterministic Reminder sources", () => {
+  const now = new Date("2099-09-05T01:00:00.000Z");
+  const result = buildNativeNotificationSchedules({ upcoming: [reminder(null, 1), reminder("cat_routine", 2), reminder("tracker_standard", 3), reminder("tracker_missing", 4), reminder("period_medication", 5)], now });
+  assert.deepEqual(result.map((item) => item.id), ["evaorbit-scheduled-reminder-1", "evaorbit-scheduled-reminder-2", "evaorbit-scheduled-reminder-3"]);
+  assert.equal(nativeReminderNotification(reminder("tracker_missing"), "zh-CN", now), null);
+  assert.equal(nativeReminderNotification(reminder("period_medication"), "zh-CN", now), null);
 });
 
-test("native overdue follow-ups are opt-in",()=>{
-  const reminder={id:43,title:"Medication",note:"",sourceType:null,subjectLabel:"",sourceLabel:"",nextDueAt:"2026-09-05T01:00:00.000Z",scheduledAt:"2026-09-05T01:00:00.000Z",snoozedUntil:null,leadTimeMinutes:0,dueHasExplicitTime:true,isActive:true,timezone:"Asia/Shanghai",repeatWhileOverdue:false} as ScheduledNotification;
-  assert.deepEqual(nativeReminderNotifications(reminder,"zh-CN",new Date("2026-09-05T02:00:00.000Z"),3),[]);
+test("native reminders stage daily follow-ups after the due date", () => {
+  const item = { ...reminder("cat_routine"), nextDueAt: "2026-09-05T01:00:00.000Z", repeatWhileOverdue: true };
+  const result = nativeReminderNotifications(item, "zh-CN", new Date("2026-09-05T02:00:00.000Z"), 3);
+  assert.deepEqual(result.map((entry) => entry.id), ["evaorbit-scheduled-reminder-42-2026-09-06", "evaorbit-scheduled-reminder-42-2026-09-07"]);
+  assert.deepEqual(result.map((entry) => entry.triggerAt), ["2026-09-06T01:00:00.000Z", "2026-09-07T01:00:00.000Z"]);
 });
 
-test("native weight reminders are independent and skip dates with an existing weight",()=>{
-  const settings={targetWeightKg:null,reminderEnabled:true,reminderTime:"08:00",updatedAt:""};
-  const result=nativeWeightNotifications(settings,[{occurredAt:"2026-09-05T02:00:00.000Z"}],"zh-CN",new Date("2026-09-05T00:00:00.000Z"),2);
-  assert.deepEqual(result.map(item=>item.id),["evaorbit-scheduled-weight-2026-09-06"]);
+test("native overdue follow-ups are opt-in", () => {
+  assert.deepEqual(nativeReminderNotifications({ ...reminder(null), nextDueAt: "2026-09-05T01:00:00.000Z" }, "zh-CN", new Date("2026-09-05T02:00:00.000Z"), 3), []);
 });

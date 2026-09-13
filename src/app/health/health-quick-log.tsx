@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, type ComponentType } from "react";
-import { Dumbbell, Health, Weight, type IconComponent } from "reicon-react";
+import { Droplet, Dumbbell, Health, Pill, Weight, type IconComponent } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
-import type { TrainingInputSuggestions, WeightRecord } from "@/lib/types";
+import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, WeightRecord } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
 import { TrainingLogEditor } from "./training-log-editor";
 import { WeightEditor } from "./weight-section";
+import { MedicationDoseEditor, PeriodFlowEditor } from "./period-medication-section";
 
 type HealthQuickLogEditorProps = {
   initialDate: string;
@@ -71,9 +72,14 @@ function HealthRecordQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogE
   </FormSheet>;
 }
 
+function PeriodQuickLog({initialDate,onClose,onSaved}:HealthQuickLogEditorProps){const request=useRemoteJson<MenstrualPeriod[]>("/api/health/periods?limit=30");if(!request.data)return <LoadSheet title="记录经期 / 经量" error={request.error} onClose={onClose} onRetry={request.retry}/>;return <PeriodFlowEditor initialDate={initialDate} periods={request.data} onClose={onClose} onSaved={async()=>{await onSaved();onClose();}}/>;}
+function MedicationDoseQuickLog({initialDate,onClose,onSaved}:HealthQuickLogEditorProps){const periods=useRemoteJson<MenstrualPeriod[]>("/api/health/periods?limit=30"),presets=useRemoteJson<MedicationPreset[]>("/api/health/medications?limit=100");if(!periods.data||!presets.data)return <LoadSheet title="记录服药" error={periods.error||presets.error} onClose={onClose} onRetry={()=>{periods.retry();presets.retry();}}/>;return <MedicationDoseEditor initialDate={initialDate} periods={periods.data} presets={presets.data} onClose={onClose} onSaved={async()=>{await onSaved();onClose();}}/>;}
+
 export const HEALTH_QUICK_LOGS = [
   { kind: "training", icon: Dumbbell, en: "Training", zh: "训练", Editor: TrainingQuickLog },
   { kind: "weight", icon: Weight, en: "Weight", zh: "体重", Editor: WeightQuickLog },
+  { kind: "period", icon: Droplet, en: "Period / Flow", zh: "经期 / 经量", Editor: PeriodQuickLog },
+  { kind: "medication-dose", icon: Pill, en: "Medication dose", zh: "服药", Editor: MedicationDoseQuickLog },
   { kind: "health-record", icon: Health, en: "Health record", zh: "健康记录", Editor: HealthRecordQuickLog },
 ] as const satisfies readonly HealthQuickLogDefinition[];
 

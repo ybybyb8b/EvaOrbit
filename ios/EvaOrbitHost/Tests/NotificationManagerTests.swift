@@ -33,7 +33,7 @@ final class NotificationManagerTests: XCTestCase {
     func testSchedulingSameStableIdentifierReplacesPendingRequest() async throws {
         let center = FakeLocalNotificationCenter(status: .authorized)
         let manager = NotificationManager(center: center)
-        let identifier = "evaorbit-reminder-42"
+        let identifier = "evaorbit-scheduled-reminder-42"
 
         try await manager.schedule(identifier: identifier, title: "Before", body: "One", triggerAt: Date().addingTimeInterval(600))
         try await manager.schedule(identifier: identifier, title: "After", body: "Two", triggerAt: Date().addingTimeInterval(1_200))
@@ -47,7 +47,7 @@ final class NotificationManagerTests: XCTestCase {
     func testCancelRemovesPendingRequest() async throws {
         let center = FakeLocalNotificationCenter(status: .authorized)
         let manager = NotificationManager(center: center)
-        let identifier = "evaorbit-reminder-7"
+        let identifier = "evaorbit-scheduled-reminder-7"
         try await manager.schedule(identifier: identifier, title: "Care", body: "Momo", triggerAt: Date().addingTimeInterval(600))
 
         try manager.cancel(identifier: identifier)
@@ -68,7 +68,7 @@ final class NotificationManagerTests: XCTestCase {
         }
 
         do {
-            try await manager.schedule(identifier: "evaorbit-reminder-1", title: "Care", body: "Momo", triggerAt: Date().addingTimeInterval(600))
+            try await manager.schedule(identifier: "evaorbit-scheduled-reminder-1", title: "Care", body: "Momo", triggerAt: Date().addingTimeInterval(600))
             XCTFail("Expected denied scheduling")
         } catch {
             XCTAssertEqual(error as? NotificationManagerError, .notAuthorized)

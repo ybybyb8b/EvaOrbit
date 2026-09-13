@@ -1,0 +1,4 @@
+import { NextRequest,NextResponse } from "next/server";import { apiError } from "@/lib/api";import { createMedicationPreset,listMedicationPresets } from "@/lib/services/period-medication";import { parseNewMedicationPreset } from "@/lib/validation";
+export const runtime="nodejs";
+export async function GET(request:NextRequest){try{const q=request.nextUrl.searchParams,limit=Number(q.get("limit")??100);return NextResponse.json(await listMedicationPresets({includeArchived:q.get("includeArchived")==="true",limit:Number.isSafeInteger(limit)?limit:100}));}catch(error){return apiError(error);}}
+export async function POST(request:NextRequest){try{return NextResponse.json(await createMedicationPreset(parseNewMedicationPreset(await request.json())),{status:201});}catch(error){return apiError(error);}}

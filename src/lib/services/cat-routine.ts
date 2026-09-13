@@ -5,6 +5,7 @@ import { catRoutineCompletionPatch, catRoutineSkipPatch } from "../reminder-engi
 import { getRepository } from "../repositories";
 import type { NewCatRoutine } from "../repositories/types";
 import type { CatRoutine, Reminder } from "../types";
+import { REMINDER_SOURCE_REGISTRY } from "../reminder-source-registry";
 
 const RESET_NOTIFICATION = {
   status: "scheduled" as const,
@@ -33,7 +34,7 @@ function reminderInput(routine: CatRoutine): Omit<Reminder, "id" | "lastComplete
     title: routine.title,
     targetType: routine.scope === "cat" ? "cat" : "cat_household",
     targetId: routine.scope === "cat" ? routine.petId : null,
-    sourceType: "cat_routine",
+    sourceType: REMINDER_SOURCE_REGISTRY.cat_routine.sourceType,
     sourceId: routine.id,
     scheduleType: "one_time",
     startsAt: routine.firstDueAt,

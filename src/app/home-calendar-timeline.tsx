@@ -27,6 +27,8 @@ function dateFor(month: string, day: number) { return `${month}-${String(day).pa
 function timeLabel(value: string) { return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(value)); }
 function titleFor(item: TimelineEvent, english: boolean) {
   if (item.eventType === "health.weight") return english ? "Weight" : "体重";
+  if (item.eventType === "health.menstrual_flow") return item.metadata.isCycleStart ? (english ? "Period started" : "经期开始") : (english ? "Menstrual flow" : "经量记录");
+  if (item.eventType === "health.medication_dose") return item.title;
   if (item.sourceType === "food" && typeof item.metadata.mealType === "string") { const meal = mealLabels[item.metadata.mealType]; if (meal) return english ? meal.en : meal.zh; }
   if (item.sourceType === "training") {
     const course = typeof item.metadata.course === "string" ? item.metadata.course.trim() : "";

@@ -221,10 +221,10 @@ Body Mass 同时是 EvaOrbit 唯一写入 HealthKit 的类型。安装或启动 
 原生通知 identifier 由 Web 稳定生成：
 
 ```text
-evaorbit-reminder-{reminder.id}
+evaorbit-scheduled-{source}-{stable-id}
 ```
 
-同一个 identifier 再次提交给 iOS 会覆盖原 pending request，避免修改时间后重复。Swift 只接受 `evaorbit-reminder-` 和 `evaorbit-test-` 前缀，并校验内容长度和未来触发时间。
+同一个 identifier 再次提交给 iOS 会覆盖原 pending request，避免修改时间后重复。Swift 接受当前 `evaorbit-scheduled-`、兼容旧版 `evaorbit-reminder-`，并接受手动测试使用的 `evaorbit-test-` 前缀；同时校验内容长度和未来触发时间。
 
 Web 侧 `reconcileNativeNotifications()` 才是校准逻辑：
 

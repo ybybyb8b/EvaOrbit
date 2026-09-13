@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -67,6 +67,18 @@ export type TrainingLogListInput = { from?: string; to?: string; limit?: number 
 export type NewWeightRecord = Pick<WeightRecord, "occurredAt" | "occurredHasExplicitTime" | "weightKg">;
 export type WeightRecordPatch = Partial<NewWeightRecord>;
 export type WeightRecordListInput = { from?: string; to?: string; limit?: number };
+export type NewMenstrualPeriod = Pick<MenstrualPeriod, "startedOn" | "endedOn" | "notes">;
+export type MenstrualPeriodPatch = Partial<NewMenstrualPeriod>;
+export type MenstrualPeriodListInput = { from?: string; to?: string; limit?: number };
+export type NewMenstrualFlowRecord = Pick<MenstrualFlowRecord, "periodId" | "occurredAt" | "occurredHasExplicitTime" | "flow" | "isCycleStart" | "notes">;
+export type MenstrualFlowRecordPatch = Partial<NewMenstrualFlowRecord>;
+export type MenstrualFlowRecordListInput = { periodId?: number; from?: string; to?: string; limit?: number };
+export type NewMedicationPreset = Pick<MedicationPreset, "name" | "defaultDoseText" | "minReminderIntervalMinutes" | "reminderEnabled" | "periodLinkEnabled" | "notes">;
+export type MedicationPresetPatch = Partial<NewMedicationPreset> & { archivedAt?: string | null };
+export type MedicationPresetListInput = { includeArchived?: boolean; limit?: number };
+export type NewMedicationDoseEvent = Pick<MedicationDoseEvent, "medicationPresetId" | "periodId" | "takenAt" | "doseText" | "notes">;
+export type MedicationDoseEventPatch = Partial<NewMedicationDoseEvent>;
+export type MedicationDoseEventListInput = { medicationPresetId?: number; periodId?: number; from?: string; to?: string; limit?: number };
 export type NewMediaItem = Pick<MediaItem, "title" | "originalTitle" | "translatedTitle" | "mediaType" | "status" | "rating" | "isFavorite" | "note" | "coverUrl" | "seriesId" | "seasonNumber" | "seasonTitle">;
 export type NewMediaDraft = Omit<NewMediaItem,"title">;
 export type MediaListInput = { query?: string; mediaType?: MediaType; status?: MediaStatus; rating?: MediaRating; seriesId?: number; favorite?: boolean; rewatched?: boolean; limit?: number };
@@ -233,6 +245,27 @@ export interface EvaOrbitRepository {
   deleteWeightRecord(id: number): Promise<boolean>;
   getWeightSettings(): Promise<WeightSettings>;
   updateWeightSettings(input: Pick<WeightSettings, "targetWeightKg" | "reminderEnabled" | "reminderTime">): Promise<WeightSettings>;
+
+  listMenstrualPeriods(input?: MenstrualPeriodListInput): Promise<MenstrualPeriod[]>;
+  getMenstrualPeriod(id: number): Promise<MenstrualPeriod | null>;
+  createMenstrualPeriod(input: NewMenstrualPeriod): Promise<MenstrualPeriod>;
+  updateMenstrualPeriod(id: number, input: MenstrualPeriodPatch): Promise<MenstrualPeriod | null>;
+  deleteMenstrualPeriod(id: number): Promise<boolean>;
+  listMenstrualFlowRecords(input?: MenstrualFlowRecordListInput): Promise<MenstrualFlowRecord[]>;
+  getMenstrualFlowRecord(id: number): Promise<MenstrualFlowRecord | null>;
+  createMenstrualFlowRecord(input: NewMenstrualFlowRecord): Promise<MenstrualFlowRecord>;
+  updateMenstrualFlowRecord(id: number, input: MenstrualFlowRecordPatch): Promise<MenstrualFlowRecord | null>;
+  deleteMenstrualFlowRecord(id: number): Promise<boolean>;
+  listMedicationPresets(input?: MedicationPresetListInput): Promise<MedicationPreset[]>;
+  getMedicationPreset(id: number): Promise<MedicationPreset | null>;
+  createMedicationPreset(input: NewMedicationPreset): Promise<MedicationPreset>;
+  updateMedicationPreset(id: number, input: MedicationPresetPatch): Promise<MedicationPreset | null>;
+  deleteMedicationPreset(id: number): Promise<boolean>;
+  listMedicationDoseEvents(input?: MedicationDoseEventListInput): Promise<MedicationDoseEvent[]>;
+  getMedicationDoseEvent(id: number): Promise<MedicationDoseEvent | null>;
+  createMedicationDoseEvent(input: NewMedicationDoseEvent): Promise<MedicationDoseEvent>;
+  updateMedicationDoseEvent(id: number, input: MedicationDoseEventPatch): Promise<MedicationDoseEvent | null>;
+  deleteMedicationDoseEvent(id: number): Promise<boolean>;
 
   listMediaItems(input?: MediaListInput): Promise<MediaItem[]>;
   listMediaSeries(): Promise<MediaSeries[]>;

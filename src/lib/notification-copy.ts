@@ -5,6 +5,7 @@ type ReminderNotificationCopyInput = {
   nextDueAt?: string | null;
   timezone?: string | null;
 };
+import { reminderSourceDefinition } from "./reminder-source-registry.ts";
 
 function dueDateTime(value: string, locale: string, timezone?: string | null) {
   const date = new Date(value);
@@ -26,7 +27,16 @@ function dueDateTime(value: string, locale: string, timezone?: string | null) {
 
 export function reminderNotificationCopy(item: ReminderNotificationCopyInput, locale = "zh-CN") {
   const english = locale.toLocaleLowerCase().startsWith("en");
-  if (item.sourceType === "tracker_missing") {
+  const source = reminderSourceDefinition(item.sourceType);
+  if (source.domainRule === "period_medication") {
+    return {
+      title: item.title,
+      body: english
+        ? "Based on your settings, if you still need it, you can consider or log another use."
+        : "根据你的设置，如仍有需要，可以考虑或记录下一次使用。",
+    };
+  }
+  if (source.domainRule === "tracker_missing") {
     const days = Math.max(1, item.intervalValue ?? 1);
     return {
       title: item.title,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "./timeline.ts";
-import type { DrinkLog, FoodLog, HealthRecord, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
@@ -28,6 +28,8 @@ const trainingLog: TrainingLog = {
   teacher: "Eva", course: "Core flow", durationMinutes: 45, notes: "", createdAt: "", updatedAt: "",
 };
 const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.25,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
+const menstrualFlow:MenstrualFlowRecord={id:31,periodId:5,occurredAt:"2026-08-26T10:00:00.000Z",occurredHasExplicitTime:false,flow:"medium",isCycleStart:true,notes:"",createdAt:"",updatedAt:""};
+const medicationDose:MedicationDoseEvent={id:32,medicationPresetId:6,periodId:5,takenAt:"2026-08-26T11:00:00.000Z",medicationNameSnapshot:"My medication",doseText:"1 tablet",notes:"",createdAt:"",updatedAt:""};
 
 test("merges module records into a newest-first timeline contract", () => {
   const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker], [healthRecord]);
@@ -74,6 +76,14 @@ test("maps every weight sample into the Health timeline without daily deduplicat
   assert.equal(events[0].href,"/health#weight-title");
   assert.match(events[0].detail!,/Health/);
   assert.match(events[1].detail!,/^64\.25 kg/);
+});
+
+test("maps menstrual flow and dose facts without projecting a period episode",()=>{
+  const events=buildTimelineEvents([],[],[],[],[],[],[menstrualFlow],[medicationDose]);
+  assert.deepEqual(events.map(item=>item.eventType),["health.medication_dose","health.menstrual_flow"]);
+  assert.equal(events.every(item=>item.sourceType==="health"),true);
+  assert.equal(events.some(item=>item.eventType==="health.period"),false);
+  assert.equal(events[0].metadata.periodId,5);
 });
 
 test("marks health and training days as important while retaining an accessible count", () => {

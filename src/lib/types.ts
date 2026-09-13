@@ -534,6 +534,53 @@ export interface WeightSettings {
   updatedAt: string;
 }
 
+export interface MenstrualPeriod {
+  id: number;
+  startedOn: string;
+  endedOn: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MenstrualFlow = "none" | "unspecified" | "light" | "medium" | "heavy";
+export interface MenstrualFlowRecord {
+  id: number;
+  periodId: number | null;
+  occurredAt: string;
+  occurredHasExplicitTime: boolean;
+  flow: MenstrualFlow;
+  isCycleStart: boolean;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MedicationPreset {
+  id: number;
+  name: string;
+  defaultDoseText: string;
+  minReminderIntervalMinutes: number;
+  reminderEnabled: boolean;
+  periodLinkEnabled: boolean;
+  notes: string;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MedicationDoseEvent {
+  id: number;
+  medicationPresetId: number;
+  periodId: number | null;
+  takenAt: string;
+  medicationNameSnapshot: string;
+  doseText: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type MediaType = "movie" | "tv" | "anime" | "documentary" | "other";
 export type MediaStatus = "planned" | "watching" | "completed" | "paused" | "dropped";
 export type MediaRatingBase = "goat" | "dope" | "mid" | "nope" | "shit";
@@ -895,7 +942,7 @@ export interface CatTimelineEntry {
   metadata: Record<string, unknown>;
 }
 
-export type ReminderTargetType = "cat" | "cat_household" | "tracker";
+export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";

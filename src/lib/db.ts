@@ -8,7 +8,7 @@ import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./
 import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
 import { normalizeUiLanguage, type UiLanguage } from "./locale";
 import { normalizeChineseFont, normalizeEnglishFont, type ChineseFont, type EnglishFont } from "./font-preferences";
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MediaItem, MediaSeries, MediaViewing, Memo, Memory, MemoryEntity, MemoryFact, MemorySource, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, WeightRecord, WeightSettings } from "./types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaSeries, MediaViewing, Memo, Memory, MemoryEntity, MemoryFact, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, WeightRecord, WeightSettings } from "./types";
 import type { RelationEventInput } from "./relations";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, MemoryEntityListInput, MemoryEntityPatch, MemoryFactListInput, MemoryFactPatch, MemorySourceListInput, MemorySourcePatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment, NewMediaItem, NewMemo, NewMemoryEntity, NewMemoryFact, NewMemorySource, NewProject, NewProjectItem, NewRelationPerson, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
@@ -1046,6 +1046,81 @@ if (!hasV41) database.exec(`
   COMMIT;
 `);
 
+const hasV42 = database.prepare("SELECT 1 FROM migrations WHERE version = 42").get();
+if (!hasV42) database.exec(`
+  BEGIN;
+  CREATE TABLE menstrual_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',started_on TEXT NOT NULL,ended_on TEXT,
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=5000),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(id,user_id),CHECK(ended_on IS NULL OR ended_on>=started_on)
+  );
+  CREATE TABLE menstrual_flow_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',period_id INTEGER,occurred_at TEXT NOT NULL,
+    occurred_has_explicit_time INTEGER NOT NULL DEFAULT 0 CHECK(occurred_has_explicit_time IN(0,1)),flow TEXT NOT NULL CHECK(flow IN('none','unspecified','light','medium','heavy')),
+    is_cycle_start INTEGER NOT NULL DEFAULT 0 CHECK(is_cycle_start IN(0,1)),notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=5000),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(period_id,user_id) REFERENCES menstrual_periods(id,user_id) ON DELETE RESTRICT,CHECK(NOT is_cycle_start OR period_id IS NOT NULL)
+  );
+  CREATE TABLE medication_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 200),
+    default_dose_text TEXT NOT NULL DEFAULT '' CHECK(length(default_dose_text)<=200),min_reminder_interval_minutes INTEGER NOT NULL CHECK(min_reminder_interval_minutes BETWEEN 1 AND 43200),
+    reminder_enabled INTEGER NOT NULL DEFAULT 0 CHECK(reminder_enabled IN(0,1)),period_link_enabled INTEGER NOT NULL DEFAULT 0 CHECK(period_link_enabled IN(0,1)),
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=5000),archived_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(id,user_id)
+  );
+  CREATE TABLE medication_dose_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',medication_preset_id INTEGER NOT NULL,period_id INTEGER,taken_at TEXT NOT NULL,
+    medication_name_snapshot TEXT NOT NULL CHECK(length(trim(medication_name_snapshot)) BETWEEN 1 AND 200),dose_text TEXT NOT NULL DEFAULT '' CHECK(length(dose_text)<=200),
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=5000),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(medication_preset_id,user_id) REFERENCES medication_presets(id,user_id) ON DELETE RESTRICT,
+    FOREIGN KEY(period_id,user_id) REFERENCES menstrual_periods(id,user_id) ON DELETE RESTRICT
+  );
+  CREATE INDEX idx_menstrual_periods_user_started ON menstrual_periods(user_id,started_on DESC,id DESC);
+  CREATE UNIQUE INDEX idx_menstrual_periods_one_open ON menstrual_periods(user_id) WHERE ended_on IS NULL;
+  CREATE INDEX idx_menstrual_flow_user_occurred ON menstrual_flow_records(user_id,occurred_at DESC,id DESC);
+  CREATE INDEX idx_menstrual_flow_period ON menstrual_flow_records(user_id,period_id,occurred_at DESC);
+  CREATE UNIQUE INDEX idx_menstrual_flow_cycle_start ON menstrual_flow_records(user_id,period_id) WHERE is_cycle_start=1 AND period_id IS NOT NULL;
+  CREATE INDEX idx_medication_presets_user_active ON medication_presets(user_id,archived_at,name);
+  CREATE INDEX idx_medication_doses_user_taken ON medication_dose_events(user_id,taken_at DESC,id DESC);
+  CREATE INDEX idx_medication_doses_preset ON medication_dose_events(user_id,medication_preset_id,taken_at DESC);
+  INSERT INTO migrations(version) VALUES(42);
+  COMMIT;
+`);
+
+const hasV43 = database.prepare("SELECT 1 FROM migrations WHERE version = 43").get();
+if (!hasV43) database.exec(`
+  BEGIN;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_menstrual_periods_one_open ON menstrual_periods(user_id) WHERE ended_on IS NULL;
+  INSERT INTO migrations(version) VALUES(43);
+  COMMIT;
+`);
+
+const hasV44 = database.prepare("SELECT 1 FROM migrations WHERE version = 44").get();
+if (!hasV44) {
+  database.exec("PRAGMA foreign_keys = OFF");
+  try {
+    database.exec(`
+      BEGIN;
+      CREATE TABLE reminders_v44 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,target_type TEXT NOT NULL CHECK(target_type IN ('cat','cat_household','tracker','health')),target_id INTEGER,source_type TEXT,source_id INTEGER,
+        schedule_type TEXT NOT NULL CHECK(schedule_type IN ('one_time','interval','course')),starts_at TEXT NOT NULL,next_due_at TEXT,due_has_explicit_time INTEGER NOT NULL DEFAULT 1 CHECK(due_has_explicit_time IN (0,1)),interval_value INTEGER,interval_unit TEXT,times_of_day TEXT NOT NULL DEFAULT '[]',ends_at TEXT,timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',note TEXT NOT NULL DEFAULT '',lead_time_minutes INTEGER NOT NULL DEFAULT 0 CHECK(lead_time_minutes BETWEEN 0 AND 525600),repeat_while_overdue INTEGER NOT NULL DEFAULT 0 CHECK(repeat_while_overdue IN (0,1)),status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','sent','cancelled','failed','completed')),is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),last_completed_at TEXT,snoozed_until TEXT,last_notified_at TEXT,sent_at TEXT,cancelled_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO reminders_v44(id,title,target_type,target_id,source_type,source_id,schedule_type,starts_at,next_due_at,due_has_explicit_time,interval_value,interval_unit,times_of_day,ends_at,timezone,note,lead_time_minutes,repeat_while_overdue,status,is_active,last_completed_at,snoozed_until,last_notified_at,sent_at,cancelled_at,created_at,updated_at)
+        SELECT id,title,target_type,target_id,source_type,source_id,schedule_type,starts_at,next_due_at,due_has_explicit_time,interval_value,interval_unit,times_of_day,ends_at,timezone,note,lead_time_minutes,repeat_while_overdue,status,is_active,last_completed_at,snoozed_until,last_notified_at,sent_at,cancelled_at,created_at,updated_at FROM reminders;
+      DROP TABLE reminders;
+      ALTER TABLE reminders_v44 RENAME TO reminders;
+      CREATE INDEX idx_reminders_due ON reminders(is_active,next_due_at);
+      CREATE INDEX idx_reminders_status_due ON reminders(status,is_active,next_due_at);
+      CREATE UNIQUE INDEX idx_reminders_period_medication_projection ON reminders(source_type,source_id) WHERE source_type='period_medication';
+      INSERT INTO migrations(version) VALUES(44);
+      COMMIT;
+    `);
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1558,6 +1633,34 @@ export function deleteWeightRecord(id:number){return database.prepare("DELETE FR
 function weightSettingsFromRow(row:Record<string,unknown>|undefined):WeightSettings{return{targetWeightKg:row?.target_weight_kg===null||row?.target_weight_kg===undefined?null:Number(row.target_weight_kg),reminderEnabled:Boolean(row?.reminder_enabled),reminderTime:String(row?.reminder_time??"08:00").slice(0,5),updatedAt:String(row?.updated_at??"")};}
 export function getWeightSettings(){return weightSettingsFromRow(database.prepare("SELECT * FROM weight_settings WHERE user_id='local'").get() as Record<string,unknown>|undefined);}
 export function updateWeightSettings(input:Pick<WeightSettings,"targetWeightKg"|"reminderEnabled"|"reminderTime">){database.prepare("INSERT INTO weight_settings(user_id,target_weight_kg,reminder_enabled,reminder_time) VALUES('local',?,?,?) ON CONFLICT(user_id) DO UPDATE SET target_weight_kg=excluded.target_weight_kg,reminder_enabled=excluded.reminder_enabled,reminder_time=excluded.reminder_time,updated_at=CURRENT_TIMESTAMP").run(input.targetWeightKg,Number(input.reminderEnabled),input.reminderTime);return getWeightSettings();}
+
+function menstrualPeriodFromRow(row:Record<string,unknown>):MenstrualPeriod{return{id:Number(row.id),startedOn:String(row.started_on),endedOn:row.ended_on?String(row.ended_on):null,notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listMenstrualPeriods(input:import("./repositories/types").MenstrualPeriodListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.from){conditions.push("started_on>=?");values.push(input.from);}if(input.to){conditions.push("started_on<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),500);return(database.prepare(`SELECT * FROM menstrual_periods WHERE ${conditions.join(" AND ")} ORDER BY started_on DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(menstrualPeriodFromRow);}
+export function getMenstrualPeriod(id:number){const row=database.prepare("SELECT * FROM menstrual_periods WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?menstrualPeriodFromRow(row):null;}
+export function createMenstrualPeriod(input:import("./repositories/types").NewMenstrualPeriod){if(input.endedOn===null&&(listMenstrualPeriods({limit:500}).some(item=>item.endedOn===null)))throw new ConflictError("请先结束当前经期，再开始新的经期");const result=database.prepare("INSERT INTO menstrual_periods(user_id,started_on,ended_on,notes) VALUES('local',?,?,?)").run(input.startedOn,input.endedOn,input.notes);return getMenstrualPeriod(Number(result.lastInsertRowid))!;}
+export function updateMenstrualPeriod(id:number,input:import("./repositories/types").MenstrualPeriodPatch){const current=getMenstrualPeriod(id);if(!current)return null;const startedOn=input.startedOn??current.startedOn,endedOn=input.endedOn===undefined?current.endedOn:input.endedOn;if(endedOn&&endedOn<startedOn)throw new ConflictError("经期结束日期不能早于开始日期");const map={startedOn:"started_on",endedOn:"ended_on",notes:"notes"} as const;const entries=Object.entries(map).filter(([key])=>input[key as keyof typeof input]!==undefined);if(!entries.length)return current;const result=database.prepare(`UPDATE menstrual_periods SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof typeof input] as string|null),id);return result.changes?getMenstrualPeriod(id):null;}
+export function deleteMenstrualPeriod(id:number){const refs=database.prepare("SELECT (SELECT COUNT(*) FROM menstrual_flow_records WHERE period_id=? AND user_id='local')+(SELECT COUNT(*) FROM medication_dose_events WHERE period_id=? AND user_id='local') AS count").get(id,id) as {count:number};if(refs.count)throw new ConflictError("经期仍有关联记录，不能删除");return database.prepare("DELETE FROM menstrual_periods WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function menstrualFlowFromRow(row:Record<string,unknown>):MenstrualFlowRecord{return{id:Number(row.id),periodId:row.period_id===null?null:Number(row.period_id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),flow:row.flow as MenstrualFlowRecord["flow"],isCycleStart:Boolean(row.is_cycle_start),notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listMenstrualFlowRecords(input:import("./repositories/types").MenstrualFlowRecordListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.periodId){conditions.push("period_id=?");values.push(input.periodId);}if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),500);return(database.prepare(`SELECT * FROM menstrual_flow_records WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(menstrualFlowFromRow);}
+export function getMenstrualFlowRecord(id:number){const row=database.prepare("SELECT * FROM menstrual_flow_records WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?menstrualFlowFromRow(row):null;}
+export function createMenstrualFlowRecord(input:import("./repositories/types").NewMenstrualFlowRecord){const result=database.prepare("INSERT INTO menstrual_flow_records(user_id,period_id,occurred_at,occurred_has_explicit_time,flow,is_cycle_start,notes) VALUES('local',?,?,?,?,?,?)").run(input.periodId,input.occurredAt,Number(input.occurredHasExplicitTime),input.flow,Number(input.isCycleStart),input.notes);return getMenstrualFlowRecord(Number(result.lastInsertRowid))!;}
+export function updateMenstrualFlowRecord(id:number,input:import("./repositories/types").MenstrualFlowRecordPatch){const current=getMenstrualFlowRecord(id);if(!current)return null;const periodId=input.periodId===undefined?current.periodId:input.periodId,isCycleStart=input.isCycleStart??current.isCycleStart;if(isCycleStart&&periodId===null)throw new ConflictError("周期开始记录必须关联经期");const map={periodId:"period_id",occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",flow:"flow",isCycleStart:"is_cycle_start",notes:"notes"} as const;const entries=Object.entries(map).filter(([key])=>input[key as keyof typeof input]!==undefined);if(!entries.length)return current;const value=(key:string)=>key==="occurredHasExplicitTime"||key==="isCycleStart"?Number(input[key as keyof typeof input]):input[key as keyof typeof input] as string|number|null;const result=database.prepare(`UPDATE menstrual_flow_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getMenstrualFlowRecord(id):null;}
+export function deleteMenstrualFlowRecord(id:number){return database.prepare("DELETE FROM menstrual_flow_records WHERE id=? AND user_id='local'").run(id).changes>0;}
+
+function medicationPresetFromRow(row:Record<string,unknown>):MedicationPreset{return{id:Number(row.id),name:String(row.name),defaultDoseText:String(row.default_dose_text??""),minReminderIntervalMinutes:Number(row.min_reminder_interval_minutes),reminderEnabled:Boolean(row.reminder_enabled),periodLinkEnabled:Boolean(row.period_link_enabled),notes:String(row.notes??""),archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listMedicationPresets(input:import("./repositories/types").MedicationPresetListInput={}){const conditions=["user_id='local'"];if(!input.includeArchived)conditions.push("archived_at IS NULL");const limit=Math.min(Math.max(input.limit??100,1),500);return(database.prepare(`SELECT * FROM medication_presets WHERE ${conditions.join(" AND ")} ORDER BY name COLLATE NOCASE,id LIMIT ?`).all(limit) as Record<string,unknown>[]).map(medicationPresetFromRow);}
+export function getMedicationPreset(id:number){const row=database.prepare("SELECT * FROM medication_presets WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?medicationPresetFromRow(row):null;}
+export function createMedicationPreset(input:import("./repositories/types").NewMedicationPreset){const result=database.prepare("INSERT INTO medication_presets(user_id,name,default_dose_text,min_reminder_interval_minutes,reminder_enabled,period_link_enabled,notes) VALUES('local',?,?,?,?,?,?)").run(input.name,input.defaultDoseText,input.minReminderIntervalMinutes,Number(input.reminderEnabled),Number(input.periodLinkEnabled),input.notes);return getMedicationPreset(Number(result.lastInsertRowid))!;}
+export function updateMedicationPreset(id:number,input:import("./repositories/types").MedicationPresetPatch){const map={name:"name",defaultDoseText:"default_dose_text",minReminderIntervalMinutes:"min_reminder_interval_minutes",reminderEnabled:"reminder_enabled",periodLinkEnabled:"period_link_enabled",notes:"notes",archivedAt:"archived_at"} as const;const entries=Object.entries(map).filter(([key])=>input[key as keyof typeof input]!==undefined);if(!entries.length)return getMedicationPreset(id);const value=(key:string)=>key==="reminderEnabled"||key==="periodLinkEnabled"?Number(input[key as keyof typeof input]):input[key as keyof typeof input] as string|number|null;const result=database.prepare(`UPDATE medication_presets SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getMedicationPreset(id):null;}
+export function deleteMedicationPreset(id:number){const result=database.prepare("UPDATE medication_presets SET archived_at=CURRENT_TIMESTAMP,reminder_enabled=0,period_link_enabled=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(id);return result.changes>0;}
+
+function medicationDoseFromRow(row:Record<string,unknown>):MedicationDoseEvent{return{id:Number(row.id),medicationPresetId:Number(row.medication_preset_id),periodId:row.period_id===null?null:Number(row.period_id),takenAt:String(row.taken_at),medicationNameSnapshot:String(row.medication_name_snapshot),doseText:String(row.dose_text??""),notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listMedicationDoseEvents(input:import("./repositories/types").MedicationDoseEventListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.medicationPresetId){conditions.push("medication_preset_id=?");values.push(input.medicationPresetId);}if(input.periodId){conditions.push("period_id=?");values.push(input.periodId);}if(input.from){conditions.push("taken_at>=?");values.push(input.from);}if(input.to){conditions.push("taken_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),500);return(database.prepare(`SELECT * FROM medication_dose_events WHERE ${conditions.join(" AND ")} ORDER BY taken_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(medicationDoseFromRow);}
+export function getMedicationDoseEvent(id:number){const row=database.prepare("SELECT * FROM medication_dose_events WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?medicationDoseFromRow(row):null;}
+export function createMedicationDoseEvent(input:import("./repositories/types").NewMedicationDoseEvent){const preset=getMedicationPreset(input.medicationPresetId);if(!preset||preset.archivedAt)throw new ConflictError("药物配置不存在或已归档");const result=database.prepare("INSERT INTO medication_dose_events(user_id,medication_preset_id,period_id,taken_at,medication_name_snapshot,dose_text,notes) VALUES('local',?,?,?,?,?,?)").run(input.medicationPresetId,input.periodId,input.takenAt,preset.name,input.doseText,input.notes);return getMedicationDoseEvent(Number(result.lastInsertRowid))!;}
+export function updateMedicationDoseEvent(id:number,input:import("./repositories/types").MedicationDoseEventPatch){const map={medicationPresetId:"medication_preset_id",periodId:"period_id",takenAt:"taken_at",doseText:"dose_text",notes:"notes"} as const;const entries=Object.entries(map).filter(([key])=>input[key as keyof typeof input]!==undefined);if(!entries.length)return getMedicationDoseEvent(id);let snapshot:MedicationPreset|undefined;if(input.medicationPresetId!==undefined){snapshot=getMedicationPreset(input.medicationPresetId)??undefined;if(!snapshot||snapshot.archivedAt)throw new ConflictError("药物配置不存在或已归档");entries.push(["medicationNameSnapshot","medication_name_snapshot"] as never);}const value=(key:string)=>key==="medicationNameSnapshot"?snapshot!.name:input[key as keyof typeof input] as string|number|null;const result=database.prepare(`UPDATE medication_dose_events SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getMedicationDoseEvent(id):null;}
+export function deleteMedicationDoseEvent(id:number){return database.prepare("DELETE FROM medication_dose_events WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function mediaItemFromRow(row:Record<string,unknown>):MediaItem{return{id:Number(row.id),title:String(row.title),originalTitle:row.original_title===null?null:String(row.original_title),translatedTitle:row.translated_title===null?null:String(row.translated_title),mediaType:row.media_type as MediaItem["mediaType"],status:row.status as MediaItem["status"],rating:row.rating as MediaItem["rating"],isFavorite:Boolean(row.is_favorite),note:row.note===null?null:String(row.note),coverUrl:row.cover_url===null?null:String(row.cover_url),seriesId:row.series_id===null?null:Number(row.series_id),seriesName:row.series_name===null||row.series_name===undefined?null:String(row.series_name),seasonNumber:row.season_number===null?null:Number(row.season_number),seasonTitle:row.season_title===null?null:String(row.season_title),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function mediaSeriesFromRow(row:Record<string,unknown>):MediaSeries{return{id:Number(row.id),name:String(row.name),itemCount:Number(row.item_count??0),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}

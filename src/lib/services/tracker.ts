@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getRepository } from "../repositories";
+import { REMINDER_SOURCE_REGISTRY } from "../reminder-source-registry";
 import type { NewTracker, NewTrackerEntry, NewTrackerField, NewTrackerGoal, NewTrackerReminder } from "../repositories/types";
 import { dateInEvaOrbit, dateRange, weekRange } from "../time";
 import type { Reminder, TrackerEntry, TrackerField, TrackerReminder, TrackerStats, TrackerSummary } from "../types";
@@ -102,7 +103,7 @@ export async function deleteTrackerEntry(id: number) { return (await getReposito
 export async function createTrackerGoal(input: NewTrackerGoal) { return (await getRepository()).createTrackerGoal(input); }
 export async function deleteTrackerGoal(id: number) { return (await getRepository()).deleteTrackerGoal(id); }
 function reminderInput(rule: TrackerReminder, title: string): Omit<Reminder, "id" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt"> {
-  return { title, targetType: "tracker", targetId: rule.trackerId, sourceType: `tracker_${rule.reminderMode}`, sourceId: rule.id, scheduleType: "interval", startsAt: rule.nextDueAt, nextDueAt: rule.nextDueAt, dueHasExplicitTime: true, intervalValue: rule.periodDays, intervalUnit: "day", timesOfDay: [], endsAt: null, timezone: rule.timezone, note: rule.reminderMode === "missing" ? "Only remind when this Tracker has no entry in the current observation period." : "", leadTimeMinutes: 0, repeatWhileOverdue: false, status: rule.enabled ? "scheduled" : "cancelled", isActive: rule.enabled };
+  return { title, targetType: "tracker", targetId: rule.trackerId, sourceType: rule.reminderMode === "missing" ? REMINDER_SOURCE_REGISTRY.tracker_missing.sourceType : REMINDER_SOURCE_REGISTRY.tracker_standard.sourceType, sourceId: rule.id, scheduleType: "interval", startsAt: rule.nextDueAt, nextDueAt: rule.nextDueAt, dueHasExplicitTime: true, intervalValue: rule.periodDays, intervalUnit: "day", timesOfDay: [], endsAt: null, timezone: rule.timezone, note: rule.reminderMode === "missing" ? "Only remind when this Tracker has no entry in the current observation period." : "", leadTimeMinutes: 0, repeatWhileOverdue: false, status: rule.enabled ? "scheduled" : "cancelled", isActive: rule.enabled };
 }
 
 async function syncTrackerReminder(rule: TrackerReminder) {

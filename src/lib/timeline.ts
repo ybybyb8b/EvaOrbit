@@ -1,8 +1,8 @@
-import type { DrinkLog, FoodLog, HealthRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, RelationEvent, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 import { formatWeightKg } from "./weight.ts";
 
-export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = [], weightRecords: WeightRecord[] = []): TimelineEvent[] {
+export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], trackerEntries: TrackerEntry[] = [], trackers: Tracker[] = [], healthRecords: HealthRecord[] = [], weightRecords: WeightRecord[] = [], menstrualFlows:MenstrualFlowRecord[]=[], medicationDoses:MedicationDoseEvent[]=[]): TimelineEvent[] {
   const foodEvents: TimelineEvent[] = foods.map((item) => ({
     id: `food:${item.id}`,
     eventType: "food.logged",
@@ -53,7 +53,10 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     id:`weight:${item.id}`,eventType:"health.weight",sourceType:"health",sourceId:item.id,title:"Weight",detail:`${formatWeightKg(item.weightKg)} kg · ${item.healthKitSourceName || item.healthKitSourceBundle || (item.source === "apple_health" ? "Apple Health" : "EvaOrbit")}`,
     occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:"/health#weight-title",relatedPeople:[],relatedPets:[],metadata:{weightKg:item.weightKg,source:item.source},
   }));
-  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents, ...weightEvents].sort(compareTimelineEvents);
+  const flowLabels={none:"No flow",unspecified:"Unspecified flow",light:"Light flow",medium:"Medium flow",heavy:"Heavy flow"};
+  const menstrualEvents:TimelineEvent[]=menstrualFlows.map(item=>({id:`menstrual-flow:${item.id}`,eventType:"health.menstrual_flow",sourceType:"health",sourceId:item.id,title:item.isCycleStart?"Period started":"Menstrual flow",detail:item.notes||flowLabels[item.flow],occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:"/health#period-medication-title",relatedPeople:[],relatedPets:[],metadata:{flow:item.flow,periodId:item.periodId,isCycleStart:item.isCycleStart}}));
+  const doseEvents:TimelineEvent[]=medicationDoses.map(item=>({id:`medication-dose:${item.id}`,eventType:"health.medication_dose",sourceType:"health",sourceId:item.id,title:item.medicationNameSnapshot,detail:item.doseText||item.notes||"Medication dose recorded",occurredAt:item.takenAt,hasExplicitTime:true,endAt:null,href:"/health#period-medication-title",relatedPeople:[],relatedPets:[],metadata:{medicationPresetId:item.medicationPresetId,periodId:item.periodId,doseText:item.doseText}}));
+  return [...foodEvents, ...drinkEvents, ...trackerEvents, ...healthEvents, ...weightEvents,...menstrualEvents,...doseEvents].sort(compareTimelineEvents);
 }
 
 export function buildTrainingTimelineEvents(logs: TrainingLog[]): TimelineEvent[] {

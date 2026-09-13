@@ -86,7 +86,8 @@ final class SystemLocalNotificationCenter: LocalNotificationCenter {
 }
 
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
-    static let reminderIdentifierPrefix = "evaorbit-reminder-"
+    static let scheduledIdentifierPrefix = "evaorbit-scheduled-"
+    static let legacyReminderIdentifierPrefix = "evaorbit-reminder-"
     static let testIdentifierPrefix = "evaorbit-test-"
 
     private let center: LocalNotificationCenter
@@ -158,7 +159,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     static func isValidIdentifier(_ value: String) -> Bool {
         guard !value.isEmpty, value.count <= 160,
-              value.hasPrefix(reminderIdentifierPrefix) || value.hasPrefix(testIdentifierPrefix)
+              value.hasPrefix(scheduledIdentifierPrefix)
+                || value.hasPrefix(legacyReminderIdentifierPrefix)
+                || value.hasPrefix(testIdentifierPrefix)
         else { return false }
         return value.rangeOfCharacter(from: .controlCharacters) == nil
     }
