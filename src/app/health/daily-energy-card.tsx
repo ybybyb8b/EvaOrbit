@@ -23,8 +23,12 @@ function draftFromSummary(summary: DailyNutritionSummary): EnergyDraft {
   };
 }
 
+function formatKcalNumber(value: number) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
 function formatKcal(value: number | null) {
-  return value === null ? "Not recorded" : `${value.toLocaleString()} kcal`;
+  return value === null ? "Not recorded" : `${formatKcalNumber(value)} kcal`;
 }
 
 function shortDate(value: string) {
@@ -41,7 +45,7 @@ function energySourceLabel(summary: DailyNutritionSummary) {
 
 function PrimaryEnergyMetric({ label, value, prominent = false }: { label: string; value: number | null; prominent?: boolean }) {
   return <div className={`daily-energy-primary-metric${value === null ? " missing" : ""}${prominent ? " prominent" : ""}`}>
-    <strong>{value === null ? "Not recorded" : value.toLocaleString()}</strong>
+    <strong>{value === null ? "Not recorded" : formatKcalNumber(value)}</strong>
     {value !== null && <span>kcal</span>}
     <small>{label}</small>
   </div>;

@@ -69,6 +69,8 @@ test("Health home shows today's energy outcome and exposes Training CRUD", () =>
   assert.match(view, /<TrainingSection[\s\S]*<DailyEnergyCard[\s\S]*Health records/);
   assert.match(energy, /label="Intake"[\s\S]*label="Expenditure"[\s\S]*label="Balance"/);
   assert.match(energy, /Resting[\s\S]*Active[\s\S]*sourceLabel/);
+  assert.match(energy, /maximumFractionDigits:\s*0/);
+  assert.match(energy, /formatKcalNumber\(value\)/);
   assert.doesNotMatch(energy, /daily-energy-summary|daily-energy-date-row/);
   assert.match(energy, /editing && <form[\s\S]*<span>Date<\/span><input type="date"/);
   assert.match(collection, /export async function GET/);
