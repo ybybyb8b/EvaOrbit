@@ -106,6 +106,11 @@ fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const database = new DatabaseSync(dbPath);
 database.exec("PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
 database.exec("PRAGMA journal_mode = WAL;");
+
+function sqliteHasColumn(table: string, column: string) {
+  return (database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name?: string }>).some((item) => item.name === column);
+}
+
 database.exec(`
   CREATE TABLE IF NOT EXISTS migrations (
     version INTEGER PRIMARY KEY,
@@ -1045,6 +1050,10 @@ if (!hasV41) database.exec(`
   INSERT INTO migrations(version) VALUES(41);
   COMMIT;
 `);
+
+// Older local databases may have recorded migration 41 before the column was added.
+if (!sqliteHasColumn("reminders", "repeat_while_overdue")) database.exec("ALTER TABLE reminders ADD COLUMN repeat_while_overdue INTEGER NOT NULL DEFAULT 0 CHECK(repeat_while_overdue IN (0,1));");
+if (!sqliteHasColumn("cat_routines", "repeat_while_overdue")) database.exec("ALTER TABLE cat_routines ADD COLUMN repeat_while_overdue INTEGER NOT NULL DEFAULT 0 CHECK(repeat_while_overdue IN (0,1));");
 
 const hasV42 = database.prepare("SELECT 1 FROM migrations WHERE version = 42").get();
 if (!hasV42) database.exec(`

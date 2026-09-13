@@ -43,8 +43,8 @@ function energySourceLabel(summary: DailyNutritionSummary) {
   return [apple.length ? `Apple Health (${apple.join(" + ")})` : null, manual.length ? `Manual (${manual.join(" + ")})` : null].filter(Boolean).join(" · ");
 }
 
-function PrimaryEnergyMetric({ label, value, prominent = false }: { label: string; value: number | null; prominent?: boolean }) {
-  return <div className={`daily-energy-primary-metric${value === null ? " missing" : ""}${prominent ? " prominent" : ""}`}>
+function PrimaryEnergyMetric({ label, value }: { label: string; value: number | null }) {
+  return <div className={`daily-energy-primary-metric${value === null ? " missing" : ""}`}>
     <strong>{value === null ? "Not recorded" : formatKcalNumber(value)}</strong>
     {value !== null && <span>kcal</span>}
     <small>{label}</small>
@@ -166,11 +166,11 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
 
   return <section className="daily-energy-card health-section health-energy-section" aria-labelledby="daily-energy-title">
     <div className="daily-energy-heading">
-      <div><span className="eyebrow">{isToday ? "TODAY · IN PROGRESS" : "ENERGY REVIEW"}</span><h2 id="daily-energy-title">{shortDate(selectedDate)}</h2></div>
+      <div><span className="eyebrow">ENERGY · {isToday ? "TODAY IN PROGRESS" : shortDate(selectedDate)}</span><h2 id="daily-energy-title">Calorie balance</h2></div>
       {!editing && <button className="text-button daily-energy-edit" onClick={openEditor}>Edit</button>}
     </div>
     <div className="daily-energy-primary">
-      <PrimaryEnergyMetric label="Intake" value={summary.estimatedIntakeKcal} prominent />
+      <PrimaryEnergyMetric label="Intake" value={summary.estimatedIntakeKcal} />
       <PrimaryEnergyMetric label="Expenditure" value={summary.totalExpenditureKcal} />
       <PrimaryEnergyMetric label="Balance" value={summary.energyBalance} />
     </div>
@@ -178,7 +178,6 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       <p><span>Resting <strong>{formatKcal(summary.restingEnergyKcal)}</strong></span><i aria-hidden="true">·</i><span>Active <strong>{formatKcal(summary.activeEnergyKcal)}</strong></span></p>
       {sourceLabel && <small>{sourceLabel}</small>}
     </div>
-    {!editing && <p className="daily-energy-progress-note">{isToday ? "Today is still changing. This is not a completed review." : "Intake from Food + Drinks, with saved resting and active energy."}</p>}
     {loading && <span className="daily-energy-loading">Loading…</span>}
     {editing && <form className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">

@@ -68,6 +68,7 @@ test("Health home shows today's energy outcome and exposes Training CRUD", () =>
   assert.doesNotMatch(view, /AppleHealthSummary|apple-health-summary|health-current-icon/);
   assert.match(view, /<TrainingSection[\s\S]*<DailyEnergyCard[\s\S]*Health records/);
   assert.match(energy, /label="Intake"[\s\S]*label="Expenditure"[\s\S]*label="Balance"/);
+  assert.match(energy, /ENERGY · [\s\S]*Calorie balance/);
   assert.match(energy, /Resting[\s\S]*Active[\s\S]*sourceLabel/);
   assert.match(energy, /maximumFractionDigits:\s*0/);
   assert.match(energy, /formatKcalNumber\(value\)/);
