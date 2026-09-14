@@ -1,4 +1,6 @@
-import type { SubscriptionIntervalUnit, SubscriptionPayment } from "./types";
+import type { Subscription, SubscriptionIntervalUnit, SubscriptionPayment } from "./types";
+
+export const AUTO_RENEWAL_PAYMENT_NOTE = "自动记账";
 
 export function nextSubscriptionRenewal(date: string, value: number, unit: SubscriptionIntervalUnit) {
   const [year, month, day] = date.split("-").map(Number);
@@ -12,6 +14,13 @@ export function nextSubscriptionRenewal(date: string, value: number, unit: Subsc
   const normalizedMonth = ((targetMonth % 12) + 12) % 12;
   const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0, 12)).getUTCDate();
   return new Date(Date.UTC(targetYear, normalizedMonth, Math.min(day, lastDay), 12)).toISOString().slice(0, 10);
+}
+
+export function automaticSubscriptionRenewalsThrough(subscription: Pick<Subscription, "status" | "autoRenew" | "nextRenewalOn" | "billingIntervalValue" | "billingIntervalUnit">, through: string) {
+  if (subscription.status !== "active" || !subscription.autoRenew || subscription.nextRenewalOn > through) return [];
+  const dates: string[] = [];
+  for (let date = subscription.nextRenewalOn; date <= through; date = nextSubscriptionRenewal(date, subscription.billingIntervalValue, subscription.billingIntervalUnit)) dates.push(date);
+  return dates;
 }
 
 export function subscriptionTotal(payments: SubscriptionPayment[], currency: string) {

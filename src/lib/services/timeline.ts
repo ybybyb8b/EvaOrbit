@@ -5,6 +5,7 @@ import { getRepository } from "../repositories";
 import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
+import { catchUpAutomaticSubscriptionPayments } from "./subscription";
 import type { TimelineEvent, TimelineMonthSummary } from "../types";
 
 function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:string;to:string}):TimelineEvent[]{return items.filter(item=>item.occurredAt>=range.from&&item.occurredAt<range.to).map(item=>({id:`cat:${item.kind}:${item.id}`,eventType:`cat.${item.eventType}`,sourceType:"cat",sourceId:item.id,title:item.title,detail:item.summary,occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:item.petId?`/cats/${item.petId}`:"/cats",relatedPeople:[],relatedPets:item.petId?[item.petId]:[],metadata:{kind:item.kind,...item.metadata}}));}
@@ -17,6 +18,7 @@ function monthDateRange(month: string) {
 }
 
 async function loadSources(range: { from: string; to: string }) {
+  await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses] = await Promise.all([
     repository.listFoodLogs(range),
@@ -62,6 +64,7 @@ export async function listTimeline(input: { date?: string; limit?: number } = {}
 }
 
 export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
+  await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const range = dateRange(date);
   const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions] = await Promise.all([

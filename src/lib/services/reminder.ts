@@ -8,7 +8,7 @@ import type { NewReminder } from "../repositories/types";
 import type { DueReminder, Reminder, ScheduledNotification } from "../types";
 import { completeCatRoutine, skipCatRoutineOccurrence } from "./cat-routine";
 import { periodMedicationSnoozeDeadline, reconcilePeriodMedicationReminder, reconcilePeriodMedicationReminders } from "./period-medication-reminder";
-import { disableSubscriptionReminder, recordSubscriptionPaymentFromReminder, skipSubscriptionRenewal } from "./subscription";
+import { catchUpAutomaticSubscriptionPayments, disableSubscriptionReminder, recordSubscriptionPaymentFromReminder, skipSubscriptionRenewal } from "./subscription";
 
 async function subjectLabel(reminder: Reminder) {
   if (reminder.targetType === "cat_household") return "Household";
@@ -59,6 +59,7 @@ export async function cancelReminder(id: number) {
 export const deleteReminder = cancelReminder;
 
 export async function listScheduledNotifications(now = new Date()): Promise<ScheduledNotification[]> {
+  await catchUpAutomaticSubscriptionPayments(now);
   await reconcilePeriodMedicationReminders(now);
   const repository = await getRepository();
   const source = (await repository.listReminders({ activeOnly: true })).filter((reminder) => reminder.nextDueAt && (["scheduled", "failed"].includes(reminder.status) || (reminder.status === "sent" && reminder.repeatWhileOverdue)));
@@ -82,6 +83,7 @@ export async function listScheduledNotifications(now = new Date()): Promise<Sche
 export async function listNotificationHistory(limit = 100) { return (await getRepository()).listNotificationDeliveries(limit); }
 
 export async function getDueReminders(limit = 50, now = new Date()): Promise<DueReminder[]> {
+  await catchUpAutomaticSubscriptionPayments(now);
   await reconcilePeriodMedicationReminders(now);
   const repository = await getRepository();
   const candidates = selectDueReminders(await repository.listReminders({ activeOnly: true }), now, limit * 2);
