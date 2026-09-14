@@ -445,15 +445,27 @@ function tags(value: unknown) {
   return [...new Set(value.map((tag) => tag.trim()).filter(Boolean))].slice(0, 10);
 }
 
+function taskDueTime(value: unknown) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    throw new ValidationError("截止时间格式不正确");
+  }
+  return value;
+}
+
 export function parseNewTask(value: unknown) {
   const body = objectValue(value);
-  return {
+  const result = {
     title: text(body.title, "任务标题", 160)!,
     notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
     dueDate: dueDate(body.dueDate) ?? null,
+    dueTime: taskDueTime(body.dueTime) ?? null,
     priority: priority(body.priority) ?? "medium",
     tags: tags(body.tags) ?? [],
   };
+  if (result.dueTime && !result.dueDate) throw new ValidationError("设置截止时间前需要先选择截止日期");
+  return result;
 }
 
 export function parseTaskPatch(value: unknown) {
@@ -468,12 +480,14 @@ export function parseTaskPatch(value: unknown) {
           ? body.completed
           : (() => { throw new ValidationError("完成状态格式不正确"); })(),
     dueDate: dueDate(body.dueDate),
+    dueTime: taskDueTime(body.dueTime),
     priority: priority(body.priority),
     tags: tags(body.tags),
   };
   if (Object.values(result).every((item) => item === undefined)) {
     throw new ValidationError("没有可更新的字段");
   }
+  if (result.dueDate === null && result.dueTime) throw new ValidationError("设置截止时间前需要先选择截止日期");
   return result;
 }
 

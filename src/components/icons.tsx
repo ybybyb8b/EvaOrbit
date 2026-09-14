@@ -1,6 +1,6 @@
 import { Edit2 } from "reicon-react";
 
-export type IconName = "home" | "tasks" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
@@ -11,7 +11,8 @@ const navIconSources: Partial<Record<IconName, string>> = {
 
 const featureIconSources: Partial<Record<IconName, string>> = {
   home: "/icons/features/home.png",
-  tasks: "/icons/features/projects.png",
+  tasks: "/icons/features/tasks.png",
+  projects: "/icons/features/projects.png",
   memory: "/icons/features/memo.png",
   ai: "/icons/features/eva.png",
   settings: "/icons/features/settings.png",
@@ -46,6 +47,7 @@ function iconSourceStyle(source: string) {
 const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
   tasks: <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7"/><path d="M14 9h3M8 14h9M8 18h6"/></>,
+  projects: <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7"/><path d="M14 9h3M8 14h9M8 18h6"/></>,
   memory: <><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v17H7.5A2.5 2.5 0 0 0 5 21.5z"/><path d="M5 4.5v17M9 6h6"/></>,
   ai: <><path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2z"/><path d="m18 14 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/><path d="M5 13.5 5.8 16l2.7.8-2.7.8L5 20l-.8-2.4-2.7-.8 2.7-.8z"/></>,
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
@@ -75,6 +77,6 @@ export function Icon({ name, variant = "feature" }: IconProps) {
   const featureSource = featureIconSources[name];
   const navSource = navIconSources[name];
   if (navSource && variant === "nav") return <span className="icon nav-icon" style={iconSourceStyle(navSource)} aria-hidden="true" />;
-  if (featureSource && variant === "feature") return <span className="icon feature-icon" style={iconSourceStyle(featureSource)} aria-hidden="true" />;
+  if (featureSource && variant === "feature") return <span className={`icon feature-icon icon-${name}`} style={iconSourceStyle(featureSource)} aria-hidden="true" />;
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }

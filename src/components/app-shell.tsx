@@ -32,9 +32,10 @@ const navigationGroups = [
   { label: "SPACE", items: [
     { href: "/", label: "Home", zh: "首页", icon: "home" as const },
     { href: "/inbox", label: "Inbox", zh: "散落", icon: "inbox" as const },
+    { href: "/tasks", label: "Tasks", zh: "待办", icon: "tasks" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
     { href: "/lucius", label: "Lucius", icon: "lucius" as const },
-    { href: "/projects", label: "Projects", zh: "工坊", icon: "tasks" as const },
+    { href: "/projects", label: "Projects", zh: "工坊", icon: "projects" as const },
   ] },
 ];
 

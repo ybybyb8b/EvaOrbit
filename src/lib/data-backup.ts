@@ -1,5 +1,5 @@
 export const BACKUP_VERSION = 5 as const;
-export const BACKUP_SCHEMA_VERSION = "202609140003_subscriptions";
+export const BACKUP_SCHEMA_VERSION = "202609140004_task_due_time_reminders";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -7,7 +7,6 @@ export const BACKUP_SCHEMA_VERSION = "202609140003_subscriptions";
  */
 export const BACKUP_TABLES = [
   "ui_preferences",
-  "tasks",
   "memories",
   "memory_entities",
   "memory_facts",
@@ -34,6 +33,7 @@ export const BACKUP_TABLES = [
   "cat_medications",
   "cat_measurements",
   "reminders",
+  "tasks",
   "subscriptions",
   "subscription_payments",
   "subscription_price_changes",
@@ -115,6 +115,7 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
     row.reminder_time = normalizeLocalTime(row.reminder_time);
   }
   if (table === "subscriptions" && typeof row.reminder_time === "string") row.reminder_time = normalizeLocalTime(row.reminder_time);
+  if (table === "tasks" && typeof row.due_time === "string") row.due_time = normalizeLocalTime(row.due_time);
   return row;
 }
 
@@ -132,6 +133,7 @@ export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRo
     row.reminder_time = normalizeLocalTime(row.reminder_time);
   }
   if (table === "subscriptions" && typeof row.reminder_time === "string") row.reminder_time = normalizeLocalTime(row.reminder_time);
+  if (table === "tasks" && typeof row.due_time === "string") row.due_time = normalizeLocalTime(row.due_time);
   return row;
 }
 

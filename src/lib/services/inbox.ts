@@ -29,7 +29,7 @@ export async function convertInbox(id: number, target: "task" | "memory") {
   if (!item) return null;
   const title = item.content.replace(/\s+/g, " ").trim().slice(0, 160);
   const converted = target === "task"
-    ? await repository.createTask({ title, notes: item.content.length > 160 ? item.content : "", dueDate: null, priority: "medium", tags: [] })
+    ? await repository.createTask({ title, notes: item.content.length > 160 ? item.content : "", dueDate: null, dueTime: null, priority: "medium", tags: [] })
     : await repository.createMemory({ title: title.slice(0, 80), content: item.content, category: "其他" });
   await repository.updateInboxItem(id, { status: "processed", processedAt: new Date().toISOString(), convertedType: target, convertedId: converted.id });
   return { item: await repository.getInboxItem(id), converted };

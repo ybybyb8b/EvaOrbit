@@ -1,9 +1,9 @@
 import { ConflictError } from "../errors.ts";
-import type { CatRecordKind, CatRoutine, CatTimelineEntry, ChronicleEntry, DrinkLimit, FoodDish, FoodPlace, HealthRecord, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MediaDetail, MediaListItem, Memo, MemoStatus, MemoType, MemoryEntity, MemoryEntityDetail, MemoryEntityMergeResult, MemoryFact, MemoryFactDetail, MemorySource, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary, Reminder, Subscription, SubscriptionDetail, SubscriptionPayment, Tracker, TrackerSummary, TrainingLog } from "../types.ts";
+import type { CatRecordKind, CatRoutine, CatTimelineEntry, ChronicleEntry, DrinkLimit, FoodDish, FoodPlace, HealthRecord, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MediaDetail, MediaListItem, Memo, MemoStatus, MemoType, MemoryEntity, MemoryEntityDetail, MemoryEntityMergeResult, MemoryFact, MemoryFactDetail, MemorySource, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary, Reminder, Subscription, SubscriptionDetail, SubscriptionPayment, Task, Tracker, TrackerSummary, TrainingLog } from "../types.ts";
 import { parseCatRecord, parseCatRoutine, parsePet, parsePetPatch, parseReminder } from "../cats-validation.ts";
 import { parseMemoryNote,parseRelationEvent,parseRelationPerson,parseRelationPersonPatch,parseSettleAdvance } from "../relations-validation.ts";
 import { memoryUuid, parseMemoryEntityPatch, parseMemoryEntitySearch, parseMemoryFactPatch, parseMemoryFactSearch, parseMemorySourcePatch, parseNewMemoryEntity, parseNewMemoryFact, parseNewMemorySource } from "../memory-graph-validation.ts";
-import { dateOnly, parseChronicleEntryPatch, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodPlace, parseFoodPlacePatch, parseHealthRecordPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostCommentPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMediaPatch, parseMediaSeries, parseMediaViewing, parseMemoPatch, parseNewChronicleEntry, parseNewHealthRecord, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewLuciusPostComment, parseNewMedia, parseNewMemo, parseNewProject, parseNewProjectItem, parseNewSubscription, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseNewTrainingLog, parseProjectItemPatch, parseProjectPatch, parseSubscriptionPatch, parseSubscriptionPayment, parseTrackerEntryPatch, parseTrackerPatch, parseTrainingLogPatch, ValidationError } from "../validation.ts";
+import { dateOnly, parseChronicleEntryPatch, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodPlace, parseFoodPlacePatch, parseHealthRecordPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostCommentPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMediaPatch, parseMediaSeries, parseMediaViewing, parseMemoPatch, parseNewChronicleEntry, parseNewHealthRecord, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewLuciusPostComment, parseNewMedia, parseNewMemo, parseNewProject, parseNewProjectItem, parseNewSubscription, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseNewTrainingLog, parseProjectItemPatch, parseProjectPatch, parseSubscriptionPatch, parseSubscriptionPayment, parseTaskPatch, parseTrackerEntryPatch, parseTrackerPatch, parseTrainingLogPatch, ValidationError } from "../validation.ts";
 
 export type ResourceId = string | number;
 export type ResourceCapability = "search" | "get" | "create" | "update" | "delete" | "action";
@@ -63,6 +63,14 @@ export type InboxResourceOperations = {
   restore(id: number): Promise<InboxItem | null>;
 };
 
+export type TaskResourceOperations = {
+  search(status?: "all" | "open" | "done"): Promise<Task[]>;
+  get(id: number): Promise<Task | null>;
+  create(input: ReturnType<typeof parseNewTask>): Promise<Task>;
+  update(id: number, input: ReturnType<typeof parseTaskPatch>): Promise<Task | null>;
+  delete(id: number): Promise<boolean>;
+};
+
 export type MemoResourceOperations = {
   search(input: { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number }): Promise<Memo[]>;
   get(id: number): Promise<Memo | null>;
@@ -112,6 +120,7 @@ export type ResourceRegistryOperations = {
   memoryFact: {search(input:{entityId?:string;direction?:"in"|"out"|"both";predicate?:string;perspectiveEntityId?:string|null;status?:MemoryFact["status"];validOn?:string;limit?:number}):Promise<MemoryFact[]>;get(id:string):Promise<MemoryFactDetail|null>;create(input:ReturnType<typeof parseNewMemoryFact>):Promise<MemoryFact>;update(id:string,input:ReturnType<typeof parseMemoryFactPatch>):Promise<MemoryFact|null>;invalidate(id:string,reason:string|null):Promise<MemoryFact|null>;restore(id:string):Promise<MemoryFact|null>};
   memorySource: {search(input:{factId?:string;sourceResource?:string;sourceRecordId?:string;limit?:number}):Promise<MemorySource[]>;get(id:string):Promise<MemorySource|null>;create(input:ReturnType<typeof parseNewMemorySource>):Promise<MemorySource>;update(id:string,input:ReturnType<typeof parseMemorySourcePatch>):Promise<MemorySource|null>;delete(id:string):Promise<boolean>};
   inbox: InboxResourceOperations;
+  task: TaskResourceOperations;
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
@@ -280,6 +289,48 @@ function inboxResource(operations: InboxResourceOperations): RegisteredResource 
       if (!item) throw new ConflictError("Inbox item not found.");
       return inboxRecord(item);
     },
+  };
+}
+
+function taskRecord(item: Task): ResourceRecord {
+  return { id: item.id, title: item.title, notes: item.notes, status: item.completed ? "done" : "open", due_date: item.dueDate, due_time: item.dueTime, priority: item.priority, tags: item.tags, created_at: item.createdAt, updated_at: item.updatedAt };
+}
+
+function taskResource(operations: TaskResourceOperations): RegisteredResource {
+  const writableFields = ["title", "notes", "due_date", "due_time", "priority", "tags"];
+  const inputMap = { title: "title", notes: "notes", due_date: "dueDate", due_time: "dueTime", priority: "priority", tags: "tags" };
+  return {
+    schema: {
+      resource: "task",
+      description: "EvaOrbit tasks with optional due dates and times, unified Reminder delivery, priorities, tags, and explicit completion state.",
+      fields: {
+        id: { type: "integer", description: "Stable Task identifier.", read_only: true },
+        title: { type: "string", max_length: 160, description: "Task title." },
+        notes: { type: "string", max_length: 2000, description: "Optional supporting notes." },
+        status: { type: "string", enum: ["open", "done"], description: "Task completion state; change it with complete or reopen.", read_only: true },
+        due_date: { type: "string", format: "date", description: "Optional due date in YYYY-MM-DD format." },
+        due_time: { type: "string", description: "Optional explicit due time in HH:mm format. Requires due_date and creates a unified Reminder notification." },
+        priority: { type: "string", enum: ["low", "medium", "high"], default: "medium", description: "Task priority." },
+        tags: { type: "array", items: { type: "string" }, description: "Up to 10 unique tags." },
+        created_at: { type: "string", format: "date-time", description: "Server-assigned creation timestamp.", read_only: true },
+        updated_at: { type: "string", format: "date-time", description: "Server-assigned update timestamp.", read_only: true },
+      },
+      required_fields: ["title"], writable_fields: writableFields, searchable_fields: ["title", "notes", "tags", "status", "priority"], supported_actions: ["complete", "reopen"],
+      validation_rules: ["search filters accept only status and priority", "status defaults to all", "due_date is date-only", "due_time is optional and requires due_date", "only an explicit due_time creates a unified Reminder notification", "complete and reopen are explicit actions", "update is PATCH: omitted fields remain unchanged", "unknown fields are rejected"],
+    },
+    async search({ query, filters = {}, limit, cursor }) {
+      assertOnlyKeys(filters, ["status", "priority"], "task search filters"); rejectCursor(cursor, "Task");
+      const status = filterEnum(filters.status, ["all", "open", "done"] as const, "status") ?? "all";
+      const priority = filterEnum(filters.priority, ["low", "medium", "high"] as const, "priority");
+      const needle = query?.trim().toLocaleLowerCase();
+      const items = (await operations.search(status)).filter((item) => (!priority || item.priority === priority) && (!needle || `${item.title} ${item.notes} ${item.tags.join(" ")}`.toLocaleLowerCase().includes(needle))).slice(0, limit);
+      return { items: items.map(taskRecord), next_cursor: null };
+    },
+    async get(resourceId) { const item = await operations.get(numericId(resourceId, "Task")); if (!item) throw new ConflictError("Task not found."); return taskRecord(item); },
+    async create(data) { assertOnlyKeys(data, writableFields, "task create"); return taskRecord(await operations.create(parseNewTask(mappedInput(data, inputMap)))); },
+    async update(resourceId, data) { assertOnlyKeys(data, writableFields, "task update"); const item = await operations.update(numericId(resourceId, "Task"), parseTaskPatch(mappedInput(data, inputMap))); if (!item) throw new ConflictError("Task not found."); return taskRecord(item); },
+    async delete(resourceId) { const id = numericId(resourceId, "Task"); if (!await operations.delete(id)) throw new ConflictError("Task not found."); return { deleted: true, id }; },
+    async action({ id, action, data }) { if (id === undefined) throw new ValidationError(`${action} requires a Task id.`); assertOnlyKeys(data, [], `task ${action}`); const item = await operations.update(numericId(id, "Task"), parseTaskPatch({ completed: action === "complete" })); if (!item) throw new ConflictError("Task not found."); return taskRecord(item); },
   };
 }
 
@@ -829,6 +880,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
     memoryFactResource(operations.memoryFact),
     memorySourceResource(operations.memorySource),
     inboxResource(operations.inbox),
+    taskResource(operations.task),
     memoResource(operations.memo),
     chronicleResource(operations.chronicle),
     luciusDiaryResource(operations.luciusDiary),

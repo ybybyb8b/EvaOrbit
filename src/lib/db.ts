@@ -18,6 +18,8 @@ type TaskRow = {
   notes: string;
   completed: number;
   due_date: string | null;
+  due_time: string | null;
+  reminder_id: number | null;
   priority: "low" | "medium" | "high";
   tags: string;
   created_at: string;
@@ -1192,6 +1194,38 @@ if (!hasV46) {
   }
 }
 
+const hasV47 = database.prepare("SELECT 1 FROM migrations WHERE version = 47").get();
+if (!hasV47) {
+  database.exec("PRAGMA foreign_keys = OFF");
+  try {
+    database.exec(`
+      BEGIN;
+      ALTER TABLE tasks ADD COLUMN due_time TEXT;
+      ALTER TABLE tasks ADD COLUMN reminder_id INTEGER REFERENCES reminders(id) ON DELETE SET NULL;
+      CREATE UNIQUE INDEX idx_tasks_reminder_id ON tasks(reminder_id) WHERE reminder_id IS NOT NULL;
+      CREATE TABLE reminders_v47 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,target_type TEXT NOT NULL CHECK(target_type IN ('cat','cat_household','tracker','health','subscription','task')),target_id INTEGER,source_type TEXT,source_id INTEGER,
+        schedule_type TEXT NOT NULL CHECK(schedule_type IN ('one_time','interval','course')),starts_at TEXT NOT NULL,next_due_at TEXT,due_has_explicit_time INTEGER NOT NULL DEFAULT 1 CHECK(due_has_explicit_time IN (0,1)),interval_value INTEGER,interval_unit TEXT,times_of_day TEXT NOT NULL DEFAULT '[]',ends_at TEXT,timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',note TEXT NOT NULL DEFAULT '',lead_time_minutes INTEGER NOT NULL DEFAULT 0 CHECK(lead_time_minutes BETWEEN 0 AND 525600),repeat_while_overdue INTEGER NOT NULL DEFAULT 0 CHECK(repeat_while_overdue IN (0,1)),status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','sent','cancelled','failed','completed')),is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),last_completed_at TEXT,snoozed_until TEXT,last_notified_at TEXT,sent_at TEXT,cancelled_at TEXT,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO reminders_v47 SELECT * FROM reminders;
+      DROP TABLE reminders;
+      ALTER TABLE reminders_v47 RENAME TO reminders;
+      CREATE INDEX idx_reminders_due ON reminders(is_active,next_due_at);
+      CREATE INDEX idx_reminders_status_due ON reminders(status,is_active,next_due_at);
+      CREATE UNIQUE INDEX idx_reminders_period_medication_projection ON reminders(source_type,source_id) WHERE source_type='period_medication';
+      CREATE UNIQUE INDEX idx_reminders_subscription_projection ON reminders(source_type,source_id) WHERE source_type='subscription_renewal';
+      CREATE UNIQUE INDEX idx_reminders_task_projection ON reminders(source_type,source_id) WHERE source_type='task_due';
+      INSERT INTO migrations(version) VALUES(47);
+      COMMIT;
+    `);
+  } catch (error) {
+    try { database.exec("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1199,6 +1233,8 @@ function taskFromRow(row: TaskRow): Task {
     notes: row.notes,
     completed: Boolean(row.completed),
     dueDate: row.due_date,
+    dueTime: row.due_time ? row.due_time.slice(0, 5) : null,
+    reminderId: row.reminder_id,
     priority: row.priority,
     tags: JSON.parse(row.tags) as string[],
     createdAt: row.created_at,
@@ -1267,15 +1303,15 @@ export function getTask(id: number) {
   return row ? taskFromRow(row) : null;
 }
 
-export function createTask(input: { title: string; notes: string; dueDate: string | null; priority: string; tags: string[] }) {
-  const result = database.prepare("INSERT INTO tasks(title, notes, due_date, priority, tags) VALUES (?, ?, ?, ?, ?)").run(input.title, input.notes, input.dueDate, input.priority, JSON.stringify(input.tags));
+export function createTask(input: { title: string; notes: string; dueDate: string | null; dueTime: string | null; priority: string; tags: string[] }) {
+  const result = database.prepare("INSERT INTO tasks(title, notes, due_date, due_time, priority, tags) VALUES (?, ?, ?, ?, ?, ?)").run(input.title, input.notes, input.dueDate, input.dueTime, input.priority, JSON.stringify(input.tags));
   return getTask(Number(result.lastInsertRowid))!;
 }
 
 export function updateTask(id: number, input: Record<string, unknown>) {
   const columns: string[] = [];
   const values: Array<string | number | null> = [];
-  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", priority: "priority", tags: "tags" };
+  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
   for (const [key, column] of Object.entries(map)) {
     if (input[key] !== undefined) {
       columns.push(`${column} = ?`);

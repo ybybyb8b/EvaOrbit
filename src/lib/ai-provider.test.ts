@@ -69,7 +69,7 @@ test("sends standard OpenAI tool definitions to the configured provider", async 
     for (const retired of ["list_tasks", "search_memories", "create_task", "complete_task", "create_memory", "convert_inbox_item"]) {
       assert.equal(toolNames.includes(retired), false, `retired AI tool leaked: ${retired}`);
     }
-    assert.match(systemPrompt, /不再维护活跃的 Task \/ Memory 能力/);
+    assert.match(systemPrompt, /Task 页面与 MCP 独立可用/);
     assert.match(systemPrompt, /品牌已知时必须匹配品牌/);
     assert.match(systemPrompt, /饮品限制只报告数量和状态/);
   } finally {

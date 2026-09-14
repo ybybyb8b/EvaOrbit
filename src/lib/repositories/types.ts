@@ -21,6 +21,7 @@ export type NewTask = {
   title: string;
   notes: string;
   dueDate: string | null;
+  dueTime: string | null;
   priority: string;
   tags: string[];
 };

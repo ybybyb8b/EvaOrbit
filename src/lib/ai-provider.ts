@@ -79,7 +79,7 @@ export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<
   ].filter(Boolean).join("\n");
   const tools = [
     "可读取 Inbox、跨模块 Timeline、Trackers、Food、Drinks、Food Library、Drink Limits 和每日摄入汇总。",
-    "EvaOrbit 不再维护活跃的 Task / Memory 能力。提醒与待办交给 ChatGPT、Todoist 或系统 Reminders；不要声称已在 EvaOrbit 创建任务或长期 Memory。",
+    "当前内置 Eva 对话未接入 Task / Memory 工具。Task 页面与 MCP 独立可用；不要声称已在当前对话中创建任务或长期 Memory。",
     "涉及本人今天/历史吃喝过什么、摄入多少、上次何时吃过时，以 Tool 返回的数据库事实为准，不凭聊天上下文猜。",
     "记录食物前优先检索 Food Library；品牌已知时必须匹配品牌，不同品牌不能默认等价。估算不确定时保留范围并降低可信度。",
     "饮品限制只报告数量和状态，措辞保持中性，不评价自律、健康或好坏。",

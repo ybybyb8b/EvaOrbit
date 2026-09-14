@@ -10,6 +10,10 @@ create/update payloads strictly, preserves PATCH semantics, and delegates
 deletes and non-CRUD actions to existing business services. Register resources
 one at a time rather than mirroring every database table.
 
+`task` exposes the restored Task module through generic MCP CRUD. Search accepts
+status and priority filters, optional `due_time` values project into unified
+Reminder delivery, and completion and reopening remain explicit actions.
+
 Memory Graph v0.1 registers three resources without changing the generic MCP
 tool protocol:
 

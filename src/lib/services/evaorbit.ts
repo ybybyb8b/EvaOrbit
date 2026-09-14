@@ -1,18 +1,14 @@
 import "server-only";
 
 import { getRepository } from "../repositories";
-import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, NewTask, TaskFilter } from "../repositories/types";
+import type { AiModelConfigInput, AiProviderInput, AiSettingsInput } from "../repositories/types";
 import type { ChatRole } from "../types";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
 import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
 
-export async function listTasks(filter: TaskFilter = "all") { return (await getRepository()).listTasks(filter); }
-export async function getTask(id: number) { return (await getRepository()).getTask(id); }
-export async function createTask(input: NewTask) { return (await getRepository()).createTask(input); }
-export async function updateTask(id: number, input: Record<string, unknown>) { return (await getRepository()).updateTask(id, input); }
-export async function deleteTask(id: number) { return (await getRepository()).deleteTask(id); }
+export { listTasks, getTask, createTask, updateTask, deleteTask } from "./task";
 
 export async function listMemories(query = "", category = "") { return (await getRepository()).listMemories(query, category); }
 export async function getMemory(id: number) { return (await getRepository()).getMemory(id); }

@@ -452,6 +452,7 @@ button { color: inherit; }
 .icon { width: 20px; height: 20px; flex: none; }
 /* Feature PNGs use a transparent 512px canvas; scale the image box so their visible artwork matches the SVG weight. */
 .feature-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; transform: scale(var(--feature-icon-scale)); transform-origin: center; }
+.feature-icon.icon-tasks { --feature-icon-scale:1.58; }
 .nav-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; }
 html[data-mode="dark"] .feature-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
 html[data-mode="dark"] .nav-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
@@ -4829,4 +4830,47 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   .subscription-card { transition:none; }
   .subscription-card:hover,
   .subscription-card:active { transform:none; }
+}
+
+/* Task rows prioritize scan speed without sacrificing readable type. */
+.tasks-page .task-list { gap:3px; }
+.tasks-page .task-row {
+  min-height:52px;
+  padding:7px 8px;
+  align-items:center;
+  gap:8px;
+  border-radius:var(--radius-control);
+}
+.tasks-page .task-check { width:22px;height:22px;margin-top:0;border-radius:7px; }
+.tasks-page .task-title-line { gap:6px; }
+.tasks-page .task-title-line h3 { font-size:13px;line-height:1.35; }
+.tasks-page .priority-label,
+.tasks-page .tag { padding:2px 5px;font-size:8px;line-height:1.25; }
+.tasks-page .task-body > p {
+  margin-top:3px;
+  overflow:hidden;
+  color:var(--text-secondary);
+  font-size:10px;
+  line-height:1.35;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.tasks-page .task-meta { min-height:0;margin-top:3px;gap:5px;font-size:9px;line-height:1.3; }
+.tasks-page .task-reminder-state { display:inline-flex;align-items:center;gap:3px;color:var(--text-secondary); }
+.tasks-page .task-reminder-state .icon { width:10px;height:10px; }
+.tasks-page .row-actions button { width:28px;height:28px;border-radius:8px; }
+.tasks-page .advanced-fields > .date-time-field { grid-column:1 / -1; }
+
+@media(max-width:720px) {
+  .tasks-page > .page-header .eyebrow { visibility:hidden;height:0;margin:0; }
+  .tasks-page .task-list { gap:4px; }
+  .tasks-page .task-row { min-height:58px;padding:8px 6px;gap:8px;border-radius:var(--radius-control); }
+  .tasks-page .task-check { width:26px;height:26px;border-radius:8px; }
+  .tasks-page .task-title-line h3 { font-size:14px;line-height:1.35; }
+  .tasks-page .task-body > p { font-size:11px;line-height:1.35; }
+  .tasks-page .task-meta { font-size:10px; }
+  .tasks-page .priority-label,
+  .tasks-page .tag { padding:2px 5px;font-size:9px; }
+  .tasks-page .row-actions { flex-direction:row; }
+  .tasks-page .row-actions button { width:36px;height:36px; }
 }

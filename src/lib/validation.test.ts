@@ -5,12 +5,14 @@ import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferen
 test("normalizes a new task", () => {
   assert.deepEqual(
     parseNewTask({ title: "  买咖啡  ", tags: ["生活", "生活", " "] }),
-    { title: "买咖啡", notes: "", dueDate: null, priority: "medium", tags: ["生活"] },
+    { title: "买咖啡", notes: "", dueDate: null, dueTime: null, priority: "medium", tags: ["生活"] },
   );
 });
 
 test("rejects invalid task fields", () => {
   assert.throws(() => parseNewTask({ title: "" }), ValidationError);
+  assert.throws(() => parseNewTask({ title: "提醒我", dueTime: "09:30" }), ValidationError);
+  assert.throws(() => parseNewTask({ title: "提醒我", dueDate: "2026-09-15", dueTime: "25:00" }), ValidationError);
   assert.throws(() => parseTaskPatch({ completed: "yes" }), ValidationError);
 });
 

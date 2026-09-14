@@ -6,6 +6,8 @@ export interface Task {
   notes: string;
   completed: boolean;
   dueDate: string | null;
+  dueTime: string | null;
+  reminderId: number | null;
   priority: TaskPriority;
   tags: string[];
   createdAt: string;
@@ -1006,7 +1008,7 @@ export interface CatTimelineEntry {
   metadata: Record<string, unknown>;
 }
 
-export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health" | "subscription";
+export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health" | "subscription" | "task";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";

@@ -19,6 +19,7 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(BACKUP_TABLES.includes("memory_entities"));
   assert.ok(BACKUP_TABLES.includes("memory_facts"));
   assert.ok(BACKUP_TABLES.includes("memory_sources"));
+  assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("tasks"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("ai_providers"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));
@@ -83,4 +84,6 @@ test("Postgres time values are compatible with the local minute-only reminder sc
   assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "20:15:00.000000" }).remind_at, "20:15");
   assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "08:05" }).remind_at, "08:05");
   assert.equal(sanitizeExportRow("weight_settings", { reminder_time: "08:30:00" }).reminder_time, "08:30");
+  assert.equal(sanitizeExportRow("tasks", { due_time: "09:45:00" }).due_time, "09:45");
+  assert.equal(normalizeBackupRowForSqlite("tasks", { due_time: "21:05:00.000000" }).due_time, "21:05");
 });

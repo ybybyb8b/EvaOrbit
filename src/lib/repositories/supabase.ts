@@ -26,7 +26,8 @@ function fail(error: { message: string } | null, operation: string) {
 function taskFromRow(row: Row): Task {
   return {
     id: Number(row.id), title: String(row.title), notes: String(row.notes ?? ""), completed: Boolean(row.completed),
-    dueDate: row.due_date ? String(row.due_date) : null, priority: row.priority as TaskPriority,
+    dueDate: row.due_date ? String(row.due_date) : null, dueTime: row.due_time ? String(row.due_time).slice(0, 5) : null,
+    reminderId: row.reminder_id === null || row.reminder_id === undefined ? null : Number(row.reminder_id), priority: row.priority as TaskPriority,
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [], createdAt: String(row.created_at), updatedAt: String(row.updated_at),
   };
 }
@@ -270,11 +271,11 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       fail(error, "读取任务"); return data ? taskFromRow(data) : null;
     },
     async createTask(input: NewTask) {
-      const { data, error } = await client.from("tasks").insert({ user_id: userId, title: input.title, notes: input.notes, due_date: input.dueDate, priority: input.priority, tags: input.tags }).select().single();
+      const { data, error } = await client.from("tasks").insert({ user_id: userId, title: input.title, notes: input.notes, due_date: input.dueDate, due_time: input.dueTime, priority: input.priority, tags: input.tags }).select().single();
       fail(error, "创建任务"); return taskFromRow(data);
     },
     async updateTask(id, input) {
-      const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", priority: "priority", tags: "tags" };
+      const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
       const patch = Object.fromEntries(Object.entries(map).filter(([key]) => input[key] !== undefined).map(([key, column]) => [column, input[key]]));
       if (!Object.keys(patch).length) return repository.getTask(id);
       const { data, error } = await client.from("tasks").update(patch).eq("id", id).select().maybeSingle();
