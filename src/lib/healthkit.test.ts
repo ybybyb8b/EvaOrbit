@@ -154,6 +154,8 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   const localStore = readFileSync(new URL("../../ios/EvaOrbitHost/Sources/HealthLocalStore.swift", import.meta.url), "utf8");
   assert.match(client, /HKCategorySample/);
   assert.match(client, /HKMetadataKeyMenstrualCycleStart/);
+  assert.match(client, /HKCategoryValueVaginalBleeding/);
+  assert.doesNotMatch(client, /invalidMenstrualFlowValue/);
   assert.match(client, /HKMetadataKeySyncIdentifier/);
   assert.match(client, /anchoredMenstrualFlowDelta/);
   assert.match(coordinator, /authorizationRevision = "3"/);

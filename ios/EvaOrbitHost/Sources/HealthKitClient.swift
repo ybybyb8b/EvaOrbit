@@ -206,8 +206,8 @@ final class SystemHealthKitClient: HealthKitReading {
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {
-                    let added = try (samples as? [HKCategorySample] ?? []).map { sample in
-                        guard let value = Self.flowValue(sample.value) else { throw HealthKitClientError.invalidMenstrualFlowValue }
+                    let added = (samples as? [HKCategorySample] ?? []).map { sample in
+                        let value = Self.flowValue(sample.value)
                         return HealthMenstrualFlowSample(uuid: sample.uuid.uuidString.lowercased(), startDate: sample.startDate, endDate: sample.endDate, flow: value, cycleStart: (sample.metadata?[HKMetadataKeyMenstrualCycleStart] as? NSNumber)?.boolValue ?? false, sourceBundle: sample.sourceRevision.source.bundleIdentifier, sourceName: sample.sourceRevision.source.name, syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String, syncVersion: (sample.metadata?[HKMetadataKeySyncVersion] as? NSNumber)?.intValue)
                     }
                     continuation.resume(returning: HealthMenstrualFlowDelta(added: added, deletedUUIDs: (deleted ?? []).map { $0.uuid.uuidString.lowercased() }, encodedAnchor: try HealthAnchorCodec.encode(newAnchor)))
@@ -234,11 +234,26 @@ final class SystemHealthKitClient: HealthKitReading {
         if !samples.isEmpty { try await store.delete(samples) }
     }
 
-    private static func flowValue(_ value: Int) -> HealthMenstrualFlowValue? {
-        switch value { case HKCategoryValueMenstrualFlow.none.rawValue: return .none; case HKCategoryValueMenstrualFlow.unspecified.rawValue: return .unspecified; case HKCategoryValueMenstrualFlow.light.rawValue: return .light; case HKCategoryValueMenstrualFlow.medium.rawValue: return .medium; case HKCategoryValueMenstrualFlow.heavy.rawValue: return .heavy; default: return nil }
+    static func flowValue(_ value: Int) -> HealthMenstrualFlowValue {
+        if #available(iOS 18.0, *), let bleeding = HKCategoryValueVaginalBleeding(rawValue: value) {
+            switch bleeding { case .none: return .none; case .unspecified: return .unspecified; case .light: return .light; case .medium: return .medium; case .heavy: return .heavy; @unknown default: break }
+        }
+        switch value {
+        case HKCategoryValueMenstrualFlow.none.rawValue: return .none
+        case HKCategoryValueMenstrualFlow.unspecified.rawValue: return .unspecified
+        case HKCategoryValueMenstrualFlow.light.rawValue: return .light
+        case HKCategoryValueMenstrualFlow.medium.rawValue: return .medium
+        case HKCategoryValueMenstrualFlow.heavy.rawValue: return .heavy
+        default:
+            HealthDiagnostics.log("metric=menstrual_flow unknown-category=\(value) mapped=unspecified")
+            return .unspecified
+        }
     }
 
     private static func healthKitFlowValue(_ value: HealthMenstrualFlowValue) -> Int {
+        if #available(iOS 18.0, *) {
+            switch value { case .none: return HKCategoryValueVaginalBleeding.none.rawValue; case .unspecified: return HKCategoryValueVaginalBleeding.unspecified.rawValue; case .light: return HKCategoryValueVaginalBleeding.light.rawValue; case .medium: return HKCategoryValueVaginalBleeding.medium.rawValue; case .heavy: return HKCategoryValueVaginalBleeding.heavy.rawValue }
+        }
         switch value { case .none: return HKCategoryValueMenstrualFlow.none.rawValue; case .unspecified: return HKCategoryValueMenstrualFlow.unspecified.rawValue; case .light: return HKCategoryValueMenstrualFlow.light.rawValue; case .medium: return HKCategoryValueMenstrualFlow.medium.rawValue; case .heavy: return HKCategoryValueMenstrualFlow.heavy.rawValue }
     }
 
@@ -263,7 +278,6 @@ enum HealthKitClientError: LocalizedError {
     case backgroundDeliveryFailed
     case missingAnchor
     case invalidAnchor
-    case invalidMenstrualFlowValue
 
     var errorDescription: String? {
         switch self {
@@ -272,7 +286,6 @@ enum HealthKitClientError: LocalizedError {
         case .backgroundDeliveryFailed: return "HealthKit background delivery was not enabled"
         case .missingAnchor: return "HealthKit did not return an anchor"
         case .invalidAnchor: return "Stored HealthKit anchor is invalid"
-        case .invalidMenstrualFlowValue: return "HealthKit menstrual flow value is invalid"
         }
     }
 }

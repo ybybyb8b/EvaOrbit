@@ -116,6 +116,14 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertNil(try store.menstrualFlowAnchor())
     }
 
+    func testMenstrualFlowValueUsesCurrentBleedingCategoriesAndKeepsUnknownSamples() {
+        XCTAssertEqual(SystemHealthKitClient.flowValue(HKCategoryValueMenstrualFlow.heavy.rawValue), .heavy)
+        XCTAssertEqual(SystemHealthKitClient.flowValue(Int.max), .unspecified)
+        if #available(iOS 18.0, *) {
+            XCTAssertEqual(SystemHealthKitClient.flowValue(HKCategoryValueVaginalBleeding.light.rawValue), .light)
+        }
+    }
+
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
