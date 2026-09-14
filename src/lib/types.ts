@@ -684,6 +684,7 @@ export interface Subscription {
   pausedAt: string | null;
   endedAt: string | null;
   totalSpentMinor: number;
+  spendByCurrency: Record<string, number>;
   paymentCount: number;
   latestPriceChange: SubscriptionPriceChange | null;
   createdAt: string;

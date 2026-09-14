@@ -17,3 +17,10 @@ export function nextSubscriptionRenewal(date: string, value: number, unit: Subsc
 export function subscriptionTotal(payments: SubscriptionPayment[], currency: string) {
   return payments.filter((payment) => payment.currency === currency).reduce((sum, payment) => sum + payment.amountMinor, 0);
 }
+
+export function subscriptionSpendByCurrency(payments: SubscriptionPayment[]) {
+  return payments.reduce<Record<string, number>>((totals, payment) => {
+    totals[payment.currency] = (totals[payment.currency] ?? 0) + payment.amountMinor;
+    return totals;
+  }, {});
+}

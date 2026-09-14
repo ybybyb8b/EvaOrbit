@@ -565,10 +565,184 @@ const routineMap={scope:"scope",pet_id:"petId",title:"title",interval_value:"int
 function catRoutineResource(operations:NonNullable<ResourceRegistryOperations["catRoutine"]>):RegisteredResource{const writable=Object.keys(routineMap);return{schema:{resource:"cat_routine",description:"Recurring cat or household care routines.",fields:{id:{type:"integer",description:"Routine id.",read_only:true},scope:{type:"string",enum:["cat","household"],description:"Routine scope."},pet_id:{type:"integer",description:"Cat id for cat-scoped routines."},title:{type:"string",description:"Title."},interval_value:{type:"integer",description:"Interval amount."},interval_unit:{type:"string",enum:["day","week","month"],description:"Interval unit."},first_due_at:{type:"string",format:"date-time",description:"First due time."},next_due_at:{type:"string",format:"date-time",description:"Next due time."},reminder_lead_minutes:{type:"integer",description:"Reminder lead time."},notes:{type:"string",description:"Notes."},enabled:{type:"boolean",description:"Enabled flag."},...timestamps},required_fields:["scope","title","interval_value","interval_unit","first_due_at"],writable_fields:writable,searchable_fields:["title"],supported_actions:["complete","skip","archive"],validation_rules:["search filters accept scope, pet_id, and enabled_only","complete and skip update the schedule through the routine business service","archive disables the linked reminder","updates are validated after merging with the existing routine","unknown fields are rejected"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["scope","pet_id","enabled_only"],"cat_routine search filters");rejectCursor(cursor,"Cat routine");let items=await operations.search({scope:filterEnum(filters.scope,["cat","household"] as const,"scope"),petId:filters.pet_id===undefined?undefined:filters.pet_id===null?null:numericId(filters.pet_id as ResourceId,"Cat"),enabledOnly:filters.enabled_only as boolean|undefined});if(query)items=items.filter(item=>item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));return{items:items.slice(0,limit).map(snakeRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Cat routine"));if(!item)throw new ConflictError("Cat routine not found.");return snakeRecord(item);},async create(data){assertOnlyKeys(data,writable,"cat_routine create");return snakeRecord(await operations.create(parseCatRoutine(mappedInput(data,routineMap))));},async update(value,data){assertOnlyKeys(data,writable,"cat_routine update");const id=numericId(value,"Cat routine"),existing=await operations.get(id);if(!existing)throw new ConflictError("Cat routine not found.");const merged={...snakeRecord(existing),...data};const item=await operations.update(id,parseCatRoutine(mappedInput(merged,routineMap)));if(!item)throw new ConflictError("Cat routine not found.");return snakeRecord(item);},async delete(value){const id=numericId(value,"Cat routine");if(!await operations.archive(id))throw new ConflictError("Cat routine not found.");return{deleted:true,id};},async action({id,action,data}){if(id===undefined)throw new ValidationError(`${action} requires a routine id.`);assertOnlyKeys(data,["acted_at"],`cat_routine ${action}`);const actedAt=data.acted_at===undefined?undefined:new Date(String(data.acted_at));if(actedAt&&Number.isNaN(actedAt.getTime()))throw new ValidationError("acted_at is invalid.");if(action==="complete")return snakeRecord(await operations.complete(numericId(id,"Cat routine"),actedAt) as object);if(action==="skip")return snakeRecord(await operations.skip(numericId(id,"Cat routine"),actedAt) as object);if(action==="archive"){if(!await operations.archive(numericId(id,"Cat routine")))throw new ConflictError("Cat routine not found.");return{archived:true,id};}throw new ValidationError(`cat_routine does not support action: ${action}.`);}};}
 
 const reminderMap={title:"title",target_type:"targetType",target_id:"targetId",source_type:"sourceType",source_id:"sourceId",schedule_type:"scheduleType",starts_at:"startsAt",next_due_at:"nextDueAt",due_has_explicit_time:"dueHasExplicitTime",interval_value:"intervalValue",interval_unit:"intervalUnit",times_of_day:"timesOfDay",ends_at:"endsAt",timezone:"timezone",note:"note",lead_time_minutes:"leadTimeMinutes",repeat_while_overdue:"repeatWhileOverdue",status:"status",is_active:"isActive"};
-function reminderResource(operations:NonNullable<ResourceRegistryOperations["reminder"]>):RegisteredResource{const writable=Object.keys(reminderMap);return{schema:{resource:"reminder",description:"User reminders attached to cats, the cat household, or trackers.",fields:{id:{type:"integer",description:"Reminder id.",read_only:true},title:{type:"string",description:"Title."},target_type:{type:"string",enum:["cat","cat_household","tracker"],description:"Target type."},target_id:{type:"integer",description:"Target id when required."},schedule_type:{type:"string",enum:["one_time","interval","course"],description:"Schedule type."},starts_at:{type:"string",format:"date-time",description:"Start."},next_due_at:{type:"string",format:"date-time",description:"Next due."},due_has_explicit_time:{type:"boolean",description:"Whether due time is explicit."},interval_value:{type:"integer",description:"Interval amount."},interval_unit:{type:"string",enum:["hour","day","week","month"],description:"Interval unit."},times_of_day:{type:"array",items:{type:"string"},description:"Times of day."},ends_at:{type:"string",format:"date-time",description:"Optional end."},timezone:{type:"string",description:"IANA timezone."},note:{type:"string",description:"Note."},lead_time_minutes:{type:"integer",description:"Lead time."},status:{type:"string",description:"Status."},is_active:{type:"boolean",description:"Active flag."},...timestamps},required_fields:["title","target_type","schedule_type","starts_at"],writable_fields:writable,searchable_fields:["title"],supported_actions:["complete","skip","snooze"],validation_rules:["search filters accept target_type, target_id, and active_only","delete uses the existing cancellation service","complete and skip record an occurrence","snooze accepts choice later_today, tomorrow, or custom plus custom time","updates are validated after merging with the existing reminder","delivery and due-reminder control endpoints are not resources"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["target_type","target_id","active_only"],"reminder search filters");rejectCursor(cursor,"Reminder");let items=await operations.search({targetType:filterEnum(filters.target_type,["cat","cat_household","tracker"] as const,"target_type"),targetId:filters.target_id===undefined?undefined:filters.target_id===null?null:numericId(filters.target_id as ResourceId,"Target"),activeOnly:filters.active_only as boolean|undefined});if(query)items=items.filter(item=>item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));return{items:items.slice(0,limit).map(snakeRecord),next_cursor:null};},async get(value){const id=numericId(value,"Reminder"),item=(await operations.search({})).find(entry=>entry.id===id);if(!item)throw new ConflictError("Reminder not found.");return snakeRecord(item);},async create(data){assertOnlyKeys(data,writable,"reminder create");return snakeRecord(await operations.create(parseReminder(mappedInput(data,reminderMap))));},async update(value,data){assertOnlyKeys(data,writable,"reminder update");const id=numericId(value,"Reminder"),existing=(await operations.search({})).find(entry=>entry.id===id);if(!existing)throw new ConflictError("Reminder not found.");const merged={...snakeRecord(existing),...data};const item=await operations.update(id,parseReminder(mappedInput(merged,reminderMap)));if(!item)throw new ConflictError("Reminder not found.");return snakeRecord(item);},async delete(value){const id=numericId(value,"Reminder");if(!await operations.delete(id))throw new ConflictError("Reminder not found.");return{deleted:true,id};},async action({id,action,data}){if(id===undefined)throw new ValidationError(`${action} requires a reminder id.`);const resourceId=numericId(id,"Reminder");if(action==="complete"||action==="skip"){assertOnlyKeys(data,["acted_at"],`reminder ${action}`);const actedAt=data.acted_at===undefined?undefined:new Date(String(data.acted_at));if(actedAt&&Number.isNaN(actedAt.getTime()))throw new ValidationError("acted_at is invalid.");return snakeRecord(await (action==="complete"?operations.complete(resourceId,actedAt):operations.skip(resourceId,actedAt)) as object);}if(action==="snooze"){assertOnlyKeys(data,["choice","custom"],"reminder snooze");const choice=filterEnum(data.choice,["later_today","tomorrow","custom"] as const,"choice");if(!choice)throw new ValidationError("snooze requires choice.");const item=await operations.snooze(resourceId,choice,data.custom===undefined?undefined:String(data.custom));if(!item)throw new ConflictError("Reminder not found.");return snakeRecord(item);}throw new ValidationError(`reminder does not support action: ${action}.`);}};}
+function reminderResource(operations:NonNullable<ResourceRegistryOperations["reminder"]>):RegisteredResource {
+  const writable=Object.keys(reminderMap);
+  const searchTargetTypes=["cat","cat_household","tracker","health","subscription"] as const;
+  return {
+    schema:{
+      resource:"reminder",
+      description:"User reminders and module-owned reminder projections.",
+      fields:{
+        id:{type:"integer",description:"Reminder id.",read_only:true},
+        title:{type:"string",description:"Title."},
+        target_type:{type:"string",enum:[...searchTargetTypes],description:"Target type."},
+        target_id:{type:"integer",description:"Target id when required."},
+        schedule_type:{type:"string",enum:["one_time","interval","course"],description:"Schedule type."},
+        starts_at:{type:"string",format:"date-time",description:"Start."},
+        next_due_at:{type:"string",format:"date-time",description:"Next due."},
+        due_has_explicit_time:{type:"boolean",description:"Whether due time is explicit."},
+        interval_value:{type:"integer",description:"Interval amount."},
+        interval_unit:{type:"string",enum:["hour","day","week","month"],description:"Interval unit."},
+        times_of_day:{type:"array",items:{type:"string"},description:"Times of day."},
+        ends_at:{type:"string",format:"date-time",description:"Optional end."},
+        timezone:{type:"string",description:"IANA timezone."},
+        note:{type:"string",description:"Note."},
+        lead_time_minutes:{type:"integer",description:"Lead time."},
+        status:{type:"string",description:"Status."},
+        is_active:{type:"boolean",description:"Active flag."},
+        ...timestamps,
+      },
+      required_fields:["title","target_type","schedule_type","starts_at"],
+      writable_fields:writable,
+      searchable_fields:["title"],
+      supported_actions:["complete","skip","snooze"],
+      validation_rules:[
+        "search filters accept target_type, target_id, and active_only, including subscription projections",
+        "subscription reminders are created and updated through the subscription resource",
+        "delete uses the existing cancellation service",
+        "complete and skip record an occurrence",
+        "snooze accepts choice later_today, tomorrow, or custom plus custom time",
+        "updates are validated after merging with the existing reminder",
+        "delivery and due-reminder control endpoints are not resources",
+      ],
+    },
+    async search({query,filters={},limit,cursor}) {
+      assertOnlyKeys(filters,["target_type","target_id","active_only"],"reminder search filters");
+      rejectCursor(cursor,"Reminder");
+      let items=await operations.search({
+        targetType:filterEnum(filters.target_type,searchTargetTypes,"target_type"),
+        targetId:filters.target_id===undefined?undefined:filters.target_id===null?null:numericId(filters.target_id as ResourceId,"Target"),
+        activeOnly:filters.active_only as boolean|undefined,
+      });
+      if(query)items=items.filter(item=>item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+      return{items:items.slice(0,limit).map(snakeRecord),next_cursor:null};
+    },
+    async get(value) {
+      const id=numericId(value,"Reminder"),item=(await operations.search({})).find(entry=>entry.id===id);
+      if(!item)throw new ConflictError("Reminder not found.");
+      return snakeRecord(item);
+    },
+    async create(data) {
+      assertOnlyKeys(data,writable,"reminder create");
+      return snakeRecord(await operations.create(parseReminder(mappedInput(data,reminderMap))));
+    },
+    async update(value,data) {
+      assertOnlyKeys(data,writable,"reminder update");
+      const id=numericId(value,"Reminder"),existing=(await operations.search({})).find(entry=>entry.id===id);
+      if(!existing)throw new ConflictError("Reminder not found.");
+      const merged={...snakeRecord(existing),...data};
+      const item=await operations.update(id,parseReminder(mappedInput(merged,reminderMap)));
+      if(!item)throw new ConflictError("Reminder not found.");
+      return snakeRecord(item);
+    },
+    async delete(value) {
+      const id=numericId(value,"Reminder");
+      if(!await operations.delete(id))throw new ConflictError("Reminder not found.");
+      return{deleted:true,id};
+    },
+    async action({id,action,data}) {
+      if(id===undefined)throw new ValidationError(`${action} requires a reminder id.`);
+      const resourceId=numericId(id,"Reminder");
+      if(action==="complete"||action==="skip") {
+        assertOnlyKeys(data,["acted_at"],`reminder ${action}`);
+        const actedAt=data.acted_at===undefined?undefined:new Date(String(data.acted_at));
+        if(actedAt&&Number.isNaN(actedAt.getTime()))throw new ValidationError("acted_at is invalid.");
+        return snakeRecord(await (action==="complete"?operations.complete(resourceId,actedAt):operations.skip(resourceId,actedAt)) as object);
+      }
+      if(action==="snooze") {
+        assertOnlyKeys(data,["choice","custom"],"reminder snooze");
+        const choice=filterEnum(data.choice,["later_today","tomorrow","custom"] as const,"choice");
+        if(!choice)throw new ValidationError("snooze requires choice.");
+        const item=await operations.snooze(resourceId,choice,data.custom===undefined?undefined:String(data.custom));
+        if(!item)throw new ConflictError("Reminder not found.");
+        return snakeRecord(item);
+      }
+      throw new ValidationError(`reminder does not support action: ${action}.`);
+    },
+  };
+}
 
 const subscriptionMap={name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
-function subscriptionResource(operations:NonNullable<ResourceRegistryOperations["subscription"]>):RegisteredResource{const writable=Object.keys(subscriptionMap);return{schema:{resource:"subscription",description:"Recurring subscriptions with renewal reminders, immutable actual-payment history, price history, and pause/resume lifecycle.",fields:{id:{type:"integer",description:"Subscription id.",read_only:true},name:{type:"string",description:"Subscription name."},current_amount_minor:{type:"integer",description:"Current recurring price in minor currency units.",read_only:true},currency:{type:"string",description:"Three-letter currency code."},billing_interval_value:{type:"integer",description:"Billing interval amount."},billing_interval_unit:{type:"string",enum:["day","week","month","year"],description:"Billing interval unit."},started_on:{type:"string",format:"date",description:"Date-only start date."},next_renewal_on:{type:"string",format:"date",description:"Date-only next renewal."},status:{type:"string",enum:["active","paused","ended"],description:"Lifecycle state; change through actions.",read_only:true},auto_renew:{type:"boolean",description:"Whether the provider renews automatically."},reminder_enabled:{type:"boolean",description:"Whether the owned renewal reminder is enabled."},reminder_days_before:{type:"integer",description:"Whole days before renewal."},reminder_time:{type:"string",description:"Explicit local HH:mm time; required when reminders are enabled."},total_spent_minor:{type:"integer",description:"Derived sum of actual payments in the current currency.",read_only:true},payment_count:{type:"integer",description:"Derived actual payment count.",read_only:true},latest_price_change:{type:"object",description:"Latest immutable price-change record.",read_only:true},payments:{type:"array",items:{type:"object"},description:"Actual payment history, available from get.",read_only:true},price_changes:{type:"array",items:{type:"object"},description:"Immutable price history, available from get.",read_only:true},notes:{type:"string",description:"Notes."},...timestamps},required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"],writable_fields:writable,searchable_fields:["name","status"],supported_actions:["pause","resume","end","record_payment"],validation_rules:["amount inputs use major currency units and outputs use integer minor units","cumulative spending sums actual payments only","price changes append history instead of rewriting payments","pause disables the owned reminder without deleting history","dates are date-only; reminder_time is explicit and required only when reminders are enabled","unknown fields are rejected"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["status"],"subscription search filters");rejectCursor(cursor,"Subscription");return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(snakeRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Subscription"));if(!item)throw new ConflictError("Subscription not found.");return snakeRecord(item);},async create(data){assertOnlyKeys(data,writable,"subscription create");return snakeRecord(await operations.create(parseNewSubscription(mappedInput(data,subscriptionMap))));},async update(value,data){assertOnlyKeys(data,writable,"subscription update");const item=await operations.update(numericId(value,"Subscription"),parseSubscriptionPatch(mappedInput(data,subscriptionMap)));if(!item)throw new ConflictError("Subscription not found.");return snakeRecord(item);},async action({id,action,data}){if(id===undefined)throw new ValidationError(`${action} requires a subscription id.`);const subscriptionId=numericId(id,"Subscription");if(action==="record_payment"){assertOnlyKeys(data,["scheduled_for","paid_on","amount","currency","note","update_current_price"],"subscription record_payment");return snakeRecord(await operations.recordPayment(subscriptionId,parseSubscriptionPayment(mappedInput(data,{scheduled_for:"scheduledFor",paid_on:"paidOn",amount:"amount",currency:"currency",note:"note",update_current_price:"updateCurrentPrice"}))));}if(action==="pause"||action==="end"||action==="resume"){assertOnlyKeys(data,action==="resume"?["next_renewal_on"]:[],`subscription ${action}`);const nextRenewalOn=data.next_renewal_on===undefined?undefined:dateOnly(data.next_renewal_on,"next_renewal_on");const item=await operations.setStatus(subscriptionId,action==="resume"?"active":action==="pause"?"paused":"ended",nextRenewalOn);if(!item)throw new ConflictError("Subscription not found.");return snakeRecord(item);}throw new ValidationError(`subscription does not support action: ${action}.`);}};}
+function subscriptionResource(operations:NonNullable<ResourceRegistryOperations["subscription"]>):RegisteredResource {
+  const writable=Object.keys(subscriptionMap);
+  return {
+    schema:{
+      resource:"subscription",
+      description:"Recurring subscriptions with renewal reminders, immutable actual-payment history, price history, and pause/resume lifecycle.",
+      fields:{
+        id:{type:"integer",description:"Subscription id.",read_only:true},
+        name:{type:"string",description:"Subscription name."},
+        current_amount_minor:{type:"integer",description:"Current recurring price in minor currency units.",read_only:true},
+        currency:{type:"string",description:"Three-letter currency code."},
+        billing_interval_value:{type:"integer",description:"Billing interval amount."},
+        billing_interval_unit:{type:"string",enum:["day","week","month","year"],description:"Billing interval unit."},
+        started_on:{type:"string",format:"date",description:"Date-only start date."},
+        next_renewal_on:{type:"string",format:"date",description:"Date-only next renewal."},
+        status:{type:"string",enum:["active","paused","ended"],description:"Lifecycle state; change through actions.",read_only:true},
+        auto_renew:{type:"boolean",description:"Whether the provider renews automatically."},
+        reminder_enabled:{type:"boolean",description:"Whether the owned renewal reminder is enabled."},
+        reminder_days_before:{type:"integer",description:"Whole days before renewal."},
+        reminder_time:{type:"string",description:"Explicit local HH:mm time; required when reminders are enabled."},
+        total_spent_minor:{type:"integer",description:"Backward-compatible actual-payment total in the current currency.",read_only:true},
+        spend_by_currency:{type:"object",description:"Derived actual-payment totals grouped by currency.",read_only:true},
+        payment_count:{type:"integer",description:"Derived actual payment count across all currencies.",read_only:true},
+        latest_price_change:{type:"object",description:"Latest immutable price-change record.",read_only:true},
+        payments:{type:"array",items:{type:"object"},description:"Actual payment history, available from get.",read_only:true},
+        price_changes:{type:"array",items:{type:"object"},description:"Immutable price history, available from get.",read_only:true},
+        notes:{type:"string",description:"Notes."},
+        ...timestamps,
+      },
+      required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"],
+      writable_fields:writable,
+      searchable_fields:["name","status"],
+      supported_actions:["pause","resume","end","record_payment"],
+      validation_rules:[
+        "amount inputs use major currency units and outputs use integer minor units",
+        "cumulative spending sums actual payments only and remains grouped by currency",
+        "price changes append history instead of rewriting payments",
+        "pause disables the owned reminder without deleting history",
+        "dates are date-only; reminder_time is explicit and required only when reminders are enabled",
+        "unknown fields are rejected",
+      ],
+    },
+    async search({query,filters={},limit,cursor}) {
+      assertOnlyKeys(filters,["status"],"subscription search filters");
+      rejectCursor(cursor,"Subscription");
+      return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(snakeRecord),next_cursor:null};
+    },
+    async get(value) {
+      const item=await operations.get(numericId(value,"Subscription"));
+      if(!item)throw new ConflictError("Subscription not found.");
+      return snakeRecord(item);
+    },
+    async create(data) {
+      assertOnlyKeys(data,writable,"subscription create");
+      return snakeRecord(await operations.create(parseNewSubscription(mappedInput(data,subscriptionMap))));
+    },
+    async update(value,data) {
+      assertOnlyKeys(data,writable,"subscription update");
+      const item=await operations.update(numericId(value,"Subscription"),parseSubscriptionPatch(mappedInput(data,subscriptionMap)));
+      if(!item)throw new ConflictError("Subscription not found.");
+      return snakeRecord(item);
+    },
+    async action({id,action,data}) {
+      if(id===undefined)throw new ValidationError(`${action} requires a subscription id.`);
+      const subscriptionId=numericId(id,"Subscription");
+      if(action==="record_payment") {
+        assertOnlyKeys(data,["scheduled_for","paid_on","amount","currency","note","update_current_price"],"subscription record_payment");
+        return snakeRecord(await operations.recordPayment(subscriptionId,parseSubscriptionPayment(mappedInput(data,{scheduled_for:"scheduledFor",paid_on:"paidOn",amount:"amount",currency:"currency",note:"note",update_current_price:"updateCurrentPrice"}))));
+      }
+      if(action==="pause"||action==="end"||action==="resume") {
+        assertOnlyKeys(data,action==="resume"?["next_renewal_on"]:[],`subscription ${action}`);
+        const nextRenewalOn=data.next_renewal_on===undefined?undefined:dateOnly(data.next_renewal_on,"next_renewal_on");
+        const item=await operations.setStatus(subscriptionId,action==="resume"?"active":action==="pause"?"paused":"ended",nextRenewalOn);
+        if(!item)throw new ConflictError("Subscription not found.");
+        return snakeRecord(item);
+      }
+      throw new ValidationError(`subscription does not support action: ${action}.`);
+    },
+  };
+}
 
 const foodPlaceMap={name:"name",branch:"branch",category:"category",rating:"rating",status:"status",notes:"notes"};
 function foodPlaceResource(operations:NonNullable<ResourceRegistryOperations["foodPlace"]>):RegisteredResource{const writable=Object.keys(foodPlaceMap);return{schema:{resource:"food_place",description:"A specific real-world food shop or restaurant branch, independent of dining scene.",fields:{id:{type:"integer",description:"Place id.",read_only:true},name:{type:"string",max_length:200,description:"Shop name."},branch:{type:"string",max_length:160,description:"Optional branch information."},category:{type:"string",max_length:100,description:"Free-form category."},rating:{type:"string",enum:["love","good","neutral","dislike"],description:"Long-term overall rating."},status:{type:"string",enum:["frequent","occasional","paused","avoid","closed"],description:"Current personal status."},notes:{type:"string",max_length:4000,description:"Notes."},dish_count:{type:"integer",description:"Derived active dish count.",read_only:true},visit_count:{type:"integer",description:"Derived linked Food Record count.",read_only:true},last_visited_at:{type:"string",format:"date-time",description:"Derived latest linked Food Record time.",read_only:true},created_at:{type:"string",format:"date-time",description:"Created time.",read_only:true},updated_at:{type:"string",format:"date-time",description:"Updated time.",read_only:true}},required_fields:["name"],writable_fields:writable,searchable_fields:["name","branch","category","notes"],supported_actions:[],validation_rules:["category is free-form","rating is love, good, neutral, or dislike","status is frequent, occasional, paused, avoid, or closed","visit_count and last_visited_at are derived from Food Records","scene remains a separate Food Record field"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["status","category"],"food_place search filters");rejectCursor(cursor,"Food place");const status=filterEnum(filters.status,["frequent","occasional","paused","avoid","closed"] as const,"status");const category=filterText(filters.category,"category");return{items:(await operations.search(query??"",{status,category,limit})).map(snakeRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Food place"));if(!item)throw new ConflictError("Food place not found.");return snakeRecord(item);},async create(data){assertOnlyKeys(data,writable,"food_place create");return snakeRecord(await operations.create(parseFoodPlace(mappedInput(data,foodPlaceMap))));},async update(value,data){assertOnlyKeys(data,writable,"food_place update");const item=await operations.update(numericId(value,"Food place"),parseFoodPlacePatch(mappedInput(data,foodPlaceMap)));if(!item)throw new ConflictError("Food place not found.");return snakeRecord(item);}};}

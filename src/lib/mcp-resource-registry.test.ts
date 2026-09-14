@@ -131,6 +131,24 @@ test("registry exposes long-term memory and project resources without changing g
   assert.throws(() => registry.schema("media"), /Unknown resource/);
 });
 
+test("reminder registry can discover subscription-owned reminder projections", async () => {
+  const {operations}=fakeOperations();
+  const targets:Array<string|undefined>=[];
+  operations.reminder={
+    async search(input){targets.push(input.targetType);return[];},
+    async create(){throw new Error("unused");},
+    async update(){return null;},
+    async delete(){return false;},
+    async complete(){throw new Error("unused");},
+    async skip(){throw new Error("unused");},
+    async snooze(){return null;},
+  };
+  const registry=createResourceRegistry(operations);
+  assert.ok(registry.schema("reminder").fields.target_type.enum?.includes("subscription"));
+  await registry.search("reminder",{filters:{target_type:"subscription"},limit:20});
+  assert.deepEqual(targets,["subscription"]);
+});
+
 test("Memory Graph resources preserve lifecycle, provenance, and immutable assertion shape", async () => {
   const registry=createResourceRegistry(fakeOperations().operations);
   const eva=await registry.create("memory_entity",{canonical_name:"Eva",entity_type:"identity",aliases:["EvaOrbit"]});

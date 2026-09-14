@@ -4733,3 +4733,58 @@ html[data-mode="dark"] .settings-directory-page .settings-directory-item:hover {
 .subscription-summary,.subscription-detail-stats{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:12px;margin:22px 0}.subscription-summary article,.subscription-detail-stats article{min-width:0;padding:20px;border:1px solid var(--line);border-radius:18px;background:rgb(var(--surface-card-rgb)/.78);display:grid;gap:6px}.subscription-summary small,.subscription-detail-stats small{color:var(--muted);font-size:9px;letter-spacing:.14em}.subscription-summary strong,.subscription-detail-stats strong{font:600 clamp(21px,3vw,34px) var(--font-editorial-label);overflow-wrap:anywhere}.subscription-summary span,.subscription-detail-stats span{color:var(--muted);font-size:10px}.subscription-filters{display:flex;gap:7px;margin:18px 0;overflow-x:auto}.subscription-filters button{min-height:36px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap}.subscription-filters button.active{border-color:var(--border-default);background:var(--surface-warm);color:var(--ink)}.subscription-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.subscription-card{min-width:0;padding:18px;border:1px solid var(--line);border-radius:20px;background:rgb(var(--surface-card-rgb)/.78);color:var(--ink);text-decoration:none;transition:transform .18s ease,border-color .18s ease}.subscription-card:hover{transform:translateY(-2px);border-color:var(--border-default)}.subscription-card-head{display:flex;align-items:center;gap:11px}.subscription-card-head>span:nth-child(2){min-width:0;display:grid;gap:3px}.subscription-card-head strong{overflow-wrap:anywhere}.subscription-card-head small{color:var(--muted);font-size:9px}.subscription-monogram{width:38px;height:38px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;background:var(--surface-warm);font:600 16px var(--font-editorial-label)}.subscription-card-head em{margin-left:auto;padding:5px 8px;border-radius:999px;background:var(--surface-warm);color:var(--muted);font-size:8px;font-style:normal}.subscription-card-head em[data-status=active]{color:var(--green)}.subscription-price{margin:23px 0 18px;display:flex;align-items:baseline;gap:6px}.subscription-price strong{font:600 28px var(--font-editorial-label)}.subscription-price span{color:var(--muted);font-size:10px}.subscription-card dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:12px}.subscription-card dl div{display:grid;gap:3px}.subscription-card dt{color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.08em}.subscription-card dd{margin:0;font-size:10px}.subscription-change{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:9px}.subscription-detail-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.subscription-actions{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:20px 0 30px}.subscription-history-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.subscription-history-grid>section{min-width:0;padding:20px;border:1px solid var(--line);border-radius:20px;background:rgb(var(--surface-card-rgb)/.55)}.subscription-history-list{display:grid}.subscription-history-list article{min-width:0;padding:13px 0;border-top:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.subscription-history-list article>span{min-width:0;display:grid;gap:4px}.subscription-history-list strong{overflow-wrap:anywhere;font-size:11px}.subscription-history-list small,.subscription-history-list time,.subscription-empty-note{color:var(--muted);font-size:9px}.subscription-empty-note{margin:8px 0 0}.subscription-editor .check-row{min-height:52px}
 
 @media(max-width:720px){.subscription-grid,.subscription-history-grid,.subscription-detail-stats{grid-template-columns:1fr}.subscription-summary{grid-template-columns:1fr}.subscription-card{padding:16px}.subscription-actions{align-items:stretch}.subscription-actions .button{flex:1}}
+
+/* Subscriptions read as a compact ledger, with elevation reserved for records. */
+.subscription-summary,
+.subscription-detail-stats {
+  gap:4px;
+  padding:5px;
+  border-radius:var(--radius-content);
+  background:rgb(var(--surface-card-rgb) / .52);
+}
+.subscription-summary article,
+.subscription-detail-stats article {
+  padding:15px;
+  border:0;
+  border-radius:var(--radius-control);
+  background:transparent;
+}
+.subscription-summary article:first-child,
+.subscription-detail-stats article:first-child { background:rgb(var(--surface-raised-rgb) / .58); }
+.subscription-card,
+.subscription-history-grid > section { border-radius:var(--radius-content); }
+.subscription-card:active { transform:scale(.99); }
+.subscription-card:focus-visible,
+.subscription-filters button:focus-visible {
+  outline:2px solid var(--focus-ring);
+  outline-offset:3px;
+}
+.subscription-card dd { overflow-wrap:anywhere; }
+.subscription-detail-stats { grid-template-columns:minmax(0,1.25fr) repeat(2,minmax(0,1fr)); }
+.subscription-history-grid > section {
+  padding:18px;
+  background:rgb(var(--surface-card-rgb) / .45);
+}
+.subscription-history-grid .section-heading { margin-bottom:5px; }
+.subscription-history-grid .section-heading h2 { font-size:17px; }
+
+html[data-mode="dark"] .subscription-summary,
+html[data-mode="dark"] .subscription-detail-stats,
+html[data-mode="dark"] .subscription-history-grid > section { background:rgb(255 255 255 / .035); }
+html[data-mode="dark"] .subscription-summary article:first-child,
+html[data-mode="dark"] .subscription-detail-stats article:first-child { background:rgb(255 255 255 / .045); }
+
+@media(max-width:720px) {
+  .subscription-summary { grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr); }
+  .subscription-summary article { padding:13px; }
+  .subscription-detail-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .subscription-detail-stats article:first-child { grid-column:1 / -1; }
+  .subscription-detail-stats article:not(:first-child) strong { font-size:18px;white-space:nowrap; }
+  .subscription-history-grid > section { padding:16px; }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .subscription-card { transition:none; }
+  .subscription-card:hover,
+  .subscription-card:active { transform:none; }
+}
