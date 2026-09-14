@@ -210,7 +210,7 @@ export interface InboxItem {
   updatedAt: string;
 }
 
-export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "media" | "chronicle";
+export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "subscription" | "media" | "chronicle";
 
 export interface TimelineEvent {
   id: string;
@@ -662,6 +662,57 @@ export interface Project {
 
 export type ProjectItemType = "feature" | "bug" | "ui" | "migration" | "research" | "tech_debt" | "other";
 export type ProjectItemStatus = "to_solve" | "doing" | "blocked" | "done" | "verified" | "dropped";
+
+export type SubscriptionStatus = "active" | "paused" | "ended";
+export type SubscriptionIntervalUnit = "day" | "week" | "month" | "year";
+export interface Subscription {
+  id: number;
+  name: string;
+  currentAmountMinor: number;
+  currency: string;
+  billingIntervalValue: number;
+  billingIntervalUnit: SubscriptionIntervalUnit;
+  startedOn: string;
+  nextRenewalOn: string;
+  status: SubscriptionStatus;
+  autoRenew: boolean;
+  reminderEnabled: boolean;
+  reminderDaysBefore: number;
+  reminderTime: string | null;
+  reminderId: number | null;
+  notes: string;
+  pausedAt: string | null;
+  endedAt: string | null;
+  totalSpentMinor: number;
+  paymentCount: number;
+  latestPriceChange: SubscriptionPriceChange | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SubscriptionPayment {
+  id: number;
+  subscriptionId: number;
+  scheduledFor: string;
+  paidOn: string;
+  amountMinor: number;
+  currency: string;
+  note: string;
+  createdAt: string;
+}
+export interface SubscriptionPriceChange {
+  id: number;
+  subscriptionId: number;
+  effectiveOn: string;
+  oldAmountMinor: number;
+  newAmountMinor: number;
+  oldCurrency: string;
+  newCurrency: string;
+  createdAt: string;
+}
+export interface SubscriptionDetail extends Subscription {
+  payments: SubscriptionPayment[];
+  priceChanges: SubscriptionPriceChange[];
+}
 export interface ProjectItem {
   id: number;
   projectId: number;
@@ -954,7 +1005,7 @@ export interface CatTimelineEntry {
   metadata: Record<string, unknown>;
 }
 
-export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health";
+export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health" | "subscription";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";

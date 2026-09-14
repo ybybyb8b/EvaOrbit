@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -96,6 +96,10 @@ export type ProjectListInput = { query?: string; status?: ProjectStatus; limit?:
 export type NewProjectItem = Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">;
 export type ProjectItemPatch = Partial<Omit<NewProjectItem, "projectId">> & { projectId?: number };
 export type ProjectItemListInput = { query?: string; projectId?: number; project?: string; status?: ProjectItemStatus; type?: ProjectItemType; module?: string; limit?: number };
+export type NewSubscription = Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "notes"> & { status?: Subscription["status"] };
+export type SubscriptionPatch = Partial<Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "reminderId" | "notes">>;
+export type SubscriptionListInput = { query?: string; status?: Subscription["status"]; limit?: number };
+export type NewSubscriptionPayment = Pick<SubscriptionPayment, "scheduledFor" | "paidOn" | "amountMinor" | "currency" | "note"> & { updateCurrentPrice: boolean };
 export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
 export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
 export type LuciusDiaryListInput = { query?: string; tag?: string; limit?: number };
@@ -296,6 +300,15 @@ export interface EvaOrbitRepository {
   getProjectItem(id: number): Promise<ProjectItem | null>;
   createProjectItem(input: NewProjectItem): Promise<ProjectItem>;
   updateProjectItem(id: number, input: ProjectItemPatch): Promise<ProjectItem | null>;
+
+  listSubscriptions(input?: SubscriptionListInput): Promise<Subscription[]>;
+  getSubscription(id: number): Promise<Subscription | null>;
+  createSubscription(input: NewSubscription): Promise<Subscription>;
+  updateSubscription(id: number, input: SubscriptionPatch, effectiveOn?: string): Promise<Subscription | null>;
+  setSubscriptionStatus(id: number, status: Subscription["status"], nextRenewalOn?: string): Promise<Subscription | null>;
+  listSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]>;
+  listSubscriptionPriceChanges(subscriptionId: number): Promise<SubscriptionPriceChange[]>;
+  recordSubscriptionPayment(subscriptionId: number, input: NewSubscriptionPayment, nextRenewalOn: string): Promise<SubscriptionPayment>;
 
   listMemos(input?: MemoListInput): Promise<Memo[]>;
   getMemo(id: number): Promise<Memo | null>;

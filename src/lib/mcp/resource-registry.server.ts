@@ -17,6 +17,7 @@ import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryN
 import { createResourceRegistry } from "./resource-registry";
 import { createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,updateFoodDish,updateFoodPlace } from "../services/food";
 import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
+import { createSubscription, getSubscriptionDetail, listSubscriptions, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 
 export const resourceRegistry = createResourceRegistry({
   memoryEntity:{search:listMemoryEntities,get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
@@ -40,6 +41,7 @@ export const resourceRegistry = createResourceRegistry({
   catRecord: { search: catTimeline, get: getCatRecord, create: createCatRecord, update: updateCatRecord, delete: deleteCatRecord },
   catRoutine: { search: listCatRoutines, get: getCatRoutine, create: createCatRoutine, update: updateCatRoutine, complete: completeCatRoutine, skip: skipCatRoutineOccurrence, archive: archiveCatRoutine },
   reminder: { search: listReminders, create: createReminder, update: updateReminder, delete: deleteReminder, complete: completeReminder, skip: skipReminder, snooze: snoozeReminder },
+  subscription: { search: listSubscriptions, get: getSubscriptionDetail, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment },
   project: { search: listProjects, get: getProject, create: createProject, update: updateProject },
   projectItem: { search: listProjectItems, get: getProjectItem, create: createProjectItem, update: updateProjectItem },
   relationPerson:{search:listRelationPeople,get:getRelationPersonDetail,create:createRelationPerson,update:updateRelationPerson},

@@ -3,7 +3,7 @@ import test from "node:test";
 import { reminderSourceAllows, reminderSourceDefinition, REMINDER_SOURCE_REGISTRY } from "./reminder-source-registry.ts";
 
 test("Reminder source registry keeps deterministic and conditional channels separate", () => {
-  for (const source of [null, "cat_routine", "vet_visit", "medication", "tracker_standard"]) {
+  for (const source of [null, "cat_routine", "vet_visit", "medication", "tracker_standard", "subscription_renewal"]) {
     assert.equal(reminderSourceAllows(source, "native_local"), true);
     assert.equal(reminderSourceAllows(source, "web_push"), true);
   }
@@ -13,5 +13,5 @@ test("Reminder source registry keeps deterministic and conditional channels sepa
   }
   assert.equal(reminderSourceDefinition("period_medication").projectionOwner, "medication_preset");
   assert.equal(reminderSourceDefinition("unregistered").channels.length, 0);
-  assert.equal(Object.keys(REMINDER_SOURCE_REGISTRY).length, 9);
+  assert.equal(Object.keys(REMINDER_SOURCE_REGISTRY).length, 10);
 });

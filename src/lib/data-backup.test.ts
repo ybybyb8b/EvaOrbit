@@ -44,7 +44,7 @@ test("backup parser requires a complete current-version document", () => {
     resources: emptyBackupResources(),
   };
   assert.deepEqual(parseBackupDocument(backup), backup);
-  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 5 }), /不支持/);
+  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 6 }), /不支持/);
   const incomplete = { ...backup, resources: { ...backup.resources } };
   delete (incomplete.resources as Partial<typeof incomplete.resources>).projects;
   assert.throws(() => parseBackupDocument(incomplete), /备份不完整/);

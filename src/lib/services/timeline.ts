@@ -2,7 +2,7 @@ import "server-only";
 
 import { calculateDailyNutrition } from "../nutrition";
 import { getRepository } from "../repositories";
-import { buildRelationTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "../timeline";
+import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import type { TimelineEvent, TimelineMonthSummary } from "../types";
@@ -30,7 +30,9 @@ async function loadSources(range: { from: string; to: string }) {
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
   ]);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses };
+  const subscriptions=await repository.listSubscriptions();
+  const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, subscriptionPayments };
 }
 
 function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, cats: Awaited<ReturnType<typeof catTimeline>>, range: { from: string; to: string }) {
@@ -38,6 +40,7 @@ function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, 
     ...buildTimelineEvents(sources.foods, sources.drinks, sources.trackerEntries, sources.trackers, sources.healthRecords, sources.weightRecords, sources.menstrualFlows, sources.medicationDoses),
     ...buildTrainingTimelineEvents(sources.trainingLogs),
     ...buildRelationTimelineEvents(sources.relationEvents),
+    ...buildSubscriptionTimelineEvents(sources.subscriptionPayments,sources.subscriptions),
     ...catsInRange(cats, range),
   ].sort(compareTimelineEvents);
 }
@@ -61,7 +64,7 @@ export async function listTimeline(input: { date?: string; limit?: number } = {}
 export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -74,10 +77,12 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
+    repository.listSubscriptions(),
   ]);
+  const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>item.paidOn===date);
   return {
     date,
-    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents), ...catsInRange(cats,range)]),
+    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range)]),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

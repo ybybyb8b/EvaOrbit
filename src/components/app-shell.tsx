@@ -26,6 +26,7 @@ const navigationGroups = [
     { href: "/trackers", label: "Trackers", zh: "观测", icon: "tracker" as const },
     { href: "/food", label: "Food", zh: "吃吃", icon: "food" as const },
     { href: "/drinks", label: "Drinks", zh: "喝喝", icon: "drink" as const },
+    { href: "/subscriptions", label: "Subscriptions", zh: "订阅", icon: "calendar" as const },
     { href: "/health", label: "Health", zh: "体征", icon: "health" as const },
     { href: "/cats", label: "Cats", zh: "咪子", icon: "cats" as const },
   ] },

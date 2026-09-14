@@ -1,4 +1,4 @@
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 import { normalizeWeightKg } from "./weight.ts";
@@ -932,6 +932,56 @@ export function parseTrainingLogPatch(value: unknown) {
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的训练记录字段");
   return result;
+}
+
+function moneyMinor(value: unknown, field: string) {
+  const textValue = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!/^\d{1,10}(\.\d{1,2})?$/.test(textValue)) throw new ValidationError(`${field}格式不正确`);
+  const [whole, fraction = ""] = textValue.split(".");
+  const result = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  if (!Number.isSafeInteger(result)) throw new ValidationError(`${field}过大`);
+  return result;
+}
+
+function currencyCode(value: unknown) {
+  if (typeof value !== "string" || !/^[A-Za-z]{3}$/.test(value.trim())) throw new ValidationError("币种格式不正确");
+  return value.trim().toUpperCase();
+}
+
+const subscriptionUnits = ["day", "week", "month", "year"] as const;
+function subscriptionReminderTime(value:unknown){if(value===undefined||value===null||value==="")return null;if(typeof value!=="string"||!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))throw new ValidationError("提醒时间格式不正确");return value;}
+export function parseNewSubscription(value: unknown) {
+  const body = objectValue(value);
+  const reminderEnabled=booleanValue(body.reminderEnabled, "订阅提醒", false),reminderTime=subscriptionReminderTime(body.reminderTime);
+  if(reminderEnabled&&!reminderTime)throw new ValidationError("开启订阅提醒时需要选择提醒时间");
+  return {
+    name: text(body.name, "订阅名称", 200)!, currentAmountMinor: moneyMinor(body.amount, "金额"), currency: currencyCode(body.currency),
+    billingIntervalValue: positiveInteger(body.billingIntervalValue, "扣款周期"), billingIntervalUnit: enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
+    startedOn: dateOnly(body.startedOn, "开始日期"), nextRenewalOn: dateOnly(body.nextRenewalOn, "下次续费日期"),
+    autoRenew: booleanValue(body.autoRenew, "自动续费", true), reminderEnabled, reminderTime,
+    reminderDaysBefore: integerValue(body.reminderDaysBefore, "提前提醒天数", 0, 3650, 3), notes: text(body.notes ?? "", "备注", 5000, false) ?? "", status: "active" as const,
+  };
+}
+
+export function parseSubscriptionPatch(value: unknown) {
+  const body = objectValue(value), reminderTime=body.reminderTime===undefined?undefined:subscriptionReminderTime(body.reminderTime), result = {
+    name: body.name === undefined ? undefined : text(body.name, "订阅名称", 200)!,
+    currentAmountMinor: body.amount === undefined ? undefined : moneyMinor(body.amount, "金额"),
+    currency: body.currency === undefined ? undefined : currencyCode(body.currency),
+    billingIntervalValue: body.billingIntervalValue === undefined ? undefined : positiveInteger(body.billingIntervalValue, "扣款周期"),
+    billingIntervalUnit: body.billingIntervalUnit === undefined ? undefined : enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
+    startedOn: body.startedOn === undefined ? undefined : dateOnly(body.startedOn, "开始日期"), nextRenewalOn: body.nextRenewalOn === undefined ? undefined : dateOnly(body.nextRenewalOn, "下次续费日期"),
+    autoRenew: body.autoRenew === undefined ? undefined : booleanValue(body.autoRenew, "自动续费", true), reminderEnabled: body.reminderEnabled === undefined ? undefined : booleanValue(body.reminderEnabled, "订阅提醒", true),
+    reminderDaysBefore: body.reminderDaysBefore === undefined ? undefined : integerValue(body.reminderDaysBefore, "提前提醒天数", 0, 3650), reminderTime, notes: body.notes === undefined ? undefined : text(body.notes, "备注", 5000, false) ?? "",
+  };
+  if(result.reminderEnabled===true&&result.reminderTime===null)throw new ValidationError("开启订阅提醒时需要选择提醒时间");
+  if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的订阅字段");
+  return result;
+}
+
+export function parseSubscriptionPayment(value: unknown) {
+  const body = objectValue(value);
+  return { scheduledFor: dateOnly(body.scheduledFor, "账期日期"), paidOn: dateOnly(body.paidOn, "扣款日期"), amountMinor: moneyMinor(body.amount, "实际金额"), currency: currencyCode(body.currency), note: text(body.note ?? "", "备注", 5000, false) ?? "", updateCurrentPrice: booleanValue(body.updateCurrentPrice, "更新后续价格", false) };
 }
 
 function timestampWithExplicitTime(value:unknown,field="时间"){
