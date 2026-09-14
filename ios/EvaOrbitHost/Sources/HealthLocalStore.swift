@@ -226,6 +226,10 @@ final class HealthLocalStore {
         }
     }
 
+    func resetMenstrualFlowAnchor() throws {
+        try locked { try execute("DELETE FROM anchors WHERE metric='menstrual_flow'") }
+    }
+
     func commitBodyMassDelta(samples: [HealthBodyMassSample], deletedUUIDs: [String], encodedAnchor: Data, now: Date = Date()) throws {
         try locked {
             try execute("BEGIN IMMEDIATE")

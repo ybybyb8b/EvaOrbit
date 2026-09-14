@@ -108,6 +108,14 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertEqual(deletion.first?.operation,.delete);XCTAssertEqual(deletion.first?.sampleId,sample.uuid)
     }
 
+    func testMenstrualFlowAnchorCanBeResetForAuthorizationUpgrade() throws {
+        let start=Date(timeIntervalSince1970:1_788_912_000)
+        try store.commitMenstrualFlowDelta(samples:[],deletedUUIDs:[],encodedAnchor:Data("old-flow-anchor".utf8),now:start)
+        XCTAssertNotNil(try store.menstrualFlowAnchor())
+        try store.resetMenstrualFlowAnchor()
+        XCTAssertNil(try store.menstrualFlowAnchor())
+    }
+
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
@@ -123,6 +131,8 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertEqual(store.metadata("authorizationRevision"), HealthKitCoordinator.authorizationRevision)
         XCTAssertEqual(healthKit.authorizationRequests, 1)
         XCTAssertEqual(Set(healthKit.backgroundMetrics), Set(HealthMetric.allCases))
+        XCTAssertEqual(healthKit.menstrualFlowAnchors.count, 1)
+        XCTAssertNil(healthKit.menstrualFlowAnchors[0])
 
         let noon = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-01T04:00:00Z"))
         try await coordinator.saveBodyMass(kilograms: 64.2, occurredAt: noon, syncIdentifier: "evaorbit.weight.test", syncVersion: 1)
@@ -140,6 +150,7 @@ private final class FakeHealthKitClient: HealthKitReading {
     var backgroundMetrics: [HealthMetric] = []
     var savedBodyMass: Double?
     var savedMenstrualFlow: HealthMenstrualFlowValue?
+    var menstrualFlowAnchors: [Data?] = []
 
     func requestAuthorization() async throws { authorizationRequests += 1 }
     func startObserver(for metric: HealthMetric, handler: @escaping (@escaping () -> Void) -> Void) throws {}
@@ -153,7 +164,7 @@ private final class FakeHealthKitClient: HealthKitReading {
     func saveBodyMass(kilograms: Double, occurredAt: Date, syncIdentifier: String, syncVersion: Int) async throws { savedBodyMass = kilograms }
     func startMenstrualFlowObserver(handler: @escaping (@escaping () -> Void) -> Void) throws {}
     func enableMenstrualFlowBackgroundDelivery() async throws {}
-    func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta { HealthMenstrualFlowDelta(added:[],deletedUUIDs:[],encodedAnchor:Data("menstrual_flow".utf8)) }
+    func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta { menstrualFlowAnchors.append(encodedAnchor); return HealthMenstrualFlowDelta(added:[],deletedUUIDs:[],encodedAnchor:Data("menstrual_flow".utf8)) }
     func saveMenstrualFlow(startAt: Date, endAt: Date, flow: HealthMenstrualFlowValue, cycleStart: Bool, syncIdentifier: String, syncVersion: Int) async throws { savedMenstrualFlow=flow }
     func deleteMenstrualFlow(sampleID: String?, syncIdentifier: String?) async throws {}
 }

@@ -107,6 +107,18 @@ test("menstrual flow migration keeps sync identity and server-side cycle associa
   assert.match(retry,/pending_delete|record\.deletedAt/);
 });
 
+test("HealthKit period range migration backfills ribbon periods without stretching them to the next cycle",()=>{
+  const sql=readFileSync(new URL("../../supabase/migrations/202609140001_healthkit_menstrual_period_ranges.sql",import.meta.url),"utf8");
+  const privilege=readFileSync(new URL("../../supabase/migrations/202609140002_healthkit_menstrual_period_reconcile_privilege.sql",import.meta.url),"utf8");
+  assert.match(sql,/reconcile_healthkit_menstrual_periods/);
+  assert.match(sql,/f\.period_id is null/);
+  assert.match(sql,/row_number\(\) over\(order by flow_on\)/);
+  assert.match(sql,/set ended_on=b\.last_flow_on/);
+  assert.match(sql,/perform public\.reconcile_healthkit_menstrual_periods\(p_user_id\)/);
+  assert.doesNotMatch(sql,/ended_on=local_date-1/);
+  assert.match(privilege,/grant execute on function public\.reconcile_healthkit_menstrual_periods\(uuid\) to service_role/);
+});
+
 test("HealthKit migration separates sources and enforces scope and revision idempotency", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/202609010001_healthkit_energy.sql", import.meta.url), "utf8");
   assert.match(sql, /create table if not exists public\.native_devices/i);
@@ -144,8 +156,9 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   assert.match(client, /HKMetadataKeyMenstrualCycleStart/);
   assert.match(client, /HKMetadataKeySyncIdentifier/);
   assert.match(client, /anchoredMenstrualFlowDelta/);
-  assert.match(coordinator, /authorizationRevision = "2"/);
+  assert.match(coordinator, /authorizationRevision = "3"/);
   assert.match(coordinator, /metadata\("authorizationRevision"\) == Self\.authorizationRevision/);
+  assert.match(coordinator, /resetMenstrualFlowAnchor/);
   assert.match(localStore, /menstrual_flow_outbox/);
   assert.match(localStore, /menstrualFlowAnchor/);
 });

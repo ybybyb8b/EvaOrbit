@@ -2,7 +2,7 @@ import Foundation
 
 final class HealthKitCoordinator {
     static let defaultInitialLookbackDays = 1
-    static let authorizationRevision = "2"
+    static let authorizationRevision = "3"
 
     private let healthKit: HealthKitReading
     private let store: HealthLocalStore
@@ -64,7 +64,9 @@ final class HealthKitCoordinator {
     func requestAuthorization() async throws -> HealthRuntimeStatus {
         guard healthKit.isAvailable else { throw HealthKitCoordinatorError.unavailable }
         do {
+            let needsMenstrualFlowRescan = store.metadata("authorizationRevision") != Self.authorizationRevision
             try await healthKit.requestAuthorization()
+            if needsMenstrualFlowRescan { try store.resetMenstrualFlowAnchor() }
             try store.setMetadata("authorizationRequested", value: "true")
             try store.setMetadata("authorizationRevision", value: Self.authorizationRevision)
             await enableBackgroundDelivery()
