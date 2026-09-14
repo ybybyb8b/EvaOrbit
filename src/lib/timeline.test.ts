@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, summarizeTimelineDays } from "./timeline.ts";
+import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, periodRangesForCalendar, summarizeTimelineDays } from "./timeline.ts";
 import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
@@ -103,4 +103,21 @@ test("finds a period day without extending an active period beyond today", () =>
   const active: MenstrualPeriod = { id: 5, startedOn: "2026-08-26", endedOn: null, notes: "", createdAt: "", updatedAt: "" };
   assert.equal(periodDayForDate([active], "2026-08-27", "2026-08-28")?.day, 2);
   assert.equal(periodDayForDate([active], "2026-08-29", "2026-08-28"), null);
+});
+
+test("limits an open calendar ribbon to confirmed menstrual flow", () => {
+  const active: MenstrualPeriod = { id: 5, startedOn: "2026-08-26", endedOn: null, notes: "", createdAt: "", updatedAt: "" };
+  const ranges = periodRangesForCalendar([active], [
+    menstrualFlow,
+    { ...menstrualFlow, id: 32, occurredAt: "2026-08-30T04:00:00.000Z", endedAt: "2026-08-30T04:00:00.000Z", isCycleStart: false },
+    { ...menstrualFlow, id: 33, occurredAt: "2026-09-01T04:00:00.000Z", endedAt: "2026-09-01T04:00:00.000Z", flow: "none", isCycleStart: false },
+  ], "2026-09-14");
+  assert.equal(ranges[0].endedOn, "2026-08-30");
+  assert.equal(active.endedOn, null);
+});
+
+test("treats a HealthKit midnight end as exclusive for the calendar ribbon", () => {
+  const active: MenstrualPeriod = { id: 5, startedOn: "2026-08-26", endedOn: null, notes: "", createdAt: "", updatedAt: "" };
+  const [range] = periodRangesForCalendar([active], [{ ...menstrualFlow, occurredAt: "2026-08-30T16:00:00.000Z", endedAt: "2026-08-31T16:00:00.000Z" }], "2026-09-14");
+  assert.equal(range.endedOn, "2026-08-31");
 });

@@ -2,7 +2,7 @@ import "server-only";
 
 import { calculateDailyNutrition } from "../nutrition";
 import { getRepository } from "../repositories";
-import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, summarizeTimelineDays } from "../timeline";
+import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, periodRangesForCalendar, summarizeTimelineDays } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import { catchUpAutomaticSubscriptionPayments } from "./subscription";
@@ -99,6 +99,6 @@ export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 
   const next = new Date(`${first}T12:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);
   const nextMonth = next.toISOString().slice(0, 10);
-  const periods = (await sources.repository.listMenstrualPeriods({ limit: 500 })).filter((item) => item.startedOn < nextMonth && (!item.endedOn || item.endedOn >= first));
+  const periods = periodRangesForCalendar(await sources.repository.listMenstrualPeriods({ limit: 500 }), sources.menstrualFlows).filter((item) => item.startedOn < nextMonth && item.endedOn >= first);
   return { month, days: summarizeTimelineDays(groupMealsByDay(mergeTimelineSources(sources, cats, range))), periods };
 }

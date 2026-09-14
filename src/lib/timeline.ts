@@ -129,6 +129,20 @@ export function periodDayForDate(periods: MenstrualPeriod[], date: string, today
   return { period, day };
 }
 
+export function periodRangesForCalendar(periods: MenstrualPeriod[], flows: MenstrualFlowRecord[], today = dateInEvaOrbit()): Array<MenstrualPeriod & { endedOn: string }> {
+  const periodStarts = new Map(periods.map((period) => [period.id, period.startedOn]));
+  const confirmedEnds = new Map<number, string>();
+  for (const flow of flows) {
+    if (flow.deletedAt || flow.periodId === null || flow.flow === "none") continue;
+    const startedAt = new Date(flow.occurredAt);
+    const endedAt = new Date(flow.endedAt);
+    const endedOn = dateInEvaOrbit(endedAt > startedAt ? new Date(endedAt.getTime() - 1) : endedAt);
+    const confirmedOn = endedOn > today ? today : endedOn;
+    if (confirmedOn >= (periodStarts.get(flow.periodId) ?? confirmedOn) && confirmedOn > (confirmedEnds.get(flow.periodId) ?? "")) confirmedEnds.set(flow.periodId, confirmedOn);
+  }
+  return periods.map((period) => ({ ...period, endedOn: period.endedOn ?? confirmedEnds.get(period.id) ?? period.startedOn }));
+}
+
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
 export function buildRelationTimelineEvents(events:RelationEvent[]):TimelineEvent[]{return events.map(event=>{const people=event.parties.flatMap(p=>p.personId?[p.personId]:[]);const detail=event.totalAmountMinor===null?(event.note||event.eventType):`¥${(event.totalAmountMinor/100).toFixed(2)}${event.note?` · ${event.note}`:""}`;return{id:`relation:${event.id}`,eventType:`relation.${event.eventType}`,sourceType:"person" as const,sourceId:event.id,title:event.title,detail,occurredAt:event.occurredAt,hasExplicitTime:event.occurredHasExplicitTime,endAt:null,href:people[0]?`/relations/${people[0]}`:"/relations",relatedPeople:people,relatedPets:[],metadata:{relationEventType:event.eventType,currency:event.currency,totalAmountMinor:event.totalAmountMinor,partyCount:event.parties.length}};}).sort(compareTimelineEvents);}
 export function buildSubscriptionTimelineEvents(payments:SubscriptionPayment[],subscriptions:Subscription[]):TimelineEvent[]{const names=new Map(subscriptions.map(item=>[item.id,item.name]));return payments.map(payment=>({id:`subscription:${payment.id}`,eventType:"subscription.paid",sourceType:"subscription" as const,sourceId:payment.id,title:names.get(payment.subscriptionId)??"Subscription",detail:`${payment.currency} ${(payment.amountMinor/100).toFixed(2)}${payment.note?` · ${payment.note===AUTO_RENEWAL_PAYMENT_NOTE?"自动记账":payment.note}`:""}`,occurredAt:`${payment.paidOn}T12:00:00.000Z`,hasExplicitTime:false,endAt:null,href:`/subscriptions/${payment.subscriptionId}`,relatedPeople:[],relatedPets:[],metadata:{subscriptionId:payment.subscriptionId,amountMinor:payment.amountMinor,currency:payment.currency,scheduledFor:payment.scheduledFor}})).sort(compareTimelineEvents);}

@@ -15,13 +15,6 @@ import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
 
 const navigationGroups = [
-  { label: "SPACE", items: [
-    { href: "/", label: "Home", zh: "首页", icon: "home" as const },
-    { href: "/inbox", label: "Inbox", zh: "散落", icon: "inbox" as const },
-    { href: "/ai", label: "Eva", icon: "ai" as const },
-    { href: "/lucius", label: "Lucius", icon: "lucius" as const },
-    { href: "/projects", label: "Projects", zh: "工坊", icon: "tasks" as const },
-  ] },
   { label: "LIFE", items: [
     { href: "/trackers", label: "Trackers", zh: "观测", icon: "tracker" as const },
     { href: "/food", label: "Food", zh: "吃吃", icon: "food" as const },
@@ -31,10 +24,17 @@ const navigationGroups = [
     { href: "/cats", label: "Cats", zh: "咪子", icon: "cats" as const },
   ] },
   { label: "ARCHIVE", items: [
+    { href: "/chronicle", label: "Chronicle", zh: "纪事", icon: "chronicle" as const },
     { href: "/relations", label: "Relations", zh: "她们", icon: "people" as const },
     { href: "/media", label: "Media", zh: "展架", icon: "media" as const },
     { href: "/memo", label: "Memo", zh: "碎片", icon: "memory" as const },
-    { href: "/chronicle", label: "Chronicle", zh: "纪事", icon: "chronicle" as const },
+  ] },
+  { label: "SPACE", items: [
+    { href: "/", label: "Home", zh: "首页", icon: "home" as const },
+    { href: "/inbox", label: "Inbox", zh: "散落", icon: "inbox" as const },
+    { href: "/ai", label: "Eva", icon: "ai" as const },
+    { href: "/lucius", label: "Lucius", icon: "lucius" as const },
+    { href: "/projects", label: "Projects", zh: "工坊", icon: "tasks" as const },
   ] },
 ];
 
