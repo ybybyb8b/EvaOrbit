@@ -1,5 +1,5 @@
 import { dateOnly, ValidationError } from "./validation.ts";
-import type { MemoryEntityStatus, MemoryFactStatus } from "./types.ts";
+import type { MemoryEntityStatus, MemoryEpistemicType, MemoryFactStatus } from "./types.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -54,6 +54,12 @@ function factStatus(value: unknown): MemoryFactStatus {
   throw new ValidationError("Memory Fact status is invalid.");
 }
 
+function epistemicType(value: unknown): MemoryEpistemicType {
+  if (value === undefined) return "unknown";
+  if (value === "direct_statement" || value === "recorded_observation" || value === "derived" || value === "agent_judgment" || value === "external_report" || value === "unknown") return value;
+  throw new ValidationError("epistemicType is invalid.");
+}
+
 export function parseNewMemoryEntity(value: unknown) {
   const body = object(value);
   return { canonicalName: text(body.canonicalName, "canonicalName", 200), entityType: text(body.entityType, "entityType", 80), aliases: aliases(body.aliases), description: nullableText(body.description, "description", 5000) };
@@ -94,6 +100,8 @@ export function parseNewMemoryFact(value: unknown) {
     subjectEntityId: memoryUuid(body.subjectEntityId, "subjectEntityId"), predicate: text(body.predicate, "predicate", 120), objectEntityId,
     objectValue: hasObjectValue ? body.objectValue : null,
     perspectiveEntityId: body.perspectiveEntityId === undefined || body.perspectiveEntityId === null ? null : memoryUuid(body.perspectiveEntityId, "perspectiveEntityId"),
+    epistemicType: epistemicType(body.epistemicType),
+    supersedesFactId: body.supersedesFactId === undefined || body.supersedesFactId === null ? null : memoryUuid(body.supersedesFactId, "supersedesFactId"),
     confidence: numberInRange(body.confidence, "confidence", 0, 1, 1), importance: numberInRange(body.importance, "importance", 1, 5, 3, true), validFrom, validTo,
   };
 }
@@ -126,8 +134,13 @@ export function parseMemoryFactSearch(value: unknown) {
 
 export function parseNewMemorySource(value: unknown) {
   const body = object(value);
+  return { factId: memoryUuid(body.factId, "factId"), ...parseMemorySourceDraft(body) };
+}
+
+export function parseMemorySourceDraft(value: unknown) {
+  const body = object(value);
   const result = {
-    factId: memoryUuid(body.factId, "factId"), sourceResource: text(body.sourceResource, "sourceResource", 100),
+    sourceResource: text(body.sourceResource, "sourceResource", 100),
     sourceRecordId: nullableText(body.sourceRecordId, "sourceRecordId", 300), sourceUrl: nullableText(body.sourceUrl, "sourceUrl", 2000),
     excerpt: nullableText(body.excerpt, "excerpt", 10000), note: nullableText(body.note, "note", 2000),
   };

@@ -11,9 +11,9 @@ export const APPEARANCE_MODE_STORAGE_KEY = "evaorbit.appearanceMode";
 export const COLOR_THEME_STORAGE_KEY = "evaorbit.colorTheme";
 
 const themeColors: Record<ColorTheme, Record<"light" | "dark", string>> = {
-  editorial: { light: "#f5f2e9", dark: "#101111" },
-  rosewood: { light: "#f4ece8", dark: "#110f10" },
-  powderblue: { light: "#faf2e0", dark: "#081722" },
+  editorial: { light: "#f5f2e9", dark: "#111313" },
+  rosewood: { light: "#f4ece8", dark: "#111313" },
+  powderblue: { light: "#faf2e0", dark: "#111313" },
 };
 
 export function resolveAppearanceMode(mode: AppearanceMode): "light" | "dark" {

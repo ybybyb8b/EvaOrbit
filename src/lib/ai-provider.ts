@@ -12,7 +12,7 @@ export type ProviderMessage = {
   tool_calls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }>;
 };
 
-type PromptContext = { module?: string; sessionTitle?: string; omittedMessages?: number };
+type PromptContext = { module?: string; sessionTitle?: string; omittedMessages?: number; memoryContext?: string };
 
 function endpoint(baseUrl: string, pathname: string) {
   return `${baseUrl.replace(/\/+$/, "")}/${pathname.replace(/^\/+/, "")}`;
@@ -97,8 +97,9 @@ export function buildSystemPrompt(settings: InternalAiSettings, messages: Array<
     `[VOICE]\n${voice}`,
     `[CURRENT TIME]\n${currentTime()}`,
     `[CURRENT CONTEXT]\n${currentContext}`,
+    context.memoryContext ? `[RECALLED MEMORY]\n以下内容来自可审计的 Memory Graph，只在与当前问题相关时使用；保留其来源、不确定性与时间边界，不把推断改写成用户原话。\n${context.memoryContext}` : "",
     `[TOOLS]\n${tools}`,
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 export function selectConversationHistory<T extends ChatMessage>(messages: T[], maxMessages = 28, maxCharacters = 45000) {

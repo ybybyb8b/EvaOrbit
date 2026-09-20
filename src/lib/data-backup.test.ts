@@ -19,6 +19,7 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(BACKUP_TABLES.includes("memory_entities"));
   assert.ok(BACKUP_TABLES.includes("memory_facts"));
   assert.ok(BACKUP_TABLES.includes("memory_sources"));
+  assert.ok(BACKUP_TABLES.includes("memory_fact_candidates"));
   assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("tasks"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("ai_providers"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
@@ -45,7 +46,7 @@ test("backup parser requires a complete current-version document", () => {
     resources: emptyBackupResources(),
   };
   assert.deepEqual(parseBackupDocument(backup), backup);
-  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 6 }), /不支持/);
+  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 7 }), /不支持/);
   const incomplete = { ...backup, resources: { ...backup.resources } };
   delete (incomplete.resources as Partial<typeof incomplete.resources>).projects;
   assert.throws(() => parseBackupDocument(incomplete), /备份不完整/);
@@ -69,6 +70,13 @@ test("backup version 2 remains restorable before Weight resources existed", () =
   const parsed=parseBackupDocument({backup_version:2,exported_at:"2026-09-01T00:00:00Z",schema:{supabase_migration:"legacy-v2"},source:{backend:"supabase"},resources});
   assert.deepEqual(parsed.resources.weight_records,[]);
   assert.deepEqual(parsed.resources.weight_settings,[]);
+});
+
+test("backup version 5 restores without the v0.2 candidate queue", () => {
+  const resources=emptyBackupResources() as Record<string,unknown>;
+  delete resources.memory_fact_candidates;
+  const parsed=parseBackupDocument({backup_version:5,exported_at:"2026-09-19T00:00:00Z",schema:{supabase_migration:"legacy-v5"},source:{backend:"supabase"},resources});
+  assert.deepEqual(parsed.resources.memory_fact_candidates,[]);
 });
 
 test("SQLite conversion preserves scalars and serializes structured values", () => {

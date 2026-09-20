@@ -48,7 +48,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
   }
 
   return <div className="page memo-page">
-    <PageHeader eyebrow="长期记忆" title="Memo" action={<button className="button primary" onClick={() => { setDraft(emptyDraft()); setShowForm(true); }}><Icon name="plus" />新增碎片</button>} />
+    <PageHeader eyebrow="长期记忆" title="Memo" action={<span className="memo-header-actions"><Link className="button secondary" href="/memo/graph"><Icon name="memory" />Memory Graph</Link><button className="button primary" onClick={() => { setDraft(emptyDraft()); setShowForm(true); }}><Icon name="plus" />新增碎片</button></span>} />
     {notice && <p className="success-banner" role="status">{notice}</p>}
     {showForm && <FormSheet title="Keep something important" onClose={() => setShowForm(false)} formId="memo-create-form" submitLabel="Save Memo" busy={saving}><form id="memo-create-form" className="editor-card long-term-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW MEMO</span><h2>Keep something important</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>

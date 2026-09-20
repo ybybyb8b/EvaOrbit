@@ -3,6 +3,7 @@ import { apiError } from "@/lib/api";
 import { extractDelta, selectConversationHistory, startChatCompletion, type ProviderMessage } from "@/lib/ai-provider";
 import { executeAiTool } from "@/lib/ai-tools";
 import { addChatMessage, autoTitleChatSession, getAiRuntimeSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
+import { recallMemory } from "@/lib/services/memory-graph";
 import { ValidationError, parseChatRequest } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -73,6 +74,12 @@ export async function POST(request: NextRequest) {
     const messages = await listChatMessages(input.sessionId);
     const selectedHistory = selectConversationHistory(messages);
     const history: ProviderMessage[] = selectedHistory.messages.map(({ role, content }) => ({ role, content }));
+    const recall = /[\p{L}\p{N}]{2,}/u.test(input.content) ? await recallMemory(input.content, 6).catch(() => []) : [];
+    const memoryContext = recall.map((hit) => {
+      const object = hit.objectEntity?.canonicalName ?? (typeof hit.fact.objectValue === "string" ? hit.fact.objectValue : JSON.stringify(hit.fact.objectValue));
+      const source = hit.sources[0];
+      return `- ${hit.subject.canonicalName} ${hit.fact.predicate} ${object} [${hit.fact.epistemicType}; confidence=${hit.fact.confidence}; source=${source ? `${source.sourceResource}${source.sourceRecordId ? `:${source.sourceRecordId}` : ""}` : "legacy-unknown"}]`;
+    }).join("\n");
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -84,6 +91,7 @@ export async function POST(request: NextRequest) {
               module: "想想 / 对话",
               sessionTitle: session.title,
               omittedMessages: selectedHistory.omittedMessages,
+              memoryContext,
             });
             const completion = await readCompletion(upstream);
             if (!completion.toolCalls.length) {

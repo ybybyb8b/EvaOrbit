@@ -37,6 +37,7 @@ export interface MemoryEntity {
 }
 
 export type MemoryFactStatus = "active" | "invalidated";
+export type MemoryEpistemicType = "direct_statement" | "recorded_observation" | "derived" | "agent_judgment" | "external_report" | "unknown";
 export interface MemoryFact {
   id: string;
   subjectEntityId: string;
@@ -44,6 +45,8 @@ export interface MemoryFact {
   objectEntityId: string | null;
   objectValue: unknown | null;
   perspectiveEntityId: string | null;
+  epistemicType: MemoryEpistemicType;
+  supersedesFactId: string | null;
   confidence: number;
   importance: number;
   validFrom: string | null;
@@ -234,6 +237,23 @@ export interface TimelineMonthSummary {
   month: string;
   days: Record<string, TimelineDaySummary>;
   periods: MenstrualPeriod[];
+}
+
+export type MemoryRecallChannel = "exact" | "literal" | "lexical" | "graph";
+export interface MemoryRecallHit extends MemoryFactDetail {
+  subject: MemoryEntity;
+  objectEntity: MemoryEntity | null;
+  perspectiveEntity: MemoryEntity | null;
+  channels: MemoryRecallChannel[];
+  score: number;
+  explanation: string;
+}
+
+export interface MemoryGraphSnapshot {
+  entities: MemoryEntity[];
+  facts: MemoryFact[];
+  sources: MemorySource[];
+  candidates: MemoryFactCandidate[];
 }
 
 export interface TimelineDaySummary {
@@ -529,6 +549,21 @@ export interface WeightRecord {
   healthKitSyncVersion: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type MemoryFactCandidateStatus = "pending" | "promoted" | "rejected";
+export type MemoryFactCandidateProposer = "user" | "model" | "system" | "import";
+export interface MemoryFactCandidate {
+  id: string;
+  proposedFact: Omit<MemoryFact, "id" | "status" | "invalidatedAt" | "invalidationReason" | "createdAt" | "updatedAt">;
+  proposedSources: Array<Omit<MemorySource, "id" | "factId" | "createdAt" | "updatedAt">>;
+  proposedBy: MemoryFactCandidateProposer;
+  proposerModel: string | null;
+  status: MemoryFactCandidateStatus;
+  reviewNote: string | null;
+  promotedFactId: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
 }
 export interface WeightSettings {
   targetWeightKg: number | null;

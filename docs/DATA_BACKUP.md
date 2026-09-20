@@ -10,14 +10,15 @@ The document shape is:
 
 ```json
 {
-  "backup_version": 2,
+  "backup_version": 6,
   "exported_at": "2026-09-05T08:00:00.000Z",
-  "schema": { "supabase_migration": "202609070001_memory_graph" },
+  "schema": { "supabase_migration": "202609200001_memory_graph_v02" },
   "source": { "backend": "supabase" },
   "resources": {
     "memory_entities": [],
     "memory_facts": [],
     "memory_sources": [],
+    "memory_fact_candidates": [],
     "food_logs": [],
     "food_places": [],
     "food_dishes": []
@@ -27,7 +28,7 @@ The document shape is:
 
 `resources` contains every table in the explicit allowlist in `src/lib/data-backup.ts`. Rows retain their IDs, foreign-key values, timestamps, date-only anchors, and explicit-time flags. Supabase `user_id` values are removed because a local SQLite database has a fixed local owner.
 
-Version 2 adds `memory_entities`, `memory_facts`, and `memory_sources`. Version 1 backups remain accepted: when those three resources are absent they are normalized to empty arrays before restore, so older backups do not manufacture graph data and do not fail completeness validation.
+Version 2 adds `memory_entities`, `memory_facts`, and `memory_sources`. Version 6 adds the reviewed `memory_fact_candidates` queue used by Memory Graph v0.2. Older accepted backups normalize resources that did not exist in that version to empty arrays, so restore never manufactures graph data.
 
 AI settings/providers/models, API-key ciphertext, push subscriptions, native device credentials, HealthKit aggregates/raw samples, authentication/session/cookie data, and import bookkeeping are excluded. Conversation text is retained, but provider/model foreign keys are set to `null` because the secret-bearing provider tables are excluded. Storage binaries are not embedded; media records and their metadata/path fields are included.
 

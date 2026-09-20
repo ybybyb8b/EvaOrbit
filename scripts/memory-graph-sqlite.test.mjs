@@ -18,7 +18,7 @@ test("SQLite Memory Graph supports parity queries and atomic lifecycle operation
       const entity=(canonicalName,aliases=[])=>graph.createMemoryEntity({id:randomUUID(),canonicalName,entityType:"person",aliases,description:null,status:"active"});
       const eva=entity("Eva",["Lucius"]),orbit=entity("EvaOrbit",["Orbit"]),observer=entity("Observer");
       assert.deepEqual(graph.listMemoryEntities({query:"lucius"}).map(item=>item.id),[eva.id]);
-      const relation=graph.createMemoryFact({id:randomUUID(),subjectEntityId:eva.id,predicate:"maintains",objectEntityId:orbit.id,objectValue:null,perspectiveEntityId:observer.id,confidence:.9,importance:5,validFrom:"2026-01-01",validTo:"2026-12-31",status:"active"});
+      const relation=graph.createMemoryFact({id:randomUUID(),subjectEntityId:eva.id,predicate:"maintains",objectEntityId:orbit.id,objectValue:null,perspectiveEntityId:observer.id,epistemicType:"recorded_observation",supersedesFactId:null,confidence:.9,importance:5,validFrom:"2026-01-01",validTo:"2026-12-31",status:"active"});
       const literal=graph.createMemoryFact({id:randomUUID(),subjectEntityId:orbit.id,predicate:"version",objectEntityId:null,objectValue:{major:1,label:"v0.1"},perspectiveEntityId:null,confidence:1,importance:3,validFrom:null,validTo:null,status:"active"});
       assert.equal(graph.listMemoryFacts({entityId:eva.id,direction:"out"})[0].id,relation.id);
       assert.equal(graph.listMemoryFacts({entityId:orbit.id,direction:"in",predicate:"maintains",perspectiveEntityId:observer.id,status:"active",validOn:"2026-09-07"})[0].id,relation.id);
@@ -30,6 +30,22 @@ test("SQLite Memory Graph supports parity queries and atomic lifecycle operation
       assert.equal(graph.invalidateMemoryFact(relation.id,"corrected").status,"invalidated");
       assert.equal(graph.invalidateMemoryFact(relation.id,"again"),null);
       assert.equal(graph.restoreMemoryFact(relation.id).status,"active");
+      const replacementId=randomUUID(),replacementSourceId=randomUUID();
+      const replacement=graph.supersedeMemoryFact(literal.id,{id:replacementId,subjectEntityId:orbit.id,predicate:"version",objectEntityId:null,objectValue:{major:2,label:"v0.2"},perspectiveEntityId:null,epistemicType:"direct_statement",supersedesFactId:literal.id,confidence:1,importance:4,validFrom:null,validTo:null,status:"active"},[{id:replacementSourceId,factId:replacementId,sourceResource:"memo",sourceRecordId:"v02",sourceUrl:null,excerpt:"Version v0.2",note:null}]);
+      assert.equal(replacement.supersedesFactId,literal.id);
+      assert.equal(graph.getMemoryFact(literal.id).status,"invalidated");
+      assert.throws(()=>graph.restoreMemoryFact(literal.id),/active replacement/);
+      assert.throws(()=>graph.supersedeMemoryFact(literal.id,{id:randomUUID(),subjectEntityId:orbit.id,predicate:"version",objectEntityId:null,objectValue:{major:3},perspectiveEntityId:null,epistemicType:"direct_statement",supersedesFactId:literal.id,confidence:1,importance:4,validFrom:null,validTo:null,status:"active"},[]),/requires at least one source/);
+      const failedFactId=randomUUID(),failedSourceId=randomUUID();
+      assert.throws(()=>graph.createMemoryFactWithSources({id:failedFactId,subjectEntityId:randomUUID(),predicate:"fails",objectEntityId:null,objectValue:true,perspectiveEntityId:null,epistemicType:"derived",supersedesFactId:null,confidence:1,importance:1,validFrom:null,validTo:null,status:"active"},[{id:failedSourceId,factId:failedFactId,sourceResource:"test",sourceRecordId:"rollback",sourceUrl:null,excerpt:null,note:null}]));
+      assert.equal(graph.getMemorySource(failedSourceId),null);
+      const candidateId=randomUUID(),candidateFactId=randomUUID(),candidateSourceId=randomUUID();
+      graph.createMemoryFactCandidate({id:candidateId,proposedFact:{subjectEntityId:observer.id,predicate:"reviews",objectEntityId:orbit.id,objectValue:null,perspectiveEntityId:null,epistemicType:"agent_judgment",supersedesFactId:null,confidence:.7,importance:2,validFrom:null,validTo:null},proposedSources:[{sourceResource:"chat",sourceRecordId:"42",sourceUrl:null,excerpt:"Review note",note:null}],proposedBy:"model",proposerModel:"test-model"});
+      assert.equal(graph.getMemoryFact(candidateFactId),null);
+      const promoted=graph.promoteMemoryFactCandidate(candidateId,candidateFactId,[candidateSourceId],"approved");
+      assert.equal(promoted.status,"promoted");
+      assert.equal(graph.getMemoryFact(candidateFactId).epistemicType,"agent_judgment");
+      assert.equal(graph.getMemorySource(candidateSourceId).factId,candidateFactId);
       const merged=graph.mergeMemoryEntities(eva.id,orbit.id);
       assert.equal(merged.redirectedFacts,1);
       assert.equal(graph.getMemoryEntity(eva.id).mergedIntoEntityId,orbit.id);
@@ -46,7 +62,7 @@ test("SQLite Memory Graph supports parity queries and atomic lifecycle operation
     const result=spawnSync(process.execPath,["--conditions=react-server","--experimental-loader",loader,"--input-type=module","--eval",program],{cwd:process.cwd(),encoding:"utf8",env:{...process.env,NODE_ENV:"development",EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:databasePath,VERCEL:""}});
     assert.equal(result.status,0,result.stderr||result.stdout);
     const database=new DatabaseSync(databasePath,{readOnly:true});
-    assert.ok(database.prepare("SELECT 1 FROM migrations WHERE version=39").get());
+    assert.ok(database.prepare("SELECT 1 FROM migrations WHERE version=48").get());
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(),[]);
     database.close();
   }finally{

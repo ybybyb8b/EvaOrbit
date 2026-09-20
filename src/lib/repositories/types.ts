@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -14,8 +14,11 @@ export type NewMemoryFact = Omit<MemoryFact, "createdAt" | "updatedAt" | "invali
 export type MemoryFactPatch = Partial<Pick<MemoryFact, "confidence" | "importance" | "validFrom" | "validTo">>;
 export type MemoryFactListInput = { entityId?: string; direction?: "in" | "out" | "both"; predicate?: string; perspectiveEntityId?: string | null; status?: MemoryFactStatus; validOn?: string; limit?: number };
 export type NewMemorySource = Omit<MemorySource, "createdAt" | "updatedAt">;
+export type MemorySourceDraft = Omit<NewMemorySource, "id" | "factId">;
 export type MemorySourcePatch = Partial<Pick<MemorySource, "sourceUrl" | "excerpt" | "note">>;
 export type MemorySourceListInput = { factId?: string; sourceResource?: string; sourceRecordId?: string; limit?: number };
+export type NewMemoryFactCandidate = Pick<MemoryFactCandidate, "id" | "proposedFact" | "proposedSources" | "proposedBy" | "proposerModel">;
+export type MemoryFactCandidateListInput = { status?: MemoryFactCandidateStatus; proposedBy?: MemoryFactCandidateProposer; limit?: number };
 
 export type NewTask = {
   title: string;
@@ -143,6 +146,8 @@ export interface EvaOrbitRepository {
   listMemoryFacts(input?: MemoryFactListInput): Promise<MemoryFact[]>;
   getMemoryFact(id: string): Promise<MemoryFact | null>;
   createMemoryFact(input: NewMemoryFact): Promise<MemoryFact>;
+  createMemoryFactWithSources(input: NewMemoryFact, sources: NewMemorySource[]): Promise<MemoryFact>;
+  supersedeMemoryFact(oldFactId: string, input: NewMemoryFact, sources: NewMemorySource[]): Promise<MemoryFact>;
   updateMemoryFact(id: string, input: MemoryFactPatch): Promise<MemoryFact | null>;
   invalidateMemoryFact(id: string, reason: string | null): Promise<MemoryFact | null>;
   restoreMemoryFact(id: string): Promise<MemoryFact | null>;
@@ -151,6 +156,11 @@ export interface EvaOrbitRepository {
   createMemorySource(input: NewMemorySource): Promise<MemorySource>;
   updateMemorySource(id: string, input: MemorySourcePatch): Promise<MemorySource | null>;
   deleteMemorySource(id: string): Promise<boolean>;
+  listMemoryFactCandidates(input?: MemoryFactCandidateListInput): Promise<MemoryFactCandidate[]>;
+  getMemoryFactCandidate(id: string): Promise<MemoryFactCandidate | null>;
+  createMemoryFactCandidate(input: NewMemoryFactCandidate): Promise<MemoryFactCandidate>;
+  promoteMemoryFactCandidate(id: string, factId: string, sourceIds: string[], reviewNote: string | null): Promise<MemoryFactCandidate | null>;
+  rejectMemoryFactCandidate(id: string, reviewNote: string | null): Promise<MemoryFactCandidate | null>;
 
   listRelationPeople(input?: { query?: string; includeArchived?: boolean; relationshipStatus?: "active" | "ended" }): Promise<RelationPerson[]>;
   getRelationPerson(id: number): Promise<RelationPerson | null>;
