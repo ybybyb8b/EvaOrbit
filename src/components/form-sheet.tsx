@@ -35,7 +35,9 @@ export function FormSheet({
   const [phase, setPhase] = useState<FormSheetPhase>("opening");
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const closeRef = useRef(onClose);
   const busyRef = useRef(busy);
   const phaseRef = useRef<FormSheetPhase>("opening");
@@ -83,6 +85,11 @@ export function FormSheet({
   useEffect(() => {
     if (!mounted) return;
     const body = document.body;
+    const dialog = dialogRef.current;
+    const previousFocus = returnFocusRef.current;
+    const inertSiblings = Array.from(body.children)
+      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== panelRef.current)
+      .map((element) => ({ element, inert: element.inert }));
     const previousOverflow = body.style.overflow;
     const previousPaddingRight = body.style.paddingRight;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
@@ -98,10 +105,41 @@ export function FormSheet({
       layer.style.setProperty("--form-sheet-viewport-top", `${viewport?.offsetTop ?? 0}px`);
       layer.style.setProperty("--form-sheet-viewport-left", `${viewport?.offsetLeft ?? 0}px`);
     };
+    const getFocusable = () => dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+    )).filter((element) => !element.hidden && element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true") : [];
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape") {
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = getFocusable();
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+    inertSiblings.forEach(({ element }) => { element.inert = true; });
     updateViewport();
+    const focusFrame = window.requestAnimationFrame(() => {
+      const autoFocus = dialog?.querySelector<HTMLElement>("[autofocus]");
+      const firstField = Array.from(dialog?.querySelectorAll<HTMLElement>("input:not([disabled]),select:not([disabled]),textarea:not([disabled])") ?? [])
+        .find((element) => element.getClientRects().length > 0);
+      const preferred = autoFocus?.getClientRects().length ? autoFocus : firstField ?? getFocusable()[0];
+      (preferred ?? dialog)?.focus();
+    });
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", updateViewport);
     window.visualViewport?.addEventListener("resize", updateViewport);
@@ -109,6 +147,9 @@ export function FormSheet({
     return () => {
       body.style.overflow = previousOverflow;
       body.style.paddingRight = previousPaddingRight;
+      inertSiblings.forEach(({ element, inert }) => { element.inert = inert; });
+      window.cancelAnimationFrame(focusFrame);
+      previousFocus?.focus();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", updateViewport);
       window.visualViewport?.removeEventListener("resize", updateViewport);
@@ -126,7 +167,7 @@ export function FormSheet({
   return createPortal(
     <div className="form-sheet-layer" data-state={phase} role="presentation" ref={panelRef}>
       <button className="form-sheet-backdrop" type="button" aria-label={`${copy("Close")} ${copy(title)}`} onClick={requestClose} />
-      <div className="form-sheet-panel" role="dialog" aria-modal="true" aria-labelledby={titleId} onTransitionEnd={finishCloseOnTransition}>
+      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}>
         <header className="form-sheet-header">
           <h2 id={titleId}>{copy(title)}</h2>
           <button className="text-button" type="button" onClick={requestClose} disabled={busy}>{copy("Close")}</button>

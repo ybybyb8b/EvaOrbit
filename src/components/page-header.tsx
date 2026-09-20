@@ -3,10 +3,10 @@
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
 
-export function PageHeader({ eyebrow, title, action }: { eyebrow: string; title: React.ReactNode; description?: string; action?: React.ReactNode }) {
+export function PageHeader({ eyebrow, title, description, action }: { eyebrow: string; title: React.ReactNode; description?: string; action?: React.ReactNode }) {
   const { language } = useLocale();
   return <header className="page-header">
-    <div><span className="eyebrow">{translateUiCopy(eyebrow, language)}</span><h1>{typeof title === "string" ? translateUiCopy(title, language) : title}</h1></div>
+    <div><span className="eyebrow">{translateUiCopy(eyebrow, language)}</span><h1>{typeof title === "string" ? translateUiCopy(title, language) : title}</h1>{description && <p>{translateUiCopy(description, language)}</p>}</div>
     {action}
   </header>;
 }

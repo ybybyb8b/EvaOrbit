@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu4 } from "reicon-react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
@@ -47,6 +47,9 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   const pathname = usePathname();
   const [evaOpen, setEvaOpen] = useState(false);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
+  const spacesTriggerRef = useRef<HTMLButtonElement>(null);
+  const spacesLayerRef = useRef<HTMLDivElement>(null);
+  const spacesDrawerRef = useRef<HTMLElement>(null);
   const spacesDrawerMounted = spacesDrawerPhase !== "closed";
   const openSpacesDrawer = useCallback(() => {
     setSpacesDrawerPhase((phase) => phase === "closed" || phase === "closing" ? "opening" : phase);
@@ -74,15 +77,47 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   useEffect(() => {
     if (!spacesDrawerMounted) return;
     const body = document.body;
+    const drawer = spacesDrawerRef.current;
+    const layer = spacesLayerRef.current;
+    const trigger = spacesTriggerRef.current;
+    const inertSiblings = Array.from(layer?.parentElement?.children ?? [])
+      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== layer)
+      .map((element) => ({ element, inert: element.inert }));
     const previousOverflow = body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeSpacesDrawer();
+      if (event.key === "Escape") {
+        closeSpacesDrawer();
+        return;
+      }
+      if (event.key !== "Tab" || !drawer) return;
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),[tabindex]:not([tabindex="-1"])'))
+        .filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !drawer.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !drawer.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+    inertSiblings.forEach(({ element }) => { element.inert = true; });
     body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => drawer?.querySelector<HTMLElement>("button")?.focus());
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       body.style.overflow = previousOverflow;
+      inertSiblings.forEach(({ element, inert }) => { element.inert = inert; });
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", closeOnEscape);
+      trigger?.focus();
     };
   }, [closeSpacesDrawer, spacesDrawerMounted]);
 
@@ -116,16 +151,18 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      <button type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>
+      <button ref={spacesTriggerRef} type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
+        <Link href="/trackers" className={pathname.startsWith("/trackers") ? "active" : ""}><Icon name="tracker" variant="nav" /><span>{english ? "Trackers" : "观测"}</span></Link>
+        <Link href="/tasks" className={pathname.startsWith("/tasks") ? "active" : ""}><Icon name="tasks" variant="nav" /><span>{english ? "Tasks" : "待办"}</span></Link>
         <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
-      {spacesDrawerMounted && <div className="space-drawer-layer" data-state={spacesDrawerPhase} role="presentation">
+      {spacesDrawerMounted && <div ref={spacesLayerRef} className="space-drawer-layer" data-state={spacesDrawerPhase} role="presentation">
         <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer} />
-        <aside className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"} onTransitionEnd={finishSpacesDrawerClose}>
+        <aside ref={spacesDrawerRef} className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"} tabIndex={-1} onTransitionEnd={finishSpacesDrawerClose}>
           <header><strong>{english ? "All Spaces" : "总览"}</strong><button type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer}><Icon name="close" /></button></header>
           <nav aria-label={english ? "All spaces" : "总览"}>
             {navigationGroups.map((group) => <section key={group.label}>

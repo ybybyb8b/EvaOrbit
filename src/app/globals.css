@@ -79,7 +79,7 @@
   --font-selected-zh: var(--font-canger-huaxin);
   --font-selected-en: var(--font-zen-serif);
   --font-editorial: var(--font-selected-en), var(--font-selected-zh), Georgia, serif;
-  --font-ui: var(--font-selected-en), var(--font-selected-zh), Georgia, serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-editorial-label: var(--font-editorial);
   --font-serif: var(--font-editorial-label);
   --text-readable-small: 14px;
@@ -4872,4 +4872,88 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   .tasks-page .tag { padding:2px 5px;font-size:9px; }
   .tasks-page .row-actions { flex-direction:row; }
   .tasks-page .row-actions button { width:36px;height:36px; }
+}
+
+/* Shared usability pass: product copy stays neutral; editorial type remains for display moments. */
+.loading-state {
+  min-height:260px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  color:var(--text-secondary);
+  font-size:13px;
+  line-height:1.45;
+  text-align:center;
+}
+.loading-state::before {
+  content:"";
+  width:min(420px,100%);
+  height:96px;
+  border-radius:var(--radius-content);
+  background:
+    linear-gradient(90deg,transparent 0 34%,rgb(var(--surface-raised-rgb) / .72) 48%,transparent 62%) -180px 0 / 180px 100% no-repeat,
+    linear-gradient(var(--border-subtle),var(--border-subtle)) 18px 20px / 72px 8px no-repeat,
+    linear-gradient(var(--text-tertiary),var(--text-tertiary)) 18px 39px / 42% 13px no-repeat,
+    linear-gradient(var(--border-subtle),var(--border-subtle)) 18px 65px / 70% 8px no-repeat,
+    rgb(var(--surface-card-rgb) / .62);
+  box-shadow:inset 0 1px 0 rgb(255 255 255 / .3);
+  animation:eo-loading-sheen 1.15s var(--motion-ease) infinite;
+}
+@keyframes eo-loading-sheen { to { background-position:520px 0,18px 20px,18px 39px,18px 65px,0 0; } }
+
+.quick-date-field > div,
+.chip-row,
+.provider-presets,
+.composer-shortcuts,
+.routine-suggestions,
+.cat-tabs,
+.notification-tabs,
+.media-filters,
+.media-shelf-track,
+.media-series-track,
+.subscription-filters {
+  scrollbar-width:none;
+}
+.quick-date-field > div::-webkit-scrollbar,
+.chip-row::-webkit-scrollbar,
+.provider-presets::-webkit-scrollbar,
+.composer-shortcuts::-webkit-scrollbar,
+.routine-suggestions::-webkit-scrollbar,
+.cat-tabs::-webkit-scrollbar,
+.notification-tabs::-webkit-scrollbar,
+.media-filters::-webkit-scrollbar,
+.media-shelf-track::-webkit-scrollbar,
+.media-series-track::-webkit-scrollbar,
+.subscription-filters::-webkit-scrollbar { display:none; }
+
+@media(max-width:720px) {
+  .mobile-nav { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .mobile-nav a { font-size:10px; }
+
+  .page small,
+  .page time,
+  .page dt,
+  .page dd { font-size:12px;line-height:1.4; }
+
+  .button,
+  .icon-button,
+  .text-button,
+  .row-actions button,
+  .cat-record-actions button,
+  .routine-suggestions button,
+  .subscription-filters button { min-height:44px; }
+  .icon-button,
+  .row-actions button { min-width:44px;width:44px;height:44px; }
+
+  .tasks-page .task-meta,
+  .tasks-page .priority-label,
+  .tasks-page .tag { font-size:11px; }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .loading-state::before { animation:none; }
+  .form-sheet-panel,
+  .form-sheet-backdrop { transition-duration:1ms; }
 }
