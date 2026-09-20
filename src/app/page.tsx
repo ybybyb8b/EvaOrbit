@@ -5,7 +5,8 @@ import { getDailyTimelineOverview, getTimelineMonthSummary } from "@/lib/service
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import { DueReminders } from "@/components/due-reminders";
-import { getDueReminders } from "@/lib/services/reminder";
+import { getHomeBriefOverview } from "@/lib/services/home-brief";
+import { HomeBrief } from "./home-brief";
 import styles from "./home.module.css";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +32,10 @@ function timeLabel(value: string) {
 }
 
 export default async function HomePage() {
-  const [inbox, today, monthSummary, preferences, due] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getTimelineMonthSummary(), getUiPreferences(), getDueReminders()]);
-  const latestInbox = inbox[0];
+  const preferences = await getUiPreferences();
   const english = preferences.uiLanguage === "en";
+  const [inbox, today, monthSummary, briefOverview] = await Promise.all([listInbox("inbox"), getDailyTimelineOverview(), getTimelineMonthSummary(), getHomeBriefOverview(english)]);
+  const latestInbox = inbox[0];
 
   return <div className="page home-page">
     <header className="home-masthead">
@@ -41,7 +43,9 @@ export default async function HomePage() {
       <h1>{greeting(english)}</h1>
     </header>
 
-    <DueReminders items={due} limit={3} compact />
+    <HomeBrief brief={briefOverview.brief} english={english} />
+
+    <DueReminders items={briefOverview.due} limit={3} compact />
 
     <section className={`home-overview ${styles.overview}`}>
       <HomeCalendarTimeline initialDate={today.date} initialEvents={today.events} initialSummary={monthSummary} language={preferences.uiLanguage} />
