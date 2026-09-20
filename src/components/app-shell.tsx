@@ -155,8 +155,6 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
-        <Link href="/trackers" className={pathname.startsWith("/trackers") ? "active" : ""}><Icon name="tracker" variant="nav" /><span>{english ? "Trackers" : "观测"}</span></Link>
-        <Link href="/tasks" className={pathname.startsWith("/tasks") ? "active" : ""}><Icon name="tasks" variant="nav" /><span>{english ? "Tasks" : "待办"}</span></Link>
         <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
