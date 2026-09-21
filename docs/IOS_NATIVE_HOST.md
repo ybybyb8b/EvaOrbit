@@ -6,6 +6,8 @@
 
 本文只固化已经在 2026-09-01 实际跑通的构建、免费 Apple ID 重签、Windows → WSL → iPhone 通信和安装链路。EvaOrbit 仍是由 Vercel 托管、Supabase 提供后端的 Next.js Web 应用；iOS 工程只是加载生产站点的轻量 `WKWebView` Host。
 
+EventKit 接入不新增 entitlement，也不改变本 runbook 的 ad-hoc IPA、patched xtool、免费 Team 重签与安装链。它新增 `EventKit.framework`、Calendar/Reminders 隐私文案和对应 bridge 方法；实际权限与双向同步必须在新版 IPA 的 Apple Integration 设置页由用户明确启用并完成真机验证。
+
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取、Body Mass 与 Menstrual Flow 双向同步：能量按日聚合，体重逐样本处理，经量使用独立 CategorySample 路径并保留 source/sample/sync identity。三者复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql`、`supabase/migrations/202609090002_weight.sql`、`supabase/migrations/202609130001_period_medication.sql`、`supabase/migrations/202609130002_period_medication_reminder_projection.sql` 与 `supabase/migrations/202609130003_healthkit_menstrual_flow.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
 ## 已验证基线

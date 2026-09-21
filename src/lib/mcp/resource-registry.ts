@@ -1,4 +1,6 @@
 import { ConflictError } from "../errors.ts";
+import type { CalendarEvent } from "../types.ts";
+import { parseCalendarEventPatch, parseNewCalendarEvent } from "../validation.ts";
 import type { CatRecordKind, CatRoutine, CatTimelineEntry, ChronicleEntry, DrinkLimit, FoodDish, FoodPlace, HealthRecord, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MediaDetail, MediaListItem, Memo, MemoStatus, MemoType, MemoryEntity, MemoryEntityDetail, MemoryEntityMergeResult, MemoryFact, MemoryFactDetail, MemorySource, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary, Reminder, Subscription, SubscriptionDetail, SubscriptionPayment, Task, Tracker, TrackerSummary, TrainingLog } from "../types.ts";
 import { parseCatRecord, parseCatRoutine, parsePet, parsePetPatch, parseReminder } from "../cats-validation.ts";
 import { parseMemoryNote,parseRelationEvent,parseRelationPerson,parseRelationPersonPatch,parseSettleAdvance } from "../relations-validation.ts";
@@ -71,6 +73,8 @@ export type TaskResourceOperations = {
   delete(id: number): Promise<boolean>;
 };
 
+export type CalendarEventResourceOperations={search(input:{query?:string;from?:string;to?:string;status?:CalendarEvent["status"];limit?:number}):Promise<CalendarEvent[]>;get(id:number):Promise<CalendarEvent|null>;create(input:Omit<CalendarEvent,"id"|"createdAt"|"updatedAt">):Promise<CalendarEvent>;update(id:number,input:Partial<Omit<CalendarEvent,"id"|"createdAt"|"updatedAt">>):Promise<CalendarEvent|null>;delete(id:number):Promise<boolean>;};
+
 export type MemoResourceOperations = {
   search(input: { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number }): Promise<Memo[]>;
   get(id: number): Promise<Memo | null>;
@@ -121,6 +125,7 @@ export type ResourceRegistryOperations = {
   memorySource: {search(input:{factId?:string;sourceResource?:string;sourceRecordId?:string;limit?:number}):Promise<MemorySource[]>;get(id:string):Promise<MemorySource|null>;create(input:ReturnType<typeof parseNewMemorySource>):Promise<MemorySource>;update(id:string,input:ReturnType<typeof parseMemorySourcePatch>):Promise<MemorySource|null>;delete(id:string):Promise<boolean>};
   inbox: InboxResourceOperations;
   task: TaskResourceOperations;
+  calendarEvent?: CalendarEventResourceOperations;
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
@@ -294,7 +299,7 @@ function inboxResource(operations: InboxResourceOperations): RegisteredResource 
 
 function taskRecord(item: Task): ResourceRecord {
   const rules=item.reminders??[],reminder=rules[0]??null;
-  return { id:item.id,title:item.title,notes:item.notes,status:item.completed?"done":"open",due_date:item.dueDate,due_time:item.dueTime,remind_mode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",remind_date:reminder?.absoluteDate??null,remind_time:reminder?.absoluteTime??null,repeat_while_overdue:reminder?.repeatWhileOverdue??false,timezone:reminder?.timezone??"Asia/Shanghai",reminders:rules.map(rule=>({id:rule.id,trigger_type:rule.triggerType,absolute_date:rule.absoluteDate,absolute_time:rule.absoluteTime,relative_to:rule.relativeTo,offset_minutes:rule.offsetMinutes,timezone:rule.timezone,repeat_while_overdue:rule.repeatWhileOverdue})),priority:item.priority,tags:item.tags,created_at:item.createdAt,updated_at:item.updatedAt };
+  return { id:item.id,title:item.title,notes:item.notes,status:item.completed?"done":"open",completed_at:item.completedAt,due_date:item.dueDate,due_time:item.dueTime,remind_mode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",remind_date:reminder?.absoluteDate??null,remind_time:reminder?.absoluteTime??null,repeat_while_overdue:reminder?.repeatWhileOverdue??false,timezone:reminder?.timezone??"Asia/Shanghai",reminders:rules.map(rule=>({id:rule.id,trigger_type:rule.triggerType,absolute_date:rule.absoluteDate,absolute_time:rule.absoluteTime,relative_to:rule.relativeTo,offset_minutes:rule.offsetMinutes,timezone:rule.timezone,repeat_while_overdue:rule.repeatWhileOverdue,delivery_channel:rule.deliveryChannel})),priority:item.priority,tags:item.tags,created_at:item.createdAt,updated_at:item.updatedAt };
 }
 
 function taskResource(operations: TaskResourceOperations): RegisteredResource {
@@ -309,6 +314,7 @@ function taskResource(operations: TaskResourceOperations): RegisteredResource {
         title: { type: "string", max_length: 160, description: "Task title." },
         notes: { type: "string", max_length: 2000, description: "Optional supporting notes." },
         status: { type: "string", enum: ["open", "done"], description: "Task completion state; change it with complete or reopen.", read_only: true },
+        completed_at:{type:"string",format:"date-time",description:"Actual completion timestamp when known.",read_only:true},
         due_date: { type: "string", format: "date", description: "Optional due date in YYYY-MM-DD format." },
         due_time: { type: "string", description: "Optional explicit task due time in HH:mm format. Requires due_date; it does not enable notifications by itself." },
         remind_mode: { type:"string",enum:["none","at_due","custom"],default:"none",description:"Independent notification mode. at_due requires due_date and due_time; custom requires remind_date and remind_time." },
@@ -340,6 +346,9 @@ function taskResource(operations: TaskResourceOperations): RegisteredResource {
     async action({ id, action, data }) { if (id === undefined) throw new ValidationError(`${action} requires a Task id.`); assertOnlyKeys(data, [], `task ${action}`); const item = await operations.update(numericId(id, "Task"), parseTaskPatch({ completed: action === "complete" })); if (!item) throw new ConflictError("Task not found."); return taskRecord(item); },
   };
 }
+
+function calendarEventRecord(item:CalendarEvent):ResourceRecord{return{id:item.id,title:item.title,notes:item.notes,start_at:item.startAt,end_at:item.endAt,is_all_day:item.isAllDay,timezone:item.timezone,location:item.location,status:item.status,created_at:item.createdAt,updated_at:item.updatedAt};}
+function calendarEventResource(operations:CalendarEventResourceOperations):RegisteredResource{const writable=["title","notes","start_at","end_at","is_all_day","timezone","location","status"],map={title:"title",notes:"notes",start_at:"startAt",end_at:"endAt",is_all_day:"isAllDay",timezone:"timezone",location:"location",status:"status"};return{schema:{resource:"calendar_event",description:"Faithful structured calendar events synchronized with selected Apple calendars.",fields:{id:{type:"integer",description:"Stable EvaOrbit identifier.",read_only:true},title:{type:"string",max_length:300,description:"Event title, preserved verbatim."},notes:{type:"string",max_length:10000,description:"Event notes."},start_at:{type:"string",description:"ISO date-time for timed events or YYYY-MM-DD for all-day events."},end_at:{type:"string",description:"Exclusive end boundary."},is_all_day:{type:"boolean",description:"Whether boundaries use date-only semantics."},timezone:{type:"string",description:"IANA timezone for timed events."},location:{type:"string",max_length:1000,description:"Event location."},status:{type:"string",enum:["confirmed","tentative","cancelled"],description:"Calendar event status."},created_at:{type:"string",format:"date-time",description:"Creation timestamp.",read_only:true},updated_at:{type:"string",format:"date-time",description:"Update timestamp.",read_only:true}},required_fields:["title","start_at","end_at","is_all_day"],writable_fields:writable,searchable_fields:["title","notes","location","status"],supported_actions:[],validation_rules:["all-day boundaries are date-only and end is exclusive","timed boundaries are ISO date-times","end_at must be later than start_at","content is not classified or rewritten"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["from","to","status"],"calendar_event search filters");rejectCursor(cursor,"Calendar event");const status=filterEnum(filters.status,["confirmed","tentative","cancelled"] as const,"status");const items=await operations.search({query,from:typeof filters.from==="string"?filters.from:undefined,to:typeof filters.to==="string"?filters.to:undefined,status,limit});return{items:items.map(calendarEventRecord),next_cursor:null};},async get(id){const item=await operations.get(numericId(id,"Calendar event"));if(!item)throw new ConflictError("Calendar event not found.");return calendarEventRecord(item);},async create(data){assertOnlyKeys(data,writable,"calendar_event create");return calendarEventRecord(await operations.create(parseNewCalendarEvent(mappedInput(data,map))));},async update(id,data){assertOnlyKeys(data,writable,"calendar_event update");const item=await operations.update(numericId(id,"Calendar event"),parseCalendarEventPatch(mappedInput(data,map)));if(!item)throw new ConflictError("Calendar event not found.");return calendarEventRecord(item);},async delete(id){const numeric=numericId(id,"Calendar event");if(!await operations.delete(numeric))throw new ConflictError("Calendar event not found.");return{deleted:true,id:numeric};}};}
 
 function migrationRecord(item: Memo | LuciusDiaryEntry | LuciusCase) {
   return { source_system: item.sourceSystem, source_id: item.sourceId, source_url: item.sourceUrl, imported_at: item.importedAt };
@@ -899,6 +908,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
     relationEventResource(operations.relationEvent),
     personNoteResource(operations.personNote),
   ];
+  if(operations.calendarEvent)resources.push(calendarEventResource(operations.calendarEvent));
   if(operations.luciusPost)resources.push(luciusPostResource(operations.luciusPost));
   if(operations.luciusPostComment)resources.push(luciusPostCommentResource(operations.luciusPostComment));
   if(operations.healthRecord)resources.push(healthRecordResource(operations.healthRecord));

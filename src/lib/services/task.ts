@@ -77,6 +77,8 @@ export async function createTask(input:TaskCreateInput){
 export async function updateTask(id:number,input:TaskPatch){
   const repository=await getRepository(),current=await repository.getTask(id);if(!current)return null;
   const reminder=reminderFields(input),taskPatch=Object.fromEntries(Object.entries(input).filter(([key])=>!["reminderMode","reminderDate","reminderTime","repeatWhileOverdue","timezone"].includes(key)));
+  if(input.completed===true&&input.completedAt===undefined)taskPatch.completedAt=new Date().toISOString();
+  if(input.completed===false)taskPatch.completedAt=null;
   if(taskPatch.dueDate===null)taskPatch.dueTime=null;
   const nextDueDate=taskPatch.dueDate===undefined?current.dueDate:taskPatch.dueDate,nextDueTime=taskPatch.dueTime===undefined?current.dueTime:taskPatch.dueTime;
   if(nextDueTime&&!nextDueDate)throw new ConflictError("设置截止时间前需要先选择截止日期");
@@ -93,5 +95,7 @@ export async function disableTaskReminder(ruleId:number){
 }
 
 export async function completeTaskFromReminder(ruleId:number){const rule=await(await getRepository()).getTaskReminder(ruleId);if(!rule)throw new ConflictError("Task reminder rule not found.");return updateTask(rule.taskId,{completed:true});}
+
+export async function replaceTaskRemindersFromEventKit(taskId:number,alarms:Array<{absoluteDate:string|null;absoluteTime:string|null;offsetMinutes:number|null;timezone:string}>){const repository=await getRepository(),task=await repository.getTask(taskId);if(!task)throw new ConflictError("Task not found.");for(const rule of await repository.listTaskReminders(taskId)){if(rule.reminderId)await repository.deleteReminder(rule.reminderId);await repository.deleteTaskReminder(rule.id);}for(const alarm of alarms){const absolute=Boolean(alarm.absoluteDate&&alarm.absoluteTime);await repository.createTaskReminder({taskId,reminderId:null,triggerType:absolute?"absolute":"relative",absoluteDate:absolute?alarm.absoluteDate:null,absoluteTime:absolute?alarm.absoluteTime:null,relativeTo:absolute?null:"due",offsetMinutes:absolute?null:alarm.offsetMinutes,timezone:alarm.timezone,repeatWhileOverdue:false,deliveryChannel:"apple_reminders"});}return reconcileTaskReminders(taskId,true);}
 
 export async function deleteTask(id:number){const repository=await getRepository(),task=await repository.getTask(id);if(!task)return false;for(const rule of await repository.listTaskReminders(id))if(rule.reminderId)await repository.deleteReminder(rule.reminderId);return repository.deleteTask(id);}

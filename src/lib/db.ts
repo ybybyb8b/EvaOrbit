@@ -10,6 +10,8 @@ import { normalizeUiLanguage, type UiLanguage } from "./locale";
 import { normalizeChineseFont, normalizeEnglishFont, type ChineseFont, type EnglishFont } from "./font-preferences";
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaSeries, MediaViewing, Memo, Memory, MemoryEntity, MemoryFact, MemoryFactCandidate, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, WeightRecord, WeightSettings } from "./types";
 import type { RelationEventInput } from "./relations";
+import type { CalendarEvent } from "./types";
+import type { CalendarEventListInput, CalendarEventPatch, NewCalendarEvent } from "./repositories/types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, MemoryEntityListInput, MemoryEntityPatch, MemoryFactCandidateListInput, MemoryFactListInput, MemoryFactPatch, MemorySourceListInput, MemorySourcePatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment, NewMediaItem, NewMemo, NewMemoryEntity, NewMemoryFact, NewMemoryFactCandidate, NewMemorySource, NewProject, NewProjectItem, NewRelationPerson, NewSubscription, NewSubscriptionPayment, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, SubscriptionListInput, SubscriptionPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
@@ -17,6 +19,7 @@ type TaskRow = {
   title: string;
   notes: string;
   completed: number;
+  completed_at: string | null;
   due_date: string | null;
   due_time: string | null;
   reminder_id: number | null;
@@ -1266,12 +1269,40 @@ if (!hasV49) database.exec(`
   COMMIT;
 `);
 
+const hasV50 = database.prepare("SELECT 1 FROM migrations WHERE version = 50").get();
+if (!hasV50) database.exec(`
+  BEGIN;
+  CREATE TABLE calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',title TEXT NOT NULL,notes TEXT NOT NULL DEFAULT '',
+    start_at TEXT NOT NULL,end_at TEXT NOT NULL,is_all_day INTEGER NOT NULL DEFAULT 0 CHECK(is_all_day IN (0,1)),timezone TEXT,
+    location TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('confirmed','tentative','cancelled')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX idx_calendar_events_window ON calendar_events(user_id,start_at,end_at);
+  CREATE TABLE eventkit_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',installation_id TEXT NOT NULL,entity_type TEXT NOT NULL CHECK(entity_type IN ('task','calendar_event')),eo_id INTEGER NOT NULL,
+    eventkit_entity_type TEXT NOT NULL CHECK(eventkit_entity_type IN ('reminder','event')),calendar_item_identifier TEXT NOT NULL,external_identifier TEXT,calendar_identifier TEXT NOT NULL,source_identifier TEXT NOT NULL,
+    last_synced_hash TEXT NOT NULL,last_synced_snapshot TEXT NOT NULL CHECK(json_valid(last_synced_snapshot)),apple_last_modified_at TEXT,last_synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id,installation_id,entity_type,eo_id),UNIQUE(user_id,installation_id,eventkit_entity_type,calendar_item_identifier)
+  );
+  CREATE INDEX idx_eventkit_links_recovery ON eventkit_links(user_id,installation_id,eventkit_entity_type,external_identifier,calendar_identifier,source_identifier);
+  INSERT INTO migrations(version) VALUES(50);
+  COMMIT;
+`);
+
+const hasV51=database.prepare("SELECT 1 FROM migrations WHERE version=51").get();
+if(!hasV51)database.exec(`BEGIN; ALTER TABLE task_reminders ADD COLUMN delivery_channel TEXT NOT NULL DEFAULT 'pwa' CHECK(delivery_channel IN ('pwa','apple_reminders')); INSERT INTO migrations(version) VALUES(51); COMMIT;`);
+
+const hasV52=database.prepare("SELECT 1 FROM migrations WHERE version=52").get();
+if(!hasV52)database.exec(`BEGIN; ALTER TABLE tasks ADD COLUMN completed_at TEXT; INSERT INTO migrations(version) VALUES(52); COMMIT;`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
     title: row.title,
     notes: row.notes,
     completed: Boolean(row.completed),
+    completedAt: row.completed_at,
     dueDate: row.due_date,
     dueTime: row.due_time ? row.due_time.slice(0, 5) : null,
     reminderId: row.reminder_id,
@@ -1284,7 +1315,7 @@ function taskFromRow(row: TaskRow): Task {
 }
 
 function taskReminderFromRow(row: Record<string, unknown>): TaskReminder {
-  return { id:Number(row.id),taskId:Number(row.task_id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),triggerType:row.trigger_type as TaskReminder["triggerType"],absoluteDate:row.absolute_date?String(row.absolute_date):null,absoluteTime:row.absolute_time?String(row.absolute_time).slice(0,5):null,relativeTo:row.relative_to as TaskReminder["relativeTo"],offsetMinutes:row.offset_minutes===null?null:Number(row.offset_minutes),timezone:String(row.timezone),repeatWhileOverdue:Boolean(row.repeat_while_overdue),createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
+  return { id:Number(row.id),taskId:Number(row.task_id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),triggerType:row.trigger_type as TaskReminder["triggerType"],absoluteDate:row.absolute_date?String(row.absolute_date):null,absoluteTime:row.absolute_time?String(row.absolute_time).slice(0,5):null,relativeTo:row.relative_to as TaskReminder["relativeTo"],offsetMinutes:row.offset_minutes===null?null:Number(row.offset_minutes),timezone:String(row.timezone),repeatWhileOverdue:Boolean(row.repeat_while_overdue),deliveryChannel:(row.delivery_channel??"pwa") as TaskReminder["deliveryChannel"],createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
 }
 
 function memoryFromRow(row: MemoryRow): Memory {
@@ -1356,7 +1387,7 @@ export function createTask(input: { title: string; notes: string; dueDate: strin
 export function updateTask(id: number, input: Record<string, unknown>) {
   const columns: string[] = [];
   const values: Array<string | number | null> = [];
-  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
+  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", completedAt:"completed_at", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
   for (const [key, column] of Object.entries(map)) {
     if (input[key] !== undefined) {
       columns.push(`${column} = ?`);
@@ -1376,9 +1407,16 @@ export function deleteTask(id: number) {
 
 export function listTaskReminders(taskId:number){return(database.prepare("SELECT * FROM task_reminders WHERE task_id=? ORDER BY id").all(taskId) as Record<string,unknown>[]).map(taskReminderFromRow);}
 export function getTaskReminder(id:number){const row=database.prepare("SELECT * FROM task_reminders WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?taskReminderFromRow(row):null;}
-export function createTaskReminder(input:{taskId:number;reminderId:number|null;triggerType:string;absoluteDate:string|null;absoluteTime:string|null;relativeTo:string|null;offsetMinutes:number|null;timezone:string;repeatWhileOverdue:boolean}){const result=database.prepare("INSERT INTO task_reminders(task_id,reminder_id,trigger_type,absolute_date,absolute_time,relative_to,offset_minutes,timezone,repeat_while_overdue) VALUES(?,?,?,?,?,?,?,?,?)").run(input.taskId,input.reminderId,input.triggerType,input.absoluteDate,input.absoluteTime,input.relativeTo,input.offsetMinutes,input.timezone,Number(input.repeatWhileOverdue));return getTaskReminder(Number(result.lastInsertRowid))!;}
-export function updateTaskReminder(id:number,input:Record<string,unknown>){const map:Record<string,string>={reminderId:"reminder_id",triggerType:"trigger_type",absoluteDate:"absolute_date",absoluteTime:"absolute_time",relativeTo:"relative_to",offsetMinutes:"offset_minutes",timezone:"timezone",repeatWhileOverdue:"repeat_while_overdue"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(entries.length)database.prepare(`UPDATE task_reminders SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="repeatWhileOverdue"?Number(input[key]):input[key] as string|number|null),id);return getTaskReminder(id);}
+export function createTaskReminder(input:{taskId:number;reminderId:number|null;triggerType:string;absoluteDate:string|null;absoluteTime:string|null;relativeTo:string|null;offsetMinutes:number|null;timezone:string;repeatWhileOverdue:boolean;deliveryChannel?:string}){const result=database.prepare("INSERT INTO task_reminders(task_id,reminder_id,trigger_type,absolute_date,absolute_time,relative_to,offset_minutes,timezone,repeat_while_overdue,delivery_channel) VALUES(?,?,?,?,?,?,?,?,?,?)").run(input.taskId,input.reminderId,input.triggerType,input.absoluteDate,input.absoluteTime,input.relativeTo,input.offsetMinutes,input.timezone,Number(input.repeatWhileOverdue),input.deliveryChannel??"pwa");return getTaskReminder(Number(result.lastInsertRowid))!;}
+export function updateTaskReminder(id:number,input:Record<string,unknown>){const map:Record<string,string>={reminderId:"reminder_id",triggerType:"trigger_type",absoluteDate:"absolute_date",absoluteTime:"absolute_time",relativeTo:"relative_to",offsetMinutes:"offset_minutes",timezone:"timezone",repeatWhileOverdue:"repeat_while_overdue",deliveryChannel:"delivery_channel"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(entries.length)database.prepare(`UPDATE task_reminders SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="repeatWhileOverdue"?Number(input[key]):input[key] as string|number|null),id);return getTaskReminder(id);}
 export function deleteTaskReminder(id:number){return database.prepare("DELETE FROM task_reminders WHERE id=?").run(id).changes>0;}
+
+function calendarEventFromRow(row:Record<string,unknown>):CalendarEvent{return{id:Number(row.id),title:String(row.title),notes:String(row.notes??""),startAt:String(row.start_at),endAt:String(row.end_at),isAllDay:Boolean(row.is_all_day),timezone:row.timezone?String(row.timezone):null,location:String(row.location??""),status:row.status as CalendarEvent["status"],createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listCalendarEvents(input:CalendarEventListInput={}){const where:string[]=[],values:Array<string|number>=[];if(input.query){where.push("(title LIKE ? OR notes LIKE ? OR location LIKE ?)");values.push(`%${input.query}%`,`%${input.query}%`,`%${input.query}%`);}if(input.from){where.push("end_at>=?");values.push(input.from);}if(input.to){where.push("start_at<=?");values.push(input.to);}if(input.status){where.push("status=?");values.push(input.status);}values.push(Math.min(Math.max(input.limit??200,1),500));return(database.prepare(`SELECT * FROM calendar_events ${where.length?`WHERE ${where.join(" AND ")}`:""} ORDER BY start_at,id LIMIT ?`).all(...values) as Record<string,unknown>[]).map(calendarEventFromRow);}
+export function getCalendarEvent(id:number){const row=database.prepare("SELECT * FROM calendar_events WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?calendarEventFromRow(row):null;}
+export function createCalendarEvent(input:NewCalendarEvent){const result=database.prepare("INSERT INTO calendar_events(title,notes,start_at,end_at,is_all_day,timezone,location,status) VALUES(?,?,?,?,?,?,?,?)").run(input.title,input.notes,input.startAt,input.endAt,Number(input.isAllDay),input.timezone,input.location,input.status);return getCalendarEvent(Number(result.lastInsertRowid))!;}
+export function updateCalendarEvent(id:number,input:CalendarEventPatch){const map:Record<string,string>={title:"title",notes:"notes",startAt:"start_at",endAt:"end_at",isAllDay:"is_all_day",timezone:"timezone",location:"location",status:"status"},entries=Object.entries(map).filter(([key])=>input[key as keyof CalendarEventPatch]!==undefined);if(entries.length)database.prepare(`UPDATE calendar_events SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="isAllDay"?Number(input.isAllDay):input[key as keyof CalendarEventPatch] as string|null),id);return getCalendarEvent(id);}
+export function deleteCalendarEvent(id:number){return database.prepare("DELETE FROM calendar_events WHERE id=?").run(id).changes>0;}
 
 export function listMemories(query = "", category = "") {
   const conditions: string[] = [];

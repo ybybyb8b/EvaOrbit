@@ -2,6 +2,7 @@ import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, Hea
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 import { normalizeWeightKg } from "./weight.ts";
+import type { CalendarEventStatus } from "./types";
 
 export class ValidationError extends Error {}
 
@@ -517,6 +518,12 @@ export function parseTaskPatch(value: unknown) {
   if (result.reminderMode === "custom" && (result.reminderDate === null || result.reminderTime === null)) throw new ValidationError("自定义提醒需要完整的日期和时间");
   return result;
 }
+
+const calendarEventStatuses = ["confirmed", "tentative", "cancelled"] as const;
+function calendarBoundary(value:unknown,field:string,isAllDay:boolean|undefined){if(typeof value!=="string")throw new ValidationError(`${field}格式不正确`);if(isAllDay===true)return dateOnly(value,field);if(isAllDay===undefined&&/^\d{4}-\d{2}-\d{2}$/.test(value))return dateOnly(value,field);if(Number.isNaN(Date.parse(value))||!/^\d{4}-\d{2}-\d{2}T/.test(value))throw new ValidationError(`${field}格式不正确`);return value;}
+function nullableTimezone(value:unknown){if(value===null||value==="")return null;if(typeof value!=="string"||value.length>100)throw new ValidationError("时区格式不正确");try{new Intl.DateTimeFormat("en-US",{timeZone:value}).format();}catch{throw new ValidationError("时区格式不正确");}return value;}
+export function parseNewCalendarEvent(value:unknown){const body=objectValue(value),isAllDay=booleanValue(body.isAllDay,"全天事件",false),startAt=calendarBoundary(body.startAt,"开始时间",isAllDay),endAt=calendarBoundary(body.endAt,"结束时间",isAllDay);if(endAt<=startAt)throw new ValidationError("结束时间必须晚于开始时间");return{title:text(body.title,"事件标题",300)!,notes:text(body.notes??"","备注",10000,false)??"",startAt,endAt,isAllDay,timezone:nullableTimezone(body.timezone??null),location:text(body.location??"","地点",1000,false)??"",status:enumValue(body.status,"事件状态",calendarEventStatuses,"confirmed") as CalendarEventStatus};}
+export function parseCalendarEventPatch(value:unknown){const body=objectValue(value);if(body.startAt===undefined&&body.endAt===undefined&&body.isAllDay===undefined&&body.title===undefined&&body.notes===undefined&&body.timezone===undefined&&body.location===undefined&&body.status===undefined)throw new ValidationError("没有可更新的日历事件字段");const isAllDay=body.isAllDay===undefined?undefined:booleanValue(body.isAllDay,"全天事件",false);return{title:body.title===undefined?undefined:text(body.title,"事件标题",300),notes:body.notes===undefined?undefined:text(body.notes,"备注",10000,false),startAt:body.startAt===undefined?undefined:calendarBoundary(body.startAt,"开始时间",isAllDay),endAt:body.endAt===undefined?undefined:calendarBoundary(body.endAt,"结束时间",isAllDay),isAllDay,timezone:body.timezone===undefined?undefined:nullableTimezone(body.timezone),location:body.location===undefined?undefined:text(body.location,"地点",1000,false),status:body.status===undefined?undefined:enumValue(body.status,"事件状态",calendarEventStatuses,"confirmed") as CalendarEventStatus};}
 
 export function parseNewMemory(value: unknown) {
   const body = objectValue(value);

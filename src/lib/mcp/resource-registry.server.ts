@@ -19,6 +19,7 @@ import { createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,
 import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
 import { createSubscription, getSubscriptionDetail, listSubscriptions, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "../services/evaorbit";
+import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
   memoryEntity:{search:listMemoryEntities,get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
@@ -26,6 +27,7 @@ export const resourceRegistry = createResourceRegistry({
   memorySource:{search:listMemorySources,get:getMemorySource,create:createMemorySource,update:updateMemorySource,delete:deleteMemorySource},
   inbox: { search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox },
   task: { search: listTasks, get: getTask, create: createTask, update: updateTask, delete: deleteTask },
+  calendarEvent:{search:listCalendarEvents,get:getCalendarEvent,create:createCalendarEvent,update:updateCalendarEvent,delete:deleteCalendarEvent},
   memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
   luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },

@@ -59,7 +59,7 @@ function fakeOperations() {
     task: {
       async search(status = "all") { return tasks.filter((item) => status === "all" || (status === "done") === item.completed); },
       async get(id) { return tasks.find((item) => item.id === id) ?? null; },
-      async create(input) { const item: Task = { ...input, id: ++nextTask, completed: false, reminderId: null, createdAt, updatedAt: createdAt }; tasks.push(item); return item; },
+      async create(input) { const item: Task = { ...input, id: ++nextTask, completed: false, completedAt:null, reminderId: null, createdAt, updatedAt: createdAt }; tasks.push(item); return item; },
       async update(id, patch) { const item = tasks.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
       async delete(id) { return remove(tasks, id); },
     },

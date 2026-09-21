@@ -123,6 +123,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
   const languages = new Map(((preferencesResult.data ?? []) as Row[]).map((row) => [String(row.user_id), String(row.ui_language)]));
   let sent = 0;
   for (const reminder of due) {
+    if(String(reminder.source_type??"")==="task_reminder"&&reminder.source_id){const rule=await client.from("task_reminders").select("delivery_channel,repeat_while_overdue").eq("id",Number(reminder.source_id)).maybeSingle();if(rule.error)throw new Error("Could not read Task reminder ownership");if(rule.data?.delivery_channel==="apple_reminders"&&(!rule.data.repeat_while_overdue||!reminder.overdue_after||now.toISOString()<=String(reminder.overdue_after)))continue;}
     const deliveryScheduledAt = notificationDeliverySlot({
       nextDueAt: reminder.next_due_at ? String(reminder.next_due_at) : null,
       snoozedUntil: reminder.snoozed_until ? String(reminder.snoozed_until) : null,

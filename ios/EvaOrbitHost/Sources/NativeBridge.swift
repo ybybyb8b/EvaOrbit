@@ -1,5 +1,6 @@
 import UIKit
 import WebKit
+import EventKit
 
 final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let name = "evaOrbit"
@@ -13,6 +14,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         "healthkit.saveBodyMass", "healthkit.saveMenstrualFlow", "healthkit.deleteMenstrualFlow",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
         "notification.cancel", "notification.listPending", "notification.openSettings"
+        ,"eventkit.getStatus", "eventkit.requestAccess", "eventkit.fetch", "eventkit.save", "eventkit.delete"
     ]
 
     static let bootstrapScript = #"""
@@ -42,11 +44,13 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager: NotificationManager
     private let hapticFeedbackManager = HapticFeedbackManager()
+    private let eventKitSyncEngine: EventKitSyncEngine
 
-    init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager) {
+    init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
         self.hostConfiguration = hostConfiguration
         self.healthKitCoordinator = healthKitCoordinator
         self.notificationManager = notificationManager
+        self.eventKitSyncEngine = eventKitSyncEngine
     }
 
     func userContentController(
@@ -144,11 +148,31 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 let opened = await notificationManager.openSettings()
                 replyOnMain(replyHandler, value: success(id: identifier, result: ["opened": opened]))
             }
+        case "eventkit.getStatus":
+            replyHandler(success(id: identifier, result: eventKitSyncEngine.status()), nil)
+        case "eventkit.requestAccess":
+            eventKitRequestAccess(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "eventkit.fetch":
+            eventKitFetch(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "eventkit.save":
+            eventKitSave(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "eventkit.delete":
+            eventKitDelete(parameters: parameters, id: identifier, replyHandler: replyHandler)
         default:
             assertionFailure("Whitelisted bridge method is not implemented")
             replyHandler(failure(id: identifier, code: "unknown_method", message: "Unsupported native method."), nil)
         }
     }
+
+    private func eventKitKind(_ parameters:[String:Any])->EKEntityType?{switch parameters["kind"] as? String{case "calendar":return .event;case "reminder":return .reminder;default:return nil}}
+
+    private func eventKitRequestAccess(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters)else{replyHandler(failure(id:id,code:"invalid_eventkit_kind",message:"EventKit kind is invalid."),nil);return};Task{do{let result=try await eventKitSyncEngine.requestAccess(kind);replyOnMain(replyHandler,value:success(id:id,result:result))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_authorization_failed",message:error.localizedDescription))}}}
+
+    private func eventKitFetch(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let calendarIDs=parameters["calendarIdentifiers"] as? [String],calendarIDs.count<=100,calendarIDs.allSatisfy({!$0.isEmpty&&$0.count<=500})else{replyHandler(failure(id:id,code:"invalid_eventkit_fetch",message:"EventKit fetch parameters are invalid."),nil);return};if kind == .event{guard let from=Self.parseISO8601(parameters["from"] as? String ?? ""),let to=Self.parseISO8601(parameters["to"] as? String ?? ""),to>from else{replyHandler(failure(id:id,code:"invalid_eventkit_window",message:"Calendar sync window is invalid."),nil);return};replyHandler(success(id:id,result:["items":eventKitSyncEngine.fetchEvents(calendarIDs:calendarIDs,from:from,to:to),"complete":true]),nil)}else{let completedSince=Self.parseISO8601(parameters["completedSince"] as? String ?? "") ?? Date().addingTimeInterval(-30*86400);Task{do{let items=try await eventKitSyncEngine.fetchReminders(calendarIDs:calendarIDs,completedSince:completedSince);replyOnMain(replyHandler,value:success(id:id,result:["items":items,"complete":true]))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription))}}}}
+
+    private func eventKitSave(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let item=parameters["item"] as? [String:Any]else{replyHandler(failure(id:id,code:"invalid_eventkit_save",message:"EventKit item is invalid."),nil);return};do{let saved=try kind == .event ? eventKitSyncEngine.saveEvent(item) : eventKitSyncEngine.saveReminder(item);replyHandler(success(id:id,result:["item":saved]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_save_failed",message:error.localizedDescription),nil)}}
+
+    private func eventKitDelete(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let itemID=parameters["calendarItemIdentifier"] as? String,!itemID.isEmpty,itemID.count<=500 else{replyHandler(failure(id:id,code:"invalid_eventkit_delete",message:"EventKit identifier is invalid."),nil);return};do{try eventKitSyncEngine.delete(kind:kind,identifier:itemID);replyHandler(success(id:id,result:["deleted":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_delete_failed",message:error.localizedDescription),nil)}}
 
     private func scheduleNotification(
         parameters: [String: Any],
@@ -322,6 +346,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "healthKitPipeline": "energy-body-mass-menstrual-flow-v3",
             "notificationPipeline": "local-v1",
             "hapticPipeline": "feedback-v1",
+            "eventKitPipeline": "calendar-reminders-v1",
             "methods": Self.supportedMethods.sorted()
         ]
     }

@@ -11,6 +11,8 @@ import { normalizeUiLanguage } from "../locale";
 import { normalizeChineseFont, normalizeEnglishFont } from "../font-preferences";
 import { subscriptionSpendByCurrency } from "../subscriptions";
 import { createSupabaseServerClient } from "../supabase/server";
+import type { CalendarEvent } from "../types";
+import type { NewCalendarEvent } from "./types";
 import type { AiModelConfig, AiProvider, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatRole, ChatSession, ChronicleEntry, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaSeries, MediaViewing, Memo, Memory, MemoryEntity, MemoryFact, MemoryFactCandidate, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskPriority, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, WeightRecord, WeightSettings } from "../types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, EvaOrbitRepository, FoodLibrarySearchOptions, HealthRecordListInput, InternalAiProvider, InternalAiSettings, LuciusCasePatch, LuciusDiaryPatch, LuciusPostCommentPatch, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MemoPatch, MemoryFactPatch, NewTask, ProjectItemPatch, ProjectPatch, TaskFilter } from "./types";
 
@@ -25,7 +27,7 @@ function fail(error: { message: string } | null, operation: string) {
 
 function taskFromRow(row: Row): Task {
   return {
-    id: Number(row.id), title: String(row.title), notes: String(row.notes ?? ""), completed: Boolean(row.completed),
+    id: Number(row.id), title: String(row.title), notes: String(row.notes ?? ""), completed: Boolean(row.completed), completedAt:row.completed_at?String(row.completed_at):null,
     dueDate: row.due_date ? String(row.due_date) : null, dueTime: row.due_time ? String(row.due_time).slice(0, 5) : null,
     reminderId: row.reminder_id === null || row.reminder_id === undefined ? null : Number(row.reminder_id), priority: row.priority as TaskPriority,
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [], reminders: [], createdAt: String(row.created_at), updatedAt: String(row.updated_at),
@@ -33,8 +35,10 @@ function taskFromRow(row: Row): Task {
 }
 
 function taskReminderFromRow(row: Row): TaskReminder {
-  return { id:Number(row.id),taskId:Number(row.task_id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),triggerType:row.trigger_type as TaskReminder["triggerType"],absoluteDate:row.absolute_date?String(row.absolute_date):null,absoluteTime:row.absolute_time?String(row.absolute_time).slice(0,5):null,relativeTo:row.relative_to as TaskReminder["relativeTo"],offsetMinutes:row.offset_minutes===null?null:Number(row.offset_minutes),timezone:String(row.timezone),repeatWhileOverdue:Boolean(row.repeat_while_overdue),createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
+  return { id:Number(row.id),taskId:Number(row.task_id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),triggerType:row.trigger_type as TaskReminder["triggerType"],absoluteDate:row.absolute_date?String(row.absolute_date):null,absoluteTime:row.absolute_time?String(row.absolute_time).slice(0,5):null,relativeTo:row.relative_to as TaskReminder["relativeTo"],offsetMinutes:row.offset_minutes===null?null:Number(row.offset_minutes),timezone:String(row.timezone),repeatWhileOverdue:Boolean(row.repeat_while_overdue),deliveryChannel:(row.delivery_channel??"pwa") as TaskReminder["deliveryChannel"],createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
 }
+
+function calendarEventFromRow(row:Row):CalendarEvent{return{id:Number(row.id),title:String(row.title),notes:String(row.notes??""),startAt:String(row.start_at),endAt:String(row.end_at),isAllDay:Boolean(row.is_all_day),timezone:row.timezone?String(row.timezone):null,location:String(row.location??""),status:row.status as CalendarEvent["status"],createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 
 function subscriptionPaymentFromRow(row:Row):SubscriptionPayment{return{id:Number(row.id),subscriptionId:Number(row.subscription_id),scheduledFor:String(row.scheduled_for),paidOn:String(row.paid_on),amountMinor:Number(row.amount_minor),currency:String(row.currency),note:String(row.note??""),createdAt:String(row.created_at)};}
 function subscriptionPriceChangeFromRow(row:Row):SubscriptionPriceChange{return{id:Number(row.id),subscriptionId:Number(row.subscription_id),effectiveOn:String(row.effective_on),oldAmountMinor:Number(row.old_amount_minor),newAmountMinor:Number(row.new_amount_minor),oldCurrency:String(row.old_currency),newCurrency:String(row.new_currency),createdAt:String(row.created_at)};}
@@ -287,7 +291,7 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       fail(error, "创建任务"); return taskFromRow(data);
     },
     async updateTask(id, input) {
-      const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
+      const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", completedAt:"completed_at", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
       const patch = Object.fromEntries(Object.entries(map).filter(([key]) => input[key] !== undefined).map(([key, column]) => [column, input[key]]));
       if (!Object.keys(patch).length) return repository.getTask(id);
       const { data, error } = await client.from("tasks").update(patch).eq("id", id).select().maybeSingle();
@@ -299,9 +303,14 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     },
     async listTaskReminders(taskId) { const {data,error}=await client.from("task_reminders").select("*").eq("task_id",taskId).order("id"); fail(error,"读取任务提醒"); return (data as Row[]).map(taskReminderFromRow); },
     async getTaskReminder(id) { const {data,error}=await client.from("task_reminders").select("*").eq("id",id).maybeSingle(); fail(error,"读取任务提醒"); return data?taskReminderFromRow(data):null; },
-    async createTaskReminder(input) { const {data,error}=await client.from("task_reminders").insert({user_id:userId,task_id:input.taskId,reminder_id:input.reminderId,trigger_type:input.triggerType,absolute_date:input.absoluteDate,absolute_time:input.absoluteTime,relative_to:input.relativeTo,offset_minutes:input.offsetMinutes,timezone:input.timezone,repeat_while_overdue:input.repeatWhileOverdue}).select().single(); fail(error,"创建任务提醒"); return taskReminderFromRow(data); },
-    async updateTaskReminder(id,input) { return catUpdate("task_reminders",id,input,{reminderId:"reminder_id",triggerType:"trigger_type",absoluteDate:"absolute_date",absoluteTime:"absolute_time",relativeTo:"relative_to",offsetMinutes:"offset_minutes",timezone:"timezone",repeatWhileOverdue:"repeat_while_overdue"},taskReminderFromRow); },
+    async createTaskReminder(input) { const {data,error}=await client.from("task_reminders").insert({user_id:userId,task_id:input.taskId,reminder_id:input.reminderId,trigger_type:input.triggerType,absolute_date:input.absoluteDate,absolute_time:input.absoluteTime,relative_to:input.relativeTo,offset_minutes:input.offsetMinutes,timezone:input.timezone,repeat_while_overdue:input.repeatWhileOverdue,delivery_channel:input.deliveryChannel??"pwa"}).select().single(); fail(error,"创建任务提醒"); return taskReminderFromRow(data); },
+    async updateTaskReminder(id,input) { return catUpdate("task_reminders",id,input,{reminderId:"reminder_id",triggerType:"trigger_type",absoluteDate:"absolute_date",absoluteTime:"absolute_time",relativeTo:"relative_to",offsetMinutes:"offset_minutes",timezone:"timezone",repeatWhileOverdue:"repeat_while_overdue",deliveryChannel:"delivery_channel"},taskReminderFromRow); },
     async deleteTaskReminder(id) { const {data,error}=await client.from("task_reminders").delete().eq("id",id).select("id").maybeSingle(); fail(error,"删除任务提醒"); return Boolean(data); },
+    async listCalendarEvents(input={}) { let query=client.from("calendar_events").select("*"); if(input.query)query=query.or(`title.ilike.%${foodLibrarySearchValue(input.query)}%,notes.ilike.%${foodLibrarySearchValue(input.query)}%,location.ilike.%${foodLibrarySearchValue(input.query)}%`);if(input.from)query=query.gte("end_at",input.from);if(input.to)query=query.lte("start_at",input.to);if(input.status)query=query.eq("status",input.status);const{data,error}=await query.order("start_at").order("id").limit(Math.min(Math.max(input.limit??200,1),500));fail(error,"读取日历事件");return(data as Row[]).map(calendarEventFromRow);},
+    async getCalendarEvent(id) { const{data,error}=await client.from("calendar_events").select("*").eq("id",id).maybeSingle();fail(error,"读取日历事件");return data?calendarEventFromRow(data):null;},
+    async createCalendarEvent(input:NewCalendarEvent) { const{data,error}=await client.from("calendar_events").insert({user_id:userId,title:input.title,notes:input.notes,start_at:input.startAt,end_at:input.endAt,is_all_day:input.isAllDay,timezone:input.timezone,location:input.location,status:input.status}).select().single();fail(error,"创建日历事件");return calendarEventFromRow(data);},
+    async updateCalendarEvent(id,input) { const patch=mappedPatch(input,{title:"title",notes:"notes",startAt:"start_at",endAt:"end_at",isAllDay:"is_all_day",timezone:"timezone",location:"location",status:"status"});if(!Object.keys(patch).length)return repository.getCalendarEvent(id);const{data,error}=await client.from("calendar_events").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新日历事件");return data?calendarEventFromRow(data):null;},
+    async deleteCalendarEvent(id) { const{data,error}=await client.from("calendar_events").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除日历事件");return Boolean(data);},
     async listMemories(query = "", category = "") {
       let request = client.from("memories").select("*");
       if (query) request = request.ilike("search_text", `%${query.replace(/[\\%_]/g, "\\$&")}%`);

@@ -5,6 +5,7 @@ export interface Task {
   title: string;
   notes: string;
   completed: boolean;
+  completedAt: string | null;
   dueDate: string | null;
   dueTime: string | null;
   reminderId: number | null;
@@ -252,6 +253,22 @@ export interface TaskReminder {
   offsetMinutes: number | null;
   timezone: string;
   repeatWhileOverdue: boolean;
+  deliveryChannel: "pwa" | "apple_reminders";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CalendarEventStatus = "confirmed" | "tentative" | "cancelled";
+export interface CalendarEvent {
+  id: number;
+  title: string;
+  notes: string;
+  startAt: string;
+  endAt: string;
+  isAllDay: boolean;
+  timezone: string | null;
+  location: string;
+  status: CalendarEventStatus;
   createdAt: string;
   updatedAt: string;
 }

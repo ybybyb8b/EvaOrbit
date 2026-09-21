@@ -25,6 +25,7 @@ targets:
       - sdk: WebKit.framework
       - sdk: HealthKit.framework
       - sdk: UserNotifications.framework
+      - sdk: EventKit.framework
       - sdk: Security.framework
       - sdk: libsqlite3.tbd
     info:
@@ -35,6 +36,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSHealthShareUsageDescription: EvaOrbit reads resting energy, active energy, body weight, and menstrual flow that you choose to share from Apple Health.
         NSHealthUpdateUsageDescription: EvaOrbit writes body weight and menstrual flow records that you save in EvaOrbit to Apple Health.
+        NSCalendarsFullAccessUsageDescription: EvaOrbit syncs events only with calendars you select.
+        NSRemindersFullAccessUsageDescription: EvaOrbit syncs tasks and alarms only with reminder lists you select.
+        NSCalendarsUsageDescription: EvaOrbit syncs events only with calendars you select.
+        NSRemindersUsageDescription: EvaOrbit syncs tasks and alarms only with reminder lists you select.
         UILaunchScreen:
           UIColorName: LoadingBackground
         UIRequiresFullScreen: true

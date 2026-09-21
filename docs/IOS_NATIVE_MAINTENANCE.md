@@ -15,6 +15,7 @@ Next.js / Supabase（业务 source of truth）
 WKWebView Native Host
           │ 单一、版本化、白名单 JS↔Swift bridge
           ├─ HealthKit：能量、体重与 Menstrual Flow CategorySample 双向同步
+          ├─ EventKit：选定 Calendar / Reminder List 的日历事件与任务双向同步
           ├─ UserNotifications：本地提醒调度
           ├─ UIKit Haptics：按 Web 语义播放原生触感
           └─ Native loading / appearance：启动体验
@@ -42,6 +43,7 @@ WKWebView Native Host
 | Web bridge 类型、能力检测和通知 reconcile | `src/lib/native-bridge.ts` |
 | HealthKit 实现 | `ios/EvaOrbitHost/Sources/HealthKit*.swift`、`HealthLocalStore.swift`、`HealthUploadManager.swift`；Menstrual Flow 使用独立 CategorySample DTO/路径 |
 | Local Notification 实现 | `ios/EvaOrbitHost/Sources/NotificationManager.swift` |
+| EventKit 实现 | `ios/EvaOrbitHost/Sources/EventKitSyncEngine.swift`、`src/lib/eventkit-sync.ts`、`src/app/settings/apple-integration` |
 | 原生触感执行器 | `ios/EvaOrbitHost/Sources/HapticFeedbackManager.swift`、`src/lib/native-haptics.ts` |
 | 原生启动核心图 | `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`、`ios/EvaOrbitHost/Sources/OrbitArtworkView.swift` |
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
@@ -170,6 +172,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 | HealthKit 凭据安全存储 | `Security.framework` | 无 | 当前无需 Keychain Sharing capability | Web 注册完成后写入 app 自有 Keychain |
 | Web Push | Web Service Worker / Push API | 浏览器管理 | 不属于 Native Host entitlement | 由浏览器设置中的独立按钮请求 |
 | 原生触感 | `UIKit`（已由 App 使用） | 无 | 无 | 无权限弹窗；只响应当前用户交互 |
+| Apple Calendar / Reminders | `EventKit.framework` | `NSCalendarsFullAccessUsageDescription`、`NSRemindersFullAccessUsageDescription`（并保留 iOS 16 legacy keys） | 无 | 仅在 Apple Integration 中由用户点击分别请求；只同步明确选择的来源 |
 
 不要把“引入 framework”“Info.plist 用途文案”“entitlement/capability”“运行时 permission prompt”混为一件事。新增原生权限前必须分别核对这四层，以及免费个人 Team 和 patched xtool 是否支持对应 entitlement。
 
@@ -245,6 +248,18 @@ Web 侧 `reconcileNativeNotifications()` 才是校准逻辑：
 reconcile 在 App shell 初始化、`evaorbit:native-ready`、`evaorbit:native-active`、页面重新可见、用户 Refresh status，以及相关 reminder 创建/修改/完成/删除操作后触发。业务 source of truth 仍是 Web/API，不得在 Swift 再建 reminder 数据库。
 
 Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Native 控件只有检测到 Host 后才出现；浏览器不能伪装 Native 可用。不得为了接入原生通知修改或删除现有 Web Push / Cron。
+
+### 4.4 EventKit：来源选择、同步与边界
+
+- Calendar 与 Reminders 分别请求权限；启动、恢复和 bridge ready 不主动弹权限框。
+- 来源按设备保存 `Off / Import only / Two-way`；只读来源不能选择 Two-way。
+- Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，三方基线与 identifier mapping 存在 `eventkit_links`。
+- Calendar 使用过去 90 天到未来 365 天窗口；Reminders 使用未完成项和最近 30 天完成项。
+- reconcile 使用 Base / EO current / Apple current：非重叠字段合并，同字段改动报告 conflict，不静默覆盖；成功后更新 snapshot/hash，抑制 echo。
+- recurring events 当前只安全读取并标记，不导入、不写回、不删除 series 或 occurrence。普通单次 Event 才参与双向同步。
+- all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
+- 已映射 Apple alarm 的原始 occurrence 由 `apple_reminders` channel 负责；EO 的 `repeat_while_overdue` 仍可在 Due 后继续由 EO 投递。
+- `EKEventStoreChanged` 经 Native 1.5 秒 debounce 后通知 Web；App launch/foreground、手动 Sync now 和 store change 都触发 eventual reconcile。没有 APNs silent push，App 长期不运行时不保证即时同步。
 
 ## 五、JS↔Swift bridge 安全契约
 

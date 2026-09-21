@@ -4,6 +4,7 @@ import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
 import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
+import type { CalendarEvent } from "../types";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -29,7 +30,10 @@ export type NewTask = {
   tags: string[];
 };
 
-export type NewTaskReminder = Omit<TaskReminder, "id" | "createdAt" | "updatedAt">;
+export type NewTaskReminder = Omit<TaskReminder, "id" | "createdAt" | "updatedAt" | "deliveryChannel"> & { deliveryChannel?: TaskReminder["deliveryChannel"] };
+export type NewCalendarEvent = Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">;
+export type CalendarEventPatch = Partial<NewCalendarEvent>;
+export type CalendarEventListInput = { query?: string; from?: string; to?: string; status?: CalendarEvent["status"]; limit?: number };
 
 export type AiSettingsInput = ChatPreferences & {
   providerPreset: string;
@@ -188,6 +192,11 @@ export interface EvaOrbitRepository {
   createTaskReminder(input: NewTaskReminder): Promise<TaskReminder>;
   updateTaskReminder(id: number, input: Record<string, unknown>): Promise<TaskReminder | null>;
   deleteTaskReminder(id: number): Promise<boolean>;
+  listCalendarEvents(input?: CalendarEventListInput): Promise<CalendarEvent[]>;
+  getCalendarEvent(id: number): Promise<CalendarEvent | null>;
+  createCalendarEvent(input: NewCalendarEvent): Promise<CalendarEvent>;
+  updateCalendarEvent(id: number, input: CalendarEventPatch): Promise<CalendarEvent | null>;
+  deleteCalendarEvent(id: number): Promise<boolean>;
 
   listMemories(query?: string, category?: string): Promise<Memory[]>;
   getMemory(id: number): Promise<Memory | null>;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronRight, Cpu, Database, Health, Notification as NotificationIcon, Palette, type IconComponent } from "reicon-react";
+import { Calendar, ChevronRight, Cpu, Database, Health, Notification as NotificationIcon, Palette, type IconComponent } from "reicon-react";
 import { PageHeader } from "@/components/page-header";
 import { getNativeHostInfo, healthKitSupported, nativeNotificationsSupported } from "@/lib/native-bridge";
 import { useLocale } from "@/components/locale-controller";
@@ -38,6 +38,7 @@ export function SettingsDirectory() {
       <DirectoryItem href="/settings/ai-connection" icon={Cpu} title={english ? "AI & Connection" : "AI 与连接"} meta={english ? "Provider, endpoint and model" : "服务商、地址与模型"} />
       <DirectoryItem href="/settings/notifications" icon={NotificationIcon} title={english ? "Notifications" : "通知"} meta={english ? status.nativeNotifications ? "Native notifications available" : "Web notifications" : status.nativeNotifications ? "原生通知可用" : `网页通知${status.webNotifications}`} />
       <DirectoryItem href="/settings/health-native" icon={Health} title={english ? "Health & Native" : "健康与原生能力"} meta={english ? status.health ? "Apple Health available" : status.nativeHost ? "HealthKit unavailable" : "Connect through the iOS Host" : status.health ? "Apple Health 可用" : status.nativeHost ? "HealthKit 不可用" : "请在 iOS Host 中连接"} />
+      <DirectoryItem href="/settings/apple-integration" icon={Calendar} title={english ? "Apple Integration" : "Apple 日历与提醒事项"} meta={english ? "Calendar and Reminders sync" : "选择来源并双向同步"} />
       <DirectoryItem href="/settings/data-backup" icon={Database} title={english ? "Data & Backup" : "数据与备份"} meta={english ? "Supabase with SQLite fallback" : "Supabase 与 SQLite 后备"} />
     </nav>
   </div>;

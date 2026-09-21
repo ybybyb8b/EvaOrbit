@@ -10,6 +10,7 @@ export type NativeHostInfo = {
   buildVersion?: string;
   healthKitPipeline?: string;
   hapticPipeline?: string;
+  eventKitPipeline?: string;
   capabilities?: string[] | Record<string, boolean>;
   methods?: string[];
 };
@@ -75,6 +76,8 @@ export function nativeNotificationsSupported(info: NativeHostInfo | null) {
 export function nativeHapticsSupported(info: NativeHostInfo | null) {
   return hostSupports(info, "haptic.play");
 }
+
+export function eventKitSupported(info:NativeHostInfo|null){return["eventkit.getStatus","eventkit.requestAccess","eventkit.fetch","eventkit.save","eventkit.delete"].every(method=>hostSupports(info,method));}
 
 export function nativeNotificationIdentifier(reminderId: number) {
   return managedIdentifier("reminder", reminderId);

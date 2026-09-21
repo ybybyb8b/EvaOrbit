@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, type TransitionEvent, useCallback, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, type TransitionEvent, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
@@ -17,7 +17,7 @@ type FormSheetProps = {
 };
 
 type FormSheetPhase = "opening" | "open" | "closing" | "closed";
-const FORM_SHEET_CLOSE_FALLBACK_MS = 240;
+const FORM_SHEET_CLOSE_FALLBACK_MS = 340;
 
 export function FormSheet({
   title,
@@ -82,7 +82,7 @@ export function FormSheet({
     return () => window.clearTimeout(fallback);
   }, [finishClose, phase]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mounted) return;
     const body = document.body;
     const dialog = dialogRef.current;
@@ -134,11 +134,15 @@ export function FormSheet({
     inertSiblings.forEach(({ element }) => { element.inert = true; });
     updateViewport();
     const focusFrame = window.requestAnimationFrame(() => {
+      if (window.matchMedia("(max-width: 720px)").matches) {
+        dialog?.focus({ preventScroll: true });
+        return;
+      }
       const autoFocus = dialog?.querySelector<HTMLElement>("[autofocus]");
       const firstField = Array.from(dialog?.querySelectorAll<HTMLElement>("input:not([disabled]),select:not([disabled]),textarea:not([disabled])") ?? [])
         .find((element) => element.getClientRects().length > 0);
       const preferred = autoFocus?.getClientRects().length ? autoFocus : firstField ?? getFocusable()[0];
-      (preferred ?? dialog)?.focus();
+      (preferred ?? dialog)?.focus({ preventScroll: true });
     });
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", updateViewport);
@@ -160,7 +164,8 @@ export function FormSheet({
   if (!mounted || phase === "closed") return null;
 
   const finishCloseOnTransition = (event: TransitionEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget || (event.propertyName !== "transform" && event.propertyName !== "opacity")) return;
+    if (event.target !== event.currentTarget) return;
+    if (event.propertyName !== "transform" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     finishClose();
   };
 
@@ -178,7 +183,7 @@ export function FormSheet({
           onFocusCapture={(event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 120);
+            window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "auto" }), 120);
           }}
         >
           {children}

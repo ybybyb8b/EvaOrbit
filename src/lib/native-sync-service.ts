@@ -8,8 +8,13 @@ import { resetTrackerIcon, saveTrackerIcon } from "./services/tracker-icon";
 import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseTrackerEntryPatch, parseTrackerPatch, parseTrackerReminderPatch, ValidationError } from "./validation";
 import { applyIdempotently, type MutationClaim, type MutationReceiptStore } from "./native-sync-idempotency";
 import { conflictFor, type NativeSyncMutation, type NativeSyncRequest, type NativeSyncResult } from "./native-sync-contract";
+import { createTask,deleteTask,listTasks,updateTask } from "./services/evaorbit";
+import { createCalendarEvent,deleteCalendarEvent,listCalendarEvents,updateCalendarEvent } from "./services/calendar-event";
+import { parseCalendarEventPatch,parseNewCalendarEvent,parseNewTask,parseTaskPatch } from "./validation";
 
 type NativeSyncSnapshot = {
+  tasks: Record<string,unknown>[];
+  calendarEvents: Record<string,unknown>[];
   trackers: Record<string, unknown>[];
   trackerFields: Record<string, unknown>[];
   trackerGoals: Record<string, unknown>[];
@@ -29,7 +34,9 @@ async function applyMutation(mutation: NativeSyncMutation): Promise<NativeSyncRe
   const repository = await getRepository();
   let current: { id: number; updatedAt: string } | null = null;
   if (mutation.serverId) {
-    if (mutation.resourceType === "tracker" || mutation.resourceType === "tracker_icon") current = await repository.getTracker(mutation.serverId);
+    if (mutation.resourceType === "task") current=await repository.getTask(mutation.serverId);
+    else if (mutation.resourceType === "calendar_event") current=await repository.getCalendarEvent(mutation.serverId);
+    else if (mutation.resourceType === "tracker" || mutation.resourceType === "tracker_icon") current = await repository.getTracker(mutation.serverId);
     else if (mutation.resourceType === "tracker_entry") current = await repository.getTrackerEntry(mutation.serverId);
     else if (mutation.resourceType === "tracker_reminder") current = await repository.getTrackerReminder(mutation.serverId);
     else {
@@ -39,6 +46,17 @@ async function applyMutation(mutation: NativeSyncMutation): Promise<NativeSyncRe
         if (found) { current = found; break; }
       }
     }
+  }
+
+  if(mutation.resourceType==="task"){
+    if(mutation.operation==="create"){const created=await createTask(parseNewTask(mutation.payload));return{...baseResult(mutation),status:"applied",serverId:created.id,serverUpdatedAt:created.updatedAt};}
+    if(mutation.operation==="update"){const updated=await updateTask(mutation.serverId!,parseTaskPatch(mutation.payload));return updated?{...baseResult(mutation),status:"applied",serverId:updated.id,serverUpdatedAt:updated.updatedAt}:{...baseResult(mutation),status:"conflict",serverId:mutation.serverId,conflictKind:"remote_deleted"};}
+    await deleteTask(mutation.serverId!);return{...baseResult(mutation),status:"applied",serverId:mutation.serverId};
+  }
+  if(mutation.resourceType==="calendar_event"){
+    if(mutation.operation==="create"){const created=await createCalendarEvent(parseNewCalendarEvent(mutation.payload));return{...baseResult(mutation),status:"applied",serverId:created.id,serverUpdatedAt:created.updatedAt};}
+    if(mutation.operation==="update"){const updated=await updateCalendarEvent(mutation.serverId!,parseCalendarEventPatch(mutation.payload));return updated?{...baseResult(mutation),status:"applied",serverId:updated.id,serverUpdatedAt:updated.updatedAt}:{...baseResult(mutation),status:"conflict",serverId:mutation.serverId,conflictKind:"remote_deleted"};}
+    await deleteCalendarEvent(mutation.serverId!);return{...baseResult(mutation),status:"applied",serverId:mutation.serverId};
   }
 
   if (mutation.operation !== "create") {
@@ -123,6 +141,8 @@ async function snapshot(): Promise<NativeSyncSnapshot> {
   const summaries = await listTrackerSummaries();
   const details = await Promise.all(summaries.map((tracker) => getTrackerDetail(tracker.id)));
   return {
+    tasks:(await listTasks()).map(record),
+    calendarEvents:(await listCalendarEvents()).map(record),
     trackers: details.flatMap((detail) => detail ? [record(detail.tracker)] : []),
     trackerFields: details.flatMap((detail) => detail ? detail.fields.map(record) : []),
     trackerGoals: details.flatMap((detail) => detail ? detail.goals.map(record) : []),

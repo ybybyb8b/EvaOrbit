@@ -167,13 +167,13 @@ html[data-theme="rosewood"] {
 
 html[data-theme="powderblue"] {
   --surface-canvas:#faf2e0;
-  --surface-card:#fff8e9;
-  --surface-raised:#fffdf7;
-  --surface-soft:#f2e6cf;
-  --surface-tint:#e3ecf2;
-  --surface-accent-soft:#dcecf5;
-  --surface-warm:#f0e4ce;
-  --surface-due:#e4eef4;
+  --surface-card:#fdf5e5;
+  --surface-raised:#fffaf0;
+  --surface-soft:#f1e5cf;
+  --surface-tint:#e5ebed;
+  --surface-accent-soft:#dce9f0;
+  --surface-warm:#efe3cc;
+  --surface-due:#e3ebef;
   --surface-lavender:#e7ebee;
   --surface-danger:#f5e1e0;
   --text-primary:#173248;
@@ -203,13 +203,13 @@ html[data-theme="powderblue"] {
   --surface-note-alt:#e6ebf0;
   --surface-note-green:#e1ece7;
   --accent-gold:#956a2d;
-  --surface-card-rgb:255 248 233;
-  --surface-raised-rgb:255 253 247;
-  --surface-tint-rgb:227 236 242;
-  --surface-warm-rgb:240 228 206;
-  --surface-shell-rgb:252 246 233;
-  --surface-header-rgb:253 248 238;
-  --surface-chat-rgb:250 244 231;
+  --surface-card-rgb:253 245 229;
+  --surface-raised-rgb:255 250 240;
+  --surface-tint-rgb:229 235 237;
+  --surface-warm-rgb:239 227 204;
+  --surface-shell-rgb:251 244 229;
+  --surface-header-rgb:252 247 235;
+  --surface-chat-rgb:249 242 226;
   --border-rgb:70 94 111;
   --accent-rgb:14 113 172;
   --shadow-rgb:24 63 88;
@@ -639,7 +639,7 @@ html[data-mode="dark"] .field select { background-image: url("data:image/svg+xml
 
 @media (max-width: 720px) {
   .form-sheet-layer { padding: max(12px,env(safe-area-inset-top)) 0 0; place-items: end stretch; }
-  .form-sheet-panel { width: 100%; max-height: min(92dvh,calc(var(--form-sheet-viewport-height) - max(48px,env(safe-area-inset-top)))); border-width: 1px 0 0; border-radius: 24px 24px 0 0; transform: translateY(100%); transform-origin: center bottom; }
+  .form-sheet-panel { width: 100%; max-height: min(92dvh,calc(var(--form-sheet-viewport-height) - max(48px,env(safe-area-inset-top)))); border-width: 1px 0 0; border-radius: 24px 24px 0 0; transform: translateY(100%); transform-origin: center bottom; transition:opacity 280ms var(--motion-ease-out),transform 280ms var(--motion-ease-drawer); }
   .form-sheet-layer[data-state="open"] .form-sheet-panel { transform: translateY(0); }
   .form-sheet-header,.form-sheet-footer { min-height: 62px; padding-inline: 16px; }.form-sheet-header h2 { font-size: 21px; }
   .form-sheet-body { padding: 18px 16px; scroll-padding-bottom: 100px; }

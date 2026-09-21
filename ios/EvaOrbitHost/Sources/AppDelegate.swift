@@ -5,6 +5,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager = NotificationManager()
+    private let eventKitSyncEngine = EventKitSyncEngine()
 
     override init() {
         let store = try! HealthLocalStore()
@@ -21,7 +22,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.overrideUserInterfaceStyle = NativeLoadingTheme.currentAppearanceMode.interfaceStyle
         healthKitCoordinator.restoreAtLaunch()
-        window.rootViewController = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager)
+        let controller = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager, eventKitSyncEngine: eventKitSyncEngine)
+        eventKitSyncEngine.onStoreChanged = { [weak controller] in controller?.notifyEventKitStoreChanged() }
+        window.rootViewController = controller
         window.makeKeyAndVisible()
         self.window = window
 

@@ -11,8 +11,8 @@ final class WebViewController: UIViewController {
     private var navigationTimeoutWorkItem: DispatchWorkItem?
     private static let navigationTimeout: TimeInterval = 25
 
-    init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager) {
-        let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager)
+    init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
+        let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager, eventKitSyncEngine: eventKitSyncEngine)
         let themePalette = LoadingThemePalette.current()
         hostConfiguration = configuration
         bridge = nativeBridge
@@ -176,6 +176,10 @@ extension WebViewController: WKNavigationDelegate {
 
     func notifyApplicationDidBecomeActive() {
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:native-active'))")
+    }
+
+    func notifyEventKitStoreChanged() {
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:eventkit-store-changed'))")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
