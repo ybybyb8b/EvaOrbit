@@ -86,13 +86,12 @@ export function SettingsView() {
     finally { setWorking(false); }
   }
 
-  if (loading) return <div className="page"><div className="loading-state">{english ? "Loading settings…" : "正在读取设置…"}</div></div>;
-
   return <div className="page">
     <PageHeader eyebrow={english ? "APP & APPEARANCE" : "应用与外观"} title={english ? "App & Appearance" : "应用与外观"} action={<Link className="settings-back-link" href="/settings">{english ? "All Settings" : "全部设置"}</Link>} />
 
     <form className="provider-card" onSubmit={save}>
       <AppearanceThemeSettings />
+      {loading ? <div className="loading-state" role="status">{english ? "Loading conversation settings…" : "正在读取对话设置…"}</div> : <>
       <section className="conversation-appearance-settings">
         <div className="persona-heading"><span className="eyebrow">{english ? "CONVERSATION APPEARANCE" : "对话外观"}</span><h2>{english ? "Conversation identity" : "对话身份"}</h2></div>
         <div className="identity-editor-grid">
@@ -130,6 +129,7 @@ export function SettingsView() {
       <div className="provider-actions">
         <button className="button primary" disabled={working} type="submit">{english ? "Save Preferences" : "保存偏好"}</button>
       </div>
+      </>}
     </form>
   </div>;
 }
