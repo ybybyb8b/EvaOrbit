@@ -117,7 +117,40 @@ final class EventKitSyncEngine {
     private func sources(_ kind: EKEntityType) -> [[String:Any]] { store.calendars(for:kind).map { ["identifier":$0.calendarIdentifier,"title":$0.title,"sourceIdentifier":$0.source.sourceIdentifier,"sourceTitle":$0.source.title,"allowsContentModifications":$0.allowsContentModifications] } }
     private func eventDictionary(_ event:EKEvent)->[String:Any]{let zone=event.timeZone?.identifier ?? TimeZone.current.identifier;return compact(["calendarItemIdentifier":event.calendarItemIdentifier,"externalIdentifier":event.calendarItemExternalIdentifier,"calendarIdentifier":event.calendar.calendarIdentifier,"sourceIdentifier":event.calendar.source.sourceIdentifier,"title":event.title ?? "","notes":event.notes,"startAt":event.isAllDay ? day(event.startDate,zone:zone) : iso(event.startDate),"endAt":event.isAllDay ? day(event.endDate,zone:zone) : iso(event.endDate),"isAllDay":event.isAllDay,"timezone":zone,"location":event.location,"status":eventStatus(event.status),"lastModifiedAt":event.lastModifiedDate.map(iso),"isRecurring":!(event.recurrenceRules?.isEmpty ?? true),"hasAttendees":!(event.attendees?.isEmpty ?? true)])}
     private func eventStatus(_ status:EKEventStatus)->String{switch status{case .tentative:return "tentative";case .canceled:return "cancelled";default:return "confirmed"}}
-    private func reminderDictionary(_ reminder:EKReminder)->[String:Any]{let due=reminder.dueDateComponents;let dueDate=due.flatMap{components in components.year.flatMap{y in components.month.flatMap{m in components.day.map{d in String(format:"%04d-%02d-%02d",y,m,d)}}}}};let dueTime=due.flatMap{c in c.hour.flatMap{h in c.minute.map{m in String(format:"%02d:%02d",h,m)}}}};let alarms=(reminder.alarms ?? []).map{alarm in compact(["absoluteAt":alarm.absoluteDate.map(iso),"relativeOffset":alarm.relativeOffset])};return compact(["calendarItemIdentifier":reminder.calendarItemIdentifier,"externalIdentifier":reminder.calendarItemExternalIdentifier,"calendarIdentifier":reminder.calendar.calendarIdentifier,"sourceIdentifier":reminder.calendar.source.sourceIdentifier,"title":reminder.title ?? "","notes":reminder.notes,"dueDate":dueDate,"dueTime":dueTime,"timezone":due?.timeZone?.identifier,"priority":reminder.priority,"completed":reminder.isCompleted,"completionDate":reminder.completionDate.map(iso),"alarms":alarms,"lastModifiedAt":reminder.lastModifiedDate.map(iso)])}
+    private func reminderDictionary(_ reminder: EKReminder) -> [String: Any] {
+        let due = reminder.dueDateComponents
+        let dueDate: String? = {
+            guard let year = due?.year, let month = due?.month, let day = due?.day else { return nil }
+            return String(format: "%04d-%02d-%02d", year, month, day)
+        }()
+        let dueTime: String? = {
+            guard let hour = due?.hour, let minute = due?.minute else { return nil }
+            return String(format: "%02d:%02d", hour, minute)
+        }()
+        let alarms = (reminder.alarms ?? []).map { alarm in
+            compact([
+                "absoluteAt": alarm.absoluteDate.map(iso),
+                "relativeOffset": alarm.absoluteDate == nil ? alarm.relativeOffset : nil,
+            ])
+        }
+
+        return compact([
+            "calendarItemIdentifier": reminder.calendarItemIdentifier,
+            "externalIdentifier": reminder.calendarItemExternalIdentifier,
+            "calendarIdentifier": reminder.calendar.calendarIdentifier,
+            "sourceIdentifier": reminder.calendar.source.sourceIdentifier,
+            "title": reminder.title ?? "",
+            "notes": reminder.notes,
+            "dueDate": dueDate,
+            "dueTime": dueTime,
+            "timezone": due?.timeZone?.identifier,
+            "priority": reminder.priority,
+            "completed": reminder.isCompleted,
+            "completionDate": reminder.completionDate.map(iso),
+            "alarms": alarms,
+            "lastModifiedAt": reminder.lastModifiedDate.map(iso),
+        ])
+    }
     private func compact(_ values:[String:Any?])->[String:Any]{values.compactMapValues{$0}}
     private func iso(_ date:Date)->String{ISO8601DateFormatter().string(from:date)}
     private func isoDate(_ value:Any?)->Date?{guard let text=value as? String else{return nil};let fractional=ISO8601DateFormatter();fractional.formatOptions=[.withInternetDateTime,.withFractionalSeconds];return fractional.date(from:text) ?? ISO8601DateFormatter().date(from:text)}
