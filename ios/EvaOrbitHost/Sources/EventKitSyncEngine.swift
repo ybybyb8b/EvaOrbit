@@ -32,10 +32,10 @@ final class EventKitSyncEngine {
             if kind == .event { _ = try await store.requestFullAccessToEvents() }
             else { _ = try await store.requestFullAccessToReminders() }
         } else {
-            _ = try await withCheckedThrowingContinuation { continuation in
-                store.requestAccess(to: kind) { granted, error in
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                store.requestAccess(to: kind) { _, error in
                     if let error { continuation.resume(throwing: error) }
-                    else { continuation.resume(returning: granted) }
+                    else { continuation.resume() }
                 }
             }
         }
@@ -52,11 +52,10 @@ final class EventKitSyncEngine {
         let calendars = store.calendars(for: .reminder).filter { calendarIDs.contains($0.calendarIdentifier) }
         guard !calendars.isEmpty else { return [] }
         func fetch(_ predicate:NSPredicate) async -> [EKReminder] { await withCheckedContinuation { continuation in store.fetchReminders(matching:predicate){continuation.resume(returning:$0 ?? [])} } }
-        async let incomplete=fetch(store.predicateForIncompleteReminders(withDueDateStarting:nil,ending:nil,calendars:calendars))
-        async let completed=fetch(store.predicateForCompletedReminders(withCompletionDateStarting:completedSince,ending:nil,calendars:calendars))
-        let values = await (incomplete, completed)
+        let incomplete=await fetch(store.predicateForIncompleteReminders(withDueDateStarting:nil,ending:nil,calendars:calendars))
+        let completed=await fetch(store.predicateForCompletedReminders(withCompletionDateStarting:completedSince,ending:nil,calendars:calendars))
         var seen = Set<String>()
-        return (values.0 + values.1).filter { seen.insert($0.calendarItemIdentifier).inserted }.map(reminderDictionary)
+        return (incomplete + completed).filter { seen.insert($0.calendarItemIdentifier).inserted }.map(reminderDictionary)
     }
 
     func saveEvent(_ value: [String: Any]) throws -> [String: Any] {
