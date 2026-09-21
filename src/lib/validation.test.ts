@@ -70,6 +70,10 @@ test("normalizes core life capture records", () => {
   assert.equal(datedDrink.occurredHasExplicitTime, false);
   assert.equal(datedDrink.temperature, "less_ice");
   assert.equal(datedDrink.rating, "good");
+  for (const drinkType of ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", drinkType }).drinkType, drinkType);
+  for (const sugarLevel of ["", "无糖", "微糖", "半糖", "少糖", "标准", "多糖"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", sugarLevel }).sugarLevel, sugarLevel);
+  for (const temperature of ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", temperature }).temperature, temperature);
+  for (const rating of ["love", "good", "neutral", "dislike"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", rating }).rating, rating);
   assert.throws(() => parseNewDrinkLog({ name: "拿铁", sugarLevel: "五分糖" }), /糖度/);
 });
 

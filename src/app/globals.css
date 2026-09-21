@@ -884,6 +884,7 @@ html[data-mode="dark"] .field select { background-image: url("data:image/svg+xml
 .tracker-reminder-alert { margin-bottom: 18px; padding: 14px 16px; border-radius: 14px; display: flex; align-items: center; gap: 11px; background: var(--surface-warm); color: var(--accent-gold); }
 .tracker-reminder-alert > .icon { width: 18px; }.tracker-reminder-alert span { display: flex; flex-direction: column; gap: 3px; }.tracker-reminder-alert strong { font-size: 10px; }.tracker-reminder-alert small { font-size: 8px; }
 .tracker-detail-section { margin-top: 32px; padding-top: 26px; border-top: 1px solid var(--border-subtle); }
+.tracker-settings-copy { margin: 0; color: var(--text-secondary); font-size: 11px; }
 .tracker-entry-form, .tracker-rule-form { margin-bottom: 15px; padding: 20px; }
 .tracker-values-grid { margin: 12px 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
 .tracker-search { min-height: 43px; margin-bottom: 11px; padding: 0 6px 0 13px; border: 1px solid var(--border-default); border-radius: 12px; display: flex; align-items: center; gap: 9px; background: rgb(var(--surface-raised-rgb) / .58); }
