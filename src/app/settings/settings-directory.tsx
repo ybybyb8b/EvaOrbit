@@ -34,7 +34,7 @@ export function SettingsDirectory() {
       <span><i className={status.nativeHost ? "online" : ""} />{english ? status.nativeHost ? "Native Host connected" : "Browser session" : status.nativeHost ? "Native Host 已连接" : "浏览器会话"}</span>
     </div>
     <nav className="settings-directory" aria-label="Settings sections">
-      <DirectoryItem href="/settings/app-appearance" icon={Palette} title={english ? "App & Appearance" : "应用与外观"} meta={english ? "Language, theme and identity" : "语言、主题与身份"} />
+      <DirectoryItem href="/settings/app-appearance" icon={Palette} title={english ? "App & Appearance" : "应用与外观"} meta={english ? "Language, type and theme" : "语言、字体与主题"} />
       <DirectoryItem href="/settings/ai-connection" icon={Cpu} title={english ? "AI & Connection" : "AI 与连接"} meta={english ? "Provider, endpoint and model" : "服务商、地址与模型"} />
       <DirectoryItem href="/settings/notifications" icon={NotificationIcon} title={english ? "Notifications" : "通知"} meta={english ? status.nativeNotifications ? "Native notifications available" : "Web notifications" : status.nativeNotifications ? "原生通知可用" : `网页通知${status.webNotifications}`} />
       <DirectoryItem href="/settings/health-native" icon={Health} title={english ? "Health & Native" : "健康与原生能力"} meta={english ? status.health ? "Apple Health available" : status.nativeHost ? "HealthKit unavailable" : "Connect through the iOS Host" : status.health ? "Apple Health 可用" : status.nativeHost ? "HealthKit 不可用" : "请在 iOS Host 中连接"} />
