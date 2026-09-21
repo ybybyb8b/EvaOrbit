@@ -135,9 +135,9 @@
 }
 
 .overview :global(.home-inbox-card) {
-  border: 1px solid rgb(var(--border-rgb) / .09);
+  border: 0;
   background: linear-gradient(135deg, var(--surface-tint), var(--surface-raised));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .28), 0 14px 34px rgb(var(--shadow-rgb) / .055);
+  box-shadow: inset 0 0 0 .5px rgb(var(--border-rgb) / .055), inset 0 1px 0 rgb(255 255 255 / .38), inset 1px 0 0 rgb(255 255 255 / .16), 0 14px 34px rgb(var(--shadow-rgb) / .055);
 }
 
 :global(html[data-mode="dark"]) .overview :global(.today-focus) {
@@ -146,9 +146,8 @@
 }
 
 :global(html[data-mode="dark"]) .overview :global(.home-inbox-card) {
-  border-color: rgb(255 255 255 / .035);
   background: linear-gradient(135deg, rgb(var(--surface-tint-rgb) / .7), rgb(255 255 255 / .018));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .035);
+  box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .025), inset 0 1px 0 rgb(255 255 255 / .04), inset 1px 0 0 rgb(255 255 255 / .018);
 }
 
 @media (max-width: 720px) {
