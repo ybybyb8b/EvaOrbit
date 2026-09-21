@@ -25,13 +25,15 @@ export function nativeReminderNotifications(item: ScheduledNotification, locale 
   if (!item.isActive || !item.dueHasExplicitTime || !reminderSourceAllows(item.sourceType, "native_local")) return [];
   const copy = reminderNotificationCopy(item, locale);
   const initial = nativeReminderNotification(item, locale, now);
-  const dueAt = item.snoozedUntil ?? item.nextDueAt;
-  if (!dueAt) return initial ? [initial] : [];
-  const due = zonedDateParts(dueAt, item.timezone);
+  if (!item.nextDueAt) return initial ? [initial] : [];
+  const reminderTime = zonedDateParts(item.nextDueAt, item.timezone).time;
+  const overdueBoundary=item.overdueAfter===undefined?item.nextDueAt:item.overdueAfter;
+  if(!overdueBoundary)return initial?[initial]:[];
+  const overdueDate=zonedDateParts(overdueBoundary,item.timezone).date;
   const today = zonedDateParts(now, item.timezone).date;
   const followUps = item.repeatWhileOverdue ? Array.from({ length: days }, (_, offset) => shiftDate(today, offset)).flatMap((date) => {
-    if (date <= due.date) return [];
-    const triggerAt = zonedDateTimeToUtc(date, due.time, item.timezone);
+    if (date <= overdueDate) return [];
+    const triggerAt = zonedDateTimeToUtc(date, reminderTime, item.timezone);
     if (new Date(triggerAt).getTime() <= now.getTime()) return [];
     return [{
       id: nativeNotificationIdentifier("reminder", `${item.id}-${date}`),

@@ -17,8 +17,8 @@ test("web and native host share the managed notification identifier contract", (
 
 test("native schedules only deterministic Reminder sources", () => {
   const now = new Date("2099-09-05T01:00:00.000Z");
-  const result = buildNativeNotificationSchedules({ upcoming: [reminder(null, 1), reminder("cat_routine", 2), reminder("tracker_standard", 3), reminder("tracker_missing", 4), reminder("period_medication", 5), reminder("task_due", 6)], now });
-  assert.deepEqual(result.map((item) => item.id), ["evaorbit-scheduled-reminder-1", "evaorbit-scheduled-reminder-2", "evaorbit-scheduled-reminder-3", "evaorbit-scheduled-reminder-6"]);
+  const result = buildNativeNotificationSchedules({ upcoming: [reminder(null, 1), reminder("cat_routine", 2), reminder("tracker_standard", 3), reminder("tracker_missing", 4), reminder("period_medication", 5), reminder("task_due", 6),reminder("task_reminder",7)], now });
+  assert.deepEqual(result.map((item) => item.id), ["evaorbit-scheduled-reminder-1", "evaorbit-scheduled-reminder-2", "evaorbit-scheduled-reminder-3", "evaorbit-scheduled-reminder-6","evaorbit-scheduled-reminder-7"]);
   assert.equal(nativeReminderNotification(reminder("tracker_missing"), "zh-CN", now), null);
   assert.equal(nativeReminderNotification(reminder("period_medication"), "zh-CN", now), null);
 });
@@ -32,4 +32,10 @@ test("native reminders stage daily follow-ups after the due date", () => {
 
 test("native overdue follow-ups are opt-in", () => {
   assert.deepEqual(nativeReminderNotifications({ ...reminder(null), nextDueAt: "2026-09-05T01:00:00.000Z" }, "zh-CN", new Date("2026-09-05T02:00:00.000Z"), 3), []);
+});
+
+test("native Task follow-ups start only after the independent Due boundary",()=>{
+  const item={...reminder("task_reminder"),nextDueAt:"2026-09-20T07:00:00.000Z",overdueAfter:"2026-09-21T10:00:00.000Z",repeatWhileOverdue:true};
+  const result=nativeReminderNotifications(item,"zh-CN",new Date("2026-09-20T08:00:00.000Z"),4);
+  assert.deepEqual(result.map(entry=>entry.triggerAt),["2026-09-22T07:00:00.000Z","2026-09-23T07:00:00.000Z"]);
 });

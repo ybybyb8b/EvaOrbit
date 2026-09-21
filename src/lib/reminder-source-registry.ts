@@ -23,6 +23,7 @@ export const REMINDER_SOURCE_REGISTRY = {
   tracker_missing: { sourceType: "tracker_missing", businessFact: "tracker_entries", projectionOwner: "tracker", domainRule: "tracker_missing", label: "Tracker · Missing", channels: pushOnly },
   subscription_renewal: { sourceType: "subscription_renewal", businessFact: "subscription", projectionOwner: "subscription", domainRule: "scheduled", label: "Subscriptions", channels: localAndPush },
   task_due: { sourceType: "task_due", businessFact: "task", projectionOwner: "task", domainRule: "scheduled", label: "Tasks", channels: localAndPush },
+  task_reminder: { sourceType: "task_reminder", businessFact: "task_reminder", projectionOwner: "task", domainRule: "scheduled", label: "Tasks", channels: localAndPush },
   period_medication: { sourceType: "period_medication", businessFact: "period_and_medication_dose", projectionOwner: "medication_preset", domainRule: "period_medication", label: "Health", channels: pushOnly },
   meal_missing: { sourceType: "meal_missing", businessFact: "food_logs", projectionOwner: "meal_rule", domainRule: "missing_record", label: "Food · Missing", channels: pushOnly },
   weight_missing: { sourceType: "weight_missing", businessFact: "weight_records", projectionOwner: "weight_settings", domainRule: "missing_record", label: "Health · Missing", channels: pushOnly },

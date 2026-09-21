@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -28,6 +28,8 @@ export type NewTask = {
   priority: string;
   tags: string[];
 };
+
+export type NewTaskReminder = Omit<TaskReminder, "id" | "createdAt" | "updatedAt">;
 
 export type AiSettingsInput = ChatPreferences & {
   providerPreset: string;
@@ -131,7 +133,7 @@ export type NewCatSymptom = Omit<CatSymptom, "id" | "createdAt" | "updatedAt">;
 export type NewCatVetVisit = Omit<CatVetVisit, "id" | "createdAt" | "updatedAt">;
 export type NewCatMedication = Omit<CatMedication, "id" | "createdAt" | "updatedAt">;
 export type NewCatMeasurement = Omit<CatMeasurement, "id" | "createdAt" | "updatedAt">;
-export type NewReminder = Omit<Reminder, "id" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt">;
+export type NewReminder = Omit<Reminder, "id" | "overdueAfter" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt"> & { overdueAfter?: string | null };
 export type NewCatRoutine = Omit<CatRoutine, "id" | "lastCompletedAt" | "createdAt" | "updatedAt">;
 export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archivedAt" | "createdAt" | "updatedAt">;
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
@@ -181,6 +183,11 @@ export interface EvaOrbitRepository {
   createTask(input: NewTask): Promise<Task>;
   updateTask(id: number, input: Record<string, unknown>): Promise<Task | null>;
   deleteTask(id: number): Promise<boolean>;
+  listTaskReminders(taskId: number): Promise<TaskReminder[]>;
+  getTaskReminder(id: number): Promise<TaskReminder | null>;
+  createTaskReminder(input: NewTaskReminder): Promise<TaskReminder>;
+  updateTaskReminder(id: number, input: Record<string, unknown>): Promise<TaskReminder | null>;
+  deleteTaskReminder(id: number): Promise<boolean>;
 
   listMemories(query?: string, category?: string): Promise<Memory[]>;
   getMemory(id: number): Promise<Memory | null>;

@@ -8,6 +8,7 @@ export interface Task {
   dueDate: string | null;
   dueTime: string | null;
   reminderId: number | null;
+  reminders?: TaskReminder[];
   priority: TaskPriority;
   tags: string[];
   createdAt: string;
@@ -237,6 +238,22 @@ export interface TimelineMonthSummary {
   month: string;
   days: Record<string, TimelineDaySummary>;
   periods: MenstrualPeriod[];
+}
+
+export type TaskReminderTriggerType = "absolute" | "relative";
+export interface TaskReminder {
+  id: number;
+  taskId: number;
+  reminderId: number | null;
+  triggerType: TaskReminderTriggerType;
+  absoluteDate: string | null;
+  absoluteTime: string | null;
+  relativeTo: "due" | null;
+  offsetMinutes: number | null;
+  timezone: string;
+  repeatWhileOverdue: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type MemoryRecallChannel = "exact" | "literal" | "lexical" | "graph";
@@ -1085,6 +1102,7 @@ export interface Reminder {
   scheduleType: ReminderScheduleType;
   startsAt: string;
   nextDueAt: string | null;
+  overdueAfter?: string | null;
   dueHasExplicitTime: boolean;
   intervalValue: number | null;
   intervalUnit: ReminderIntervalUnit | null;

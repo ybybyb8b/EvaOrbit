@@ -115,6 +115,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
     lastNotifiedAt: row.last_notified_at ? String(row.last_notified_at) : null,
     timezone: String(row.timezone ?? "Asia/Shanghai"),
     repeatWhileOverdue: Boolean(row.repeat_while_overdue),
+    overdueAfter: row.overdue_after ? String(row.overdue_after) : null,
   }, now));
   const preferencesResult = due.length
     ? await client.from("ui_preferences").select("user_id,ui_language").in("user_id", [...new Set(due.map((row) => String(row.user_id)))])
@@ -129,6 +130,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       leadTimeMinutes: Number(reminder.lead_time_minutes ?? 0),
       timezone: String(reminder.timezone ?? "Asia/Shanghai"),
       repeatWhileOverdue: Boolean(reminder.repeat_while_overdue),
+      overdueAfter: reminder.overdue_after ? String(reminder.overdue_after) : null,
     }, now);
     if (!deliveryScheduledAt) continue;
     let trackerRule: TrackerReminder | null = null;
@@ -215,6 +217,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       status,
       last_notified_at: delivery.delivered ? now.toISOString() : reminder.last_notified_at,
       sent_at: delivery.delivered ? now.toISOString() : reminder.sent_at,
+      snoozed_until: delivery.delivered ? null : reminder.snoozed_until,
     }).eq("id", reminder.id);
   }
   return { due: due.length, sent };

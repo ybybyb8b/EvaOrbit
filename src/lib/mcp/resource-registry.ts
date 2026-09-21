@@ -293,12 +293,13 @@ function inboxResource(operations: InboxResourceOperations): RegisteredResource 
 }
 
 function taskRecord(item: Task): ResourceRecord {
-  return { id: item.id, title: item.title, notes: item.notes, status: item.completed ? "done" : "open", due_date: item.dueDate, due_time: item.dueTime, priority: item.priority, tags: item.tags, created_at: item.createdAt, updated_at: item.updatedAt };
+  const rules=item.reminders??[],reminder=rules[0]??null;
+  return { id:item.id,title:item.title,notes:item.notes,status:item.completed?"done":"open",due_date:item.dueDate,due_time:item.dueTime,remind_mode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",remind_date:reminder?.absoluteDate??null,remind_time:reminder?.absoluteTime??null,repeat_while_overdue:reminder?.repeatWhileOverdue??false,timezone:reminder?.timezone??"Asia/Shanghai",reminders:rules.map(rule=>({id:rule.id,trigger_type:rule.triggerType,absolute_date:rule.absoluteDate,absolute_time:rule.absoluteTime,relative_to:rule.relativeTo,offset_minutes:rule.offsetMinutes,timezone:rule.timezone,repeat_while_overdue:rule.repeatWhileOverdue})),priority:item.priority,tags:item.tags,created_at:item.createdAt,updated_at:item.updatedAt };
 }
 
 function taskResource(operations: TaskResourceOperations): RegisteredResource {
-  const writableFields = ["title", "notes", "due_date", "due_time", "priority", "tags"];
-  const inputMap = { title: "title", notes: "notes", due_date: "dueDate", due_time: "dueTime", priority: "priority", tags: "tags" };
+  const writableFields = ["title", "notes", "due_date", "due_time", "remind_mode", "remind_date", "remind_time", "repeat_while_overdue", "timezone", "priority", "tags"];
+  const inputMap = { title:"title",notes:"notes",due_date:"dueDate",due_time:"dueTime",remind_mode:"reminderMode",remind_date:"reminderDate",remind_time:"reminderTime",repeat_while_overdue:"repeatWhileOverdue",timezone:"timezone",priority:"priority",tags:"tags" };
   return {
     schema: {
       resource: "task",
@@ -309,14 +310,20 @@ function taskResource(operations: TaskResourceOperations): RegisteredResource {
         notes: { type: "string", max_length: 2000, description: "Optional supporting notes." },
         status: { type: "string", enum: ["open", "done"], description: "Task completion state; change it with complete or reopen.", read_only: true },
         due_date: { type: "string", format: "date", description: "Optional due date in YYYY-MM-DD format." },
-        due_time: { type: "string", description: "Optional explicit due time in HH:mm format. Requires due_date and creates a unified Reminder notification." },
+        due_time: { type: "string", description: "Optional explicit task due time in HH:mm format. Requires due_date; it does not enable notifications by itself." },
+        remind_mode: { type:"string",enum:["none","at_due","custom"],default:"none",description:"Independent notification mode. at_due requires due_date and due_time; custom requires remind_date and remind_time." },
+        remind_date: { type:"string",format:"date",description:"Absolute custom reminder date." },
+        remind_time: { type:"string",description:"Absolute custom reminder time in HH:mm; arbitrary minute values are preserved." },
+        repeat_while_overdue: { type:"boolean",default:false,description:"Repeat daily after the Task Due boundary until Done." },
+        timezone: { type:"string",default:"Asia/Shanghai",description:"IANA timezone used to resolve Due and Reminder wall-clock values." },
+        reminders: { type:"array",items:{type:"object"},description:"Read-only reminder rules; modeled one-to-many for future multiple reminders.",read_only:true },
         priority: { type: "string", enum: ["low", "medium", "high"], default: "medium", description: "Task priority." },
         tags: { type: "array", items: { type: "string" }, description: "Up to 10 unique tags." },
         created_at: { type: "string", format: "date-time", description: "Server-assigned creation timestamp.", read_only: true },
         updated_at: { type: "string", format: "date-time", description: "Server-assigned update timestamp.", read_only: true },
       },
       required_fields: ["title"], writable_fields: writableFields, searchable_fields: ["title", "notes", "tags", "status", "priority"], supported_actions: ["complete", "reopen"],
-      validation_rules: ["search filters accept only status and priority", "status defaults to all", "due_date is date-only", "due_time is optional and requires due_date", "only an explicit due_time creates a unified Reminder notification", "complete and reopen are explicit actions", "update is PATCH: omitted fields remain unchanged", "unknown fields are rejected"],
+      validation_rules: ["search filters accept only status and priority","status defaults to all","due_date is date-only","due_time is optional and requires due_date","Due never enables a notification by itself","at_due requires due_date and due_time","custom reminders may exist without Due and require remind_date plus remind_time","complete and reopen are explicit actions","update is PATCH: omitted fields remain unchanged","unknown fields are rejected"],
     },
     async search({ query, filters = {}, limit, cursor }) {
       assertOnlyKeys(filters, ["status", "priority"], "task search filters"); rejectCursor(cursor, "Task");

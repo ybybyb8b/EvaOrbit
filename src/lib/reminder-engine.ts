@@ -69,18 +69,20 @@ export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snooz
   return scheduled.toISOString();
 }
 
-export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue">, now = new Date()) {
+export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & { overdueAfter?: string | null }, now = new Date()) {
   const initial = notificationSendAt(reminder);
-  const dueAt = effectiveDueAt(reminder);
-  if (!initial || !dueAt) return null;
-  const due = zonedDateParts(dueAt, reminder.timezone);
+  if (!initial || !reminder.nextDueAt) return null;
+  const overdueBoundary=reminder.overdueAfter===undefined?reminder.nextDueAt:reminder.overdueAfter;
+  if (!reminder.repeatWhileOverdue || !overdueBoundary || now.getTime() < new Date(overdueBoundary).getTime()) return initial;
+  if (reminder.snoozedUntil) return initial;
+  const due = zonedDateParts(reminder.nextDueAt, reminder.timezone);
   const current = zonedDateParts(now, reminder.timezone);
-  if (!reminder.repeatWhileOverdue || current.date <= due.date) return initial;
+  if (current.date <= due.date) return initial;
   const daily = zonedDateTimeToUtc(current.date, due.time, reminder.timezone);
   return new Date(daily).getTime() <= now.getTime() ? daily : null;
 }
 
-export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue">, now = new Date()) {
+export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & { overdueAfter?: string | null }, now = new Date()) {
   const scheduledAt = notificationDeliverySlot(reminder, now);
   return Boolean(scheduledAt) && new Date(scheduledAt!).getTime() <= now.getTime() && (!reminder.lastNotifiedAt || new Date(reminder.lastNotifiedAt).getTime() < new Date(scheduledAt!).getTime());
 }

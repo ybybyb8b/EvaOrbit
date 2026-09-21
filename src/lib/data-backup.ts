@@ -35,6 +35,7 @@ export const BACKUP_TABLES = [
   "cat_measurements",
   "reminders",
   "tasks",
+  "task_reminders",
   "subscriptions",
   "subscription_payments",
   "subscription_price_changes",
@@ -117,6 +118,7 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
   }
   if (table === "subscriptions" && typeof row.reminder_time === "string") row.reminder_time = normalizeLocalTime(row.reminder_time);
   if (table === "tasks" && typeof row.due_time === "string") row.due_time = normalizeLocalTime(row.due_time);
+  if (table === "task_reminders" && typeof row.absolute_time === "string") row.absolute_time = normalizeLocalTime(row.absolute_time);
   return row;
 }
 
@@ -135,6 +137,7 @@ export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRo
   }
   if (table === "subscriptions" && typeof row.reminder_time === "string") row.reminder_time = normalizeLocalTime(row.reminder_time);
   if (table === "tasks" && typeof row.due_time === "string") row.due_time = normalizeLocalTime(row.due_time);
+  if (table === "task_reminders" && typeof row.absolute_time === "string") row.absolute_time = normalizeLocalTime(row.absolute_time);
   return row;
 }
 

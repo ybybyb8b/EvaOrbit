@@ -5,7 +5,7 @@ import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferen
 test("normalizes a new task", () => {
   assert.deepEqual(
     parseNewTask({ title: "  买咖啡  ", tags: ["生活", "生活", " "] }),
-    { title: "买咖啡", notes: "", dueDate: null, dueTime: null, priority: "medium", tags: ["生活"] },
+    {title:"买咖啡",notes:"",dueDate:null,dueTime:null,priority:"medium",tags:["生活"],reminderMode:"none",reminderDate:null,reminderTime:null,repeatWhileOverdue:false,timezone:"Asia/Shanghai"},
   );
 });
 
@@ -14,6 +14,9 @@ test("rejects invalid task fields", () => {
   assert.throws(() => parseNewTask({ title: "提醒我", dueTime: "09:30" }), ValidationError);
   assert.throws(() => parseNewTask({ title: "提醒我", dueDate: "2026-09-15", dueTime: "25:00" }), ValidationError);
   assert.throws(() => parseTaskPatch({ completed: "yes" }), ValidationError);
+  assert.throws(()=>parseNewTask({title:"提醒",reminderMode:"at_due",dueDate:"2026-09-21"}),/完整的截止日期和时间/);
+  assert.throws(()=>parseNewTask({title:"提醒",reminderMode:"custom",reminderDate:"2026-09-21"}),/完整的日期和时间/);
+  assert.equal(parseNewTask({title:"提醒",reminderMode:"custom",reminderDate:"2026-09-21",reminderTime:"13:07"}).reminderTime,"13:07");
 });
 
 test("requires at least one patch field", () => {

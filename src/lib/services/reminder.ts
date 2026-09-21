@@ -9,6 +9,7 @@ import type { DueReminder, Reminder, ScheduledNotification } from "../types";
 import { completeCatRoutine, skipCatRoutineOccurrence } from "./cat-routine";
 import { periodMedicationSnoozeDeadline, reconcilePeriodMedicationReminder, reconcilePeriodMedicationReminders } from "./period-medication-reminder";
 import { catchUpAutomaticSubscriptionPayments, disableSubscriptionReminder, recordSubscriptionPaymentFromReminder, skipSubscriptionRenewal } from "./subscription";
+import { completeTaskFromReminder, disableTaskReminder } from "./task";
 
 async function subjectLabel(reminder: Reminder) {
   if (reminder.targetType === "cat_household") return "Household";
@@ -52,7 +53,7 @@ export async function cancelReminder(id: number) {
     return true;
   }
   if(source.projectionOwner==="subscription"&&reminder.sourceId)return disableSubscriptionReminder(reminder.sourceId);
-  if (source.projectionOwner === "task" && reminder.sourceId) await repository.updateTask(reminder.sourceId, { dueTime: null });
+  if (source.projectionOwner === "task" && reminder.sourceId) return disableTaskReminder(reminder.sourceId);
   const now = new Date().toISOString();
   await repository.createNotificationDelivery({ reminderId: reminder.id, title: reminder.title, sourceType: reminder.sourceType, sourceId: reminder.sourceId, targetType: reminder.targetType, targetId: reminder.targetId, scheduledAt: effectiveDueAt(reminder) ?? reminder.startsAt, scheduledHasExplicitTime: reminder.dueHasExplicitTime, sentAt: null, status: "cancelled" });
   await repository.updateReminder(id, { isActive: false, status: "cancelled", cancelledAt: now, snoozedUntil: null });
@@ -117,7 +118,11 @@ export async function completeReminder(id: number, actedAt = new Date()) {
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) return completeCatRoutine(reminder.sourceId, actedAt);
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "completed", actedAt);
   if(source.projectionOwner==="subscription"&&reminder.sourceId)return recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);
-  if (source.projectionOwner === "task" && reminder.sourceId) await repository.updateTask(reminder.sourceId, { completed: true });
+  if (source.projectionOwner === "task" && reminder.sourceId) {
+    await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});
+    await completeTaskFromReminder(reminder.sourceId);
+    return repository.getReminder(id);
+  }
   let createdEventId: number | null = null;
   if (reminder.scheduleType === "interval" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) {
     const event = await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: actedAt.toISOString(), occurredHasExplicitTime: true, title: reminder.title, note: "", sourceType: "reminder", sourceId: reminder.id });

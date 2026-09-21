@@ -454,6 +454,19 @@ function taskDueTime(value: unknown) {
   return value;
 }
 
+function taskReminderMode(value: unknown): "none" | "at_due" | "custom" | undefined {
+  if (value === undefined) return undefined;
+  if (value !== "none" && value !== "at_due" && value !== "custom") throw new ValidationError("提醒方式格式不正确");
+  return value;
+}
+
+function taskTimezone(value: unknown) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim() || value.length > 100) throw new ValidationError("时区格式不正确");
+  try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); } catch { throw new ValidationError("时区格式不正确"); }
+  return value;
+}
+
 export function parseNewTask(value: unknown) {
   const body = objectValue(value);
   const result = {
@@ -463,8 +476,16 @@ export function parseNewTask(value: unknown) {
     dueTime: taskDueTime(body.dueTime) ?? null,
     priority: priority(body.priority) ?? "medium",
     tags: tags(body.tags) ?? [],
+    reminderMode: taskReminderMode(body.reminderMode) ?? "none",
+    reminderDate: dueDate(body.reminderDate) ?? null,
+    reminderTime: taskDueTime(body.reminderTime) ?? null,
+    repeatWhileOverdue: booleanValue(body.repeatWhileOverdue, "逾期重复提醒", false),
+    timezone: taskTimezone(body.timezone) ?? "Asia/Shanghai",
   };
   if (result.dueTime && !result.dueDate) throw new ValidationError("设置截止时间前需要先选择截止日期");
+  if (result.reminderMode === "at_due" && (!result.dueDate || !result.dueTime)) throw new ValidationError("按截止时间提醒需要完整的截止日期和时间");
+  if (result.reminderMode === "custom" && (!result.reminderDate || !result.reminderTime)) throw new ValidationError("自定义提醒需要完整的日期和时间");
+  if (result.repeatWhileOverdue && !result.dueDate) throw new ValidationError("逾期重复提醒需要截止日期");
   return result;
 }
 
@@ -483,11 +504,17 @@ export function parseTaskPatch(value: unknown) {
     dueTime: taskDueTime(body.dueTime),
     priority: priority(body.priority),
     tags: tags(body.tags),
+    reminderMode: taskReminderMode(body.reminderMode),
+    reminderDate: dueDate(body.reminderDate),
+    reminderTime: taskDueTime(body.reminderTime),
+    repeatWhileOverdue: body.repeatWhileOverdue === undefined ? undefined : booleanValue(body.repeatWhileOverdue, "逾期重复提醒", false),
+    timezone: taskTimezone(body.timezone),
   };
   if (Object.values(result).every((item) => item === undefined)) {
     throw new ValidationError("没有可更新的字段");
   }
   if (result.dueDate === null && result.dueTime) throw new ValidationError("设置截止时间前需要先选择截止日期");
+  if (result.reminderMode === "custom" && (result.reminderDate === null || result.reminderTime === null)) throw new ValidationError("自定义提醒需要完整的日期和时间");
   return result;
 }
 
