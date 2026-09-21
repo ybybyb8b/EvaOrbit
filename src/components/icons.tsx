@@ -33,7 +33,7 @@ const featureIconSources: Partial<Record<IconName, string>> = {
 
 function iconSourceStyle(source: string) {
   const darkSource = source.replace(/\.png$/, "-dark.png");
-  const themedSource = (theme: "rosewood" | "powderblue", value: string) => value.replace("/icons/", `/icons/themes/${theme}/`);
+  const themedSource = (theme: "rosewood" | "powderblue" | "mistviolet", value: string) => value.replace("/icons/", `/icons/themes/${theme}/`);
   return {
     "--icon-source": `url("${source}")`,
     "--icon-source-dark": `url("${darkSource}")`,
@@ -41,6 +41,8 @@ function iconSourceStyle(source: string) {
     "--icon-source-rosewood-dark": `url("${themedSource("rosewood", darkSource ?? source)}")`,
     "--icon-source-powderblue": `url("${themedSource("powderblue", source)}")`,
     "--icon-source-powderblue-dark": `url("${themedSource("powderblue", darkSource ?? source)}")`,
+    "--icon-source-mistviolet": `url("${themedSource("mistviolet", source)}")`,
+    "--icon-source-mistviolet-dark": `url("${themedSource("mistviolet", darkSource ?? source)}")`,
   } as React.CSSProperties;
 }
 

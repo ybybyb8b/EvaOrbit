@@ -1296,6 +1296,27 @@ if(!hasV51)database.exec(`BEGIN; ALTER TABLE task_reminders ADD COLUMN delivery_
 const hasV52=database.prepare("SELECT 1 FROM migrations WHERE version=52").get();
 if(!hasV52)database.exec(`BEGIN; ALTER TABLE tasks ADD COLUMN completed_at TEXT; INSERT INTO migrations(version) VALUES(52); COMMIT;`);
 
+const hasV53=database.prepare("SELECT 1 FROM migrations WHERE version=53").get();
+if(!hasV53)database.exec(`
+  BEGIN;
+  ALTER TABLE ui_preferences RENAME TO ui_preferences_v52;
+  CREATE TABLE ui_preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    home_module_order TEXT NOT NULL DEFAULT '${JSON.stringify(HOME_MODULE_IDS)}',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    appearance_mode TEXT NOT NULL DEFAULT 'system' CHECK(appearance_mode IN ('system','light','dark')),
+    color_theme TEXT NOT NULL DEFAULT 'editorial' CHECK(color_theme IN ('editorial','rosewood','powderblue','mistviolet')),
+    ui_language TEXT NOT NULL DEFAULT 'zh-CN' CHECK(ui_language IN ('zh-CN','en')),
+    chinese_font TEXT NOT NULL DEFAULT 'canger' CHECK(chinese_font IN ('canger','lxgw','alimama','ibm')),
+    english_font TEXT NOT NULL DEFAULT 'zen' CHECK(english_font IN ('zen','ibm','polyamine','cormorant'))
+  );
+  INSERT INTO ui_preferences(id,home_module_order,updated_at,appearance_mode,color_theme,ui_language,chinese_font,english_font)
+    SELECT id,home_module_order,updated_at,appearance_mode,color_theme,ui_language,chinese_font,english_font FROM ui_preferences_v52;
+  DROP TABLE ui_preferences_v52;
+  INSERT INTO migrations(version) VALUES(53);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,

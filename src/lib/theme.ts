@@ -1,5 +1,5 @@
 export const APPEARANCE_MODES = ["system", "light", "dark"] as const;
-export const COLOR_THEMES = ["editorial", "rosewood", "powderblue"] as const;
+export const COLOR_THEMES = ["editorial", "rosewood", "powderblue", "mistviolet"] as const;
 
 export type AppearanceMode = (typeof APPEARANCE_MODES)[number];
 export type ColorTheme = (typeof COLOR_THEMES)[number];

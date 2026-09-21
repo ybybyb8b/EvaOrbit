@@ -15,6 +15,7 @@ const themeColors: Record<ColorTheme, Record<"light" | "dark", string>> = {
   editorial: { light: "#f5f2e9", dark: "#111313" },
   rosewood: { light: "#f4ece8", dark: "#111313" },
   powderblue: { light: "#faf2e0", dark: "#111313" },
+  mistviolet: { light: "#f3f1f5", dark: "#111313" },
 };
 
 export function resolveAppearanceMode(mode: AppearanceMode): "light" | "dark" {

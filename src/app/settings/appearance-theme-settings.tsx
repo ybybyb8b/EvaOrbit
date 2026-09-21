@@ -18,6 +18,7 @@ const themes: Array<{ value: ColorTheme; label: string; detail: string }> = [
   { value: "editorial", label: "原野绿", detail: "EvaOrbit 当前的米白与绿色" },
   { value: "rosewood", label: "粉棕", detail: "柔和粉褐、陶土与暖纸色" },
   { value: "powderblue", label: "奶杏蓝", detail: "奶杏底色与深宝蓝强调" },
+  { value: "mistviolet", label: "雾紫墨", detail: "雾灰紫底色与灰葡萄紫强调" },
 ];
 
 export function AppearanceThemeSettings() {
@@ -83,7 +84,7 @@ export function AppearanceThemeSettings() {
     </div>
     <div className="appearance-setting-group">
       <strong>{english ? "Color theme" : "颜色主题"}</strong>
-      <div className="appearance-option-grid themes">{themes.map((theme) => <button type="button" key={theme.value} className={colorTheme === theme.value ? "active" : ""} aria-pressed={colorTheme === theme.value} disabled={saving} onClick={() => void save(appearanceMode, theme.value)}><span className={`appearance-theme-preview ${theme.value}`} aria-hidden="true"><i /><i /><i /></span><b>{english ? ({ editorial: "Field Green", rosewood: "Rosewood", powderblue: "Almond Blue" } as const)[theme.value] : theme.label}</b><small>{english ? ({ editorial: "Ivory and muted green", rosewood: "Soft rosewood and warm paper", powderblue: "Milky almond and deep ocean blue" } as const)[theme.value] : theme.detail}</small></button>)}</div>
+      <div className="appearance-option-grid themes">{themes.map((theme) => <button type="button" key={theme.value} className={colorTheme === theme.value ? "active" : ""} aria-pressed={colorTheme === theme.value} disabled={saving} onClick={() => void save(appearanceMode, theme.value)}><span className={`appearance-theme-preview ${theme.value}`} aria-hidden="true"><i /><i /><i /></span><b>{english ? ({ editorial: "Field Green", rosewood: "Rosewood", powderblue: "Almond Blue", mistviolet: "Mist Violet" } as const)[theme.value] : theme.label}</b><small>{english ? ({ editorial: "Ivory and muted green", rosewood: "Soft rosewood and warm paper", powderblue: "Milky almond and deep ocean blue", mistviolet: "Misty grey violet and muted grape" } as const)[theme.value] : theme.detail}</small></button>)}</div>
     </div>
     {error && <p className="form-error">{error}</p>}{notice && <p className="form-success" role="status">{notice}</p>}
   </section>;

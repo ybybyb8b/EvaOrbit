@@ -19,6 +19,10 @@ const palettes = {
     light: { ink: [79, 115, 139], secondary: [139, 170, 189], surface: [244, 249, 252], accent: [111, 159, 190], accentSoft: [205, 228, 241] },
     dark: { ink: [172, 205, 225], secondary: [111, 151, 176], surface: [28, 41, 49], accent: [145, 192, 219], accentSoft: [61, 96, 116] },
   },
+  mistviolet: {
+    light: { ink: [102, 87, 123], secondary: [158, 144, 176], surface: [248, 245, 250], accent: [139, 119, 164], accentSoft: [226, 219, 234] },
+    dark: { ink: [195, 179, 216], secondary: [137, 119, 159], surface: [41, 36, 47], accent: [203, 182, 228], accentSoft: [82, 67, 99] },
+  },
 };
 
 const mix = (from, to, amount) => from.map((value, index) => Math.round(value + (to[index] - value) * amount));
