@@ -274,6 +274,7 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - 方法必须同时加入 Swift 白名单并实现显式参数校验。
 - Web 必须先通过 `host.getInfo` 的 `methods`/capabilities 做向后兼容检测，旧 IPA 不应因 Web 更新而报错。
 - Swift 返回结构化成功/错误，不把 secret、系统原始错误体或设备标识送回 Web。
+- 原生开屏只有浅色与深色两种外观，不跟随 Web 颜色主题。Web 调用旧版 Host 的 `appearance.setPreference` 时固定传入兼容的 `editorial` 启动标识，避免 `rosewood / powderblue` 等页面主题连带阻断 `system / light / dark` 的窗口外观切换；Web 页面仍保留真实颜色主题。
 - HealthKit credential 配置继续限制 credential 最短长度、同源 HTTPS ingest URL 和固定 API path。
 - Native 权限调用必须由可见的用户操作触发；bridge ready 或 App launch 只允许读状态、恢复已有后台能力或 reconcile 已获授权的项目。
 

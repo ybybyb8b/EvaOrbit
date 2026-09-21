@@ -9,7 +9,7 @@ export function ThemeController() {
     let current = storedAppearance();
     const applyCurrent = () => {
       applyAppearance(current.appearanceMode, current.colorTheme);
-      syncAppearanceToNative(current.appearanceMode, current.colorTheme);
+      syncAppearanceToNative(current.appearanceMode);
     };
     const onAppearanceChange = (event: Event) => {
       const detail = (event as CustomEvent<typeof current>).detail;

@@ -1,6 +1,7 @@
 import {
   DEFAULT_APPEARANCE_MODE,
   DEFAULT_COLOR_THEME,
+  NATIVE_LOADING_THEME,
   normalizeAppearanceMode,
   normalizeColorTheme,
   type AppearanceMode,
@@ -44,8 +45,8 @@ export function applyAppearance(appearanceMode: AppearanceMode, colorTheme: Colo
   window.dispatchEvent(new CustomEvent("evaorbit:appearance-applied", { detail: { appearanceMode, colorTheme, resolvedMode } }));
 }
 
-export function syncAppearanceToNative(appearanceMode: AppearanceMode, colorTheme: ColorTheme) {
+export function syncAppearanceToNative(appearanceMode: AppearanceMode) {
   const bridge = window.EvaOrbitNative;
   if (!bridge) return;
-  void bridge.call("appearance.setPreference", { appearanceMode, colorTheme }).catch(() => undefined);
+  void bridge.call("appearance.setPreference", { appearanceMode, colorTheme: NATIVE_LOADING_THEME }).catch(() => undefined);
 }

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   APPEARANCE_MODES,
   COLOR_THEMES,
+  NATIVE_LOADING_THEME,
   normalizeAppearanceMode,
   normalizeColorTheme,
 } from "./theme.ts";
@@ -22,4 +23,8 @@ test("appearance preference normalization falls back safely", () => {
   assert.equal(normalizeAppearanceMode(null), "system");
   assert.equal(normalizeColorTheme("unknown"), "editorial");
   assert.equal(normalizeColorTheme(undefined), "editorial");
+});
+
+test("native loading uses one theme identifier so web colors cannot block appearance mode", () => {
+  assert.equal(NATIVE_LOADING_THEME, "editorial");
 });
