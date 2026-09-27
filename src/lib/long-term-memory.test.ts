@@ -34,10 +34,13 @@ test("Lucius Cases preserves the complete correction record and validates counte
 });
 
 test("Lucius state accepts only the three explicit presentation fields", () => {
-  assert.deepEqual(parseLuciusStatePatch({ currentNote: "  Return before dusk.  ", status: "reading", mood: "calm" }), { currentNote: "Return before dusk.", status: "reading", mood: "calm" });
+  assert.deepEqual(parseLuciusStatePatch({ currentNote: "  Return before dusk.  ", status: "reading", mood: "calm" }), { currentNote: "Return before dusk.", status: "reading", mood: "😌" });
+  assert.equal(parseLuciusStatePatch({ mood: "有点珍惜" }).mood, "🥹");
+  assert.equal(parseLuciusStatePatch({ mood: "🌙" }).mood, "🌙");
   assert.equal(parseLuciusStatePatch({ currentNote: "" }).currentNote, "");
   assert.throws(() => parseLuciusStatePatch({}));
   assert.throws(() => parseLuciusStatePatch({ status: "" }));
+  assert.throws(() => parseLuciusStatePatch({ mood: "puzzled today" }));
 });
 
 test("Lucius Posts remain a minimal short-text timeline", () => {

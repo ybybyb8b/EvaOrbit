@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { luciusMoodPresentation } from "@/lib/lucius-mood";
 import { plainExcerpt } from "@/lib/long-term-memory";
 import { getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts } from "@/lib/services/lucius";
 import type { LuciusCaseStatus, LuciusPostComment } from "@/lib/types";
@@ -62,6 +63,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
     groups.set(comment.postId, group);
     return groups;
   }, new Map<number, LuciusPostComment[]>());
+  const mood = luciusMoodPresentation(state.mood);
 
   return <div className="lucius-profile-page">
     <header className="lucius-profile-header">
@@ -75,7 +77,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
 
       <div className="lucius-profile-portrait">
         <Image src="/images/lucius-profile-portrait-v2.png" alt="Lucius" width={1254} height={1254} priority sizes="(max-width: 720px) 126px, 154px" />
-        <span title={`Current mood: ${state.mood}`} aria-label={`Current mood: ${state.mood}`}>L</span>
+        <span className="lucius-profile-mood" title={`Current mood: ${mood.label}`} aria-label={`Current mood: ${mood.label}`}>{mood.emoji}</span>
       </div>
 
       <div className="lucius-profile-identity">

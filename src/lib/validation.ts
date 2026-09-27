@@ -1,6 +1,7 @@
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
+import { normalizeLuciusMood } from "./lucius-mood.ts";
 import { normalizeWeightKg } from "./weight.ts";
 import type { CalendarEventStatus } from "./types";
 
@@ -326,10 +327,13 @@ export function parseLuciusDiaryPatch(value: unknown) {
 
 export function parseLuciusStatePatch(value: unknown) {
   const body = objectValue(value);
+  const moodText = body.mood === undefined ? undefined : text(body.mood, "Lucius mood", 80);
+  const mood = moodText === undefined ? undefined : normalizeLuciusMood(moodText);
+  if (mood === null) throw new ValidationError("Lucius mood 必须是单个 emoji");
   const result = {
     currentNote: body.currentNote === undefined ? undefined : text(body.currentNote, "Lucius 当前便签", 2_000, false),
     status: body.status === undefined ? undefined : text(body.status, "Lucius 状态", 80),
-    mood: body.mood === undefined ? undefined : text(body.mood, "Lucius mood", 80),
+    mood,
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Lucius state 字段");
   return result;

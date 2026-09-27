@@ -3043,7 +3043,7 @@ html[data-mode="dark"] .training-delete { background:color-mix(in srgb,var(--sur
 .lucius-cover-botanical.botanical-left { left:0; }.lucius-cover-botanical.botanical-right { right:0; transform:scaleX(-1) rotate(-13deg); }
 .lucius-profile-portrait { width:158px; height:158px; margin:-82px auto 0; position:relative; z-index:2; border:2px solid var(--lucius-gold); border-radius:50%; background:var(--lucius-ivory); box-shadow:0 0 0 5px var(--lucius-paper),0 0 0 6px rgba(173,138,77,.58); }
 .lucius-profile-portrait img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
-.lucius-profile-portrait > span { width:39px; height:39px; position:absolute; right:-1px; bottom:3px; display:grid; place-items:center; border:1px solid #d0af6a; border-radius:50%; background:var(--lucius-forest); color:#d4b573; font:italic 23px/1 var(--font-ui); box-shadow:0 0 0 3px var(--lucius-paper); }
+.lucius-profile-portrait > span { width:39px; height:39px; position:absolute; right:-1px; bottom:3px; display:grid; place-items:center; border:1px solid #d0af6a; border-radius:50%; background:var(--lucius-forest); color:#d4b573; font:normal 21px/1 "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; box-shadow:0 0 0 3px var(--lucius-paper); }
 .lucius-profile-identity { padding:25px 24px 29px; }
 .lucius-profile-name { margin:0; color:#18382f; font:500 48px/.95 var(--font-editorial-label); letter-spacing:.19em; text-indent:.19em; }.lucius-profile-name i { color:var(--lucius-gold); font:10px/1 Georgia,serif; vertical-align:middle; }
 .lucius-profile-handle { margin:11px 0 0; color:#927750; font:italic 15px/1.2 var(--font-ui); letter-spacing:.09em; }
@@ -3090,7 +3090,7 @@ html[data-mode="dark"] .training-delete { background:color-mix(in srgb,var(--sur
   body:has(.lucius-profile-page) .main-content { padding:0; background:var(--lucius-paper); }
   .lucius-profile-page { width:100%; min-height:100vh; border:0; border-radius:0; box-shadow:none; }
   .lucius-cover { height:178px; }.lucius-cover-script { top:31px; left:6%; font-size:15px; }.lucius-cover-botanical { width:130px; height:98px; }
-  .lucius-profile-portrait { width:128px; height:128px; margin-top:-65px; }.lucius-profile-portrait > span { width:34px; height:34px; font-size:20px; }
+  .lucius-profile-portrait { width:128px; height:128px; margin-top:-65px; }.lucius-profile-portrait > span { width:34px; height:34px; font-size:18px; }
   .lucius-profile-identity { padding:21px 18px 23px; }.lucius-profile-name { font-size:36px; letter-spacing:.16em; text-indent:.16em; }.lucius-profile-handle { margin-top:9px; font-size:14px; }.lucius-profile-rule { margin-top:12px; }.lucius-profile-bio { margin-top:10px; font-size:14px; }
   .lucius-profile-tabs { min-height:54px; padding:0 10px; }.lucius-profile-tabs a { font-size:11px; letter-spacing:.1em; }
   .lucius-profile-content { width:calc(100% - 36px); padding-top:8px; padding-bottom:calc(88px + env(safe-area-inset-bottom)); }
