@@ -46,6 +46,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   const { english } = useLocale();
   const pathname = usePathname();
   const [evaOpen, setEvaOpen] = useState(false);
+  const [homeHeaderScrolled, setHomeHeaderScrolled] = useState(false);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
   const spacesTriggerRef = useRef<HTMLButtonElement>(null);
   const spacesLayerRef = useRef<HTMLDivElement>(null);
@@ -57,6 +58,17 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   const closeSpacesDrawer = useCallback(() => {
     setSpacesDrawerPhase((phase) => phase === "opening" || phase === "open" ? "closing" : phase);
   }, []);
+
+  useEffect(() => {
+    if (pathname !== "/") return;
+    const updateHeader = () => setHomeHeaderScrolled(window.scrollY > 6);
+    const frame = window.requestAnimationFrame(updateHeader);
+    window.addEventListener("scroll", updateHeader, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updateHeader);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (spacesDrawerPhase !== "opening") return;
@@ -127,6 +139,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   };
 
   if (pathname === "/login") return children;
+  const spacesTrigger = <button ref={spacesTriggerRef} type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>;
   return (
     <div className="app-shell">
       <ThemeController />
@@ -151,7 +164,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      <button ref={spacesTriggerRef} type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>
+      {pathname === "/" ? <header className={`home-global-header ${homeHeaderScrolled ? "is-scrolled" : ""}`}>{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
