@@ -58,7 +58,7 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
   const healthQuickLog = getHealthQuickLog(active);
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
-    <button type="button" className="home-quick-log-trigger" onClick={() => { playNativeHaptic("light"); setActive("picker"); }}><Icon name="plus" variant="stroke" /><span>Log</span></button>
+    <button type="button" className="home-quick-log-trigger" aria-label={english ? "Quick Log" : "快速记录"} onClick={() => { playNativeHaptic("light"); setActive("picker"); }}><Icon name="plus" variant="stroke" /></button>
     {active === "picker" && <FormSheet title={english ? "Quick Log" : "快速记录"} onClose={close}><div className="home-quick-log-grid">{options.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} suggestions={drinkSuggestions} onClose={close} onSaved={saved} />}

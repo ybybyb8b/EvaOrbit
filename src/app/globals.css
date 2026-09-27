@@ -3206,14 +3206,15 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 
 /* Mobile tab bar: a restrained Liquid Glass treatment for the navigation layer only. */
 @media (max-width:720px) {
-  .main-content { padding-bottom:calc(86px + env(safe-area-inset-bottom)); }
-  .ai-workspace { height:calc(100dvh - 86px - env(safe-area-inset-bottom)); }
+  .app-shell { --mobile-bottom-bar-height:64px; --mobile-bottom-bar-offset:max(9px,env(safe-area-inset-bottom)); }
+  .main-content { padding-bottom:calc(var(--mobile-bottom-bar-height) + 22px + env(safe-area-inset-bottom)); }
+  .ai-workspace { height:calc(100dvh - var(--mobile-bottom-bar-height) - 22px - env(safe-area-inset-bottom)); }
 
   .mobile-nav,
   body:has(.lucius-room) .mobile-nav,
   body:has(.lucius-profile-page) .mobile-nav {
-    inset:auto max(10px,env(safe-area-inset-right)) max(9px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));
-    height:64px;
+    inset:auto max(10px,env(safe-area-inset-right)) var(--mobile-bottom-bar-offset) max(10px,env(safe-area-inset-left));
+    height:var(--mobile-bottom-bar-height);
     padding:6px;
     border:0;
     border-radius:24px;
@@ -3539,9 +3540,10 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 .home-period-context strong { color:rgb(154 55 86);font-size:11px; }
 .home-period-context span { display:flex;align-items:center; }
 .home-period-context span::before { content:"";width:1px;height:12px;margin:0 9px;background:rgb(207 91 127 / .22); }
-.home-quick-log-trigger { min-height:38px;padding:0 13px;border:0;border-radius:12px;display:inline-flex;align-items:center;gap:6px;background:var(--accent-primary);color:var(--accent-on);font:750 12px/1 var(--font-ui);cursor:pointer;box-shadow:none;transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease); }
-.home-quick-log-trigger .icon { width:15px;height:15px; }
+.home-quick-log-trigger { width:46px;height:46px;padding:0;border:1px solid rgb(var(--border-rgb) / .18);border-radius:50%;position:fixed;z-index:60;right:25px;bottom:88px;display:grid;place-items:center;background:rgb(var(--surface-raised-rgb) / .9);color:var(--accent-primary);cursor:pointer;-webkit-backdrop-filter:blur(18px) saturate(145%);backdrop-filter:blur(18px) saturate(145%);box-shadow:0 8px 20px rgb(var(--shadow-rgb) / .12);transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease),border-color 150ms var(--motion-ease); }
+.home-quick-log-trigger .icon { width:21px;height:21px;stroke-width:2; }
 .home-quick-log-trigger:active { transform:scale(.96); }
+.home-quick-log-trigger:focus-visible { outline:3px solid rgb(var(--accent-rgb) / .24);outline-offset:3px; }
 .home-quick-log-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
 .home-quick-log-grid>button { min-width:0;min-height:54px;padding:8px 12px;border:0;border-radius:12px;display:flex;align-items:center;justify-content:flex-start;gap:8px;background:rgb(var(--surface-card-rgb) / .76);color:var(--text-primary);text-align:left;cursor:pointer;box-shadow:none;transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease),color 150ms var(--motion-ease); }
 .home-quick-log-grid>button .home-quick-log-icon { width:20px;height:20px;flex:none;color:var(--text-secondary); }
@@ -3602,6 +3604,7 @@ html[data-mode="dark"] .home-calendar-grid > button[data-period-day-one="true"] 
 html[data-mode="dark"] .home-period-context { background:rgb(220 114 147 / .11); }
 html[data-mode="dark"] .home-period-context strong { color:rgb(238 158 182); }
 html[data-mode="dark"] .home-timeline-loading span { background:rgb(255 255 255 / .04); }
+html[data-mode="dark"] .home-quick-log-trigger { border-color:rgb(255 255 255 / .12);background:rgb(var(--surface-raised-rgb) / .82);box-shadow:0 8px 20px rgb(0 0 0 / .22); }
 html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-quick-tracker-list>button { background:rgb(var(--surface-card-rgb) / .74);box-shadow:none; }
 
 @media (max-width:720px) {
@@ -3630,7 +3633,9 @@ html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-
   .home-day-timeline { padding:6px 0 0; }
   .home-day-heading { min-height:34px;margin-bottom:8px; }
   .home-period-context { margin-bottom:8px;padding-inline:10px;overflow-x:auto;white-space:nowrap;font-size:11px; }
-  .home-quick-log-trigger { min-height:38px;padding-inline:12px; }
+  .home-page { padding-bottom:88px; }
+  .home-page .home-inbox-heading { padding-right:24px; }
+  .home-quick-log-trigger { right:max(12px,env(safe-area-inset-right));bottom:calc(var(--mobile-bottom-bar-offset) + var(--mobile-bottom-bar-height) + 14px); }
   .home-quick-log-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:6px; }
   .home-quick-log-grid>button { min-height:50px;padding:7px 10px;border-radius:11px; }
   .home-quick-log-grid>button .home-quick-log-icon { width:19px;height:19px; }
@@ -3681,6 +3686,7 @@ html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-
     .mobile-nav,
     body:has(.lucius-room) .mobile-nav,
     body:has(.lucius-profile-page) .mobile-nav { background:rgb(var(--surface-header-rgb) / .97); }
+    .home-quick-log-trigger { background:var(--surface-raised); }
   }
 }
 
@@ -3692,6 +3698,7 @@ html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
+  .home-quick-log-trigger { background:var(--surface-raised);-webkit-backdrop-filter:none;backdrop-filter:none; }
 }
 
 @media (prefers-reduced-motion:reduce) and (max-width:720px) {

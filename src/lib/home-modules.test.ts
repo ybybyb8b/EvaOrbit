@@ -23,6 +23,9 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
   assert.match(calendar, /<HomeQuickLog/);
+  assert.doesNotMatch(calendar, /home-day-heading[^\n]*<HomeQuickLog/);
+  assert.match(quickLog, /aria-label=\{english \? "Quick Log" : "快速记录"\}/);
+  assert.doesNotMatch(quickLog, /<span>Log<\/span>/);
   assert.match(quickLog, /\.\.\.HEALTH_QUICK_LOGS/);
   for (const kind of ["training", "weight", "period", "medication-dose", "health-record"]) assert.match(healthQuickLog, new RegExp(`kind: "${kind}"`));
   assert.match(healthQuickLog, /TrainingLogEditor/);

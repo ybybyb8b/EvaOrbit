@@ -171,11 +171,12 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
         </div>
       </section>
       <section className="home-day-timeline" aria-busy={loadingDate === selected}>
-        <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2><HomeQuickLog selectedDate={selected} onSaved={refreshSelectedDate} /></header>
+        <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
         {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
         {error && <p className="form-error" role="alert">{error}</p>}
         {loadingDate === selected ? <div className="home-timeline-loading" aria-label={english ? "Loading timeline" : "正在读取时间线"}><span /><span /><span /></div> : events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.map((item) => { const source = sourceMeta[item.sourceType]; return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}><time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}</span><strong className="user-content">{titleFor(item, english)}</strong>{item.detail && <small className="user-content">{item.detail}</small>}</span></Link>; })}</div> : <p className="home-today-empty">{english ? "No records on this day" : "这一天还没有记录"}</p>}
       </section>
     </div>
+    <HomeQuickLog selectedDate={selected} onSaved={refreshSelectedDate} />
   </section>;
 }
