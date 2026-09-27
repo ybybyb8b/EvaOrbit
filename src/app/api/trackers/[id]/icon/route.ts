@@ -11,7 +11,7 @@ export async function GET(_: NextRequest, { params }: Context) {
   try {
     const icon = await readTrackerIcon(parseId((await params).id));
     if (!icon) return new NextResponse(null, { status: 404 });
-    return new NextResponse(icon.bytes, { headers: { "Content-Type": icon.mime, "Content-Length": String(icon.bytes.byteLength), "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
+    return new NextResponse(icon.bytes, { headers: { "Content-Type": icon.mime, "Content-Length": String(icon.bytes.byteLength), "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
   } catch (error) { return apiError(error); }
 }
 

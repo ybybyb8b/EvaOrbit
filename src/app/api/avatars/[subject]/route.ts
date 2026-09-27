@@ -17,7 +17,7 @@ export async function GET(_: NextRequest, context: Context) {
   try {
     const avatar = await readAvatar(await subject(context));
     if (!avatar) return new NextResponse(null, { status: 404 });
-    return new NextResponse(avatar.bytes, { headers: { "Content-Type": avatar.mime, "Content-Length": String(avatar.bytes.byteLength), "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff" } });
+    return new NextResponse(avatar.bytes, { headers: { "Content-Type": avatar.mime, "Content-Length": String(avatar.bytes.byteLength), "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
   } catch (error) { return apiError(error); }
 }
 

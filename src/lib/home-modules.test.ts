@@ -37,17 +37,21 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   assert.match(quickLog, /from "reicon-react"/);
   assert.match(quickLog, /icon: LogIcon/);
   assert.match(quickLog, /<LogIcon className="home-quick-log-icon"/);
+  assert.match(quickLog, /tracker\.quickCaptureEnabled/);
+  assert.match(quickLog, /\/api\/trackers\/\$\{tracker\.id\}\/entries/);
+  assert.match(quickLog, /if \(!tracker\.quickCaptureEnabled\) \{ setSelectedTracker\(tracker\); return; \}/);
   assert.equal(healthQuickLog.match(/initialDate=\{initialDate\}/g)?.length, 6);
   assert.match(healthQuickLog, /\/api\/health\/weight\?limit=1/);
   assert.doesNotMatch(healthQuickLog, /AppleHealthSection|WeightSettingsSheet|DailyEnergyCard/);
 });
 
-test("Home mobile chrome gives the existing spaces action a scroll-aware header", () => {
+test("Global mobile chrome excludes Login and Lucius from the scroll-aware header", () => {
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(shell, /pathname !== "\/login" && !pathname\.startsWith\("\/lucius"\)/);
   assert.match(shell, /window\.scrollY > 6/);
-  assert.match(shell, /<header className=\{`home-global-header/);
-  assert.match(css, /\.home-global-header \{[^}]*env\(safe-area-inset-top\)[^}]*z-index:55/);
-  assert.match(css, /\.home-global-header::before \{[^}]*backdrop-filter:blur\(22px\)[^}]*mask-image:linear-gradient/);
-  assert.match(css, /\.home-global-header\.is-scrolled::before \{ opacity:1; \}/);
+  assert.match(shell, /<header className=\{`mobile-global-header/);
+  assert.match(css, /\.mobile-global-header \{[^}]*env\(safe-area-inset-top\)[^}]*z-index:55/);
+  assert.match(css, /\.mobile-global-header::before \{[^}]*backdrop-filter:blur\(22px\)[^}]*mask-image:linear-gradient/);
+  assert.match(css, /\.mobile-global-header\.is-scrolled::before \{ opacity:1; \}/);
 });

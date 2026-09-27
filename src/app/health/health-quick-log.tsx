@@ -4,6 +4,7 @@ import { useEffect, useState, type ComponentType } from "react";
 import { Droplet, Dumbbell, Health, Pill, Weight, type IconComponent } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
+import { loadCachedJson } from "@/lib/client-json-cache";
 import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, WeightRecord } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
 import { TrainingLogEditor } from "./training-log-editor";
@@ -28,17 +29,13 @@ function useRemoteJson<T>(url: string) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ data: T | null; error: string }>({ data: null, error: "" });
   useEffect(() => {
-    const controller = new AbortController();
-    void fetch(url, { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error();
-        setState({ data: await response.json() as T, error: "" });
-      })
-      .catch((reason: unknown) => {
-        if (reason instanceof Error && reason.name === "AbortError") return;
-        setState({ data: null, error: "Could not open this form" });
+    let mounted = true;
+    void loadCachedJson<T>(url)
+      .then((data) => { if (mounted) setState({ data, error: "" }); })
+      .catch(() => {
+        if (mounted) setState({ data: null, error: "Could not open this form" });
       });
-    return () => controller.abort();
+    return () => { mounted = false; };
   }, [attempt, url]);
   return { ...state, retry: () => { setState({ data: null, error: "" }); setAttempt((value) => value + 1); } };
 }
@@ -51,10 +48,8 @@ function LoadSheet({ title, error, onClose, onRetry }: { title: string; error: s
 }
 
 function TrainingQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {
-  const { english } = useLocale();
   const request = useRemoteJson<TrainingInputSuggestions>("/api/health/training/suggestions");
-  if (!request.data) return <LoadSheet title={english ? "Log training" : "记录训练"} error={request.error} onClose={onClose} onRetry={request.retry} />;
-  return <TrainingLogEditor initialDate={initialDate} suggestions={request.data} onClose={onClose} onSaved={onSaved} />;
+  return <TrainingLogEditor initialDate={initialDate} suggestions={request.data ?? { teachers: [], courses: [], presets: [] }} onClose={onClose} onSaved={onSaved} />;
 }
 
 function WeightQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {

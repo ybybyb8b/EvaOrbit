@@ -38,6 +38,22 @@ export async function listTrackerSummaries(): Promise<TrackerSummary[]> {
   });
 }
 
+export async function listQuickLogTrackers() {
+  const repository = await getRepository();
+  const trackers = await repository.listTrackers();
+  return Promise.all(trackers.map(async (tracker) => ({
+    id: tracker.id,
+    name: tracker.name,
+    groupName: tracker.groupName,
+    quickCaptureEnabled: tracker.quickCaptureEnabled,
+    icon: tracker.icon,
+    iconType: tracker.iconType,
+    iconValue: tracker.iconValue,
+    updatedAt: tracker.updatedAt,
+    fields: (await repository.listTrackerFields(tracker.id)).filter((field) => !field.archivedAt),
+  })));
+}
+
 export async function getTrackerDetail(id: number, query = "") {
   const repository = await getRepository();
   const tracker = await repository.getTracker(id);

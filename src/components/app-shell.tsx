@@ -45,8 +45,9 @@ const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
 export function AppShell({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
   const { english } = useLocale();
   const pathname = usePathname();
+  const hasGlobalHeader = pathname !== "/login" && !pathname.startsWith("/lucius");
   const [evaOpen, setEvaOpen] = useState(false);
-  const [homeHeaderScrolled, setHomeHeaderScrolled] = useState(false);
+  const [globalHeaderScrolled, setGlobalHeaderScrolled] = useState(false);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
   const spacesTriggerRef = useRef<HTMLButtonElement>(null);
   const spacesLayerRef = useRef<HTMLDivElement>(null);
@@ -60,15 +61,15 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   }, []);
 
   useEffect(() => {
-    if (pathname !== "/") return;
-    const updateHeader = () => setHomeHeaderScrolled(window.scrollY > 6);
+    if (!hasGlobalHeader) return;
+    const updateHeader = () => setGlobalHeaderScrolled(window.scrollY > 6);
     const frame = window.requestAnimationFrame(updateHeader);
     window.addEventListener("scroll", updateHeader, { passive: true });
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", updateHeader);
     };
-  }, [pathname]);
+  }, [hasGlobalHeader, pathname]);
 
   useEffect(() => {
     if (spacesDrawerPhase !== "opening") return;
@@ -164,7 +165,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </div>
       </aside>
       <main className="main-content">{children}</main>
-      {pathname === "/" ? <header className={`home-global-header ${homeHeaderScrolled ? "is-scrolled" : ""}`}>{spacesTrigger}</header> : spacesTrigger}
+      {hasGlobalHeader ? <header className={`mobile-global-header ${globalHeaderScrolled ? "is-scrolled" : ""}`}>{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>

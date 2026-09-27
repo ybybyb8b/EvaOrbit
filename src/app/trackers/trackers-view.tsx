@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { TrackerIcon } from "@/components/tracker-icon";
+import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
 
 const emptyDraft = { name: "", groupName: "Everyday", quickCaptureEnabled: true };
@@ -30,20 +31,19 @@ function ago(value: string) {
   return `${Math.max(1, Math.floor(milliseconds / 60000))}m ago`;
 }
 
-export function TrackersView() {
-  const [trackers, setTrackers] = useState<TrackerSummary[]>([]);
+export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
+  const [trackers, setTrackers] = useState<TrackerSummary[]>(initial);
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
   const [fieldEditor, setFieldEditor] = useState<FieldDraft | null>(null);
   const [working, setWorking] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const iconPreview = useMemo(() => iconFile ? URL.createObjectURL(iconFile) : "", [iconFile]);
   useEffect(() => () => { if (iconPreview) URL.revokeObjectURL(iconPreview); }, [iconPreview]);
   const load = useCallback(async () => { setLoading(true); const response = await fetch("/api/trackers", { cache: "no-store" }); if (response.ok) setTrackers(await response.json()); else setError("Trackers are unavailable right now."); setLoading(false); }, []);
-  useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
 
   function chooseIcon(file: File | undefined) {
     setError("");
@@ -88,6 +88,7 @@ export function TrackersView() {
         });
         if (!fieldResponse.ok) followUpErrors.push(`the property “${field.name}” could not be added`);
       }
+      invalidateCachedJson("/api/trackers/quick-log");
       setDraft(emptyDraft); setIconFile(null); setFieldDrafts([]); setFieldEditor(null); setShowForm(false); await load();
       if (followUpErrors.length) setError(`Tracker created, but ${followUpErrors.join(" and ")}. You can finish it in Settings.`);
     }

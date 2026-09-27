@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import { TrackerIcon } from "@/components/tracker-icon";
+import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { TrackerEntryEditor } from "../tracker-entry-editor";
@@ -26,17 +27,16 @@ function shownValue(value:unknown){return Array.isArray(value)?value.join(", "):
 function entryMatchesPeriod(entry:TrackerEntry,period:TimelinePeriod){if(period==="all")return true;const occurred=new Date(entry.occurredAt);const now=new Date();if(period==="year")return occurred.getFullYear()===now.getFullYear();const days=period==="7d"?7:30;return occurred.getTime()>=now.getTime()-days*86400000;}
 function entryMatchesField(entry:TrackerEntry,field:TrackerField|undefined,filter:string){if(!field||!filter)return true;const value=entry.values[field.key]??entry.values[String(field.id)];if(Array.isArray(value))return value.some((item)=>String(item)===filter);if(field.type==="text")return String(value??"").toLocaleLowerCase().includes(filter.toLocaleLowerCase());return String(value??"")===filter;}
 
-export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { trackerId: number; openDetailedRecord?: boolean }) {
+export function TrackerDetailView({ initial, trackerId, openDetailedRecord = false }: { initial: Detail; trackerId: number; openDetailedRecord?: boolean }) {
   const router=useRouter();
-  const [detail,setDetail]=useState<Detail|null>(null),[loading,setLoading]=useState(true),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useState(""),[appliedQuery,setAppliedQuery]=useState(""),[tab,setTab]=useState<Tab>(openDetailedRecord?"timeline":"insights");
+  const [detail,setDetail]=useState<Detail|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useState(""),[appliedQuery,setAppliedQuery]=useState(""),[tab,setTab]=useState<Tab>(openDetailedRecord?"timeline":"insights");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
   const [periodFilter,setPeriodFilter]=useState<TimelinePeriod>("all"),[fieldFilter,setFieldFilter]=useState(""),[fieldValueFilter,setFieldValueFilter]=useState("");
   const [fieldDraft,setFieldDraft]=useState(emptyField),[goalDraft,setGoalDraft]=useState(emptyGoal),[reminderDraft,setReminderDraft]=useState(emptyReminder);
   const [editingReminderId,setEditingReminderId]=useState<number|null>(null);
   const load=useCallback(async(search="")=>{setLoading(true);const response=await fetch(`/api/trackers/${trackerId}${search?`?query=${encodeURIComponent(search)}`:""}`,{cache:"no-store"});if(response.ok)setDetail(await response.json());else setError(((await response.json())as ApiError).error);setLoading(false);},[trackerId]);
-  useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer);},[load]);
-  async function request(url:string,options:RequestInit){setWorking(true);setError("");setMessage("");try{const response=await fetch(url,options);if(!response.ok){setError(((await response.json())as ApiError).error);return false;}await load(appliedQuery);try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}return true;}catch(reason){setError(reason instanceof Error?reason.message:"Could not save this change.");return false;}finally{setWorking(false);}}
+  async function request(url:string,options:RequestInit){setWorking(true);setError("");setMessage("");try{const response=await fetch(url,options);if(!response.ok){setError(((await response.json())as ApiError).error);return false;}invalidateCachedJson("/api/trackers/quick-log");await load(appliedQuery);try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}return true;}catch(reason){setError(reason instanceof Error?reason.message:"Could not save this change.");return false;}finally{setWorking(false);}}
   async function quick(){if(await request(`/api/trackers/${trackerId}/entries`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:new Date().toISOString(),values:{},note:""})})){playNativeHaptic("light");setShowEntry(false);}}
   function openEntryForm(){setTab("timeline");setShowEntry(true);}
   async function addField(event:FormEvent){event.preventDefault();const activeCount=detail?.fields.filter((field)=>!field.archivedAt).length??0;const ok=await request(`/api/trackers/${trackerId}/fields`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...fieldDraft,precision:Number(fieldDraft.precision),options:fieldDraft.options.split(/[，,]/).map(item=>item.trim()).filter(Boolean),defaultValue:null,sortOrder:activeCount})});if(ok){setFieldDraft(emptyField);setShowField(false);setMessage("Property added.");}}
@@ -47,8 +47,8 @@ export function TrackerDetailView({ trackerId, openDetailedRecord = false }: { t
   async function renameTracker(event:FormEvent){event.preventDefault();if(await request(`/api/trackers/${trackerId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:trackerName})})){setShowRename(false);setMessage("Tracker renamed.");}}
   function editTrackerReminder(reminder:TrackerReminder){setReminderDraft({reminderMode:reminder.reminderMode,periodDays:String(reminder.periodDays),configuredTime:reminder.configuredTime,anchorDate:reminder.anchorDate});setEditingReminderId(reminder.id);setRulePanel("reminder");}
   function closeReminderSheet(){setRulePanel(null);setEditingReminderId(null);setReminderDraft({...emptyReminder,anchorDate:new Date().toLocaleDateString("en-CA")});}
-  async function uploadIcon(file:File|undefined){if(!file)return;if(file.size>4*1024*1024){setError("The image must be smaller than 4 MB.");return;}if(!["image/jpeg","image/png","image/webp"].includes(file.type)){setError("Use a JPG, PNG or WebP image.");return;}setWorking(true);const body=new FormData();body.set("file",file);const response=await fetch(`/api/trackers/${trackerId}/icon`,{method:"POST",body});if(!response.ok)setError(((await response.json())as ApiError).error);else await load(appliedQuery);setWorking(false);}
-  async function removeTracker(){if(!confirm(`Delete “${detail?.tracker.name}” and every record inside it?`))return;const response=await fetch(`/api/trackers/${trackerId}`,{method:"DELETE"});if(response.ok){try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}router.push("/trackers");router.refresh();}else setError(((await response.json())as ApiError).error);}
+  async function uploadIcon(file:File|undefined){if(!file)return;if(file.size>4*1024*1024){setError("The image must be smaller than 4 MB.");return;}if(!["image/jpeg","image/png","image/webp"].includes(file.type)){setError("Use a JPG, PNG or WebP image.");return;}setWorking(true);const body=new FormData();body.set("file",file);const response=await fetch(`/api/trackers/${trackerId}/icon`,{method:"POST",body});if(!response.ok)setError(((await response.json())as ApiError).error);else{invalidateCachedJson("/api/trackers/quick-log");await load(appliedQuery);}setWorking(false);}
+  async function removeTracker(){if(!confirm(`Delete “${detail?.tracker.name}” and every record inside it?`))return;const response=await fetch(`/api/trackers/${trackerId}`,{method:"DELETE"});if(response.ok){invalidateCachedJson("/api/trackers/quick-log");try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}router.push("/trackers");router.refresh();}else setError(((await response.json())as ApiError).error);}
   if(loading&&!detail)return <div className="page"><div className="loading-state">Opening Tracker…</div></div>;
   if(!detail)return <div className="page"><PageHeader eyebrow="TRACKER" title="Tracker not found" description={error}/><Link className="button secondary" href="/trackers">Back to Trackers</Link></div>;
   const {tracker,stats,insights}=detail;

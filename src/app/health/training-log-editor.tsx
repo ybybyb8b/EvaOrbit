@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
+import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { TRAINING_BODY_PARTS, type TrainingBodyPart, type TrainingInputSuggestions, type TrainingLog, type TrainingType } from "@/lib/types";
 
 export const trainingTypeLabels: Record<TrainingType, { zh: string; en: string }> = { cardio: { zh: "有氧", en: "Cardio" }, strength: { zh: "无氧", en: "Strength" }, mixed: { zh: "混合", en: "Mixed" } };
@@ -29,10 +30,10 @@ export function TrainingLogEditor({ record, initialDate, suggestions, onClose, o
     try {
       const response = await fetch(record ? `/api/health/training/${record.id}` : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ occurredAt: occurred.value, occurredHasExplicitTime: occurred.hasExplicitTime, trainingType: draft.trainingType, bodyParts: draft.bodyParts, teacher: draft.teacher, course: draft.course, durationMinutes: draft.durationMinutes ? Number(draft.durationMinutes) : null, notes: draft.notes }) });
       const result = await response.json().catch(() => null); if (!response.ok) { setError(getError(result, "Could not save training")); return; }
-      await onSaved(); onClose();
+      invalidateCachedJson("/api/health/training/suggestions"); await onSaved(); onClose();
     } catch { setError("Could not save training"); } finally { setSaving(false); }
   }
-  async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } await onDeleted(); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
+  async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
   return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving}>
     <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>
       <DateTimeField label={english ? "Date" : "日期"} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={(value) => setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : "") })} />
