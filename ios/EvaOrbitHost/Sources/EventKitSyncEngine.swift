@@ -75,6 +75,15 @@ final class EventKitSyncEngine {
         return eventDictionary(event)
     }
 
+    static func reminderDueComponents(date:String,time:String?,timezone:String?) -> DateComponents? {
+        let dateParts=date.split(separator:"-").compactMap { Int($0) }
+        guard dateParts.count == 3 else { return nil }
+        var components=DateComponents();components.calendar=Calendar(identifier:.gregorian);components.year=dateParts[0];components.month=dateParts[1];components.day=dateParts[2]
+        if let time { let timeParts=time.split(separator:":").compactMap { Int($0) };guard timeParts.count == 2 else { return nil };components.hour=timeParts[0];components.minute=timeParts[1] }
+        if let timezone { guard let zone=TimeZone(identifier:timezone) else { return nil };components.timeZone=zone }
+        return components
+    }
+
     func saveReminder(_ value: [String: Any]) throws -> [String: Any] {
         let reminder: EKReminder
         if let identifier = value["calendarItemIdentifier"] as? String, let existing = store.calendarItem(withIdentifier: identifier) as? EKReminder { reminder = existing }
@@ -87,11 +96,10 @@ final class EventKitSyncEngine {
         reminder.priority = value["priority"] as? Int ?? 0; reminder.isCompleted = value["completed"] as? Bool ?? false
         reminder.completionDate = isoDate(value["completionDate"])
         if let dueDate = value["dueDate"] as? String {
-            var components = DateComponents(); let parts = dueDate.split(separator: "-").compactMap { Int($0) }
-            if parts.count == 3 { components.year=parts[0];components.month=parts[1];components.day=parts[2] }
-            if let dueTime = value["dueTime"] as? String { let time=dueTime.split(separator:":").compactMap{Int($0)};if time.count==2{components.hour=time[0];components.minute=time[1]} }
-            components.timeZone=(value["timezone"] as? String).flatMap(TimeZone.init(identifier:)); reminder.dueDateComponents=components
-        } else { reminder.dueDateComponents=nil }
+            guard let components=Self.reminderDueComponents(date:dueDate,time:value["dueTime"] as? String,timezone:value["timezone"] as? String) else { throw EventKitSyncError.invalidInput }
+            reminder.dueDateComponents=components
+            reminder.startDateComponents=components
+        } else { reminder.dueDateComponents=nil;reminder.startDateComponents=nil }
         reminder.alarms=(value["alarms"] as? [[String:Any]] ?? []).compactMap { alarm in
             if let absolute=isoDate(alarm["absoluteAt"]) { return EKAlarm(absoluteDate:absolute) }
             if let offset=alarm["relativeOffset"] as? Double { return EKAlarm(relativeOffset:offset) }
