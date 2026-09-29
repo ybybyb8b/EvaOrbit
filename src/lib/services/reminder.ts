@@ -116,9 +116,9 @@ export async function completeReminder(id: number, actedAt = new Date()) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
   const source = reminderSourceDefinition(reminder.sourceType);
-  if (source.projectionOwner === "cat_routine" && reminder.sourceId) return completeCatRoutine(reminder.sourceId, actedAt);
+  if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt); return repository.getReminder(id); }
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "completed", actedAt);
-  if(source.projectionOwner==="subscription"&&reminder.sourceId)return recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);
+  if(source.projectionOwner==="subscription"&&reminder.sourceId){await recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);return repository.getReminder(id);}
   if (source.projectionOwner === "task" && reminder.sourceId) {
     await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});
     await completeTaskFromReminder(reminder.sourceId);

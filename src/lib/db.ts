@@ -1317,6 +1317,24 @@ if(!hasV53)database.exec(`
   COMMIT;
 `);
 
+const hasV54=database.prepare("SELECT 1 FROM migrations WHERE version=54").get();
+if(!hasV54)database.exec(`
+  BEGIN;
+  DROP INDEX idx_eventkit_links_recovery;
+  ALTER TABLE eventkit_links RENAME TO eventkit_links_v53;
+  CREATE TABLE eventkit_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',installation_id TEXT NOT NULL,entity_type TEXT NOT NULL CHECK(entity_type IN ('task','reminder','calendar_event')),eo_id INTEGER NOT NULL,
+    eventkit_entity_type TEXT NOT NULL CHECK(eventkit_entity_type IN ('reminder','event')),calendar_item_identifier TEXT NOT NULL,external_identifier TEXT,calendar_identifier TEXT NOT NULL,source_identifier TEXT NOT NULL,
+    last_synced_hash TEXT NOT NULL,last_synced_snapshot TEXT NOT NULL CHECK(json_valid(last_synced_snapshot)),apple_last_modified_at TEXT,last_synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id,installation_id,entity_type,eo_id),UNIQUE(user_id,installation_id,eventkit_entity_type,calendar_item_identifier)
+  );
+  INSERT INTO eventkit_links SELECT * FROM eventkit_links_v53;
+  DROP TABLE eventkit_links_v53;
+  CREATE INDEX idx_eventkit_links_recovery ON eventkit_links(user_id,installation_id,eventkit_entity_type,external_identifier,calendar_identifier,source_identifier);
+  INSERT INTO migrations(version) VALUES(54);
+  COMMIT;
+`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,

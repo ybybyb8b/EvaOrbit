@@ -253,13 +253,15 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 
 - Calendar 与 Reminders 分别请求权限；启动、恢复和 bridge ready 不主动弹权限框。
 - 来源按设备保存 `Off / Import only / Two-way`；只读来源不能选择 Two-way。`Off` 只暂停该来源，不删除映射或任一侧数据，也不会把未读取误判为 Apple 删除。
-- Calendar 的 Two-way 保持完整双向同步。Reminders 的 Two-way 在 UI 中显示为 `EO Tasks only`：只导出 EO Task，并只 reconcile 已有 EO link 的 Apple Reminder；同一列表内没有 EO link 的项目不会进入 EO。若 Apple 镜像缺失，则保留 EO Task 并重新创建镜像，不把 Apple 侧缺失解释为删除 EO。
+- Calendar 的 Two-way 保持完整双向同步。Reminders 通过 `EO → Reminder List` 将 Tasks、Cats、Cats Household、Trackers、Health 与 Subscriptions 独立路由到可写 Apple List；同一 List 内没有 EO link 的私人项目不会进入 EO。旧版 `EO Tasks only` 配置首次读取时迁移为 Tasks route。
+- Task link 继续同步 title、notes、Due 与完成状态。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
 - Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，三方基线与 identifier mapping 存在 `eventkit_links`。
+- 发布 domain routes 前必须先应用 `supabase/migrations/202609300001_eventkit_reminder_domain_routes.sql`，使 `eventkit_links` 可以记录通用 EO Reminder 映射。
 - Calendar 使用过去 90 天到未来 365 天窗口；Reminders 使用未完成项和最近 30 天完成项。
 - reconcile 使用 Base / EO current / Apple current：非重叠字段合并，同字段改动报告 conflict，不静默覆盖；成功后更新 snapshot/hash，抑制 echo。
 - recurring events 当前只安全读取并标记，不导入、不写回、不删除 series 或 occurrence。普通单次 Event 才参与双向同步。
 - all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
-- Task 映射只包含 title、notes、Due 日期/明确时间、completed 与 completion date。新建 Apple Reminder 不创建 alarm、也不映射 priority；更新既有 Apple Reminder 时保留 Apple 侧已有的 alarm 与 priority。Tags、URL、location、recurrence 与 start date 不进入 EO Task 模型；iOS 仅在 Due 需要时补齐 EventKit 要求的 Gregorian `startDateComponents`。
+- Reminder 映射包含 title、notes、Due 日期/明确时间、completed 与 completion date。新建 Apple Reminder 不创建 alarm、也不映射 priority；更新既有 Apple Reminder 时保留 Apple 侧已有的 alarm 与 priority。Tags、URL、location 与 Apple recurrence 不进入 EO 模型；EO recurrence 由原业务服务推进下一期，iOS 仅在 Due 需要时补齐 EventKit 要求的 Gregorian `startDateComponents`。
 - 只有实际已有 Apple alarm 的已映射 Task 才由 `apple_reminders` channel 负责首次通知；没有 Apple alarm 时继续由 EO 投递。Due 卡与投递渠道无关，`repeat_while_overdue` 仍可在 Due 后继续由 EO 投递。
 - `EKEventStoreChanged` 经 Native 1.5 秒 debounce 后通知 Web；App launch/foreground、手动 Sync now 和 store change 都触发 eventual reconcile。没有 APNs silent push，App 长期不运行时不保证即时同步。
 
