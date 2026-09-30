@@ -1,4 +1,4 @@
-import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, Subscription, SubscriptionPayment, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, Subscription, SubscriptionPayment, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 import { AUTO_RENEWAL_PAYMENT_NOTE } from "./subscriptions.ts";
 import { formatWeightKg } from "./weight.ts";
@@ -144,5 +144,16 @@ export function periodRangesForCalendar(periods: MenstrualPeriod[], flows: Menst
 }
 
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
-export function buildRelationTimelineEvents(events:RelationEvent[]):TimelineEvent[]{return events.map(event=>{const people=event.parties.flatMap(p=>p.personId?[p.personId]:[]);const detail=event.totalAmountMinor===null?(event.note||event.eventType):`¥${(event.totalAmountMinor/100).toFixed(2)}${event.note?` · ${event.note}`:""}`;return{id:`relation:${event.id}`,eventType:`relation.${event.eventType}`,sourceType:"person" as const,sourceId:event.id,title:event.title,detail,occurredAt:event.occurredAt,hasExplicitTime:event.occurredHasExplicitTime,endAt:null,href:people[0]?`/relations/${people[0]}`:"/relations",relatedPeople:people,relatedPets:[],metadata:{relationEventType:event.eventType,currency:event.currency,totalAmountMinor:event.totalAmountMinor,partyCount:event.parties.length}};}).sort(compareTimelineEvents);}
+export function buildRelationTimelineEvents(events:RelationEvent[],relationPeople:Pick<RelationPerson,"id"|"name">[]=[]):TimelineEvent[]{
+  const namesById=new Map(relationPeople.map(person=>[person.id,person.name]));
+  return events.map(event=>{
+    const people=event.parties.flatMap(party=>party.personId?[party.personId]:[]);
+    const personNames=people.flatMap(id=>{const name=namesById.get(id);return name?[name]:[];});
+    const selfShareAmountMinor=event.eventType==="expense"?(event.parties.find(party=>party.partyType==="self")?.shareAmountMinor??null):null;
+    const displayedAmountMinor=selfShareAmountMinor??event.totalAmountMinor;
+    const amount=displayedAmountMinor===null?null:`¥${(displayedAmountMinor/100).toFixed(2)}`;
+    const detail=[personNames.join("、"),amount?(selfShareAmountMinor===null?amount:`AA ${amount}`):null,event.note].filter(Boolean).join(" · ")||event.eventType;
+    return{id:`relation:${event.id}`,eventType:`relation.${event.eventType}`,sourceType:"person" as const,sourceId:event.id,title:event.title,detail,occurredAt:event.occurredAt,hasExplicitTime:event.occurredHasExplicitTime,endAt:null,href:people[0]?`/relations/${people[0]}`:"/relations",relatedPeople:people,relatedPets:[],metadata:{relationEventType:event.eventType,currency:event.currency,totalAmountMinor:event.totalAmountMinor,selfShareAmountMinor,personNames,note:event.note,partyCount:event.parties.length}};
+  }).sort(compareTimelineEvents);
+}
 export function buildSubscriptionTimelineEvents(payments:SubscriptionPayment[],subscriptions:Subscription[]):TimelineEvent[]{const names=new Map(subscriptions.map(item=>[item.id,item.name]));return payments.map(payment=>({id:`subscription:${payment.id}`,eventType:"subscription.paid",sourceType:"subscription" as const,sourceId:payment.id,title:names.get(payment.subscriptionId)??"Subscription",detail:`${payment.currency} ${(payment.amountMinor/100).toFixed(2)}${payment.note?` · ${payment.note===AUTO_RENEWAL_PAYMENT_NOTE?"自动记账":payment.note}`:""}`,occurredAt:`${payment.paidOn}T12:00:00.000Z`,hasExplicitTime:false,endAt:null,href:`/subscriptions/${payment.subscriptionId}`,relatedPeople:[],relatedPets:[],metadata:{subscriptionId:payment.subscriptionId,amountMinor:payment.amountMinor,currency:payment.currency,scheduledFor:payment.scheduledFor}})).sort(compareTimelineEvents);}

@@ -20,13 +20,14 @@ function monthDateRange(month: string) {
 async function loadSources(range: { from: string; to: string }) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
-  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
     repository.listTrackers(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
+    repository.listRelationPeople({ includeArchived: true }),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
@@ -34,14 +35,14 @@ async function loadSources(range: { from: string; to: string }) {
   ]);
   const subscriptions=await repository.listSubscriptions();
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, subscriptionPayments };
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, subscriptionPayments };
 }
 
 function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, cats: Awaited<ReturnType<typeof catTimeline>>, range: { from: string; to: string }) {
   return [
     ...buildTimelineEvents(sources.foods, sources.drinks, sources.trackerEntries, sources.trackers, sources.healthRecords, sources.weightRecords, sources.menstrualFlows, sources.medicationDoses),
     ...buildTrainingTimelineEvents(sources.trainingLogs),
-    ...buildRelationTimelineEvents(sources.relationEvents),
+    ...buildRelationTimelineEvents(sources.relationEvents,sources.relationPeople),
     ...buildSubscriptionTimelineEvents(sources.subscriptionPayments,sources.subscriptions),
     ...catsInRange(cats, range),
   ].sort(compareTimelineEvents);
@@ -67,7 +68,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -76,6 +77,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     catTimeline(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
+    repository.listRelationPeople({ includeArchived: true }),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
@@ -85,7 +87,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>item.paidOn===date);
   return {
     date,
-    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range)]),
+    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range)]),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

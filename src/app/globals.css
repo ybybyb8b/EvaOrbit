@@ -5213,3 +5213,107 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   .memory-candidate-list article { align-items:stretch;flex-direction:column; }
   .memory-candidate-list article > span { display:grid;grid-template-columns:1fr 1fr; }
 }
+
+/* Relations detail: make identity and history legible across every theme. */
+.relation-detail-page .relation-profile-head {
+  margin-top:12px;
+  padding:22px;
+  border:1px solid rgb(var(--border-rgb) / .1);
+  border-radius:24px;
+}
+.relation-detail-page .relation-profile-title { min-width:0; }
+.relation-detail-page .relation-profile-title > div { min-width:0; }
+.relation-detail-page .relation-avatar.large {
+  border:1px solid rgb(var(--accent-rgb) / .14);
+  background:rgb(var(--surface-tint-rgb) / .82);
+  box-shadow:0 10px 24px rgb(var(--shadow-rgb) / .07);
+}
+.relation-profile-label {
+  width:max-content;
+  max-width:100%;
+  padding:5px 9px;
+  border:1px solid rgb(var(--accent-rgb) / .16);
+  border-radius:999px;
+  display:block;
+  overflow:hidden;
+  background:rgb(var(--accent-rgb) / .09);
+  color:var(--accent-primary);
+  font-size:11px;
+  line-height:1.2;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.relation-detail-page .relation-profile-title h1 { margin-top:8px; }
+.relation-detail-page .relation-profile-tags span {
+  padding:5px 9px;
+  border:1px solid rgb(var(--border-rgb) / .08);
+  background:rgb(var(--surface-tint-rgb) / .68);
+  color:var(--text-secondary);
+  font-size:10px;
+}
+.relation-detail-page .relation-profile-tags span[data-status="active"] {
+  border-color:rgb(var(--accent-rgb) / .12);
+  background:rgb(var(--accent-rgb) / .07);
+  color:var(--accent-primary);
+}
+.relation-detail-page .relation-summary { margin-top:12px; }
+.relation-detail-page .relation-summary article {
+  border:1px solid rgb(var(--border-rgb) / .08);
+  background:rgb(var(--surface-card-rgb) / .68);
+}
+.relation-detail-page .relation-profile-facts > div {
+  border-color:rgb(var(--border-rgb) / .08);
+  background:rgb(var(--surface-card-rgb) / .44);
+}
+.relation-detail-page .relation-section .section-heading h2 { margin:4px 0 0; }
+.relation-detail-page .relation-timeline { display:grid;gap:8px; }
+.relation-detail-page .relation-timeline > article {
+  padding:0;
+  border:0;
+  align-items:start;
+}
+.relation-detail-page .relation-time { padding:16px 0 0 2px; }
+.relation-detail-page .relation-time time { color:var(--text-primary); }
+.relation-detail-page .relation-event-card {
+  min-width:0;
+  padding:15px 16px;
+  border:1px solid rgb(var(--border-rgb) / .08);
+  border-radius:16px;
+  background:rgb(var(--surface-card-rgb) / .56);
+}
+.relation-event-total { flex:none;display:flex;align-items:flex-end;flex-direction:column;gap:2px; }
+.relation-event-total small { color:var(--text-tertiary);font-size:9px;text-transform:uppercase;letter-spacing:.08em; }
+.relation-event-total b { color:var(--text-primary);font-size:12px; }
+.relation-detail-page .relation-note-list article {
+  border:1px solid rgb(var(--border-rgb) / .07);
+  background:rgb(var(--surface-card-rgb) / .52);
+}
+html[data-mode="dark"] .relation-profile-label {
+  border-color:rgb(var(--accent-rgb) / .28);
+  background:rgb(var(--accent-rgb) / .16);
+  color:var(--accent-strong);
+}
+html[data-mode="dark"] .relation-detail-page .relation-profile-tags span {
+  border-color:rgb(255 255 255 / .07);
+  background:rgb(255 255 255 / .055);
+  color:var(--text-secondary);
+}
+html[data-mode="dark"] .relation-detail-page .relation-profile-tags span[data-status="active"] {
+  border-color:rgb(var(--accent-rgb) / .22);
+  background:rgb(var(--accent-rgb) / .12);
+  color:var(--accent-strong);
+}
+html[data-mode="dark"] .relation-detail-page .relation-summary article,
+html[data-mode="dark"] .relation-detail-page .relation-profile-facts > div,
+html[data-mode="dark"] .relation-detail-page .relation-event-card,
+html[data-mode="dark"] .relation-detail-page .relation-note-list article {
+  border-color:rgb(255 255 255 / .06);
+  background:rgb(255 255 255 / .03);
+}
+@media(max-width:720px) {
+  .relation-detail-page .relation-profile-head { padding:18px; }
+  .relation-detail-page .relation-profile-title { align-items:flex-start; }
+  .relation-detail-page .relation-timeline > article { grid-template-columns:1fr;gap:6px; }
+  .relation-detail-page .relation-time { padding:0 2px;display:flex;align-items:center;flex-direction:row;gap:8px; }
+  .relation-detail-page .relation-time span::before { content:"·";margin-right:8px; }
+}

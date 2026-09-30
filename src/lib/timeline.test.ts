@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, periodRangesForCalendar, summarizeTimelineDays } from "./timeline.ts";
-import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
+import { buildRelationTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, periodRangesForCalendar, summarizeTimelineDays } from "./timeline.ts";
+import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
   id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
@@ -30,6 +30,8 @@ const trainingLog: TrainingLog = {
 const weightRecord:WeightRecord={id:29,occurredAt:"2026-08-26T09:00:00.000Z",occurredHasExplicitTime:true,weightKg:64.25,source:"apple_health",healthKitSampleId:"946e6cf1-96f2-4e47-9d45-b0fab32db24d",healthKitSourceBundle:"com.apple.Health",healthKitSourceName:"Health",healthKitSyncIdentifier:null,healthKitSyncVersion:1,createdAt:"",updatedAt:""};
 const menstrualFlow:MenstrualFlowRecord={id:31,periodId:5,occurredAt:"2026-08-26T10:00:00.000Z",endedAt:"2026-08-26T10:00:00.000Z",occurredHasExplicitTime:false,flow:"medium",isCycleStart:true,notes:"",source:"manual",healthKitSampleId:null,healthKitSourceBundle:null,healthKitSourceName:null,healthKitSyncIdentifier:"evaorbit.menstrual_flow.test",healthKitSyncVersion:1,healthKitSyncStatus:"pending",deletedAt:null,createdAt:"",updatedAt:""};
 const medicationDose:MedicationDoseEvent={id:32,medicationPresetId:6,periodId:5,takenAt:"2026-08-26T11:00:00.000Z",medicationNameSnapshot:"My medication",doseText:"1 tablet",notes:"",createdAt:"",updatedAt:""};
+const relationPerson:RelationPerson={id:41,name:"小林",nickname:null,relationLabel:"朋友",closenessRank:4,relationshipStatus:"active",photoPath:null,birthday:null,likes:null,avoid:null,note:null,archivedAt:null,createdAt:"",updatedAt:""};
+const relationExpense:RelationEvent={id:42,eventType:"expense",title:"晚餐",note:"AA 消费",occurredAt:"2026-08-26T12:00:00.000Z",occurredHasExplicitTime:true,currency:"CNY",totalAmountMinor:30000,isInPerson:true,parties:[{id:1,partyType:"self",personId:null,shareAmountMinor:10000,paidAmountMinor:30000},{id:2,partyType:"person",personId:41,shareAmountMinor:20000,paidAmountMinor:0}],items:[],flows:[],createdAt:"",updatedAt:""};
 
 test("merges module records into a newest-first timeline contract", () => {
   const events = buildTimelineEvents([food], [drink], [trackerEntry], [tracker], [healthRecord]);
@@ -67,6 +69,15 @@ test("maps training logs into editable date-aware timeline events", () => {
   assert.equal(event.href, "/health?training=23");
   assert.equal(event.metadata.trainingType, "strength");
   assert.match(event.detail, /45 min/);
+});
+
+test("shows relation companions and the user's AA share instead of the full bill",()=>{
+  const [event]=buildRelationTimelineEvents([relationExpense],[relationPerson]);
+  assert.equal(event.detail,"小林 · AA ¥100.00 · AA 消费");
+  assert.deepEqual(event.relatedPeople,[41]);
+  assert.equal(event.metadata.selfShareAmountMinor,10000);
+  assert.equal(event.metadata.totalAmountMinor,30000);
+  assert.deepEqual(event.metadata.personNames,["小林"]);
 });
 
 test("maps every weight sample into the Health timeline without daily deduplication",()=>{

@@ -42,6 +42,18 @@ function titleFor(item: TimelineEvent, english: boolean) {
   return item.title;
 }
 
+function detailFor(item:TimelineEvent,english:boolean){
+  if(item.sourceType!=="person")return item.detail;
+  const names=Array.isArray(item.metadata.personNames)?item.metadata.personNames.filter((name):name is string=>typeof name==="string"&&Boolean(name.trim())):[];
+  const selfShare=typeof item.metadata.selfShareAmountMinor==="number"?item.metadata.selfShareAmountMinor:null;
+  const total=typeof item.metadata.totalAmountMinor==="number"?item.metadata.totalAmountMinor:null;
+  const amount=selfShare??total;
+  const amountLabel=amount===null?null:selfShare===null?`¥${(amount/100).toFixed(2)}`:`${english?"Your share":"你的份额"} ¥${(amount/100).toFixed(2)}`;
+  const peopleLabel=names.length?`${english?"With":"和"} ${names.join(english?", ":"、")}`:null;
+  const note=typeof item.metadata.note==="string"?item.metadata.note:null;
+  return [peopleLabel,amountLabel,note].filter(Boolean).join(" · ")||item.detail;
+}
+
 export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummary, language }: { initialDate: string; initialEvents: TimelineEvent[]; initialSummary: TimelineMonthSummary; language: UiLanguage }) {
   const english = language === "en";
   const today = initialDate;
@@ -174,7 +186,7 @@ export function HomeCalendarTimeline({ initialDate, initialEvents, initialSummar
         <header className="home-day-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
         {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
         {error && <p className="form-error" role="alert">{error}</p>}
-        {loadingDate === selected ? <div className="home-timeline-loading" aria-label={english ? "Loading timeline" : "正在读取时间线"}><span /><span /><span /></div> : events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.map((item) => { const source = sourceMeta[item.sourceType]; return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}><time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}</span><strong className="user-content">{titleFor(item, english)}</strong>{item.detail && <small className="user-content">{item.detail}</small>}</span></Link>; })}</div> : <p className="home-today-empty">{english ? "No records on this day" : "这一天还没有记录"}</p>}
+        {loadingDate === selected ? <div className="home-timeline-loading" aria-label={english ? "Loading timeline" : "正在读取时间线"}><span /><span /><span /></div> : events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.map((item) => { const source = sourceMeta[item.sourceType],detail=detailFor(item,english); return <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}><time>{item.hasExplicitTime ? timeLabel(item.occurredAt) : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}</span><strong className="user-content">{titleFor(item, english)}</strong>{detail && <small className="user-content">{detail}</small>}</span></Link>; })}</div> : <p className="home-today-empty">{english ? "No records on this day" : "这一天还没有记录"}</p>}
       </section>
     </div>
     <HomeQuickLog selectedDate={selected} onSaved={refreshSelectedDate} />
