@@ -144,8 +144,8 @@ export function periodRangesForCalendar(periods: MenstrualPeriod[], flows: Menst
 }
 
 export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
-export function buildRelationTimelineEvents(events:RelationEvent[],relationPeople:Pick<RelationPerson,"id"|"name">[]=[]):TimelineEvent[]{
-  const namesById=new Map(relationPeople.map(person=>[person.id,person.name]));
+export function buildRelationTimelineEvents(events:RelationEvent[],relationPeople:Pick<RelationPerson,"id"|"name"|"nickname">[]=[]):TimelineEvent[]{
+  const namesById=new Map(relationPeople.map(person=>[person.id,person.nickname?.trim()||person.name]));
   return events.map(event=>{
     const people=event.parties.flatMap(party=>party.personId?[party.personId]:[]);
     const personNames=people.flatMap(id=>{const name=namesById.get(id);return name?[name]:[];});

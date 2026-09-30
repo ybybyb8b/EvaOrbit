@@ -1,9 +1,12 @@
-import type { RelationPersonSummary } from "./types";
+import type { RelationPerson, RelationPersonSummary } from "./types";
 
 export type RelationPeopleSort = "last_met" | "latest_event" | "closeness" | "name";
 export type RelationshipStatusFilter = "all" | "active" | "ended";
 const localeName = (left: RelationPersonSummary, right: RelationPersonSummary) => left.name.localeCompare(right.name, ["zh-CN", "en"], { sensitivity: "base", numeric: true });
 const nullableNewest = (left: string | null, right: string | null) => left === null ? (right === null ? 0 : 1) : right === null ? -1 : right.localeCompare(left);
+
+export function relationPersonDisplayName(person:Pick<RelationPerson,"name"|"nickname">){return person.nickname?.trim()||person.name;}
+export function relationLabelSuggestions(people:Pick<RelationPerson,"relationLabel">[]){return [...new Set(people.flatMap(person=>{const label=person.relationLabel?.trim();return label?[label]:[];}))].sort((left,right)=>left.localeCompare(right,["zh-CN","en"],{sensitivity:"base"}));}
 
 export function sortRelationPeople(people: RelationPersonSummary[], sort: RelationPeopleSort) {
   return [...people].sort((left, right) => {
