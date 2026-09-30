@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import { useState } from "react";
 import { Icon } from "@/components/icons";
@@ -190,7 +191,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     </form>}
     {!editing && summary.notes && <p className="daily-energy-note">{summary.notes}</p>}
     {error && <p className="form-error">{error}</p>}
-    {message && <p className="form-success" role="status">{message}</p>}
+    {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     <div className="daily-energy-history-heading"><span>Energy history</span><button className="text-button" onClick={() => setHistoryOpen((open) => !open)}>{historyOpen ? "Hide history" : "View history"}<Icon name="arrow" /></button></div>
     {historyOpen && (history.length ? <div className="daily-energy-history">{history.slice(0, 7).map((item) => <button key={item.date} className={item.date === selectedDate ? "active" : ""} onClick={() => void loadDate(item.date)}><span>{item.date}</span><strong>{formatKcal(item.totalExpenditureKcal)}</strong><small>Balance {formatKcal(item.energyBalance)}</small></button>)}</div> : <p className="daily-energy-history-empty">Save resting or active energy to build a history.</p>)}
   </section>;

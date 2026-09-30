@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { useState } from "react";
@@ -33,7 +34,7 @@ export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
     setError("");
     try {
       const response = await fetch(`/api/health/records/${record.id}`, { method: "DELETE" });
-      if (response.ok) { router.push("/health/records"); return; }
+      if (response.ok) { showActionToast("Health record deleted", "deleted"); router.push("/health/records"); return; }
       const result = await response.json().catch(() => null) as { error?: string } | null;
       setError(result?.error || "Could not delete this record");
     } catch { setError("Could not delete this record"); }
@@ -42,7 +43,7 @@ export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
   return <div className="page health-page health-detail-page">
     <Link className="back-link" href="/health/records">← Health records</Link>
     <header className="health-detail-header"><div><span className="eyebrow">{healthRecordTypeLabels[record.type]}</span><h1>{record.title}</h1><div className="health-detail-meta">{healthRecordUsesStatus(record.type) && <span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span>}<time>{formatRecordMoment(record.occurredAt,record.occurredHasExplicitTime)}</time></div></div><span className="health-detail-header-icon"><Icon name="health" /></span></header>
-    {message && <p className="success-banner" role="status">{message}</p>}
+    {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <p className="form-error">{error}</p>}
     {editing && <FormSheet title="Edit health record" onClose={() => setEditing(false)} formId="health-record-detail-form" submitLabel="Save changes" busy={saving}><HealthRecordEditor formId="health-record-detail-form" editing={record} onSavingChange={setSaving} onCancel={() => setEditing(false)} onSaved={(next) => { setRecord(next); setEditing(false); setMessage("Health record saved"); }} /></FormSheet>}
     {!editing && <>

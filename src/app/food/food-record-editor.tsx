@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { type FormEvent, useEffect, useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
@@ -34,7 +35,7 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
   }
   async function remove() {
     if (!record || !onDeleted || !confirm("删掉这条饮食记录？")) return; setSaving(true); setError("");
-    try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("无法删除这条饮食记录"); return; } await onDeleted(); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
+    try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("无法删除这条饮食记录"); return; } await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
   }
   return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}><form id="food-record-form" className="editor-card compact-editor" onSubmit={submit}><div className="form-grid">
     <label className="field"><span>餐次</span><select value={draft.mealType} onChange={(event) => setDraft({ ...draft, mealType: event.target.value as MealType })}>{meals.map((meal) => <option value={meal.value} key={meal.value}>{meal.label}</option>)}</select></label>

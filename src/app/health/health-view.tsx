@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -37,7 +38,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory, initi
 
   return <div className="page health-page" data-has-current={dashboard.current.length > 0}>
     <PageHeader eyebrow="生活" title="Health" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
-    {message && <p className="success-banner" role="status">{message}</p>}
+    {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <p className="form-error">{error}</p>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}
     {dashboard.current.length > 0 && <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>{english ? "In view now" : "当前关注"}</h2></div><span>{dashboard.current.length}</span></div><div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div></section>}

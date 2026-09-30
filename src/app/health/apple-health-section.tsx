@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
 import { getNativeHostInfo, healthKitSupported, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
@@ -117,7 +118,7 @@ export function AppleHealthSection() {
       <div className="apple-health-metrics">{status.metrics.map((metric) => <div key={metric.metric}><strong>{metric.name}</strong><span>Background delivery: {status.backgroundDelivery[metric.metric]?.replaceAll("_", " ") ?? "not requested"}</span></div>)}</div>
       {status.lastError && <p className="apple-health-error">Last error: {status.lastError}</p>}
       {error && <p className="form-error">{error}</p>}
-      {message && <p className="form-success" role="status">{message}</p>}
+      {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
       <div className="apple-health-actions">
         {status.available && (!status.authorizationRequested || !status.credentialConfigured) && <button className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? "Connecting…" : status.credentialConfigured ? "Update Health Access" : "Connect / Request Access"}</button>}
         {status.available && status.authorizationRequested && <button className="button secondary" disabled={busy} onClick={() => void syncNow()}>{busy ? "Syncing…" : "Sync Now"}</button>}

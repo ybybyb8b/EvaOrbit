@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -30,9 +31,9 @@ export function RelationPersonView({initial,people}:{initial:Detail;people:Relat
   const[data,setData]=useState(initial),[panel,setPanel]=useState<"profile"|"event"|"note"|"settle"|null>(null),[editing,setEditing]=useState<RelationEvent>(),[settling,setSettling]=useState<{flow:RelationEventFlow;outstanding:number}>(),[busy,setBusy]=useState(false),[note,setNote]=useState("");
   async function load(){const response=await fetch(`/api/relations/people/${data.person.id}`);if(response.ok)setData(await response.json());}
   function openEvent(event?:RelationEvent){setEditing(event);setPanel("event");}
-  async function removeEvent(id:number){if(!confirm("Delete this exchange?"))return;const response=await fetch(`/api/relations/events/${id}`,{method:"DELETE"});if(response.ok)void load();}
+  async function removeEvent(id:number){if(!confirm("Delete this exchange?"))return;const response=await fetch(`/api/relations/events/${id}`,{method:"DELETE"});if(response.ok){showActionToast("Exchange deleted","deleted");void load();}}
   async function addNote(){setBusy(true);const response=await fetch(`/api/relations/people/${data.person.id}/notes`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:note})});setBusy(false);if(response.ok){setNote("");setPanel(null);void load();}}
-  async function archive(){if(!confirm(`Archive ${data.person.name}?`))return;const response=await fetch(`/api/relations/people/${data.person.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({archivedAt:new Date().toISOString()})});if(response.ok)router.push("/relations");}
+  async function archive(){if(!confirm(`Archive ${data.person.name}?`))return;const response=await fetch(`/api/relations/people/${data.person.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({archivedAt:new Date().toISOString()})});if(response.ok){showActionToast("Person archived","deleted");router.push("/relations");}}
   const allFlows=data.events.flatMap(event=>event.flows);
   const openAdvances=allFlows.filter(flow=>flow.flowType==="advance").map(flow=>({flow,outstanding:flow.amountMinor-allFlows.filter(item=>item.flowType==="repayment"&&item.settlesFlowId===flow.id).reduce((sum,item)=>sum+item.amountMinor,0)})).filter(item=>item.outstanding>0);
   const displayName=relationPersonDisplayName(data.person),relationshipSuggestions=relationLabelSuggestions(people);

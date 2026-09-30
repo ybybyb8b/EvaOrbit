@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import { FormEvent, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -123,7 +124,7 @@ export function AiPreferences() {
       <div className="context-options">
         <label className="write-permission"><input type="checkbox" checked={draft.allowWriteActions} onChange={(event) => setDraft({ ...draft, allowWriteActions: event.target.checked })} /><span><strong>{english ? "Allow EvaOrbit writes" : "允许写入 EvaOrbit"}</strong><small>{english ? "On explicit request, Eva may write to Food, Drinks, or Inbox" : "明确要求时可以写入吃吃、喝喝或散落"}</small></span></label>
       </div>
-      {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
+      {error && <p className="form-error">{error}</p>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
       <div className="provider-actions">
         <button className="button primary" disabled={working} type="submit">{english ? "Save Preferences" : "保存偏好"}</button>
       </div>

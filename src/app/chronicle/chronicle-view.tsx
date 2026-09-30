@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
@@ -83,7 +84,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   return <div className="page chronicle-page">
     <PageHeader eyebrow={english ? "ARCHIVE" : "归档"} title="Chronicle" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />{english ? "Add entry" : "新增记录"}</button>} />
 
-    {notice && <p className="success-banner" role="status">{notice}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">NEW ENTRY</span><h2>Add to Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setShowForm(false); setError(""); }}>Cancel</button></div>
       <div className="form-grid">

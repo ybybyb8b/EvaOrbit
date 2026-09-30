@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -119,6 +120,7 @@ export function TasksView() {
     const response = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
     if (!response.ok) { playNativeHaptic("error"); return; }
     await load(); await refreshNativeNotifications();
+    showActionToast(english ? "Task deleted" : "任务已删除", "deleted");
   }
 
   const labels = { all: english ? "All" : "全部", open: english ? "Open" : "未完成", done: english ? "Done" : "已完成" };

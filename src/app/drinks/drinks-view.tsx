@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -22,7 +23,7 @@ export function DrinksView(){
   function openCreate(){setEditing(undefined);setError("");setEditorOpen(true);}function openEdit(log:DrinkLog){setEditing(log);setError("");setEditorOpen(true);}
   function editLimit(limit?:DrinkLimit){setEditingLimit(limit?.id??null);setLimitDraft(limit?{name:limit.name,targetType:limit.targetType,period:limit.period,limitValue:String(limit.limitValue)}:emptyLimit);setShowLimitForm(true);}
   async function submitLimit(event:FormEvent){event.preventDefault();if(saving)return;setError("");setSaving(true);try{const response=await fetch(editingLimit?`/api/drinks/limits/${editingLimit}`:"/api/drinks/limits",{method:editingLimit?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...limitDraft,limitValue:Number(limitDraft.limitValue),enabled:true})});if(!response.ok){setError(((await response.json())as ApiError).error);return;}setLimitDraft(emptyLimit);setEditingLimit(null);setShowLimitForm(false);await load();}finally{setSaving(false);}}
-  async function removeLimit(id:number){if(!confirm("删掉这条饮品限制？"))return;await fetch(`/api/drinks/limits/${id}`,{method:"DELETE"});setShowLimitForm(false);setEditingLimit(null);await load();}
+  async function removeLimit(id:number){if(!confirm("删掉这条饮品限制？"))return;const response=await fetch(`/api/drinks/limits/${id}`,{method:"DELETE"});if(!response.ok){setError(((await response.json())as ApiError).error);return;}setShowLimitForm(false);setEditingLimit(null);await load();showActionToast("饮品限制已删除","deleted");}
   return <div className="page drinks-page">
     <PageHeader eyebrow="生活" title="Drinks" action={<button className="button primary" onClick={openCreate}><Icon name="plus"/>新增记录</button>}/>
     {editorOpen&&<DrinkRecordEditor record={editing} suggestions={suggestions} onClose={()=>setEditorOpen(false)} onSaved={load} onDeleted={load}/>}

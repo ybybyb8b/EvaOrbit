@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -57,6 +58,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
     try {
       const response = await fetch(`/api/chronicle/${entry.id}`, { method: "DELETE" });
       if (!response.ok) { setError(await responseError(response, "Could not delete Chronicle entry.")); return; }
+      showActionToast("Chronicle entry deleted", "deleted");
       router.push("/chronicle"); router.refresh();
     } catch {
       setError("Could not delete Chronicle entry.");
@@ -68,7 +70,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
   return <div className="page chronicle-page chronicle-detail-page">
     <Link className="back-link" href="/chronicle">← Chronicle</Link>
     <PageHeader eyebrow={`${entry.date} · ${sourceLabel(entry.source)}`} title={entry.title} description="Full Markdown entry." />
-    {notice && <p className="success-banner" role="status">{notice}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     {error && <p className="form-error" role="alert">{error}</p>}
 
     {editing ? <FormSheet title="Edit Chronicle" onClose={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }} formId="chronicle-edit-form" submitLabel="Save changes" busy={busy}><form id="chronicle-edit-form" className="editor-card chronicle-editor" onSubmit={submit}>

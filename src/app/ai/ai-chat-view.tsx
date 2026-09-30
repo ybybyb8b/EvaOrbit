@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -78,7 +79,9 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
 
   async function removeSession(session: ChatSession) {
     if (!window.confirm(`删除“${session.title}”及其中全部消息？`)) return;
-    await fetch(`/api/ai/sessions/${session.id}`, { method: "DELETE" });
+    const response = await fetch(`/api/ai/sessions/${session.id}`, { method: "DELETE" });
+    if (!response.ok) return;
+    showActionToast("对话已删除", "deleted");
     const remaining = sessions.filter((item) => item.id !== session.id);
     setSessions(remaining);
     if (activeId === session.id) {

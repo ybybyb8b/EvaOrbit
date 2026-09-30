@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import { useEffect, useState } from "react";
 import type { UiPreferences } from "@/lib/types";
@@ -86,6 +87,6 @@ export function AppearanceThemeSettings() {
       <strong>{english ? "Color theme" : "颜色主题"}</strong>
       <div className="appearance-option-grid themes">{themes.map((theme) => <button type="button" key={theme.value} className={colorTheme === theme.value ? "active" : ""} aria-pressed={colorTheme === theme.value} disabled={saving} onClick={() => void save(appearanceMode, theme.value)}><span className={`appearance-theme-preview ${theme.value}`} aria-hidden="true"><i /><i /><i /></span><b>{english ? ({ editorial: "Field Green", rosewood: "Rosewood", powderblue: "Almond Blue", mistviolet: "Mist Violet" } as const)[theme.value] : theme.label}</b><small>{english ? ({ editorial: "Ivory and muted green", rosewood: "Soft rosewood and warm paper", powderblue: "Milky almond and deep ocean blue", mistviolet: "Misty grey violet and muted grape" } as const)[theme.value] : theme.detail}</small></button>)}</div>
     </div>
-    {error && <p className="form-error">{error}</p>}{notice && <p className="form-success" role="status">{notice}</p>}
+    {error && <p className="form-error">{error}</p>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
   </section>;
 }

@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -47,7 +48,8 @@ export function MemoryView() {
 
   async function remove(memory: Memory) {
     if (!window.confirm(`删除“${memory.title}”？此操作无法撤销。`)) return;
-    await fetch(`/api/memories/${memory.id}`, { method: "DELETE" }); await load();
+    const response = await fetch(`/api/memories/${memory.id}`, { method: "DELETE" });
+    if (response.ok) { await load(); showActionToast("记忆已删除", "deleted"); }
   }
 
   return <div className="page">

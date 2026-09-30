@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -31,8 +32,8 @@ export function InboxView() {
 
   async function remove(id: number) {
     if (!confirm(english ? "Delete this temporary record?" : "删掉这条临时记录？")) return;
-    await fetch(`/api/inbox/${id}`, { method: "DELETE" });
-    await load();
+    const response = await fetch(`/api/inbox/${id}`, { method: "DELETE" });
+    if (response.ok) { await load(); showActionToast(english ? "Inbox item deleted" : "Inbox 记录已删除", "deleted"); }
   }
 
   return <div className="page inbox-page">

@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,10 +19,10 @@ export function MemoDetailView({ initial }: { initial: Memo }) {
   const router = useRouter(); const [item, setItem] = useState(initial); const [draft, setDraft] = useState(() => fromMemo(initial)); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   async function patch(body: Record<string, unknown>, success: string) { setBusy(true); setError(""); try { const response = await fetch(`/api/memos/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(await responseError(response, "Could not update Memo.")); const updated = await response.json() as Memo; setItem(updated); setDraft(fromMemo(updated)); setEditing(false); setNotice(success); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Memo."); } finally { setBusy(false); } }
   async function submit(event: FormEvent) { event.preventDefault(); await patch({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null, mergedIntoId: draft.mergedIntoId ? Number(draft.mergedIntoId) : null }, "Memo updated."); }
-  async function remove() { if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); router.push("/memo"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
+  async function remove() { if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); router.push("/memo"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
 
   return <div className="page memo-page long-term-detail"><Link className="back-link" href="/memo">← Memo</Link><PageHeader eyebrow={`${optionLabel(memoTypeOptions, item.type)} · ${optionLabel(memoStatusOptions, item.status)}`} title={item.title} description={item.eventDate ? `Event date · ${item.eventDate}` : "Long-term context"} />
-    {notice && <p className="success-banner">{notice}</p>}{error && <p className="form-error">{error}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <p className="form-error">{error}</p>}
     {editing ? <FormSheet title="Edit Memo" onClose={() => { setDraft(fromMemo(item)); setEditing(false); }} formId="memo-edit-form" submitLabel="Save changes" busy={busy}><form id="memo-edit-form" className="editor-card long-term-editor" onSubmit={submit}><div className="form-grid">
       <label className="field wide"><span>Title</span><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       <label className="field"><span>Type</span><select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as MemoType })}>{memoTypeOptions.map((value) => <option value={value.value} key={value.value}>{value.label}</option>)}</select></label>

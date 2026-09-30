@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
@@ -130,6 +131,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
     try {
       const response = await fetch(`/api/media/${detail.id}`, { method: "DELETE" });
       if (!response.ok) { setError(await responseError(response, "Could not delete media.")); return; }
+      showActionToast("Media deleted", "deleted");
       router.push("/media"); router.refresh();
     } catch { setError("Could not delete media."); }
     finally { setBusy(false); }
@@ -145,7 +147,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
     <Link className="back-link media-back-link" href="/media">← Media</Link>
     <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={displayTitle.primary} description={displayTitle.secondary ?? "A single item from your private shelf."} />
 
-    {notice && <p className="success-banner" role="status">{notice}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     {error && <p className="form-error" role="alert">{error}</p>}
 
     {editing && <FormSheet title="Edit media" onClose={closeEditor} formId="media-edit-form" submitLabel="Save changes" busy={busy}><form id="media-edit-form" className="editor-card media-editor" onSubmit={submitEdit}>

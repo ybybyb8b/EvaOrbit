@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -112,7 +113,7 @@ export function FoodLibraryView() {
     </form></FormSheet>}
 
     {!showForm && error && <p className="form-error">{error}</p>}
-    {notice && <p className="form-notice">{notice}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     <div className="food-library-content-grid"><label className="search-box library-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name or brand…" /></label>
 
     {items.length ? <div className="food-library-list">{items.map((item) => {

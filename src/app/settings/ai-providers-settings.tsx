@@ -1,4 +1,5 @@
 "use client";
+import { ToastNotice } from "@/components/action-toast";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { AiModelConfig, AiProvider, ApiError } from "@/lib/types";
@@ -167,7 +168,7 @@ export function AiProvidersSettings() {
         </section>}
       </div>
     </div>
-    {error && <p className="form-error">{error}</p>}{notice && <p className="form-success">{notice}</p>}
+    {error && <p className="form-error">{error}</p>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
   </section>;
 }
 

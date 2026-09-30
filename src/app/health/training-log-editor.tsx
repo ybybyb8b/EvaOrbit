@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
@@ -33,7 +34,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions, onClose, o
       invalidateCachedJson("/api/health/training/suggestions"); await onSaved(); onClose();
     } catch { setError("Could not save training"); } finally { setSaving(false); }
   }
-  async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
+  async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); showActionToast(english ? "Training log deleted" : "训练记录已删除", "deleted"); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
   return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving}>
     <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>
       <DateTimeField label={english ? "Date" : "日期"} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={(value) => setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : "") })} />

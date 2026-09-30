@@ -1,4 +1,5 @@
 "use client";
+import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useState } from "react";
 import type { ApiError, LuciusPostComment } from "@/lib/types";
@@ -60,6 +61,7 @@ export function LuciusPostComments({ postId, initialComments }: { postId: number
     if (response.ok) {
       setComments((current) => current.filter((item) => item.id !== comment.id));
       playNativeHaptic("medium");
+      showActionToast("Comment deleted", "deleted");
     } else {
       playNativeHaptic("error");
       setError(await responseError(response, "Could not delete comment."));
