@@ -14,6 +14,7 @@ import { completeTaskFromReminder, disableTaskReminder } from "./task";
 async function subjectLabel(reminder: Reminder) {
   if (reminder.targetType === "cat_household") return "Household";
   if (reminder.targetType === "cat" && reminder.targetId) return (await (await getRepository()).getPet(reminder.targetId))?.name ?? "Cat";
+  if (reminder.targetType === "cat_food" && reminder.targetId) return (await (await getRepository()).getCatFoodItem(reminder.targetId))?.name ?? "Cat food";
   if (reminder.targetType === "tracker" && reminder.targetId) return (await (await getRepository()).getTracker(reminder.targetId))?.name ?? "Tracker";
   if (reminder.targetType === "subscription" && reminder.targetId) return (await (await getRepository()).getSubscription(reminder.targetId))?.name ?? "Subscription";
   if (reminder.targetType === "task") return "Task";
@@ -23,6 +24,7 @@ async function subjectLabel(reminder: Reminder) {
 async function validateTarget(input: NewReminder) {
   const repository = await getRepository();
   if (input.targetType === "cat" && (!input.targetId || !await repository.getPet(input.targetId))) throw new ConflictError("Cat not found.");
+  if (input.targetType === "cat_food" && (!input.targetId || !await repository.getCatFoodItem(input.targetId))) throw new ConflictError("Cat food not found.");
   if (input.targetType === "tracker" && (!input.targetId || !await repository.getTracker(input.targetId))) throw new ConflictError("Tracker not found.");
 }
 

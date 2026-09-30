@@ -1,6 +1,6 @@
 export type ReminderDeliveryChannel = "native_local" | "web_push";
 export type ReminderDomainRule = "scheduled" | "tracker_missing" | "period_medication" | "missing_record";
-export type ReminderProjectionOwner = "reminder" | "cat_routine" | "tracker" | "subscription" | "task" | "medication_preset" | "meal_rule" | "weight_settings" | "unknown";
+export type ReminderProjectionOwner = "reminder" | "cat_routine" | "cat_food" | "tracker" | "subscription" | "task" | "medication_preset" | "meal_rule" | "weight_settings" | "unknown";
 
 export type ReminderSourceDefinition = {
   sourceType: string | null;
@@ -19,6 +19,7 @@ export const REMINDER_SOURCE_REGISTRY = {
   cat_routine: { sourceType: "cat_routine", businessFact: "cat_routine", projectionOwner: "cat_routine", domainRule: "scheduled", label: "Routine", channels: localAndPush },
   vet_visit: { sourceType: "vet_visit", businessFact: "vet_visit", projectionOwner: "reminder", domainRule: "scheduled", label: "Cats", channels: localAndPush },
   medication: { sourceType: "medication", businessFact: "cat_medication", projectionOwner: "reminder", domainRule: "scheduled", label: "Cats", channels: localAndPush },
+  cat_food_restock: { sourceType: "cat_food_restock", businessFact: "cat_food_item", projectionOwner: "cat_food", domainRule: "scheduled", label: "Cats", channels: localAndPush },
   tracker_standard: { sourceType: "tracker_standard", businessFact: "tracker_reminder", projectionOwner: "tracker", domainRule: "scheduled", label: "Tracker", channels: localAndPush },
   tracker_missing: { sourceType: "tracker_missing", businessFact: "tracker_entries", projectionOwner: "tracker", domainRule: "tracker_missing", label: "Tracker · Missing", channels: pushOnly },
   subscription_renewal: { sourceType: "subscription_renewal", businessFact: "subscription", projectionOwner: "subscription", domainRule: "scheduled", label: "Subscriptions", channels: localAndPush },
@@ -45,7 +46,7 @@ export function reminderSourceAllows(sourceType: string | null | undefined, chan
 export function reminderSourceLabel(sourceType: string | null | undefined, targetType?: string) {
   const definition = reminderSourceDefinition(sourceType);
   if (definition.projectionOwner !== "reminder") return definition.label;
-  if (targetType === "cat" || targetType === "cat_household") return "Cats";
+  if (targetType === "cat" || targetType === "cat_household" || targetType === "cat_food") return "Cats";
   if (targetType === "tracker") return "Tracker";
   if (targetType === "health" || targetType === "health_record") return "Health";
   if (targetType === "subscription") return "Subscriptions";

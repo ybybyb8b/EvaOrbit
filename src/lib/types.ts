@@ -984,6 +984,64 @@ export interface Pet {
   updatedAt: string;
 }
 
+export type CatFoodCategory = "dry" | "wet" | "treat" | "supplement" | "other";
+export type CatFoodAmountUnit = "g" | "ml" | "piece";
+
+export interface CatFoodItem {
+  id: number;
+  name: string;
+  brand: string;
+  category: CatFoodCategory;
+  flavor: string;
+  notes: string;
+  lowStockThresholdPackages: number;
+  restockIntervalDays: number | null;
+  restockLeadDays: number;
+  restockReminderTime: string | null;
+  restockReminderId: number | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatFoodPurchase {
+  id: number;
+  itemId: number;
+  purchasedOn: string;
+  merchant: string;
+  packageCount: number;
+  remainingPackageCount: number;
+  amountPerPackage: number;
+  amountUnit: CatFoodAmountUnit;
+  paidAmountMinor: number;
+  currency: "CNY";
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatFoodPricePoint extends CatFoodPurchase {
+  normalizedPriceMinor: number;
+  normalizedUnit: "kg" | "L" | "piece";
+  changePercent: number | null;
+  isBestPrice: boolean;
+}
+
+export interface CatFoodCadenceSuggestion {
+  intervalDays: number;
+  intervals: number[];
+}
+
+export interface CatFoodSummary extends CatFoodItem {
+  purchases: CatFoodPricePoint[];
+  latestPurchase: CatFoodPricePoint | null;
+  bestPriceMinor: number | null;
+  stockPackages: number;
+  stockByUnit: Partial<Record<CatFoodAmountUnit, number>>;
+  cadenceSuggestion: CatFoodCadenceSuggestion | null;
+  stockState: "empty" | "low" | "available";
+}
+
 export type CatEventType = "deworming" | "grooming" | "care" | "note" | "cleaning" | "shared_note";
 export interface CatEvent {
   id: number;
@@ -1077,7 +1135,7 @@ export interface CatTimelineEntry {
   metadata: Record<string, unknown>;
 }
 
-export type ReminderTargetType = "cat" | "cat_household" | "tracker" | "health" | "subscription" | "task";
+export type ReminderTargetType = "cat" | "cat_household" | "cat_food" | "tracker" | "health" | "subscription" | "task";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";

@@ -1,5 +1,5 @@
-export const BACKUP_VERSION = 6 as const;
-export const BACKUP_SCHEMA_VERSION = "202609200001_memory_graph_v02";
+export const BACKUP_VERSION = 7 as const;
+export const BACKUP_SCHEMA_VERSION = "202609300002_cat_food_library";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -34,6 +34,8 @@ export const BACKUP_TABLES = [
   "cat_medications",
   "cat_measurements",
   "reminders",
+  "cat_food_items",
+  "cat_food_purchases",
   "tasks",
   "task_reminders",
   "subscriptions",
@@ -86,7 +88,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | 2 | 3 | 4 | 5 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -156,8 +158,8 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== BACKUP_VERSION) {
-    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1、2、3、4、5 和 ${BACKUP_VERSION}）`);
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== BACKUP_VERSION) {
+    throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1、2、3、4、5、6 和 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {
     throw new Error("备份文件缺少有效的 exported_at");
@@ -186,6 +188,7 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   }
   if(document.backup_version!==BACKUP_VERSION){resources.subscriptions??=[];resources.subscription_payments??=[];resources.subscription_price_changes??=[];}
   if(document.backup_version!==BACKUP_VERSION)resources.memory_fact_candidates??=[];
+  if(document.backup_version!==BACKUP_VERSION){resources.cat_food_items??=[];resources.cat_food_purchases??=[];}
   for (const table of BACKUP_TABLES) {
     if (!Array.isArray(resources[table])) throw new Error(`备份不完整：resources.${table} 缺失或格式错误`);
     if (!(resources[table] as unknown[]).every((row) => row && typeof row === "object" && !Array.isArray(row))) {

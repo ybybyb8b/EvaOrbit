@@ -20,6 +20,10 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(BACKUP_TABLES.includes("memory_facts"));
   assert.ok(BACKUP_TABLES.includes("memory_sources"));
   assert.ok(BACKUP_TABLES.includes("memory_fact_candidates"));
+  assert.ok(BACKUP_TABLES.includes("cat_food_items"));
+  assert.ok(BACKUP_TABLES.includes("cat_food_purchases"));
+  assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("cat_food_items"));
+  assert.ok(BACKUP_TABLES.indexOf("cat_food_items") < BACKUP_TABLES.indexOf("cat_food_purchases"));
   assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("tasks"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("ai_providers"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
@@ -46,7 +50,7 @@ test("backup parser requires a complete current-version document", () => {
     resources: emptyBackupResources(),
   };
   assert.deepEqual(parseBackupDocument(backup), backup);
-  assert.throws(() => parseBackupDocument({ ...backup, backup_version: 7 }), /不支持/);
+  assert.throws(() => parseBackupDocument({ ...backup, backup_version: BACKUP_VERSION + 1 }), /不支持/);
   const incomplete = { ...backup, resources: { ...backup.resources } };
   delete (incomplete.resources as Partial<typeof incomplete.resources>).projects;
   assert.throws(() => parseBackupDocument(incomplete), /备份不完整/);

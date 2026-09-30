@@ -1,4 +1,5 @@
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { CatFoodItem, CatFoodPurchase } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
@@ -132,6 +133,10 @@ export type NewTrackerEntry = Omit<TrackerEntry, "id" | "createdAt" | "updatedAt
 export type NewTrackerGoal = Omit<TrackerGoal, "id" | "createdAt" | "updatedAt">;
 export type NewTrackerReminder = Omit<TrackerReminder, "id" | "createdAt" | "updatedAt">;
 export type NewPet = Omit<Pet, "id" | "createdAt" | "updatedAt">;
+export type NewCatFoodItem = Omit<CatFoodItem, "id" | "restockReminderId" | "archivedAt" | "createdAt" | "updatedAt">;
+export type CatFoodItemPatch = Partial<NewCatFoodItem> & { restockReminderId?: number | null; archivedAt?: string | null };
+export type NewCatFoodPurchase = Omit<CatFoodPurchase, "id" | "createdAt" | "updatedAt">;
+export type CatFoodPurchasePatch = Partial<Omit<NewCatFoodPurchase, "itemId">>;
 export type NewCatEvent = Omit<CatEvent, "id" | "createdAt" | "updatedAt">;
 export type NewCatSymptom = Omit<CatSymptom, "id" | "createdAt" | "updatedAt">;
 export type NewCatVetVisit = Omit<CatVetVisit, "id" | "createdAt" | "updatedAt">;
@@ -405,6 +410,16 @@ export interface EvaOrbitRepository {
   createPet(input: NewPet): Promise<Pet>;
   updatePet(id: number, input: Record<string, unknown>): Promise<Pet | null>;
   archivePet(id: number): Promise<boolean>;
+  listCatFoodItems(query?: string, includeArchived?: boolean): Promise<CatFoodItem[]>;
+  getCatFoodItem(id: number): Promise<CatFoodItem | null>;
+  createCatFoodItem(input: NewCatFoodItem): Promise<CatFoodItem>;
+  updateCatFoodItem(id: number, input: CatFoodItemPatch): Promise<CatFoodItem | null>;
+  removeCatFoodItem(id: number): Promise<{ id: number; action: "deleted" | "archived" } | null>;
+  listCatFoodPurchases(itemId?: number): Promise<CatFoodPurchase[]>;
+  getCatFoodPurchase(id: number): Promise<CatFoodPurchase | null>;
+  createCatFoodPurchase(input: NewCatFoodPurchase): Promise<CatFoodPurchase>;
+  updateCatFoodPurchase(id: number, input: CatFoodPurchasePatch): Promise<CatFoodPurchase | null>;
+  deleteCatFoodPurchase(id: number): Promise<boolean>;
   listCatEvents(petId?: number | null): Promise<CatEvent[]>;
   getCatEvent(id: number): Promise<CatEvent | null>;
   createCatEvent(input: NewCatEvent): Promise<CatEvent>;
