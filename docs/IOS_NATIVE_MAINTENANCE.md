@@ -46,6 +46,7 @@ WKWebView Native Host
 | EventKit 实现 | `ios/EvaOrbitHost/Sources/EventKitSyncEngine.swift`、`src/lib/eventkit-sync.ts`、`src/app/settings/apple-integration` |
 | 原生触感执行器 | `ios/EvaOrbitHost/Sources/HapticFeedbackManager.swift`、`src/lib/native-haptics.ts` |
 | 原生启动核心图 | `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`、`ios/EvaOrbitHost/Sources/OrbitArtworkView.swift` |
+| 原生 App Icon 浅深外观 | `ios/EvaOrbitHost/Resources/AppIconSources`、`ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset`、`scripts/ios/prepare-assets.sh` |
 | 原生通知 Settings | `src/components/native-notification-control.tsx` |
 | 原生通知启动/恢复校准 | `src/components/native-notification-reconciler.tsx` |
 | Web Push / Cron | `src/lib/push/**`、现有 reminders delivery API / cron 配置 |
@@ -112,6 +113,8 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 仅有 Web 页面或服务端改动，且没有改变原生接口时，通常只需部署 Web；Host 下次加载生产站点即可获取更新。个人免费签名过期但 Native 二进制未变时，可以重用同一个可信 IPA 重新签名安装。
 
 原生启动轨道中央的核心图由 `LoadingCore.imageset` 负责：`LoadingCoreLight.png` 是 universal 默认（浅色外观），`LoadingCoreDark.png` 是 dark luminosity 变体。`OrbitArtworkView` 只负责按当前 trait collection 解析并显示该资源。替换任一文件都属于原生资源变化，必须重新构建 IPA；这项资源不会新增或改变 bridge、entitlement、framework、系统权限、签名方式及已验证的 IPA 打包/重签/安装链。
+
+原生 App Icon 的源图位于 `Resources/AppIconSources`：浅色外观使用米白底与黑色核心石，深色外观使用炭黑底与米色核心石。`prepare-assets.sh` 在 CI 中将两张 1024×1024 RGB PNG 复制进 `AppIcon.appiconset`，其中深色图通过 `luminosity: dark` 声明交给支持该外观的 iOS 自动选择；旧系统继续使用默认浅色图。替换这些资源同样只要求重新构建并安装 IPA，不改变任何权限、entitlement、framework、bridge 或签名链。
 
 ### 3.4 个人免费签名基线
 

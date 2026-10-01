@@ -18,6 +18,7 @@ notion-import-work/
 ios/EvaOrbitHost/EvaOrbitHost.xcodeproj/
 ios/EvaOrbitHost/build/
 ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset/AppIconDark.png
 
 # Local environment and secrets
 .env*

@@ -30,6 +30,8 @@ GitHub Actions 的 `iOS Native Host` workflow 使用 `macos-15` runner：
 
 启动轨道中央的核心图来自 `ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset`：`LoadingCoreLight.png` 是 universal 默认浅色资源，`LoadingCoreDark.png` 是 dark luminosity 变体。修改任一图片后都要重新运行 `iOS Native Host` workflow 并安装新 IPA；仅替换这组资源不会改变 bridge、entitlement、framework、系统权限、签名方式或本文已经验证的 IPA 打包、重签和安装链。
 
+App Icon 使用 `ios/EvaOrbitHost/Resources/AppIconSources` 中的浅色与深色 1024×1024 RGB PNG；`scripts/ios/prepare-assets.sh` 在构建前复制到 `AppIcon.appiconset`。浅色图为米白底黑石，深色 luminosity 变体为炭黑底米色石；不支持深色 App Icon 的旧系统继续使用默认图。修改图标同样需要重新构建并安装 IPA，但不改变权限、entitlement、framework、bridge 或签名方式。
+
 ### 原生触感反馈
 
 Native Host 通过现有版本化 bridge 的 `haptic.play` 使用 UIKit 播放 `selection`、`light`、`medium`、`success`、`warning` 和 `error` 六种固定语义。它不使用 Web Vibration API，不需要 Core Haptics framework、权限、Info.plist 文案或 entitlement。Web 端通过 `host.getInfo().methods` 检查能力；旧 IPA 和普通浏览器会静默跳过。
