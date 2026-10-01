@@ -1187,6 +1187,7 @@ export interface Reminder {
   note: string;
   leadTimeMinutes: number;
   repeatWhileOverdue: boolean;
+  deliveryChannel?: "pwa" | "apple_reminders";
   status: NotificationStatus;
   isActive: boolean;
   lastCompletedAt: string | null;

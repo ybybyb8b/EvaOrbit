@@ -69,6 +69,11 @@ export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snooz
   return scheduled.toISOString();
 }
 
+export function appleOwnsInitialNotification(reminder:Pick<Reminder,"nextDueAt"|"overdueAfter"|"repeatWhileOverdue"|"deliveryChannel">,now=new Date()){
+  const boundary=reminder.overdueAfter??reminder.nextDueAt;
+  return reminder.deliveryChannel==="apple_reminders"&&(!reminder.repeatWhileOverdue||!boundary||now.toISOString()<=boundary);
+}
+
 export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & { overdueAfter?: string | null }, now = new Date()) {
   const initial = notificationSendAt(reminder);
   if (!initial || !reminder.nextDueAt) return null;

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { ConflictError } from "../errors";
-import { effectiveDueAt, nextTrackerNotification, reminderActionPatch, selectDueReminders, snoozeUntil, trackerReminderNextDueAt, trackerReminderShouldNotify } from "../reminder-engine";
+import { appleOwnsInitialNotification, effectiveDueAt, nextTrackerNotification, reminderActionPatch, selectDueReminders, snoozeUntil, trackerReminderNextDueAt, trackerReminderShouldNotify } from "../reminder-engine";
 import { reminderSourceDefinition, reminderSourceLabel } from "../reminder-source-registry";
 import { getRepository } from "../repositories";
 import type { NewReminder } from "../repositories/types";
@@ -69,6 +69,7 @@ export async function listScheduledNotifications(now = new Date()): Promise<Sche
   const repository = await getRepository();
   const source = (await repository.listReminders({ activeOnly: true })).filter((reminder) => reminder.nextDueAt && (["scheduled", "failed"].includes(reminder.status) || (reminder.status === "sent" && reminder.repeatWhileOverdue)));
   const reminders = (await Promise.all(source.map(async (reminder) => {
+    if(appleOwnsInitialNotification(reminder,now))return null;
     if(reminder.sourceType==="task_reminder"&&reminder.sourceId){const rule=await repository.getTaskReminder(reminder.sourceId);if(rule?.deliveryChannel==="apple_reminders"&&(!rule.repeatWhileOverdue||!reminder.overdueAfter||now.toISOString()<=reminder.overdueAfter))return null;}
     if (reminderSourceDefinition(reminder.sourceType).projectionOwner !== "tracker" || !reminder.sourceId) return reminder;
     const rule = await repository.getTrackerReminder(reminder.sourceId);
