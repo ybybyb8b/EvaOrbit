@@ -148,6 +148,33 @@ export function parseChronicleEntryPatch(value: unknown) {
   return result;
 }
 
+function dailyJournalMood(value: unknown, optional = false) {
+  if (value === undefined) return optional ? undefined : null;
+  if (value === null || value === "") return null;
+  if (!Number.isInteger(value) || Number(value) < -2 || Number(value) > 2) throw new ValidationError("心情格式不正确");
+  return Number(value) as -2 | -1 | 0 | 1 | 2;
+}
+
+export function parseNewDailyJournalEntry(value: unknown) {
+  const body = objectValue(value);
+  return {
+    date: dateOnly(body.date),
+    content: text(body.content, "日记", 10_000)!,
+    moodScore: dailyJournalMood(body.moodScore) ?? null,
+  };
+}
+
+export function parseDailyJournalEntryPatch(value: unknown) {
+  const body = objectValue(value);
+  const result = {
+    date: body.date === undefined ? undefined : dateOnly(body.date),
+    content: body.content === undefined ? undefined : text(body.content, "日记", 10_000),
+    moodScore: dailyJournalMood(body.moodScore, true),
+  };
+  if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的日记字段");
+  return result;
+}
+
 const projectStatuses = ["active", "paused", "archived"] as const satisfies readonly ProjectStatus[];
 const projectItemTypes = ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"] as const satisfies readonly ProjectItemType[];
 const projectItemStatuses = ["to_solve", "doing", "blocked", "done", "verified", "dropped"] as const satisfies readonly ProjectItemStatus[];

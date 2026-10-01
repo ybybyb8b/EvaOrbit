@@ -719,6 +719,16 @@ export interface ChronicleEntry {
   updatedAt: string;
 }
 
+export type DailyJournalMood = -2 | -1 | 0 | 1 | 2;
+export interface DailyJournalEntry {
+  id: number;
+  date: string;
+  content: string;
+  moodScore: DailyJournalMood | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ProjectStatus = "active" | "paused" | "archived";
 export interface Project {
   id: number;

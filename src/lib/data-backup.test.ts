@@ -22,6 +22,7 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(BACKUP_TABLES.includes("memory_fact_candidates"));
   assert.ok(BACKUP_TABLES.includes("cat_food_items"));
   assert.ok(BACKUP_TABLES.includes("cat_food_purchases"));
+  assert.ok(BACKUP_TABLES.includes("daily_journal_entries"));
   assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("cat_food_items"));
   assert.ok(BACKUP_TABLES.indexOf("cat_food_items") < BACKUP_TABLES.indexOf("cat_food_purchases"));
   assert.ok(BACKUP_TABLES.indexOf("reminders") < BACKUP_TABLES.indexOf("tasks"));

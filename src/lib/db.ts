@@ -14,6 +14,8 @@ import type { CalendarEvent } from "./types";
 import type { CatFoodItem, CatFoodPurchase } from "./types";
 import type { CalendarEventListInput, CalendarEventPatch, NewCalendarEvent } from "./repositories/types";
 import type { CatFoodItemPatch, CatFoodPurchasePatch, NewCatFoodItem, NewCatFoodPurchase } from "./repositories/types";
+import type { DailyJournalEntry } from "./types";
+import type { DailyJournalEntryPatch, DailyJournalListInput, NewDailyJournalEntry } from "./repositories/types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusCaseListInput, LuciusCasePatch, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, MemoryEntityListInput, MemoryEntityPatch, MemoryFactCandidateListInput, MemoryFactListInput, MemoryFactPatch, MemorySourceListInput, MemorySourcePatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusCase, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment, NewMediaItem, NewMemo, NewMemoryEntity, NewMemoryFact, NewMemoryFactCandidate, NewMemorySource, NewProject, NewProjectItem, NewRelationPerson, NewSubscription, NewSubscriptionPayment, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, SubscriptionListInput, SubscriptionPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
 
 type TaskRow = {
@@ -1374,6 +1376,15 @@ if(!hasV55){
 const hasV56=database.prepare("SELECT 1 FROM migrations WHERE version=56").get();
 if(!hasV56)database.exec(`BEGIN; ALTER TABLE reminders ADD COLUMN delivery_channel TEXT NOT NULL DEFAULT 'pwa' CHECK(delivery_channel IN ('pwa','apple_reminders')); INSERT INTO migrations(version) VALUES(56); COMMIT;`);
 
+const hasV57=database.prepare("SELECT 1 FROM migrations WHERE version=57").get();
+if(!hasV57)database.exec(`BEGIN;
+CREATE TABLE daily_journal_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',date TEXT NOT NULL,content TEXT NOT NULL,mood_score INTEGER CHECK(mood_score BETWEEN -2 AND 2),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_daily_journal_entries_date ON daily_journal_entries(user_id,date DESC,id DESC);
+INSERT INTO migrations(version) VALUES(57);
+COMMIT;`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1960,6 +1971,12 @@ export function getChronicleEntry(id:number){const row=database.prepare("SELECT 
 export function createChronicleEntry(input:NewChronicleEntry){const result=database.prepare("INSERT INTO chronicle_entries(user_id,date,title,content_md,source) VALUES('local',?,?,?,?)").run(input.date,input.title,input.contentMd,input.source);return getChronicleEntry(Number(result.lastInsertRowid))!;}
 export function updateChronicleEntry(id:number,input:ChronicleEntryPatch){const map:Record<keyof ChronicleEntryPatch,string>={date:"date",title:"title",contentMd:"content_md",source:"source"};const entries=Object.entries(map).filter(([key])=>input[key as keyof ChronicleEntryPatch]!==undefined);if(!entries.length)return getChronicleEntry(id);const result=database.prepare(`UPDATE chronicle_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof ChronicleEntryPatch] as string),id);return result.changes?getChronicleEntry(id):null;}
 export function deleteChronicleEntry(id:number){return database.prepare("DELETE FROM chronicle_entries WHERE id=? AND user_id='local'").run(id).changes>0;}
+function dailyJournalEntryFromRow(row:Record<string,unknown>):DailyJournalEntry{return{id:Number(row.id),date:String(row.date),content:String(row.content),moodScore:row.mood_score===null?null:Number(row.mood_score) as DailyJournalEntry["moodScore"],createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listDailyJournalEntries(input:DailyJournalListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.date){conditions.push("date=?");values.push(input.date);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM daily_journal_entries WHERE ${conditions.join(" AND ")} ORDER BY date DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(dailyJournalEntryFromRow);}
+export function getDailyJournalEntry(id:number){const row=database.prepare("SELECT * FROM daily_journal_entries WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?dailyJournalEntryFromRow(row):null;}
+export function createDailyJournalEntry(input:NewDailyJournalEntry){const result=database.prepare("INSERT INTO daily_journal_entries(user_id,date,content,mood_score) VALUES('local',?,?,?)").run(input.date,input.content,input.moodScore);return getDailyJournalEntry(Number(result.lastInsertRowid))!;}
+export function updateDailyJournalEntry(id:number,input:DailyJournalEntryPatch){const map:Record<keyof DailyJournalEntryPatch,string>={date:"date",content:"content",moodScore:"mood_score"};const entries=Object.entries(map).filter(([key])=>input[key as keyof DailyJournalEntryPatch]!==undefined);if(!entries.length)return getDailyJournalEntry(id);const result=database.prepare(`UPDATE daily_journal_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof DailyJournalEntryPatch] as string|number|null),id);return result.changes?getDailyJournalEntry(id):null;}
+export function deleteDailyJournalEntry(id:number){return database.prepare("DELETE FROM daily_journal_entries WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function projectFromRow(row:Record<string,unknown>):Project{return{id:Number(row.id),name:String(row.name),description:row.description===null?null:String(row.description),status:row.status as Project["status"],doingCount:Number(row.doing_count??0),toSolveCount:Number(row.to_solve_count??0),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function projectItemFromRow(row:Record<string,unknown>):ProjectItem{return{id:Number(row.id),projectId:Number(row.project_id),projectName:row.project_name===undefined?undefined:String(row.project_name),title:String(row.title),description:row.description===null?null:String(row.description),type:row.type as ProjectItem["type"],status:row.status as ProjectItem["status"],module:row.module===null?null:String(row.module),priority:row.priority===null?null:String(row.priority),nextStep:row.next_step===null?null:String(row.next_step),resolution:row.resolution===null?null:String(row.resolution),createdAt:String(row.created_at),startedAt:row.started_at===null?null:String(row.started_at),completedAt:row.completed_at===null?null:String(row.completed_at),verifiedAt:row.verified_at===null?null:String(row.verified_at),updatedAt:String(row.updated_at)};}

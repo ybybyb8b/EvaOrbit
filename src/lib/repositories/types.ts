@@ -6,6 +6,7 @@ import type { AppearanceMode, ColorTheme } from "../theme";
 import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
 import type { CalendarEvent } from "../types";
+import type { DailyJournalEntry } from "../types";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -98,6 +99,9 @@ export type MediaDraftPatch = Omit<MediaItemPatch,"title">;
 export type NewChronicleEntry = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
 export type ChronicleListInput = { query?: string; limit?: number };
 export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: string; source?: ChronicleSource };
+export type NewDailyJournalEntry = Pick<DailyJournalEntry, "date" | "content" | "moodScore">;
+export type DailyJournalEntryPatch = Partial<NewDailyJournalEntry>;
+export type DailyJournalListInput = { date?: string; limit?: number };
 export type NewMemo = Omit<Memo, "id" | "createdAt" | "updatedAt">;
 export type MemoPatch = Partial<NewMemo>;
 export type MemoListInput = { query?: string; tag?: string; type?: MemoType; status?: MemoStatus; limit?: number };
@@ -323,6 +327,12 @@ export interface EvaOrbitRepository {
   createChronicleEntry(input: NewChronicleEntry): Promise<ChronicleEntry>;
   updateChronicleEntry(id: number, input: ChronicleEntryPatch): Promise<ChronicleEntry | null>;
   deleteChronicleEntry(id: number): Promise<boolean>;
+
+  listDailyJournalEntries(input?: DailyJournalListInput): Promise<DailyJournalEntry[]>;
+  getDailyJournalEntry(id: number): Promise<DailyJournalEntry | null>;
+  createDailyJournalEntry(input: NewDailyJournalEntry): Promise<DailyJournalEntry>;
+  updateDailyJournalEntry(id: number, input: DailyJournalEntryPatch): Promise<DailyJournalEntry | null>;
+  deleteDailyJournalEntry(id: number): Promise<boolean>;
 
   listProjects(input?: ProjectListInput): Promise<Project[]>;
   getProject(id: number): Promise<Project | null>;
