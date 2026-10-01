@@ -16,6 +16,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Prefer the smallest low-risk change that satisfies the request. Do not refactor unrelated or stable modules for cleanup.
 - Ask only when a decision changes product semantics, the data model, existing data, or important architecture. Resolve ordinary implementation details using established EvaOrbit patterns.
 - Preserve the existing visual language, component system, and interaction conventions. Do not introduce a new UI framework or design system for a local change.
+- Do not use fine hairlines as the default way to express visual boundaries. Prefer spacing, surface tone, grouping, and restrained elevation; reserve borders for controls or genuinely semantic separation.
 
 ## Date and time semantics
 
