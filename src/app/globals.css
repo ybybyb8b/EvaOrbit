@@ -5235,13 +5235,14 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   gap:8px;
 }
 .relations-page .relation-person-row {
-  min-height:104px;
+  min-height:110px;
   padding:15px 16px;
   border:0;
   border-radius:18px;
   background:rgb(var(--surface-card-rgb) / .58);
   transition:background-color 160ms var(--motion-ease),transform 120ms var(--motion-ease-out);
 }
+.relations-page .relation-person-row > .icon { grid-column:4;grid-row:1;align-self:center; }
 .relations-page .relation-person-tags em {
   padding:4px 8px;
   border-radius:8px;
@@ -5254,6 +5255,14 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   background:rgb(var(--surface-warm-rgb) / .82);
   color:var(--text-secondary);
 }
+.relations-page .relation-person-tags { align-items:center;flex-wrap:wrap; }
+.relations-page .relation-person-closeness { background:rgb(var(--surface-warm-rgb) / .82);color:var(--text-secondary); }
+.relations-page .relation-person-ended { color:var(--state-danger); }
+.relation-person-likes { display:flex;align-items:center;gap:5px; }
+.relation-person-likes b { color:var(--accent-primary);font-size:9px;font-weight:600; }
+.relation-person-meta { display:flex!important;align-items:center;justify-content:space-between;gap:14px; }
+.relation-person-meta small { min-width:0;overflow:hidden;color:var(--text-tertiary);font-size:9px;text-overflow:ellipsis;white-space:nowrap; }
+.relation-person-meta small:last-child { flex:none; }
 .relations-page .relation-avatar { background:rgb(var(--surface-tint-rgb) / .82); }
 .relation-label-suggestions { display:flex;flex-wrap:wrap;gap:6px; }
 .relation-label-suggestions button {
@@ -5375,6 +5384,7 @@ html[data-mode="dark"] .relations-page .relation-person-tags em + em { backgroun
   .relation-label-suggestions button:hover { background:rgb(var(--accent-rgb) / .15); }
 }
 @media(max-width:720px) {
+  .relations-page .relation-person-row > .icon { grid-column:3;grid-row:1; }
   .relation-detail-page .relation-profile-head { padding:18px; }
   .relation-detail-page .relation-profile-title { align-items:flex-start; }
   .relation-detail-page .relation-timeline > article { grid-template-columns:1fr;gap:6px; }
