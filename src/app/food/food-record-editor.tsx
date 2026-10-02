@@ -3,6 +3,7 @@ import { showActionToast } from "@/components/action-toast";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { compactDateTimePayload, compactDateTimeValue, DateTimeField } from "@/components/date-time-field";
+import { FoodDeleteAction } from "./food-delete-action";
 import { FoodLinkPicker } from "./food-link-picker";
 import { FormSheet } from "@/components/form-sheet";
 import { TASTE_RATINGS } from "@/lib/types";
@@ -58,8 +59,8 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法保存饮食记录"); } finally { setSaving(false); }
   }
   async function remove() {
-    if (!record || !onDeleted || !confirm("删掉这条饮食记录？")) return; setSaving(true); setError("");
-    try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("无法删除这条饮食记录"); return; } await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
+    if (!record || !onDeleted || saving) return; setSaving(true); setError("");
+    try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) throw new Error("无法删除这条饮食记录，请重试"); await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
   }
   return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}><form id="food-record-form" className="editor-card compact-editor" onSubmit={submit}><DateTimeField label="日期" minuteStep={1} value={{date:draft.occurredAt.slice(0,10),time:draft.occurredAt.length>10?draft.occurredAt.slice(11,16):""}} onChange={value=>setDraft({...draft,occurredAt:value.date+(value.time?`T${value.time}`:"")})}/><div className="form-grid">
     <label className="field"><span>餐次</span><select value={draft.mealType} onChange={(event) => setDraft({ ...draft, mealType: event.target.value as MealType })}>{meals.map((meal) => <option value={meal.value} key={meal.value}>{meal.label}</option>)}</select></label>
@@ -71,7 +72,7 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
     <label className="field wide"><span>明细</span><textarea rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
     <label className="field"><span>热量估算</span><input type="number" value={draft.estimatedKcal} onChange={(event) => setDraft({ ...draft, estimatedKcal: event.target.value })} /></label>
     <label className="field"><span>范围 kcal</span><div className="range-pair"><input type="number" placeholder="最低" value={draft.kcalMin} onChange={(event) => setDraft({ ...draft, kcalMin: event.target.value })} /><input type="number" placeholder="最高" value={draft.kcalMax} onChange={(event) => setDraft({ ...draft, kcalMax: event.target.value })} /></div></label>
-  </div>{error && <p className="form-error">{error}</p>}{record && onDeleted && <button className="danger-text food-record-delete" type="button" onClick={() => void remove()}>删除这条饮食记录</button>}</form></FormSheet>;
+  </div>{error && <p className="form-error">{error}</p>}{record && onDeleted && <FoodDeleteAction label="删除这条饮食记录" description={`确定删除「${record.title}」？删除后无法恢复。`} onDelete={remove} disabled={saving}/>}</form></FormSheet>;
 }
 
 export { meals, scenes, tasteLabels };

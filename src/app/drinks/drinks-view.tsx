@@ -27,6 +27,7 @@ export function DrinksView(){
   return <div className="page drinks-page">
     <PageHeader eyebrow="生活" title="Drinks" action={<button className="button primary" onClick={openCreate}><Icon name="plus"/>新增记录</button>}/>
     {editorOpen&&<DrinkRecordEditor record={editing} suggestions={suggestions} onClose={()=>setEditorOpen(false)} onSaved={load} onDeleted={load}/>}
+    <Link className="section-link" href="/food/places">店铺库 <Icon name="arrow"/></Link>
     <section className="drink-today-section"><div className="section-heading drink-today-heading"><div><span className="eyebrow">TODAY</span><h2>今天喝了什么</h2></div></div>
       {logs.length?<div className="drink-record-list">{logs.map(log=><DrinkRecordCard log={log} onEdit={openEdit} key={log.id}/>)}</div>:<div className="empty-state drink-empty-state"><h2>今天暂无饮品记录</h2></div>}
     </section>

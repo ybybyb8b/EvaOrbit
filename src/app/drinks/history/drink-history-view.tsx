@@ -13,8 +13,8 @@ export function DrinkHistoryView(){
   useEffect(()=>{const timer=setTimeout(()=>void load(),150);return()=>clearTimeout(timer);},[load]);
   return <div className="page drinks-page drink-history-page">
     <PageHeader eyebrow="DRINKS" title="History" action={<Link className="button secondary" href="/drinks"><Icon name="arrow"/>返回 Drinks</Link>}/>
-    <div className="drink-history-toolbar"><label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="找名称或 Brand…"/></label><select aria-label="饮品类型" value={type} onChange={event=>setType(event.target.value as DrinkType|"")}><option value="">全部类型</option>{drinkTypes.map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></div>
-    {logs.length?<div className="drink-record-list">{logs.map(log=><DrinkRecordCard log={log} onEdit={setEditing} showDate key={log.id}/>)}</div>:<div className="empty-state"><h2>没有匹配的饮品记录</h2><p>换一个名称、Brand 或类型试试。</p></div>}
+    <div className="drink-history-toolbar"><label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="找饮品、品牌、店铺或地点…"/></label><select aria-label="饮品类型" value={type} onChange={event=>setType(event.target.value as DrinkType|"")}><option value="">全部类型</option>{drinkTypes.map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></div>
+    {logs.length?<div className="drink-record-list">{logs.map(log=><DrinkRecordCard log={log} onEdit={setEditing} showDate key={log.id}/>)}</div>:<div className="empty-state"><h2>没有匹配的饮品记录</h2><p>换一个饮品、品牌、店铺或类型试试。</p></div>}
     {editing&&<DrinkRecordEditor record={editing} suggestions={suggestions} onClose={()=>setEditing(undefined)} onSaved={load} onDeleted={load}/>} 
   </div>;
 }

@@ -1,0 +1,12 @@
+.root { min-width: 0; margin-top: 16px; }
+.trigger, .actions button { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.trigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface-danger); color: var(--danger); }
+.trigger svg { width: 17px; height: 17px; }
+.confirm { margin-top: 10px; padding: 16px; border-radius: 14px; background: var(--surface-danger); }
+.confirm p { margin: 0 0 12px; color: var(--ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.confirm p[role="alert"] { color: var(--danger); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions button { flex: 1; background: var(--paper); color: var(--ink); }
+.actions button:last-child { background: var(--danger); color: white; }
+.root button:disabled { opacity: .55; cursor: wait; }
+.root button:focus-visible { outline: 2px solid var(--danger); outline-offset: 3px; }

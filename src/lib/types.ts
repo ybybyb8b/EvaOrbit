@@ -476,6 +476,8 @@ export interface FoodPlace {
   notes: string;
   archivedAt: string | null;
   dishCount: number;
+  foodVisitCount?: number;
+  drinkVisitCount?: number;
   visitCount: number;
   lastVisitedAt: string | null;
   createdAt: string;
@@ -501,6 +503,7 @@ export interface FoodPlaceDetail {
   place: FoodPlace;
   dishes: FoodDish[];
   recentFoodLogs: FoodLog[];
+  recentDrinkLogs: DrinkLog[];
 }
 
 export type FoodCategory = "staple" | "dish" | "snack" | "drink" | "other";
@@ -913,6 +916,11 @@ export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
 export const DRINK_TEMPERATURES = ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const;
 export type DrinkTemperature = typeof DRINK_TEMPERATURES[number];
 export interface DrinkLog {
+  foodPlaceId?: number | null;
+  foodPlaceName?: string | null;
+  foodPlaceBranch?: string | null;
+  foodPlaceCity?: string | null;
+  foodPlaceLocation?: string | null;
   id: number;
   occurredAt: string;
   occurredHasExplicitTime: boolean;

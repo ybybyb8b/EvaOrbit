@@ -386,7 +386,7 @@ export interface EvaOrbitRepository {
   updateLuciusPostComment(id: number, input: LuciusPostCommentPatch): Promise<LuciusPostComment | null>;
   deleteLuciusPostComment(id: number): Promise<boolean>;
 
-  listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string }): Promise<DrinkLog[]>;
+  listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string; foodPlaceId?: number; limit?: number }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;
   createDrinkLog(input: NewDrinkLog): Promise<DrinkLog>;
   updateDrinkLog(id: number, input: Record<string, unknown>): Promise<DrinkLog | null>;

@@ -34,6 +34,16 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       assert.equal(place.city,"成都");assert.equal(place.location,"高新区");
       const {item:updated}=await call("eo_update",{resource:"food_place",id:place.id,data:{location:"天府和悦",category:"快餐"}});assert.equal(updated.location,"天府和悦");
       const {items:places}=await call("eo_search",{resource:"food_place",query:"天府和悦",filters:{category:"快餐"}});assert.equal(places[0].id,place.id);
+      for(const name of ["drink_create","drink_update"])assert.ok(tools.find(t=>t.name===name).inputSchema.properties.food_place_id);
+      const {record:drink}=await call("drink_create",{name:"奶茶",brand:"测试品牌",drink_type:"milk_tea",food_place_id:place.id,occurred_at:"2026-10-03T12:00:00+08:00",occurred_has_explicit_time:false});
+      assert.equal(drink.food_place_city,"成都");assert.equal(drink.food_place_location,"天府和悦");assert.equal(drink.brand,"测试品牌");
+      assert.equal((await call("drink_search_recent",{food_place_id:place.id})).records[0].id,drink.id);
+      assert.equal((await call("drink_search_recent",{query:"天府和悦"})).records[0].id,drink.id);
+      const {record:drinkRenamed}=await call("drink_update",{id:drink.id,name:"换名字"});assert.equal(drinkRenamed.food_place_id,place.id);assert.equal(drinkRenamed.occurred_has_explicit_time,false);
+      const invalidDrink=await rpc("tools/call",{name:"drink_update",arguments:{id:drink.id,food_place_id:999999}});assert.equal(invalidDrink.isError,true);
+      const {record:drinkUnlinked}=await call("drink_update",{id:drink.id,food_place_id:null});assert.equal(drinkUnlinked.food_place_id,null);
+      await call("drink_update",{id:drink.id,food_place_id:place.id});
+      const {item:drinkPlaceStats}=await call("eo_get",{resource:"food_place",id:place.id});assert.equal(drinkPlaceStats.drink_visit_count,1);assert.equal(drinkPlaceStats.visit_count,1);
       const ids=[];
       for(const name of ["鸡腿饭","紫菜汤"]){const {item}=await call("eo_create",{resource:"food_dish",data:{food_place_id:place.id,name,category:"午餐"}});ids.push(item.id);}
       const {items:dishes}=await call("eo_search",{resource:"food_dish",query:"汤",filters:{food_place_id:place.id}});assert.equal(dishes[0].id,ids[1]);
@@ -58,6 +68,7 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const rejected=await rpc("tools/call",{name:"food_update",arguments:{id:record.id,food_place_id:other.id}});assert.equal(rejected.isError,true);
       const {record:cleared}=await call("food_update",{id:record.id,food_dish_ids:[]});assert.deepEqual(cleared.food_dish_ids,[]);
       const {record:legacy}=await call("food_update",{id:record.id,food_dish_id:ids[0]});assert.deepEqual(legacy.food_dish_ids,[ids[0]]);
+      await call("drink_delete",{id:drink.id});
       await call("food_delete",{id:record.id});assert.equal((await call("food_search_recent",{food_place_id:place.id})).records.length,0);
     } finally {await mcpHandler.close();}
   `;

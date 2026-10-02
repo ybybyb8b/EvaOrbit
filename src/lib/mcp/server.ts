@@ -44,6 +44,7 @@ const foodFields = {
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };
 const drinkFields = {
+  food_place_id: z.number().int().positive().nullable().optional().describe("Shared shop or cafe branch ID; null clears the association, omitted on update preserves it."),
   occurred_at: occurredAt.optional(), occurred_has_explicit_time: z.boolean().optional(), name: z.string().trim().min(1).max(200), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
   volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: sugarLevel.optional(), temperature: drinkTemperature.nullable().optional(), rating: tasteRating.nullable().optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
@@ -62,7 +63,7 @@ function compactFood(record: FoodLog) {
 }
 
 function compactDrink(record: DrinkLog) {
-  return { id: record.id, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, temperature: record.temperature, rating: record.rating, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, id: record.id, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, temperature: record.temperature, rating: record.rating, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactFoodLibrary(item: FoodLibraryItem) {
@@ -106,7 +107,7 @@ function foodInput(input: z.infer<z.ZodObject<typeof foodFields>>) {
 }
 
 function drinkInput(input: z.infer<z.ZodObject<typeof drinkFields>>) {
-  return { occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, temperature: input.temperature, rating: input.rating, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { foodPlaceId: input.food_place_id, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, temperature: input.temperature, rating: input.rating, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function foodLibraryInput(input: Record<string, unknown>) {
@@ -157,8 +158,8 @@ function createServer() {
       return { id: result.id, action: result.action };
     }));
 
-  server.registerTool("drink_search_recent", { description: "Find recent EvaOrbit drink records.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), drink_type: drinkType.optional(), limit: z.number().int().min(1).max(50).default(10) }) },
-    async ({ query, date: day, drink_type, limit }) => runTool(async () => ({ records: (await listDrinkLogs({ query, date: day, drinkType: drink_type })).slice(0, limit).map(compactDrink) })));
+  server.registerTool("drink_search_recent", { description: "Find recent EvaOrbit drink records.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), drink_type: drinkType.optional(), food_place_id: z.number().int().positive().optional(), limit: z.number().int().min(1).max(50).default(10) }) },
+    async ({ query, date: day, drink_type, food_place_id, limit }) => runTool(async () => ({ records: (await listDrinkLogs({ query, date: day, drinkType: drink_type, foodPlaceId: food_place_id })).slice(0, limit).map(compactDrink) })));
 
   server.registerTool("drink_create", { description: "Create one EvaOrbit drink record.", inputSchema: z.object(drinkFields) },
     async (input) => runTool(async () => { const result = await createDrinkLog(parseNewDrinkLog(drinkInput(input))); return { record: compactDrink(result.drink), limits: result.limits }; }));

@@ -63,7 +63,7 @@ export async function removeFoodLibraryItem(id: number) { return (await getRepos
 
 export async function listFoodPlaces(query="",options?:FoodPlaceSearchOptions){return(await getRepository()).listFoodPlaces(query,options);}
 export async function getFoodPlace(id:number){return(await getRepository()).getFoodPlace(id);}
-export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20})]);return{place,dishes,recentFoodLogs};}
+export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs,recentDrinkLogs]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20}),repository.listDrinkLogs({foodPlaceId:id,limit:20})]);return{place,dishes,recentFoodLogs,recentDrinkLogs};}
 export async function createFoodPlace(input:NewFoodPlace){return(await getRepository()).createFoodPlace(input);}
 export async function updateFoodPlace(id:number,input:Partial<NewFoodPlace>){return(await getRepository()).updateFoodPlace(id,input);}
 export async function removeFoodPlace(id:number){return(await getRepository()).removeFoodPlace(id);}
