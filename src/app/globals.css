@@ -48,6 +48,7 @@
   --surface-chat-rgb: 248 246 238;
   --border-rgb: 73 84 75;
   --accent-rgb: 36 66 53;
+  --calendar-ribbon-rgb: 93 126 108;
   --shadow-rgb: 40 50 41;
   --backdrop-rgb: 28 39 32;
   --ink: var(--text-primary);
@@ -161,6 +162,7 @@ html[data-theme="rosewood"] {
   --surface-chat-rgb: 247 237 234;
   --border-rgb: 103 82 82;
   --accent-rgb: 116 76 79;
+  --calendar-ribbon-rgb: 174 103 119;
   --shadow-rgb: 66 43 44;
   --backdrop-rgb: 38 27 28;
 }
@@ -212,6 +214,7 @@ html[data-theme="powderblue"] {
   --surface-chat-rgb:249 242 226;
   --border-rgb:70 94 111;
   --accent-rgb:14 113 172;
+  --calendar-ribbon-rgb:79 132 167;
   --shadow-rgb:24 63 88;
   --backdrop-rgb:10 35 52;
 }
@@ -263,6 +266,7 @@ html[data-theme="mistviolet"] {
   --surface-chat-rgb:244 241 246;
   --border-rgb:77 69 87;
   --accent-rgb:102 87 123;
+  --calendar-ribbon-rgb:136 110 172;
   --shadow-rgb:48 40 58;
   --backdrop-rgb:29 25 35;
 }
@@ -3529,12 +3533,12 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
   background:transparent;color:var(--text-primary);cursor:pointer;
   transition:background-color 150ms var(--motion-ease),color 150ms var(--motion-ease),transform 100ms cubic-bezier(.23,1,.32,1),box-shadow 150ms var(--motion-ease);
 }
-.home-calendar-grid > button[data-period="true"]::before { content:"";height:32px;position:absolute;z-index:0;top:5px;left:0;right:0;background:rgb(216 124 151 / .12);pointer-events:none; }
+.home-calendar-grid > button[data-period="true"]::before { content:"";height:32px;position:absolute;z-index:0;top:5px;left:0;right:0;background:rgb(var(--calendar-ribbon-rgb) / .18);pointer-events:none; }
 .home-calendar-grid > button[data-period-start="true"]::before { left:4px;border-radius:999px 0 0 999px; }
 .home-calendar-grid > button[data-period-end="true"]::before { right:4px;border-radius:0 999px 999px 0; }
 .home-calendar-grid > button[data-period-start="true"][data-period-end="true"]::before { border-radius:999px; }
 .home-calendar-grid > button strong { width:32px;height:32px;border:0;border-radius:50%;position:relative;z-index:1;display:grid;place-items:center;font:650 14px/1 var(--font-ui);font-variant-numeric:tabular-nums;transition:background-color 150ms var(--motion-ease),color 150ms var(--motion-ease),transform 100ms var(--motion-ease-out); }
-.home-calendar-grid > button[data-period-day-one="true"] strong::before { content:"";width:32px;height:32px;position:absolute;z-index:-1;top:0;left:-5px;border-radius:50%;box-shadow:inset 9px 0 0 rgb(var(--accent-rgb) / .24); }
+.home-calendar-grid > button[data-period-day-one="true"] strong::before { content:"";width:32px;height:32px;position:absolute;z-index:-1;top:0;left:-5px;border-radius:50%;box-shadow:inset 9px 0 0 rgb(var(--calendar-ribbon-rgb) / .32); }
 .home-calendar-grid > button[data-today="true"]:not(.selected) strong { color:var(--accent-primary);font-weight:800; }
 .home-calendar-grid > button.selected { color:var(--text-primary);box-shadow:none; }
 .home-calendar-grid > button.selected strong { background:var(--accent-primary);color:var(--accent-on); }
@@ -3548,10 +3552,10 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 .home-day-timeline { min-width:0; }
 .home-day-heading { align-items:flex-end; }
 .home-day-heading h2 { overflow-wrap:anywhere; }
-.home-period-context { min-height:38px;margin:0 0 10px;padding:9px 12px;border-radius:12px;display:flex;align-items:center;gap:0;background:rgb(216 124 151 / .11);color:var(--text-secondary);font-size:10px;line-height:1.35; }
-.home-period-context strong { color:rgb(154 55 86);font-size:11px; }
+.home-period-context { min-height:38px;margin:0 0 10px;padding:9px 12px;border-radius:12px;display:flex;align-items:center;gap:0;background:rgb(var(--calendar-ribbon-rgb) / .12);color:var(--text-secondary);font-size:10px;line-height:1.35; }
+.home-period-context strong { color:var(--accent-primary);font-size:11px; }
 .home-period-context span { display:flex;align-items:center; }
-.home-period-context span::before { content:"";width:1px;height:12px;margin:0 9px;background:rgb(207 91 127 / .22); }
+.home-period-context span::before { content:"";width:1px;height:12px;margin:0 9px;background:rgb(var(--calendar-ribbon-rgb) / .22); }
 .home-quick-log-trigger { width:52px;height:46px;padding:0;border:1px solid rgb(var(--border-rgb) / .12);border-radius:17px;position:fixed;z-index:60;right:25px;bottom:82px;display:grid;place-items:center;background:rgb(var(--surface-raised-rgb) / .9);color:var(--accent-primary);cursor:pointer;-webkit-backdrop-filter:blur(18px) saturate(145%);backdrop-filter:blur(18px) saturate(145%);box-shadow:0 6px 16px rgb(var(--shadow-rgb) / .08);transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease),border-color 150ms var(--motion-ease); }
 .home-quick-log-trigger .icon { width:20px;height:20px;stroke-width:1.65; }
 .home-quick-log-trigger:active { transform:scale(.96); }
@@ -3611,10 +3615,9 @@ html[data-mode="dark"] .home-activity-marker {
 html[data-mode="dark"] .home-calendar-actions button { background:transparent; }
 html[data-mode="dark"] .home-calendar-actions button:hover { background:rgb(255 255 255 / .05); }
 html[data-mode="dark"] .home-calendar-grid > button.selected strong { background:var(--accent-primary);color:var(--accent-on); }
-html[data-mode="dark"] .home-calendar-grid > button[data-period="true"]::before { background:rgb(232 142 169 / .12); }
-html[data-mode="dark"] .home-calendar-grid > button[data-period-day-one="true"] strong::before { box-shadow:inset 9px 0 0 rgb(var(--accent-rgb) / .34); }
-html[data-mode="dark"] .home-period-context { background:rgb(220 114 147 / .11); }
-html[data-mode="dark"] .home-period-context strong { color:rgb(238 158 182); }
+html[data-mode="dark"] .home-calendar-grid > button[data-period="true"]::before { background:rgb(var(--calendar-ribbon-rgb) / .24); }
+html[data-mode="dark"] .home-calendar-grid > button[data-period-day-one="true"] strong::before { box-shadow:inset 9px 0 0 rgb(var(--calendar-ribbon-rgb) / .46); }
+html[data-mode="dark"] .home-period-context { background:rgb(var(--calendar-ribbon-rgb) / .18); }
 html[data-mode="dark"] .home-timeline-loading span { background:rgb(255 255 255 / .04); }
 html[data-mode="dark"] .home-quick-log-trigger { border-color:rgb(255 255 255 / .08);background:rgb(var(--surface-raised-rgb) / .82);box-shadow:0 6px 16px rgb(0 0 0 / .16); }
 html[data-mode="dark"] .home-quick-log-grid>button,html[data-mode="dark"] .home-quick-tracker-list>button { background:rgb(var(--surface-card-rgb) / .74);box-shadow:none; }
@@ -5453,20 +5456,21 @@ html[data-mode="dark"] .relations-page .relation-person-tags em + em { backgroun
 }
 
 /* Home daily four-pane overview. */
+/* One grouping surface: the four panes, not an elevated wrapper around them. */
+.home-page .home-overview .today-focus.home-calendar-card { padding:0;border:0;border-radius:0;background:transparent;box-shadow:none; }
 .home-calendar-card > .home-calendar { margin-bottom:24px; }
 .home-selected-date-heading { margin:0 0 12px;display:flex;align-items:end;justify-content:space-between; }
 .home-selected-date-heading h2 { margin:0;color:var(--text-secondary);font:600 14px/1.4 var(--font-editorial-label); }
 .home-day-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }
-.home-day-pane { min-width:0;padding:18px;border:0;border-radius:18px;background:rgb(var(--surface-raised-rgb) / .52);box-shadow:0 10px 30px rgb(var(--shadow-rgb) / .035); }
-.home-day-pane:nth-child(2),.home-day-pane:nth-child(3) { background:rgb(var(--surface-tint-rgb) / .42); }
+.home-day-pane { min-width:0;padding:18px;border:0;border-radius:18px;background:var(--surface-card);box-shadow:0 6px 22px rgb(var(--shadow-rgb) / .025); }
 .home-day-pane header { margin-bottom:14px;display:flex;align-items:center;gap:8px; }
 .home-day-pane header > svg { color:var(--accent-primary); }
 .home-day-pane header h3 { margin:0;flex:1;font:600 17px/1.1 var(--font-editorial-label); }
 .home-day-pane header small { color:var(--text-tertiary);font-size:11px; }
-.home-day-primary { display:block;color:var(--text-editorial);font:650 30px/1 var(--font-editorial-label);letter-spacing:-.7px; }
+.home-day-primary { display:block;color:var(--text-editorial);font:600 22px/1.25 var(--font-editorial-label);letter-spacing:-.3px; }
 .home-sleep-pane > p { margin:8px 0 0;color:var(--text-secondary);font-size:13px; }
 .home-sleep-pane > small { display:block;margin-top:8px;color:var(--text-tertiary);font-size:11px; }
-.home-pane-empty { margin:5px 0 0;color:var(--text-tertiary);font-size:12px;line-height:1.5; }
+.home-pane-empty { margin:5px 0 0;color:var(--text-secondary);font-size:12px;line-height:1.5; }
 .home-pane-list { margin:0;padding:0;display:grid;gap:8px;list-style:none; }
 .home-pane-list a { display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px; }
 .home-pane-list strong { min-width:0;overflow:hidden;color:var(--text-primary);font-weight:520;text-overflow:ellipsis;white-space:nowrap; }
@@ -5516,8 +5520,7 @@ html[data-mode="dark"] .relations-page .relation-person-tags em + em { backgroun
 .home-calendar-card > .home-day-timeline { margin-top:24px;padding:0 2px;border-radius:0;background:transparent; }
 .home-day-heading { display:flex;align-items:center;justify-content:space-between;gap:12px; }
 .home-day-heading .section-link { border:0;background:transparent;cursor:pointer; }
-html[data-mode="dark"] .home-day-pane { background:rgb(255 255 255 / .035);box-shadow:0 14px 34px rgb(0 0 0 / .1); }
-html[data-mode="dark"] .home-day-pane:nth-child(2),html[data-mode="dark"] .home-day-pane:nth-child(3) { background:rgb(var(--surface-tint-rgb) / .46); }
+html[data-mode="dark"] .home-day-pane { background:var(--surface-card);box-shadow:none; }
 html[data-mode="dark"] .home-journal-entry { background:rgb(255 255 255 / .032); }
 @media(max-width:720px) {
   .home-day-grid { grid-template-columns:1fr; }
