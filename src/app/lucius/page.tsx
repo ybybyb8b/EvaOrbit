@@ -6,6 +6,7 @@ import { plainExcerpt } from "@/lib/long-term-memory";
 import { getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts } from "@/lib/services/lucius";
 import type { LuciusCaseStatus, LuciusPostComment } from "@/lib/types";
 import { LuciusPostComments } from "./lucius-post-comments";
+import { PageBackButton } from "@/components/page-back-button";
 
 export const metadata: Metadata = { title: "Lucius" };
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
 
   return <div className="lucius-profile-page">
     <header className="lucius-profile-header">
+      <div className="lucius-profile-navigation"><PageBackButton /></div>
       <div className="lucius-cover" aria-hidden="true">
         <span className="lucius-cover-script">silent things are still worth noticing</span>
         <span className="lucius-cover-star star-one">✦</span>

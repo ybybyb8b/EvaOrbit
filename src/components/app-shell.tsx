@@ -14,6 +14,8 @@ import { NativeHapticController } from "./native-haptic-controller";
 import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
+import { PageBackButton } from "./page-back-button";
+import { pageNavigationState } from "@/lib/page-navigation";
 
 const navigationGroups = [
   { label: "LIFE", items: [
@@ -46,7 +48,9 @@ const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
 export function AppShell({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
   const { english } = useLocale();
   const pathname = usePathname();
+  const hasPageBack = pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/") && !pathname.startsWith("/lucius");
   const hasGlobalHeader = pathname !== "/login" && !pathname.startsWith("/lucius");
+  const previousUrlRef = useRef<string | null>(null);
   const [evaOpen, setEvaOpen] = useState(false);
   const [globalHeaderScrolled, setGlobalHeaderScrolled] = useState(false);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
@@ -54,6 +58,17 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   const spacesLayerRef = useRef<HTMLDivElement>(null);
   const spacesDrawerRef = useRef<HTMLElement>(null);
   const spacesDrawerMounted = spacesDrawerPhase !== "closed";
+  useEffect(() => {
+    const resetPreviousPage = () => { previousUrlRef.current = null; };
+    window.addEventListener("evaorbit:page-back-fallback", resetPreviousPage);
+    return () => window.removeEventListener("evaorbit:page-back-fallback", resetPreviousPage);
+  }, []);
+  useEffect(() => {
+    const url = window.location.href;
+    if (previousUrlRef.current === url) return;
+    window.history.replaceState(pageNavigationState(window.history.state, previousUrlRef.current !== null), "", url);
+    previousUrlRef.current = url;
+  });
   const openSpacesDrawer = useCallback(() => {
     setSpacesDrawerPhase((phase) => phase === "closed" || phase === "closing" ? "opening" : phase);
   }, []);
@@ -166,8 +181,11 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
           {cloudMode && <form action={logout}><button className="sidebar-logout" type="submit">{english ? "Sign out" : "退出登录"}</button></form>}
         </div>
       </aside>
-      <main className="main-content">{children}</main>
-      {hasGlobalHeader ? <header className={`mobile-global-header ${globalHeaderScrolled ? "is-scrolled" : ""}`}>{spacesTrigger}</header> : spacesTrigger}
+      <main className={`main-content${hasPageBack ? " has-page-back" : ""}`}>
+        {hasPageBack && <header className="desktop-page-navigation"><PageBackButton /></header>}
+        {children}
+      </main>
+      {hasGlobalHeader ? <header className={`mobile-global-header ${globalHeaderScrolled ? "is-scrolled" : ""}`}>{hasPageBack && <PageBackButton />}{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
