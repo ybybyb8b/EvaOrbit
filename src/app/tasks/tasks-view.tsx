@@ -1,7 +1,7 @@
 "use client";
 import { showActionToast } from "@/components/action-toast";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { DateTimeField } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
@@ -33,6 +33,8 @@ function dueLabel(task: Task, english: boolean) {
 export function TasksView() {
   const { english } = useLocale();
   const params = useSearchParams();
+  const taskId = params.get("taskId");
+  const openedTask = useRef<string | null>(null);
   const initialStatus = params.get("status");
   const [status, setStatus] = useState<Status>(initialStatus === "open" || initialStatus === "done" ? initialStatus : "all");
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -43,6 +45,14 @@ export function TasksView() {
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const startEdit = useCallback((task: Task) => {
+    const reminder=task.reminders?.[0];
+    setEditing(task.id);
+    setDraft({title:task.title,notes:task.notes,dueDate:task.dueDate??"",dueTime:task.dueTime??"",reminderMode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",reminderDate:reminder?.absoluteDate??"",reminderTime:reminder?.absoluteTime??"",repeatWhileOverdue:reminder?.repeatWhileOverdue??false,priority:task.priority,tags:task.tags.join(", ")});
+    setShowMore(true); setError(""); setShowForm(true);
+  }, []);
+
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/tasks?status=${status}`);
@@ -58,18 +68,12 @@ export function TasksView() {
         if (!response.ok) throw new Error();
         return response.json() as Promise<Task[]>;
       })
-      .then((result) => { if (!cancelled) { setTasks(result); setLoading(false); } })
+      .then((result) => { if (!cancelled) { setTasks(result); setLoading(false); if (taskId && openedTask.current !== taskId) { openedTask.current = taskId; const task = result.find(item => String(item.id) === taskId); if (task) startEdit(task); else setError(english ? "Task not found." : "找不到这条任务。"); } } })
       .catch(() => { if (!cancelled) { setError(english ? "Could not load tasks." : "无法载入任务。"); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [english, status]);
+  }, [english, status, taskId, startEdit]);
 
   function startNew() { setEditing(null); setDraft(emptyDraft); setShowMore(false); setError(""); setShowForm(true); }
-  function startEdit(task: Task) {
-    const reminder=task.reminders?.[0];
-    setEditing(task.id);
-    setDraft({title:task.title,notes:task.notes,dueDate:task.dueDate??"",dueTime:task.dueTime??"",reminderMode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",reminderDate:reminder?.absoluteDate??"",reminderTime:reminder?.absoluteTime??"",repeatWhileOverdue:reminder?.repeatWhileOverdue??false,priority:task.priority,tags:task.tags.join(", ")});
-    setShowMore(true); setError(""); setShowForm(true);
-  }
 
   function quickDate(kind: "today" | "tomorrow" | "week" | "none") {
     if (kind === "none") { setDraft({ ...draft, dueDate: "", dueTime: "", reminderMode:draft.reminderMode==="at_due"?"none":draft.reminderMode,repeatWhileOverdue:false }); return; }

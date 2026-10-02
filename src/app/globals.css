@@ -5482,15 +5482,19 @@ html[data-mode="dark"] .relations-page .relation-person-tags em + em { backgroun
 .home-day-pane header h3 { margin:0;flex:1;font:600 17px/1.1 var(--font-editorial-label); }
 .home-day-pane header small { color:var(--text-tertiary);font-size:11px; }
 .home-day-primary { display:block;color:var(--text-editorial);font:600 22px/1.25 var(--font-editorial-label);letter-spacing:-.3px; }
-.home-sleep-pane > p { margin:8px 0 0;color:var(--text-secondary);font-size:13px; }
-.home-sleep-pane > small { display:block;margin-top:8px;color:var(--text-tertiary);font-size:11px; }
+.home-sleep-pane .home-pane-open > p { margin:8px 0 0;color:var(--text-secondary);font-size:13px; }
+.home-sleep-pane .home-pane-open > small { display:block;margin-top:8px;color:var(--text-tertiary);font-size:11px; }
+.home-pane-open { width:100%;height:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer; }
+.home-pane-open:active { opacity:.75; }
+.home-pane-open:focus-visible,.home-pane-list a:focus-visible,.home-day-pane h3 a:focus-visible { outline:2px solid var(--accent-primary);outline-offset:4px;border-radius:5px; }
+.home-sleep-notes { white-space:pre-wrap;overflow-wrap:anywhere; }
 .home-pane-empty { margin:5px 0 0;color:var(--text-secondary);font-size:12px;line-height:1.5; }
 .home-pane-list { margin:0;padding:0;display:grid;gap:8px;list-style:none; }
 .home-pane-list a { display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px; }
 .home-pane-list strong { min-width:0;overflow:hidden;color:var(--text-primary);font-weight:520;text-overflow:ellipsis;white-space:nowrap; }
 .home-pane-list time { color:var(--text-tertiary);font-size:10px; }
 .home-pane-list li[data-completed="true"] strong { color:var(--text-tertiary);text-decoration:line-through; }
-.home-meal-list li { display:grid;grid-template-columns:52px minmax(0,1fr);gap:9px;align-items:baseline; }
+.home-meal-list li > a { min-height:32px;grid-template-columns:52px minmax(0,1fr) auto;gap:9px;align-items:baseline; }
 .home-meal-list span { color:var(--text-tertiary);font-size:10px; }
 .home-meal-list strong { font-size:12px; }
 .home-journal-open { width:100%;height:100%;padding:0;border:0;display:block;background:transparent;color:inherit;text-align:left;cursor:pointer; }

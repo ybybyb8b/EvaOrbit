@@ -24,6 +24,9 @@ test("calendar activity uses event intervals, clips totals, and separates main s
   assert.equal(result.sleep?.durationMinutes, 480);
   assert.equal(result.sleep?.napCount, 1);
   assert.equal(result.sleep?.napMinutes, 40);
+  assert.deepEqual(result.sleep?.records.map(record => record.id), [1, 2]);
+  assert.equal(result.sleep?.records[0].notes, "这只是用户评论，不能作为标签");
+  assert.equal(result.sleep?.records[0].startAt, "2026-09-30T15:30:00.000Z");
   assert.equal(result.activities.find((item) => item.category === "phone")?.durationMinutes, 60);
   assert.equal(result.activities.find((item) => item.category === "screen")?.durationMinutes, 90);
   const phone = result.activityRecords.find((item) => item.category === "phone")!;

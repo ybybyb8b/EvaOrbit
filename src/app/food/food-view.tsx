@@ -10,8 +10,8 @@ import { FoodRecordEditor, meals, scenes, tasteLabels } from "./food-record-edit
 
 function shiftDate(date:string,days:number){const value=new Date(`${date}T12:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
 
-export function FoodView(){
-  const today=new Date().toLocaleDateString("en-CA");const[date,setDate]=useState(today);const[mealFilter,setMealFilter]=useState("");const[query,setQuery]=useState("");const[logs,setLogs]=useState<FoodLog[]>([]);const[summary,setSummary]=useState<DailyNutritionSummary|null>(null);const[editing,setEditing]=useState<FoodLog>();const[showForm,setShowForm]=useState(false);
+export function FoodView({initialDate,initialMealType}:{initialDate?:string;initialMealType?:string}={}){
+  const today=new Date().toLocaleDateString("en-CA");const[date,setDate]=useState(initialDate??today);const[mealFilter,setMealFilter]=useState(meals.some(meal=>meal.value===initialMealType)?initialMealType!:"");const[query,setQuery]=useState("");const[logs,setLogs]=useState<FoodLog[]>([]);const[summary,setSummary]=useState<DailyNutritionSummary|null>(null);const[editing,setEditing]=useState<FoodLog>();const[showForm,setShowForm]=useState(false);
   const load=useCallback(async()=>{const params=new URLSearchParams({date});if(mealFilter)params.set("mealType",mealFilter);if(query)params.set("q",query);const[recordsResponse,summaryResponse]=await Promise.all([fetch(`/api/food/logs?${params}`),fetch(`/api/nutrition/daily?date=${date}`)]);if(recordsResponse.ok)setLogs(await recordsResponse.json());if(summaryResponse.ok)setSummary(await summaryResponse.json());},[date,mealFilter,query]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),120);return()=>clearTimeout(timer);},[load]);
   function edit(item:FoodLog){setEditing(item);setShowForm(true);}

@@ -38,6 +38,7 @@ export interface HomeSleepSummary {
   durationMinutes: number;
   napCount: number;
   napMinutes: number;
+  records: Array<{ id: number; title: string; startAt: string; endAt: string; durationMinutes: number; notes: string }>;
 }
 
 export interface HomeDayOverview {
@@ -61,7 +62,7 @@ export function summarizeCalendarActivity(events: CalendarEvent[], date: string)
   const from = new Date(range.from).getTime();
   const to = new Date(range.to).getTime();
   const totals = { phone: 0, screen: 0, gaming: 0 };
-  const sleeps: Array<{ startAt: string; endAt: string; durationMinutes: number }> = [];
+  const sleeps: HomeSleepSummary["records"] = [];
   const activityRecords: HomeDayOverview["activityRecords"] = [];
 
   for (const event of events) {
@@ -70,7 +71,7 @@ export function summarizeCalendarActivity(events: CalendarEvent[], date: string)
     const end = new Date(event.endAt).getTime();
     if (!category || event.isAllDay || event.status !== "confirmed" || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || end <= from || start >= to) continue;
     if (category === "sleep") {
-      if (dateInEvaOrbit(new Date(end)) === date) sleeps.push({ startAt: event.startAt, endAt: event.endAt, durationMinutes: Math.round((end - start) / 60_000) });
+      if (dateInEvaOrbit(new Date(end)) === date) sleeps.push({ id: event.id, title: event.title, notes: event.notes, startAt: event.startAt, endAt: event.endAt, durationMinutes: Math.round((end - start) / 60_000) });
       continue;
     }
     const clippedStart = Math.max(start, from), clippedEnd = Math.min(end, to);
@@ -82,7 +83,7 @@ export function summarizeCalendarActivity(events: CalendarEvent[], date: string)
   const main = sleeps[0] ?? null;
   const naps = sleeps.slice(1);
   return {
-    sleep: main ? { ...main, napCount: naps.length, napMinutes: naps.reduce((sum, item) => sum + item.durationMinutes, 0) } : null,
+    sleep: main ? { ...main, napCount: naps.length, napMinutes: naps.reduce((sum, item) => sum + item.durationMinutes, 0), records: sleeps } : null,
     activities: (["phone", "screen", "gaming"] as const).map((category) => ({ category, durationMinutes: Math.round(totals[category] / 60_000) })),
     activityRecords: activityRecords.sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id - b.id),
   };
