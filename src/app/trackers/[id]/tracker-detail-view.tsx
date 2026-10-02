@@ -14,6 +14,7 @@ import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { shiftTrackerMonth, trackerCalendarMonth, trackerHeatLevel } from "@/lib/tracker-insights";
+import { translateUiCopy } from "@/lib/ui-copy";
 import { TrackerEntryEditor } from "../tracker-entry-editor";
 import type { ApiError, Tracker, TrackerEntry, TrackerField, TrackerFieldType, TrackerGoal, TrackerGoalOperator, TrackerInsights, TrackerPeriodType, TrackerReminder, TrackerReminderMode, TrackerStats } from "@/lib/types";
 
@@ -33,7 +34,8 @@ function entryMatchesField(entry:TrackerEntry,field:TrackerField|undefined,filte
 
 export function TrackerDetailView({ initial, trackerId, openDetailedRecord = false }: { initial: Detail; trackerId: number; openDetailedRecord?: boolean }) {
   const router=useRouter();
-  const {english}=useLocale();
+  const {english,language}=useLocale();
+  const copy=(value:string)=>translateUiCopy(value,language);
   const [detail,setDetail]=useState<Detail|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useState(""),[appliedQuery,setAppliedQuery]=useState(""),[tab,setTab]=useState<Tab>(openDetailedRecord?"timeline":"insights");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
@@ -77,9 +79,9 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
         <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">RHYTHM</span><h2>Day of week</h2></div></div><BarChart items={insights.weekdays}/></section>
         <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">RHYTHM</span><h2>Time of day</h2></div></div><BarChart items={insights.dayParts}/></section>
       </div>
-      {(insights.numericFields.length>0||insights.choiceFields.length>0)&&<section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">PROPERTIES</span><h2>What the details reveal</h2></div></div><div className="tracker-property-insights">
-        {insights.numericFields.map((field)=><article key={field.fieldKey}><span>{field.name}</span><strong>{field.average}{field.unit&&` ${field.unit}`}</strong><small>Average · {field.minimum}–{field.maximum} · latest {field.latest}</small></article>)}
-        {insights.choiceFields.map((field)=><article className="choice" key={field.fieldKey}><span>{field.name}</span><div>{field.values.map((value)=><p key={value.key}><span>{value.label}</span><strong>{value.count}</strong><i style={{width:`${value.percentage}%`}}/></p>)}</div></article>)}
+      {(insights.numericFields.length>0||insights.choiceFields.length>0)&&<section className="tracker-detail-section"><div className="section-heading"><div><span className="eyebrow">PROPERTIES</span><h2>{english?"What the details reveal":"属性分布"}</h2></div></div><div className="tracker-property-insights">
+        {insights.numericFields.map((field)=><article className="metric" key={field.fieldKey}><span>{copy(field.name)}</span><strong>{field.average}{field.unit&&` ${field.unit}`}</strong><small>{english?`Average · ${field.minimum}-${field.maximum} · latest ${field.latest}`:`平均值 · ${field.minimum}-${field.maximum} · 最近 ${field.latest}`}</small></article>)}
+        {insights.choiceFields.map((field)=>{const total=field.values.reduce((sum,value)=>sum+value.count,0);return <article className="choice" key={field.fieldKey}><header><strong>{copy(field.name)}</strong><span>{english?`${total} record${total===1?"":"s"}`:`${total} 条记录`}</span></header><div role="list">{field.values.map((value)=>{const label=copy(value.label);return <p role="listitem" aria-label={english?`${label}: ${value.count} records`:`${label}：${value.count} 条记录`} data-zero={value.count===0} key={value.key}><span>{label}</span><i aria-hidden="true"><b style={{width:`${value.percentage}%`}}/></i><strong>{value.count}</strong></p>;})}</div></article>;})}
       </div></section>}
       {stats.total===0&&<div className="empty-state compact-empty"><h2>Patterns will appear here</h2><p>Record a few moments and the heatmap, rhythm and property summaries will grow naturally.</p></div>}
     </>}

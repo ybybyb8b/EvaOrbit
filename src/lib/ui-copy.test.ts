@@ -26,3 +26,11 @@ test("UI copy preserves whitespace and unknown personal content", () => {
   assert.equal(translateUiCopy("  Save  ", "zh-CN"), "  保存  ");
   assert.equal(translateUiCopy("用户自己的标题", "en"), "用户自己的标题");
 });
+
+test("Tracker insight field labels follow the selected UI language", () => {
+  assert.equal(translateUiCopy("Bristol", "zh-CN"), "布里斯托分型");
+  assert.equal(translateUiCopy("Medium", "zh-CN"), "中");
+  assert.equal(translateUiCopy("Yes", "zh-CN"), "是");
+  assert.equal(translateUiCopy("腹痛", "en"), "Abdominal pain");
+  assert.equal(translateUiCopy("4型", "en"), "Type 4");
+});
