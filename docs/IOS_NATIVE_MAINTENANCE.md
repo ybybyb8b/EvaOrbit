@@ -260,7 +260,7 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - Task link 继续同步 title、notes、Due 与完成状态，但只为尚未完成的未关联 EO Task 新建 Apple Reminder；历史已完成 Task 不参与首次导出，已关联 Task 仍会把后续完成状态同步给 Apple。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
 - Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，三方基线与 identifier mapping 存在 `eventkit_links`。
 - 发布 domain routes 前必须先应用 `supabase/migrations/202609300001_eventkit_reminder_domain_routes.sql`，使 `eventkit_links` 可以记录通用 EO Reminder 映射。
-- Calendar 使用过去 90 天到未来 365 天窗口；Reminders 使用未完成项和最近 30 天完成项。
+- Calendar 使用设备本地时间 `2026-10-01 00:00` 到同步时刻未来 365 天的固定窗口；10 月 1 日以前已结束的事件不读取，跨越该边界的事件仍包含。Reminders 使用未完成项和最近 30 天完成项。
 - reconcile 使用 Base / EO current / Apple current：非重叠字段合并，同字段改动报告 conflict，不静默覆盖；成功后更新 snapshot/hash，抑制 echo。
 - recurring events 当前只安全读取并标记，不导入、不写回、不删除 series 或 occurrence。普通单次 Event 只参与 Apple → EO 导入与更新。
 - all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
