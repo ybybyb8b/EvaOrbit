@@ -1,6 +1,6 @@
-import { Bone, Cookie, Edit2, FoodTray, Pet, PillJar } from "reicon-react";
+import { Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
-export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "close" | "arrow" | "inbox" | "food" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
@@ -76,6 +76,8 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
 
 export function Icon({ name, variant = "feature" }: IconProps) {
   if (name === "edit") return <Edit2 className="icon" weight="Outline" aria-hidden="true" />;
+  if (name === "history") return <History className="icon" weight="Outline" aria-hidden="true" />;
+  if (name === "chevronDown") return <ChevronDown className="icon" weight="Outline" aria-hidden="true" />;
   if (name === "catFood") return <Pet className="icon" weight="Outline" aria-hidden="true" />;
   if (name === "catFoodDry") return <Bone className="icon" weight="Outline" aria-hidden="true" />;
   if (name === "catFoodWet") return <FoodTray className="icon" weight="Outline" aria-hidden="true" />;

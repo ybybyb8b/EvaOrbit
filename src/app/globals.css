@@ -4585,6 +4585,32 @@ html[data-mode="dark"] .meal-reminder-settings label > input[type="time"] { back
 .period-end-action { color:var(--danger); }
 .period-records { margin-top:12px; }
 .period-records .weight-record-list + .weight-record-list { margin-top:7px; }
+.period-history { margin-top:14px; }
+.period-history > summary { min-height:62px;padding:8px 11px;border-radius:var(--radius-content);display:flex;align-items:center;justify-content:space-between;gap:14px;background:rgb(var(--surface-card-rgb) / .42);cursor:pointer;list-style:none;transition:background-color var(--motion-fast) var(--motion-ease),transform var(--motion-fast) var(--motion-ease); }
+.period-history > summary::-webkit-details-marker { display:none; }
+.period-history > summary:hover { background:rgb(var(--surface-raised-rgb) / .62); }
+.period-history > summary:active { transform:scale(.99); }
+.period-history > summary:focus-visible { outline:0;box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .13); }
+.period-history-heading { min-width:0;display:flex;align-items:center;gap:11px; }
+.period-history-heading > span:last-child { min-width:0;display:flex;flex-direction:column;gap:3px; }
+.period-history-heading strong { color:var(--ink);font-size:12px;line-height:1.25; }
+.period-history-heading small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);font-size:9px;line-height:1.35; }
+.period-history-icon { width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;background:rgb(207 91 127 / .1);color:rgb(166 74 103); }
+.period-history-icon .icon { width:15px; }
+.period-history-meta { display:flex;align-items:center;gap:10px;flex:none; }
+.period-history-meta small { min-width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:rgb(var(--surface-raised-rgb) / .74);color:var(--text-secondary);font-size:9px;font-weight:750; }
+.period-history-meta > .icon { width:13px;color:var(--soft-muted);transition:transform var(--motion-fast) var(--motion-ease); }
+.period-history[open] > summary { background:rgb(var(--surface-raised-rgb) / .58); }
+.period-history[open] .period-history-meta > .icon { transform:rotate(180deg); }
+.period-history-list { margin-top:7px;padding:7px;border-radius:var(--radius-content);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;background:rgb(var(--surface-card-rgb) / .34); }
+.period-history-list button { min-width:0;min-height:58px;padding:10px 11px;border:0;border-radius:var(--radius-control);display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgb(var(--surface-raised-rgb) / .52);color:inherit;text-align:left;cursor:pointer;transition:background-color var(--motion-fast) var(--motion-ease),transform var(--motion-fast) var(--motion-ease); }
+.period-history-list button:hover { background:rgb(var(--surface-raised-rgb) / .82); }
+.period-history-list button:active { transform:scale(.985); }
+.period-history-list button:focus-visible { outline:0;box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .13); }
+.period-history-list button > span { min-width:0;display:flex;flex-direction:column;gap:4px; }
+.period-history-list strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);font-size:11px;line-height:1.25; }
+.period-history-list small { color:var(--text-secondary);font-size:9px; }
+.period-history-list .icon { width:13px;flex:none;color:rgb(166 74 103); }
 .medication-presets { margin-top:14px; }
 .medication-add { min-height:39px;margin:0 2px 7px;display:inline-flex;align-items:center;gap:5px; }
 .medication-add .icon { width:13px; }
@@ -4596,6 +4622,8 @@ html[data-mode="dark"] .meal-reminder-settings label > input[type="time"] { back
 html[data-mode="dark"] .period-overview { background:linear-gradient(145deg,rgb(220 114 147 / .1),rgb(255 255 255 / .018)); }
 html[data-mode="dark"] .period-day strong { color:rgb(238 158 182); }
 html[data-mode="dark"] .period-empty { background:rgb(255 255 255 / .025); }
+html[data-mode="dark"] .period-history-icon { background:rgb(220 114 147 / .12);color:rgb(238 158 182); }
+html[data-mode="dark"] .period-history-list .icon { color:rgb(238 158 182); }
 
 html[data-mode="dark"] .health-page .health-current-section {
   background:linear-gradient(145deg,rgb(255 255 255 / .048),rgb(255 255 255 / .015));
@@ -4617,6 +4645,7 @@ html[data-mode="dark"] .health-page .training-recent-list { background:rgb(255 2
   .period-overview dl > div { min-height:48px;padding:8px 0;border-left:0;border-top:1px solid rgb(207 91 127 / .12); }
   .period-primary-actions .button { min-height:42px; }
   .period-primary-actions .button.primary,.period-primary-actions .button.secondary { flex:1; }
+  .period-history-list { grid-template-columns:1fr; }
   .health-records-section { margin-top:40px!important; }
 }
 
