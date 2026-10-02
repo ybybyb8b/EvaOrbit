@@ -825,6 +825,8 @@ export function parseFoodPlace(value: unknown) {
   return {
     name: text(body.name, "店铺名称", 200)!,
     branch: text(body.branch ?? "", "分店信息", 160, false) ?? "",
+    city: text(body.city ?? "", "城市", 100, false) ?? "",
+    location: text(body.location ?? "", "地点", 200, false) ?? "",
     category: text(body.category ?? "", "店铺品类", 100, false) ?? "",
     rating: body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "总体评价", ["love", "good", "neutral", "dislike"] as const, "neutral"),
     status: enumValue(body.status, "店铺状态", ["frequent", "occasional", "paused", "avoid", "closed"] as const, "occasional"),
@@ -834,8 +836,8 @@ export function parseFoodPlace(value: unknown) {
 
 export function parseFoodPlacePatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", branch: body.branch, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
-  const keys = ["name", "branch", "category", "rating", "status", "notes"] as const;
+  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", branch: body.branch, city: body.city, location: body.location, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
+  const keys = ["name", "branch", "city", "location", "category", "rating", "status", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的店铺字段");
   return result;

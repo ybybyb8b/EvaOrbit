@@ -452,6 +452,8 @@ export interface FoodLog {
   foodDishId?: number | null;
   foodPlaceName?: string | null;
   foodPlaceBranch?: string | null;
+  foodPlaceCity?: string | null;
+  foodPlaceLocation?: string | null;
   foodDishName?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -463,6 +465,8 @@ export interface FoodPlace {
   id: number;
   name: string;
   branch: string;
+  city: string;
+  location: string;
   category: string;
   rating: TasteRating | null;
   status: FoodPlaceStatus;

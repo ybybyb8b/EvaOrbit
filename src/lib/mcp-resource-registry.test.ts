@@ -228,7 +228,9 @@ test("food place and dish resources expose safe generic CRUD",async()=>{
     async delete(id){const index=dishes.findIndex(item=>item.id===id);if(index<0)return false;dishes.splice(index,1);return true;},
   }});
   assert.deepEqual(registry.resources().slice(-2).map(item=>item.resource),["food_place","food_dish"]);
-  const place=await registry.create("food_place",{name:"某某米线",branch:"天府和悦店",category:"米线",rating:"love",status:"frequent"});
+  const place=await registry.create("food_place",{name:"某某米线",branch:"天府和悦店",city:"成都",location:"高新区",category:"米线",rating:"love",status:"frequent"});
+  assert.equal(place.city,"成都");assert.equal(place.location,"高新区");
+  assert.equal((await registry.update("food_place",place.id as number,{city:"重庆",location:""})).city,"重庆");
   const dish=await registry.create("food_dish",{food_place_id:place.id,name:"番茄米线",rating:"good",recommended:true});
   assert.equal(dish.food_place_id,place.id);assert.equal(dish.recommended,true);
   assert.deepEqual((await registry.search("food_dish",{filters:{food_place_id:place.id,recommended:true},limit:20})).items.map(item=>item.id),[dish.id]);
