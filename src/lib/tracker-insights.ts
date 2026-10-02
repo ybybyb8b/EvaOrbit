@@ -1,10 +1,37 @@
 import { dateInEvaOrbit, EVAORBIT_TIME_ZONE } from "./time.ts";
-import type { TrackerChoiceInsight, TrackerDistributionItem, TrackerEntry, TrackerField, TrackerInsights, TrackerNumericInsight } from "./types.ts";
+import type { TrackerChoiceInsight, TrackerDistributionItem, TrackerEntry, TrackerField, TrackerHeatmapDay, TrackerInsights, TrackerNumericInsight } from "./types.ts";
 
 function shiftDate(date: string, days: number) {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+export function shiftTrackerMonth(month: string, offset: number) {
+  const value = new Date(`${month}-15T12:00:00Z`);
+  value.setUTCMonth(value.getUTCMonth() + offset);
+  return value.toISOString().slice(0, 7);
+}
+
+export function trackerHeatLevel(count: number) {
+  return Math.min(4, Math.max(0, Math.floor(count)));
+}
+
+export function trackerCalendarMonth(heatmap: TrackerHeatmapDay[], month: string, latestDate: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const dayCount = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const firstAvailable = heatmap[0]?.date ?? latestDate;
+  const counts = new Map(heatmap.map((day) => [day.date, day.count]));
+  const days = Array.from({ length: dayCount }, (_, index) => {
+    const date = `${month}-${String(index + 1).padStart(2, "0")}`;
+    return { date, count: counts.get(date) ?? 0, available: date >= firstAvailable && date <= latestDate };
+  });
+  return {
+    days,
+    leadingDays: (new Date(`${month}-01T12:00:00Z`).getUTCDay() + 6) % 7,
+    activeDays: days.filter((day) => day.available && day.count > 0).length,
+    totalRecords: days.reduce((total, day) => total + (day.available ? day.count : 0), 0),
+  };
 }
 
 function monthKeys(today: string) {

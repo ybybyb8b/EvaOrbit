@@ -2,15 +2,18 @@
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useState } from "react";
+import { FormEvent, useCallback, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft2, ArrowRight2 } from "reicon-react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
+import { useLocale } from "@/components/locale-controller";
 import { PageHeader } from "@/components/page-header";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import { shiftTrackerMonth, trackerCalendarMonth, trackerHeatLevel } from "@/lib/tracker-insights";
 import { TrackerEntryEditor } from "../tracker-entry-editor";
 import type { ApiError, Tracker, TrackerEntry, TrackerField, TrackerFieldType, TrackerGoal, TrackerGoalOperator, TrackerInsights, TrackerPeriodType, TrackerReminder, TrackerReminderMode, TrackerStats } from "@/lib/types";
 
@@ -30,6 +33,7 @@ function entryMatchesField(entry:TrackerEntry,field:TrackerField|undefined,filte
 
 export function TrackerDetailView({ initial, trackerId, openDetailedRecord = false }: { initial: Detail; trackerId: number; openDetailedRecord?: boolean }) {
   const router=useRouter();
+  const {english}=useLocale();
   const [detail,setDetail]=useState<Detail|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useState(""),[appliedQuery,setAppliedQuery]=useState(""),[tab,setTab]=useState<Tab>(openDetailedRecord?"timeline":"insights");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
@@ -67,7 +71,7 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
     {tab==="insights"&&<>
       <div className="tracker-stat-grid"><article><span>Today</span><strong>{stats.today}</strong></article><article><span>This week</span><strong>{stats.week}</strong></article><article><span>This month</span><strong>{stats.month}</strong></article><article><span>This year</span><strong>{stats.year}</strong></article><article className="wide"><span>Last recorded</span><strong>{elapsed(stats.lastOccurredAt)}</strong></article></div>
       {stats.reminderDue&&<div className="tracker-reminder-alert"><Icon name="history"/><span><strong>A Tracker reminder is due</strong><small>Missing reminders only consider entries from this Tracker and this observation period.</small></span></div>}
-      <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">ACTIVITY</span><h2>A year at a glance</h2></div><span>{insights.activeDays} active days</span></div><TrackerHeatmap insights={insights}/></section>
+      <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">{english?"ACTIVITY":"活跃记录"}</span><h2>{english?"Monthly activity":"月度热力图"}</h2></div></div><TrackerHeatmap insights={insights}/></section>
       <div className="tracker-insight-grid">
         <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">TREND</span><h2>Last 12 months</h2></div></div><BarChart items={insights.monthly}/></section>
         <section className="tracker-insight-card"><div className="section-heading"><div><span className="eyebrow">RHYTHM</span><h2>Day of week</h2></div></div><BarChart items={insights.weekdays}/></section>
@@ -110,15 +114,27 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
 }
 
 function TrackerHeatmap({insights}:{insights:TrackerInsights}) {
-  const maximum=Math.max(1,...insights.heatmap.map((day)=>day.count));
-  const firstDay=insights.heatmap[0]?.date;
-  const blanks=firstDay?(new Date(`${firstDay}T12:00:00Z`).getUTCDay()+6)%7:0;
-  return <div className="tracker-heatmap-scroll"><div className="tracker-heatmap" role="img" aria-label="365 day activity heatmap">{Array.from({length:blanks},(_,index)=><i className="blank" key={`blank-${index}`}/>)}{insights.heatmap.map((day)=>{const level=day.count===0?0:Math.max(1,Math.ceil(day.count/maximum*4));return <i className={`level-${level}`} title={`${day.date}: ${day.count}`} aria-label={`${day.date}, ${day.count} records`} key={day.date}/>;})}</div><div className="tracker-heatmap-legend"><span>Less</span>{[0,1,2,3,4].map(level=><i className={`level-${level}`} key={level}/>)}<span>More</span></div></div>;
+  const {english}=useLocale();
+  const latestDate=insights.heatmap.at(-1)?.date??new Date().toISOString().slice(0,10);
+  const latestMonth=latestDate.slice(0,7),earliestMonth=(insights.heatmap[0]?.date??latestDate).slice(0,7);
+  const [month,setMonth]=useState(latestMonth);
+  const calendar=trackerCalendarMonth(insights.heatmap,month,latestDate);
+  const locale=english?"en-US":"zh-CN";
+  const monthLabel=new Intl.DateTimeFormat(locale,{year:"numeric",month:"long",timeZone:"UTC"}).format(new Date(`${month}-15T12:00:00Z`));
+  const weekdays=english?["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]:["一","二","三","四","五","六","日"];
+  const summary=english?`${calendar.activeDays} active days · ${calendar.totalRecords} records`:`${calendar.activeDays} 个活跃日 · ${calendar.totalRecords} 条记录`;
+  return <div className="tracker-heatmap-calendar">
+    <header className="tracker-heatmap-toolbar"><div><strong>{monthLabel}</strong><span>{summary}</span></div><div>{month!==latestMonth&&<button type="button" onClick={()=>setMonth(latestMonth)}>{english?"This month":"本月"}</button>}<button type="button" aria-label={english?"Previous month":"上个月"} disabled={month<=earliestMonth} onClick={()=>setMonth(value=>shiftTrackerMonth(value,-1))}><ArrowLeft2 size={16} weight="Outline" aria-hidden="true"/></button><button type="button" aria-label={english?"Next month":"下个月"} disabled={month>=latestMonth} onClick={()=>setMonth(value=>shiftTrackerMonth(value,1))}><ArrowRight2 size={16} weight="Outline" aria-hidden="true"/></button></div></header>
+    <div className="tracker-heatmap-weekdays" aria-hidden="true">{weekdays.map(day=><span key={day}>{day}</span>)}</div>
+    <div className="tracker-heatmap" aria-label={english?`${monthLabel} activity calendar`:`${monthLabel}活动日历`}>{Array.from({length:calendar.leadingDays},(_,index)=><i className="blank" key={`blank-${index}`} aria-hidden="true"/>)}{calendar.days.map(day=>{const label=!day.available?(day.date>latestDate?(english?`${day.date}, future date`:`${day.date}，未来日期`):(english?`${day.date}, outside available history`:`${day.date}，超出可用历史范围`)):(english?`${day.date}, ${day.count} record${day.count===1?"":"s"}`:`${day.date}，${day.count} 条记录`);return <span className={`tracker-heatmap-cell level-${trackerHeatLevel(day.count)}`} data-today={day.date===latestDate} data-unavailable={!day.available} title={label} aria-label={label} key={day.date}><strong>{Number(day.date.slice(-2))}</strong>{day.available&&day.count>1&&<small>{english?`${day.count}×`:`${day.count}次`}</small>}</span>;})}</div>
+    <div className="tracker-heatmap-legend" aria-label={english?"Records per day":"每日记录次数"}><span>{english?"Records":"次数"}</span>{[0,1,2,3,4].map(level=><span key={level}><i className={`level-${level}`}/><small>{level===4?"4+":level}</small></span>)}</div>
+  </div>;
 }
 
 function BarChart({items}:{items:TrackerInsights["monthly"]}) {
+  const {english}=useLocale();
   const maximum=Math.max(1,...items.map((item)=>item.count));
-  return <div className="tracker-bars">{items.map((item)=><div key={item.key}><span title={`${item.label}: ${item.count}`} style={{height:`${Math.max(item.count?8:2,item.count/maximum*100)}%`}}/><small>{item.label}</small></div>)}</div>;
+  return <div className="tracker-bars" role="list">{items.map((item)=>{const height=item.count?Math.max(8,item.count/maximum*82):0;return <div role="listitem" aria-label={english?`${item.label}: ${item.count} records`:`${item.label}：${item.count} 条记录`} key={item.key}><div className="tracker-bar-plot" style={{"--bar-height":`${height}%`} as CSSProperties}>{item.count>0&&<strong>{item.count}</strong>}<span aria-hidden="true"/></div><small>{item.label}</small></div>;})}</div>;
 }
 
 function FieldFilter({field,value,onChange}:{field:TrackerField;value:string;onChange:(value:string)=>void}){
