@@ -720,11 +720,13 @@ export interface ChronicleEntry {
 }
 
 export type DailyJournalMood = -2 | -1 | 0 | 1 | 2;
+export type DailyJournalEnergy = 1 | 2 | 3;
 export interface DailyJournalEntry {
   id: number;
   date: string;
   content: string;
   moodScore: DailyJournalMood | null;
+  energyLevel: DailyJournalEnergy | null;
   createdAt: string;
   updatedAt: string;
 }

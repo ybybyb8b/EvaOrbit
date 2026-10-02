@@ -155,12 +155,20 @@ function dailyJournalMood(value: unknown, optional = false) {
   return Number(value) as -2 | -1 | 0 | 1 | 2;
 }
 
+function dailyJournalEnergy(value: unknown, optional = false) {
+  if (value === undefined) return optional ? undefined : null;
+  if (value === null || value === "") return null;
+  if (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 3) throw new ValidationError("精力格式不正确");
+  return Number(value) as 1 | 2 | 3;
+}
+
 export function parseNewDailyJournalEntry(value: unknown) {
   const body = objectValue(value);
   return {
     date: dateOnly(body.date),
     content: text(body.content, "日记", 10_000)!,
     moodScore: dailyJournalMood(body.moodScore) ?? null,
+    energyLevel: dailyJournalEnergy(body.energyLevel) ?? null,
   };
 }
 
@@ -170,6 +178,7 @@ export function parseDailyJournalEntryPatch(value: unknown) {
     date: body.date === undefined ? undefined : dateOnly(body.date),
     content: body.content === undefined ? undefined : text(body.content, "日记", 10_000),
     moodScore: dailyJournalMood(body.moodScore, true),
+    energyLevel: dailyJournalEnergy(body.energyLevel, true),
   };
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的日记字段");
   return result;

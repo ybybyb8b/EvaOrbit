@@ -1,5 +1,5 @@
 export const BACKUP_VERSION = 8 as const;
-export const BACKUP_SCHEMA_VERSION = "202610010002_daily_journal_entries";
+export const BACKUP_SCHEMA_VERSION = "202610020002_daily_journal_energy";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
