@@ -5558,6 +5558,11 @@ html[data-mode="dark"] .home-journal-entry { background:rgb(255 255 255 / .032);
 .food-place-detail-page .food-place-log-list span { font-size:11px; }
 .food-place-detail-page .food-place-log-list strong { font-size:13px; }
 
+.food-place-location-field .relation-label-suggestions button {
+  max-width:100%;padding:6px 12px;border-radius:999px;
+  overflow-wrap:anywhere;line-height:1.4;
+}
+
 /* Keep navigation above the title, including profile and full-height chat pages. */
 .lucius-profile-navigation { position:absolute; z-index:2; top:max(14px,env(safe-area-inset-top)); left:max(14px,env(safe-area-inset-left)); }
 .lucius-profile-navigation .page-back-button { background:var(--lucius-header); color:var(--lucius-ink); }
