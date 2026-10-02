@@ -257,7 +257,7 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - Calendar 与 Reminders 分别请求权限；启动、恢复和 bridge ready 不主动弹权限框。
 - Calendar 来源按设备保存 `Off / Import only`；即使旧配置残留 `Two-way`，同步核心也必须降级为 Import only。`Off` 只暂停该来源，不删除映射或任一侧数据，也不会把未读取误判为 Apple 删除。
 - Calendar 永远是 Apple → EO 单向读取：EO 不创建、修改或删除 Apple Event。Reminders 通过 `EO → Reminder List` 将 Tasks、Cats、Cats Household、Trackers、Health 与 Subscriptions 独立路由到可写 Apple List；同一 List 内没有 EO link 的私人项目不会进入 EO。旧版 `EO Tasks only` 配置首次读取时迁移为 Tasks route。
-- Task link 继续同步 title、notes、Due 与完成状态。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
+- Task link 继续同步 title、notes、Due 与完成状态，但只为尚未完成的未关联 EO Task 新建 Apple Reminder；历史已完成 Task 不参与首次导出，已关联 Task 仍会把后续完成状态同步给 Apple。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
 - Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，三方基线与 identifier mapping 存在 `eventkit_links`。
 - 发布 domain routes 前必须先应用 `supabase/migrations/202609300001_eventkit_reminder_domain_routes.sql`，使 `eventkit_links` 可以记录通用 EO Reminder 映射。
 - Calendar 使用过去 90 天到未来 365 天窗口；Reminders 使用未完成项和最近 30 天完成项。
