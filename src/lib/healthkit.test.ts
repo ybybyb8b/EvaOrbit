@@ -119,6 +119,15 @@ test("HealthKit period range migration backfills ribbon periods without stretchi
   assert.match(privilege,/grant execute on function public\.reconcile_healthkit_menstrual_periods\(uuid\) to service_role/);
 });
 
+test("HealthKit period reconciliation moves out-of-order samples to the newest started cycle",()=>{
+  const sql=readFileSync(new URL("../../supabase/migrations/202610020001_healthkit_menstrual_period_reassignment.sql",import.meta.url),"utf8");
+  assert.match(sql,/order by p\.started_on desc,p\.id desc/);
+  assert.match(sql,/f\.period_id is distinct from resolved\.period_id/);
+  assert.ok(sql.indexOf("set period_id=resolved.period_id")<sql.indexOf("set ended_on=b.last_flow_on"));
+  assert.match(sql,/perform public\.reconcile_healthkit_menstrual_periods\(owner\.user_id\)/);
+  assert.match(sql,/grant execute on function public\.reconcile_healthkit_menstrual_periods\(uuid\) to service_role/);
+});
+
 test("HealthKit migration separates sources and enforces scope and revision idempotency", () => {
   const sql = readFileSync(new URL("../../supabase/migrations/202609010001_healthkit_energy.sql", import.meta.url), "utf8");
   assert.match(sql, /create table if not exists public\.native_devices/i);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildRelationTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, groupMealTimelineEvents, periodDayForDate, periodRangesForCalendar, summarizeTimelineDays } from "./timeline.ts";
 import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
@@ -131,4 +132,10 @@ test("treats a HealthKit midnight end as exclusive for the calendar ribbon", () 
   const active: MenstrualPeriod = { id: 5, startedOn: "2026-08-26", endedOn: null, notes: "", createdAt: "", updatedAt: "" };
   const [range] = periodRangesForCalendar([active], [{ ...menstrualFlow, occurredAt: "2026-08-30T16:00:00.000Z", endedAt: "2026-08-31T16:00:00.000Z" }], "2026-09-14");
   assert.equal(range.endedOn, "2026-08-31");
+});
+
+test("month summaries use the complete open-period flow history across a month boundary", () => {
+  const service = readFileSync(new URL("./services/timeline.ts", import.meta.url), "utf8");
+  assert.match(service, /listMenstrualFlowRecords\(\{ periodId: openPeriod\.id, limit: 500 \}\)/);
+  assert.doesNotMatch(service, /periodRangesForCalendar\([^\n]+sources\.menstrualFlows/);
 });

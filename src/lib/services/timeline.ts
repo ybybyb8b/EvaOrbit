@@ -101,6 +101,11 @@ export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 
   const next = new Date(`${first}T12:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);
   const nextMonth = next.toISOString().slice(0, 10);
-  const periods = periodRangesForCalendar(await sources.repository.listMenstrualPeriods({ limit: 500 }), sources.menstrualFlows).filter((item) => item.startedOn < nextMonth && item.endedOn >= first);
+  const menstrualPeriods = await sources.repository.listMenstrualPeriods({ limit: 500 });
+  const openPeriod = menstrualPeriods.find((item) => item.endedOn === null);
+  const calendarFlows = openPeriod
+    ? await sources.repository.listMenstrualFlowRecords({ periodId: openPeriod.id, limit: 500 })
+    : [];
+  const periods = periodRangesForCalendar(menstrualPeriods, calendarFlows).filter((item) => item.startedOn < nextMonth && item.endedOn >= first);
   return { month, days: summarizeTimelineDays(groupMealsByDay(mergeTimelineSources(sources, cats, range))), periods };
 }
