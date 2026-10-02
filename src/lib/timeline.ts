@@ -112,7 +112,7 @@ export function groupMealTimelineEvents(events: TimelineEvent[]) {
 export function summarizeTimelineDays(events: TimelineEvent[]) {
   const days: Record<string, TimelineDaySummary> = {};
   for (const event of events) {
-    const day = dateInEvaOrbit(new Date(event.occurredAt));
+    const day = timelineEventDate(event);
     const current = days[day] ?? { count: 0, highlighted: false };
     days[day] = {
       count: current.count + 1,
@@ -143,7 +143,10 @@ export function periodRangesForCalendar(periods: MenstrualPeriod[], flows: Menst
   return periods.map((period) => ({ ...period, endedOn: period.endedOn ?? confirmedEnds.get(period.id) ?? period.startedOn }));
 }
 
-export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id">){const leftDay=dateInEvaOrbit(new Date(left.occurredAt)),rightDay=dateInEvaOrbit(new Date(right.occurredAt));if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
+export function timelineEventDate(event: Pick<TimelineEvent, "occurredAt"> & Partial<Pick<TimelineEvent, "sourceType" | "metadata">>) {
+  return event.sourceType === "calendar" && typeof event.metadata?.timelineDate === "string" ? event.metadata.timelineDate : dateInEvaOrbit(new Date(event.occurredAt));
+}
+export function compareTimelineEvents(left:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id"> & Partial<Pick<TimelineEvent,"sourceType"|"metadata">>,right:Pick<TimelineEvent,"occurredAt"|"hasExplicitTime"|"id"> & Partial<Pick<TimelineEvent,"sourceType"|"metadata">>){const leftDay=timelineEventDate(left),rightDay=timelineEventDate(right);if(leftDay!==rightDay)return rightDay.localeCompare(leftDay);if(left.hasExplicitTime!==right.hasExplicitTime)return left.hasExplicitTime?-1:1;if(left.hasExplicitTime&&left.occurredAt!==right.occurredAt)return right.occurredAt.localeCompare(left.occurredAt);return right.id.localeCompare(left.id);}
 export function buildRelationTimelineEvents(events:RelationEvent[],relationPeople:Pick<RelationPerson,"id"|"name"|"nickname">[]=[]):TimelineEvent[]{
   const namesById=new Map(relationPeople.map(person=>[person.id,person.nickname?.trim()||person.name]));
   return events.map(event=>{

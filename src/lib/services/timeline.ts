@@ -1,8 +1,9 @@
 import "server-only";
 
 import { calculateDailyNutrition } from "../nutrition";
+import { buildCalendarTimelineEvents, readCalendarTimelineRecords } from "../calendar-timeline";
 import { getRepository } from "../repositories";
-import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, periodRangesForCalendar, summarizeTimelineDays } from "../timeline";
+import { buildRelationTimelineEvents, buildSubscriptionTimelineEvents, buildTimelineEvents, buildTrainingTimelineEvents, compareTimelineEvents, groupMealTimelineEvents, periodRangesForCalendar, summarizeTimelineDays, timelineEventDate } from "../timeline";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import { catchUpAutomaticSubscriptionPayments } from "./subscription";
@@ -17,10 +18,15 @@ function monthDateRange(month: string) {
   return { from: dateRange(first).from, to: dateRange(next.toISOString().slice(0, 10)).from };
 }
 
+async function calendarRecordsInRange(range: { from: string; to: string }) {
+  const repository = await getRepository();
+  return readCalendarTimelineRecords(range, query => repository.listCalendarEvents(query));
+}
+
 async function loadSources(range: { from: string; to: string }) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
-  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -32,10 +38,11 @@ async function loadSources(range: { from: string; to: string }) {
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
+    calendarRecordsInRange(range),
   ]);
   const subscriptions=await repository.listSubscriptions();
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, subscriptionPayments };
+  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptions, subscriptionPayments };
 }
 
 function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, cats: Awaited<ReturnType<typeof catTimeline>>, range: { from: string; to: string }) {
@@ -45,13 +52,14 @@ function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, 
     ...buildRelationTimelineEvents(sources.relationEvents,sources.relationPeople),
     ...buildSubscriptionTimelineEvents(sources.subscriptionPayments,sources.subscriptions),
     ...catsInRange(cats, range),
+    ...buildCalendarTimelineEvents(sources.calendarEvents, range),
   ].sort(compareTimelineEvents);
 }
 
 function groupMealsByDay(events: TimelineEvent[]) {
   const byDay = new Map<string, TimelineEvent[]>();
   for (const event of events) {
-    const day = dateInEvaOrbit(new Date(event.occurredAt));
+    const day = timelineEventDate(event);
     byDay.set(day, [...(byDay.get(day) ?? []), event]);
   }
   return [...byDay.values()].flatMap(groupMealTimelineEvents).sort(compareTimelineEvents);
@@ -68,7 +76,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, calendarEvents] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -83,11 +91,12 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
     repository.listSubscriptions(),
+    calendarRecordsInRange(range),
   ]);
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>item.paidOn===date);
   return {
     date,
-    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range)]),
+    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range), ...buildCalendarTimelineEvents(calendarEvents,range)]),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

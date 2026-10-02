@@ -217,7 +217,7 @@ export interface InboxItem {
   updatedAt: string;
 }
 
-export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "subscription" | "media" | "chronicle";
+export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "subscription" | "media" | "chronicle" | "calendar";
 
 export interface TimelineEvent {
   id: string;
