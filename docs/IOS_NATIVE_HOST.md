@@ -10,6 +10,8 @@ EventKit 接入不新增 entitlement，也不改变本 runbook 的 ad-hoc IPA、
 
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取、Body Mass 与 Menstrual Flow 双向同步：能量按日聚合，体重逐样本处理，经量使用独立 CategorySample 路径并保留 source/sample/sync identity。三者复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql`、`supabase/migrations/202609090002_weight.sql`、`supabase/migrations/202609130001_period_medication.sql`、`supabase/migrations/202609130002_period_medication_reminder_projection.sql` 与 `supabase/migrations/202609130003_healthkit_menstrual_flow.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
+EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线每 60 秒补偿；无需进入设置页，手动 Sync now 仍可用。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。此次仅改 Web，不新增 bridge 方法、权限或 entitlement，也不要求重建 IPA；需要部署 Web 后用支持 EventKit 的现有 Host 真机验证。App 不运行时仍不保证即时同步。
+
 ## 已验证基线
 
 ### Native Host 构建链

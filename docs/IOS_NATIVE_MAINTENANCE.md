@@ -266,7 +266,8 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
 - Reminder 映射包含 title、notes、Due 日期/明确时间、completed 与 completion date。带明确时间的 Due 创建普通的零偏移 Apple alert；date-only Due 不创建定时通知，也不映射 priority。更新既有 Apple Reminder 时保留 Apple 侧已有的自定义 alarm 与 priority。Tags、URL、location 与 Apple recurrence 不进入 EO 模型；EO recurrence 只投影当前一期，完成后由原业务服务推进并创建下一期 Apple Reminder。
 - 实际已有 Apple alert 的已映射 Task 或 domain Reminder 由 `apple_reminders` channel 负责首次通知；没有 Apple alert 时继续由 EO 投递。Due 卡与投递渠道无关，`repeat_while_overdue` 在 Due 后继续由 EO 投递，避免首次通知双响。
-- `EKEventStoreChanged` 经 Native 1.5 秒 debounce 后通知 Web；App launch/foreground、手动 Sync now 和 store change 都触发 eventual reconcile。没有 APNs silent push，App 长期不运行时不保证即时同步。
+- 全局 App shell 挂载 EventKit reconciler，不依赖 Apple Integration 页。启动、bridge ready、回到前台/页面可见、网络恢复、来源/路由配置变动与 `EKEventStoreChanged` 都触发同步（Web 1.5 秒防抖；Native store change 另有 1.5 秒防抖）。前台在线每 60 秒补偿同步 EO/远端修改；隐藏或离线时跳过，重叠调用复用 single-flight，运行期间到达的事件保留一轮补偿。失败等待下一次触发重试；设置页显示自动同步时间/错误，导入后刷新当前页面。自动同步不请求权限，选定来源权限被撤销时停止该轮，避免误判删除。没有 APNs silent push，App 长期不运行时不保证即时同步。
+- Reminders 标题包含 `续火花` 时排除导入、导出和已有关联项的更新/删除/重建；匹配 Apple 当前标题、EO 当前标题和映射基线标题。保留已有数据和映射，不把屏蔽项当成 Apple 删除；不影响 Calendar。
 
 ## 五、JS↔Swift bridge 安全契约
 
