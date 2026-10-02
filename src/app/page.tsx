@@ -1,7 +1,9 @@
 import { getUiPreferences } from "@/lib/services/evaorbit";
 import { getTimelineMonthSummary } from "@/lib/services/timeline";
 import { getHomeDayOverview } from "@/lib/services/home-day";
+import { getDueReminders } from "@/lib/services/reminder";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
+import { DueReminders } from "@/components/due-reminders";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import styles from "./home.module.css";
 
@@ -26,13 +28,15 @@ function greeting(english: boolean) {
 export default async function HomePage() {
   const preferences = await getUiPreferences();
   const english = preferences.uiLanguage === "en";
-  const [today, monthSummary] = await Promise.all([getHomeDayOverview(), getTimelineMonthSummary()]);
+  const [today, monthSummary, due] = await Promise.all([getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders()]);
 
   return <div className="page home-page">
     <header className="home-masthead">
       <span className={styles.date}>{dateLabel(english)}</span>
       <h1>{greeting(english)}</h1>
     </header>
+
+    <DueReminders items={due} compact />
 
     <section className={`home-overview ${styles.overview}`}>
       <HomeCalendarTimeline initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage} />
