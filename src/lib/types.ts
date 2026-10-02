@@ -435,6 +435,7 @@ export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
   id: number;
   occurredAt: string;
+  occurredHasExplicitTime?: boolean;
   mealType: MealType;
   title: string;
   description: string;

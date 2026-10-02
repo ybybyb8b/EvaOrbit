@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
+import { defaultCalendarInterpretation, parseCalendarInterpretation, type CalendarInterpretation } from "./calendar-interpretation";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
 import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
@@ -1424,6 +1425,29 @@ END;
 INSERT INTO migrations(version) VALUES(60);
 COMMIT;`);
 
+const hasV61 = database.prepare("SELECT 1 FROM migrations WHERE version=61").get();
+if (!hasV61) database.exec(`BEGIN;
+ALTER TABLE ui_preferences ADD COLUMN calendar_interpretation TEXT NOT NULL DEFAULT '${JSON.stringify(defaultCalendarInterpretation())}' CHECK(json_valid(calendar_interpretation) AND json_type(calendar_interpretation)='object');
+INSERT INTO migrations(version) VALUES(61);
+COMMIT;`);
+
+const hasV62 = database.prepare("SELECT 1 FROM migrations WHERE version=62").get();
+if (!hasV62) database.exec(`BEGIN;
+ALTER TABLE food_logs ADD COLUMN occurred_has_explicit_time INTEGER NOT NULL DEFAULT 1 CHECK(occurred_has_explicit_time IN (0,1));
+INSERT INTO migrations(version) VALUES(62);
+COMMIT;`);
+
+export function getCalendarInterpretation(): CalendarInterpretation {
+  const row = database.prepare("SELECT calendar_interpretation FROM ui_preferences WHERE id=1").get() as { calendar_interpretation: string };
+  return parseCalendarInterpretation(JSON.parse(row.calendar_interpretation));
+}
+export function updateCalendarInterpretation(input: CalendarInterpretation) {
+  const next = { ...parseCalendarInterpretation(input), revision: input.revision + 1 };
+  const result = database.prepare("UPDATE ui_preferences SET calendar_interpretation=?,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND json_extract(calendar_interpretation,'$.revision')=?").run(JSON.stringify(next), input.revision);
+  if (!result.changes) throw new ConflictError("解读规则已在其他页面更新，请刷新后重试");
+  return next;
+}
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -1885,7 +1909,7 @@ export function updateInboxItem(id: number, input: Record<string, unknown>) {
 }
 export function deleteInboxItem(id: number) { return database.prepare("DELETE FROM inbox_items WHERE id = ?").run(id).changes > 0; }
 
-function foodFromRow(row: Record<string, unknown>): FoodLog { return { id: Number(row.id), occurredAt: String(row.occurred_at), mealType: row.meal_type as FoodLog["mealType"], title: String(row.title), description: String(row.description), portion: String(row.portion), scene: row.scene as FoodLog["scene"], rating: row.rating ? row.rating as FoodLog["rating"] : null, estimatedKcal: row.estimated_kcal === null ? null : Number(row.estimated_kcal), kcalMin: row.kcal_min === null ? null : Number(row.kcal_min), kcalMax: row.kcal_max === null ? null : Number(row.kcal_max), confidence: row.confidence as FoodLog["confidence"], notes: String(row.notes), imageUrl: row.image_url ? String(row.image_url) : null, attachmentId: row.attachment_id ? String(row.attachment_id) : null, foodPlaceId: row.food_place_id === null || row.food_place_id === undefined ? null : Number(row.food_place_id), foodDishId: row.food_dish_id === null || row.food_dish_id === undefined ? null : Number(row.food_dish_id), foodPlaceName: row.food_place_name ? String(row.food_place_name) : null, foodPlaceBranch: row.food_place_branch ? String(row.food_place_branch) : null, foodPlaceCity: row.food_place_city ? String(row.food_place_city) : null, foodPlaceLocation: row.food_place_location ? String(row.food_place_location) : null, foodDishName: row.food_dish_name ? String(row.food_dish_name) : null, foodDishIds: JSON.parse(String(row.food_dish_ids ?? "[]")), foodDishes: JSON.parse(String(row.food_dishes_json ?? "[]")), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }; }
+function foodFromRow(row: Record<string, unknown>): FoodLog { return { id: Number(row.id), occurredAt: String(row.occurred_at), occurredHasExplicitTime: row.occurred_has_explicit_time === undefined ? true : Boolean(row.occurred_has_explicit_time), mealType: row.meal_type as FoodLog["mealType"], title: String(row.title), description: String(row.description), portion: String(row.portion), scene: row.scene as FoodLog["scene"], rating: row.rating ? row.rating as FoodLog["rating"] : null, estimatedKcal: row.estimated_kcal === null ? null : Number(row.estimated_kcal), kcalMin: row.kcal_min === null ? null : Number(row.kcal_min), kcalMax: row.kcal_max === null ? null : Number(row.kcal_max), confidence: row.confidence as FoodLog["confidence"], notes: String(row.notes), imageUrl: row.image_url ? String(row.image_url) : null, attachmentId: row.attachment_id ? String(row.attachment_id) : null, foodPlaceId: row.food_place_id === null || row.food_place_id === undefined ? null : Number(row.food_place_id), foodDishId: row.food_dish_id === null || row.food_dish_id === undefined ? null : Number(row.food_dish_id), foodPlaceName: row.food_place_name ? String(row.food_place_name) : null, foodPlaceBranch: row.food_place_branch ? String(row.food_place_branch) : null, foodPlaceCity: row.food_place_city ? String(row.food_place_city) : null, foodPlaceLocation: row.food_place_location ? String(row.food_place_location) : null, foodDishName: row.food_dish_name ? String(row.food_dish_name) : null, foodDishIds: JSON.parse(String(row.food_dish_ids ?? "[]")), foodDishes: JSON.parse(String(row.food_dishes_json ?? "[]")), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }; }
 export function listFoodLogs(input: { query?: string; mealType?: string; from?: string; to?: string; foodPlaceId?:number; foodDishId?:number; limit?:number } = {}) {
   const conditions: string[] = [], values:Array<string|number> = [];
   if (input.query) { conditions.push("(fl.title LIKE ? OR fl.description LIKE ? OR fp.name LIKE ? OR EXISTS(SELECT 1 FROM json_each(fl.food_dish_ids) j JOIN food_dishes d ON d.id=j.value WHERE d.name LIKE ?))"); values.push(...Array(4).fill(`%${input.query}%`)); }
@@ -1898,9 +1922,9 @@ export function listFoodLogs(input: { query?: string; mealType?: string; from?: 
 }
 export function getFoodLog(id: number) { const row = database.prepare("SELECT fl.*,fp.name AS food_place_name,fp.branch AS food_place_branch,fp.city AS food_place_city,fp.location AS food_place_location,fd.name AS food_dish_name,(SELECT json_group_array(json_object('id',d.id,'name',d.name)) FROM json_each(fl.food_dish_ids) j JOIN food_dishes d ON d.id=j.value) AS food_dishes_json FROM food_logs fl LEFT JOIN food_places fp ON fp.id=fl.food_place_id LEFT JOIN food_dishes fd ON fd.id=fl.food_dish_id WHERE fl.id=?").get(id) as Record<string, unknown> | undefined; return row ? foodFromRow(row) : null; }
 export function createFoodLog(input: NewFoodLog) {
-  const result = database.prepare("INSERT INTO food_logs(occurred_at,meal_type,title,description,portion,scene,rating,estimated_kcal,kcal_min,kcal_max,confidence,notes,image_url,attachment_id,food_place_id,food_dish_id,food_dish_ids) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.occurredAt,input.mealType,input.title,input.description,input.portion,input.scene,input.rating,input.estimatedKcal,input.kcalMin,input.kcalMax,input.confidence,input.notes,input.imageUrl,input.attachmentId,input.foodPlaceId??null,(input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]))[0]??null,JSON.stringify(input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]))); return getFoodLog(Number(result.lastInsertRowid))!;
+  const result = database.prepare("INSERT INTO food_logs(occurred_has_explicit_time,occurred_at,meal_type,title,description,portion,scene,rating,estimated_kcal,kcal_min,kcal_max,confidence,notes,image_url,attachment_id,food_place_id,food_dish_id,food_dish_ids) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(Number(input.occurredHasExplicitTime??true),input.occurredAt,input.mealType,input.title,input.description,input.portion,input.scene,input.rating,input.estimatedKcal,input.kcalMin,input.kcalMax,input.confidence,input.notes,input.imageUrl,input.attachmentId,input.foodPlaceId??null,(input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]))[0]??null,JSON.stringify(input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]))); return getFoodLog(Number(result.lastInsertRowid))!;
 }
-export function updateFoodLog(id: number, input: Record<string, unknown>) { if(input.foodDishIds!==undefined){input={...input,foodDishId:(input.foodDishIds as number[])[0]??null,foodDishIds:JSON.stringify(input.foodDishIds)};} else if(input.foodDishId!==undefined){input={...input,foodDishIds:JSON.stringify(input.foodDishId?[input.foodDishId]:[])};} const map: Record<string,string>={occurredAt:"occurred_at",mealType:"meal_type",title:"title",description:"description",portion:"portion",scene:"scene",rating:"rating",estimatedKcal:"estimated_kcal",kcalMin:"kcal_min",kcalMax:"kcal_max",confidence:"confidence",notes:"notes",imageUrl:"image_url",attachmentId:"attachment_id",foodPlaceId:"food_place_id",foodDishId:"food_dish_id",foodDishIds:"food_dish_ids"}; const entries=Object.entries(map).filter(([key])=>input[key]!==undefined); if(!entries.length)return getFoodLog(id); database.prepare(`UPDATE food_logs SET ${entries.map(([,column])=>`${column} = ?`).join(", ")}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>input[key] as string|number|null),id); return getFoodLog(id); }
+export function updateFoodLog(id: number, input: Record<string, unknown>) { if(input.foodDishIds!==undefined){input={...input,foodDishId:(input.foodDishIds as number[])[0]??null,foodDishIds:JSON.stringify(input.foodDishIds)};} else if(input.foodDishId!==undefined){input={...input,foodDishIds:JSON.stringify(input.foodDishId?[input.foodDishId]:[])};} const map: Record<string,string>={occurredHasExplicitTime:"occurred_has_explicit_time",occurredAt:"occurred_at",mealType:"meal_type",title:"title",description:"description",portion:"portion",scene:"scene",rating:"rating",estimatedKcal:"estimated_kcal",kcalMin:"kcal_min",kcalMax:"kcal_max",confidence:"confidence",notes:"notes",imageUrl:"image_url",attachmentId:"attachment_id",foodPlaceId:"food_place_id",foodDishId:"food_dish_id",foodDishIds:"food_dish_ids"}; const entries=Object.entries(map).filter(([key])=>input[key]!==undefined); if(!entries.length)return getFoodLog(id); database.prepare(`UPDATE food_logs SET ${entries.map(([,column])=>`${column} = ?`).join(", ")}, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="occurredHasExplicitTime"?Number(input[key]):input[key] as string|number|null),id); return getFoodLog(id); }
 export function deleteFoodLog(id:number){return database.prepare("DELETE FROM food_logs WHERE id=?").run(id).changes>0;}
 
 function libraryFromRow(row:Record<string,unknown>):FoodLibraryItem{return{id:Number(row.id),name:String(row.name),brand:String(row.brand),category:row.category as FoodLibraryItem["category"],defaultPortion:String(row.default_portion),referenceType:row.reference_type as FoodLibraryItem["referenceType"],referenceEnergyKj:row.reference_energy_kj===null?null:Number(row.reference_energy_kj),referenceKcal:row.reference_kcal===null?null:Number(row.reference_kcal),servingWeight:row.serving_weight===null?null:Number(row.serving_weight),servingKcal:row.serving_kcal===null?null:Number(row.serving_kcal),dataSource:row.data_source as FoodLibraryItem["dataSource"],notes:String(row.notes),archivedAt:row.archived_at?String(row.archived_at):null,updatedAt:String(row.updated_at)};}

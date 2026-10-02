@@ -12,7 +12,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     title: item.title,
     detail: item.portion || item.description || "饮食记录",
     occurredAt: item.occurredAt,
-    hasExplicitTime: true,
+    hasExplicitTime: item.occurredHasExplicitTime ?? true,
     endAt: null,
     href: "/food",
     relatedPeople: [],

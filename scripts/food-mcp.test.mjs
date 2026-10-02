@@ -37,9 +37,20 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const ids=[];
       for(const name of ["鸡腿饭","紫菜汤"]){const {item}=await call("eo_create",{resource:"food_dish",data:{food_place_id:place.id,name,category:"午餐"}});ids.push(item.id);}
       const {items:dishes}=await call("eo_search",{resource:"food_dish",query:"汤",filters:{food_place_id:place.id}});assert.equal(dishes[0].id,ids[1]);
-      const {record}=await call("food_create",{title:"午餐",food_place_id:place.id,food_dish_ids:ids});
+      const {record}=await call("food_create",{title:"午餐",food_place_id:place.id,food_dish_ids:ids,occurred_at:"2026-10-01T12:00:00+08:00",estimated_kcal:450});
       assert.deepEqual(record.food_dish_ids,ids);assert.deepEqual(record.food_dishes.map(d=>d.name),["鸡腿饭","紫菜汤"]);
       assert.equal(record.food_place_city,"成都");assert.equal(record.food_place_location,"天府和悦");
+      const {record:retimed}=await call("food_update",{id:record.id,occurred_at:"2026-10-02T18:35:00+08:00",occurred_has_explicit_time:true});
+      assert.equal(new Date(retimed.occurred_at).toISOString(),"2026-10-02T10:35:00.000Z");assert.equal(retimed.occurred_has_explicit_time,true);
+      assert.equal((await call("food_search_recent",{date:"2026-10-01"})).records.length,0);
+      assert.equal((await call("food_search_recent",{date:"2026-10-02"})).records[0].id,record.id);
+      assert.equal((await call("nutrition_get_daily_summary",{date:"2026-10-01"})).estimated_intake_kcal,0);
+      assert.equal((await call("nutrition_get_daily_summary",{date:"2026-10-02"})).estimated_intake_kcal,450);
+      const {record:dateOnly}=await call("food_update",{id:record.id,occurred_at:"2026-10-02T12:00:00+08:00",occurred_has_explicit_time:false});
+      assert.equal(dateOnly.occurred_has_explicit_time,false);
+      const {record:preservedTime}=await call("food_update",{id:record.id,title:"只改标题"});assert.equal(preservedTime.occurred_has_explicit_time,false);assert.equal(preservedTime.occurred_at,dateOnly.occurred_at);
+      const {getFoodLog}=await import("./src/lib/db.ts");const {buildTimelineEvents}=await import("./src/lib/timeline.ts");
+      assert.equal(buildTimelineEvents([getFoodLog(record.id)],[])[0].hasExplicitTime,false);
       const {records}=await call("food_search_recent",{food_place_id:place.id,food_dish_id:ids[1]});assert.equal(records[0].id,record.id);
       const {record:renamed}=await call("food_update",{id:record.id,title:"修改午餐"});assert.deepEqual(renamed.food_dish_ids,ids);
       const {record:reordered}=await call("food_update",{id:record.id,food_dish_ids:[ids[1],ids[0]]});assert.deepEqual(reordered.food_dish_ids,[ids[1],ids[0]]);

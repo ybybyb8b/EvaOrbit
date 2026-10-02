@@ -5554,6 +5554,28 @@ button.home-activity-item:focus-visible { outline:2px solid var(--accent-primary
 .home-calendar-detail p { font-size:15px;line-height:1.65; }
 .home-calendar-detail-notes { white-space:pre-wrap; }
 .home-calendar-detail .home-calendar-detail-context { color:var(--text-secondary);font-size:13px; }
+.calendar-rule-directory { display:grid;gap:20px; }
+.calendar-rule-directory > header { display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap; }
+.calendar-rule-directory h2,.calendar-rule-preview h3 { margin:0; }
+.calendar-rule-list { display:grid;gap:10px; }
+.calendar-rule-row { width:100%;padding:18px;display:flex;align-items:center;gap:18px;border:0;border-radius:var(--radius-control);background:var(--surface-card);color:var(--text-primary);font:inherit;text-align:left;cursor:pointer; }
+.calendar-rule-row > span { min-width:0;flex:1;display:grid;gap:6px; }
+.calendar-rule-row strong { font-size:16px;line-height:1.5;overflow-wrap:anywhere; }
+.calendar-rule-row > span > span { color:var(--text-secondary);font-size:14px;line-height:1.5; }
+.calendar-rule-row svg { flex-shrink:0;color:var(--accent-primary); }
+.calendar-rule-row:active { background:rgb(var(--surface-tint-rgb) / .7); }
+.calendar-rule-row:focus-visible { outline:2px solid var(--accent-primary);outline-offset:3px; }
+.calendar-rule-form { display:grid;gap:20px; }
+.calendar-rule-toggle { display:flex;align-items:center;gap:12px;font-size:15px;line-height:1.5; }
+.calendar-rule-toggle input { width:20px;height:20px;flex-shrink:0;accent-color:var(--accent-primary); }
+.calendar-rule-preview { padding:18px;display:grid;gap:14px;border-radius:var(--radius-control);background:rgb(var(--surface-tint-rgb) / .4); }
+.calendar-rule-preview h3 { font-size:16px; }
+.calendar-rule-preview p { margin:0;overflow-wrap:anywhere;line-height:1.6; }
+.calendar-rule-preview ul { list-style:none;padding:0;margin:0;display:grid;gap:14px; }
+.calendar-rule-preview li { display:grid;gap:4px;overflow-wrap:anywhere; }
+.calendar-rule-preview li strong { font-size:15px;line-height:1.5; }
+.calendar-rule-preview li span,.calendar-rule-hint,.calendar-rule-impact { color:var(--text-secondary);font-size:14px;line-height:1.65; }
+.calendar-rule-hint,.calendar-rule-impact { margin:0; }
 html[data-mode="dark"] .home-day-pane { background:var(--surface-card);box-shadow:none; }
 html[data-mode="dark"] .home-journal-entry { background:rgb(255 255 255 / .032); }
 @media(max-width:720px) {

@@ -34,6 +34,7 @@ const foodLibraryReferenceType = z.enum(["per_100g", "per_100ml", "per_serving"]
 const foodLibraryDataSource = z.enum(["package_label", "official", "estimated", "manual"]);
 
 const foodFields = {
+  occurred_has_explicit_time: z.boolean().optional().describe("False for a date-only record; true when a time was explicitly supplied. Omitted on update preserves the existing precision."),
   food_place_id: z.number().int().positive().nullable().optional().describe("Associated food_place ID. All linked dishes must belong to this place."),
   food_dish_id: z.number().int().positive().nullable().optional().describe("Legacy single-dish association; prefer food_dish_ids."),
   food_dish_ids: z.array(z.number().int().positive()).max(50).optional().describe("Ordered dish IDs from the selected food_place. Use [] to clear associations; omitted on update preserves them."),
@@ -57,7 +58,7 @@ const foodLibraryFields = {
 const foodLibraryPatchFields = { ...foodLibraryFields, name: foodLibraryFields.name.optional() };
 
 function compactFood(record: FoodLog) {
-  return { id: record.id, food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, food_dish_ids: record.foodDishIds ?? (record.foodDishId ? [record.foodDishId] : []), food_dishes: record.foodDishes, occurred_at: record.occurredAt, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { id: record.id, food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, food_dish_ids: record.foodDishIds ?? (record.foodDishId ? [record.foodDishId] : []), food_dishes: record.foodDishes, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime ?? true, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactDrink(record: DrinkLog) {
@@ -101,7 +102,7 @@ async function runTool(action: () => Promise<Record<string, unknown>>): Promise<
 }
 
 function foodInput(input: z.infer<z.ZodObject<typeof foodFields>>) {
-  return { foodPlaceId: input.food_place_id, foodDishId: input.food_dish_id, foodDishIds: input.food_dish_ids, occurredAt: input.occurred_at, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { foodPlaceId: input.food_place_id, foodDishId: input.food_dish_id, foodDishIds: input.food_dish_ids, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function drinkInput(input: z.infer<z.ZodObject<typeof drinkFields>>) {

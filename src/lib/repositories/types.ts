@@ -5,6 +5,7 @@ import type { HomeModuleId } from "../home-modules";
 import type { AppearanceMode, ColorTheme } from "../theme";
 import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
+import type { CalendarInterpretation } from "../calendar-interpretation";
 import type { CalendarEvent } from "../types";
 import type { DailyJournalEntry } from "../types";
 
@@ -215,6 +216,8 @@ export interface EvaOrbitRepository {
 
   getDashboardSummary(): Promise<DashboardSummary>;
   getUiPreferences(): Promise<UiPreferences>;
+  getCalendarInterpretation(): Promise<CalendarInterpretation>;
+  updateCalendarInterpretation(input: CalendarInterpretation): Promise<CalendarInterpretation>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
   updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
