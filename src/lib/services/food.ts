@@ -10,19 +10,20 @@ export async function listFoodLogs(input: { date?: string; query?: string; mealT
   return (await getRepository()).listFoodLogs({ ...input, from: range?.from ?? input.from, to: range?.to ?? input.to });
 }
 export async function getTodayFood() { return listFoodLogs({ date: dateInEvaOrbit() }); }
-async function validateFoodLinks(repository:Awaited<ReturnType<typeof getRepository>>,foodPlaceId:number|null,foodDishId:number|null){
-  if(foodDishId!==null&&foodPlaceId===null)throw new ValidationError("选择菜品前需要先选择店铺");
+async function validateFoodLinks(repository:Awaited<ReturnType<typeof getRepository>>,foodPlaceId:number|null,foodDishIds:number[]){
+  if(foodDishIds.length&&foodPlaceId===null)throw new ValidationError("选择菜品前需要先选择店铺");
   if(foodPlaceId!==null&&!await repository.getFoodPlace(foodPlaceId))throw new ValidationError("所选店铺不存在");
-  if(foodDishId!==null){const dish=await repository.getFoodDish(foodDishId);if(!dish||dish.foodPlaceId!==foodPlaceId)throw new ValidationError("所选菜品不属于该店铺");}
+  for(const foodDishId of foodDishIds){const dish=await repository.getFoodDish(foodDishId);if(!dish||dish.foodPlaceId!==foodPlaceId)throw new ValidationError("所选菜品不属于该店铺");}
 }
-export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();await validateFoodLinks(repository,input.foodPlaceId??null,input.foodDishId??null);return repository.createFoodLog(input); }
+export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);return repository.createFoodLog({...input,foodDishIds:ids,foodDishId:ids[0]??null}); }
 export async function updateFoodLog(id: number, input: Record<string, unknown>) {
   const repository = await getRepository(); const existing = await repository.getFoodLog(id); if (!existing) return null;
   const scene = (input.scene ?? existing.scene) as FoodLog["scene"];
   const rating = input.rating === undefined ? existing.rating : input.rating;
   const foodPlaceId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
-  const foodDishId=input.foodDishId===undefined?existing.foodDishId??null:input.foodDishId as number|null;
-  await validateFoodLinks(repository,foodPlaceId,foodDishId);
+  const ids = input.foodDishIds !== undefined ? input.foodDishIds as number[] : input.foodDishId !== undefined ? (input.foodDishId ? [input.foodDishId as number] : []) : existing.foodDishIds ?? (existing.foodDishId ? [existing.foodDishId] : []);
+  await validateFoodLinks(repository,foodPlaceId,ids);
+  input = { ...input, foodDishIds: ids, foodDishId: ids[0] ?? null };
   if (scene !== "delivery" && scene !== "restaurant") {
     if (input.rating !== undefined && input.rating !== null) throw new ValidationError("只有外卖或外食记录可以填写评价");
     input = { ...input, rating: null };
@@ -69,5 +70,5 @@ export async function removeFoodPlace(id:number){return(await getRepository()).r
 export async function listFoodDishes(query="",options?:FoodDishSearchOptions){return(await getRepository()).listFoodDishes(query,options);}
 export async function getFoodDish(id:number){return(await getRepository()).getFoodDish(id);}
 export async function createFoodDish(input:NewFoodDish){const repository=await getRepository();const place=await repository.getFoodPlace(input.foodPlaceId);if(!place||place.archivedAt)throw new ValidationError("店铺不存在或已归档");return repository.createFoodDish(input);}
-export async function updateFoodDish(id:number,input:Partial<NewFoodDish>){const repository=await getRepository();const existing=await repository.getFoodDish(id);if(!existing||existing.archivedAt)return null;const placeId=input.foodPlaceId??existing.foodPlaceId;const place=await repository.getFoodPlace(placeId);if(!place||place.archivedAt)throw new ValidationError("店铺不存在或已归档");return repository.updateFoodDish(id,input);}
+export async function updateFoodDish(id:number,input:Partial<NewFoodDish>){const repository=await getRepository();const existing=await repository.getFoodDish(id);if(!existing||existing.archivedAt)return null;const placeId=input.foodPlaceId??existing.foodPlaceId;const place=await repository.getFoodPlace(placeId);if(!place||place.archivedAt)throw new ValidationError("店铺不存在或已归档");if(placeId!==existing.foodPlaceId&&(await repository.listFoodLogs({foodDishId:id,limit:1})).length)throw new ValidationError("已关联饮食记录的菜品不能移动到其他店铺");return repository.updateFoodDish(id,input);}
 export async function removeFoodDish(id:number){return(await getRepository()).removeFoodDish(id);}

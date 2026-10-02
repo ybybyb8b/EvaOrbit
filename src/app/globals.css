@@ -5574,3 +5574,24 @@ html[data-mode="dark"] .home-journal-entry { background:rgb(255 255 255 / .032);
   .has-page-back > .page { padding-top:24px; }
   .has-page-back > .ai-workspace { height:calc(100dvh - var(--page-navigation-height) - var(--mobile-bottom-bar-height) - 22px - env(safe-area-inset-bottom)); padding-top:0; }
 }
+
+/* Food record identity and searchable association controls. */
+.food-log-card .food-log-place { color:var(--text-secondary)!important; font-weight:400; }
+.food-log-place a { color:var(--green); font-weight:500; }
+.food-linked-dishes,.food-place-log-list .food-linked-dishes { display:flex; flex-direction:row; flex-wrap:wrap; gap:6px; margin:7px 0; }
+.food-linked-dishes>span,.food-linked-dishes>button { width:auto; padding:5px 9px; border:0; border-radius:999px; background:rgb(var(--surface-tint-rgb) / .7); color:var(--text-secondary); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.food-linked-dishes>button { cursor:pointer; min-height:36px; }
+.food-link-field { min-width:0; }
+.food-link-picker summary { list-style:none; display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:44px; padding:10px 12px; border:1px solid var(--border-control); border-radius:10px; cursor:pointer; background:var(--surface); color:var(--ink); font-size:14px; }
+.food-link-picker summary::-webkit-details-marker { display:none; }
+.food-link-picker summary>span:first-child { min-width:0; overflow-wrap:anywhere; }
+.food-link-picker summary:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+.food-link-menu { margin-top:8px; padding:10px; border-radius:12px; background:rgb(var(--surface-raised-rgb) / .85); }
+.food-link-menu>input { font-size:16px; }
+.food-link-options { max-height:240px; overflow-y:auto; overscroll-behavior:contain; margin-top:8px; }
+.food-link-options>button,.food-link-option { display:flex; align-items:center; gap:10px; min-height:44px; width:100%; padding:10px; border:0; border-radius:8px; background:transparent; color:var(--ink); font-size:14px; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
+.food-link-options>button { flex-direction:column; align-items:flex-start; gap:3px; }
+.food-link-option:hover,.food-link-options>button:hover,.food-link-options>button[aria-pressed="true"] { background:rgb(var(--surface-tint-rgb) / .8); }
+.food-link-option input { width:18px; height:18px; min-height:18px; flex:0 0 auto; margin:0; padding:0; accent-color:var(--green); }
+.food-link-options small { display:block; margin-top:3px; color:var(--text-secondary); font-size:12px; }
+.food-link-empty { padding:10px; font-size:13px; color:var(--muted); }

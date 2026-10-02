@@ -450,6 +450,8 @@ export interface FoodLog {
   attachmentId: string | null;
   foodPlaceId?: number | null;
   foodDishId?: number | null;
+  foodDishIds?: number[];
+  foodDishes?: { id: number; name: string }[];
   foodPlaceName?: string | null;
   foodPlaceBranch?: string | null;
   foodPlaceCity?: string | null;

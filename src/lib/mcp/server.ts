@@ -34,6 +34,9 @@ const foodLibraryReferenceType = z.enum(["per_100g", "per_100ml", "per_serving"]
 const foodLibraryDataSource = z.enum(["package_label", "official", "estimated", "manual"]);
 
 const foodFields = {
+  food_place_id: z.number().int().positive().nullable().optional().describe("Associated food_place ID. All linked dishes must belong to this place."),
+  food_dish_id: z.number().int().positive().nullable().optional().describe("Legacy single-dish association; prefer food_dish_ids."),
+  food_dish_ids: z.array(z.number().int().positive()).max(50).optional().describe("Ordered dish IDs from the selected food_place. Use [] to clear associations; omitted on update preserves them."),
   occurred_at: occurredAt.optional(), meal_type: mealType.optional(), title: z.string().trim().min(1).max(200),
   description: z.string().max(4000).optional(), portion: z.string().max(200).optional(), scene: scene.optional(),
   rating: tasteRating.nullable().optional(),
@@ -54,7 +57,7 @@ const foodLibraryFields = {
 const foodLibraryPatchFields = { ...foodLibraryFields, name: foodLibraryFields.name.optional() };
 
 function compactFood(record: FoodLog) {
-  return { id: record.id, occurred_at: record.occurredAt, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { id: record.id, food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, food_dish_ids: record.foodDishIds ?? (record.foodDishId ? [record.foodDishId] : []), food_dishes: record.foodDishes, occurred_at: record.occurredAt, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactDrink(record: DrinkLog) {
@@ -98,7 +101,7 @@ async function runTool(action: () => Promise<Record<string, unknown>>): Promise<
 }
 
 function foodInput(input: z.infer<z.ZodObject<typeof foodFields>>) {
-  return { occurredAt: input.occurred_at, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { foodPlaceId: input.food_place_id, foodDishId: input.food_dish_id, foodDishIds: input.food_dish_ids, occurredAt: input.occurred_at, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function drinkInput(input: z.infer<z.ZodObject<typeof drinkFields>>) {
@@ -116,8 +119,8 @@ function foodLibraryInput(input: Record<string, unknown>) {
 function createServer() {
   const server = new McpServer({ name: "eva-orbit", version: "0.1.0" }, { capabilities: { tools: {} } });
 
-  server.registerTool("food_search_recent", { description: "Find recent EvaOrbit food records.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), meal_type: mealType.optional(), limit: z.number().int().min(1).max(50).default(10) }) },
-    async ({ query, date: day, meal_type, limit }) => runTool(async () => ({ records: (await listFoodLogs({ query, date: day, mealType: meal_type })).slice(0, limit).map(compactFood) })));
+  server.registerTool("food_search_recent", { description: "Find recent EvaOrbit food records, optionally filtered by place or any linked dish. Includes place location and all linked dishes.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), meal_type: mealType.optional(), food_place_id: z.number().int().positive().optional(), food_dish_id: z.number().int().positive().optional(), limit: z.number().int().min(1).max(50).default(10) }) },
+    async ({ query, date: day, meal_type, food_place_id, food_dish_id, limit }) => runTool(async () => ({ records: (await listFoodLogs({ query, date: day, mealType: meal_type, foodPlaceId: food_place_id, foodDishId: food_dish_id, limit })).map(compactFood) })));
 
   server.registerTool("food_create", { description: "Create one EvaOrbit food record.", inputSchema: z.object(foodFields) },
     async (input) => runTool(async () => ({ record: compactFood(await createFoodLog(parseNewFoodLog(foodInput(input)))) })));

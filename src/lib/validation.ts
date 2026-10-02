@@ -782,6 +782,12 @@ export function parseInboxConversion(value: unknown) {
   return { target: enumValue(body.target, "转换类型", ["task", "memory"] as const, "task") };
 }
 
+function foodDishIds(value: unknown, legacy: unknown): number[] {
+  const ids = value === undefined ? (legacy == null || legacy === "" ? [] : [legacy]) : value;
+  if (!Array.isArray(ids) || ids.length > 50 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new ValidationError("菜品 ID 必须是正整数数组，最多 50 项");
+  return [...new Set(ids)] as number[];
+}
+
 export function parseNewFoodLog(value: unknown) {
   const body = objectValue(value);
   const kcalMin = optionalNumber(body.kcalMin, "热量下限");
@@ -802,7 +808,8 @@ export function parseNewFoodLog(value: unknown) {
     imageUrl: body.imageUrl === undefined || body.imageUrl === null ? null : text(body.imageUrl, "图片地址", 1000, false) || null,
     attachmentId: body.attachmentId === undefined || body.attachmentId === null ? null : text(body.attachmentId, "附件 ID", 200, false) || null,
     foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER),
-    foodDishId: optionalNumber(body.foodDishId, "菜品 ID", 1, Number.MAX_SAFE_INTEGER),
+    foodDishId: foodDishIds(body.foodDishIds, body.foodDishId)[0] ?? null,
+    foodDishIds: foodDishIds(body.foodDishIds, body.foodDishId),
   };
 }
 
@@ -812,9 +819,9 @@ export function parseFoodLogPatch(value: unknown) {
     occurredAt: body.occurredAt ?? new Date().toISOString(), mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
-    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId,
+    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["occurredAt", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodPlaceId", "foodDishId"] as const;
+  const keys = ["occurredAt", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;
