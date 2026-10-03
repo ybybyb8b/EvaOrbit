@@ -109,6 +109,12 @@ test("marks health and training days as important while retaining an accessible 
 
   const weightOnly = summarizeTimelineDays(buildTimelineEvents([], [], [], [], [], [weightRecord]));
   assert.deepEqual(weightOnly["2026-08-26"], { count: 1, highlighted: false });
+
+  const flowOnly = summarizeTimelineDays(buildTimelineEvents([], [], [], [], [], [], [menstrualFlow]));
+  assert.deepEqual(flowOnly["2026-08-26"], { count: 1, highlighted: false });
+
+  const doseOnly = summarizeTimelineDays(buildTimelineEvents([], [], [], [], [], [], [], [medicationDose]));
+  assert.deepEqual(doseOnly["2026-08-26"], { count: 1, highlighted: true });
 });
 
 test("finds a period day without extending an active period beyond today", () => {

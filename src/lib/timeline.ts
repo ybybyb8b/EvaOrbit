@@ -116,7 +116,7 @@ export function summarizeTimelineDays(events: TimelineEvent[]) {
     const current = days[day] ?? { count: 0, highlighted: false };
     days[day] = {
       count: current.count + 1,
-      highlighted: current.highlighted || event.sourceType === "training" || (event.sourceType === "health" && event.eventType !== "health.weight"),
+      highlighted: current.highlighted || event.sourceType === "training" || (event.sourceType === "health" && event.eventType !== "health.weight" && event.eventType !== "health.menstrual_flow"),
     };
   }
   return days;
