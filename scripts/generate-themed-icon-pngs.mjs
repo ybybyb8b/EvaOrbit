@@ -78,7 +78,7 @@ function mapTone(luminance, palette, dark) {
   return mix(palette.secondary, palette.surface, (luminance - 0.5) / 0.5);
 }
 
-function recolor(buffer, palette, dark) {
+function recolor(buffer, palette, dark, harmonizeWarm = false) {
   for (let index = 0; index < buffer.length; index += 4) {
     const red = buffer[index];
     const green = buffer[index + 1];
@@ -90,7 +90,9 @@ function recolor(buffer, palette, dark) {
     }
 
     const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-    const target = isBrandGreen(red, green, blue) || (dark && isLargeWarmFill(red, green, blue))
+    const [hue, saturation] = rgbToHsl(red, green, blue);
+    const warm = harmonizeWarm && hue >= 18 && hue <= 80 && saturation > 0.08;
+    const target = isBrandGreen(red, green, blue) || warm || (dark && isLargeWarmFill(red, green, blue))
       ? mapTone(luminance, palette, dark)
       : dark ? preserveHueForDark(red, green, blue) : [red, green, blue];
     buffer[index] = target[0];
@@ -109,15 +111,18 @@ async function writePng(data, info, destination) {
   await sharp(data, { raw: info }).png({ compressionLevel: 9, adaptiveFiltering: true, palette: true, colours: 128, dither: 0.35 }).toFile(destination);
 }
 
+const selectedTheme = process.argv.find((argument) => argument.startsWith("--theme="))?.slice(8);
+if (selectedTheme && !Object.hasOwn(palettes, selectedTheme)) throw new Error(`Unknown theme: ${selectedTheme}`);
+const selectedPalettes = selectedTheme ? { [selectedTheme]: palettes[selectedTheme] } : palettes;
 const sourceFiles = (await readdir(sourceDirectory)).filter((name) => name.endsWith(".png") && !name.endsWith("-dark.png")).sort();
 for (const filename of sourceFiles) {
   const name = filename.replace(/\.png$/, "");
   const { data: source, info } = await normalizedSource(path.join(sourceDirectory, filename));
 
-  for (const [theme, modes] of Object.entries(palettes)) {
+  for (const [theme, modes] of Object.entries(selectedPalettes)) {
     for (const [mode, palette] of Object.entries(modes)) {
       const data = Buffer.from(source);
-      recolor(data, palette, mode === "dark");
+      recolor(data, palette, mode === "dark", theme === "mistviolet");
       const suffix = mode === "dark" ? "-dark.png" : ".png";
       const base = theme === "editorial" ? path.join(root, "public/icons") : path.join(root, `public/icons/themes/${theme}`);
       await writePng(data, info, path.join(base, "features", `${name}${suffix}`));
@@ -131,10 +136,10 @@ for (const name of navNames) {
   const input = await access(navSource).then(() => navSource).catch(() => featureSource);
   const { data: source, info } = await normalizedSource(input);
 
-  for (const [theme, modes] of Object.entries(palettes)) {
+  for (const [theme, modes] of Object.entries(selectedPalettes)) {
     for (const [mode, palette] of Object.entries(modes)) {
       const data = Buffer.from(source);
-      recolor(data, palette, mode === "dark");
+      recolor(data, palette, mode === "dark", theme === "mistviolet");
       const suffix = mode === "dark" ? "-dark.png" : ".png";
       const base = theme === "editorial" ? path.join(root, "public/icons") : path.join(root, `public/icons/themes/${theme}`);
       await writePng(data, info, path.join(base, "nav", `${name}${suffix}`));

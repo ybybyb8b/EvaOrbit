@@ -226,8 +226,8 @@ html[data-theme="mistviolet"] {
   --surface-soft:#eae6ee;
   --surface-tint:#e6e2eb;
   --surface-accent-soft:#e2dbea;
-  --surface-warm:#eee6d8;
-  --surface-due:#eee6d8;
+  --surface-warm:#ede9f1;
+  --surface-due:#e5deed;
   --surface-lavender:#e5deed;
   --surface-danger:#f2e0e3;
   --text-primary:#302b36;
@@ -240,7 +240,7 @@ html[data-theme="mistviolet"] {
   --accent-soft:#e2dbea;
   --state-danger:#a6505a;
   --state-success:#547463;
-  --state-warning:#8a692e;
+  --state-warning:#89536a;
   --text-editorial:#403849;
   --text-action:#625873;
   --text-label:#5e5568;
@@ -256,11 +256,11 @@ html[data-theme="mistviolet"] {
   --surface-note:#eee9f1;
   --surface-note-alt:#e5deed;
   --surface-note-green:#e4ebe6;
-  --accent-gold:#8d6a3b;
+  --accent-gold:var(--state-warning);
   --surface-card-rgb:250 248 251;
   --surface-raised-rgb:254 252 255;
   --surface-tint-rgb:230 226 235;
-  --surface-warm-rgb:238 230 216;
+  --surface-warm-rgb:237 233 241;
   --surface-shell-rgb:246 243 247;
   --surface-header-rgb:248 245 249;
   --surface-chat-rgb:244 241 246;
@@ -434,8 +434,8 @@ html[data-theme="mistviolet"][data-mode="dark"] {
   --surface-soft:#202222;
   --surface-tint:#252828;
   --surface-accent-soft:#352f40;
-  --surface-warm:#292824;
-  --surface-due:#2d2922;
+  --surface-warm:#2c2932;
+  --surface-due:#302b3a;
   --surface-lavender:#302b3a;
   --surface-danger:#392326;
   --text-primary:#f1eee8;
@@ -449,7 +449,7 @@ html[data-theme="mistviolet"][data-mode="dark"] {
   --accent-on:#1c1722;
   --state-danger:#e49a92;
   --state-success:#9fc4aa;
-  --state-warning:#d7b872;
+  --state-warning:#d4a5b8;
   --text-editorial:#e5dfee;
   --text-action:#c2b5d0;
   --text-label:#c6bdcc;
@@ -465,11 +465,11 @@ html[data-theme="mistviolet"][data-mode="dark"] {
   --surface-note:#222323;
   --surface-note-alt:#2c2733;
   --surface-note-green:#242824;
-  --accent-gold:#cfad7f;
+  --accent-gold:var(--state-warning);
   --surface-card-rgb:24 26 26;
   --surface-raised-rgb:32 35 35;
   --surface-tint-rgb:37 40 40;
-  --surface-warm-rgb:41 40 36;
+  --surface-warm-rgb:44 41 50;
   --surface-shell-rgb:18 20 20;
   --surface-header-rgb:22 24 24;
   --surface-chat-rgb:16 18 18;
@@ -583,6 +583,7 @@ html[data-theme="mistviolet"][data-mode="dark"] .feature-icon,html[data-theme="m
 .brand { padding: 2px 7px 34px; display: flex; align-items: center; gap: 11px; }
 .brand-mark { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; overflow: hidden; flex: none; background: var(--surface-brand); box-shadow: 0 5px 16px rgba(31,55,44,.12); }
 .brand-mark img { width: 100%; height: 100%; object-fit: cover; }
+html[data-theme="mistviolet"] .brand-mark img { filter:sepia(1) hue-rotate(205deg) saturate(.55); }
 .brand > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .brand strong { white-space: nowrap; font: 600 17px var(--font-editorial-label); }
 .brand small { color: var(--text-secondary); font-size: 7px; font-weight: 800; letter-spacing: 1.4px; }
@@ -4188,6 +4189,10 @@ body {
 .settings-directory-icon,
 .module-preview-card > span {
   background:rgb(var(--surface-warm-rgb) / .7);
+}
+
+html[data-theme="mistviolet"] .settings-directory-icon {
+  background:var(--surface-accent-soft);
 }
 
 
