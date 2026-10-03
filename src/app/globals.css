@@ -6020,3 +6020,16 @@ html[data-theme="mistviolet"] :is(.module-intro-icon,.module-preview-card>span,.
 .eo-select-check { flex:0 0 16px; font-size:13px; color:var(--green); }
 .eo-select-create { color:var(--green); }
 .eo-select-empty { display:block; padding:12px; color:var(--text-secondary); font-size:13px; line-height:1.5; }
+
+/* Drink records keep specifications readable across page and history layouts. */
+.drink-record-card { grid-template-columns:minmax(0,1fr) 44px; }
+.drink-record-card .drink-record-copy > span { font-size:13px; font-weight:400; letter-spacing:0; line-height:1.5; }
+.drink-record-card .drink-record-copy h2 { white-space:normal; overflow-wrap:anywhere; line-height:1.4; margin:5px 0; }
+.drink-record-card .drink-record-copy small { white-space:normal; overflow:visible; font-size:13px; line-height:1.6; }
+.drink-record-card .drink-record-copy .drink-record-assessment { margin-top:3px; font-size:12px; }
+.drink-record-specifications:empty { display:none; }
+.drink-record-card .drink-record-brand { font-size:13px; line-height:1.5; }
+.drink-record-card .drink-record-edit { width:44px; height:44px; }
+.drinks-page .drink-limit-copy > span { font-size:12px; line-height:1.5; }
+.drinks-page .drink-limit-copy > strong { font-size:14px; line-height:1.5; }
+.drinks-page .drink-limit-count small { font-size:13px; }
