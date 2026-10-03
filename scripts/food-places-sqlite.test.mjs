@@ -48,6 +48,17 @@ test("food place migration preserves existing shops and distinguishes cities and
       assert.equal(food.getFoodLog(food.listFoodLogs({foodPlaceId:1})[0].id).foodPlaceLocation,"湖滨");
       food.updateFoodPlace(chengdu.id,{city:"",location:""});
       assert.equal(food.getFoodPlace(chengdu.id).city,"");
+      const drink=food.createFoodPlace({...input,name:"过滤茶店",serviceType:"drink",rating:"love",category:"茶饮"});
+      const both=food.createFoodPlace({...input,name:"过滤咖啡餐馆",serviceType:"both",rating:"good",category:"咖啡"});
+      assert.deepEqual(food.listFoodPlaces("过滤",{serviceType:"drink"}).map(place=>place.id),[drink.id]);
+      assert.deepEqual(food.listFoodPlaces("过滤",{serviceType:"both"}).map(place=>place.id),[both.id]);
+      assert.equal(food.listFoodPlaces("过滤",{purpose:"drink"}).length,2);
+      assert.deepEqual(food.listFoodPlaces("过滤",{city:"成都",rating:"love"}).map(place=>place.id),[drink.id]);
+      assert.equal(food.listFoodPlaces("过滤",{city:"重庆"}).length,0);
+      assert.equal(food.listFoodPlaces("过滤",{rating:"unrated"}).length,0);
+      assert.deepEqual(food.listFoodPlaces("过滤",{category:"咖啡",status:"occasional"}).map(place=>place.id),[both.id]);
+      food.updateFoodPlace(drink.id,{rating:null});
+      assert.deepEqual(food.listFoodPlaces("过滤",{rating:"unrated"}).map(place=>place.id),[drink.id]);
     `);
     run('import "./src/lib/db.ts";');
     const migrated = new DatabaseSync(databasePath, { readOnly: true });

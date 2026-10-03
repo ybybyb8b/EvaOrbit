@@ -4,8 +4,8 @@ import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { selectDropdownLayout } from "@/lib/select-dropdown-layout";
 
 /** Native popovers escape sheet clipping while remaining inside its focus/dirty scope. */
-export function SelectDropdown({ anchor, onClose, children, id, label, className = "" }: {
-  anchor: RefObject<HTMLElement | null>; onClose: () => void; children: ReactNode; id: string; label: string; className?: string;
+export function SelectDropdown({ anchor, onClose, children, id, label, className = "", minWidth }: {
+  anchor: RefObject<HTMLElement | null>; onClose: () => void; children: ReactNode; id: string; label: string; className?: string; minWidth?: number;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -21,7 +21,8 @@ export function SelectDropdown({ anchor, onClose, children, id, label, className
       const left = viewport?.offsetLeft ?? 0;
       const top = viewport?.offsetTop ?? 0;
       const width = viewport?.width ?? window.innerWidth;
-      const layout = selectDropdownLayout(rect, { left, top, width, height: viewport?.height ?? window.innerHeight }, element.scrollHeight);
+      const desiredWidth = Math.max(rect.width, minWidth ?? 0);
+      const layout = selectDropdownLayout({ left: rect.right - desiredWidth, top: rect.top, bottom: rect.bottom, width: desiredWidth }, { left, top, width, height: viewport?.height ?? window.innerHeight }, element.scrollHeight);
       element.style.width = `${layout.width}px`;
       element.style.left = `${layout.left}px`;
       element.style.maxHeight = `${layout.maxHeight}px`;
@@ -49,7 +50,7 @@ export function SelectDropdown({ anchor, onClose, children, id, label, className
       window.visualViewport?.removeEventListener("resize", position);
       window.visualViewport?.removeEventListener("scroll", position);
     };
-  }, [anchor]);
+  }, [anchor, minWidth]);
   return <div ref={panel} popover="manual" id={id} className={`eo-select-dropdown ${className}`} aria-label={label} onKeyDown={event => {
     if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); anchor.current?.querySelector<HTMLElement>("input,summary")?.focus({ preventScroll: true }); }
