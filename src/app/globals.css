@@ -221,8 +221,8 @@ html[data-theme="powderblue"] {
 
 html[data-theme="mistviolet"] {
   --surface-canvas:#f3f1f5;
-  --surface-card:#faf8fb;
-  --surface-raised:#fefcff;
+  --surface-card:#f8fafb;
+  --surface-raised:#fdfeff;
   --surface-soft:#eae6ee;
   --surface-tint:#e6e2eb;
   --surface-accent-soft:#e2dbea;
@@ -230,6 +230,9 @@ html[data-theme="mistviolet"] {
   --surface-due:#e5deed;
   --surface-lavender:#e5deed;
   --surface-danger:#f2e0e3;
+  --surface-success:#e0ebe4;
+  --surface-info:#dfe8f0;
+  --surface-warning:#f0e0e7;
   --text-primary:#302b36;
   --text-secondary:#6d6675;
   --text-tertiary:#96909d;
@@ -238,8 +241,9 @@ html[data-theme="mistviolet"] {
   --accent-primary:#66577b;
   --accent-strong:#514465;
   --accent-soft:#e2dbea;
-  --state-danger:#a6505a;
-  --state-success:#547463;
+  --state-danger:#984650;
+  --state-success:#4b6858;
+  --state-info:#49657b;
   --state-warning:#89536a;
   --text-editorial:#403849;
   --text-action:#625873;
@@ -257,8 +261,8 @@ html[data-theme="mistviolet"] {
   --surface-note-alt:#e5deed;
   --surface-note-green:#e4ebe6;
   --accent-gold:var(--state-warning);
-  --surface-card-rgb:250 248 251;
-  --surface-raised-rgb:254 252 255;
+  --surface-card-rgb:248 250 251;
+  --surface-raised-rgb:253 254 255;
   --surface-tint-rgb:230 226 235;
   --surface-warm-rgb:237 233 241;
   --surface-shell-rgb:246 243 247;
@@ -438,6 +442,9 @@ html[data-theme="mistviolet"][data-mode="dark"] {
   --surface-due:#302b3a;
   --surface-lavender:#302b3a;
   --surface-danger:#392326;
+  --surface-success:#25362c;
+  --surface-info:#25333f;
+  --surface-warning:#392b34;
   --text-primary:#f1eee8;
   --text-secondary:#bbb6be;
   --text-tertiary:#858188;
@@ -449,6 +456,7 @@ html[data-theme="mistviolet"][data-mode="dark"] {
   --accent-on:#1c1722;
   --state-danger:#e49a92;
   --state-success:#9fc4aa;
+  --state-info:#adc6d8;
   --state-warning:#d4a5b8;
   --text-editorial:#e5dfee;
   --text-action:#c2b5d0;
@@ -5104,6 +5112,41 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
   .tasks-page .tag { padding:2px 5px;font-size:9px; }
   .tasks-page .row-actions { flex-direction:row; }
   .tasks-page .row-actions button { width:36px;height:36px; }
+}
+
+/* Mist Violet: category accents stay independent of inventory status. */
+html[data-theme="mistviolet"] .cat-food-card[data-category="dry"] .cat-food-card-icon,
+html[data-theme="mistviolet"] .cat-food-stock.available {
+  background:var(--surface-success);
+  color:var(--state-success);
+}
+html[data-theme="mistviolet"] .cat-food-card[data-category="wet"] .cat-food-card-icon {
+  background:var(--surface-info);
+  color:var(--state-info);
+}
+html[data-theme="mistviolet"] .cat-food-card[data-category="treat"] .cat-food-card-icon,
+html[data-theme="mistviolet"] .cat-food-stock.low {
+  background:var(--surface-warning);
+  color:var(--state-warning);
+}
+html[data-theme="mistviolet"] .cat-food-card[data-category="supplement"] .cat-food-card-icon,
+html[data-theme="mistviolet"] .cat-food-card[data-category="other"] .cat-food-card-icon {
+  background:var(--surface-accent-soft);
+  color:var(--accent-primary);
+}
+html[data-theme="mistviolet"] .cat-food-stock.empty {
+  background:var(--surface-danger);
+  color:var(--state-danger);
+}
+html[data-theme="mistviolet"] .cats-food-library-entry,
+html[data-theme="mistviolet"] .cat-food-overview {
+  background:linear-gradient(125deg,var(--surface-success),var(--surface-card));
+}
+html[data-theme="mistviolet"] .cat-food-stock-hero.low {
+  background:linear-gradient(130deg,var(--surface-warning),var(--surface-card));
+}
+html[data-theme="mistviolet"] .cat-food-stock-hero.empty {
+  background:linear-gradient(130deg,var(--surface-danger),var(--surface-card));
 }
 
 /* Shared usability pass: keep the selected typeface and improve legibility through sizing. */
