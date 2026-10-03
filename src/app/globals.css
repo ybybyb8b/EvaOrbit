@@ -5144,10 +5144,6 @@ html[data-theme="mistviolet"] .cat-food-stock.empty {
   background:var(--surface-danger);
   color:var(--state-danger);
 }
-html[data-theme="mistviolet"] .cats-food-library-entry,
-html[data-theme="mistviolet"] .cat-food-overview {
-  background:linear-gradient(125deg,var(--surface-success),var(--surface-card));
-}
 html[data-theme="mistviolet"] .cat-food-stock-hero.low {
   background:linear-gradient(130deg,var(--surface-warning),var(--surface-card));
 }
@@ -5753,13 +5749,14 @@ html[data-theme="mistviolet"] :is(.relations-page,.relation-detail-page) {
 
 /* A shared frosted surface keeps the four daily summaries visually calm. */
 .home-day-grid > .home-day-pane {
-  --frost-highlight:rgb(255 255 255 / .48);
   --frost-grain-opacity:.055;
   position:relative;
   background:var(--surface-card);
   box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .045);
 }
 .home-day-grid > .home-day-pane::before,
+.cats-food-library-entry::before,
+.cat-food-overview::before,
 .due-section:not(.due-stack)::before,
 .due-stack .due-list article::before {
   content:"";
@@ -5772,41 +5769,105 @@ html[data-theme="mistviolet"] :is(.relations-page,.relation-detail-page) {
 }
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
   .home-day-grid > .home-day-pane {
-    background:radial-gradient(ellipse at 15% 0%,var(--frost-highlight),transparent 72%),linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .68),rgb(var(--surface-card-rgb) / .38));
+    background:rgb(var(--surface-raised-rgb) / .72);
+    -webkit-backdrop-filter:blur(18px) saturate(110%);
+    backdrop-filter:blur(18px) saturate(110%);
+  }
+}
+/* Food library: quiet surfaces, one cool accent and clear stock hierarchy. */
+.cats-food-library-entry,.cat-food-overview {
+  --frost-grain-opacity:.045;
+  position:relative;
+  background:var(--surface-raised);
+  box-shadow:0 2px 4px rgb(var(--shadow-rgb) / .025),0 8px 22px rgb(var(--shadow-rgb) / .04);
+}
+.cats-food-library-entry::after { content:none; }
+.cats-food-library-entry:hover {
+  transform:translateY(-1px);
+  box-shadow:0 3px 5px rgb(var(--shadow-rgb) / .035),0 10px 24px rgb(var(--shadow-rgb) / .055);
+}
+.cats-food-library-entry:focus-visible {
+  outline:2px solid var(--accent-primary);
+  outline-offset:4px;
+}
+.cats-food-library-icon {
+  background:var(--surface-info);
+  color:var(--state-info);
+  box-shadow:none;
+}
+.cats-food-library-arrow { background:transparent; }
+.cats-food-library-copy strong { line-height:1.2; }
+.cats-food-library-copy p { line-height:1.6; }
+.cat-food-overview { align-items:center;gap:28px; }
+.cat-food-overview-copy h2 { margin:9px 0 10px;line-height:1.25; }
+.cat-food-overview dl { gap:20px; }
+.cat-food-overview dt { font-size:11px;line-height:1.5; }
+.cat-food-overview dd { margin-top:9px;font-size:30px;line-height:1.15; }
+.cat-food-overview dd small { margin-left:3px;font-size:11px; }
+html[data-mode="dark"] :is(.cats-food-library-entry,.cat-food-overview) {
+  --frost-grain-opacity:.025;
+  box-shadow:0 2px 4px rgb(var(--shadow-rgb) / .08),0 8px 22px rgb(var(--shadow-rgb) / .1);
+}
+@media (max-width:720px) {
+  .cats-food-library-entry,.cat-food-overview {
+    box-shadow:0 2px 3px rgb(var(--shadow-rgb) / .025),0 4px 12px rgb(var(--shadow-rgb) / .035);
+  }
+  html[data-mode="dark"] :is(.cats-food-library-entry,.cat-food-overview) {
+    box-shadow:0 2px 3px rgb(var(--shadow-rgb) / .07),0 4px 12px rgb(var(--shadow-rgb) / .08);
+  }
+  .cat-food-overview { gap:24px; }
+  .cat-food-overview dl { padding-top:2px; }
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
+  .cats-food-library-entry,.cat-food-overview {
+    background:rgb(var(--surface-raised-rgb) / .76);
     -webkit-backdrop-filter:blur(18px) saturate(110%);
     backdrop-filter:blur(18px) saturate(110%);
   }
 }
 html[data-mode="dark"] .home-day-pane {
-  --frost-highlight:rgb(255 255 255 / .025);
   --frost-grain-opacity:.025;
   box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .08);
 }
 .due-section:not(.due-stack),
 .due-stack .due-list article {
-  --frost-highlight:rgb(255 255 255 / .24);
   --frost-grain-opacity:.055;
+  --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .06),0 8px 20px rgb(var(--shadow-rgb) / .06);
   position:relative;
+  /* A uniform face and close contact shadow lift the whole plane evenly. */
   background:var(--surface-due);
-  box-shadow:0 3px 7px rgb(var(--shadow-rgb) / .04),0 12px 28px rgb(var(--shadow-rgb) / .08);
+  box-shadow:var(--due-shadow);
 }
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
   .due-section:not(.due-stack),
   .due-stack .due-list article {
-    background:radial-gradient(ellipse at 15% 0%,var(--frost-highlight),transparent 72%),color-mix(in srgb,var(--surface-due) 88%,transparent);
+    background:color-mix(in srgb,var(--surface-due) 88%,transparent);
     -webkit-backdrop-filter:blur(18px) saturate(110%);
     backdrop-filter:blur(18px) saturate(110%);
   }
 }
 html[data-mode="dark"] .due-section:not(.due-stack),
 html[data-mode="dark"] .due-stack .due-list article {
-  --frost-highlight:rgb(255 255 255 / .025);
   --frost-grain-opacity:.025;
-  box-shadow:0 3px 7px rgb(var(--shadow-rgb) / .12),0 12px 28px rgb(var(--shadow-rgb) / .22);
+  --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .14),0 8px 20px rgb(var(--shadow-rgb) / .16);
+}
+@media (max-width:720px) {
+  .due-section:not(.due-stack),.due-stack .due-list article {
+    --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .04),0 4px 10px rgb(var(--shadow-rgb) / .035);
+  }
+  html[data-mode="dark"] .due-section:not(.due-stack),
+  html[data-mode="dark"] .due-stack .due-list article {
+    --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .09),0 4px 10px rgb(var(--shadow-rgb) / .09);
+  }
 }
 @media (prefers-reduced-transparency:reduce) {
   .home-day-grid > .home-day-pane {
     background:var(--surface-card);
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+  .cats-food-library-entry,.cat-food-overview {
+    background:var(--surface-raised);
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
@@ -5816,6 +5877,8 @@ html[data-mode="dark"] .due-stack .due-list article {
     backdrop-filter:none;
   }
   .home-day-grid > .home-day-pane::before,
+  .cats-food-library-entry::before,
+  .cat-food-overview::before,
   .due-section:not(.due-stack)::before,
   .due-stack .due-list article::before { display:none; }
 }
