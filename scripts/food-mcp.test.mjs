@@ -26,9 +26,14 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
     async function call(name,args={}){const result=await rpc("tools/call",{name,arguments:args});assert.notEqual(result.isError,true,JSON.stringify(result));return result.structuredContent;}
     try {
       const {tools}=await rpc("tools/list");
+      assert.equal(tools.find(t=>t.name==="drink_create").inputSchema.required?.includes("name")??false,false);
+      const {record:unnamed}=await call("drink_create",{drink_type:"water",occurred_has_explicit_time:false});assert.equal(unnamed.name,"");
+      const {record:manual}=await call("drink_update",{id:unnamed.id,name:"自制饮品"});assert.equal(manual.name,"自制饮品");
+      assert.equal((await call("drink_update",{id:unnamed.id,name:""})).record.name,"");await call("drink_delete",{id:unnamed.id});
       for(const name of ["food_create","food_update"])assert.equal(tools.find(t=>t.name===name).inputSchema.properties.food_dish_ids.type,"array");
       assert.ok(tools.find(t=>t.name==="food_search_recent").inputSchema.properties.food_dish_id);
       const {schema}=await call("eo_schema",{resource:"food_place"});
+      assert.ok((await call("eo_resources")).resources.find(r=>r.resource==="food_place").capabilities.includes("delete"));
       for(const field of ["city","location","category"])assert.ok(schema.writable_fields.includes(field));
       const {item:place}=await call("eo_create",{resource:"food_place",data:{name:"测试饭店",service_type:"both",city:"成都",location:"高新区",category:"川菜"}});
       assert.equal(place.city,"成都");assert.equal(place.location,"高新区");
@@ -47,6 +52,11 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const ids=[];
       for(const name of ["鸡腿饭","紫菜汤"]){const {item}=await call("eo_create",{resource:"food_dish",data:{food_place_id:place.id,name,category:"午餐"}});ids.push(item.id);}
       const {items:dishes}=await call("eo_search",{resource:"food_dish",query:"汤",filters:{food_place_id:place.id}});assert.equal(dishes[0].id,ids[1]);
+      const {record:unlinkedDinner}=await call("food_create",{title:"晚餐",meal_type:"dinner"});
+      const {record:linkedDinner}=await call("food_update",{id:unlinkedDinner.id,food_place_id:place.id,food_dish_ids:ids});
+      assert.equal(linkedDinner.food_place_id,place.id);assert.deepEqual(linkedDinner.food_dish_ids,ids);
+      assert.deepEqual(linkedDinner,(await call("food_search_recent",{food_place_id:place.id})).records.find(r=>r.id===linkedDinner.id));
+      await call("food_delete",{id:linkedDinner.id});
       const {record}=await call("food_create",{title:"午餐",food_place_id:place.id,food_dish_ids:ids,occurred_at:"2026-10-01T12:00:00+08:00",estimated_kcal:450});
       assert.deepEqual(record.food_dish_ids,ids);assert.deepEqual(record.food_dishes.map(d=>d.name),["鸡腿饭","紫菜汤"]);
       assert.equal(record.food_place_city,"成都");assert.equal(record.food_place_location,"天府和悦");
@@ -77,6 +87,11 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       await reject("drink_create",{name:"茶",food_place_id:place.id,drink_menu_id:menu.id});
       await reject("drink_create",{name:"茶",food_place_id:place.id,drink_menu_id:ids[0]});
       const {records:before}=await call("drink_search_recent",{});
+      const {record:unlinkedTea}=await call("drink_create",{sugar_level:"无糖",temperature:"hot"});
+      const {record:linkedTea}=await call("drink_update",{id:unlinkedTea.id,food_place_id:tea.id,drink_menu_id:menu.id});
+      assert.equal(linkedTea.food_place_id,tea.id);assert.equal(linkedTea.drink_menu_id,menu.id);assert.equal(linkedTea.name,"茉莉奶茶");
+      assert.deepEqual(linkedTea,(await call("drink_search_recent",{drink_menu_id:menu.id})).records.find(r=>r.id===linkedTea.id));
+      await call("drink_delete",{id:linkedTea.id});
       const drinks=[];
       for(const [sugar_level,temperature] of [["无糖","hot"],["标准","normal_ice"]]){
         const {record:d}=await call("drink_create",{name:"占位名",food_place_id:tea.id,drink_menu_id:menu.id,sugar_level,temperature});
@@ -98,13 +113,21 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       await call("eo_update",{resource:"food_place",id:tea.id,data:{service_type:"food"}});
       assert.equal((await call("drink_update",{id:drinks[0].id,notes:"保留历史"})).record.drink_menu_id,menu.id);
       await call("drink_update",{id:drinks[0].id,food_place_id:place.id,drink_menu_id:null});
+      const archivedTea=await call("eo_delete",{resource:"food_place",id:tea.id});assert.equal(archivedTea.action,"archived");assert.equal(archivedTea.deleted,false);
+      assert.equal((await call("drink_search_recent",{drink_menu_id:menu.id})).records[0].food_place_name,"只卖茶");
       for(const d of drinks)await call("drink_delete",{id:d.id});
       assert.equal((await call("drink_search_recent",{})).records.length,before.length);
       const rejected=await rpc("tools/call",{name:"food_update",arguments:{id:record.id,food_place_id:other.id}});assert.equal(rejected.isError,true);
       const {record:cleared}=await call("food_update",{id:record.id,food_dish_ids:[]});assert.deepEqual(cleared.food_dish_ids,[]);
       const {record:legacy}=await call("food_update",{id:record.id,food_dish_id:ids[0]});assert.deepEqual(legacy.food_dish_ids,[ids[0]]);
+      assert.equal((await call("eo_delete",{resource:"food_place",id:place.id})).action,"archived");
+      assert.equal((await call("food_search_recent",{food_place_id:place.id})).records[0].food_place_name,"测试饭店");
       await call("drink_delete",{id:drink.id});
       await call("food_delete",{id:record.id});assert.equal((await call("food_search_recent",{food_place_id:place.id})).records.length,0);
+      const {item:emptyPlace}=await call("eo_create",{resource:"food_place",data:{name:"误建店"}});
+      const {item:emptyDish}=await call("eo_create",{resource:"food_dish",data:{food_place_id:emptyPlace.id,name:"误建菜单"}});
+      const deletedPlace=await call("eo_delete",{resource:"food_place",id:emptyPlace.id});assert.equal(deletedPlace.action,"deleted");assert.equal(deletedPlace.deleted,true);
+      await reject("eo_get",{resource:"food_place",id:emptyPlace.id});await reject("eo_get",{resource:"food_dish",id:emptyDish.id});
     } finally {await mcpHandler.close();}
   `;
   try {

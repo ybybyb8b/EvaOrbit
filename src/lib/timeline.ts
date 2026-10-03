@@ -1,3 +1,4 @@
+import { drinkRecordName } from "./drink-display.ts";
 import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, Subscription, SubscriptionPayment, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
 import { AUTO_RENEWAL_PAYMENT_NOTE } from "./subscriptions.ts";
@@ -24,7 +25,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     eventType: "drink.logged",
     sourceType: "drink",
     sourceId: item.id,
-    title: item.name,
+    title: drinkRecordName(item),
     detail: [item.foodPlaceName, item.volumeMl ? `${item.volumeMl} ml` : item.brand].filter(Boolean).join(" · ") || "饮品记录",
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime,

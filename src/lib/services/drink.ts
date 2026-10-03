@@ -44,7 +44,7 @@ export async function updateDrinkLog(id: number, input: Record<string, unknown>)
   const placeId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
   const menuId=input.drinkMenuId===undefined?existing.drinkMenuId??null:input.drinkMenuId as number|null;
   await validateDrinkLinks(repository,placeId,menuId,placeId===(existing.foodPlaceId??null)&&menuId===(existing.drinkMenuId??null));
-  const menu=menuId!==null&&menuId!==(existing.drinkMenuId??null)?await repository.getFoodDish(menuId):null;
+  const menu=menuId!==null&&(menuId!==(existing.drinkMenuId??null)||input.name!==undefined)?await repository.getFoodDish(menuId):null;
   const drink = await repository.updateDrinkLog(id, menu?{...input,name:menu.name}:input);
   return drink ? { drink, limits: await checkDrinkLimits(new Date(drink.occurredAt)) } : null;
 }

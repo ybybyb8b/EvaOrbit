@@ -220,6 +220,7 @@ test("food place and dish resources expose safe generic CRUD",async()=>{
     async get(id){return places.find(item=>item.id===id)??null;},
     async create(input){const item:FoodPlace={...input,id:places.length+1,archivedAt:null,dishCount:0,visitCount:0,lastVisitedAt:null,createdAt,updatedAt:createdAt};places.push(item);return item;},
     async update(id,input){const item=places.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item;},
+    async delete(id){const index=places.findIndex(item=>item.id===id);if(index<0)return null;places.splice(index,1);return{id,action:"deleted" as const};},
   },foodDish:{
     async search(query="",options={}){return dishes.filter(item=>(!query||item.name.includes(query))&&(!options.foodPlaceId||item.foodPlaceId===options.foodPlaceId)).slice(0,options.limit??20);},
     async get(id){return dishes.find(item=>item.id===id)??null;},

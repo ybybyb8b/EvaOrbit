@@ -46,7 +46,7 @@ const foodFields = {
 const drinkFields = {
   drink_menu_id: z.number().int().positive().nullable().optional().describe("Drink-kind food_dish ID from the selected place; null clears it. Fixes name only, never sugar or temperature."),
   food_place_id: z.number().int().positive().nullable().optional().describe("Shared shop or cafe branch ID; null clears the association, omitted on update preserves it."),
-  occurred_at: occurredAt.optional(), occurred_has_explicit_time: z.boolean().optional(), name: z.string().trim().min(1).max(200), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
+  occurred_at: occurredAt.optional(), occurred_has_explicit_time: z.boolean().optional(), name: z.string().trim().max(200).optional().describe("Optional manual name. A linked menu supplies its name; unnamed drinks display their type."), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
   volume_ml: z.number().min(0).max(10000).nullable().optional(), sugar_level: sugarLevel.optional(), temperature: drinkTemperature.nullable().optional(), rating: tasteRating.nullable().optional(), caffeine_mg: z.number().min(0).max(5000).nullable().optional(),
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };

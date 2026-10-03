@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type Option = { id: number; name: string; detail?: string };
 export function FoodLinkPicker({ itemType, label, options, selected, multiple = false, onSearch, onChange, loading = false, error, onRetry }: { itemType?: "place"|"food"|"drink"; label: string; options: Option[]; selected: number[]; multiple?: boolean; onSearch: (query: string) => void; onChange: (ids: number[]) => void; loading?: boolean; error?: string; onRetry?: () => void }) {
@@ -16,6 +17,7 @@ export function FoodLinkPicker({ itemType, label, options, selected, multiple = 
   }
   const picked = options.filter(option => selected.includes(option.id));
   const matches = options.filter(option => `${option.name} ${option.detail ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  if (!multiple) return <div className="field food-link-field"><span>{label}</span><SearchableSelect label={label} value={selected[0]?.toString()??""} options={[{value:"",label:`未关联${noun}`},...options.map(option=>({value:String(option.id),label:option.name,detail:option.detail}))]} onValueChange={value=>onChange(value?[Number(value)]:[])} onSearch={onSearch} loading={loading} error={error} onRetry={onRetry}/></div>;
   return <div className="field food-link-field"><span id={`${id}-label`}>{label}</span>
     <details ref={details} className="food-link-picker" onKeyDown={event => { if (event.key === "Escape" && details.current?.open) { event.preventDefault(); event.stopPropagation(); details.current.open = false; details.current.querySelector("summary")?.focus(); } }}>
       <summary aria-labelledby={`${id}-label ${id}-value`}><span id={`${id}-value`} className="user-content">{multiple ? selected.length ? `已选择 ${selected.length} 道菜品` : "选择菜品，可多选" : picked[0] ? [picked[0].name, picked[0].detail].filter(Boolean).join(" · ") : `未关联${noun}`}</span><span aria-hidden="true">⌄</span></summary>

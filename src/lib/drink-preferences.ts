@@ -1,3 +1,4 @@
+import { drinkRecordName } from "./drink-display.ts";
 import type { DrinkLog, DrinkPreferenceSummary, DrinkTemperature, DrinkType, TasteRating } from "./types";
 
 const ratingWeights: Record<TasteRating, number> = { love: 2, good: 1, neutral: -1, dislike: -2 };
@@ -16,7 +17,7 @@ export function buildDrinkPreferenceSummary(logs: DrinkLog[], now = new Date()):
   const sorted = [...logs].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.id - a.id);
   const groups = new Map<string, { name: string; brand: string; logs: DrinkLog[] }>();
   for (const log of sorted) {
-    const name = log.name.trim(); const brand = log.brand.trim(); const key = `${name.toLocaleLowerCase()}\u0000${brand.toLocaleLowerCase()}`;
+    const name = (log.drinkMenuName || log.name).trim(); if (!name) continue; const brand = log.brand.trim(); const key = `${name.toLocaleLowerCase()}\u0000${brand.toLocaleLowerCase()}`;
     const group = groups.get(key) ?? { name, brand, logs: [] }; group.logs.push(log); groups.set(key, group);
   }
   const commonDrinks = [...groups.values()].map((group) => ({ name: group.name, brand: group.brand, count: group.logs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 3);
@@ -36,6 +37,6 @@ export function buildDrinkPreferenceSummary(logs: DrinkLog[], now = new Date()):
     commonBrands: rankedCounts(sorted.map((log) => log.brand.trim()).filter(Boolean)),
     sugarTendency: rankedCounts(sorted.map((log) => log.sugarLevel.trim()).filter(Boolean)),
     temperatureTendency: rankedCounts(sorted.map((log) => log.temperature).filter((value): value is DrinkTemperature => value !== null)),
-    recent: sorted.slice(0, 4),
+    recent: sorted.slice(0, 4).map((log) => ({ ...log, name: drinkRecordName(log) })),
   };
 }

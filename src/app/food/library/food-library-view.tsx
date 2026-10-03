@@ -1,4 +1,5 @@
 "use client";
+import { SearchableSelect } from "@/components/searchable-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -102,13 +103,13 @@ export function FoodLibraryView() {
       <div className="editor-title"><h2>{editingId ? "Edit Item" : "Add Item"}</h2><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Name</span><input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-        <div className="field"><span>Brand</span><SuggestedInput suggestionLabel="品牌" suggestions={items.map(item => item.brand)} value={draft.brand} onValueChange={nextValue => setDraft({ ...draft, brand: nextValue })} placeholder="Optional" /></div>
-        <label className="field"><span>Category</span><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as FoodCategory })}><option value="staple">Staple</option><option value="dish">Dish</option><option value="snack">Snack</option><option value="drink">Drink</option><option value="other">Other</option></select></label>
-        <label className="field"><span>Reference</span><select value={draft.referenceType} onChange={(event) => setDraft({ ...draft, referenceType: event.target.value as FoodReferenceType })}><option value="per_serving">Per serving</option><option value="per_100g">Per 100g</option><option value="per_100ml">Per 100ml</option></select></label>
-        <div className="field"><span>Default portion</span><SuggestedInput suggestionLabel="份量" suggestions={[...items.map(item => item.defaultPortion), "1 份", "1 碗", "1 个"]} value={draft.defaultPortion} onValueChange={nextValue => setDraft({ ...draft, defaultPortion: nextValue })} placeholder="1 cup / 35 g" /></div>
+        <div className="field"><span>Brand</span><SuggestedInput recommendationStyle="search" suggestionLabel="品牌" suggestions={items.map(item => item.brand)} value={draft.brand} onValueChange={nextValue => setDraft({ ...draft, brand: nextValue })} placeholder="Optional" /></div>
+        <div className="field"><span>Category</span><SearchableSelect label="Category" searchable={false} value={draft.category} onValueChange={(value) => setDraft({ ...draft, category: value as FoodCategory })} options={[{value:"staple",label:"Staple"},{value:"dish",label:"Dish"},{value:"snack",label:"Snack"},{value:"drink",label:"Drink"},{value:"other",label:"Other"}]}/></div>
+        <div className="field"><span>Reference</span><SearchableSelect label="Reference" searchable={false} value={draft.referenceType} onValueChange={(value) => setDraft({ ...draft, referenceType: value as FoodReferenceType })} options={[{value:"per_serving",label:"Per serving"},{value:"per_100g",label:"Per 100g"},{value:"per_100ml",label:"Per 100ml"}]}/></div>
+        <div className="field"><span>Default portion</span><SuggestedInput recommendationStyle="chips" suggestionLabel="份量" suggestions={[...items.map(item => item.defaultPortion), "1 份", "1 碗", "1 个"]} value={draft.defaultPortion} onValueChange={nextValue => setDraft({ ...draft, defaultPortion: nextValue })} placeholder="1 cup / 35 g" /></div>
         <label className="field"><span>Reference kcal</span><input type="number" min={0} value={draft.referenceKcal} onChange={(event) => setDraft({ ...draft, referenceKcal: event.target.value })} /></label>
         <label className="field"><span>Serving kcal</span><input type="number" min={0} value={draft.servingKcal} onChange={(event) => setDraft({ ...draft, servingKcal: event.target.value })} /></label>
-        <label className="field"><span>Data source</span><select value={draft.dataSource} onChange={(event) => setDraft({ ...draft, dataSource: event.target.value as FoodDataSource })}><option value="package_label">Package label</option><option value="official">Official</option><option value="estimated">Estimated</option><option value="manual">Manual</option></select></label>
+        <div className="field"><span>Data source</span><SearchableSelect label="Data source" searchable={false} value={draft.dataSource} onValueChange={(value) => setDraft({ ...draft, dataSource: value as FoodDataSource })} options={[{value:"package_label",label:"Package label"},{value:"official",label:"Official"},{value:"estimated",label:"Estimated"},{value:"manual",label:"Manual"}]}/></div>
       </div>
       {error && <p className="form-error">{error}</p>}<button className="button primary">{editingId ? "Save Changes" : "Add Item"}</button>
     </form></FormSheet>}

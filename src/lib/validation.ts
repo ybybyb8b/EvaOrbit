@@ -1160,7 +1160,7 @@ export function parseNewDrinkLog(value: unknown) {
   const kcalMax = optionalNumber(body.kcalMax, "热量上限");
   if (kcalMin !== null && kcalMax !== null && kcalMin > kcalMax) throw new ValidationError("热量下限不能大于上限");
   return {
-    occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()), occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true), name: text(body.name, "饮品名称", 200)!,
+    occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()), occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true), name: text(body.name ?? "", "饮品名称", 200, false) ?? "",
     brand: text(body.brand ?? "", "品牌", 120, false) ?? "",
     drinkType: enumValue(body.drinkType, "饮品类型", ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"] as const, "other"),
     volumeMl: optionalNumber(body.volumeMl, "容量", 0, 10000), sugarLevel: enumValue(body.sugarLevel, "糖度", ["", ...SUGAR_LEVELS] as const, ""),

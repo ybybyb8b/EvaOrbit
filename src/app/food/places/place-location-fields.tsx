@@ -1,4 +1,5 @@
 "use client";
+import { SearchableSelect } from "@/components/searchable-select";
 import { SuggestedInput } from "@/components/suggested-input";
 
 import { useEffect, useId, useState } from "react";
@@ -27,14 +28,14 @@ export function PlaceSuggestionFields({ values, onChange }: {
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 
   return <>
-    <label className="field"><span>店铺类型</span><select value={values.serviceType??"food"} onChange={event=>onChange({serviceType:event.target.value as FoodPlace["serviceType"]})}>{Object.entries(placeServiceLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
+    <div className="field"><span>店铺类型</span><SearchableSelect label="店铺类型" searchable={false} value={values.serviceType??"food"} onValueChange={(value) =>onChange({serviceType:value as FoodPlace["serviceType"]})} options={[...Object.entries(placeServiceLabels).map(([value,label])=>({value:value,label:label}))]}/></div>
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
 
     </div>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-location`}>地点（可选）</label></span><SuggestedInput suggestionLabel="地点" suggestions={locations} id={`${id}-location`} maxLength={200} value={values.location} onValueChange={nextValue => onChange({ location: nextValue })} placeholder="商圈、街道或具体地址" />
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-location`}>地点（可选）</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="地点" suggestions={locations} id={`${id}-location`} maxLength={200} value={values.location} onValueChange={nextValue => onChange({ location: nextValue })} placeholder="商圈、街道或具体地址" />
 
     </div>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-category`}>品类</label></span><SuggestedInput suggestionLabel="品类" suggestions={categories} id={`${id}-category`} maxLength={100} value={values.category} onValueChange={nextValue => onChange({ category: nextValue })} placeholder="自由输入" />
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-category`}>品类</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="品类" suggestions={categories} id={`${id}-category`} maxLength={100} value={values.category} onValueChange={nextValue => onChange({ category: nextValue })} placeholder="自由输入" />
 
     </div>
   </>;
