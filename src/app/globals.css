@@ -5752,32 +5752,56 @@ html[data-theme="mistviolet"] :is(.relations-page,.relation-detail-page) {
 
 /* A shared frosted surface keeps the four daily summaries visually calm. */
 .home-day-grid > .home-day-pane {
-  --home-frost-highlight:rgb(255 255 255 / .48);
-  --home-frost-grain-opacity:.055;
+  --frost-highlight:rgb(255 255 255 / .48);
+  --frost-grain-opacity:.055;
   position:relative;
   background:var(--surface-card);
   box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .045);
 }
-.home-day-grid > .home-day-pane::before {
+.home-day-grid > .home-day-pane::before,
+.due-section:not(.due-stack)::before,
+.due-stack .due-list article::before {
   content:"";
   position:absolute;
   inset:0;
   border-radius:inherit;
   background:url("/textures/frosted-grain.svg") repeat;
-  opacity:var(--home-frost-grain-opacity);
+  opacity:var(--frost-grain-opacity);
   pointer-events:none;
 }
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
   .home-day-grid > .home-day-pane {
-    background:radial-gradient(ellipse at 15% 0%,var(--home-frost-highlight),transparent 72%),linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .68),rgb(var(--surface-card-rgb) / .38));
+    background:radial-gradient(ellipse at 15% 0%,var(--frost-highlight),transparent 72%),linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .68),rgb(var(--surface-card-rgb) / .38));
     -webkit-backdrop-filter:blur(18px) saturate(110%);
     backdrop-filter:blur(18px) saturate(110%);
   }
 }
 html[data-mode="dark"] .home-day-pane {
-  --home-frost-highlight:rgb(255 255 255 / .025);
-  --home-frost-grain-opacity:.025;
+  --frost-highlight:rgb(255 255 255 / .025);
+  --frost-grain-opacity:.025;
   box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .08);
+}
+.due-section:not(.due-stack),
+.due-stack .due-list article {
+  --frost-highlight:rgb(255 255 255 / .24);
+  --frost-grain-opacity:.055;
+  position:relative;
+  background:var(--surface-due);
+  box-shadow:0 3px 7px rgb(var(--shadow-rgb) / .04),0 12px 28px rgb(var(--shadow-rgb) / .08);
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
+  .due-section:not(.due-stack),
+  .due-stack .due-list article {
+    background:radial-gradient(ellipse at 15% 0%,var(--frost-highlight),transparent 72%),color-mix(in srgb,var(--surface-due) 88%,transparent);
+    -webkit-backdrop-filter:blur(18px) saturate(110%);
+    backdrop-filter:blur(18px) saturate(110%);
+  }
+}
+html[data-mode="dark"] .due-section:not(.due-stack),
+html[data-mode="dark"] .due-stack .due-list article {
+  --frost-highlight:rgb(255 255 255 / .025);
+  --frost-grain-opacity:.025;
+  box-shadow:0 3px 7px rgb(var(--shadow-rgb) / .12),0 12px 28px rgb(var(--shadow-rgb) / .22);
 }
 @media (prefers-reduced-transparency:reduce) {
   .home-day-grid > .home-day-pane {
@@ -5785,7 +5809,14 @@ html[data-mode="dark"] .home-day-pane {
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
-  .home-day-grid > .home-day-pane::before { display:none; }
+  .due-section:not(.due-stack),.due-stack .due-list article {
+    background:var(--surface-due);
+    -webkit-backdrop-filter:none;
+    backdrop-filter:none;
+  }
+  .home-day-grid > .home-day-pane::before,
+  .due-section:not(.due-stack)::before,
+  .due-stack .due-list article::before { display:none; }
 }
 html[data-theme="mistviolet"] .home-sleep-pane header > svg { color:var(--state-info); }
 html[data-theme="mistviolet"] .home-journal-pane header > svg { color:var(--state-warning); }
