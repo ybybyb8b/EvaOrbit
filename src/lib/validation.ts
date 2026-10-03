@@ -3,6 +3,8 @@ import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 import { normalizeLuciusMood } from "./lucius-mood.ts";
 import { normalizeWeightKg } from "./weight.ts";
+import { journalEmotions } from "./journal-emotions.ts";
+import type { DailyJournalEmotion } from "./types";
 import type { CalendarEventStatus } from "./types";
 
 export class ValidationError extends Error {}
@@ -148,6 +150,13 @@ export function parseChronicleEntryPatch(value: unknown) {
   return result;
 }
 
+function dailyJournalEmotion(value: unknown, optional = false): DailyJournalEmotion | null | undefined {
+  if (value === undefined) return optional ? undefined : null;
+  if (value === null) return null;
+  if (!journalEmotions.some(option => option.value === value)) throw new ValidationError("情绪格式不正确");
+  return value as DailyJournalEmotion;
+}
+
 function dailyJournalMood(value: unknown, optional = false) {
   if (value === undefined) return optional ? undefined : null;
   if (value === null || value === "") return null;
@@ -169,6 +178,8 @@ export function parseNewDailyJournalEntry(value: unknown) {
     content: text(body.content, "日记", 10_000)!,
     moodScore: dailyJournalMood(body.moodScore) ?? null,
     energyLevel: dailyJournalEnergy(body.energyLevel) ?? null,
+    hasFullDiary: booleanValue(body.hasFullDiary, "完整日记状态", false),
+    emotion: dailyJournalEmotion(body.emotion) ?? null,
   };
 }
 
@@ -179,6 +190,8 @@ export function parseDailyJournalEntryPatch(value: unknown) {
     content: body.content === undefined ? undefined : text(body.content, "日记", 10_000),
     moodScore: dailyJournalMood(body.moodScore, true),
     energyLevel: dailyJournalEnergy(body.energyLevel, true),
+    hasFullDiary: body.hasFullDiary === undefined ? undefined : booleanValue(body.hasFullDiary, "完整日记状态", false),
+    emotion: dailyJournalEmotion(body.emotion, true),
   };
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的日记字段");
   return result;
@@ -831,6 +844,7 @@ export function parseFoodLogPatch(value: unknown) {
 export function parseFoodPlace(value: unknown) {
   const body = objectValue(value);
   return {
+    serviceType: enumValue(body.serviceType, "店铺类型", ["food", "drink", "both"] as const, "food"),
     name: text(body.name, "店铺名称", 200)!,
     branch: text(body.branch ?? "", "分店信息", 160, false) ?? "",
     city: text(body.city ?? "", "城市", 100, false) ?? "",
@@ -844,8 +858,8 @@ export function parseFoodPlace(value: unknown) {
 
 export function parseFoodPlacePatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", branch: body.branch, city: body.city, location: body.location, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
-  const keys = ["name", "branch", "city", "location", "category", "rating", "status", "notes"] as const;
+  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", serviceType: body.serviceType, branch: body.branch, city: body.city, location: body.location, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
+  const keys = ["serviceType", "name", "branch", "city", "location", "category", "rating", "status", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的店铺字段");
   return result;
@@ -856,6 +870,7 @@ export function parseFoodDish(value: unknown) {
   const foodPlaceId = optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER);
   if (foodPlaceId === null) throw new ValidationError("菜品必须属于一家店铺");
   return {
+    kind: enumValue(body.kind, "菜单类型", ["food", "drink"] as const, "food"),
     foodPlaceId,
     name: text(body.name, "菜名", 200)!,
     category: text(body.category ?? "", "菜品品类", 100, false) ?? "",
@@ -867,8 +882,8 @@ export function parseFoodDish(value: unknown) {
 
 export function parseFoodDishPatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseFoodDish({ foodPlaceId: body.foodPlaceId ?? 1, name: body.name ?? "placeholder", category: body.category, rating: body.rating, recommended: body.recommended, notes: body.notes });
-  const keys = ["foodPlaceId", "name", "category", "rating", "recommended", "notes"] as const;
+  const parsed = parseFoodDish({ foodPlaceId: body.foodPlaceId ?? 1, kind: body.kind, name: body.name ?? "placeholder", category: body.category, rating: body.rating, recommended: body.recommended, notes: body.notes });
+  const keys = ["kind", "foodPlaceId", "name", "category", "rating", "recommended", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的菜品字段");
   return result;
@@ -1139,6 +1154,8 @@ export function parseNewDrinkLog(value: unknown) {
   const body = objectValue(value);
   const foodPlaceId = optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER);
   if (foodPlaceId !== null && !Number.isSafeInteger(foodPlaceId)) throw new ValidationError("店铺 ID 必须是整数");
+  const drinkMenuId = optionalNumber(body.drinkMenuId, "饮品菜单 ID", 1, Number.MAX_SAFE_INTEGER);
+  if (drinkMenuId !== null && !Number.isSafeInteger(drinkMenuId)) throw new ValidationError("饮品菜单 ID 必须是整数");
   const kcalMin = optionalNumber(body.kcalMin, "热量下限");
   const kcalMax = optionalNumber(body.kcalMax, "热量上限");
   if (kcalMin !== null && kcalMax !== null && kcalMin > kcalMax) throw new ValidationError("热量下限不能大于上限");
@@ -1151,15 +1168,15 @@ export function parseNewDrinkLog(value: unknown) {
     rating: body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "评价", ["love", "good", "neutral", "dislike"] as const, "neutral"),
     caffeineMg: optionalNumber(body.caffeineMg, "咖啡因", 0, 5000), estimatedKcal: optionalNumber(body.estimatedKcal, "估算热量"), kcalMin, kcalMax,
     confidence: enumValue(body.confidence, "可信度", ["high", "medium", "low"] as const, "low"),
-    foodPlaceId,
+    drinkMenuId, foodPlaceId,
     foodLibraryId: optionalNumber(body.foodLibraryId, "Food Library ID", 1, Number.MAX_SAFE_INTEGER), notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
   };
 }
 
 export function parseDrinkLogPatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseNewDrinkLog({ occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime ?? true, name: body.name ?? "placeholder", brand: body.brand ?? "", drinkType: body.drinkType ?? "other", volumeMl: body.volumeMl, sugarLevel: body.sugarLevel ?? "", temperature: body.temperature, rating: body.rating, caffeineMg: body.caffeineMg, estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low", foodPlaceId: body.foodPlaceId, foodLibraryId: body.foodLibraryId, notes: body.notes ?? "" });
-  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "brand", "drinkType", "volumeMl", "sugarLevel", "temperature", "rating", "caffeineMg", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "notes"] as const;
+  const parsed = parseNewDrinkLog({ occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime ?? true, name: body.name ?? "placeholder", brand: body.brand ?? "", drinkType: body.drinkType ?? "other", volumeMl: body.volumeMl, sugarLevel: body.sugarLevel ?? "", temperature: body.temperature, rating: body.rating, caffeineMg: body.caffeineMg, estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low", drinkMenuId: body.drinkMenuId, foodPlaceId: body.foodPlaceId, foodLibraryId: body.foodLibraryId, notes: body.notes ?? "" });
+  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "brand", "drinkType", "volumeMl", "sugarLevel", "temperature", "rating", "caffeineMg", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "drinkMenuId", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

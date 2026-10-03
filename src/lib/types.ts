@@ -465,6 +465,8 @@ export interface FoodLog {
 export const FOOD_PLACE_STATUSES = ["frequent", "occasional", "paused", "avoid", "closed"] as const;
 export type FoodPlaceStatus = typeof FOOD_PLACE_STATUSES[number];
 export interface FoodPlace {
+  serviceType?: "food" | "drink" | "both";
+  drinkMenuCount?: number;
   id: number;
   name: string;
   branch: string;
@@ -485,6 +487,7 @@ export interface FoodPlace {
 }
 
 export interface FoodDish {
+  kind?: "food" | "drink";
   id: number;
   foodPlaceId: number;
   name: string;
@@ -504,6 +507,7 @@ export interface FoodPlaceDetail {
   dishes: FoodDish[];
   recentFoodLogs: FoodLog[];
   recentDrinkLogs: DrinkLog[];
+  drinkMenu: FoodDish[];
 }
 
 export type FoodCategory = "staple" | "dish" | "snack" | "drink" | "other";
@@ -731,12 +735,15 @@ export interface ChronicleEntry {
 
 export type DailyJournalMood = -2 | -1 | 0 | 1 | 2;
 export type DailyJournalEnergy = 1 | 2 | 3;
+export type DailyJournalEmotion = "happy" | "excited" | "relaxed" | "grateful" | "neutral" | "low" | "sad" | "irritated" | "angry" | "anxious" | "lonely" | "surprised";
 export interface DailyJournalEntry {
   id: number;
   date: string;
   content: string;
   moodScore: DailyJournalMood | null;
   energyLevel: DailyJournalEnergy | null;
+  hasFullDiary: boolean;
+  emotion: DailyJournalEmotion | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -916,6 +923,8 @@ export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
 export const DRINK_TEMPERATURES = ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const;
 export type DrinkTemperature = typeof DRINK_TEMPERATURES[number];
 export interface DrinkLog {
+  drinkMenuId?: number | null;
+  drinkMenuName?: string | null;
   foodPlaceId?: number | null;
   foodPlaceName?: string | null;
   foodPlaceBranch?: string | null;

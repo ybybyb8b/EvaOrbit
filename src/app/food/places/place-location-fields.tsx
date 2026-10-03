@@ -3,9 +3,10 @@ import { SuggestedInput } from "@/components/suggested-input";
 
 import { useEffect, useId, useState } from "react";
 import { buildHistorySuggestions } from "@/lib/history-suggestions";
+import { placeServiceLabels } from "@/lib/place-menu";
 import type { FoodPlace } from "@/lib/types";
 
-type SuggestionValues = Pick<FoodPlace, "city" | "location" | "category">;
+type SuggestionValues = Pick<FoodPlace, "city" | "location" | "category" | "serviceType">;
 
 export function PlaceSuggestionFields({ values, onChange }: {
   values: SuggestionValues;
@@ -26,6 +27,7 @@ export function PlaceSuggestionFields({ values, onChange }: {
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 
   return <>
+    <label className="field"><span>店铺类型</span><select value={values.serviceType??"food"} onChange={event=>onChange({serviceType:event.target.value as FoodPlace["serviceType"]})}>{Object.entries(placeServiceLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
     <div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
 
     </div>

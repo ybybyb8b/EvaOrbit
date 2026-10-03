@@ -90,13 +90,17 @@ test("keeps food brands distinct and validates drink limits", () => {
 });
 
 test("validates lightweight food places, dishes, and optional Food Record links",()=>{
-  assert.deepEqual(parseFoodPlace({name:" 某某米线 ",branch:" 天府和悦店 ",category:" 米线 ",rating:"love",status:"frequent"}),{name:"某某米线",branch:"天府和悦店",city:"",location:"",category:"米线",rating:"love",status:"frequent",notes:""});
+  assert.deepEqual(parseFoodPlace({name:" 某某米线 ",branch:" 天府和悦店 ",category:" 米线 ",rating:"love",status:"frequent"}),{serviceType:"food",name:"某某米线",branch:"天府和悦店",city:"",location:"",category:"米线",rating:"love",status:"frequent",notes:""});
   assert.deepEqual(parseFoodPlacePatch({status:"closed"}),{status:"closed"});
   assert.deepEqual(parseFoodPlacePatch({city:" 成都 ",location:" 高新区 "}),{city:"成都",location:"高新区"});
   assert.deepEqual(parseFoodPlacePatch({city:"",location:""}),{city:"",location:""});
   assert.throws(()=>parseFoodPlace({name:"店",city:"城".repeat(101)}),ValidationError);
   assert.throws(()=>parseFoodPlacePatch({location:"地".repeat(201)}),ValidationError);
-  assert.deepEqual(parseFoodDish({foodPlaceId:3,name:" 番茄米线 ",recommended:true}),{foodPlaceId:3,name:"番茄米线",category:"",rating:null,recommended:true,notes:""});
+  assert.deepEqual(parseFoodDish({foodPlaceId:3,name:" 番茄米线 ",recommended:true}),{kind:"food",foodPlaceId:3,name:"番茄米线",category:"",rating:null,recommended:true,notes:""});
+  assert.deepEqual(parseFoodPlacePatch({serviceType:"drink"}),{serviceType:"drink"});
+  assert.deepEqual(parseFoodDishPatch({kind:"drink"}),{kind:"drink"});
+  assert.throws(()=>parseFoodPlace({name:"店",serviceType:"any"}),ValidationError);
+  assert.throws(()=>parseFoodDish({foodPlaceId:3,name:"茶",kind:"any"}),ValidationError);
   assert.deepEqual(parseFoodDishPatch({rating:"dislike"}),{rating:"dislike"});
   const log=parseNewFoodLog({title:"午饭",foodPlaceId:3,foodDishId:8});
   assert.equal(log.foodPlaceId,3);assert.equal(log.foodDishId,8);

@@ -69,8 +69,8 @@ export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryIt
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
 export type NewFoodPlace = Omit<FoodPlace, "id" | "archivedAt" | "dishCount" | "visitCount" | "lastVisitedAt" | "createdAt" | "updatedAt">;
 export type NewFoodDish = Omit<FoodDish, "id" | "archivedAt" | "eatCount" | "lastEatenAt" | "createdAt" | "updatedAt">;
-export type FoodPlaceSearchOptions = { status?: FoodPlace["status"]; category?: string; includeArchived?: boolean; limit?: number };
-export type FoodDishSearchOptions = { foodPlaceId?: number; recommended?: boolean; rating?: FoodDish["rating"]; includeArchived?: boolean; limit?: number };
+export type FoodPlaceSearchOptions = { purpose?: "food" | "drink"; status?: FoodPlace["status"]; category?: string; includeArchived?: boolean; limit?: number };
+export type FoodDishSearchOptions = { kind?: "food" | "drink"; foodPlaceId?: number; recommended?: boolean; rating?: FoodDish["rating"]; includeArchived?: boolean; limit?: number };
 export type FoodObjectRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
@@ -100,7 +100,7 @@ export type MediaDraftPatch = Omit<MediaItemPatch,"title">;
 export type NewChronicleEntry = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
 export type ChronicleListInput = { query?: string; limit?: number };
 export type ChronicleEntryPatch = { date?: string; title?: string; contentMd?: string; source?: ChronicleSource };
-export type NewDailyJournalEntry = Pick<DailyJournalEntry, "date" | "content" | "moodScore" | "energyLevel">;
+export type NewDailyJournalEntry = Pick<DailyJournalEntry, "date" | "content" | "moodScore" | "energyLevel" | "hasFullDiary" | "emotion">;
 export type DailyJournalEntryPatch = Partial<NewDailyJournalEntry>;
 export type DailyJournalListInput = { date?: string; limit?: number };
 export type NewMemo = Omit<Memo, "id" | "createdAt" | "updatedAt">;
@@ -386,7 +386,7 @@ export interface EvaOrbitRepository {
   updateLuciusPostComment(id: number, input: LuciusPostCommentPatch): Promise<LuciusPostComment | null>;
   deleteLuciusPostComment(id: number): Promise<boolean>;
 
-  listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string; foodPlaceId?: number; limit?: number }): Promise<DrinkLog[]>;
+  listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string; foodPlaceId?: number; drinkMenuId?: number; limit?: number }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;
   createDrinkLog(input: NewDrinkLog): Promise<DrinkLog>;
   updateDrinkLog(id: number, input: Record<string, unknown>): Promise<DrinkLog | null>;
