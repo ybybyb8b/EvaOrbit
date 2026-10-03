@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu4 } from "reicon-react";
+import { Activity, Book, Calendar, ChatRoundDots, ClipboardCheck, CupPaper, DirectInbox, Film, Folder, FoodTray, Heart, Home, Menu4, NoteText, Pet, Settings, Sparkles, Users } from "reicon-react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
@@ -41,6 +41,13 @@ const navigationGroups = [
     { href: "/projects", label: "Projects", zh: "工坊", icon: "projects" as const },
   ] },
 ];
+
+const sidebarIcons = {
+  tracker: Activity, food: FoodTray, drink: CupPaper, calendar: Calendar,
+  health: Heart, cats: Pet, chronicle: Book, people: Users, media: Film,
+  memory: NoteText, home: Home, inbox: DirectInbox, tasks: ClipboardCheck,
+  ai: Sparkles, lucius: ChatRoundDots, projects: Folder,
+};
 
 type SpacesDrawerPhase = "closed" | "opening" | "open" | "closing";
 const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
@@ -172,11 +179,12 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         <nav className="main-nav" aria-label={english ? "Main navigation" : "主导航"}>
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon name={item.icon} variant="stroke" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            const SidebarIcon = sidebarIcons[item.icon];
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><SidebarIcon className="icon" weight="Outline" aria-hidden="true" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
-          <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="stroke" /><span>{english ? "Settings" : "设置"}</span></Link>
+          <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Settings className="icon" weight="Outline" aria-hidden="true" /><span>{english ? "Settings" : "设置"}</span></Link>
           <div className="local-status"><span className="status-dot" /><span><strong>{english ? cloudMode ? "Private cloud" : "Local mode" : cloudMode ? "私人云端" : "本地模式"}</strong><small>{english ? cloudMode ? "Account and RLS enabled" : "SQLite development fallback" : cloudMode ? "登录与行级权限已开启" : "SQLite 开发后备"}</small></span></div>
           {cloudMode && <form action={logout}><button className="sidebar-logout" type="submit">{english ? "Sign out" : "退出登录"}</button></form>}
         </div>

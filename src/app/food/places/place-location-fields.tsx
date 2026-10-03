@@ -1,4 +1,5 @@
 "use client";
+import { SuggestedInput } from "@/components/suggested-input";
 
 import { useEffect, useId, useState } from "react";
 import { buildHistorySuggestions } from "@/lib/history-suggestions";
@@ -21,18 +22,18 @@ export function PlaceSuggestionFields({ values, onChange }: {
     return () => controller.abort();
   }, []);
   const cities = buildHistorySuggestions(places, place => place.city, place => place.updatedAt, 6);
-  const locations = buildHistorySuggestions(places, place => place.location, place => place.updatedAt, 6);
+  const locations = buildHistorySuggestions(places.filter(place => !values.city.trim() || place.city.trim().toLocaleLowerCase() === values.city.trim().toLocaleLowerCase()), place => place.location, place => place.updatedAt, 6);
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 
   return <>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><input id={`${id}-city`} maxLength={100} value={values.city} onChange={event => onChange({ city: event.target.value })} placeholder="例如：成都" />
-      {cities.length > 0 && <div className="relation-label-suggestions" role="group" aria-label="城市填写推荐">{cities.map(value => <button type="button" className="user-content" key={value} onClick={() => onChange({ city: value })}>{value}</button>)}</div>}
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
+
     </div>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-location`}>地点（可选）</label></span><input id={`${id}-location`} maxLength={200} value={values.location} onChange={event => onChange({ location: event.target.value })} placeholder="商圈、街道或具体地址" />
-      {locations.length > 0 && <div className="relation-label-suggestions" role="group" aria-label="地点填写推荐">{locations.map(value => <button type="button" className="user-content" key={value} onClick={() => onChange({ location: value })}>{value}</button>)}</div>}
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-location`}>地点（可选）</label></span><SuggestedInput suggestionLabel="地点" suggestions={locations} id={`${id}-location`} maxLength={200} value={values.location} onValueChange={nextValue => onChange({ location: nextValue })} placeholder="商圈、街道或具体地址" />
+
     </div>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-category`}>品类</label></span><input id={`${id}-category`} maxLength={100} value={values.category} onChange={event => onChange({ category: event.target.value })} placeholder="自由输入" />
-      <div className="relation-label-suggestions" role="group" aria-label="品类填写推荐">{categories.map(value => <button type="button" className="user-content" key={value} onClick={() => onChange({ category: value })}>{value}</button>)}</div>
+    <div className="field food-place-location-field"><span><label htmlFor={`${id}-category`}>品类</label></span><SuggestedInput suggestionLabel="品类" suggestions={categories} id={`${id}-category`} maxLength={100} value={values.category} onValueChange={nextValue => onChange({ category: nextValue })} placeholder="自由输入" />
+
     </div>
   </>;
 }

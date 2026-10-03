@@ -25,19 +25,21 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
   const automaticTitle = useRef<string | null>(null);
   const [placeQuery, setPlaceQuery] = useState("");
   const [dishQuery, setDishQuery] = useState("");
+  const [placeLoading, setPlaceLoading] = useState(false); const [placeError, setPlaceError] = useState(""); const [placeAttempt, setPlaceAttempt] = useState(0);
+  const [dishLoading, setDishLoading] = useState(false); const [dishError, setDishError] = useState(""); const [dishAttempt, setDishAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    const timer = setTimeout(() => { void fetch(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodPlace[]>; }).then(items => setPlaces(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setError("店铺加载失败，请重试"); }); }, 150);
+    const timer = setTimeout(() => { setPlaceLoading(true); setPlaceError(""); void fetch(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodPlace[]>; }).then(items => setPlaces(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setPlaceError("店铺加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setPlaceLoading(false); }); }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [placeQuery]);
+  }, [placeQuery, placeAttempt]);
   useEffect(() => {
     if (!draft.foodPlaceId) return;
     const controller = new AbortController();
-    const timer = setTimeout(() => { void fetch(`/api/food/places/${draft.foodPlaceId}/dishes?q=${encodeURIComponent(dishQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodDish[]>; }).then(items => setDishes(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setError("菜品加载失败，请重试"); }); }, 150);
+    const timer = setTimeout(() => { setDishLoading(true); setDishError(""); void fetch(`/api/food/places/${draft.foodPlaceId}/dishes?q=${encodeURIComponent(dishQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodDish[]>; }).then(items => setDishes(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setDishError("菜品加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setDishLoading(false); }); }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [draft.foodPlaceId, dishQuery]);
+  }, [draft.foodPlaceId, dishQuery, dishAttempt]);
   const dishOptions = [...new Map([...(record?.foodPlaceId === Number(draft.foodPlaceId) ? record.foodDishes ?? (record.foodDishId && record.foodDishName ? [{ id: record.foodDishId, name: record.foodDishName }] : []) : []), ...dishes.map(dish => ({ id: dish.id, name: dish.name, detail: [dish.category, dish.recommended ? "推荐" : ""].filter(Boolean).join(" · ") }))].map(dish => [dish.id, dish])).values()];
   const placeOptions = [...new Map([...(record?.foodPlaceId && record.foodPlaceName ? [{ id: record.foodPlaceId, name: record.foodPlaceName, detail: [record.foodPlaceCity, record.foodPlaceLocation, record.foodPlaceBranch].filter(Boolean).join(" · ") }] : []), ...places.map(place => ({ id: place.id, name: place.name, detail: [place.city, place.location, place.branch].filter(Boolean).join(" · ") }))].map(place => [place.id, place])).values()];
   function selectDishes(ids: number[]) {
@@ -66,8 +68,8 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
     <label className="field"><span>餐次</span><select value={draft.mealType} onChange={(event) => setDraft({ ...draft, mealType: event.target.value as MealType })}>{meals.map((meal) => <option value={meal.value} key={meal.value}>{meal.label}</option>)}</select></label>
     <label className="field"><span>场景</span><select value={draft.scene} onChange={(event) => { const scene = event.target.value as FoodScene; setDraft({ ...draft, scene, rating: canRate(scene) ? draft.rating : "" }); }}>{scenes.map((scene) => <option value={scene.value} key={scene.value}>{scene.label}</option>)}</select></label>
     <label className="field"><span>吃了什么</span><input required value={draft.title} placeholder="可手动填写，或选择菜品自动生成" maxLength={200} onChange={(event) => { automaticTitle.current = null; setDraft({ ...draft, title: event.target.value }); }} /></label>
-    <FoodLinkPicker label="店铺（可选）" options={placeOptions} selected={draft.foodPlaceId ? [Number(draft.foodPlaceId)] : []} onSearch={setPlaceQuery} onChange={ids => { setDishes([]); setDishQuery(""); const clearTitle = draft.title === automaticTitle.current; if (clearTitle) automaticTitle.current = ""; setDraft({ ...draft, foodPlaceId: ids[0]?.toString() ?? "", foodDishIds: [], ...(clearTitle ? { title: "" } : {}) }); }} />
-    {draft.foodPlaceId && <FoodLinkPicker key={draft.foodPlaceId} label="菜品（可选，可多选）" options={dishOptions} selected={draft.foodDishIds} multiple onSearch={setDishQuery} onChange={selectDishes} />}
+    <FoodLinkPicker label="店铺（可选）" options={placeOptions} selected={draft.foodPlaceId ? [Number(draft.foodPlaceId)] : []} loading={placeLoading} error={placeError} onRetry={() => setPlaceAttempt(value => value + 1)} onSearch={setPlaceQuery} onChange={ids => { setDishes([]); setDishQuery(""); setDishError(""); setDishLoading(false); const clearTitle = draft.title === automaticTitle.current; if (clearTitle) automaticTitle.current = ""; setDraft({ ...draft, foodPlaceId: ids[0]?.toString() ?? "", foodDishIds: [], ...(clearTitle ? { title: "" } : {}) }); }} />
+    {draft.foodPlaceId && <FoodLinkPicker key={draft.foodPlaceId} label="菜品（可选，可多选）" options={dishOptions} selected={draft.foodDishIds} multiple loading={dishLoading} error={dishError} onRetry={() => setDishAttempt(value => value + 1)} onSearch={setDishQuery} onChange={selectDishes} />}
     {canRate(draft.scene) && <label className="field"><span>评价</span><select value={draft.rating} onChange={(event) => setDraft({ ...draft, rating: event.target.value as TasteRating | "" })}><option value="">未评价</option>{TASTE_RATINGS.map((value) => <option value={value} key={value}>{tasteLabels[value]}</option>)}</select></label>}
     <label className="field wide"><span>明细</span><textarea rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
     <label className="field"><span>热量估算</span><input type="number" value={draft.estimatedKcal} onChange={(event) => setDraft({ ...draft, estimatedKcal: event.target.value })} /></label>

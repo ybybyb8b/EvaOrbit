@@ -1,4 +1,5 @@
 "use client";
+import { SearchableSelect } from "./searchable-select";
 
 import { useState, type FormEvent } from "react";
 import { FormSheet } from "./form-sheet";
@@ -53,7 +54,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
       {error && <p className="form-error" role="alert">{error}</p>}
       {conflict && <button className="button secondary" type="button" disabled={busy} onClick={() => void reloadRules()}>{english ? "Reload rules, keep draft" : "刷新规则，保留草稿"}</button>}
       <label className="field"><span>{english ? "Title starts with" : "标题以什么开头"}</span><input required autoFocus maxLength={80} value={prefix} onChange={event => setPrefix(event.target.value)} disabled={busy} placeholder={english ? "Emoji or text prefix" : "emoji 或文字前缀"} /></label>
-      <label className="field"><span>{english ? "Meaning in EO" : "在 EO 中代表什么"}</span><select value={categoryId} onChange={event => setCategoryId(event.target.value)} disabled={busy}>{base.categories.map(item => <option key={item.id} value={item.id}>{calendarCategoryLabel(item, english)}</option>)}<option value="new">{english ? "New category…" : "新建分类……"}</option></select></label>
+      <div className="field"><span>{english ? "Meaning in EO" : "在 EO 中代表什么"}</span>{base.categories.length > 10 ? <SearchableSelect label={english?"Meaning in EO":"在 EO 中代表什么"} value={categoryId} disabled={busy} options={[...base.categories.map(item=>({value:item.id,label:calendarCategoryLabel(item,english)})),{value:"new",label:english?"New category…":"新建分类……"}]} onValueChange={setCategoryId}/> : <select value={categoryId} onChange={event => setCategoryId(event.target.value)} disabled={busy}>{base.categories.map(item => <option key={item.id} value={item.id}>{calendarCategoryLabel(item, english)}</option>)}<option value="new">{english ? "New category…" : "新建分类……"}</option></select>}</div>
       {categoryId === "new" && <label className="field"><span>{english ? "Category name" : "分类名称"}</span><input required maxLength={60} value={newName} onChange={event => setNewName(event.target.value)} disabled={busy} placeholder={english ? "Reading, study…" : "阅读、学习……"} /></label>}
       <label className="calendar-rule-toggle"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={busy} /><span>{english ? "Enable this rule" : "启用这条规则"}</span></label>
       {!isSleep ? <label className="calendar-rule-toggle"><input type="checkbox" checked={include} onChange={event => setInclude(event.target.checked)} disabled={busy} /><span>{english ? "Include in daily recorded-time summary" : "加入每日用时总结"}</span></label> : <p className="calendar-rule-hint">{english ? "Sleep records contribute to the sleep card, including naps." : "睡眠记录用于睡眠卡片，包含主睡眠和小睡。"}</p>}

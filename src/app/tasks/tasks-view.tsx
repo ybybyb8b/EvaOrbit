@@ -1,4 +1,6 @@
 "use client";
+import { parseInputTags } from "@/lib/form-input";
+import { SuggestedInput } from "@/components/suggested-input";
 import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -98,7 +100,7 @@ export function TasksView() {
       const response = await fetch(editing ? `/api/tasks/${editing}` : "/api/tasks", {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({...draft,dueDate:draft.dueDate||null,dueTime:draft.dueTime||null,reminderDate:draft.reminderDate||null,reminderTime:draft.reminderTime||null,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"Asia/Shanghai",tags:draft.tags.split(",").map((tag)=>tag.trim()).filter(Boolean)}),
+        body: JSON.stringify({...draft,dueDate:draft.dueDate||null,dueTime:draft.dueTime||null,reminderDate:draft.reminderDate||null,reminderTime:draft.reminderTime||null,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||"Asia/Shanghai",tags:parseInputTags(draft.tags)}),
       });
       const result = await response.json().catch(() => null) as ApiError | null;
       if (!response.ok) throw new Error(english ? "Could not save task." : result?.error ?? "无法保存任务。");
@@ -141,7 +143,7 @@ export function TasksView() {
         {draft.reminderMode==="custom"&&<><label className="field"><span>{english?"Reminder date":"提醒日期"}</span><input type="date" required value={draft.reminderDate} onChange={(event)=>setDraft({...draft,reminderDate:event.target.value})}/></label><label className="field"><span>{english?"Reminder time":"提醒时间"}</span><input type="time" required step={draft.reminderTime&&Number(draft.reminderTime.slice(3,5))%5!==0?60:300} value={draft.reminderTime} onChange={(event)=>setDraft({...draft,reminderTime:event.target.value})}/></label></>}
         {draft.reminderMode!=="none"&&draft.dueDate&&<label className="field wide checkbox-line"><input type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>{english?"Repeat daily while overdue":"逾期后每日重复提醒"}</span></label>}
         <label className="field"><span>{english ? "Priority" : "优先级"}</span><select value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value as TaskPriority })}><option value="low">{english ? "Low" : "低"}</option><option value="medium">{english ? "Medium" : "中"}</option><option value="high">{english ? "High" : "高"}</option></select></label>
-        <label className="field wide"><span>{english ? "Tags" : "标签"} <small>{english ? "Comma separated" : "用逗号分隔"}</small></span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></label>
+        <div className="field wide"><span>{english ? "Tags" : "标签"} <small>{english ? "Enter to add" : "回车添加"}</small></span><SuggestedInput suggestionLabel="标签" suggestions={tasks.flatMap(task => task.tags)} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></div>
         <label className="field wide"><span>{english ? "Notes" : "备注"}</span><textarea rows={3} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={english ? "Optional context" : "补充上下文（可选）"} /></label>
       </div>}
       {error && <p className="form-error" role="alert">{error}</p>}

@@ -1,4 +1,5 @@
 "use client";
+import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
@@ -59,7 +60,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
         <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as MemoStatus })}>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
         <label className="field"><span>Event date <small>Optional</small></span><input type="date" value={draft.eventDate} onChange={(event) => setDraft({ ...draft, eventDate: event.target.value })} /></label>
         <label className="field"><span>Confirmed at <small>Optional</small></span><input type="datetime-local" value={draft.confirmedAt} onChange={(event) => setDraft({ ...draft, confirmedAt: event.target.value })} /></label>
-        <label className="field wide"><span>Tags <small>Comma separated</small></span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder="人物, 规则, 长期资料" /></label>
+        <div className="field wide"><span>Tags <small>Enter to add</small></span><SuggestedInput suggestionLabel="标签" suggestions={knownTags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder="人物, 规则, 长期资料" /></div>
         <label className="field wide"><span>Content</span><textarea required rows={10} maxLength={100000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}

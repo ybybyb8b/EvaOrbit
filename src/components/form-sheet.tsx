@@ -4,6 +4,7 @@ import { type ReactNode, type TransitionEvent, useCallback, useEffect, useId, us
 import { createPortal } from "react-dom";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
+import { SheetSuggestionTarget } from "./suggested-input";
 
 type FormSheetProps = {
   title: string;
@@ -32,6 +33,10 @@ export function FormSheet({
   const { language } = useLocale();
   const copy = (value: string) => translateUiCopy(value, language);
   const [mounted, setMounted] = useState(false);
+  const [suggestionTarget, setSuggestionTarget] = useState<HTMLDivElement | null>(null);
+  const dirtyRef = useRef(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const discardRef = useRef(false);
   const [phase, setPhase] = useState<FormSheetPhase>("opening");
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -72,6 +77,12 @@ export function FormSheet({
 
   const requestClose = useCallback(() => {
     if (busyRef.current || phaseRef.current === "closing" || phaseRef.current === "closed") return;
+    if (dirtyRef.current) {
+      discardRef.current = true;
+      setDiscardOpen(true);
+      window.requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLButtonElement>(".form-sheet-discard-confirm button")?.focus());
+      return;
+    }
     phaseRef.current = "closing";
     setPhase("closing");
   }, []);
@@ -105,11 +116,12 @@ export function FormSheet({
       layer.style.setProperty("--form-sheet-viewport-top", `${viewport?.offsetTop ?? 0}px`);
       layer.style.setProperty("--form-sheet-viewport-left", `${viewport?.offsetLeft ?? 0}px`);
     };
-    const getFocusable = () => dialog ? Array.from(dialog.querySelectorAll<HTMLElement>(
+    const getFocusable = () => dialog ? Array.from((discardRef.current ? dialog.querySelector(".form-sheet-discard-confirm") ?? dialog : dialog).querySelectorAll<HTMLElement>(
       'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
     )).filter((element) => !element.hidden && element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true") : [];
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (discardRef.current) { discardRef.current = false; setDiscardOpen(false); return; }
         requestClose();
         return;
       }
@@ -171,24 +183,33 @@ export function FormSheet({
 
   return createPortal(
     <div className="form-sheet-layer" data-state={phase} role="presentation" ref={panelRef}>
-      <button className="form-sheet-backdrop" type="button" aria-label={`${copy("Close")} ${copy(title)}`} onClick={requestClose} />
-      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}>
+      <button className="form-sheet-backdrop" type="button" aria-label={`${language === "en" ? "Close" : "关闭"} ${copy(title)}`} onClick={requestClose} />
+      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
+        onChangeCapture={event => { if (!(event.target instanceof HTMLInputElement) || event.target.type !== "search") dirtyRef.current = true; }}
+        onClickCapture={event => { if (event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
+        onInvalidCapture={event => { if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: "nearest" }); }}>
         <header className="form-sheet-header">
           <h2 id={titleId}>{copy(title)}</h2>
-          <button className="text-button" type="button" onClick={requestClose} disabled={busy}>{copy("Close")}</button>
+          <button className="text-button" type="button" onClick={requestClose} disabled={busy || discardOpen}>{language === "en" ? "Close" : "关闭"}</button>
         </header>
         <div
           className="form-sheet-body"
           ref={bodyRef}
+          inert={discardOpen || busy}
           onFocusCapture={(event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
             window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "auto" }), 120);
           }}
         >
-          {children}
+          <SheetSuggestionTarget.Provider value={suggestionTarget}>{children}</SheetSuggestionTarget.Provider>
         </div>
-        {submitLabel && <footer className="form-sheet-footer">
+        <div className="form-sheet-recommendations" ref={setSuggestionTarget} hidden={discardOpen || busy} />
+        {discardOpen ? <footer className="form-sheet-footer form-sheet-discard-confirm" role="group" aria-label={language === "en" ? "Unsaved changes" : "未保存的修改"}>
+          <p role="alert">{language === "en" ? "Discard unsaved changes?" : "放弃尚未保存的修改？"}</p>
+          <div><button className="button secondary" type="button" onClick={() => { discardRef.current = false; setDiscardOpen(false); dialogRef.current?.focus(); }}>{language === "en" ? "Keep editing" : "继续填写"}</button>
+          <button className="button primary" type="button" onClick={() => { dirtyRef.current = false; discardRef.current = false; setDiscardOpen(false); requestClose(); }}>{language === "en" ? "Discard and close" : "放弃并关闭"}</button></div>
+        </footer> : submitLabel && <footer className="form-sheet-footer">
           <button className="button secondary" type="button" onClick={requestClose} disabled={busy}>{copy(cancelLabel)}</button>
           <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy}>{copy(busy ? busyLabel : submitLabel)}</button>
         </footer>}

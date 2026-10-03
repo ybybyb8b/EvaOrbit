@@ -1,4 +1,6 @@
 "use client";
+import { SuggestedInput } from "@/components/suggested-input";
+import { useFormHistory, historyValues } from "@/components/use-form-history";
 import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -13,6 +15,7 @@ const emptyDraft = { title: "", content: "", category: "其他" };
 
 export function MemoryView() {
   const params = useSearchParams();
+  const categoryHistory = useFormHistory("/api/memories");
   const [memories, setMemories] = useState<Memory[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
@@ -58,7 +61,7 @@ export function MemoryView() {
       <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT" : "KEEP"}</span><h2>{editing ? "改一下" : "先留下来"}</h2></div><button type="button" className="text-button" onClick={() => setShowForm(false)}>先不写</button></div>
       <div className="form-grid">
         <label className="field"><span>标题</span><input autoFocus required maxLength={160} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="例如：妈妈喜欢的花" /></label>
-        <label className="field"><span>分类</span><input required list="memory-categories" maxLength={40} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /><datalist id="memory-categories">{suggestedCategories.map((item) => <option key={item} value={item} />)}</datalist></label>
+        <div className="field"><span>分类</span><SuggestedInput suggestionLabel="分类" suggestions={[...suggestedCategories, ...historyValues(categoryHistory, "category"), ...categories]} required maxLength={40} value={draft.category} onValueChange={nextValue => setDraft({ ...draft, category: nextValue })} /></div>
         <label className="field wide"><span>内容</span><textarea required rows={5} maxLength={10000} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder="写下细节，让未来的你能够理解上下文。" /></label>
       </div>
       {error && <p className="form-error">{error}</p>}

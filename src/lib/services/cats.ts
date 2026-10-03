@@ -19,6 +19,21 @@ export async function deleteCatRecord(kind:CatRecordKind,id:number){const reposi
 
 export async function getCatRecord(kind:CatRecordKind,id:number){const repository=await getRepository();if(kind==="event")return repository.getCatEvent(id);if(kind==="symptom")return repository.getCatSymptom(id);if(kind==="vet_visit")return repository.getCatVetVisit(id);if(kind==="medication")return repository.getCatMedication(id);return repository.getCatMeasurement(id);}
 
+export async function getCatInputHistory(petId: number) {
+  await ensurePet(petId, true);
+  const repository = await getRepository();
+  const [symptoms, visits, medications, measurements] = await Promise.all([
+    repository.listCatSymptoms(petId), repository.listCatVetVisits(petId),
+    repository.listCatMedications(petId), repository.listCatMeasurements(petId),
+  ]);
+  return [
+    ...symptoms.map(item => ({ kind: "symptom", title: item.title, severity: item.severity, bodyArea: item.bodyArea })),
+    ...visits.map(item => ({ kind: "vet_visit", clinic: item.clinic, doctor: item.doctor })),
+    ...medications.map(item => ({ kind: "medication", name: item.name, unit: item.unit, frequencyText: item.frequencyText })),
+    ...measurements.map(item => ({ kind: "measurement", measurementType: item.measurementType, unit: item.unit })),
+  ];
+}
+
 export async function catTimeline(petId?:number|null):Promise<CatTimelineEntry[]>{const repository=await getRepository();const [events,symptoms,visits,medications,measurements]=await Promise.all([repository.listCatEvents(petId),petId===null?Promise.resolve([]):repository.listCatSymptoms(petId),petId===null?Promise.resolve([]):repository.listCatVetVisits(petId),petId===null?Promise.resolve([]):repository.listCatMedications(petId),petId===null?Promise.resolve([]):repository.listCatMeasurements(petId)]);return[
   ...events.map(item=>({id:item.id,kind:"event" as const,petId:item.petId,occurredAt:item.occurredAt,occurredHasExplicitTime:item.occurredHasExplicitTime,eventType:item.eventType,title:item.title,summary:item.note,metadata:{sourceType:item.sourceType,sourceId:item.sourceId}})),
   ...symptoms.map(item=>({id:item.id,kind:"symptom" as const,petId:item.petId,occurredAt:item.occurredAt,occurredHasExplicitTime:item.occurredHasExplicitTime,eventType:"symptom",title:item.title,summary:[item.severity,item.bodyArea,item.description].filter(Boolean).join(" · "),metadata:{severity:item.severity,bodyArea:item.bodyArea}})),

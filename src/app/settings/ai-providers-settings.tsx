@@ -1,4 +1,5 @@
 "use client";
+import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -163,7 +164,7 @@ export function AiProvidersSettings() {
         </form>
 
         {selected && <section className="provider-models"><div className="provider-models-head"><div><strong>模型</strong><small>默认模型只影响新对话；对话内切换不会改它。</small></div></div>
-          <form className="model-add-form" onSubmit={addModel}><label className="field"><span>Model ID</span><input required list={`discovered-${selected.id}`} maxLength={200} value={modelId} onChange={(event) => { setModelId(event.target.value); if (!displayName) setDisplayName(event.target.value); }} /><datalist id={`discovered-${selected.id}`}>{discovered.map((model) => <option value={model} key={model} />)}</datalist></label><label className="field"><span>显示名称</span><input required maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><button className="button secondary" disabled={working} type="submit">添加模型</button></form>
+          <form className="model-add-form" onSubmit={addModel}><div className="field"><span>Model ID</span><SuggestedInput suggestionLabel="Model ID" suggestions={discovered} required  maxLength={200} value={modelId} onValueChange={nextValue => { setModelId(nextValue); if (!displayName) setDisplayName(nextValue); }} /></div><label className="field"><span>显示名称</span><input required maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><button className="button secondary" disabled={working} type="submit">添加模型</button></form>
           <div className="provider-model-list">{selected.models.map((model) => <ModelRow key={model.id} model={model} working={working} onUpdate={updateModel} onDelete={removeModel} />)}{!selected.models.length && <p>还没有模型。可以手动填写，或先测试连接读取列表。</p>}</div>
         </section>}
       </div>

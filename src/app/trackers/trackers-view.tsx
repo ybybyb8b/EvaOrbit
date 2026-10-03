@@ -1,4 +1,5 @@
 "use client";
+import { SuggestedInput } from "@/components/suggested-input";
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -115,7 +116,7 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
         </label>
         <div className="tracker-basic-fields">
           <label className="field wide"><span>Name</span><input required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Poo, Home visit, Headache…" /></label>
-          <label className="field"><span>Group</span><input maxLength={60} value={draft.groupName} onChange={(event) => setDraft({ ...draft, groupName: event.target.value })} /></label>
+          <div className="field"><span>Group</span><SuggestedInput suggestionLabel="分组" suggestions={trackers.map(tracker => tracker.groupName)} maxLength={60} value={draft.groupName} onValueChange={nextValue => setDraft({ ...draft, groupName: nextValue })} /></div>
         </div>
       </div>
       <section className="tracker-property-builder">

@@ -5,6 +5,8 @@ import { useState } from "react";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import type { HealthRecord, HealthRecordDetails, HealthRecordStatus, HealthRecordType } from "@/lib/types";
 import { detailFields, healthRecordStatusLabels, healthRecordTypes, healthRecordUsesStatus } from "./health-record-utils";
+import { SuggestedInput } from "@/components/suggested-input";
+import { useFormHistory, historyValues } from "@/components/use-form-history";
 
 type Draft = {
   type: HealthRecordType;
@@ -31,6 +33,7 @@ function draftFromRecord(record: HealthRecord): Draft {
 
 export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, formId, onSavingChange }: { editing?: HealthRecord; initialDate?: string; onCancel: () => void; onSaved: (record: HealthRecord) => void | Promise<void>; formId?: string; onSavingChange?: (saving: boolean) => void }) {
   const [draft, setDraft] = useState<Draft>(() => editing ? draftFromRecord(editing) : emptyDraft(initialDate));
+  const history = useFormHistory(`/api/health/records?type=${draft.type}&limit=100`);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -71,18 +74,19 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
   }
 
   const fields = detailFields[draft.type];
+  const suggestedKeys = new Set(["severity", "body_area", "provider", "frequency", "unit", "source"]);
   return <form id={formId} className="editor-card health-editor" onSubmit={(event) => void submit(event)}>
     <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h2>{editing ? "Edit health record" : "Add health record"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
-    <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} onClick={() => selectType(item.value)}><span>{item.label}</span></button>)}</div></div>
+    <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} data-form-change onClick={() => selectType(item.value)}><span>{item.label}</span></button>)}</div></div>
     <div className="form-grid health-form-grid">
-      <label className="field"><span>Title</span><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="What should you remember?" /></label>
+      <div className="field"><span>Title</span><SuggestedInput suggestionLabel="Title" suggestions={["symptom", "condition", "medication"].includes(draft.type) ? historyValues(history, "title") : []} required maxLength={200} value={draft.title} onValueChange={title => setDraft({ ...draft, title })} placeholder="What should you remember?" /></div>
       {healthRecordUsesStatus(draft.type) && <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}
       <HealthDateTime label="Occurred" value={draft.occurredAt} onChange={(occurredAt)=>setDraft({...draft,occurredAt})}/>
       <HealthDateTime label="Started" value={draft.startedAt} onChange={(startedAt)=>setDraft({...draft,startedAt})} optional/>
       <HealthDateTime label="Ended" value={draft.endedAt} onChange={(endedAt)=>setDraft({...draft,endedAt})} optional/>
       <label className="field wide"><span>Summary <small>(optional)</small></span><textarea rows={3} maxLength={5000} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} placeholder="A short note for later…" /></label>
     </div>
-    <section className="health-details-editor"><div className="health-editor-section-heading"><div><span className="eyebrow">DETAILS</span><p>Small type-specific context. Keep it lightweight.</p></div></div><div className="form-grid health-form-grid">{fields.map((field) => <label className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><input type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onChange={(event) => setDetail(field.key, event.target.value, field.inputType)} placeholder={field.placeholder} /></label>)}</div></section>
+    <details className="health-details-editor" open={editing ? undefined : false}><summary>Details · optional</summary><div className="form-grid health-form-grid">{fields.map((field) => <div className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><SuggestedInput suggestionLabel={field.label} suggestions={suggestedKeys.has(field.key) ? [...historyValues(history, `details.${field.key}`), ...(field.key === "severity" ? ["Mild", "Moderate", "Severe"] : [])] : []} type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onValueChange={value => setDetail(field.key, value, field.inputType)} placeholder={field.placeholder} /></div>)}</div></details>
     {error && <p className="form-error">{error}</p>}
     <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
   </form>;
