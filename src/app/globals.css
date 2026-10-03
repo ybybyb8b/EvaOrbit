@@ -5751,26 +5751,41 @@ html[data-theme="mistviolet"] :is(.relations-page,.relation-detail-page) {
 }
 
 /* A shared frosted surface keeps the four daily summaries visually calm. */
-html[data-theme="mistviolet"] .home-day-pane {
+.home-day-grid > .home-day-pane {
+  --home-frost-highlight:rgb(255 255 255 / .48);
+  --home-frost-grain-opacity:.055;
+  position:relative;
   background:var(--surface-card);
-  box-shadow:inset 0 1px 0 rgb(var(--surface-raised-rgb) / .65),0 6px 22px rgb(var(--shadow-rgb) / .035);
+  box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .045);
+}
+.home-day-grid > .home-day-pane::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  background:url("/textures/frosted-grain.svg") repeat;
+  opacity:var(--home-frost-grain-opacity);
+  pointer-events:none;
 }
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
-  html[data-theme="mistviolet"] .home-day-pane {
-    background:linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .68),rgb(var(--surface-card-rgb) / .38));
+  .home-day-grid > .home-day-pane {
+    background:radial-gradient(ellipse at 15% 0%,var(--home-frost-highlight),transparent 72%),linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .68),rgb(var(--surface-card-rgb) / .38));
     -webkit-backdrop-filter:blur(18px) saturate(110%);
     backdrop-filter:blur(18px) saturate(110%);
   }
 }
-html[data-theme="mistviolet"][data-mode="dark"] .home-day-pane {
-  box-shadow:inset 0 1px 0 rgb(255 255 255 / .07),0 6px 22px rgb(var(--shadow-rgb) / .08);
+html[data-mode="dark"] .home-day-pane {
+  --home-frost-highlight:rgb(255 255 255 / .025);
+  --home-frost-grain-opacity:.025;
+  box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .08);
 }
 @media (prefers-reduced-transparency:reduce) {
-  html[data-theme="mistviolet"] .home-day-pane {
+  .home-day-grid > .home-day-pane {
     background:var(--surface-card);
     -webkit-backdrop-filter:none;
     backdrop-filter:none;
   }
+  .home-day-grid > .home-day-pane::before { display:none; }
 }
 html[data-theme="mistviolet"] .home-sleep-pane header > svg { color:var(--state-info); }
 html[data-theme="mistviolet"] .home-journal-pane header > svg { color:var(--state-warning); }
