@@ -94,7 +94,8 @@ html[data-chinese-font="alimama"] { --font-selected-zh: var(--font-ke-song); }
 html[data-chinese-font="ibm"] { --font-selected-zh: var(--font-canger-xuansan); }
 html[data-english-font="ibm"] { --font-selected-en: var(--font-august-stories); }
 html[data-english-font="polyamine"] { --font-selected-en: var(--font-polyamine); }
-html[data-english-font="cormorant"] { --font-selected-en: var(--font-cormorant); }
+/* Use the loaded Latin face directly: its generated system fallback can claim Chinese glyphs on iOS. */
+html[data-english-font="cormorant"] { --font-selected-en: "Cormorant Garamond"; }
 
 :is(input, textarea, [contenteditable="true"], .user-content) {
   font-family: var(--font-zh);
