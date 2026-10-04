@@ -55,14 +55,14 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
   const ready = !loading && !error && data;
   return <div className={`page ${styles.page}`}>
     <PageHeader eyebrow="生活" title="Food & Drink" action={<button className="button primary" onClick={() => setEditor({ kind: "choose" })}><Icon name="plus" />新增记录</button>} />
+    <nav className={styles.destinations} aria-label="Food & Drink 核心入口">{destinations.map(destination => <Link href={destination.href} key={destination.href}><Icon name={destination.icon} variant="feature" /><span>{destination.label}</span></Link>)}</nav>
     <section className={styles.brief} aria-labelledby="brief-title"><h2 id="brief-title">Brief</h2>
       {error ? <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></p> : loading ? <p className={styles.hint} role="status">正在读取饮食简报…</p> : data && <>
-        <p className={styles.briefLead}>今天吃了 <strong>{data.brief.foodCount}</strong> 次，喝了 <strong>{data.brief.drinkCount}</strong> 杯。</p>
-        {latest ? <button className={styles.latest} onClick={() => setEditor(latest.kind === "food" ? { kind: "food", record: latest.record } : { kind: "drink", record: latest.record })} aria-label={`编辑最近记录 ${latestTitle}`}><span>最近一条 · {latest.kind === "food" ? "Food" : "Drink"}</span><strong className="user-content">{latestTitle}</strong><small>{latestDay === data.date ? "今天" : latestDay} · {latestTime}</small></button> : <p className={styles.hint}>还没有记录，从第一餐或第一杯开始。</p>}
+        <p className={styles.briefLead}>今天吃了 {data.brief.foodCount} 次，喝了 {data.brief.drinkCount} 杯。</p>
+        {latest ? <p className={styles.latest}>最近一条：{latestDay === data.date ? "今天" : latestDay}{latest.record.occurredHasExplicitTime === false ? "（仅日期）" : ` ${latestTime}`}，{latest.kind === "food" ? "吃了" : "喝了"}「<button className={`${styles.latestLink} user-content`} onClick={() => setEditor(latest.kind === "food" ? { kind: "food", record: latest.record } : { kind: "drink", record: latest.record })} aria-label={`编辑最近记录 ${latestTitle}`}>{latestTitle}</button>」。</p> : <p className={styles.hint}>还没有记录，从第一餐或第一杯开始。</p>}
         {warning ? <button className={styles.briefWarning} onClick={() => setLimitEditor(warning.limit)}><span className="user-content">{warning.limit.name}</span> · {limitStateLabels[warning.state]} <Icon name="arrow" /></button> : <p className={styles.hint}>{data.limitStatuses.length ? "当前限额均在范围内。" : "当前没有启用中的限额。"}</p>}
       </>}
     </section>
-    <nav className={styles.destinations} aria-label="Food & Drink 核心入口">{destinations.map(destination => <Link href={destination.href} key={destination.href}><Icon name={destination.icon} variant="feature" /><span>{destination.label}</span></Link>)}</nav>
     <section className={styles.insights} aria-labelledby="insights-title"><div className="section-heading"><h2 id="insights-title">Insights</h2></div>
       {ready ? <>{!data.window.complete && <p className={styles.hint}>记录较多，仅展示已读取内容的代表性模式，暂停前后比较。</p>}{data.insights.length ? <ol className={styles.insightList}>{data.insights.map(insight => <li key={insight.id}><h3>{insight.href ? <Link href={insight.href}>{insight.title}<Icon name="arrow" /></Link> : insight.title}</h3><p>{insight.body}</p></li>)}</ol> : <p className={styles.insightEmpty}>近期还没有足够记录形成有代表性的模式。先记下来，有值得注意的变化再放在这里。</p>}</> : <p className={styles.hint}>{error ? "重新加载后查看近期洞察。" : "正在整理近期模式…"}</p>}
     </section>
