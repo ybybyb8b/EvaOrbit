@@ -30,7 +30,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime,
     endAt: null,
-    href: "/drinks",
+    href: "/drinks/history",
     relatedPeople: [],
     relatedPets: [],
     metadata: { foodPlaceId:item.foodPlaceId,foodPlaceName:item.foodPlaceName,foodPlaceCity:item.foodPlaceCity,foodPlaceLocation:item.foodPlaceLocation,foodPlaceBranch:item.foodPlaceBranch,drinkType: item.drinkType, brand: item.brand, volumeMl: item.volumeMl, sugarLevel: item.sugarLevel, temperature: item.temperature, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },

@@ -3,6 +3,16 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["饮食简报", "Brief"], ["设置限额", "Set limit"], ["编辑饮品限额", "Edit drink limit"], ["设置饮品限额", "Set drink limit"],
+  ["限额名称", "Limit name"], ["数量上限（杯）", "Cup limit"], ["启用限额", "Enable limit"], ["自定义品名关键词", "Custom drink name keyword"], ["品名关键词", "Drink name keyword"],
+  ["删除这条限额", "Delete this limit"], ["饮品限额已保存", "Drink limit saved"], ["饮品限额已删除", "Drink limit deleted"],
+  ["正在读取饮食简报…", "Loading food and drink brief…"], ["正在整理近期模式…", "Finding recent patterns…"], ["正在读取限额…", "Loading limits…"],
+  ["最近 7 天 · 对比前 7 天", "Last 7 days · compared with the previous 7"],
+  ["当前限额均在范围内。", "All current limits are within range."], ["当前没有启用中的限额。", "No limits are currently enabled."],
+  ["还没有记录，从第一餐或第一杯开始。", "Start with your first meal or drink."],
+  ["近期还没有足够记录形成有代表性的模式。先记下来，有值得注意的变化再放在这里。", "Keep logging. Notable patterns will appear once there are enough recent records."],
+  ["还没有限额，可以为常喝的饮品设一条数量线。", "Set a cup limit for a drink you have regularly."],
+  ["沿用现有规则：按饮品类型或品名关键词计杯数。", "Counts cups by drink type or drink name keyword."],
   ["咖啡因 mg（可选）", "Caffeine mg (optional)"],
   ["饮食记录", "Food records"], ["饮品记录", "Drink records"], ["饮品洞察", "Drink insights"], ["记录饮食", "Record food"], ["记录饮品", "Record drink"],
   ["吃过的、喝过的，放在一起看。", "Meals and drinks, together."], ["今日概览", "Today overview"], ["当天概览", "Day overview"], ["概览日期", "Overview date"], ["今日时间线", "Today timeline"], ["当天时间线", "Day timeline"], ["餐次 / 加餐", "Meals / snacks"], ["仅日期", "Date only"], ["习惯与数量线", "Habits & limits"], ["饮品设置", "Drink settings"], ["饮品限额", "Drink limits"], ["饮食足迹", "Food & drink habits"], ["最近来源", "Recent sources"], ["最近关联记录", "Recent linked records"],

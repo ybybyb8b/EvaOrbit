@@ -1,1 +1,4 @@
-import type{Metadata}from"next";import{DrinksView}from"./drinks-view";export const metadata:Metadata={title:"Drink insights"};export default function DrinksPage(){return <DrinksView/>;}
+import { redirect } from "next/navigation";
+
+// Preserve old bookmarks while removing the separate insights/settings page.
+export default function DrinksPage() { redirect("/food-drink"); }

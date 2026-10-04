@@ -23,5 +23,5 @@ test("history markers preserve the initial entry on back, forward, and reload", 
  test("Food and Drink child pages share one navigation parent", () => {
   for (const path of ["/food-drink", "/food", "/drinks", "/food/places/2", "/food/library", "/drinks/history"]) assert.equal(isFoodDrinkPath(path), true);
   for (const path of ["/foodie", "/cats/food", "/drinks-old"]) assert.equal(isFoodDrinkPath(path), false);
-  for (const path of ["/food", "/drinks", "/food/places", "/food/library"]) assert.equal(pageBackFallback(path), "/food-drink");
+  for (const path of ["/food", "/drinks", "/drinks/history", "/food/places", "/food/library"]) assert.equal(pageBackFallback(path), "/food-drink");
 });

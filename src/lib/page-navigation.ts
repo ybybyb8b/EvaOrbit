@@ -4,7 +4,7 @@ export function isFoodDrinkPath(pathname: string) {
 
 export function pageBackFallback(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
-  if (pathname === "/food" || pathname === "/drinks" || pathname === "/food/library" || pathname === "/food/places") return "/food-drink";
+  if (pathname === "/food" || pathname === "/drinks" || pathname === "/drinks/history" || pathname === "/food/library" || pathname === "/food/places") return "/food-drink";
   if (segments.length < 2) return "/";
   // Series details belong to the media shelf; there is no series index page.
   if (segments[0] === "media" && segments[1] === "series") return "/media";
