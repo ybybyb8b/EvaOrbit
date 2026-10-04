@@ -36,7 +36,7 @@ export type NewTask = {
 export type NewTaskReminder = Omit<TaskReminder, "id" | "createdAt" | "updatedAt" | "deliveryChannel"> & { deliveryChannel?: TaskReminder["deliveryChannel"] };
 export type NewCalendarEvent = Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">;
 export type CalendarEventPatch = Partial<NewCalendarEvent>;
-export type CalendarEventListInput = { query?: string; from?: string; to?: string; status?: CalendarEvent["status"]; limit?: number };
+export type CalendarEventListInput = { query?: string; from?: string; to?: string; status?: CalendarEvent["status"]; limit?: number; afterId?: number };
 
 export type AiSettingsInput = ChatPreferences & {
   providerPreset: string;

@@ -254,17 +254,27 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 
 ### 4.4 EventKit：来源选择、同步与边界
 
+- 删除重装是正常升级路径。先按时间顺序应用 `202610040001_eventkit_calendar_import.sql` 与 `202610050001_eventkit_logical_links.sql`；本轮只交付源码和迁移，不发布或构建 IPA。
+- Web mapping GET 使用 `protocol=2`，完整分页读取账户 logical links 与所有 bindings，再选择本 installation 或最新历史基线。旧 Web 协议返回 409，避免按旧 installation 范围重复创建。新 bridge `eventkit.recover` 不请求权限，按历史本地 ID、external ID 和 Reminder marker 恢复；Reminder marker 查找覆盖所有可读列表与所有完成时间，未选择列表中的候选只触发暂停，不被同步。Calendar 不写恢复标记。
+- 恢复必须唯一；多候选、来源不可读、权限不足、旧 Host 无 recover 能力时保留逻辑关系，返回 identity conflict 并阻止该对象类型的新导入/导出。已绑定正常更新继续按原 EO ID。只有明确确认不存在才删除 EO Calendar 或按当前 Task 状态重建镜像。
+- Reminder 创建前服务端预留稳定 UUID、创建基线与两分钟创建租约；创建后绑定写失败保留 Apple marker 与 pending logical link，后续先找回，不能靠标题/日期判断为新对象。租约未到期且尚未找到镜像时稍后重试。循环 domain 下一期使用新的 mirror token，避免认领旧完成项。解绑本地 binding 不删除账户逻辑关联、不重置其他安装的通知归属。
+- 迁移保留所有 EO IDs 与 binding 基线。`eventkit_identity_conflicts` 为 RLS/security-invoker 只读疑似重复列表；同 external identity 对应多个 logical links 时暂停，不自动合并或删除。Apple external ID 不保证全局唯一，所有恢复线索失效时需要人工确认。
+
+
 - Calendar 与 Reminders 分别请求权限；启动、恢复和 bridge ready 不主动弹权限框。
 - Calendar 来源按设备保存 `Off / Import only`；即使旧配置残留 `Two-way`，同步核心也必须降级为 Import only。`Off` 只暂停该来源，不删除映射或任一侧数据，也不会把未读取误判为 Apple 删除。
 - Calendar 永远是 Apple → EO 单向读取：EO 不创建、修改或删除 Apple Event。Reminders 通过 `EO → Reminder List` 将 Tasks、Cats、Cats Household、Trackers、Health 与 Subscriptions 独立路由到可写 Apple List；同一 List 内没有 EO link 的私人项目不会进入 EO。旧版 `EO Tasks only` 配置首次读取时迁移为 Tasks route。
 - Task link 继续同步 title、notes、Due 与完成状态，但只为尚未完成的未关联 EO Task 新建 Apple Reminder；历史已完成 Task 不参与首次导出，已关联 Task 仍会把后续完成状态同步给 Apple。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
-- Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，三方基线与 identifier mapping 存在 `eventkit_links`。
+- Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，账户级逻辑关联存在 `eventkit_logical_links`；`eventkit_links` 是 installation binding，保留每次安装的本地 identifiers 与三方基线。EventKit installation ID 仍使用 UserDefaults，删除重装可变化；HealthKit Keychain identity 保持独立。
 - 发布 domain routes 前必须先应用 `supabase/migrations/202609300001_eventkit_reminder_domain_routes.sql`，使 `eventkit_links` 可以记录通用 EO Reminder 映射。
-- Calendar 使用设备本地时间 `2026-10-01 00:00` 到同步时刻未来 365 天的固定窗口；10 月 1 日以前已结束的事件不读取，跨越该边界的事件仍包含。Reminders 使用未完成项和最近 30 天完成项。
-- reconcile 使用 Base / EO current / Apple current：非重叠字段合并，同字段改动报告 conflict，不静默覆盖；成功后更新 snapshot/hash，抑制 echo。
+- Calendar 的新事件发现使用设备本地时间 `2026-10-01 00:00` 到同步时刻未来 365 天的窗口；已有 mapping 的事件不受该窗口限制。EO Calendar 批量列表按 ID 游标分页，mapping 列表也完整分页；已关联 Calendar/Task 优先按 mapping 的 EO ID 直接读取，只有 HTTP 404 才表示 EO 记录不存在。
+- Reminders 批量发现使用未完成项和最近 30 天完成项。已关联 Apple 对象若不在批量结果中，先用 `eventkit.getItem` 按原 identifier 查询，并尝试 external identifier 恢复；返回 `found / missing / unavailable`。实时权限不足、原 Calendar/List 或 source 不可读、匹配有歧义时不能确认删除。来源 Off 时暂停；只有明确 `missing` 才删除对应 EO Calendar 或重建未完成 Task 镜像。Task 重建以当前 completed 为准，旧完成基线不会阻止 reopen；已完成 Task 不重建。
+- Calendar 新导入通过 `/api/eventkit/calendar-import` 和 `import_eventkit_calendar_event` RPC 原子识别/创建 EO event 与 mapping；事务失败不遗留 EO event，提交后的重试复用原 ID。发布 Web 前必须应用 `supabase/migrations/202610040001_eventkit_calendar_import.sql`。后续抗重装迁移 `202610050001_eventkit_logical_links.sql` 将幂等身份提升到账户级，跨 installation 重试复用原 EO ID；不清理历史重复记录。
+- 新 Host 在 bridge v1 增加 `eventkit.getItem`，批量读取权限/来源异常会报错，既有 Reminder identifier 保存时查找失败也报错而非隐式新建。Web 通过 `host.getInfo` 检测；旧 IPA 缺少 getItem 时保留批量未读到的关联，不删除/重建。窗口外已关联状态更新与明确删除检测需要新 IPA。部署顺序：应用迁移 → 部署兼容 Web → 按原签名/安装链构建并安装新 IPA；不新增 framework、权限或 entitlement。
+- reconcile 使用 Base / EO current / Apple current：非重叠字段合并，同字段改动报告 conflict，不静默覆盖；比较和 hash 前将 timed start/end 与 completion date 转为 UTC ISO canonical，date-only 保持原日期；成功后更新 snapshot/hash，抑制 echo。
 - recurring events 当前只安全读取并标记，不导入、不写回、不删除 series 或 occurrence。普通单次 Event 只参与 Apple → EO 导入与更新。
 - all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
-- Reminder 映射包含 title、notes、Due 日期/明确时间、completed 与 completion date。带明确时间的 Due 创建普通的零偏移 Apple alert；date-only Due 不创建定时通知，也不映射 priority。更新既有 Apple Reminder 时保留 Apple 侧已有的自定义 alarm 与 priority。Tags、URL、location 与 Apple recurrence 不进入 EO 模型；EO recurrence 只投影当前一期，完成后由原业务服务推进并创建下一期 Apple Reminder。
+- Reminder 映射包含 title、notes、Due 日期/明确时间、completed 与 completion date。带明确时间的 Due 创建普通的零偏移 Apple alert；date-only Due 不创建定时通知，也不映射 priority。更新既有 Apple Reminder 时保留 Apple 侧已有的自定义 alarm 与 priority。Tags、URL、location 与 Apple recurrence 不进入 EO 业务模型；EO 镜像的空 URL 可保存 `evaorbit://eventkit/<opaque UUID>` 恢复标记，用户已有 URL 永不覆盖；EO recurrence 只投影当前一期，完成后由原业务服务推进并创建下一期 Apple Reminder。
 - 实际已有 Apple alert 的已映射 Task 或 domain Reminder 由 `apple_reminders` channel 负责首次通知；没有 Apple alert 时继续由 EO 投递。Due 卡与投递渠道无关，`repeat_while_overdue` 在 Due 后继续由 EO 投递，避免首次通知双响。
 - 全局 App shell 挂载 EventKit reconciler，不依赖 Apple Integration 页。启动、bridge ready、回到前台/页面可见、网络恢复、来源/路由配置变动与 `EKEventStoreChanged` 都触发同步（Web 1.5 秒防抖；Native store change 另有 1.5 秒防抖）。前台在线每 60 秒补偿同步 EO/远端修改；隐藏或离线时跳过，重叠调用复用 single-flight，运行期间到达的事件保留一轮补偿。失败等待下一次触发重试；设置页显示自动同步时间/错误，导入后刷新当前页面。自动同步不请求权限，选定来源权限被撤销时停止该轮，避免误判删除。没有 APNs silent push，App 长期不运行时不保证即时同步。
 - Reminders 标题包含 `续火花` 时排除导入、导出和已有关联项的更新/删除/重建；匹配 Apple 当前标题、EO 当前标题和映射基线标题。保留已有数据和映射，不把屏蔽项当成 Apple 删除；不影响 Calendar。

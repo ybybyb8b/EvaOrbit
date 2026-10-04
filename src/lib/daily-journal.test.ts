@@ -4,6 +4,33 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { parseDailyJournalEntryPatch, parseNewDailyJournalEntry } from "./validation.ts";
 import { journalEmotions, journalMoodLabel } from "./journal-emotions.ts";
+import { journalDraftChanged, journalPreviewEntries, type JournalDraft } from "./journal-draft.ts";
+
+test("homepage previews up to three complete notes in repository order", () => {
+  const entries = Array.from({ length: 4 }, (_, index) => ({ id: 4 - index, date: "2026-10-05", content: `完整短记${index}。\n不截断第二行。`, moodScore: null, emotion: null, energyLevel: null, hasFullDiary: false, createdAt: "2026-10-05T12:00:00Z", updatedAt: "2026-10-05T12:00:00Z" }));
+  for (const count of [0, 1, 2, 3, 4]) {
+    const preview = journalPreviewEntries(entries.slice(0, count));
+    assert.equal(preview.length, Math.min(count, 3));
+    assert.deepEqual(preview, entries.slice(0, Math.min(count, 3)));
+  }
+  assert.equal(entries.length, 4);
+  assert.equal(journalPreviewEntries(entries)[0], entries[0]);
+});
+
+test("journal drafts protect every optional value and recognize reverted changes", () => {
+  const blank: JournalDraft = { content: "", moodScore: null, emotion: null, energyLevel: null, hasFullDiary: false };
+  assert.equal(journalDraftChanged(blank), false);
+  const changes: Array<Partial<JournalDraft>> = [{ content: "新记录" }, { moodScore: 0 }, { emotion: "angry" }, { energyLevel: 1 }, { hasFullDiary: true }];
+  for (const patch of changes) {
+    assert.equal(journalDraftChanged({ ...blank, ...patch }), true);
+  }
+  const saved: JournalDraft = { content: "已有记录", moodScore: -2, emotion: null, energyLevel: 3, hasFullDiary: true };
+  assert.equal(journalDraftChanged({ ...saved }, saved), false);
+  assert.equal(journalDraftChanged({ ...saved, emotion: "irritated", moodScore: null }, saved), true);
+  assert.equal(journalDraftChanged({ ...saved, energyLevel: null }, saved), true);
+  assert.equal(journalDraftChanged({ ...saved, hasFullDiary: false }, saved), true);
+  assert.equal(journalDraftChanged({ ...saved }, saved), false);
+});
 
 test("named emotions stay distinct without inventing numeric mood scores", () => {
   assert.equal(journalEmotions.length,12);

@@ -10,7 +10,15 @@ EventKit 接入不新增 entitlement，也不改变本 runbook 的 ad-hoc IPA、
 
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取、Body Mass 与 Menstrual Flow 双向同步：能量按日聚合，体重逐样本处理，经量使用独立 CategorySample 路径并保留 source/sample/sync identity。三者复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql`、`supabase/migrations/202609090002_weight.sql`、`supabase/migrations/202609130001_period_medication.sql`、`supabase/migrations/202609130002_period_medication_reminder_projection.sql` 与 `supabase/migrations/202609130003_healthkit_menstrual_flow.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
-EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线每 60 秒补偿；无需进入设置页，手动 Sync now 仍可用。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。此次仅改 Web，不新增 bridge 方法、权限或 entitlement，也不要求重建 IPA；需要部署 Web 后用支持 EventKit 的现有 Host 真机验证。App 不运行时仍不保证即时同步。
+EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线每 60 秒补偿；无需进入设置页，手动 Sync now 仍可用。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。App 不运行时仍不保证即时同步。
+
+EventKit 稳定性更新新增 bridge v1 的 `eventkit.getItem`：已有 mapping 的 Apple 对象未出现在批量结果时，按 identifier 直接查找，并区分 found、明确 missing 与 unavailable。Calendar 移出发现窗口仍更新原 EO ID；权限异常、来源暂停或不可读不会被当作删除。旧 IPA 通过 capability detection 安全降级，保留未读到的关联并暂停删除/重建；完整行为需要重新构建和安装 IPA。没有新增 framework、Info.plist 权限或 entitlement，原构建、免费 Team 重签及 Windows/WSL 安装链不变。
+
+此前稳定性更新的 Web 发布前先应用 `supabase/migrations/202610040001_eventkit_calendar_import.sql`，再部署 Web，最后安装新 Host。迁移新增 security-invoker RPC，使 Calendar EO event 和 mapping 在同一事务内建立、失败回滚、重试复用 ID；EO Calendar 与 mapping 列表完整分页，已关联 EO 对象直接按 ID 读取。未完成 Task 的镜像明确删除后重建，包括旧完成任务 reopen；已完成 Task 不重建。日期时间在冲突比较/hash 前统一 UTC ISO，date-only 不转换为伪造时间。
+
+抗重装更新增加 `supabase/migrations/202610050001_eventkit_logical_links.sql`：账户级 logical link 与 installation binding 分离，重装 UUID 变化后先恢复原 EO ID 和基线，再同步。新增 bridge `eventkit.recover`；Calendar 仍只读，Reminder 空 URL 使用无敏感信息的 opaque UUID 标记，已有 URL 永不覆盖。多候选或来源异常保留关系、暂停新增；旧 Web 协议拒绝同步，旧 Host 无 recover 时暂停恢复和新建镜像。创建前服务器保留 marker、pending 状态与短期租约，binding 写失败重试先认回原镜像。循环下一期使用独立 token。疑似重复在 `eventkit_identity_conflicts` 和 mapping identity conflict 中列出，不合并、不删除。EventKit installation ID 和 HealthKit identity 保持独立。未来发布需按时间顺序应用两份 migration，再部署 Web、按现有链更新 Host；本轮未发布、未应用生产迁移、未构建 IPA。
+
+本地 Web 回归测试位于 `src/lib/eventkit-stability.test.ts`；隔离 PostgreSQL 事务测试位于 `scripts/eventkit-import-transaction.test.mjs`，设置 `EVENTKIT_PGLITE_PATH` 为临时 PGlite 的 `dist/index.js` 路径后运行，不需要生产数据库凭据或增加项目依赖。Native 编译/单测、IPA entitlement 审计和 iPhone 16 Pro 真机查找/移窗/删除测试仍须通过本 runbook 的 macOS CI 与安装链完成。
 
 ## 已验证基线
 

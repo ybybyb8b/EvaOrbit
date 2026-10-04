@@ -28,7 +28,7 @@ final class HostConfigurationTests: XCTestCase {
             "healthkit.configureCredential", "healthkit.clearCredential",
             "healthkit.saveBodyMass", "healthkit.saveMenstrualFlow", "healthkit.deleteMenstrualFlow",
             "eventkit.getStatus", "eventkit.requestAccess", "eventkit.fetch",
-            "eventkit.save", "eventkit.delete",
+            "eventkit.getItem", "eventkit.recover", "eventkit.save", "eventkit.delete",
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
             "notification.cancel", "notification.listPending", "notification.openSettings"
         ]))

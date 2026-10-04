@@ -14,7 +14,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         "healthkit.saveBodyMass", "healthkit.saveMenstrualFlow", "healthkit.deleteMenstrualFlow",
         "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
         "notification.cancel", "notification.listPending", "notification.openSettings"
-        ,"eventkit.getStatus", "eventkit.requestAccess", "eventkit.fetch", "eventkit.save", "eventkit.delete"
+        ,"eventkit.getStatus", "eventkit.requestAccess", "eventkit.fetch", "eventkit.getItem", "eventkit.recover", "eventkit.save", "eventkit.delete"
     ]
 
     static let bootstrapScript = #"""
@@ -154,6 +154,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             eventKitRequestAccess(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "eventkit.fetch":
             eventKitFetch(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "eventkit.getItem":
+            eventKitGetItem(parameters: parameters, id: identifier, replyHandler: replyHandler)
+        case "eventkit.recover":
+            eventKitRecover(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "eventkit.save":
             eventKitSave(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "eventkit.delete":
@@ -168,7 +172,36 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     private func eventKitRequestAccess(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters)else{replyHandler(failure(id:id,code:"invalid_eventkit_kind",message:"EventKit kind is invalid."),nil);return};Task{do{let result=try await eventKitSyncEngine.requestAccess(kind);replyOnMain(replyHandler,value:success(id:id,result:result))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_authorization_failed",message:error.localizedDescription))}}}
 
-    private func eventKitFetch(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let calendarIDs=parameters["calendarIdentifiers"] as? [String],calendarIDs.count<=100,calendarIDs.allSatisfy({!$0.isEmpty&&$0.count<=500})else{replyHandler(failure(id:id,code:"invalid_eventkit_fetch",message:"EventKit fetch parameters are invalid."),nil);return};if kind == .event{guard let from=Self.parseISO8601(parameters["from"] as? String ?? ""),let to=Self.parseISO8601(parameters["to"] as? String ?? ""),to>from else{replyHandler(failure(id:id,code:"invalid_eventkit_window",message:"Calendar sync window is invalid."),nil);return};replyHandler(success(id:id,result:["items":eventKitSyncEngine.fetchEvents(calendarIDs:calendarIDs,from:from,to:to),"complete":true]),nil)}else{let completedSince=Self.parseISO8601(parameters["completedSince"] as? String ?? "") ?? Date().addingTimeInterval(-30*86400);Task{do{let items=try await eventKitSyncEngine.fetchReminders(calendarIDs:calendarIDs,completedSince:completedSince);replyOnMain(replyHandler,value:success(id:id,result:["items":items,"complete":true]))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription))}}}}
+    private func eventKitFetch(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let calendarIDs=parameters["calendarIdentifiers"] as? [String],calendarIDs.count<=100,calendarIDs.allSatisfy({!$0.isEmpty&&$0.count<=500})else{replyHandler(failure(id:id,code:"invalid_eventkit_fetch",message:"EventKit fetch parameters are invalid."),nil);return};if kind == .event{guard let from=Self.parseISO8601(parameters["from"] as? String ?? ""),let to=Self.parseISO8601(parameters["to"] as? String ?? ""),to>from else{replyHandler(failure(id:id,code:"invalid_eventkit_window",message:"Calendar sync window is invalid."),nil);return};do{let items=try eventKitSyncEngine.fetchEvents(calendarIDs:calendarIDs,from:from,to:to);replyHandler(success(id:id,result:["items":items,"complete":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription),nil)}}else{let completedSince=Self.parseISO8601(parameters["completedSince"] as? String ?? "") ?? Date().addingTimeInterval(-30*86400);Task{do{let items=try await eventKitSyncEngine.fetchReminders(calendarIDs:calendarIDs,completedSince:completedSince);replyOnMain(replyHandler,value:success(id:id,result:["items":items,"complete":true]))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription))}}}}
+
+    private func eventKitGetItem(parameters: [String: Any], id: String, replyHandler: @escaping (Any?, String?) -> Void) {
+        func identifier(_ key: String) -> String? { guard let value = parameters[key] as? String, !value.isEmpty, value.count <= 500 else { return nil }; return value }
+        guard let kind = eventKitKind(parameters), let itemID = identifier("calendarItemIdentifier"),
+              let calendarID = identifier("calendarIdentifier"), let sourceID = identifier("sourceIdentifier"),
+              parameters["externalIdentifier"] == nil || parameters["externalIdentifier"] is NSNull || identifier("externalIdentifier") != nil else {
+            replyHandler(failure(id: id, code: "invalid_eventkit_lookup", message: "EventKit lookup parameters are invalid."), nil); return
+        }
+        replyHandler(success(id: id, result: eventKitSyncEngine.getItem(kind: kind, identifier: itemID, externalIdentifier: identifier("externalIdentifier"), calendarIdentifier: calendarID, sourceIdentifier: sourceID)), nil)
+    }
+
+    private func eventKitRecover(parameters: [String: Any], id: String, replyHandler: @escaping (Any?, String?) -> Void) {
+        let token = parameters["recoveryToken"] as? String
+        let externalIdentifiers = parameters["externalIdentifiers"] as? [String] ?? []
+        guard let kind = eventKitKind(parameters), let calendars = parameters["calendarIdentifiers"] as? [String],
+              !calendars.isEmpty, calendars.allSatisfy({ !$0.isEmpty && $0.count <= 500 }),
+              (parameters["externalIdentifiers"] == nil || parameters["externalIdentifiers"] is [String]), externalIdentifiers.allSatisfy({ !$0.isEmpty && $0.count <= 500 }),
+              let bindings = parameters["bindings"] as? [[String: Any]],
+              bindings.allSatisfy({ binding in ["calendar_item_identifier", "calendar_identifier", "source_identifier"].allSatisfy { key in
+                  guard let value = binding[key] as? String else { return false }; return !value.isEmpty && value.count <= 500
+              } && (binding["external_identifier"] == nil || binding["external_identifier"] is NSNull || (binding["external_identifier"] as? String).map({ !$0.isEmpty && $0.count <= 500 }) == true) }),
+              parameters["recoveryToken"] == nil || parameters["recoveryToken"] is NSNull || token.flatMap(UUID.init(uuidString:)) != nil else {
+            replyHandler(failure(id: id, code: "invalid_eventkit_recovery", message: "EventKit recovery parameters are invalid."), nil); return
+        }
+        Task {
+            do { let result = try await eventKitSyncEngine.recover(kind: kind, calendarIDs: calendars, bindings: bindings, externalIdentifiers: externalIdentifiers, recoveryToken: token); replyOnMain(replyHandler, value: success(id: id, result: result)) }
+            catch { replyOnMain(replyHandler, value: success(id: id, result: ["status": "unavailable"])) }
+        }
+    }
 
     private func eventKitSave(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let item=parameters["item"] as? [String:Any]else{replyHandler(failure(id:id,code:"invalid_eventkit_save",message:"EventKit item is invalid."),nil);return};do{let saved=try kind == .event ? eventKitSyncEngine.saveEvent(item) : eventKitSyncEngine.saveReminder(item);replyHandler(success(id:id,result:["item":saved]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_save_failed",message:error.localizedDescription),nil)}}
 

@@ -15,6 +15,8 @@ type FormSheetProps = {
   busyLabel?: string;
   busy?: boolean;
   cancelLabel?: string;
+  dirty?: boolean;
+  submitDisabled?: boolean;
 };
 
 type FormSheetPhase = "opening" | "open" | "closing" | "closed";
@@ -29,6 +31,8 @@ export function FormSheet({
   busyLabel = "Saving…",
   busy = false,
   cancelLabel = "Cancel",
+  dirty,
+  submitDisabled = false,
 }: FormSheetProps) {
   const { language } = useLocale();
   const copy = (value: string) => translateUiCopy(value, language);
@@ -50,7 +54,8 @@ export function FormSheet({
   useEffect(() => {
     closeRef.current = onClose;
     busyRef.current = busy;
-  }, [busy, onClose]);
+    if (dirty !== undefined) dirtyRef.current = dirty;
+  }, [busy, dirty, onClose]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setMounted(true));
@@ -146,6 +151,12 @@ export function FormSheet({
     inertSiblings.forEach(({ element }) => { element.inert = true; });
     updateViewport();
     const focusFrame = window.requestAnimationFrame(() => {
+      const initialFocus = dialog?.querySelector<HTMLElement>("[data-sheet-initial-focus]");
+      if (initialFocus) {
+        initialFocus.focus({ preventScroll: true });
+        initialFocus.scrollIntoView({ block: "start" });
+        return;
+      }
       if (window.matchMedia("(max-width: 720px)").matches) {
         dialog?.focus({ preventScroll: true });
         return;
@@ -185,8 +196,8 @@ export function FormSheet({
     <div className="form-sheet-layer" data-state={phase} role="presentation" ref={panelRef}>
       <button className="form-sheet-backdrop" type="button" aria-label={`${language === "en" ? "Close" : "关闭"} ${copy(title)}`} onClick={requestClose} />
       <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
-        onChangeCapture={event => { if (!(event.target instanceof HTMLInputElement) || event.target.type !== "search") dirtyRef.current = true; }}
-        onClickCapture={event => { if (event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
+        onChangeCapture={event => { if (dirty === undefined && (!(event.target instanceof HTMLInputElement) || event.target.type !== "search")) dirtyRef.current = true; }}
+        onClickCapture={event => { if (dirty === undefined && event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
         onInvalidCapture={event => { if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: "nearest" }); }}>
         <header className="form-sheet-header">
           <h2 id={titleId}>{copy(title)}</h2>
@@ -211,7 +222,7 @@ export function FormSheet({
           <button className="button primary" type="button" onClick={() => { dirtyRef.current = false; discardRef.current = false; setDiscardOpen(false); requestClose(); }}>{language === "en" ? "Discard and close" : "放弃并关闭"}</button></div>
         </footer> : submitLabel && <footer className="form-sheet-footer">
           <button className="button secondary" type="button" onClick={requestClose} disabled={busy}>{copy(cancelLabel)}</button>
-          <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy}>{copy(busy ? busyLabel : submitLabel)}</button>
+          <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy || submitDisabled}>{copy(busy ? busyLabel : submitLabel)}</button>
         </footer>}
       </div>
     </div>,

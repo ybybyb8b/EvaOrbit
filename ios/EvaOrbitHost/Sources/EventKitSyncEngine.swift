@@ -42,18 +42,108 @@ final class EventKitSyncEngine {
         return status()
     }
 
-    func fetchEvents(calendarIDs: [String], from: Date, to: Date) -> [[String: Any]] {
-        let calendars = store.calendars(for: .event).filter { calendarIDs.contains($0.calendarIdentifier) }
+    private func readableCalendars(_ kind: EKEntityType, identifiers: [String]) throws -> [EKCalendar] {
+        guard ["authorized", "full_access"].contains(permission(kind)) else { throw EventKitSyncError.unavailable }
+        let calendars = store.calendars(for: kind).filter { identifiers.contains($0.calendarIdentifier) }
+        guard Set(calendars.map(\.calendarIdentifier)) == Set(identifiers) else { throw EventKitSyncError.unavailable }
+        return calendars
+    }
+
+    /// A missing batch item is not a deletion. Resolve it without time/completion windows.
+    func getItem(kind: EKEntityType, identifier: String, externalIdentifier: String?, calendarIdentifier: String, sourceIdentifier: String) -> [String: Any] {
+        guard let calendars = try? readableCalendars(kind, identifiers: [calendarIdentifier]),
+              calendars.first?.source.sourceIdentifier == sourceIdentifier else { return ["status": "unavailable"] }
+        func matchesKind(_ item: EKCalendarItem) -> Bool { kind == .event ? item is EKEvent : item is EKReminder }
+        func found(_ item: EKCalendarItem) -> [String: Any] {
+            if let event = item as? EKEvent { return ["status": "found", "item": eventDictionary(event)] }
+            if let reminder = item as? EKReminder { return ["status": "found", "item": reminderDictionary(reminder)] }
+            return ["status": "unavailable"]
+        }
+        if let item = store.calendarItem(withIdentifier: identifier) {
+            return matchesKind(item) ? found(item) : ["status": "unavailable"]
+        }
+        if let externalIdentifier {
+            let candidates = store.calendarItems(withExternalIdentifier: externalIdentifier).filter {
+                matchesKind($0) && $0.calendar.calendarIdentifier == calendarIdentifier && $0.calendar.source.sourceIdentifier == sourceIdentifier
+            }
+            if candidates.count == 1 { return found(candidates[0]) }
+            if candidates.count > 1 { return ["status": "unavailable"] }
+        }
+        // Recheck access before treating nil as a confirmed absence.
+        guard (try? readableCalendars(kind, identifiers: [calendarIdentifier])) != nil else { return ["status": "unavailable"] }
+        return ["status": "missing"]
+    }
+
+    func fetchEvents(calendarIDs: [String], from: Date, to: Date) throws -> [[String: Any]] {
+        let calendars = try readableCalendars(.event, identifiers: calendarIDs)
         guard !calendars.isEmpty else { return [] }
         return store.events(matching: store.predicateForEvents(withStart: from, end: to, calendars: calendars)).map(eventDictionary)
     }
 
+    /// Rebind an account link without relying on discovery windows or mutable content.
+    func recover(kind: EKEntityType, calendarIDs: [String], bindings: [[String: Any]], externalIdentifiers: [String], recoveryToken: String?) async throws -> [String: Any] {
+        _ = try readableCalendars(kind, identifiers: calendarIDs)
+        var candidates: [String: EKCalendarItem] = [:]
+        func add(_ item: EKCalendarItem) {
+            guard kind == .event ? item is EKEvent : item is EKReminder else { return }
+            candidates[item.calendarItemIdentifier] = item
+        }
+        // For a pending next occurrence only its new token is supplied, not the old completed binding.
+        for binding in bindings {
+            let external = binding["external_identifier"] as? String
+            if let identifier = binding["calendar_item_identifier"] as? String,
+               let item = store.calendarItem(withIdentifier: identifier),
+               (external != nil && item.calendarItemExternalIdentifier == external) ||
+               (external == nil && item.calendar.calendarIdentifier == binding["calendar_identifier"] as? String && item.calendar.source.sourceIdentifier == binding["source_identifier"] as? String) { add(item) }
+            if let external { store.calendarItems(withExternalIdentifier: external).forEach(add) }
+        }
+        externalIdentifiers.forEach { store.calendarItems(withExternalIdentifier: $0).forEach(add) }
+        if kind == .reminder, let recoveryToken {
+            // Scan all readable lists, including old completed mirrors and moved mirrors.
+            // An object outside the selected lists pauses the link instead of causing recreation.
+            let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
+                store.fetchReminders(matching: store.predicateForReminders(in: nil)) { items in
+                    if let items { continuation.resume(returning: items) }
+                    else { continuation.resume(throwing: EventKitSyncError.unavailable) }
+                }
+            }
+            reminders.filter { Self.recoveryToken(in: $0.url) == recoveryToken.lowercased() }.forEach(add)
+        }
+        _ = try readableCalendars(kind, identifiers: calendarIDs)
+        if candidates.count > 1 { return ["status": "ambiguous"] }
+        if let item = candidates.values.first {
+            guard calendarIDs.contains(item.calendar.calendarIdentifier) else { return ["status": "unavailable"] }
+            if let event = item as? EKEvent { return ["status": "found", "item": eventDictionary(event)] }
+            if let reminder = item as? EKReminder { return ["status": "found", "item": reminderDictionary(reminder)] }
+        }
+        // Empty local lookup alone cannot prove an old object was deleted after identifier churn.
+        let originalScopeReadable = bindings.contains { binding in
+            guard let calendarID = binding["calendar_identifier"] as? String,
+                  let sourceID = binding["source_identifier"] as? String,
+                  let calendar = store.calendar(withIdentifier: calendarID) else { return false }
+            return calendarIDs.contains(calendarID) && calendar.source.sourceIdentifier == sourceID && binding["external_identifier"] is String
+        }
+        if bindings.isEmpty && kind == .reminder && recoveryToken != nil { return ["status": "missing"] }
+        return ["status": originalScopeReadable ? "missing" : "unavailable"]
+    }
+
+    static func recoveryToken(in url: URL?) -> String? {
+        guard let url, url.scheme == "evaorbit", url.host == "eventkit", url.query == nil, url.fragment == nil,
+              UUID(uuidString: String(url.path.dropFirst())) != nil else { return nil }
+        return String(url.path.dropFirst()).lowercased()
+    }
+
+    static func recoveryURL(existing: URL?, token: String?) -> URL? {
+        guard existing == nil, let token, UUID(uuidString: token) != nil else { return existing }
+        return URL(string: "evaorbit://eventkit/\(token.lowercased())")
+    }
+
     func fetchReminders(calendarIDs: [String], completedSince:Date) async throws -> [[String: Any]] {
-        let calendars = store.calendars(for: .reminder).filter { calendarIDs.contains($0.calendarIdentifier) }
+        let calendars = try readableCalendars(.reminder, identifiers: calendarIDs)
         guard !calendars.isEmpty else { return [] }
-        func fetch(_ predicate:NSPredicate) async -> [EKReminder] { await withCheckedContinuation { continuation in store.fetchReminders(matching:predicate){continuation.resume(returning:$0 ?? [])} } }
-        let incomplete=await fetch(store.predicateForIncompleteReminders(withDueDateStarting:nil,ending:nil,calendars:calendars))
-        let completed=await fetch(store.predicateForCompletedReminders(withCompletionDateStarting:completedSince,ending:nil,calendars:calendars))
+        func fetch(_ predicate:NSPredicate) async throws -> [EKReminder] { try await withCheckedThrowingContinuation { continuation in store.fetchReminders(matching:predicate){items in if let items { continuation.resume(returning:items) } else { continuation.resume(throwing:EventKitSyncError.unavailable) }} } }
+        let incomplete=try await fetch(store.predicateForIncompleteReminders(withDueDateStarting:nil,ending:nil,calendars:calendars))
+        let completed=try await fetch(store.predicateForCompletedReminders(withCompletionDateStarting:completedSince,ending:nil,calendars:calendars))
         var seen = Set<String>()
         return (incomplete + completed).filter { seen.insert($0.calendarItemIdentifier).inserted }.map(reminderDictionary)
     }
@@ -85,14 +175,22 @@ final class EventKitSyncEngine {
     }
 
     func saveReminder(_ value: [String: Any]) throws -> [String: Any] {
+        if let token = value["recoveryToken"], !(token is NSNull) {
+            guard let text = token as? String, UUID(uuidString: text) != nil else { throw EventKitSyncError.invalidInput }
+        }
         let reminder: EKReminder
-        if let identifier = value["calendarItemIdentifier"] as? String, let existing = store.calendarItem(withIdentifier: identifier) as? EKReminder { reminder = existing }
+        if let identifier = value["calendarItemIdentifier"] as? String {
+            guard let existing = store.calendarItem(withIdentifier: identifier) as? EKReminder else { throw EventKitSyncError.unavailable }
+            reminder = existing
+        }
         else { reminder = EKReminder(eventStore: store) }
         guard let title = value["title"] as? String, !title.isEmpty,
               let calendarID = value["calendarIdentifier"] as? String,
               let calendar = store.calendar(withIdentifier: calendarID), calendar.allowsContentModifications
         else { throw EventKitSyncError.invalidInput }
         reminder.calendar = calendar; reminder.title = title; reminder.notes = value["notes"] as? String
+        // User URLs always win; the marker contains only an opaque, server-reserved UUID.
+        reminder.url = Self.recoveryURL(existing: reminder.url, token: value["recoveryToken"] as? String)
         reminder.priority = value["priority"] as? Int ?? 0; reminder.isCompleted = value["completed"] as? Bool ?? false
         reminder.completionDate = isoDate(value["completionDate"])
         if let dueDate = value["dueDate"] as? String {
@@ -148,6 +246,7 @@ final class EventKitSyncEngine {
             "sourceIdentifier": reminder.calendar.source.sourceIdentifier,
             "title": reminder.title ?? "",
             "notes": reminder.notes,
+            "url": reminder.url?.absoluteString,
             "dueDate": dueDate,
             "dueTime": dueTime,
             "timezone": due?.timeZone?.identifier,
@@ -165,4 +264,4 @@ final class EventKitSyncEngine {
     private func date(_ value:Any?,allDay:Bool,timezone:String?)->Date?{guard let text=value as? String else{return nil};if !allDay{return isoDate(text)};let f=DateFormatter();f.calendar=Calendar(identifier:.gregorian);f.locale=Locale(identifier:"en_US_POSIX");f.timeZone=timezone.flatMap(TimeZone.init(identifier:)) ?? .current;f.dateFormat="yyyy-MM-dd";return f.date(from:text)}
 }
 
-enum EventKitSyncError:LocalizedError{case invalidInput;var errorDescription:String?{"EventKit sync input is invalid."}}
+enum EventKitSyncError:LocalizedError{case invalidInput,unavailable;var errorDescription:String?{switch self{case .invalidInput:return "EventKit sync input is invalid.";case .unavailable:return "EventKit source or item is unavailable; retry after access is restored."}}}

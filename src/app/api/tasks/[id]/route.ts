@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError, parseId } from "@/lib/api";
-import { deleteTask, updateTask } from "@/lib/services/evaorbit";
+import { deleteTask, getTask, updateTask } from "@/lib/services/evaorbit";
 import { parseTaskPatch } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
+
+export async function GET(_: NextRequest, { params }: Context) {
+  try {
+    const task = await getTask(parseId((await params).id));
+    return task ? NextResponse.json(task) : NextResponse.json({ error: "任务不存在" }, { status: 404 });
+  } catch (error) { return apiError(error); }
+}
 
 export async function PATCH(request: NextRequest, { params }: Context) {
   try {
