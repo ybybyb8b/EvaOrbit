@@ -7,7 +7,7 @@ import { buildFoodDrinkInsights, type FoodDrinkHomeData } from "../food-drink-in
 import { foodDrinkTimeline } from "../food-drink-timeline";
 
 export async function getFoodDrinkHome(): Promise<FoodDrinkHomeData> {
-  const date = dateInEvaOrbit(), from = shiftDate(date, -13), end = dateRange(date).to;
+  const date = dateInEvaOrbit(), from = shiftDate(date, -29), end = dateRange(date).to;
   const repository = await getRepository();
   const [foods, drinks, todayFood, todayDrink, lastFood, lastDrink, limits, limitStatuses] = await Promise.all([
     listFoodLogs({ from: dateRange(from).from, to: end, limit: 500 }),

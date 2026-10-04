@@ -1,6 +1,6 @@
 import { Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
-export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
@@ -19,6 +19,8 @@ const featureIconSources: Partial<Record<IconName, string>> = {
   inbox: "/icons/features/inbox.png",
   food: "/icons/features/food.png",
   foodDrink: "/icons/features/food-drink.png",
+  foodPlaces: "/icons/features/food-places.png",
+  foodLibrary: "/icons/features/food-library.png",
   drink: "/icons/features/drinks.png",
   tracker: "/icons/features/trackers.png",
   cats: "/icons/features/cats.png",

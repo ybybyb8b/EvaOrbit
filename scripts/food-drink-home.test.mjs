@@ -15,7 +15,7 @@ test("common home reflects independent record and limit mutations without losing
       import * as food from "./src/lib/services/food.ts";
       import * as drink from "./src/lib/services/drink.ts";
       import { parseNewFoodLog, parseNewDrinkLog, parseDrinkLimit } from "./src/lib/validation.ts";
-      import { dateInEvaOrbit } from "./src/lib/time.ts";
+      import { dateInEvaOrbit, shiftDate } from "./src/lib/time.ts";
       const date = dateInEvaOrbit(), occurredAt = date + "T12:00:00+08:00";
       const meal = await food.createFoodLog(parseNewFoodLog({ title: "午餐", occurredAt, occurredHasExplicitTime: false }));
       const { drink: cup } = await drink.createDrinkLog(parseNewDrinkLog({ name: "茶", drinkType: "tea", occurredAt: date + "T14:00:00+08:00", occurredHasExplicitTime: true }));
@@ -30,6 +30,16 @@ test("common home reflects independent record and limit mutations without losing
       home = await getFoodDrinkHome(); assert.equal(home.limitStatuses[0].state, "within_limit");
       await drink.updateDrinkLimit(limit.id, { enabled: false });
       home = await getFoodDrinkHome(); assert.equal(home.limitStatuses.length, 0);
+      const history = [];
+      for (let index = 0; index < 6; index++) {
+        const { drink: old } = await drink.createDrinkLog(parseNewDrinkLog({ name: "桂花茶", drinkType: "tea", occurredAt: shiftDate(date, -20 - index) + "T12:00:00+08:00", occurredHasExplicitTime: false }));
+        history.push(old.id);
+      }
+      home = await getFoodDrinkHome();
+      assert.equal(home.window.from, shiftDate(date, -29));
+      assert.equal(home.brief.drinkCount, 1);
+      assert.match(home.insights.find(row => row.id === "common-drink").body, /近 30 天 6 杯/);
+      for (const id of history) await drink.deleteDrinkLog(id);
       await drink.deleteDrinkLog(cup.id);
       home = await getFoodDrinkHome(); assert.equal(home.brief.drinkCount, 0); assert.equal(home.brief.latest.kind, "food"); assert.equal(home.brief.latest.record.occurredHasExplicitTime, false);
       await food.updateFoodLog(meal.id, { title: "更新后的午餐" });
