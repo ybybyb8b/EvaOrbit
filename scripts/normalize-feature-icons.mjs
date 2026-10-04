@@ -309,7 +309,8 @@ function processAsset(fileName) {
 }
 
 if (!fs.existsSync(FEATURE_DIRECTORY)) fail(`missing feature icon directory: ${FEATURE_DIRECTORY}`);
-const files = fs.readdirSync(FEATURE_DIRECTORY).filter((fileName) => fileName.toLowerCase().endsWith(".png")).sort();
+const selectedFile = process.argv.find(argument => argument.startsWith("--file="))?.slice(7);
+const files = fs.readdirSync(FEATURE_DIRECTORY).filter((fileName) => fileName.toLowerCase().endsWith(".png") && (!selectedFile || fileName === selectedFile)).sort();
 if (!files.length) fail(`no PNG assets found in ${FEATURE_DIRECTORY}`);
 
 console.log(`Normalizing ${files.length} feature PNGs (alpha>${ALPHA_THRESHOLD}, padding=${EDGE_PADDING}px, target=${TARGET_VISIBLE_SIZE}px, canvas=${CANVAS_SIZE}px)`);

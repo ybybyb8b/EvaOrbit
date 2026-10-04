@@ -97,7 +97,7 @@ export function FoodLibraryView() {
   }
 
   return <div className="page food-library-page">
-    <PageHeader eyebrow="FOOD" title="Food Library" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Item</button>} />
+    <PageHeader eyebrow="Food & Drink" title="Food Library" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Item</button>} />
 
     {showForm && <FormSheet title={editingId ? "Edit Item" : "Add Item"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "Save Changes" : "Add Item"} busy={saving}><form id="food-library-form" className="editor-card compact-editor" onSubmit={submit}>
       <div className="editor-title"><h2>{editingId ? "Edit Item" : "Add Item"}</h2><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
@@ -130,6 +130,6 @@ export function FoodLibraryView() {
         {openMenuId === item.id && <div className="food-library-menu"><button type="button" onClick={() => openEdit(item)}><Icon name="edit" />Edit</button><button type="button" className="danger" onClick={() => void remove(item)}><Icon name="trash" />Remove</button></div>}
       </article>;
     })}</div> : <div className="empty-state compact-empty"><h2>{query ? "No matching items" : "Food Library is empty"}</h2></div>}</div>
-    <Link className="section-link" href="/food">Back to Food <Icon name="arrow" /></Link>
+    <Link className="section-link" href="/food-drink">Back to Food & Drink <Icon name="arrow" /></Link>
   </div>;
 }

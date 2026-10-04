@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodPlace, parseFoodPlacePatch, parseInboxStatus, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
+import { parseAiModelConfig, parseAiProvider, parseAiSettings, parseChatPreferences, parseChatRequest, parseDailyEnergy, parseDrinkLimit, parseDrinkLogPatch, parseFoodDish, parseFoodDishPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseFoodPlace, parseFoodPlacePatch, parseInboxStatus, parseMemoryPatch, parseNewDrinkLog, parseNewFoodLog, parseNewInbox, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseTaskPatch, ValidationError } from "./validation.ts";
 
 test("normalizes a new task", () => {
   assert.deepEqual(
@@ -140,4 +140,13 @@ test("validates tracker fields and keeps entries as point events", () => {
   const entry = parseNewTrackerEntry({ occurredAt: "2026-08-26T08:00:00+08:00", endAt: "2026-08-26T09:00:00+08:00", note: "完成" }, 3);
   assert.equal(entry.occurredAt, "2026-08-26T00:00:00.000Z");
   assert.equal(entry.endAt, null);
+});
+
+test("optional drink caffeine preserves zero and validates the existing input boundary", () => {
+  assert.equal(parseNewDrinkLog({name:"无咖啡因饮品",caffeineMg:0}).caffeineMg,0);
+  assert.equal(parseNewDrinkLog({name:"咖啡",caffeineMg:120}).caffeineMg,120);
+  assert.equal(parseNewDrinkLog({name:"未填写"}).caffeineMg,null);
+  assert.deepEqual(parseDrinkLogPatch({notes:"只改备注"}),{notes:"只改备注"});
+  assert.deepEqual(parseDrinkLogPatch({caffeineMg:null}),{caffeineMg:null});
+  assert.throws(()=>parseNewDrinkLog({name:"咖啡",caffeineMg:5001}),ValidationError);
 });

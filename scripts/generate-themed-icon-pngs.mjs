@@ -114,7 +114,8 @@ async function writePng(data, info, destination) {
 const selectedTheme = process.argv.find((argument) => argument.startsWith("--theme="))?.slice(8);
 if (selectedTheme && !Object.hasOwn(palettes, selectedTheme)) throw new Error(`Unknown theme: ${selectedTheme}`);
 const selectedPalettes = selectedTheme ? { [selectedTheme]: palettes[selectedTheme] } : palettes;
-const sourceFiles = (await readdir(sourceDirectory)).filter((name) => name.endsWith(".png") && !name.endsWith("-dark.png")).sort();
+const selectedFile = process.argv.find(argument => argument.startsWith("--file="))?.slice(7);
+const sourceFiles = (await readdir(sourceDirectory)).filter((name) => name.endsWith(".png") && !name.endsWith("-dark.png") && (!selectedFile || name === selectedFile)).sort();
 for (const filename of sourceFiles) {
   const name = filename.replace(/\.png$/, "");
   const { data: source, info } = await normalizedSource(path.join(sourceDirectory, filename));
@@ -130,7 +131,7 @@ for (const filename of sourceFiles) {
   }
 }
 
-for (const name of navNames) {
+for (const name of selectedFile ? [] : navNames) {
   const navSource = path.join(root, "public/icons/nav", `${name}.png`);
   const featureSource = path.join(sourceDirectory, `${name}.png`);
   const input = await access(navSource).then(() => navSource).catch(() => featureSource);

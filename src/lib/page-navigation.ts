@@ -1,5 +1,10 @@
+export function isFoodDrinkPath(pathname: string) {
+  return ["/food-drink", "/food", "/drinks"].some(path => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 export function pageBackFallback(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
+  if (pathname === "/food" || pathname === "/drinks" || pathname === "/food/library" || pathname === "/food/places") return "/food-drink";
   if (segments.length < 2) return "/";
   // Series details belong to the media shelf; there is no series index page.
   if (segments[0] === "media" && segments[1] === "series") return "/media";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pageBackFallback, pageNavigationState } from "./page-navigation.ts";
+import { pageBackFallback, pageNavigationState, isFoodDrinkPath } from "./page-navigation.ts";
 
 test("direct entry returns to the closest functional page", () => {
   for (const [path, expected] of [
@@ -18,4 +18,10 @@ test("history markers preserve the initial entry on back, forward, and reload", 
   const next = pageNavigationState({ __NA: true }, true);
   assert.equal(next.evaOrbitCanGoBack, true);
   assert.equal(pageNavigationState(next, false).evaOrbitCanGoBack, true);
+});
+
+ test("Food and Drink child pages share one navigation parent", () => {
+  for (const path of ["/food-drink", "/food", "/drinks", "/food/places/2", "/food/library", "/drinks/history"]) assert.equal(isFoodDrinkPath(path), true);
+  for (const path of ["/foodie", "/cats/food", "/drinks-old"]) assert.equal(isFoodDrinkPath(path), false);
+  for (const path of ["/food", "/drinks", "/food/places", "/food/library"]) assert.equal(pageBackFallback(path), "/food-drink");
 });

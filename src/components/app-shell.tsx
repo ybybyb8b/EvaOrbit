@@ -15,13 +15,12 @@ import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
 import { PageBackButton } from "./page-back-button";
-import { pageNavigationState } from "@/lib/page-navigation";
+import { pageNavigationState, isFoodDrinkPath } from "@/lib/page-navigation";
 
 const navigationGroups = [
   { label: "LIFE", items: [
     { href: "/trackers", label: "Trackers", zh: "观测", icon: "tracker" as const },
-    { href: "/food", label: "Food", zh: "吃吃", icon: "food" as const },
-    { href: "/drinks", label: "Drinks", zh: "喝喝", icon: "drink" as const },
+    { href: "/food-drink", label: "Food & Drink", zh: "Food & Drink", icon: "foodDrink" as const },
     { href: "/subscriptions", label: "Subscriptions", zh: "订阅", icon: "calendar" as const },
     { href: "/health", label: "Health", zh: "体征", icon: "health" as const },
     { href: "/cats", label: "Cats", zh: "咪子", icon: "cats" as const },
@@ -43,7 +42,7 @@ const navigationGroups = [
 ];
 
 const sidebarIcons = {
-  tracker: Activity, food: FoodTray, drink: CupPaper, calendar: Calendar,
+  tracker: Activity, food: FoodTray, drink: CupPaper, foodDrink: FoodTray, calendar: Calendar,
   health: Heart, cats: Pet, chronicle: Book, people: Users, media: Film,
   memory: NoteText, home: Home, inbox: DirectInbox, tasks: ClipboardCheck,
   ai: Sparkles, lucius: ChatRoundDots, projects: Folder,
@@ -178,9 +177,9 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         </Link>
         <nav className="main-nav" aria-label={english ? "Main navigation" : "主导航"}>
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const SidebarIcon = sidebarIcons[item.icon];
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><SidebarIcon className="icon" weight="Outline" aria-hidden="true" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""}>{item.icon === "foodDrink" ? <Icon name="foodDrink" /> : <SidebarIcon className="icon" weight="Outline" aria-hidden="true" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
@@ -208,7 +207,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
             {navigationGroups.map((group) => <section key={group.label}>
               <span>{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>
               {group.items.filter((item) => item.href !== "/").map((item) => {
-                const active = pathname.startsWith(item.href);
+                const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : pathname.startsWith(item.href);
                 return <Link href={item.href} className={active ? "active" : ""} onClick={closeSpacesDrawer} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
               })}
             </section>)}
