@@ -821,6 +821,7 @@ export function parseNewFoodLog(value: unknown) {
     notes: text(body.notes ?? "", "备注", 2000, false) ?? "",
     imageUrl: body.imageUrl === undefined || body.imageUrl === null ? null : text(body.imageUrl, "图片地址", 1000, false) || null,
     attachmentId: body.attachmentId === undefined || body.attachmentId === null ? null : text(body.attachmentId, "附件 ID", 200, false) || null,
+    foodLibraryId: optionalNumber(body.foodLibraryId, "食品库 ID", 1, Number.MAX_SAFE_INTEGER),
     foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER),
     foodDishId: foodDishIds(body.foodDishIds, body.foodDishId)[0] ?? null,
     foodDishIds: foodDishIds(body.foodDishIds, body.foodDishId),
@@ -833,9 +834,9 @@ export function parseFoodLogPatch(value: unknown) {
     occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
-    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
+    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
+  const keys = ["occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;
@@ -843,8 +844,11 @@ export function parseFoodLogPatch(value: unknown) {
 
 export function parseFoodPlace(value: unknown) {
   const body = objectValue(value);
+  const kind = enumValue(body.kind, "来源类型", ["restaurant", "drink", "retail", "homemade", "other"] as const, body.serviceType === "drink" ? "drink" : "restaurant");
+  const scope = enumValue(body.scope, "地点范围", ["brand", "branch", "virtual"] as const, kind === "homemade" ? "virtual" : kind === "drink" || kind === "retail" ? "brand" : "branch");
   return {
-    serviceType: enumValue(body.serviceType, "店铺类型", ["food", "drink", "both"] as const, "food"),
+    kind, scope, address: text(body.address ?? "", "地址", 500, false) ?? "",
+    serviceType: enumValue(body.serviceType, "饮食能力", ["food", "drink", "both"] as const, kind === "drink" ? "drink" : ["retail","homemade","other"].includes(kind) ? "both" : "food"),
     name: text(body.name, "店铺名称", 200)!,
     branch: text(body.branch ?? "", "分店信息", 160, false) ?? "",
     city: text(body.city ?? "", "城市", 100, false) ?? "",
@@ -858,8 +862,8 @@ export function parseFoodPlace(value: unknown) {
 
 export function parseFoodPlacePatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", serviceType: body.serviceType, branch: body.branch, city: body.city, location: body.location, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
-  const keys = ["serviceType", "name", "branch", "city", "location", "category", "rating", "status", "notes"] as const;
+  const parsed = parseFoodPlace({ name: body.name ?? "placeholder", kind: body.kind, scope: body.scope, address: body.address, serviceType: body.serviceType, branch: body.branch, city: body.city, location: body.location, category: body.category, rating: body.rating, status: body.status, notes: body.notes });
+  const keys = ["kind", "scope", "address", "serviceType", "name", "branch", "city", "location", "category", "rating", "status", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的店铺字段");
   return result;

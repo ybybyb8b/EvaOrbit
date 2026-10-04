@@ -78,6 +78,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async removeFoodLibraryItem(id) { return sqlite.removeFoodLibraryItem(id); },
   async listFoodPlaces(query, options) { return sqlite.listFoodPlaces(query, options); },
   async getFoodPlace(id) { return sqlite.getFoodPlace(id); },
+  async getPlaceLibraryItems(id) { return sqlite.getPlaceLibraryItems(id); },
   async createFoodPlace(input) { return sqlite.createFoodPlace(input); },
   async updateFoodPlace(id, input) { return sqlite.updateFoodPlace(id, input); },
   async removeFoodPlace(id) { return sqlite.removeFoodPlace(id); },

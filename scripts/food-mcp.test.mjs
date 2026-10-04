@@ -128,6 +128,22 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const {item:emptyDish}=await call("eo_create",{resource:"food_dish",data:{food_place_id:emptyPlace.id,name:"误建菜单"}});
       const deletedPlace=await call("eo_delete",{resource:"food_place",id:emptyPlace.id});assert.equal(deletedPlace.action,"deleted");assert.equal(deletedPlace.deleted,true);
       await reject("eo_get",{resource:"food_place",id:emptyPlace.id});await reject("eo_get",{resource:"food_dish",id:emptyDish.id});
+      const {item:retail}=await call("eo_create",{resource:"food_place",data:{name:"零售来源测试",kind:"retail",rating:"love"}});
+      assert.equal(retail.scope,"brand");assert.equal(retail.service_type,"both");
+      const {item:branch}=await call("eo_update",{resource:"food_place",id:retail.id,data:{scope:"branch",address:"测试街道"}});
+      assert.equal(branch.scope,"branch");assert.equal(branch.kind,"retail");assert.equal(branch.address,"测试街道");
+      const {item:retailFood}=await call("food_library_create",{name:"零售酸奶",category:"drink",data_source:"package_label"});
+      const {record:retailLog}=await call("food_create",{title:"酸奶",scene:"packaged_food",food_place_id:retail.id,food_library_id:retailFood.id});
+      const {record:retailDrink}=await call("drink_create",{name:"酸奶",food_place_id:retail.id,food_library_id:retailFood.id});
+      assert.equal(retailLog.food_library_id,retailFood.id);assert.equal(retailDrink.food_library_id,retailFood.id);
+      const {item:sourceStats}=await call("eo_get",{resource:"food_place",id:retail.id});
+      assert.equal(sourceStats.frequency,2);assert.equal(sourceStats.rating,"love");assert.equal(sourceStats.packaged_food[0].record_count,2);
+      assert.equal(sourceStats.packaged_food[0].item.id,retailFood.id);
+      assert.equal((await call("eo_search",{resource:"food_place",filters:{kind:"retail",scope:"branch"}})).items[0].id,retail.id);
+      assert.equal((await call("drink_update",{id:retailDrink.id,notes:"保留商品关联"})).record.food_library_id,retailFood.id);
+      assert.equal((await rpc("tools/call",{name:"eo_update",arguments:{resource:"food_place",id:retail.id,data:{frequency:99}}})).isError,true);
+      await call("food_delete",{id:retailLog.id});await call("drink_delete",{id:retailDrink.id});
+      assert.deepEqual((await call("eo_get",{resource:"food_place",id:retail.id})).item.packaged_food,[]);
     } finally {await mcpHandler.close();}
   `;
   try {

@@ -67,9 +67,9 @@ export type NewFoodLog = Omit<FoodLog, "id" | "createdAt" | "updatedAt" | "foodP
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
 export type FoodLibrarySearchOptions = { name?: string; category?: FoodLibraryItem["category"]; limit?: number };
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };
-export type NewFoodPlace = Omit<FoodPlace, "id" | "archivedAt" | "dishCount" | "visitCount" | "lastVisitedAt" | "createdAt" | "updatedAt">;
+export type NewFoodPlace = Omit<FoodPlace, "id" | "archivedAt" | "dishCount" | "drinkMenuCount" | "foodVisitCount" | "drinkVisitCount" | "frequency" | "visitCount" | "lastVisitedAt" | "createdAt" | "updatedAt">;
 export type NewFoodDish = Omit<FoodDish, "id" | "archivedAt" | "eatCount" | "lastEatenAt" | "createdAt" | "updatedAt">;
-export type FoodPlaceSearchOptions = { purpose?: "food" | "drink"; serviceType?: FoodPlace["serviceType"]; city?: string; rating?: NonNullable<FoodPlace["rating"]> | "unrated"; status?: FoodPlace["status"]; category?: string; includeArchived?: boolean; limit?: number };
+export type FoodPlaceSearchOptions = { kind?:FoodPlace["kind"]; scope?:FoodPlace["scope"]; purpose?: "food" | "drink"; serviceType?: FoodPlace["serviceType"]; city?: string; rating?: NonNullable<FoodPlace["rating"]> | "unrated"; status?: FoodPlace["status"]; category?: string; includeArchived?: boolean; limit?: number };
 export type FoodDishSearchOptions = { kind?: "food" | "drink"; foodPlaceId?: number; recommended?: boolean; rating?: FoodDish["rating"]; includeArchived?: boolean; limit?: number };
 export type FoodObjectRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
@@ -260,6 +260,7 @@ export interface EvaOrbitRepository {
   removeFoodLibraryItem(id: number): Promise<FoodLibraryRemoval | null>;
   listFoodPlaces(query?: string, options?: FoodPlaceSearchOptions): Promise<FoodPlace[]>;
   getFoodPlace(id: number): Promise<FoodPlace | null>;
+  getPlaceLibraryItems(id: number): Promise<{ item: FoodLibraryItem; recordCount: number; lastRecordedAt: string | null }[]>;
   createFoodPlace(input: NewFoodPlace): Promise<FoodPlace>;
   updateFoodPlace(id: number, input: Partial<NewFoodPlace>): Promise<FoodPlace | null>;
   removeFoodPlace(id: number): Promise<FoodObjectRemoval | null>;

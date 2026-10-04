@@ -34,6 +34,7 @@ const foodLibraryReferenceType = z.enum(["per_100g", "per_100ml", "per_serving"]
 const foodLibraryDataSource = z.enum(["package_label", "official", "estimated", "manual"]);
 
 const foodFields = {
+  food_library_id: z.number().int().positive().nullable().optional().describe("Optional Food Library item. Combined with food_place_id, records a retail source without maintaining a catalog."),
   occurred_has_explicit_time: z.boolean().optional().describe("False for a date-only record; true when a time was explicitly supplied. Omitted on update preserves the existing precision."),
   food_place_id: z.number().int().positive().nullable().optional().describe("Associated food_place ID. All linked dishes must belong to this place."),
   food_dish_id: z.number().int().positive().nullable().optional().describe("Legacy single-dish association; prefer food_dish_ids."),
@@ -44,6 +45,7 @@ const foodFields = {
   estimated_kcal: optionalKcal, kcal_min: optionalKcal, kcal_max: optionalKcal, confidence: confidence.optional(), notes: z.string().max(2000).optional(),
 };
 const drinkFields = {
+  food_library_id: z.number().int().positive().nullable().optional().describe("Optional Food Library item; omitted on update preserves it."),
   drink_menu_id: z.number().int().positive().nullable().optional().describe("Drink-kind food_dish ID from the selected place; null clears it. Fixes name only, never sugar or temperature."),
   food_place_id: z.number().int().positive().nullable().optional().describe("Shared shop or cafe branch ID; null clears the association, omitted on update preserves it."),
   occurred_at: occurredAt.optional(), occurred_has_explicit_time: z.boolean().optional(), name: z.string().trim().max(200).optional().describe("Optional manual name. A linked menu supplies its name; unnamed drinks display their type."), brand: z.string().max(120).optional(), drink_type: drinkType.optional(),
@@ -60,11 +62,11 @@ const foodLibraryFields = {
 const foodLibraryPatchFields = { ...foodLibraryFields, name: foodLibraryFields.name.optional() };
 
 function compactFood(record: FoodLog) {
-  return { id: record.id, food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, food_dish_ids: record.foodDishIds ?? (record.foodDishId ? [record.foodDishId] : []), food_dishes: record.foodDishes, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime ?? true, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { id: record.id, food_library_id:record.foodLibraryId,food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, food_dish_ids: record.foodDishIds ?? (record.foodDishId ? [record.foodDishId] : []), food_dishes: record.foodDishes, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime ?? true, meal_type: record.mealType, title: record.title, description: record.description, portion: record.portion, scene: record.scene, rating: record.rating, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactDrink(record: DrinkLog) {
-  return { drink_menu_id:record.drinkMenuId,drink_menu_name:record.drinkMenuName,food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, id: record.id, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, temperature: record.temperature, rating: record.rating, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
+  return { food_library_id:record.foodLibraryId,drink_menu_id:record.drinkMenuId,drink_menu_name:record.drinkMenuName,food_place_id: record.foodPlaceId, food_place_name: record.foodPlaceName, food_place_city: record.foodPlaceCity, food_place_location: record.foodPlaceLocation, food_place_branch: record.foodPlaceBranch, id: record.id, occurred_at: record.occurredAt, occurred_has_explicit_time: record.occurredHasExplicitTime, name: record.name, brand: record.brand, drink_type: record.drinkType, volume_ml: record.volumeMl, sugar_level: record.sugarLevel, temperature: record.temperature, rating: record.rating, caffeine_mg: record.caffeineMg, estimated_kcal: record.estimatedKcal, kcal_min: record.kcalMin, kcal_max: record.kcalMax, confidence: record.confidence, notes: record.notes };
 }
 
 function compactFoodLibrary(item: FoodLibraryItem) {
@@ -104,11 +106,11 @@ async function runTool(action: () => Promise<Record<string, unknown>>): Promise<
 }
 
 function foodInput(input: z.infer<z.ZodObject<typeof foodFields>>) {
-  return { foodPlaceId: input.food_place_id, foodDishId: input.food_dish_id, foodDishIds: input.food_dish_ids, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { foodLibraryId:input.food_library_id,foodPlaceId: input.food_place_id, foodDishId: input.food_dish_id, foodDishIds: input.food_dish_ids, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, mealType: input.meal_type, title: input.title, description: input.description, portion: input.portion, scene: input.scene, rating: input.rating, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function drinkInput(input: z.infer<z.ZodObject<typeof drinkFields>>) {
-  return { drinkMenuId:input.drink_menu_id,foodPlaceId: input.food_place_id, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, temperature: input.temperature, rating: input.rating, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
+  return { foodLibraryId:input.food_library_id,drinkMenuId:input.drink_menu_id,foodPlaceId: input.food_place_id, occurredAt: input.occurred_at, occurredHasExplicitTime: input.occurred_has_explicit_time, name: input.name, brand: input.brand, drinkType: input.drink_type, volumeMl: input.volume_ml, sugarLevel: input.sugar_level, temperature: input.temperature, rating: input.rating, caffeineMg: input.caffeine_mg, estimatedKcal: input.estimated_kcal, kcalMin: input.kcal_min, kcalMax: input.kcal_max, confidence: input.confidence, notes: input.notes };
 }
 
 function foodLibraryInput(input: Record<string, unknown>) {

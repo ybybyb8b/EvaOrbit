@@ -15,7 +15,7 @@ import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../servi
 import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
 import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryNote,deleteRelationEvent,getMemoryNote,getRelationEvent,getRelationPersonDetail,listMemoryNotes,listRelationEvents,listRelationPeople,settleAdvance,updateMemoryNote,updateRelationEvent,updateRelationPerson } from "../services/relations";
 import { createResourceRegistry } from "./resource-registry";
-import { createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,removeFoodPlace,updateFoodDish,updateFoodPlace } from "../services/food";
+import { getPlaceLibraryItems,createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,removeFoodPlace,updateFoodDish,updateFoodPlace } from "../services/food";
 import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
 import { createSubscription, getSubscriptionDetail, listSubscriptions, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "../services/evaorbit";
@@ -51,6 +51,6 @@ export const resourceRegistry = createResourceRegistry({
   relationPerson:{search:listRelationPeople,get:getRelationPersonDetail,create:createRelationPerson,update:updateRelationPerson},
   relationEvent:{search:listRelationEvents,get:getRelationEvent,create:createRelationEvent,update:updateRelationEvent,delete:deleteRelationEvent,settle:settleAdvance},
   personNote:{search:listMemoryNotes,get:getMemoryNote,create:createMemoryNote,update:updateMemoryNote,delete:deleteMemoryNote},
-  foodPlace:{search:listFoodPlaces,get:getFoodPlace,create:createFoodPlace,update:updateFoodPlace,delete:removeFoodPlace},
+  foodPlace:{getLibraryItems:getPlaceLibraryItems,search:listFoodPlaces,get:getFoodPlace,create:createFoodPlace,update:updateFoodPlace,delete:removeFoodPlace},
   foodDish:{search:listFoodDishes,get:getFoodDish,create:createFoodDish,update:updateFoodDish,delete:async(id)=>Boolean(await removeFoodDish(id))},
 });

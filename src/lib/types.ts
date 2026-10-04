@@ -433,6 +433,7 @@ export const TASTE_RATINGS = ["love", "good", "neutral", "dislike"] as const;
 export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
+  foodLibraryId?: number | null;
   id: number;
   occurredAt: string;
   occurredHasExplicitTime?: boolean;
@@ -465,6 +466,11 @@ export interface FoodLog {
 export const FOOD_PLACE_STATUSES = ["frequent", "occasional", "paused", "avoid", "closed"] as const;
 export type FoodPlaceStatus = typeof FOOD_PLACE_STATUSES[number];
 export interface FoodPlace {
+  kind?: "restaurant" | "drink" | "retail" | "homemade" | "other";
+  scope?: "brand" | "branch" | "virtual";
+  address?: string;
+  /** Number of linked Food and Drink records; never manually edited. */
+  frequency?: number;
   serviceType?: "food" | "drink" | "both";
   drinkMenuCount?: number;
   id: number;
@@ -503,6 +509,7 @@ export interface FoodDish {
 }
 
 export interface FoodPlaceDetail {
+  packagedFood?: { item: FoodLibraryItem; recordCount: number; lastRecordedAt: string | null }[];
   place: FoodPlace;
   dishes: FoodDish[];
   recentFoodLogs: FoodLog[];

@@ -237,7 +237,7 @@ test("food place and dish resources expose safe generic CRUD",async()=>{
   assert.deepEqual((await registry.search("food_dish",{filters:{food_place_id:place.id,recommended:true},limit:20})).items.map(item=>item.id),[dish.id]);
   assert.equal((await registry.update("food_place",place.id as number,{status:"paused"})).status,"paused");
   assert.deepEqual(await registry.delete("food_dish",dish.id as number),{deleted:true,id:dish.id});
-  await assert.rejects(()=>registry.create("food_place",{name:"Bad",address:"not supported"}),/does not accept: address/);
+  await assert.rejects(()=>registry.create("food_place",{name:"Bad",postcode:"not supported"}),/does not accept: postcode/);
 });
 
 test("Lucius state is a single explicit MCP-updatable display resource", async () => {

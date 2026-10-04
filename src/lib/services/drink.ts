@@ -1,4 +1,5 @@
 import "server-only";
+import { validateLibraryLink } from "./food-library-link";
 import { placeSupports } from "../place-menu";
 import { ValidationError } from "../validation";
 import { getRepository } from "../repositories";
@@ -32,6 +33,7 @@ async function validateDrinkLinks(repository:Awaited<ReturnType<typeof getReposi
 }
 export async function createDrinkLog(input: NewDrinkLog) {
   const repository = await getRepository();
+  await validateLibraryLink(repository,input.foodLibraryId);
   await validateDrinkLinks(repository,input.foodPlaceId??null,input.drinkMenuId??null);
   const menu=input.drinkMenuId?await repository.getFoodDish(input.drinkMenuId):null;
   const drink = await repository.createDrinkLog(menu?{...input,name:menu.name}:input);
@@ -41,6 +43,7 @@ export async function updateDrinkLog(id: number, input: Record<string, unknown>)
   const repository = await getRepository();
   const existing = await repository.getDrinkLog(id);
   if (!existing) return null;
+  await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
   const placeId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
   const menuId=input.drinkMenuId===undefined?existing.drinkMenuId??null:input.drinkMenuId as number|null;
   await validateDrinkLinks(repository,placeId,menuId,placeId===(existing.foodPlaceId??null)&&menuId===(existing.drinkMenuId??null));

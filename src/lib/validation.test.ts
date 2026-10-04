@@ -90,7 +90,7 @@ test("keeps food brands distinct and validates drink limits", () => {
 });
 
 test("validates lightweight food places, dishes, and optional Food Record links",()=>{
-  assert.deepEqual(parseFoodPlace({name:" 某某米线 ",branch:" 天府和悦店 ",category:" 米线 ",rating:"love",status:"frequent"}),{serviceType:"food",name:"某某米线",branch:"天府和悦店",city:"",location:"",category:"米线",rating:"love",status:"frequent",notes:""});
+  assert.deepEqual(parseFoodPlace({name:" 某某米线 ",branch:" 天府和悦店 ",category:" 米线 ",rating:"love",status:"frequent"}),{kind:"restaurant",scope:"branch",address:"",serviceType:"food",name:"某某米线",branch:"天府和悦店",city:"",location:"",category:"米线",rating:"love",status:"frequent",notes:""});
   assert.deepEqual(parseFoodPlacePatch({status:"closed"}),{status:"closed"});
   assert.deepEqual(parseFoodPlacePatch({city:" 成都 ",location:" 高新区 "}),{city:"成都",location:"高新区"});
   assert.deepEqual(parseFoodPlacePatch({city:"",location:""}),{city:"",location:""});

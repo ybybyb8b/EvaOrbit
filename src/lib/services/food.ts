@@ -1,4 +1,5 @@
 import "server-only";
+import { validateLibraryLink } from "./food-library-link";
 import { placeSupports } from "../place-menu";
 import { getRepository } from "../repositories";
 import type { FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, NewFoodDish, NewFoodLibraryItem, NewFoodLog, NewFoodPlace } from "../repositories/types";
@@ -16,9 +17,10 @@ async function validateFoodLinks(repository:Awaited<ReturnType<typeof getReposit
   if(foodPlaceId!==null){const place=await repository.getFoodPlace(foodPlaceId);if(!place)throw new ValidationError("所选店铺不存在");if(!preservePlace&&!placeSupports(place,"food"))throw new ValidationError("该店铺只提供饮品");}
   for(const foodDishId of foodDishIds){const dish=await repository.getFoodDish(foodDishId);if(!dish||dish.foodPlaceId!==foodPlaceId||(dish.kind??"food")!=="food")throw new ValidationError("所选菜品不属于该店铺");}
 }
-export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);return repository.createFoodLog({...input,foodDishIds:ids,foodDishId:ids[0]??null}); }
+export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);return repository.createFoodLog({...input,foodDishIds:ids,foodDishId:ids[0]??null}); }
 export async function updateFoodLog(id: number, input: Record<string, unknown>) {
   const repository = await getRepository(); const existing = await repository.getFoodLog(id); if (!existing) return null;
+  await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
   const scene = (input.scene ?? existing.scene) as FoodLog["scene"];
   const rating = input.rating === undefined ? existing.rating : input.rating;
   const foodPlaceId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
@@ -64,7 +66,8 @@ export async function removeFoodLibraryItem(id: number) { return (await getRepos
 
 export async function listFoodPlaces(query="",options?:FoodPlaceSearchOptions){return(await getRepository()).listFoodPlaces(query,options);}
 export async function getFoodPlace(id:number){return(await getRepository()).getFoodPlace(id);}
-export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs,recentDrinkLogs,drinkMenu]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,kind:"food",limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20}),repository.listDrinkLogs({foodPlaceId:id,limit:20}),repository.listFoodDishes("",{foodPlaceId:id,kind:"drink",limit:100})]);return{place,dishes,recentFoodLogs,recentDrinkLogs,drinkMenu};}
+export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs,recentDrinkLogs,drinkMenu,packagedFood]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,kind:"food",limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20}),repository.listDrinkLogs({foodPlaceId:id,limit:20}),repository.listFoodDishes("",{foodPlaceId:id,kind:"drink",limit:100}),repository.getPlaceLibraryItems(id)]);return{place,dishes,recentFoodLogs,recentDrinkLogs,drinkMenu,packagedFood};}
+export async function getPlaceLibraryItems(id:number){return(await getRepository()).getPlaceLibraryItems(id);}
 export async function createFoodPlace(input:NewFoodPlace){return(await getRepository()).createFoodPlace(input);}
 export async function updateFoodPlace(id:number,input:Partial<NewFoodPlace>){const repository=await getRepository();if(input.serviceType&&input.serviceType!=="both"){const incompatible=input.serviceType==="drink"?"food":"drink";if((await repository.listFoodDishes("",{foodPlaceId:id,kind:incompatible,limit:1})).length)throw new ValidationError("请先归档不符合新类型的菜单项，再修改店铺类型");}return repository.updateFoodPlace(id,input);}
 export async function removeFoodPlace(id:number){return(await getRepository()).removeFoodPlace(id);}
