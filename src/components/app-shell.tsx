@@ -10,6 +10,7 @@ import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
 import { EventKitReconciler } from "./eventkit-reconciler";
+import { DataChangeReconciler } from "./data-change-reconciler";
 import { NativeHapticController } from "./native-haptic-controller";
 import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
@@ -169,6 +170,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       <NativeHapticController />
       <NativeNotificationReconciler />
       <EventKitReconciler />
+      <DataChangeReconciler />
       <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>

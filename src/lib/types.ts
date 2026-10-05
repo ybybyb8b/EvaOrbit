@@ -434,6 +434,8 @@ export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
   foodLibraryId?: number | null;
+  foodLibraryItems?: FoodConsumption[];
+  foodKcalMode?: "auto" | "manual";
   id: number;
   occurredAt: string;
   occurredHasExplicitTime?: boolean;
@@ -519,6 +521,16 @@ export interface FoodPlaceDetail {
 
 export type FoodCategory = "staple" | "dish" | "snack" | "drink" | "other";
 export type FoodReferenceType = "per_100g" | "per_100ml" | "per_serving";
+export type FoodQuantityUnit = "g" | "ml" | "serving";
+export type FoodNutritionReference = Pick<FoodLibraryItem, "referenceType" | "referenceEnergyKj" | "referenceKcal" | "servingWeight" | "servingKcal">;
+export interface FoodConsumption {
+  foodLibraryId: number;
+  quantity: number | null;
+  unit: FoodQuantityUnit;
+  item?: { id: number; name: string; brand: string };
+  nutritionReference?: FoodNutritionReference;
+  calculatedKcal?: number | null;
+}
 export type FoodDataSource = "package_label" | "official" | "estimated" | "manual";
 export interface FoodLibraryItem {
   id: number;

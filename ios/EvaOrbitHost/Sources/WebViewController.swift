@@ -40,6 +40,9 @@ final class WebViewController: UIViewController {
         webView = WKWebView(frame: .zero, configuration: webConfiguration)
 
         super.init(nibName: nil, bundle: nil)
+        nativeBridge.onDataChanged = { [weak self] domains, source in
+            self?.notifyDataChanged(domains: domains, source: source)
+        }
         loadingCoordinator = LoadingExperienceCoordinator(presenter: loadingOverlay)
         loadingOverlay.onRetry = { [weak self] in self?.retryFromFailure() }
     }
@@ -180,6 +183,14 @@ extension WebViewController: WKNavigationDelegate {
 
     func notifyEventKitStoreChanged() {
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:eventkit-store-changed'))")
+    }
+
+    func notifyDataChanged(domains: [String], source: String) {
+        guard let accepted = NativeBridge.dataChangeDomains(domains), ["eventkit", "healthkit"].contains(source),
+              let data = try? JSONSerialization.data(withJSONObject: ["domains": accepted, "source": source]),
+              let detail = String(data: data, encoding: .utf8) else { return }
+        // Completion notification only; never emits native-active or eventkit-store-changed.
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('eo:data-changed', { detail: \(detail) }))")
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

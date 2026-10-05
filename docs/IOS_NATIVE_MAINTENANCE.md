@@ -283,6 +283,14 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 
 ## 五、JS↔Swift bridge 安全契约
 
+### 同步完成后的 Web 数据刷新
+
+EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。一次 single-flight 同步结束后，Web 汇总已成功写入 EO 的 `calendar / tasks / reminders` domains，再调用 bridge v1 的 `host.notifyDataChanged`；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
+
+旧 IPA 未声明该方法或通知调用失败时，Web 本地发出相同事件；通知失败不撤销已提交的数据。无 EO 变化的同步不发通知；若同步后段失败但前段已提交 EO 变化，仍通知这些已提交的 domains。Homepage 的 client 日历缓存只 refetch 当前日期及可见月份，其他缓存失效，选中日期、展开状态和未保存日记保持；Tasks/Reminders 变化另用 `router.refresh()` 更新服务端 Due 卡片，不跳转、不整页 reload。新事件不是 EventKit scheduler 的触发源，刷新组件不启动同步，原启动/前台/store-change/定时等触发时机不变。
+
+Swift 新方法需要按现有链路构建新 IPA，兼容 Web 可先部署并在旧 Host 上使用本地通知降级。没有新增 framework、Info.plist 用途文案、权限或 entitlement；Windows 本地无法执行 iOS XCTest/Simulator 验证，须由 macOS CI 和 iPhone 16 Pro 真机验证补齐。
+
 当前只有一个 bridge：`window.EvaOrbitNative` / message handler `evaOrbit`，协议版本为 `1`。新增能力应扩展这个 bridge，不新建重复 handler 或绕过它。
 
 以下约束必须保留：

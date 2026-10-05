@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Add, ArrowDown5, ArrowLeft2, ArrowRight2, CheckCircle, Checklist, Edit2, ForkKnife, MoonSleep, Note, RecordCircle, Trash } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
 import { CalendarRuleSheet } from "@/components/calendar-rule-sheet";
@@ -18,6 +18,8 @@ import { journalDraftChanged, journalPreviewEntries } from "@/lib/journal-draft"
 import type { DailyJournalEmotion } from "@/lib/types";
 import type { CalendarEvent, DailyJournalEnergy, DailyJournalMood, DailyJournalEntry, TimelineEvent, TimelineMonthSummary } from "@/lib/types";
 import { HomeQuickLog } from "./home-quick-log";
+import { subscribeDataChanged } from "@/lib/data-changed";
+import { fetchHomeData } from "@/lib/home-data-refresh";
 
 const sourceMeta: Record<TimelineEvent["sourceType"], { en: string; zh: string }> = {
   calendar: { en: "Calendar", zh: "日历" },
@@ -83,6 +85,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
   const [calendarDetail, setCalendarDetail] = useState<TimelineEvent | null>(null);
   const [ruleEditor, setRuleEditor] = useState<{ rule?: CalendarRule } | null>(null);
   const dayRequest = useRef<AbortController | null>(null), monthRequest = useRef<AbortController | null>(null), day = days[selected], events = day?.events ?? [];
+  const backgroundMonthRequest = useRef<AbortController | null>(null), nativeRefreshRequest = useRef<AbortController | null>(null);
   const activitySentence = day ? homeActivitySentence(day.activities, english, selected === today) : null;
   const journalDirty = journalDraftChanged({ content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }, day?.journal.find(entry => entry.id === editingJournalId));
   const draftMood = journalMoodLabel({ emotion: journalEmotion, moodScore: journalMood });
@@ -98,11 +101,30 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
   const periods = useMemo(() => [...new Map(Object.values(summaries).flatMap((summary) => summary.periods ?? []).map((period) => [period.id, period])).values()], [summaries]);
   const periodContext = periodDayForDate(periods, selected, today), periodFlow = events.find((item) => item.eventType === "health.menstrual_flow" && item.metadata.periodId === periodContext?.period.id), periodDose = events.find((item) => item.eventType === "health.medication_dose" && item.metadata.periodId === periodContext?.period.id);
 
+  const refreshChangedData = useEffectEvent(async () => {
+    const date = selected, requiredMonths = calendarExpanded ? [month] : [...new Set(visibleWeek.map(value => value.slice(0, 7)))];
+    nativeRefreshRequest.current?.abort(); dayRequest.current?.abort(); monthRequest.current?.abort(); backgroundMonthRequest.current?.abort();
+    const controller = new AbortController(); nativeRefreshRequest.current = controller;
+    // Invalidate other cached dates without resetting selection, expansion or unsaved drafts.
+    setDays(current => current[date] ? { [date]: current[date] } : {});
+    setSummaries(current => Object.fromEntries(Object.entries(current).filter(([value]) => requiredMonths.includes(value))));
+    try {
+      const next = await fetchHomeData(date, requiredMonths, controller.signal);
+      if (controller.signal.aborted) return;
+      setDays({ [date]: next.day }); setSummaries(Object.fromEntries(next.summaries.map(summary => [summary.month, summary])));
+    } catch {
+      if (!controller.signal.aborted) setError(english ? "Synced data could not refresh. Please try again." : "同步数据刷新失败，请重试。");
+    }
+  });
+  useEffect(() => subscribeDataChanged(["calendar", "tasks", "reminders", "health"], () => { void refreshChangedData(); }), []);
+  useEffect(() => () => nativeRefreshRequest.current?.abort(), [selected, month, calendarExpanded]);
+
   useEffect(() => {
     const requiredMonths = calendarExpanded ? [month] : [...new Set(visibleWeek.map((date) => date.slice(0, 7)))], missingMonths = requiredMonths.filter((value) => !summaries[value]);
     if (!missingMonths.length) return;
     const controller = new AbortController();
-    void Promise.all(missingMonths.map(async (value) => { const response = await fetch(`/api/timeline?month=${encodeURIComponent(value)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); return response.json() as Promise<TimelineMonthSummary>; })).then((results) => setSummaries((current) => Object.fromEntries([...Object.entries(current), ...results.map((result) => [result.month, result])]))).catch(() => undefined);
+    backgroundMonthRequest.current = controller;
+    void Promise.all(missingMonths.map(async (value) => { const response = await fetch(`/api/timeline?month=${encodeURIComponent(value)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); return response.json() as Promise<TimelineMonthSummary>; })).then((results) => { if (!controller.signal.aborted) setSummaries((current) => Object.fromEntries([...Object.entries(current), ...results.map((result) => [result.month, result])])); }).catch(() => undefined);
     return () => controller.abort();
   }, [calendarExpanded, month, summaries, visibleWeek]);
 
@@ -110,7 +132,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
     setSelected(date); setTimelineExpanded(false); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
     if (days[date] && !force) return;
     dayRequest.current?.abort(); const controller = new AbortController(); dayRequest.current = controller; setLoadingDate(date);
-    try { const response = await fetch(`/api/home-day?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as HomeDayOverview; setDays((current) => ({ ...current, [date]: result })); }
+    try { const response = await fetch(`/api/home-day?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as HomeDayOverview; if (controller.signal.aborted) return; setDays((current) => ({ ...current, [date]: result })); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this day" : "无法读取这一天"); }
     finally { if (dayRequest.current === controller) setLoadingDate(null); }
   }
@@ -121,7 +143,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
   }
   async function changeMonth(nextMonth: string) {
     monthRequest.current?.abort(); const controller = new AbortController(); monthRequest.current = controller; setLoadingMonth(true); setError("");
-    try { const response = await fetch(`/api/timeline?month=${encodeURIComponent(nextMonth)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as TimelineMonthSummary, nextDate = today.startsWith(nextMonth) ? today : `${nextMonth}-01`; setMonth(nextMonth); setSummaries((current) => ({ ...current, [nextMonth]: result })); playNativeHaptic("selection"); await loadDay(nextDate); }
+    try { const response = await fetch(`/api/timeline?month=${encodeURIComponent(nextMonth)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as TimelineMonthSummary, nextDate = today.startsWith(nextMonth) ? today : `${nextMonth}-01`; if (controller.signal.aborted) return; setMonth(nextMonth); setSummaries((current) => ({ ...current, [nextMonth]: result })); playNativeHaptic("selection"); await loadDay(nextDate); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this month" : "无法读取这个月份"); }
     finally { if (monthRequest.current === controller) setLoadingMonth(false); }
   }

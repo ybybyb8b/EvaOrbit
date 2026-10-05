@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
+import { dataChangedEvent, type DataChangedDetail } from "./data-changed.ts";
 
 type Item = Record<string, unknown>;
 const calendarBase = { title: "Visit", notes: "", startAt: "2026-10-06T02:00:00.000Z", endAt: "2026-10-06T03:00:00.000Z", isAllDay: false, timezone: "Asia/Shanghai", location: "", status: "confirmed" };
@@ -107,7 +108,7 @@ function fixture() {
 }
 async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>) {
   const oldWindow = globalThis.window, oldFetch = globalThis.fetch, f = fixture();
-  globalThis.window = { EvaOrbitNative: { version: 1, call: async (method: string, body: Item = {}) => ({ ok: true, result: await f.native(method, body) }) } } as unknown as Window & typeof globalThis;
+  globalThis.window = Object.assign(new EventTarget(), { EvaOrbitNative: { version: 1, call: async (method: string, body: Item = {}) => ({ ok: true, result: await f.native(method, body) }) } }) as unknown as Window & typeof globalThis;
   globalThis.fetch = f.fetch;
   try { await run(f); } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch; }
 }
@@ -122,6 +123,26 @@ test("610 Calendar mappings paginate every EO record and updates keep the origin
   assert.equal(f.calls.filter(call => call.method === "POST").length, 0);
   assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/calendar-events").length, 6);
   assert.ok(f.calls.some(call => call.method === "GET" && call.target === "/api/calendar-events/610"));
+}));
+test("EventKit completion announces Calendar changes once and an unchanged retry stays quiet", async () => withFixture(async f => {
+  const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
+  f.linkEvent(1); f.events.clear(); f.links.clear();
+  await f.run(); assert.deepEqual(notifications.map(item => item.domains), [["calendar"]]);
+  assert.equal(notifications[0].source, "eventkit");
+  await f.run(); assert.equal(notifications.length, 1);
+  f.apple.set("event-1", { ...f.apple.get("event-1"), title: "Changed" }); await f.run();
+  assert.deepEqual(notifications.map(item => item.domains), [["calendar"], ["calendar"]]);
+}));
+test("Controlled Apple Task edits notify Task and Due Reminder consumers", async () => withFixture(async f => {
+  const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
+  f.linkTask(); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Apple title" });
+  await f.run(); assert.deepEqual(notifications.map(item => item.domains), [["tasks", "reminders"]]);
+}));
+test("Changes committed before a later failure still notify Web consumers", async () => withFixture(async f => {
+  const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
+  f.linkTask(); f.linkEvent(2); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Committed title" }); f.failEORead = true;
+  await assert.rejects(f.run(), /database unavailable/);
+  assert.equal(f.tasks.get(1)?.title, "Committed title"); assert.deepEqual(notifications.map(item => item.domains), [["tasks", "reminders"]]);
 }));
 for (const recovery of [false, true]) for (const flags of [false, true]) {
   test(`Missing EO records pause only their links and allow a new Calendar import (recovery=${recovery}, flags=${flags})`, async () => withFixture(async f => {

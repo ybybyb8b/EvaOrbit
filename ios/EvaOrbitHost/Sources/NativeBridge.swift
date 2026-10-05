@@ -6,7 +6,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let name = "evaOrbit"
     static let protocolVersion = 1
     static let supportedMethods: Set<String> = [
-        "host.ping", "host.getInfo", "navigation.openExternal",
+        "host.ping", "host.getInfo", "host.notifyDataChanged", "navigation.openExternal",
         "appearance.setPreference",
         "haptic.play",
         "healthkit.getStatus", "healthkit.requestAuthorization", "healthkit.syncNow",
@@ -45,6 +45,14 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private let notificationManager: NotificationManager
     private let hapticFeedbackManager = HapticFeedbackManager()
     private let eventKitSyncEngine: EventKitSyncEngine
+    var onDataChanged: (([String], String) -> Void)?
+
+    static func dataChangeDomains(_ value: Any?) -> [String]? {
+        let allowed: Set<String> = ["calendar", "tasks", "reminders", "health"]
+        guard let domains = value as? [String], !domains.isEmpty, domains.count <= allowed.count,
+              domains.allSatisfy({ allowed.contains($0) }) else { return nil }
+        return Array(Set(domains)).sorted()
+    }
 
     init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
         self.hostConfiguration = hostConfiguration
@@ -89,6 +97,15 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(success(id: identifier, result: ["pong": true]), nil)
         case "host.getInfo":
             replyHandler(success(id: identifier, result: hostInfo()), nil)
+        case "host.notifyDataChanged":
+            guard let domains = Self.dataChangeDomains(parameters["domains"]),
+                  let source = parameters["source"] as? String, ["eventkit", "healthkit"].contains(source),
+                  let notify = onDataChanged else {
+                replyHandler(failure(id: identifier, code: "invalid_data_change", message: "Data change notification is unavailable or invalid."), nil)
+                return
+            }
+            notify(domains, source)
+            replyHandler(success(id: identifier, result: ["notified": true]), nil)
         case "navigation.openExternal":
             openExternal(parameters: parameters, id: identifier, replyHandler: replyHandler)
         case "appearance.setPreference":

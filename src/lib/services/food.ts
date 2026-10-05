@@ -1,9 +1,10 @@
 import "server-only";
 import { validateLibraryLink } from "./food-library-link";
+import { foodCalculatedTotal, snapshotFoodConsumptions } from "../food-calculation";
 import { placeSupports } from "../place-menu";
 import { getRepository } from "../repositories";
 import type { FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, NewFoodDish, NewFoodLibraryItem, NewFoodLog, NewFoodPlace } from "../repositories/types";
-import type { FoodLibraryItem, FoodLog, FoodPlaceDetail } from "../types";
+import type { FoodConsumption, FoodLibraryItem, FoodLog, FoodPlaceDetail } from "../types";
 import { ValidationError } from "../validation";
 import { dateInEvaOrbit, dateRange } from "../time";
 
@@ -17,10 +18,22 @@ async function validateFoodLinks(repository:Awaited<ReturnType<typeof getReposit
   if(foodPlaceId!==null){const place=await repository.getFoodPlace(foodPlaceId);if(!place)throw new ValidationError("所选店铺不存在");if(!preservePlace&&!placeSupports(place,"food"))throw new ValidationError("该店铺只提供饮品");}
   for(const foodDishId of foodDishIds){const dish=await repository.getFoodDish(foodDishId);if(!dish||dish.foodPlaceId!==foodPlaceId||(dish.kind??"food")!=="food")throw new ValidationError("所选菜品不属于该店铺");}
 }
-export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);return repository.createFoodLog({...input,foodDishIds:ids,foodDishId:ids[0]??null}); }
+async function prepareFoodCalculation(repository: Awaited<ReturnType<typeof getRepository>>, input: Record<string, unknown>, existing?: FoodLog) {
+  let inputs = input.foodLibraryItems as FoodConsumption[] | undefined;
+  const legacyChanged = inputs === undefined && input.foodLibraryId !== undefined && input.foodLibraryId !== existing?.foodLibraryId;
+  if (legacyChanged) inputs = [];
+  if (inputs === undefined && input.foodKcalMode === undefined) return input;
+  const previous = existing?.foodLibraryItems?.length ? existing.foodLibraryItems : existing?.foodLibraryId ? [{ foodLibraryId: existing.foodLibraryId, quantity: null, unit: "serving" as const }] : [];
+  const snapshots = await snapshotFoodConsumptions(inputs ?? existing?.foodLibraryItems ?? [], previous, id => repository.getFoodLibraryItem(id));
+  const mode = input.foodKcalMode ?? (input.estimatedKcal !== undefined ? "manual" : existing?.foodKcalMode ?? "auto");
+  return { ...input, foodLibraryItems: snapshots, foodKcalMode: mode,
+    ...(inputs !== undefined && !legacyChanged ? { foodLibraryId: snapshots[0]?.foodLibraryId ?? null } : {}),
+    ...(mode === "auto" ? { estimatedKcal: foodCalculatedTotal(snapshots) } : {}) };
+}
+export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);const calculation=await prepareFoodCalculation(repository,input);return repository.createFoodLog({...input,...calculation,foodDishIds:ids,foodDishId:ids[0]??null} as NewFoodLog); }
 export async function updateFoodLog(id: number, input: Record<string, unknown>) {
   const repository = await getRepository(); const existing = await repository.getFoodLog(id); if (!existing) return null;
-  await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
+  if (input.foodLibraryItems === undefined) await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
   const scene = (input.scene ?? existing.scene) as FoodLog["scene"];
   const rating = input.rating === undefined ? existing.rating : input.rating;
   const foodPlaceId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
@@ -32,7 +45,8 @@ export async function updateFoodLog(id: number, input: Record<string, unknown>) 
     input = { ...input, rating: null };
   }
   else if (rating !== null && !["love", "good", "neutral", "dislike"].includes(String(rating))) throw new ValidationError("评价不正确");
-  return repository.updateFoodLog(id, input);
+  if (input.estimatedKcal !== undefined && input.foodKcalMode === undefined) input = { ...input, foodKcalMode: "manual" };
+  return repository.updateFoodLog(id, await prepareFoodCalculation(repository, input, existing));
 }
 export async function deleteFoodLog(id: number) { return (await getRepository()).deleteFoodLog(id); }
 export async function searchFoodLibrary(query = "", brand = "", options?: FoodLibrarySearchOptions) { return (await getRepository()).searchFoodLibrary(query, brand, options); }

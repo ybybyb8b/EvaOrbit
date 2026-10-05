@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { eventKitConfigChanged, eventKitSyncFinished, startEventKitAutoSync, syncConfiguredEventKit } from "./eventkit-auto-sync.ts";
 import { eventKitReminderExcluded, synchronizeEventKit, type EventKitStatus } from "./eventkit-sync.ts";
+import { dataChangedEvent, subscribeDataChanged } from "./data-changed.ts";
 
 function schedulerFixture() {
   const timers = new Map<number, () => void>(); let next = 0, interval = () => {};
@@ -38,6 +39,15 @@ test("events during a sync get one follow-up and failures can retry", async () =
   await f.flush(); f.win.dispatchEvent(new Event("evaorbit:eventkit-store-changed")); await f.flush(); assert.equal(calls, 1);
   release(); await new Promise(resolve => setImmediate(resolve)); await f.flush(); assert.equal(calls, 2); assert.equal(errors, 1);
   f.win.dispatchEvent(new Event("online")); await f.flush(); assert.equal(calls, 3); stop();
+});
+test("Sync completion and data refetch notifications never schedule another EventKit sync", async () => {
+  const f = schedulerFixture(); let calls = 0, refreshes = 0;
+  const win = f.win as unknown as Window & typeof globalThis;
+  const unsubscribe = subscribeDataChanged(["calendar"], () => { refreshes++; win.dispatchEvent(new Event("web-refetched")); }, win);
+  const stop = startEventKitAutoSync(async () => { calls++; win.dispatchEvent(new CustomEvent(dataChangedEvent, { detail: { domains: ["calendar"], source: "eventkit" } })); }, win, f.doc as unknown as Document);
+  await f.flush(); await f.flush(); await f.flush();
+  assert.equal(calls, 1); assert.equal(refreshes, 1); assert.equal(f.timers.size, 0);
+  stop(); unsubscribe();
 });
 
 test("续火花 excludes imports, exports and existing links without deleting either side", async () => {

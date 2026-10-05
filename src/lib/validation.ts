@@ -801,6 +801,20 @@ function foodDishIds(value: unknown, legacy: unknown): number[] {
   return [...new Set(ids)] as number[];
 }
 
+function parseFoodConsumptions(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 50) throw new ValidationError("食品库项目最多 50 项");
+  const ids = new Set<number>();
+  return value.map(value => {
+    const body = objectValue(value);
+    const id = body.foodLibraryId;
+    if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0 || ids.has(id)) throw new ValidationError("食品库 ID 必须是不同的正整数");
+    ids.add(id);
+    return { foodLibraryId: id, quantity: optionalNumber(body.quantity, "食用量", 0, 1000000),
+      unit: enumValue(body.unit, "食用量单位", ["g", "ml", "serving"] as const, "serving") };
+  });
+}
+
 export function parseNewFoodLog(value: unknown) {
   const body = objectValue(value);
   const kcalMin = optionalNumber(body.kcalMin, "热量下限");
@@ -822,6 +836,8 @@ export function parseNewFoodLog(value: unknown) {
     imageUrl: body.imageUrl === undefined || body.imageUrl === null ? null : text(body.imageUrl, "图片地址", 1000, false) || null,
     attachmentId: body.attachmentId === undefined || body.attachmentId === null ? null : text(body.attachmentId, "附件 ID", 200, false) || null,
     foodLibraryId: optionalNumber(body.foodLibraryId, "食品库 ID", 1, Number.MAX_SAFE_INTEGER),
+    foodLibraryItems: parseFoodConsumptions(body.foodLibraryItems),
+    foodKcalMode: body.foodKcalMode === undefined ? undefined : enumValue(body.foodKcalMode, "热量计算方式", ["auto", "manual"] as const, "manual"),
     foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER),
     foodDishId: foodDishIds(body.foodDishIds, body.foodDishId)[0] ?? null,
     foodDishIds: foodDishIds(body.foodDishIds, body.foodDishId),
@@ -834,9 +850,9 @@ export function parseFoodLogPatch(value: unknown) {
     occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
-    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
+    notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodLibraryItems: body.foodLibraryItems, foodKcalMode: body.foodKcalMode, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
+  const keys = ["occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

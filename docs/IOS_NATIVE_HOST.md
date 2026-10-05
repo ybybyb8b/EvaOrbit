@@ -338,6 +338,8 @@ Local-first 试验回退后，新 Host 再次直接加载生产根页面；`/nat
 
 ## 安装后的真机检查
 
+EventKit 同步完成刷新使用 bridge v1 的 `host.notifyDataChanged` → `eo:data-changed`（detail: `domains` 数组与 `source`）。部署 Web 后，旧 Host 可本地发出同名事件；安装含该方法的新 IPA 后由 Swift 通知 Web。无需新增权限或 entitlement，重建和安装仍走本文原链路。验证时停留 Homepage，在 Apple Calendar 新增/编辑/删除普通事件、在已关联 Reminder 修改允许回写的字段，回到 Host 后应自动更新当前日期、月份标记、Task 与 Due 卡片，无需切页。浏览非今日日期、跨月周视图和编辑未保存日记时，日期选择、展开、输入和滚动应保留；短时间连续同步应合并刷新，切换日期或离开首页后旧请求不得覆盖新数据。无变化同步不刷新，`eo:data-changed` 或数据 refetch 不得再次启动 EventKit sync。当前 Web + Bridge 单元检查不等同于该项真机验收。
+
 每次首次安装或 Native Host 升级后至少检查：
 
 - App 能启动并加载 EvaOrbit 生产站点，而不是空白页或循环刷新。
