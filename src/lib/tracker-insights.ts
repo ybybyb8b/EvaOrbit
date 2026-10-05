@@ -1,3 +1,4 @@
+import { trackerDurationMinutes } from "./tracker-time-range.ts";
 import { dateInEvaOrbit, EVAORBIT_TIME_ZONE } from "./time.ts";
 import type { TrackerChoiceInsight, TrackerDistributionItem, TrackerEntry, TrackerField, TrackerHeatmapDay, TrackerInsights, TrackerNumericInsight } from "./types.ts";
 
@@ -68,11 +69,11 @@ function dayPart(hour: number) {
 }
 
 function numericInsights(entries: TrackerEntry[], fields: TrackerField[]): TrackerNumericInsight[] {
-  return fields.filter((field) => field.includeInStats && (field.type === "number" || field.type === "rating")).flatMap((field) => {
-    const values = entries.map((entry) => fieldValue(entry, field)).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return fields.filter((field) => field.includeInStats && (field.type === "number" || field.type === "rating" || field.type === "time_range")).flatMap((field) => {
+    const values = entries.map((entry) => field.type === "time_range" ? trackerDurationMinutes(fieldValue(entry, field)) : fieldValue(entry, field)).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     if (!values.length) return [];
     const rounded = (value: number) => Number(value.toFixed(field.precision));
-    return [{ fieldKey: field.key, name: field.name, unit: field.unit, count: values.length, average: rounded(values.reduce((sum, value) => sum + value, 0) / values.length), minimum: Math.min(...values), maximum: Math.max(...values), latest: values[0] }];
+    return [{ fieldKey: field.key, name: field.name, unit: field.type === "time_range" ? "min" : field.unit, count: values.length, average: rounded(values.reduce((sum, value) => sum + value, 0) / values.length), minimum: Math.min(...values), maximum: Math.max(...values), latest: values[0] }];
   });
 }
 

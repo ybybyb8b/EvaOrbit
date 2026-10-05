@@ -1,3 +1,4 @@
+import { normalizeTrackerTimeRange } from "./tracker-time-range.ts";
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
@@ -1260,16 +1261,18 @@ export function parseTrackerPatch(value: unknown) {
 export function parseNewTrackerField(value: unknown, trackerId?: number) {
   const body = objectValue(value);
   const options = body.options === undefined ? [] : Array.isArray(body.options) && body.options.every((item) => typeof item === "string") ? [...new Set(body.options.map((item) => item.trim()).filter(Boolean))].slice(0, 50) : (() => { throw new ValidationError("字段选项格式不正确"); })();
-  const type = enumValue(body.type, "字段类型", ["number", "single_select", "multi_select", "text", "boolean", "rating"] as const, "text") as TrackerFieldType;
+  const type = enumValue(body.type, "字段类型", ["number", "single_select", "multi_select", "text", "boolean", "rating", "time_range"] as const, "text") as TrackerFieldType;
   if ((type === "single_select" || type === "multi_select") && !options.length) throw new ValidationError("选择字段至少需要一个选项");
+  let defaultValue = body.defaultValue ?? null;
+  if (type === "time_range" && defaultValue !== null) { try { defaultValue = normalizeTrackerTimeRange(defaultValue); } catch (error) { throw new ValidationError(error instanceof Error ? error.message : "时间段格式不正确"); } }
   const key = body.key === undefined ? crypto.randomUUID() : typeof body.key === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.key) ? body.key : (() => { throw new ValidationError("字段 key 格式不正确"); })();
   return {
     trackerId: trackerId ?? positiveInteger(body.trackerId, "Tracker ID"), key, name: text(body.name, "字段名称", 60)!, type,
-    required: booleanValue(body.required, "必填状态", false), defaultValue: body.defaultValue ?? null, options,
+    required: booleanValue(body.required, "必填状态", false), defaultValue, options,
     showAfterQuickCapture: booleanValue(body.showAfterQuickCapture, "快速记录后补充", false), includeInStats: booleanValue(body.includeInStats, "参与统计", false),
     sortOrder: numberValue(body.sortOrder, "排序", 0, 10000, 0),
-    unit: text(body.unit ?? "", "字段单位", 20, false) ?? "",
-    precision: Math.trunc(numberValue(body.precision, "小数位数", 0, 6, 0)),
+    unit: type === "time_range" ? "min" : text(body.unit ?? "", "字段单位", 20, false) ?? "",
+    precision: type === "time_range" ? 2 : Math.trunc(numberValue(body.precision, "小数位数", 0, 6, 0)),
     config: body.config === undefined ? {} : recordValue(body.config, "字段配置"),
     archivedAt: null,
   };

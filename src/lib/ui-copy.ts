@@ -3,6 +3,9 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["时间段", "Time range"], ["开始、结束与自动时长", "Start, end and automatic duration"],
+  ["停留时长、到访…", "Stay duration, Visit…"], ["先添加或取消正在编辑的属性，再创建观测。", "Add or cancel the property before creating the Tracker."],
+  ["创建失败，请重试。", "Could not create the Tracker. Please try again."],
   ["饮食简报", "Brief"], ["设置限额", "Set limit"], ["编辑饮品限额", "Edit drink limit"], ["设置饮品限额", "Set drink limit"],
   ["限额名称", "Limit name"], ["数量上限（杯）", "Cup limit"], ["启用限额", "Enable limit"], ["自定义品名关键词", "Custom drink name keyword"], ["品名关键词", "Drink name keyword"],
   ["删除这条限额", "Delete this limit"], ["饮品限额已保存", "Drink limit saved"], ["饮品限额已删除", "Drink limit deleted"],

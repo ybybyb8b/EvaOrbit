@@ -1,4 +1,5 @@
 "use client";
+import { FormSheet } from "@/components/form-sheet";
 import { SuggestedInput } from "@/components/suggested-input";
 
 import Link from "next/link";
@@ -11,6 +12,7 @@ import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
 
 const emptyDraft = { name: "", groupName: "Everyday", quickCaptureEnabled: true };
 const fieldTypes: Array<[TrackerFieldType, string, string]> = [
+  ["time_range", "Time range", "Start, end and automatic duration"],
   ["number", "Number", "Amounts, weight, cost"],
   ["rating", "Rating", "A score from 1 to 5"],
   ["single_select", "Choice", "Choose one option"],
@@ -69,7 +71,8 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setWorking(true); setError("");
+    event.preventDefault(); if (working) return; if (fieldEditor) { setError("Add or cancel the property before creating the Tracker."); return; } setWorking(true); setError("");
+    try {
     const response = await fetch("/api/trackers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
     if (!response.ok) setError(((await response.json()) as ApiError).error);
     else {
@@ -93,7 +96,7 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
       setDraft(emptyDraft); setIconFile(null); setFieldDrafts([]); setFieldEditor(null); setShowForm(false); await load();
       if (followUpErrors.length) setError(`Tracker created, but ${followUpErrors.join(" and ")}. You can finish it in Settings.`);
     }
-    setWorking(false);
+    } catch { setError("Could not create the Tracker. Please try again."); } finally { setWorking(false); }
   }
 
   async function quickCapture(tracker: TrackerSummary) {
@@ -106,8 +109,8 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   const groups = [...new Set(trackers.map((tracker) => tracker.groupName))];
   return <div className="page tracker-page">
     <PageHeader eyebrow="生活" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />新增观测</button>} />
-    {showForm && <form className="editor-card tracker-create-form" onSubmit={submit}>
-      <div className="editor-title"><div><span className="eyebrow">NEW TRACKER</span><h2>What do you want to notice?</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
+    {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
+      <p className="tracker-create-intro">What do you want to notice?</p>
       <div className="tracker-create-basics">
         <label className="tracker-image-picker">
           <span className="tracker-image-preview" style={iconPreview ? { backgroundImage: `url(${iconPreview})` } : undefined}>{!iconPreview && <Icon name="tracker" />}</span>
@@ -116,18 +119,18 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
         </label>
         <div className="tracker-basic-fields">
           <label className="field wide"><span>Name</span><input required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Poo, Home visit, Headache…" /></label>
-          <div className="field"><span>Group</span><SuggestedInput suggestionLabel="分组" suggestions={trackers.map(tracker => tracker.groupName)} maxLength={60} value={draft.groupName} onValueChange={nextValue => setDraft({ ...draft, groupName: nextValue })} /></div>
+          <div className="field"><span>Group</span><SuggestedInput recommendationStyle="search" suggestionLabel="分组" suggestions={trackers.map(tracker => tracker.groupName)} maxLength={60} value={draft.groupName} onValueChange={nextValue => setDraft({ ...draft, groupName: nextValue })} /></div>
         </div>
       </div>
       <section className="tracker-property-builder">
         <div className="tracker-builder-heading"><div><span className="eyebrow">RECORD PROPERTIES</span><h3>What should each moment include?</h3><p>Add only what will be useful later. Every record already includes its time and an optional note.</p></div><span className="tracker-property-count">{fieldDrafts.length}</span></div>
         <div className="tracker-field-type-strip" aria-label="Property types">{fieldTypes.map(([type, label, description]) => <button type="button" key={type} onClick={() => startField(type)}><strong>{label}</strong><span>{description}</span></button>)}</div>
-        {fieldDrafts.length > 0 && <div className="tracker-field-drafts">{fieldDrafts.map((field) => <article key={field.clientId}><div><strong>{field.name}</strong><span>{fieldTypes.find(([type]) => type === field.type)?.[1]}{field.unit ? ` · ${field.unit}` : ""}{field.required ? " · Required" : ""}</span></div><button type="button" aria-label={`Remove ${field.name}`} onClick={() => setFieldDrafts((current) => current.filter((item) => item.clientId !== field.clientId))}><Icon name="trash" /></button></article>)}</div>}
+        {fieldDrafts.length > 0 && <div className="tracker-field-drafts">{fieldDrafts.map((field) => <article key={field.clientId}><div><strong>{field.name}</strong><span>{fieldTypes.find(([type]) => type === field.type)?.[1]}{field.unit ? ` · ${field.unit}` : ""}{field.required ? " · Required" : ""}</span></div><button type="button" data-form-change aria-label={`Remove ${field.name}`} onClick={() => setFieldDrafts((current) => current.filter((item) => item.clientId !== field.clientId))}><Icon name="trash" /></button></article>)}</div>}
         {fieldEditor && <div className="tracker-property-draft-form">
-            <div className="form-grid"><label className="field"><span>Property name</span><input autoFocus required maxLength={60} value={fieldEditor.name} onChange={(event) => setFieldEditor({ ...fieldEditor, name: event.target.value })} placeholder={fieldEditor.type === "number" ? "Amount, Weight, Cost…" : fieldEditor.type === "rating" ? "Comfort, Energy…" : "Type, Context…"} /></label><label className="field"><span>Type</span><select value={fieldEditor.type} onChange={(event) => { const type = event.target.value as TrackerFieldType; setFieldEditor({ ...fieldEditor, type, includeInStats: type !== "text" }); }}>{fieldTypes.map(([type,label]) => <option value={type} key={type}>{label}</option>)}</select></label>
+            <div className="form-grid"><label className="field"><span>Property name</span><input autoFocus required maxLength={60} value={fieldEditor.name} onChange={(event) => setFieldEditor({ ...fieldEditor, name: event.target.value })} placeholder={fieldEditor.type === "time_range" ? "Stay duration, Visit…" : fieldEditor.type === "number" ? "Amount, Weight, Cost…" : fieldEditor.type === "rating" ? "Comfort, Energy…" : "Type, Context…"} /></label><label className="field"><span>Type</span><select value={fieldEditor.type} onChange={(event) => { const type = event.target.value as TrackerFieldType; setFieldEditor({ ...fieldEditor, type, includeInStats: type !== "text" }); }}>{fieldTypes.map(([type,label]) => <option value={type} key={type}>{label}</option>)}</select></label>
             {["single_select","multi_select"].includes(fieldEditor.type) && <label className="field wide"><span>Options <small>separated by commas</small></span><input required value={fieldEditor.options} onChange={(event) => setFieldEditor({ ...fieldEditor, options: event.target.value })} placeholder="Home, Outside, Work" /></label>}
             {fieldEditor.type === "number" && <><label className="field"><span>Unit <small>optional</small></span><input maxLength={20} value={fieldEditor.unit} onChange={(event) => setFieldEditor({ ...fieldEditor, unit: event.target.value })} placeholder="ml, kg, ¥…" /></label><label className="field"><span>Decimal places</span><input type="number" min="0" max="6" value={fieldEditor.precision} onChange={(event) => setFieldEditor({ ...fieldEditor, precision: event.target.value })} /></label></>}
-            </div><div className="tracker-property-draft-actions"><div className="tracker-inline-checks"><label><input type="checkbox" checked={fieldEditor.required} onChange={(event) => setFieldEditor({ ...fieldEditor, required: event.target.checked })} />Required</label><label><input type="checkbox" checked={fieldEditor.includeInStats} onChange={(event) => setFieldEditor({ ...fieldEditor, includeInStats: event.target.checked })} />Include in Insights</label></div><div><button className="text-button" type="button" onClick={() => setFieldEditor(null)}>Cancel</button><button className="button secondary" type="button" onClick={addFieldDraft}>Add property</button></div></div>
+            </div><div className="tracker-property-draft-actions"><div className="tracker-inline-checks"><label><input type="checkbox" checked={fieldEditor.required} onChange={(event) => setFieldEditor({ ...fieldEditor, required: event.target.checked })} />Required</label><label><input type="checkbox" checked={fieldEditor.includeInStats} onChange={(event) => setFieldEditor({ ...fieldEditor, includeInStats: event.target.checked })} />Include in Insights</label></div><div><button className="text-button" type="button" onClick={() => setFieldEditor(null)}>Cancel</button><button className="button secondary" type="button" data-form-change onClick={addFieldDraft}>Add property</button></div></div>
         </div>}
         {!fieldEditor && <button className="tracker-add-property" type="button" onClick={() => startField("number")}><Icon name="plus" />Add a custom property</button>}
       </section>
@@ -136,8 +139,8 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
         <label className={draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: true })} /><span><strong>Quick record</strong><small>Tap + to save the current moment immediately.</small></span></label>
         <label className={!draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={!draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: false })} /><span><strong>Detailed record</strong><small>Tap + to open the full time, properties and note form.</small></span></label>
       </fieldset>
-      {error && <p className="form-error">{error}</p>}<button className="button primary" disabled={working}>{working ? "Creating…" : "Create Tracker"}</button>
-    </form>}
+      {error && <p className="form-error">{error}</p>}
+    </form></FormSheet>}
     {error && !showForm && <p className="form-error">{error}</p>}
     {loading ? <div className="loading-state">Opening Trackers…</div> : trackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
       <div className="tracker-group-heading"><h2>{group}</h2><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>

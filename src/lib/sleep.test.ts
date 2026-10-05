@@ -75,6 +75,28 @@ test("wake date follows preserved sample zone including DST rather than UTC or c
   assert.equal(buildDailySleepSummary("2026-10-05", west, null).actual, null);
 });
 
+test("secondary episodes retain measured durations and individually associate overlapping windows", () => {
+  const napWindow = { id: 2, title: "Sleep", startAt: "2026-10-05T05:00:00Z", endAt: "2026-10-05T06:44:00Z", durationMinutes: 104, notes: "Nap window note" };
+  const secondWindow = { id: 3, title: "Sleep", startAt: "2026-10-05T10:00:00Z", endAt: "2026-10-05T10:40:00Z", durationMinutes: 40, notes: "" };
+  const rows = [...night,
+    sample("nap", "2026-10-05T05:10:00Z", "2026-10-05T06:33:00Z", 1),
+    sample("second", "2026-10-05T10:05:00Z", "2026-10-05T10:35:00Z", 1),
+    sample("unmatched", "2026-10-05T13:00:00Z", "2026-10-05T13:20:00Z", 1),
+  ];
+  const timeline = { ...window, records: [secondWindow, window.records[0], napWindow] };
+  const result = buildDailySleepSummary("2026-10-05", rows, timeline);
+  assert.equal(result.actual?.durationMinutes, 420);
+  assert.deepEqual(result.window, { startAt: window.startAt, endAt: window.endAt, durationMinutes: 480 });
+  assert.equal(result.efficiency, .875);
+  assert.deepEqual(result.secondary.map(episode => [episode.actual.durationMinutes, episode.window?.durationMinutes ?? null]), [[83, 104], [30, 40], [20, null]]);
+  assert.equal(result.secondary[0].window?.notes, "Nap window note");
+  assert.equal(result.napMinutes, 133);
+  assert.equal(sleepDisplay(result)?.durationMinutes, 420);
+  assert.equal(buildDailySleepSummary("2026-10-04", rows, timeline).secondary.length, 0);
+  assert.ok(buildDailySleepSummary("2026-10-05", rows, null).secondary.every(episode => episode.window === null));
+  assert.equal(buildDailySleepSummary("2026-10-05", [], timeline).secondary.length, 0);
+});
+
 test("read payload preserves sleep category/zone/source and heart quantities but default sync enables only sleep", () => {
   const base = { operation: "upsert", sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24d", streamId: "946e6cf1-96f2-4e47-9d45-b0fab32db24e", revision: 1, metric: "sleep", startAt: window.startAt, endAt: window.endAt, timeZone: "Asia/Shanghai", timeZoneSource: "metadata", stage: 5, sourceName: "Watch", syncIdentifier: "source.1", syncVersion: 2 };
   const upload = parseHealthKitUpload({ readChanges: [base] });

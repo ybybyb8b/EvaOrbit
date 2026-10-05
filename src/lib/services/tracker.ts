@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeTrackerTimeRange } from "../tracker-time-range";
 import { getRepository } from "../repositories";
 import { REMINDER_SOURCE_REGISTRY } from "../reminder-source-registry";
 import type { NewTracker, NewTrackerEntry, NewTrackerField, NewTrackerGoal, NewTrackerReminder } from "../repositories/types";
@@ -102,7 +103,8 @@ function validatedValues(fields: TrackerField[], values: Record<string, unknown>
     if (field.type === "single_select" && (typeof value !== "string" || !field.options.includes(value))) throw new ValidationError(`${field.name}选项不正确`);
     if (field.type === "multi_select" && (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !field.options.includes(item)))) throw new ValidationError(`${field.name}选项不正确`);
     if (field.type === "text" && typeof value !== "string") throw new ValidationError(`${field.name}必须是文字`);
-    result[field.key] = value;
+    if (field.type === "time_range") { try { result[field.key] = normalizeTrackerTimeRange(value); } catch (error) { throw new ValidationError(field.name + "：" + (error instanceof Error ? error.message : "时间段格式不正确")); } }
+    else result[field.key] = value;
   }
   return result;
 }
@@ -114,7 +116,22 @@ export async function createTrackerEntry(input: NewTrackerEntry) {
   const fields = await repository.listTrackerFields(tracker.id);
   return repository.createTrackerEntry({ ...input, values: validatedValues(fields, input.values) });
 }
-export async function updateTrackerEntry(id: number, input: Record<string, unknown>) { return (await getRepository()).updateTrackerEntry(id, input); }
+export async function updateTrackerEntry(id: number, input: Record<string, unknown>) {
+  const repository = await getRepository();
+  if (input.values !== undefined) {
+    const entry = await repository.getTrackerEntry(id);
+    if (!entry) return null;
+    const fields = await repository.listTrackerFields(entry.trackerId);
+    const values = { ...input.values as Record<string, unknown> };
+    for (const field of fields.filter(field => field.type === "time_range")) {
+      const key = Object.hasOwn(values, field.key) ? field.key : String(field.id);
+      if (values[key] === undefined || values[key] === null || values[key] === "") continue;
+      try { values[key] = normalizeTrackerTimeRange(values[key]); } catch (error) { throw new ValidationError(field.name + "：" + (error instanceof Error ? error.message : "时间段格式不正确")); }
+    }
+    input = { ...input, values };
+  }
+  return repository.updateTrackerEntry(id, input);
+}
 export async function deleteTrackerEntry(id: number) { return (await getRepository()).deleteTrackerEntry(id); }
 export async function createTrackerGoal(input: NewTrackerGoal) { return (await getRepository()).createTrackerGoal(input); }
 export async function deleteTrackerGoal(id: number) { return (await getRepository()).deleteTrackerGoal(id); }

@@ -297,7 +297,7 @@ export interface TimelineDaySummary {
 
 export type TrackerTimeType = "point" | "range";
 export type TrackerIconType = "default" | "image";
-export type TrackerFieldType = "number" | "single_select" | "multi_select" | "text" | "boolean" | "rating";
+export type TrackerFieldType = "number" | "single_select" | "multi_select" | "text" | "boolean" | "rating" | "time_range";
 export type TrackerGoalOperator = "<=" | ">=" | "=";
 export type TrackerPeriodType = "daily" | "weekly" | "monthly" | "yearly" | "custom";
 export type TrackerReminderMode = "standard" | "missing";

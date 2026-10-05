@@ -1,4 +1,13 @@
 .summary { display: grid; gap: 14px; min-width: 0; }
+.heading { margin: 0; color: var(--text-primary); font-size: 1rem; font-weight: 600; }
+.secondary { display: grid; gap: 16px; margin-top: 12px; }
+.episode { display: grid; gap: 12px; padding: 16px; background: var(--surface-soft); border-radius: 14px; min-width: 0; }
+.episode h4 { margin: 0; font-size: .9rem; color: var(--text-primary); }
+.episode .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.summary .notes { white-space: pre-wrap; color: var(--text-secondary); }
+.preview { display: grid; gap: 6px; margin-top: 12px; color: var(--text-editorial); font-size: 15px; line-height: 1.4; }
+.preview > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.preview strong { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 6px; }
 .metrics dt { color: var(--muted); font-size: .82rem; }
 .metrics dd { margin: 6px 0 0; font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

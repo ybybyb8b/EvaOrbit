@@ -1,6 +1,7 @@
 "use client";
 import { SearchableMultiSelect } from "@/components/searchable-multi-select";
 import { SearchableSelect } from "@/components/searchable-select";
+import { normalizeTrackerTimeRange, trackerDurationMinutes } from "@/lib/tracker-time-range";
 
 import { type FormEvent, useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
@@ -34,10 +35,34 @@ export function TrackerFieldInput({ field, value, onChange }: { field: TrackerFi
   const { english, language } = useLocale();
   const copy = (text: string) => translateUiCopy(text, language);
   const fieldName = copy(field.name);
+  if (field.type === "time_range") return <TrackerTimeRangeInput field={field} value={value} onChange={onChange} />;
   if (field.type === "boolean") return <label className="tracker-check field-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span className="user-content">{fieldName}</span></label>;
   if (field.type === "single_select" && field.options.length <= 10) return <label className="field"><span className="user-content">{fieldName}</span><select required={field.required} value={typeof value === "string" ? value : ""} onChange={event=>onChange(event.target.value)}><option value="">{english?"Not selected":"未选择"}</option>{field.options.map(option=><option className="user-content" key={option} value={option}>{copy(option)}</option>)}</select></label>;
   if (field.type === "single_select") return <div className="field"><span className="user-content">{fieldName}</span><SearchableSelect required={field.required} label={fieldName} value={typeof value === "string" ? value : ""} options={[{value:"",label:english?"Not selected":"未选择"},...field.options.map(option=>({value:option,label:copy(option)}))]} onValueChange={onChange} /></div>;
   if (field.type === "multi_select") return <fieldset className="tracker-multi-field"><legend className="user-content">{fieldName}</legend><SearchableMultiSelect label={fieldName} required={field.required} options={field.options.map(option=>({value:option,label:copy(option)}))} value={Array.isArray(value)?value as string[]:[]} onValueChange={onChange}/></fieldset>;
   if (field.type === "rating") return <label className="field"><span className="user-content">{fieldName}</span><select required={field.required} value={typeof value === "number" ? value : ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}><option value="">{english?"Not rated":"未评分"}</option>{[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{"★".repeat(score)}</option>)}</select></label>;
   return <label className="field"><span className="user-content">{fieldName}{field.unit && ` (${field.unit})`}</span><input required={field.required} type={field.type === "number" ? "number" : "text"} step={field.type === "number" ? 10 ** -field.precision : undefined} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onChange={(event) => onChange(field.type === "number" ? (event.target.value ? Number(event.target.value) : null) : event.target.value)} /></label>;
+}
+
+function TrackerTimeRangeInput({ field, value, onChange }: { field: TrackerField; value: unknown; onChange: (value: unknown) => void }) {
+  const { english } = useLocale();
+  const range = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  function localValue(value: unknown) {
+    if (typeof value !== "string" || !value) return "";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
+  }
+  function change(key: "startAt" | "endAt", next: string) {
+    const nextRange = { ...range, [key]: next ? new Date(next).toISOString() : "" };
+    if (!nextRange.startAt && !nextRange.endAt) { onChange(null); return; }
+    try { onChange(normalizeTrackerTimeRange(nextRange)); } catch { onChange({ startAt: nextRange.startAt ?? "", endAt: nextRange.endAt ?? "" }); }
+  }
+  const duration = trackerDurationMinutes(value);
+  const invalidOrder = Boolean(range.startAt && range.endAt && duration === null);
+  return <fieldset className="tracker-time-range"><legend className="user-content">{field.name}</legend><div className="form-grid">
+    <label className="field"><span>{english ? "Start" : "开始时间"}</span><input type="datetime-local" step="60" required={field.required || Boolean(range.endAt)} value={localValue(range.startAt)} onChange={event => change("startAt", event.target.value)} /></label>
+    <label className="field"><span>{english ? "End" : "结束时间"}</span><input type="datetime-local" step="60" required={field.required || Boolean(range.startAt)} value={localValue(range.endAt)} ref={element => { element?.setCustomValidity(invalidOrder ? (english ? "End must be later than start" : "结束时间必须晚于开始时间") : ""); }} onChange={event => change("endAt", event.target.value)} /></label>
+  </div><output>{invalidOrder ? (english ? "End must be later than start" : "结束时间必须晚于开始时间") : duration === null ? (english ? "Enter both times to calculate duration" : "填写起止时间后自动计算时长") : `${english ? "Duration" : "时长"} · ${Number(duration.toFixed(2))} ${english ? "min" : "分钟"}`}</output></fieldset>;
 }

@@ -1501,6 +1501,25 @@ if (!hasV68) database.exec(`BEGIN;
   ALTER TABLE food_logs ADD COLUMN food_kcal_mode TEXT NOT NULL DEFAULT 'manual' CHECK(food_kcal_mode IN ('auto','manual'));
   INSERT INTO migrations(version) VALUES(68); COMMIT;`);
 
+const hasV69 = database.prepare("SELECT 1 FROM migrations WHERE version=69").get();
+if (!hasV69) database.exec(`BEGIN;
+  CREATE TABLE tracker_fields_v69 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, tracker_id INTEGER NOT NULL REFERENCES trackers(id) ON DELETE CASCADE, name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('number','single_select','multi_select','text','boolean','rating','time_range')),
+    required INTEGER NOT NULL DEFAULT 0 CHECK(required IN (0,1)), default_value TEXT, options_json TEXT NOT NULL DEFAULT '[]',
+    show_after_quick_capture INTEGER NOT NULL DEFAULT 0 CHECK(show_after_quick_capture IN (0,1)), include_in_stats INTEGER NOT NULL DEFAULT 0 CHECK(include_in_stats IN (0,1)),
+    sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    field_key TEXT, unit TEXT NOT NULL DEFAULT '', precision INTEGER NOT NULL DEFAULT 0, config_json TEXT NOT NULL DEFAULT '{}', archived_at TEXT
+  );
+  INSERT INTO tracker_fields_v69 SELECT * FROM tracker_fields;
+    INSERT INTO sqlite_sequence(name,seq) SELECT 'tracker_fields_v69',seq FROM sqlite_sequence WHERE name='tracker_fields' AND NOT EXISTS(SELECT 1 FROM sqlite_sequence WHERE name='tracker_fields_v69');
+    UPDATE sqlite_sequence SET seq=max(seq,coalesce((SELECT seq FROM sqlite_sequence WHERE name='tracker_fields'),0)) WHERE name='tracker_fields_v69';
+  DROP TABLE tracker_fields;
+  ALTER TABLE tracker_fields_v69 RENAME TO tracker_fields;
+  CREATE INDEX idx_tracker_fields_tracker ON tracker_fields(tracker_id,sort_order,id);
+  CREATE UNIQUE INDEX idx_tracker_fields_key ON tracker_fields(tracker_id,field_key);
+  INSERT INTO migrations(version) VALUES(69); COMMIT;`);
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,

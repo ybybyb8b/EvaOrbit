@@ -19,6 +19,7 @@ export type DailySleepSummary = {
   efficiency: number | null;
   comparable: boolean;
   napMinutes: number;
+  secondary: Array<{ actual: ActualSleep; window: HomeSleepSummary["records"][number] | null }>;
   source: "apple_health" | "timeline_estimate" | "none";
 };
 type Interval = [number, number];
@@ -88,12 +89,21 @@ export function buildDailySleepSummary(date: string, samples: SleepSample[], tim
   const matched = actual ? [...windows].sort((a, b) => overlap(b) - overlap(a))[0] : null;
   const window = matched && overlap(matched) > 0 ? matched : timeline;
   const comparable = !!(actual && window && overlap(window) > 0 && window.durationMinutes > 0);
+  // Presentation only: retain every measured episode and associate its best overlapping window.
+  // Never fall back to the main timeline window for an unrelated secondary episode.
+  const secondary = sessions.slice(1).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)).map(session => {
+    const overlapMinutes = (record: HomeSleepSummary["records"][number]) => Math.max(0,
+      Math.min(Date.parse(record.endAt), Date.parse(session.endAt)) - Math.max(Date.parse(record.startAt), Date.parse(session.startAt)));
+    const matchedWindow = [...windows].sort((a, b) => overlapMinutes(b) - overlapMinutes(a))[0];
+    return { actual: session, window: matchedWindow && overlapMinutes(matchedWindow) > 0 ? matchedWindow : null };
+  });
   return {
     date, actual, window: window ? { startAt: window.startAt, endAt: window.endAt, durationMinutes: window.durationMinutes } : null,
     // Keep the raw ratio (including >100%) so a shorter/misaligned Calendar window isn't disguised.
     windowMinusActualMinutes: comparable ? window!.durationMinutes - actual!.durationMinutes : null,
     efficiency: comparable ? actual!.durationMinutes / window!.durationMinutes : null, comparable,
     napMinutes: sessions.slice(1).reduce((sum, session) => sum + session.durationMinutes, 0),
+    secondary,
     source: actual ? "apple_health" : window ? "timeline_estimate" : "none",
   };
 }
