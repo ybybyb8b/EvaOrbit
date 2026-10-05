@@ -86,8 +86,9 @@ final class SystemHealthKitClient: HealthKitReading {
     func anchoredReadDelta(for metric: HealthReadMetric, encodedAnchor: Data?) async throws -> HealthReadDelta {
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
         return try await withCheckedThrowingContinuation { continuation in
-            // No initial date cutoff: stage fragments from the previous night must remain intact.
-            let query = HKAnchoredObjectQuery(type: metric.sampleType, predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
+            // Overlap rather than strict start: retain the preceding night's stage fragments.
+            let predicate = metric == .sleep ? HKQuery.predicateForSamples(withStart: HealthSleepSyncScope.queryStart, end: nil, options: []) : nil
+            let query = HKAnchoredObjectQuery(type: metric.sampleType, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {

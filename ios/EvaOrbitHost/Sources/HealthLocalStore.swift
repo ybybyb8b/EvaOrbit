@@ -26,6 +26,14 @@ final class HealthLocalStore {
         sqlite3_busy_timeout(database, 5_000)
         try execute("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
         try migrate()
+        if metadata("sleepSyncScope") != HealthSleepSyncScope.firstWakeDate {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                try execute("DELETE FROM anchors WHERE metric='sleep'")
+                try setMetadataUnlocked("sleepSyncScope", value: HealthSleepSyncScope.firstWakeDate)
+                try execute("COMMIT")
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
     }
 
     deinit { sqlite3_close(database) }
@@ -261,7 +269,8 @@ final class HealthLocalStore {
                 // A fresh stream lets its revision restart without being rejected by old receipts.
                 let streamID = metadata("readStreamID") ?? UUID().uuidString.lowercased()
                 try setMetadataUnlocked("readStreamID", value: streamID)
-                let entries: [(String, HealthReadSample?)] = delta.deletedUUIDs.map { ($0, nil) } + delta.added.map { ($0.sampleId, Optional($0)) }
+                let added = delta.added.filter { metric != .sleep || (HealthDateFormatter.iso8601.date(from: $0.endAt).map { $0 >= HealthSleepSyncScope.queryStart } ?? false) }
+                let entries: [(String, HealthReadSample?)] = delta.deletedUUIDs.map { ($0, nil) } + added.map { ($0.sampleId, Optional($0)) }
                 for (uuid, sample) in entries {
                     revision += 1
                     let change = HealthReadChange(metric: metric, sampleId: uuid, streamId: streamID, revision: revision, sample: sample)
@@ -298,7 +307,14 @@ final class HealthLocalStore {
             try execute("BEGIN IMMEDIATE")
             do {
                 let enabled = HealthReadMetric.enabled(in: self)
-                let statement = try prepare("SELECT id,metric,payload FROM read_outbox WHERE state='pending' AND next_retry<=? ORDER BY id")
+                // Drop only obsolete upload jobs, keeping local/server samples and deletion jobs.
+                let prune = try prepare("DELETE FROM read_outbox WHERE metric='sleep' AND state='pending' AND json_extract(payload,'$.operation')='upsert' AND json_extract(payload,'$.endAt')<?")
+                bind(HealthSleepSyncScope.earliestSampleEnd, at: 1, in: prune)
+                try stepDone(prune)
+                sqlite3_finalize(prune)
+                // Initial sleep history may contain years of samples. Upload recent sleep first,
+                // while deletions lead the queue and server receipts reject stale revisions.
+                let statement = try prepare("SELECT id,metric,payload FROM read_outbox WHERE state='pending' AND next_retry<=? ORDER BY CASE WHEN json_extract(payload,'$.operation')='delete' THEN 0 ELSE 1 END,json_extract(payload,'$.endAt') DESC,id DESC")
                 defer { sqlite3_finalize(statement) }
                 sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
                 var items: [HealthReadOutboxItem] = []

@@ -1,4 +1,5 @@
 import HealthKit
+import SQLite3
 import XCTest
 @testable import EvaOrbitHost
 
@@ -163,6 +164,50 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertNil(try store.readAnchor(for: .heartRate))
         try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("stale".utf8)), authorizationEpoch: "unversioned")
         XCTAssertNil(try store.readAnchor(for: .sleep), "an in-flight query before an authorization rescan must not restore its old anchor")
+    }
+
+    func testReadOutboxPrioritizesRecentRevisionsAndDeletions() throws {
+        func sample(_ id: String, _ day: String) -> HealthReadSample {
+            HealthReadSample(sampleId: id, metric: .sleep, startAt: "2026-10-\(day)T15:00:00.000Z", endAt: "2026-10-\(day)T23:00:00.000Z", timeZone: "Asia/Shanghai", timeZoneSource: "metadata", stage: 3, value: nil, unit: nil, sourceBundle: "test", sourceName: "Test", syncIdentifier: nil, syncVersion: nil)
+        }
+        let old = sample("946e6cf1-96f2-4e47-9d45-b0fab32db24d", "02")
+        let recent = sample("946e6cf1-96f2-4e47-9d45-b0fab32db24e", "04")
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [old, recent], deletedUUIDs: [], encodedAnchor: Data("one".utf8)))
+        let first = try store.takePendingReadBatch(limit: 1)
+        XCTAssertEqual(first.first?.change.sampleId, recent.sampleId)
+        try store.completeReadUpload(ids: first.map(\.id))
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [recent.sampleId], encodedAnchor: Data("two".utf8)))
+        XCTAssertEqual(try store.takePendingReadBatch(limit: 1).first?.change.operation, "delete")
+    }
+
+    func testUpgradeResetsOnlySleepAnchorOnceAndPrunesLegacyPendingJobs() throws {
+        let url = temporaryDirectory.appendingPathComponent("health.sqlite3")
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("old".utf8)))
+        try store.commitReadDelta(metric: .heartRate, delta: HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("heart".utf8)))
+        try store.setMetadata("sleepSyncScope", value: "legacy")
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &database), SQLITE_OK)
+        defer { sqlite3_close(database) }
+        let payload = "{\"operation\":\"upsert\",\"endAt\":\"2024-10-01T00:00:00.000Z\"}"
+        XCTAssertEqual(sqlite3_exec(database, "INSERT INTO read_outbox(metric,sample_id,payload,state,updated_at) VALUES('sleep','legacy','\(payload)','pending',0)", nil, nil, nil), SQLITE_OK)
+        store = nil
+        store = try HealthLocalStore(databaseURL: url)
+        XCTAssertNil(try store.readAnchor(for: .sleep))
+        XCTAssertEqual(try store.readAnchor(for: .heartRate), Data("heart".utf8))
+        XCTAssertTrue(try store.takePendingReadBatch(limit: 50).isEmpty)
+        XCTAssertEqual(store.pendingCount(), 0)
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("new".utf8)))
+        store = nil
+        store = try HealthLocalStore(databaseURL: url)
+        XCTAssertEqual(try store.readAnchor(for: .sleep), Data("new".utf8))
+    }
+
+    func testSleepCutoffDropsOldSamplesButKeepsPreviousNightStages() throws {
+        let old = HealthReadSample(sampleId: "old", metric: .sleep, startAt: "2024-10-04T15:00:00.000Z", endAt: "2024-10-04T23:00:00.000Z", timeZone: "Asia/Shanghai", timeZoneSource: "metadata", stage: 3, value: nil, unit: nil, sourceBundle: "test", sourceName: "Test", syncIdentifier: nil, syncVersion: nil)
+        let night = HealthReadSample(sampleId: "night", metric: .sleep, startAt: "2026-09-30T14:00:00.000Z", endAt: "2026-09-30T15:59:00.000Z", timeZone: "Asia/Shanghai", timeZoneSource: "metadata", stage: 3, value: nil, unit: nil, sourceBundle: "test", sourceName: "Test", syncIdentifier: nil, syncVersion: nil)
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [old, night], deletedUUIDs: [], encodedAnchor: Data("cutoff".utf8)))
+        XCTAssertEqual(try store.takePendingReadBatch(limit: 50).map(\.change.sampleId), ["night"])
+        XCTAssertEqual(try store.readAnchor(for: .sleep), Data("cutoff".utf8))
     }
 
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {

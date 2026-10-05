@@ -3,12 +3,12 @@ import { usesSupabase } from "../config";
 import { createSupabaseServerClient } from "../supabase/server";
 import { dateRange, shiftDate } from "../time";
 import type { SleepSample } from "../sleep";
-import { buildDailySleepSummary } from "../sleep";
+import { buildDailySleepSummary, firstSleepWakeDate } from "../sleep";
 import { summarizeCalendarActivity } from "../home-day";
 import { getRepository } from "../repositories";
 
 export async function getHealthKitSleepSamples(date: string): Promise<SleepSample[]> {
-  if (!usesSupabase()) return [];
+  if (!usesSupabase() || date < firstSleepWakeDate) return [];
   const client = await createSupabaseServerClient();
   const from = dateRange(shiftDate(date, -2)).from, to = dateRange(shiftDate(date, 2)).to;
   const rows: SleepSample[] = [];

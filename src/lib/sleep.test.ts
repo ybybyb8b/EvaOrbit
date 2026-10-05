@@ -90,3 +90,9 @@ test("read payload preserves sleep category/zone/source and heart quantities but
   assert.throws(() => parseHealthKitReadChanges([{ ...base, startAt: "2026-10-04T15:00:00" }]));
   assert.deepEqual(parseHealthKitReadChanges([{ operation: "delete", metric: "sleep", sampleId: base.sampleId, streamId: base.streamId, revision: 2 }])[0], { operation: "delete", metric: "sleep", sampleId: base.sampleId, streamId: base.streamId, revision: 2 });
 });
+
+test("October 1 cutoff retains September 30 night stages and excludes earlier wake dates", () => {
+  const rows = [sample("before-midnight", "2026-09-30T14:00:00Z", "2026-09-30T16:00:00Z"), sample("after-midnight", "2026-09-30T16:00:00Z", "2026-09-30T23:00:00Z")];
+  assert.equal(buildDailySleepSummary("2026-10-01", rows, null).actual?.durationMinutes, 540);
+  assert.equal(buildDailySleepSummary("2026-09-30", [sample("old", "2026-09-29T14:00:00Z", "2026-09-29T23:00:00Z")], null).actual, null);
+});

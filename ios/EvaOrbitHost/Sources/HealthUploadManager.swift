@@ -75,7 +75,7 @@ final class HealthUploadManager: NSObject {
             request.setValue(credentialStore.installationID, forHTTPHeaderField: "X-EvaOrbit-Installation-Id")
             let task = session.uploadTask(with: request, fromFile: fileURL)
             task.taskDescription = "\(batchID)|\(claimed.map { String($0.id) }.joined(separator: ","))|\(bodyMass.map { String($0.id) }.joined(separator: ","))|\(menstrualFlow.map { String($0.id) }.joined(separator: ","))|\(readItems.map { String($0.id) }.joined(separator: ","))"
-            HealthDiagnostics.log("upload=start energy=\(claimed.count) body-mass=\(bodyMass.count) menstrual-flow=\(menstrualFlow.count) pending=\(store.pendingCount())")
+            HealthDiagnostics.log("upload=start energy=\(claimed.count) body-mass=\(bodyMass.count) menstrual-flow=\(menstrualFlow.count) read=\(readItems.count) pending=\(store.pendingCount())")
             task.resume()
         } catch {
             uploadInProgress = false
@@ -124,7 +124,7 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
                     if !description.readIDs.isEmpty {
                         DispatchQueue.main.async { [weak self] in self?.onReadDataUploaded?() }
                     }
-                    HealthDiagnostics.log("upload=success status=\(status) count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count) pending=\(self.store.pendingCount())")
+                    HealthDiagnostics.log("upload=success status=\(status) count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count + description.readIDs.count) pending=\(self.store.pendingCount())")
                     self.startNextBatch()
                 } else {
                     let reason = status.map { "HTTP \($0)" } ?? "network failure"
@@ -132,7 +132,7 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
                     try self.store.failBodyMassUpload(ids: description.bodyMassIDs, reason: reason)
                     try self.store.failMenstrualFlowUpload(ids: description.menstrualFlowIDs, reason: reason)
                     try self.store.failReadUpload(ids: description.readIDs, reason: reason)
-                    HealthDiagnostics.log("upload=failed status=\(status.map { String($0) } ?? "none") count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count)")
+                    HealthDiagnostics.log("upload=failed status=\(status.map { String($0) } ?? "none") count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count + description.readIDs.count)")
                 }
             } catch {
                 HealthDiagnostics.log("upload=state-failed error=\(HealthDiagnostics.safe(error))")

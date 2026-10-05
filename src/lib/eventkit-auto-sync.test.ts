@@ -86,7 +86,7 @@ test("configured auto sync migrates legacy routes, records success, and never fe
   win.addEventListener(eventKitSyncFinished, () => finishes++);
   globalThis.window = win as unknown as Window & typeof globalThis;
   globalThis.localStorage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } } as Storage;
-  globalThis.fetch = async () => Response.json([]);
+  globalThis.fetch = async (url) => Response.json(String(url) === "/api/preferences/eventkit" ? { available: false } : []);
   try {
     assert.ok(await syncConfiguredEventKit());
     assert.equal(values.get("evaorbit.eventkit.routes.v1"), JSON.stringify({ tasks: "list" }));

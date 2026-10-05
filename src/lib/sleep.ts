@@ -1,5 +1,6 @@
 import type { HomeSleepSummary } from "./home-day.ts";
 import { zonedDateParts } from "./time.ts";
+export const firstSleepWakeDate = "2026-10-01";
 
 export type SleepSample = {
   sampleId: string; startAt: string; endAt: string; stage: number;
@@ -79,7 +80,7 @@ export function actualSleepSessions(samples: SleepSample[]): ActualSleep[] {
 }
 
 export function buildDailySleepSummary(date: string, samples: SleepSample[], timeline: HomeSleepSummary | null): DailySleepSummary {
-  const sessions = actualSleepSessions(samples).filter(session => zonedDateParts(session.endAt, session.timeZone).date === date)
+  const sessions = actualSleepSessions(samples).filter(session => date >= firstSleepWakeDate && zonedDateParts(session.endAt, session.timeZone).date === date)
     .sort((a, b) => b.durationMinutes - a.durationMinutes);
   const actual = sessions[0] ?? null;
   const overlap = (window: { startAt: string; endAt: string }) => actual ? Math.max(0, Math.min(Date.parse(window.endAt), Date.parse(actual.endAt)) - Math.max(Date.parse(window.startAt), Date.parse(actual.startAt))) : 0;

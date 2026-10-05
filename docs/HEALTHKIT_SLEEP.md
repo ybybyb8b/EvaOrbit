@@ -40,3 +40,14 @@ node --env-file-if-exists=.env.local --test scripts/healthkit-sleep-db.test.mjs
 它在真实数据库单个事务内重放迁移、验证幂等/重装/旧版本/删除、disabled 心率零写入、显式配置启用、失败批次原子回滚和账户 RLS；最后回滚所有测试与迁移变更，**不等于已应用正式迁移**。Native outbox/策略单测位于 `HealthLocalStoreTests.swift`，需 macOS CI 执行。
 
 真机仍须检查 iPhone 16 Pro 的首次/升级授权、Sleep 用户不允许读取、后台与前台同步、离线恢复、跨午夜/多来源/删除、Health Access 后补读，以及 Safari/WKWebView/PWA safe areas。不能以合成样本的 Web UI 截图替代这些检查。本轮不默认 commit、push、部署或发布 IPA。
+
+
+## 2026-10-05：睡眠同步范围与首次历史积压
+
+实际睡眠只展示醒来日期 `2026-10-01` 及之后的记录。Native anchored query 改为有界 overlap 查询，保留首个醒来日前一晚的阶段；为兼容样本原始时区，查询保留一天边界缓冲（最早 `2026-09-29T10:00:00Z`）。缓冲中的原始阶段不作为更早日期的实际睡眠展示。
+
+升级 Host 后只重置一次 Sleep anchor，重新读取有限范围；已有更早睡眠的 pending upsert 不再上传，已有本地及服务端记录不删除，delete 任务保留。近期样本优先上传，delete 优先；原有 UUID / stream revision 去重保护继续有效。Energy、Weight、Menstrual Flow 的查询范围和同步行为不变，三项心脏指标仍默认关闭。
+
+此次数据库排查没有找到 `2026-10-05` 的实际睡眠，只找到 2023–2024 年的历史睡眠上传。原队列 FIFO 会让历史积压排在近期数据之前。这证明了当前日期数据未到 EO，不能证明设备上近期数据已成功读取；安装新 Host 后仍需检查真实上传结果。
+
+睡眠范围与队列调整需要重新构建、安装 Host。本地 Windows 未执行 Swift / iOS 构建或真机验证。

@@ -1,6 +1,14 @@
 import Foundation
 import HealthKit
 
+enum HealthSleepSyncScope {
+    static let firstWakeDate = "2026-10-01"
+    // Keep a full preceding night, including stage fragments before local midnight.
+    // UTC+14 supplies the earliest boundary; presentation uses the preserved wake-date zone.
+    static let earliestSampleEnd = "2026-09-29T10:00:00.000Z"
+    static var queryStart: Date { HealthDateFormatter.iso8601.date(from: earliestSampleEnd)! }
+}
+
 // Authorization is independent of sync policy. These types are always read-only.
 enum HealthReadMetric: String, CaseIterable, Codable {
     case sleep
