@@ -167,7 +167,7 @@ test("native API surface keeps bearer ingest separate from Web-session registrat
   assert.doesNotMatch(client, /invalidMenstrualFlowValue/);
   assert.match(client, /HKMetadataKeySyncIdentifier/);
   assert.match(client, /anchoredMenstrualFlowDelta/);
-  assert.match(coordinator, /authorizationRevision = "3"/);
+  assert.match(coordinator, /authorizationRevision = "4"/);
   assert.match(coordinator, /metadata\("authorizationRevision"\) == Self\.authorizationRevision/);
   assert.match(coordinator, /resetMenstrualFlowAnchor/);
   assert.match(localStore, /menstrual_flow_outbox/);

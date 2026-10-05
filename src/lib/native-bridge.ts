@@ -19,8 +19,9 @@ export type HealthKitStatus = {
   installationId: string;
   authorizationRequested: boolean;
   hasReadData: boolean;
-  metrics: Array<{ metric: "resting" | "active" | "body_mass" | "menstrual_flow"; name: string }>;
-  backgroundDelivery: Record<string, "enabled" | "failed" | "not_requested">;
+  metrics: Array<{ metric: "resting" | "active" | "body_mass" | "menstrual_flow" | "sleep" | "heart_rate" | "resting_heart_rate" | "hrv"; name: string }>;
+  readSyncMetrics?: string[];
+  backgroundDelivery: Record<string, "enabled" | "failed" | "not_requested" | "sync_disabled">;
   lastLocalSync: string | null;
   lastSuccessfulUpload: string | null;
   pendingCount: number;

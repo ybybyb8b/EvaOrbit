@@ -151,6 +151,7 @@ struct HealthRuntimeStatus {
     let available: Bool
     let installationID: String
     let authorizationRequested: Bool
+    let readSyncMetrics: [HealthReadMetric]
     let hasReadData: Bool
     let backgroundDelivery: [String: String]
     let lastLocalSync: String?
@@ -166,7 +167,8 @@ struct HealthRuntimeStatus {
             "installationId": installationID,
             "authorizationRequested": authorizationRequested,
             "hasReadData": hasReadData,
-            "metrics": HealthMetric.allCases.map { ["metric": $0.rawValue, "name": $0.displayName] } + [["metric": "menstrual_flow", "name": "Menstrual Flow"]],
+            "metrics": HealthMetric.allCases.map { ["metric": $0.rawValue, "name": $0.displayName] } + [["metric": "menstrual_flow", "name": "Menstrual Flow"]] + HealthReadMetric.allCases.map { ["metric": $0.rawValue, "name": $0.displayName] },
+            "readSyncMetrics": readSyncMetrics.map(\.rawValue),
             "backgroundDelivery": backgroundDelivery,
             "lastLocalSync": nullable(lastLocalSync),
             "lastSuccessfulUpload": nullable(lastSuccessfulUpload),

@@ -1,6 +1,7 @@
 import { dateInEvaOrbit, dateRange } from "./time.ts";
 import type { CalendarEvent, DailyJournalEntry, TimelineEvent } from "./types.ts";
 import { calendarCategoryLabel, defaultCalendarInterpretation, matchingCalendarRule, type CalendarInterpretation } from "./calendar-interpretation.ts";
+import type { DailySleepSummary } from "./sleep.ts";
 
 export type HomeActivityCategory = "sleep" | "phone" | "screen" | "gaming";
 type DayActivityCategory = string;
@@ -47,6 +48,7 @@ export interface HomeDayOverview {
   meals: Array<{ mealType: string; title: string; detail: string | null }>;
   journal: DailyJournalEntry[];
   sleep: HomeSleepSummary | null;
+  sleepSummary?: DailySleepSummary;
   calendarInterpretation: CalendarInterpretation;
   activities: Array<{ category: string; label?: { en: string; zh: string }; durationMinutes: number }>;
   activityRecords: Array<{ id: number; category: DayActivityCategory; startAt: string; endAt: string; durationMinutes: number; notes: string }>;

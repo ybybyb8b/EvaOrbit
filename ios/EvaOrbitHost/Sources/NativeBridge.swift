@@ -330,7 +330,15 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             return
         }
         do {
-            try healthKitCoordinator.configureCredential(credential, ingestURL: ingestURL)
+            let rawMetrics = parameters["syncMetrics"] as? [String] ?? ["sleep"]
+            guard parameters["syncMetrics"] == nil || parameters["syncMetrics"] is [String],
+                  rawMetrics.count <= HealthReadMetric.allCases.count,
+                  rawMetrics.allSatisfy({ HealthReadMetric(rawValue: $0) != nil }) else {
+                replyHandler(failure(id: id, code: "invalid_sync_policy", message: "HealthKit sync policy is invalid."), nil)
+                return
+            }
+            let metrics = HealthReadMetric.allCases.filter { $0 == .sleep || rawMetrics.contains($0.rawValue) }
+            try healthKitCoordinator.configureCredential(credential, ingestURL: ingestURL, syncMetrics: metrics)
             replyHandler(success(id: id, result: ["configured": true]), nil)
         } catch {
             replyHandler(failure(id: id, code: "credential_storage_failed", message: "Native credential could not be stored."), nil)
@@ -393,7 +401,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             "bridgeVersion": Self.protocolVersion,
             "appVersion": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
             "buildVersion": bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
-            "healthKitPipeline": "energy-body-mass-menstrual-flow-v3",
+            "healthKitPipeline": "energy-body-mass-menstrual-flow-sleep-v4",
             "notificationPipeline": "local-v1",
             "hapticPipeline": "feedback-v1",
             "eventKitPipeline": "calendar-reminders-v1",

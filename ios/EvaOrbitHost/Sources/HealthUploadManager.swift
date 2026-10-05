@@ -4,6 +4,7 @@ private struct HealthUploadEnvelope: Encodable {
     let snapshots: [HealthOutboxSnapshot]
     let bodyMassChanges: [HealthBodyMassChange]
     let menstrualFlowChanges: [HealthMenstrualFlowChange]
+    let readChanges: [HealthReadChange]
 }
 
 final class HealthUploadManager: NSObject {
@@ -13,6 +14,7 @@ final class HealthUploadManager: NSObject {
     private let queue = DispatchQueue(label: "com.evaorbit.health-upload")
     private var backgroundCompletionHandler: (() -> Void)?
     private var uploadInProgress = false
+    var onReadDataUploaded: (() -> Void)?
 
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
@@ -55,22 +57,24 @@ final class HealthUploadManager: NSObject {
         var claimed: [HealthOutboxSnapshot] = []
         var bodyMass: [HealthBodyMassChange] = []
         var menstrualFlow: [HealthMenstrualFlowChange] = []
+        var readItems: [HealthReadOutboxItem] = []
         do {
             claimed = try store.takePendingBatch(limit: 50)
             bodyMass = try store.takePendingBodyMassBatch(limit: max(0, 50 - claimed.count))
             menstrualFlow = try store.takePendingMenstrualFlowBatch(limit: max(0, 50 - claimed.count - bodyMass.count))
-            guard !claimed.isEmpty || !bodyMass.isEmpty || !menstrualFlow.isEmpty else { return }
+            readItems = try store.takePendingReadBatch(limit: max(0, 50 - claimed.count - bodyMass.count - menstrualFlow.count))
+            guard !claimed.isEmpty || !bodyMass.isEmpty || !menstrualFlow.isEmpty || !readItems.isEmpty else { return }
             uploadInProgress = true
             let batchID = UUID().uuidString.lowercased()
             let fileURL = try uploadFileURL(batchID: batchID)
-            try JSONEncoder().encode(HealthUploadEnvelope(snapshots: claimed, bodyMassChanges: bodyMass, menstrualFlowChanges: menstrualFlow)).write(to: fileURL, options: .atomic)
+            try JSONEncoder().encode(HealthUploadEnvelope(snapshots: claimed, bodyMassChanges: bodyMass, menstrualFlowChanges: menstrualFlow, readChanges: readItems.map(\.change))).write(to: fileURL, options: .atomic)
             var request = URLRequest(url: ingestURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(credential)", forHTTPHeaderField: "Authorization")
             request.setValue(credentialStore.installationID, forHTTPHeaderField: "X-EvaOrbit-Installation-Id")
             let task = session.uploadTask(with: request, fromFile: fileURL)
-            task.taskDescription = "\(batchID)|\(claimed.map { String($0.id) }.joined(separator: ","))|\(bodyMass.map { String($0.id) }.joined(separator: ","))|\(menstrualFlow.map { String($0.id) }.joined(separator: ","))"
+            task.taskDescription = "\(batchID)|\(claimed.map { String($0.id) }.joined(separator: ","))|\(bodyMass.map { String($0.id) }.joined(separator: ","))|\(menstrualFlow.map { String($0.id) }.joined(separator: ","))|\(readItems.map { String($0.id) }.joined(separator: ","))"
             HealthDiagnostics.log("upload=start energy=\(claimed.count) body-mass=\(bodyMass.count) menstrual-flow=\(menstrualFlow.count) pending=\(store.pendingCount())")
             task.resume()
         } catch {
@@ -78,6 +82,7 @@ final class HealthUploadManager: NSObject {
             if !claimed.isEmpty { try? store.failUpload(ids: claimed.map(\.id), reason: "upload preparation failed") }
             if !bodyMass.isEmpty { try? store.failBodyMassUpload(ids: bodyMass.map(\.id), reason: "upload preparation failed") }
             if !menstrualFlow.isEmpty { try? store.failMenstrualFlowUpload(ids: menstrualFlow.map(\.id), reason: "upload preparation failed") }
+            if !readItems.isEmpty { try? store.failReadUpload(ids: readItems.map(\.id), reason: "upload preparation failed") }
             HealthDiagnostics.log("upload=prepare-failed error=\(HealthDiagnostics.safe(error))")
         }
     }
@@ -89,10 +94,11 @@ final class HealthUploadManager: NSObject {
         return root.appendingPathComponent("\(batchID).json")
     }
 
-    private func parseTask(_ task: URLSessionTask) -> (batchID: String, energyIDs: [Int64], bodyMassIDs: [Int64], menstrualFlowIDs: [Int64]) {
-        let parts = (task.taskDescription ?? "").split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
-        guard parts.count >= 3 else { return ("", [], [], []) }
-        return (parts[0], parts[1].split(separator: ",").compactMap { Int64($0) }, parts[2].split(separator: ",").compactMap { Int64($0) }, parts.count == 4 ? parts[3].split(separator: ",").compactMap { Int64($0) } : [])
+    private func parseTask(_ task: URLSessionTask) -> (batchID: String, energyIDs: [Int64], bodyMassIDs: [Int64], menstrualFlowIDs: [Int64], readIDs: [Int64]) {
+        let parts = (task.taskDescription ?? "").split(separator: "|", maxSplits: 4, omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 3 else { return ("", [], [], [], []) }
+        func ids(_ index: Int) -> [Int64] { parts.count > index ? parts[index].split(separator: ",").compactMap { Int64($0) } : [] }
+        return (parts[0], ids(1), ids(2), ids(3), ids(4))
     }
 
     private func removeUploadFile(batchID: String) {
@@ -114,6 +120,10 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
                     try self.store.completeUpload(ids: description.energyIDs)
                     try self.store.completeBodyMassUpload(ids: description.bodyMassIDs)
                     try self.store.completeMenstrualFlowUpload(ids: description.menstrualFlowIDs)
+                    try self.store.completeReadUpload(ids: description.readIDs)
+                    if !description.readIDs.isEmpty {
+                        DispatchQueue.main.async { [weak self] in self?.onReadDataUploaded?() }
+                    }
                     HealthDiagnostics.log("upload=success status=\(status) count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count) pending=\(self.store.pendingCount())")
                     self.startNextBatch()
                 } else {
@@ -121,6 +131,7 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
                     try self.store.failUpload(ids: description.energyIDs, reason: reason)
                     try self.store.failBodyMassUpload(ids: description.bodyMassIDs, reason: reason)
                     try self.store.failMenstrualFlowUpload(ids: description.menstrualFlowIDs, reason: reason)
+                    try self.store.failReadUpload(ids: description.readIDs, reason: reason)
                     HealthDiagnostics.log("upload=failed status=\(status.map { String($0) } ?? "none") count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count)")
                 }
             } catch {

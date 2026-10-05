@@ -34,7 +34,7 @@ targets:
         CFBundleDisplayName: EvaOrbit
         EvaOrbitBaseURL: https://eva-orbit.vercel.app
         ITSAppUsesNonExemptEncryption: false
-        NSHealthShareUsageDescription: EvaOrbit reads resting energy, active energy, body weight, and menstrual flow that you choose to share from Apple Health.
+        NSHealthShareUsageDescription: EvaOrbit reads resting energy, active energy, body weight, menstrual flow, sleep, heart rate, resting heart rate, and heart rate variability that you choose to share from Apple Health. Heart metrics are not synced unless enabled.
         NSHealthUpdateUsageDescription: EvaOrbit writes body weight and menstrual flow records that you save in EvaOrbit to Apple Health.
         NSCalendarsFullAccessUsageDescription: EvaOrbit syncs events only with calendars you select.
         NSRemindersFullAccessUsageDescription: EvaOrbit syncs tasks and alarms only with reminder lists you select.

@@ -124,6 +124,47 @@ final class HealthLocalStoreTests: XCTestCase {
         }
     }
 
+    func testReadOutboxPreservesIntervalsRecoversAndKeepsHeartMetricsDisabled() throws {
+        let sample = HealthReadSample(sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24d", metric: .sleep,
+            startAt: "2026-10-04T15:00:00.000Z", endAt: "2026-10-04T23:00:00.000Z", timeZone: "Asia/Shanghai", timeZoneSource: "metadata",
+            stage: 5, value: nil, unit: nil, sourceBundle: "watch", sourceName: "Watch", syncIdentifier: "sleep.1", syncVersion: 2)
+        let now = Date()
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [sample], deletedUUIDs: [], encodedAnchor: Data("sleep-one".utf8)), now: now)
+        let first = try store.takePendingReadBatch(limit: 50, now: now)
+        XCTAssertEqual(first.count, 1)
+        XCTAssertEqual(first[0].change.stage, 5)
+        XCTAssertEqual(first[0].change.startAt, sample.startAt)
+        XCTAssertEqual(first[0].change.timeZone, sample.timeZone)
+        XCTAssertEqual(try store.readAnchor(for: .sleep), Data("sleep-one".utf8))
+        try store.recoverInflight(now: now)
+        let recovered = try store.takePendingReadBatch(limit: 50, now: now)
+        XCTAssertEqual(recovered.map(\.id), first.map(\.id))
+        try store.failReadUpload(ids: recovered.map(\.id), reason: "network", now: now)
+        XCTAssertTrue(try store.takePendingReadBatch(limit: 50, now: now.addingTimeInterval(10)).isEmpty)
+        let retry = try store.takePendingReadBatch(limit: 50, now: now.addingTimeInterval(20))
+        XCTAssertEqual(retry.map(\.id), first.map(\.id))
+        try store.completeReadUpload(ids: retry.map(\.id), now: now)
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [sample.sampleId], encodedAnchor: Data("sleep-two".utf8)), now: now)
+        let deletion = try store.takePendingReadBatch(limit: 50, now: now)
+        XCTAssertEqual(deletion[0].change.operation, "delete")
+        XCTAssertGreaterThan(deletion[0].change.revision, first[0].change.revision)
+        try store.completeReadUpload(ids: deletion.map(\.id), now: now)
+        let heart = HealthReadSample(sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24e", metric: .heartRate,
+            startAt: sample.startAt, endAt: sample.endAt, timeZone: sample.timeZone, timeZoneSource: sample.timeZoneSource,
+            stage: nil, value: 60, unit: "count/min", sourceBundle: "watch", sourceName: "Watch", syncIdentifier: nil, syncVersion: nil)
+        try store.commitReadDelta(metric: .heartRate, delta: HealthReadDelta(added: [heart], deletedUUIDs: [], encodedAnchor: Data("heart-one".utf8)), now: now)
+        XCTAssertTrue(try store.takePendingReadBatch(limit: 50, now: now).isEmpty)
+        try store.setMetadata("readSyncMetrics", value: "sleep,heart_rate")
+        let enabled = try store.takePendingReadBatch(limit: 50, now: now)
+        XCTAssertEqual(enabled[0].change.metric, .heartRate)
+        XCTAssertEqual(enabled[0].change.unit, "count/min")
+        try store.resetReadAnchors()
+        XCTAssertNil(try store.readAnchor(for: .sleep))
+        XCTAssertNil(try store.readAnchor(for: .heartRate))
+        try store.commitReadDelta(metric: .sleep, delta: HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data("stale".utf8)), authorizationEpoch: "unversioned")
+        XCTAssertNil(try store.readAnchor(for: .sleep), "an in-flight query before an authorization rescan must not restore its old anchor")
+    }
+
     func testAuthorizationStateAndInitialTodayYesterdayWindow() async throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
@@ -138,6 +179,9 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertTrue(status.authorizationRequested)
         XCTAssertEqual(store.metadata("authorizationRevision"), HealthKitCoordinator.authorizationRevision)
         XCTAssertEqual(healthKit.authorizationRequests, 1)
+        XCTAssertEqual(healthKit.queriedReadMetrics, [.sleep])
+        XCTAssertEqual(status.readSyncMetrics, [.sleep])
+        XCTAssertEqual(status.backgroundDelivery["heart_rate"], "sync_disabled")
         XCTAssertEqual(Set(healthKit.backgroundMetrics), Set(HealthMetric.allCases))
         XCTAssertEqual(healthKit.menstrualFlowAnchors.count, 1)
         XCTAssertNil(healthKit.menstrualFlowAnchors[0])
@@ -153,6 +197,13 @@ final class HealthLocalStoreTests: XCTestCase {
 }
 
 private final class FakeHealthKitClient: HealthKitReading {
+    var queriedReadMetrics: [HealthReadMetric] = []
+    func startReadObserver(for metric: HealthReadMetric, handler: @escaping (@escaping () -> Void) -> Void) throws {}
+    func enableReadBackgroundDelivery(for metric: HealthReadMetric) async throws {}
+    func anchoredReadDelta(for metric: HealthReadMetric, encodedAnchor: Data?) async throws -> HealthReadDelta {
+        queriedReadMetrics.append(metric)
+        return HealthReadDelta(added: [], deletedUUIDs: [], encodedAnchor: Data(metric.rawValue.utf8))
+    }
     var isAvailable = true
     var authorizationRequests = 0
     var backgroundMetrics: [HealthMetric] = []

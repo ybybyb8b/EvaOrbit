@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { ValidationError } from "./validation.ts";
 import { normalizeWeightKg } from "./weight.ts";
+import { parseHealthKitReadChanges } from "./healthkit-read.ts";
 
 export const HEALTHKIT_ENERGY_SCOPE = "healthkit:energy:write";
 export const HEALTHKIT_BODY_MASS_SCOPE = "healthkit:body-mass:write";
@@ -130,8 +131,9 @@ export function parseHealthKitUpload(value: unknown) {
     const syncVersion = change.syncVersion === undefined ? undefined : safeInteger(change.syncVersion,"HealthKit sync version",1,2_147_483_647);
     return { operation:"upsert", sampleId, startAt:change.startAt, endAt:change.endAt, flow:change.flow as HealthKitMenstrualFlowChange["flow"], cycleStart:change.cycleStart, sourceBundle, sourceName, ...(syncIdentifier?{syncIdentifier}:{}), ...(syncVersion?{syncVersion}:{}) };
   });
-  if (!snapshots.length && !bodyMassChanges.length && !menstrualFlowChanges.length) throw new ValidationError("HealthKit upload is empty");
-  return { snapshots, bodyMassChanges, menstrualFlowChanges };
+  const readChanges = parseHealthKitReadChanges(body.readChanges);
+  if (!snapshots.length && !bodyMassChanges.length && !menstrualFlowChanges.length && !readChanges.length) throw new ValidationError("HealthKit upload is empty");
+  return { snapshots, bodyMassChanges, menstrualFlowChanges, readChanges };
 }
 
 export function coalesceHealthKitEnergySnapshots(snapshots: HealthKitEnergySnapshot[]) {

@@ -4,18 +4,21 @@ import { summarizeCalendarActivity, type HomeDayOverview } from "../home-day";
 import { getRepository } from "../repositories";
 import { dateInEvaOrbit, dateRange } from "../time";
 import { getDailyTimelineOverview } from "./timeline";
+import { getHealthKitSleepSamples } from "./sleep";
+import { buildDailySleepSummary } from "../sleep";
 
 const priorities: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 export async function getHomeDayOverview(date = dateInEvaOrbit()): Promise<HomeDayOverview> {
   const repository = await getRepository();
   const range = dateRange(date);
-  const [timeline, tasks, calendarEvents, journal, calendarInterpretation] = await Promise.all([
+  const [timeline, tasks, calendarEvents, journal, calendarInterpretation, sleepSamples] = await Promise.all([
     getDailyTimelineOverview(date),
     repository.listTasks("all"),
     repository.listCalendarEvents({ from: range.from, to: range.to, status: "confirmed", limit: 500 }),
     repository.listDailyJournalEntries({ date, limit: 100 }),
     repository.getCalendarInterpretation(),
+    getHealthKitSleepSamples(date),
   ]);
   const calendar = summarizeCalendarActivity(calendarEvents, date, calendarInterpretation);
   return {
@@ -26,5 +29,6 @@ export async function getHomeDayOverview(date = dateInEvaOrbit()): Promise<HomeD
     journal,
     calendarInterpretation,
     ...calendar,
+    sleepSummary: buildDailySleepSummary(date, sleepSamples, calendar.sleep),
   };
 }

@@ -10,6 +10,7 @@ import { listMedicationDoseEvents,listMedicationPresets,listMenstrualFlowRecords
 import { listScheduledNotifications } from "../../lib/services/reminder";
 import { PERIOD_MEDICATION_REMINDER_SOURCE } from "../../lib/reminder-source-registry";
 import { HealthView } from "./health-view";
+import { getDailySleepSummary } from "../../lib/services/sleep";
 
 export const metadata: Metadata = {
   title: "Health",
@@ -24,6 +25,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   const trainingId = Number.isSafeInteger(requestedTraining) && requestedTraining > 0 ? requestedTraining : null;
   const requestedWeight = Number(params.weight);
   const weightId = Number.isSafeInteger(requestedWeight) && requestedWeight > 0 ? requestedWeight : null;
+  const initialSleep = await getDailySleepSummary(today);
   const [records, dailyEnergy, energyHistory, training, recentTraining, trainingSuggestions, focusedTraining, weights, weightSettings, focusedWeight, periods, menstrualFlows, medicationPresets, medicationDoses, scheduledNotifications] = await Promise.all([
     listHealthRecords({ limit: 100 }),
     getDailyNutritionSummary(today),
@@ -42,5 +44,5 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
     listScheduledNotifications(),
   ]);
 
-  return <HealthView initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={periods} initialMenstrualFlows={menstrualFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={medicationDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
+  return <HealthView initialSleep={initialSleep} initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={periods} initialMenstrualFlows={menstrualFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={medicationDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
 }

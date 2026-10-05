@@ -50,12 +50,13 @@ export function AppleHealthSection() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ installationId: status.installationId }),
       });
-      const registration = await registrationResponse.json().catch(() => null) as { credential?: string } | { error?: string } | null;
+      const registration = await registrationResponse.json().catch(() => null) as { credential?: string; syncMetrics?: string[] } | { error?: string } | null;
       if (!registrationResponse.ok || !registration || !("credential" in registration) || typeof registration.credential !== "string") {
         throw new Error(responseError(registration, "Could not register this iPhone"));
       }
       await nativeCall("healthkit.configureCredential", {
         credential: registration.credential,
+        syncMetrics: registration.syncMetrics ?? ["sleep"],
         ingestUrl: `${window.location.origin}/api/healthkit/energy/ingest`,
       });
       await nativeCall<HealthKitStatus>("healthkit.requestAuthorization");
@@ -102,7 +103,7 @@ export function AppleHealthSection() {
 
   return <section className="apple-health-section" aria-labelledby="apple-health-title">
     <div className="apple-health-heading">
-      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy, weight & menstrual flow</h2><p>Energy is aggregated by day. Weight and menstrual flow retain sample, source and sync identity.</p></div>
+      <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy, weight, menstrual flow & sleep</h2><p>Sleep retains intervals and stages. Heart Rate, Resting Heart Rate and HRV are requested read-only and stay sync disabled by default.</p></div>
       <span className={`status-pill ${nativeHost ? "" : "disabled"}`}>{nativeHost ? "Native Host" : "Web only"}</span>
     </div>
     {!nativeHost && <p className="apple-health-fallback">Open this page inside the EvaOrbit iOS app to connect Apple Health.</p>}
@@ -115,7 +116,7 @@ export function AppleHealthSection() {
         <Status label="Last local sync" value={formatTime(status.lastLocalSync)} />
         <Status label="Last upload" value={formatTime(status.lastSuccessfulUpload)} />
       </div>
-      <div className="apple-health-metrics">{status.metrics.map((metric) => <div key={metric.metric}><strong>{metric.name}</strong><span>Background delivery: {status.backgroundDelivery[metric.metric]?.replaceAll("_", " ") ?? "not requested"}</span></div>)}</div>
+      <div className="apple-health-metrics">{status.metrics.map((metric) => <div key={metric.metric}><strong>{metric.name}</strong><span>{status.backgroundDelivery[metric.metric] === "sync_disabled" ? "Read capability ready · Sync disabled" : `Background delivery: ${status.backgroundDelivery[metric.metric]?.replaceAll("_", " ") ?? "not requested"}`}</span></div>)}</div>
       {status.lastError && <p className="apple-health-error">Last error: {status.lastError}</p>}
       {error && <p className="form-error">{error}</p>}
       {message && <ToastNotice message={message} onShown={() => setMessage("")} />}

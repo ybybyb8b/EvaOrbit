@@ -2,6 +2,9 @@ import Foundation
 import HealthKit
 
 protocol HealthKitReading: AnyObject {
+    func startReadObserver(for metric: HealthReadMetric, handler: @escaping (@escaping () -> Void) -> Void) throws
+    func enableReadBackgroundDelivery(for metric: HealthReadMetric) async throws
+    func anchoredReadDelta(for metric: HealthReadMetric, encodedAnchor: Data?) async throws -> HealthReadDelta
     var isAvailable: Bool { get }
     func requestAuthorization() async throws
     func startObserver(for metric: HealthMetric, handler: @escaping (@escaping () -> Void) -> Void) throws
@@ -19,6 +22,7 @@ protocol HealthKitReading: AnyObject {
 }
 
 final class SystemHealthKitClient: HealthKitReading {
+    private var readObservers: [HealthReadMetric: HKObserverQuery] = [:]
     private let store = HKHealthStore()
     private var observers: [HealthMetric: HKObserverQuery] = [:]
     private var menstrualFlowObserver: HKObserverQuery?
@@ -39,7 +43,7 @@ final class SystemHealthKitClient: HealthKitReading {
 
     func requestAuthorization() async throws {
         let menstrualFlow = try menstrualFlowType()
-        let read = try Set(HealthMetric.allCases.map { try quantityType(for: $0) as HKObjectType } + [menstrualFlow])
+        let read = try Set(HealthMetric.allCases.map { try quantityType(for: $0) as HKObjectType } + [menstrualFlow] + HealthReadMetric.allCases.map { $0.sampleType as HKObjectType })
         let share = Set([try quantityType(for: .bodyMass) as HKSampleType, menstrualFlow])
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             store.requestAuthorization(toShare: share, read: read) { success, error in
@@ -63,6 +67,52 @@ final class SystemHealthKitClient: HealthKitReading {
         }
         observers[metric] = query
         store.execute(query)
+    }
+
+    func startReadObserver(for metric: HealthReadMetric, handler: @escaping (@escaping () -> Void) -> Void) throws {
+        guard readObservers[metric] == nil else { return }
+        let query = HKObserverQuery(sampleType: metric.sampleType, predicate: nil) { _, completion, error in
+            if error != nil { completion(); return }
+            handler(completion)
+        }
+        readObservers[metric] = query
+        store.execute(query)
+    }
+
+    func enableReadBackgroundDelivery(for metric: HealthReadMetric) async throws {
+        try await store.enableBackgroundDelivery(for: metric.sampleType, frequency: .immediate)
+    }
+
+    func anchoredReadDelta(for metric: HealthReadMetric, encodedAnchor: Data?) async throws -> HealthReadDelta {
+        let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
+        return try await withCheckedThrowingContinuation { continuation in
+            // No initial date cutoff: stage fragments from the previous night must remain intact.
+            let query = HKAnchoredObjectQuery(type: metric.sampleType, predicate: nil, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
+                if let error { continuation.resume(throwing: error); return }
+                guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
+                do {
+                    let formatter = ISO8601DateFormatter()
+                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    let added = (samples ?? []).map { sample in
+                        let recordedZone = (sample.metadata?[HKMetadataKeyTimeZone] as? String).flatMap(TimeZone.init(identifier:))
+                        let zone = recordedZone ?? .current
+                        return HealthReadSample(
+                            sampleId: sample.uuid.uuidString.lowercased(), metric: metric,
+                            startAt: formatter.string(from: sample.startDate), endAt: formatter.string(from: sample.endDate),
+                            timeZone: zone.identifier, timeZoneSource: recordedZone == nil ? "device" : "metadata",
+                            stage: (sample as? HKCategorySample)?.value,
+                            value: (sample as? HKQuantitySample)?.quantity.doubleValue(for: metric.unit),
+                            unit: metric == .sleep ? nil : metric.unitName,
+                            sourceBundle: sample.sourceRevision.source.bundleIdentifier, sourceName: sample.sourceRevision.source.name,
+                            syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String,
+                            syncVersion: sample.metadata?[HKMetadataKeySyncVersion] as? Int
+                        )
+                    }
+                    continuation.resume(returning: HealthReadDelta(added: added, deletedUUIDs: (deleted ?? []).map { $0.uuid.uuidString.lowercased() }, encodedAnchor: try HealthAnchorCodec.encode(newAnchor)))
+                } catch { continuation.resume(throwing: error) }
+            }
+            store.execute(query)
+        }
     }
 
     func enableBackgroundDelivery(for metric: HealthMetric) async throws {

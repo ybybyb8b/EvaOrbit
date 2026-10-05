@@ -43,6 +43,9 @@ final class WebViewController: UIViewController {
         nativeBridge.onDataChanged = { [weak self] domains, source in
             self?.notifyDataChanged(domains: domains, source: source)
         }
+        healthKitCoordinator.onReadDataUploaded = { [weak self] in
+            self?.notifyDataChanged(domains: ["health"], source: "healthkit")
+        }
         loadingCoordinator = LoadingExperienceCoordinator(presenter: loadingOverlay)
         loadingOverlay.onRetry = { [weak self] in self?.retryFromFailure() }
     }
@@ -186,7 +189,8 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func notifyDataChanged(domains: [String], source: String) {
-        guard let accepted = NativeBridge.dataChangeDomains(domains), ["eventkit", "healthkit"].contains(source),
+        guard let url = webView.url, hostConfiguration.allows(url),
+              let accepted = NativeBridge.dataChangeDomains(domains), ["eventkit", "healthkit"].contains(source),
               let data = try? JSONSerialization.data(withJSONObject: ["domains": accepted, "source": source]),
               let detail = String(data: data, encoding: .utf8) else { return }
         // Completion notification only; never emits native-active or eventkit-store-changed.

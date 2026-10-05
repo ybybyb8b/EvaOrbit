@@ -189,6 +189,7 @@ bash scripts/ios/xtool-install.sh /path/to/EvaOrbitHost-ad-hoc.ipa
 - Active Energy
 - Body Mass
 - Menstrual Flow（`HKCategorySample`，保留 flow 分类与 cycle-start metadata）
+- Sleep Analysis、Heart Rate、Resting Heart Rate、HRV (SDNN)：authorization revision `4` 新增只读类型。Sleep 启用同步；三项心脏指标具备 Native 读取/序列化/outbox 能力但默认 sync disabled，不新增 write、framework 或 entitlement。服务端 `HEALTHKIT_SYNC_METRICS` 与系统授权分离，细节及验证见 [`HEALTHKIT_SLEEP.md`](./HEALTHKIT_SLEEP.md)。
 
 Body Mass 和 Menstrual Flow 可以由 EvaOrbit 写入 HealthKit。安装或启动 App 不会自动弹出 HealthKit 授权。用户从 Apple Health 界面主动连接后，Web 调用版本化 bridge 的 `healthkit.requestAuthorization`；Swift 才请求读取与 share 权限。用户保存经量或体重时，Web 先保存 EO 业务事实，再通过 capability detection 调用对应写入方法；旧 IPA 和普通浏览器保留 EO 记录为待同步。
 
@@ -202,6 +203,7 @@ HealthKit 请求的数据类型集合有独立 `authorizationRevision`。新版 
 - App 启动时恢复 observer；已经请求过授权时再恢复 `.immediate` background delivery 并执行 anchored query。首次授权完成后也会开启 background delivery 并立即同步。
 - 能量原始样本保留在 Native 本地，上传按本地日期聚合的 resting/active kcal 快照。Body Mass 上传逐样本的 sample UUID、发生时间、kg、source 与 HealthKit sync identifier/version，以保留多条同日记录和幂等语义。
 - Menstrual Flow 使用独立 anchored query、本地 sample/outbox 和 ingest DTO，保留 start/end、分类值、cycle-start、sample UUID、source 与 sync identifier/version；Swift 不建立或关联 Period。
+- Sleep 使用独立 read sample / outbox / `readChanges`，保留完整 interval、原始 stage 和时区来源；Supabase 的 `healthkit_read_samples` 与 energy 聚合独立。窗口仍来自 3×3 / Calendar，实际睡眠按醒来日期聚合，仅可比较时计算效率。只读指标上传成功时向 Web 发出 health domain 数据刷新通知；不把本地 query 完成当作上传完成。
 - 来源归属不可混用：EO 创建的 Menstrual Flow 由 EO 用稳定 sync identifier/version 更新或删除；Apple Health 导入样本在 EO 中只读，修改或删除应在 Apple Health 完成，再由 anchored query 同步。
 - EO 写入失败时，业务记录保留 `pending`；稳定 sync identity 使手动 `Sync Now` 重试不会新建第二条 EO 事实。EO 删除先保留 `pending_delete` tombstone，HealthKit 删除成功后再完成硬删除。
 - EO 经量使用稳定的 `evaorbit.menstrual_flow.{uuid}` 标识与递增版本。回读通过 sync identifier 更新原记录；明确 cycle-start 时由服务端建立或关联 Period。

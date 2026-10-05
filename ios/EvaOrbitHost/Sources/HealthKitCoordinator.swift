@@ -2,7 +2,10 @@ import Foundation
 
 final class HealthKitCoordinator {
     static let defaultInitialLookbackDays = 1
-    static let authorizationRevision = "3"
+    static let authorizationRevision = "4"
+    private var readSyncing = Set<HealthReadMetric>()
+    private var readNeedsResync = Set<HealthReadMetric>()
+    private var readWaiters: [HealthReadMetric: [(Bool) -> Void]] = [:]
 
     private let healthKit: HealthKitReading
     private let store: HealthLocalStore
@@ -16,6 +19,10 @@ final class HealthKitCoordinator {
     private var menstrualFlowSyncing = false
     private var menstrualFlowNeedsResync = false
     private var menstrualFlowWaiters: [(Bool) -> Void] = []
+    var onReadDataUploaded: (() -> Void)? {
+        get { uploader.onReadDataUploaded }
+        set { uploader.onReadDataUploaded = newValue }
+    }
 
     init(
         healthKit: HealthKitReading,
@@ -33,6 +40,7 @@ final class HealthKitCoordinator {
 
     func restoreAtLaunch() {
         guard healthKit.isAvailable else { return }
+        restoreReadObservers()
         for metric in HealthMetric.allCases {
             do {
                 try healthKit.startObserver(for: metric) { [weak self] completion in
@@ -67,6 +75,8 @@ final class HealthKitCoordinator {
             let needsMenstrualFlowRescan = store.metadata("authorizationRevision") != Self.authorizationRevision
             try await healthKit.requestAuthorization()
             if needsMenstrualFlowRescan { try store.resetMenstrualFlowAnchor() }
+            // Read-denied queries can still advance anchors. Explicit access updates rescan read-only samples.
+            try store.resetReadAnchors()
             try store.setMetadata("authorizationRequested", value: "true")
             try store.setMetadata("authorizationRevision", value: Self.authorizationRevision)
             await enableBackgroundDelivery()
@@ -90,12 +100,20 @@ final class HealthKitCoordinator {
             enqueueMenstrualFlowSync { continuation.resume(returning: $0) }
         }
         success = success && menstrualFlowSuccess
+        for metric in HealthReadMetric.enabled(in: store) {
+            let readSuccess = await withCheckedContinuation { continuation in
+                enqueueReadSync(metric: metric) { continuation.resume(returning: $0) }
+            }
+            success = success && readSuccess
+        }
         uploader.flush()
         return success
     }
 
-    func configureCredential(_ credential: String, ingestURL: URL) throws {
+    func configureCredential(_ credential: String, ingestURL: URL, syncMetrics: [HealthReadMetric] = [.sleep]) throws {
+        try store.setMetadata("readSyncMetrics", value: syncMetrics.map(\.rawValue).joined(separator: ","))
         try uploader.configure(credential: credential, ingestURL: ingestURL)
+        restoreReadObservers()
     }
 
     func clearCredential() { uploader.clearCredential() }
@@ -138,10 +156,13 @@ final class HealthKitCoordinator {
             available: healthKit.isAvailable,
             installationID: uploader.installationID,
             authorizationRequested: store.metadata("authorizationRevision") == Self.authorizationRevision,
+            readSyncMetrics: HealthReadMetric.enabled(in: store),
             hasReadData: store.metadata("hasReadData") == "true",
             backgroundDelivery: Dictionary(uniqueKeysWithValues: HealthMetric.allCases.map { metric in
                 (metric.rawValue, store.metadata("background.\(metric.rawValue)") ?? "not_requested")
-            } + [("menstrual_flow", store.metadata("background.menstrual_flow") ?? "not_requested")]),
+            } + [("menstrual_flow", store.metadata("background.menstrual_flow") ?? "not_requested")] + HealthReadMetric.allCases.map { metric in
+                (metric.rawValue, HealthReadMetric.enabled(in: store).contains(metric) ? store.metadata("background.\(metric.rawValue)") ?? "not_requested" : "sync_disabled")
+            }),
             lastLocalSync: nonemptyMetadata("lastLocalSync"),
             lastSuccessfulUpload: nonemptyMetadata("lastSuccessfulUpload"),
             pendingCount: store.pendingCount(),
@@ -151,6 +172,12 @@ final class HealthKitCoordinator {
     }
 
     private func enableBackgroundDelivery() async {
+        for metric in HealthReadMetric.enabled(in: store) {
+            do {
+                try await healthKit.enableReadBackgroundDelivery(for: metric)
+                try? store.setMetadata("background.\(metric.rawValue)", value: "enabled")
+            } catch { recordError(error); try? store.setMetadata("background.\(metric.rawValue)", value: "failed") }
+        }
         for metric in HealthMetric.allCases {
             do {
                 try await healthKit.enableBackgroundDelivery(for: metric)
@@ -170,6 +197,46 @@ final class HealthKitCoordinator {
             try? store.setMetadata("background.menstrual_flow", value: "failed")
             recordError(error)
             HealthDiagnostics.log("metric=menstrual_flow background-delivery=failed error=\(HealthDiagnostics.safe(error))")
+        }
+    }
+
+    private func restoreReadObservers() {
+        guard healthKit.isAvailable else { return }
+        for metric in HealthReadMetric.enabled(in: store) {
+            do {
+                try healthKit.startReadObserver(for: metric) { [weak self] completion in
+                    guard let self else { completion(); return }
+                    self.enqueueReadSync(metric: metric) { _ in completion(); self.uploader.flush() }
+                }
+            } catch { recordError(error) }
+        }
+    }
+
+    private func enqueueReadSync(metric: HealthReadMetric, completion: @escaping (Bool) -> Void) {
+        guard HealthReadMetric.enabled(in: store).contains(metric), store.metadata("authorizationRequested") == "true" else { completion(true); return }
+        stateLock.lock()
+        readWaiters[metric, default: []].append(completion)
+        if readSyncing.contains(metric) { readNeedsResync.insert(metric); stateLock.unlock(); return }
+        readSyncing.insert(metric)
+        stateLock.unlock()
+        Task { [weak self] in
+            guard let self else { return }
+            var succeeded = true
+            while true {
+                do {
+                    let authorizationEpoch = self.store.metadata("readAuthorizationEpoch") ?? "unversioned"
+                    let delta = try await self.healthKit.anchoredReadDelta(for: metric, encodedAnchor: self.store.readAnchor(for: metric))
+                    // Policy may have changed while the HealthKit query was running.
+                    if HealthReadMetric.enabled(in: self.store).contains(metric) { try self.store.commitReadDelta(metric: metric, delta: delta, authorizationEpoch: authorizationEpoch) }
+                } catch { self.recordError(error); succeeded = false }
+                self.stateLock.lock()
+                if self.readNeedsResync.remove(metric) != nil { self.stateLock.unlock(); continue }
+                self.readSyncing.remove(metric)
+                let callbacks = self.readWaiters.removeValue(forKey: metric) ?? []
+                self.stateLock.unlock()
+                callbacks.forEach { $0(succeeded) }
+                break
+            }
         }
     }
 

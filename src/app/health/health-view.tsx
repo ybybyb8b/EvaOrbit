@@ -15,10 +15,12 @@ import { HealthRecordList } from "./health-record-card";
 import { TrainingSection } from "./training-section";
 import { WeightSection } from "./weight-section";
 import { PeriodMedicationSection } from "./period-medication-section";
+import { SleepSection } from "./sleep-section";
+import type { DailySleepSummary } from "@/lib/sleep";
 
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 
-export function HealthView({ initial, initialEnergy, initialEnergyHistory, initialTraining, initialRecentTraining, initialTrainingSuggestions, initialFocusedTraining, initialWeights, initialWeightSettings, initialFocusedWeight, initialPeriods, initialMenstrualFlows, initialMedicationPresets, initialMedicationDoses, initialMedicationReminders, today }: { initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialRecentTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; initialFocusedTraining?: TrainingLog; initialWeights: WeightRecord[]; initialWeightSettings: WeightSettings; initialFocusedWeight?: WeightRecord; initialPeriods:MenstrualPeriod[]; initialMenstrualFlows:MenstrualFlowRecord[]; initialMedicationPresets:MedicationPreset[]; initialMedicationDoses:MedicationDoseEvent[]; initialMedicationReminders:ScheduledNotification[]; today: string }) {
+export function HealthView({ initialSleep, initial, initialEnergy, initialEnergyHistory, initialTraining, initialRecentTraining, initialTrainingSuggestions, initialFocusedTraining, initialWeights, initialWeightSettings, initialFocusedWeight, initialPeriods, initialMenstrualFlows, initialMedicationPresets, initialMedicationDoses, initialMedicationReminders, today }: { initialSleep: DailySleepSummary; initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialRecentTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; initialFocusedTraining?: TrainingLog; initialWeights: WeightRecord[]; initialWeightSettings: WeightSettings; initialFocusedWeight?: WeightRecord; initialPeriods:MenstrualPeriod[]; initialMenstrualFlows:MenstrualFlowRecord[]; initialMedicationPresets:MedicationPreset[]; initialMedicationDoses:MedicationDoseEvent[]; initialMedicationReminders:ScheduledNotification[]; today: string }) {
   const { english } = useLocale();
   const [dashboard, setDashboard] = useState(initial);
   const [editing, setEditing] = useState<HealthRecord | undefined>();
@@ -44,6 +46,7 @@ export function HealthView({ initial, initialEnergy, initialEnergyHistory, initi
     {dashboard.current.length > 0 && <section className="health-section health-current-section"><div className="section-heading"><div><span className="eyebrow">CURRENT</span><h2>{english ? "In view now" : "当前关注"}</h2></div><span>{dashboard.current.length}</span></div><div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div></section>}
     <PeriodMedicationSection initialPeriods={initialPeriods} initialFlows={initialMenstrualFlows} initialPresets={initialMedicationPresets} initialDoses={initialMedicationDoses} initialReminders={initialMedicationReminders}/>
     <WeightSection initialRecords={initialWeights} initialSettings={initialWeightSettings} initialFocused={initialFocusedWeight} />
+    <SleepSection initial={initialSleep} />
     <TrainingSection initial={initialTraining} initialRecent={initialRecentTraining} initialSuggestions={initialTrainingSuggestions} initialFocused={initialFocusedTraining} today={today} />
     <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />
     <section className="health-section health-records-section"><div className="section-heading"><div><span className="eyebrow">RECORDS</span><h2>{english ? "Health records" : "健康记录"}</h2></div><Link href="/health/records">{english ? "View all" : "查看全部"} <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>

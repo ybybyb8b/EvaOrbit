@@ -106,7 +106,17 @@ final class HealthLocalStore {
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL
         );
-        PRAGMA user_version=2;
+        CREATE TABLE IF NOT EXISTS read_samples (
+          metric TEXT NOT NULL, sample_id TEXT NOT NULL, payload TEXT NOT NULL,
+          PRIMARY KEY(metric,sample_id)
+        );
+        CREATE TABLE IF NOT EXISTS read_outbox (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, metric TEXT NOT NULL, sample_id TEXT NOT NULL, payload TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('pending','inflight')), attempt INTEGER NOT NULL DEFAULT 0,
+          next_retry REAL NOT NULL DEFAULT 0, updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_read_outbox_ready ON read_outbox(state,next_retry,id);
+        PRAGMA user_version=3;
         """)
     }
 
@@ -203,6 +213,7 @@ final class HealthLocalStore {
 
     func recoverInflight(now: Date = Date()) throws {
         try locked {
+            try execute("UPDATE read_outbox SET state='pending',next_retry=0 WHERE state='inflight'")
             let statement = try prepare("UPDATE outbox SET state='pending',next_retry=0,updated_at=? WHERE state='inflight'")
             sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
             try stepDone(statement)
@@ -215,6 +226,122 @@ final class HealthLocalStore {
             sqlite3_bind_double(menstrualFlow, 1, now.timeIntervalSince1970)
             try stepDone(menstrualFlow)
             sqlite3_finalize(menstrualFlow)
+        }
+    }
+
+    func readAnchor(for metric: HealthReadMetric) throws -> Data? {
+        try locked {
+            let statement = try prepare("SELECT anchor FROM anchors WHERE metric=?")
+            defer { sqlite3_finalize(statement) }
+            bind(metric.rawValue, at: 1, in: statement)
+            guard sqlite3_step(statement) == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { return nil }
+            return Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0)))
+        }
+    }
+
+    func resetReadAnchors() throws {
+        try locked {
+            try execute("DELETE FROM anchors WHERE metric IN ('sleep','heart_rate','resting_heart_rate','hrv')")
+            try setMetadataUnlocked("readAuthorizationEpoch", value: UUID().uuidString)
+        }
+    }
+
+    func commitReadDelta(metric: HealthReadMetric, delta: HealthReadDelta, authorizationEpoch: String? = nil, now: Date = Date()) throws {
+        try locked {
+            if let authorizationEpoch, authorizationEpoch != (metadata("readAuthorizationEpoch") ?? "unversioned") { return }
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let remove = try prepare("DELETE FROM read_samples WHERE metric=? AND sample_id=?")
+                let upsert = try prepare("INSERT INTO read_samples(metric,sample_id,payload) VALUES(?,?,?) ON CONFLICT(metric,sample_id) DO UPDATE SET payload=excluded.payload")
+                let enqueue = try prepare("INSERT INTO read_outbox(metric,sample_id,payload,state,updated_at) VALUES(?,?,?,'pending',?)")
+                defer { sqlite3_finalize(remove); sqlite3_finalize(upsert); sqlite3_finalize(enqueue) }
+                // Monotonic, persisted per installation; tombstones prevent stale retries resurrecting samples.
+                var revision = Int64(metadata("readRevision") ?? "0") ?? 0
+                // Keychain installation ID survives reinstall; the SQLite stream does not.
+                // A fresh stream lets its revision restart without being rejected by old receipts.
+                let streamID = metadata("readStreamID") ?? UUID().uuidString.lowercased()
+                try setMetadataUnlocked("readStreamID", value: streamID)
+                let entries: [(String, HealthReadSample?)] = delta.deletedUUIDs.map { ($0, nil) } + delta.added.map { ($0.sampleId, Optional($0)) }
+                for (uuid, sample) in entries {
+                    revision += 1
+                    let change = HealthReadChange(metric: metric, sampleId: uuid, streamId: streamID, revision: revision, sample: sample)
+                    let payload = String(decoding: try JSONEncoder().encode(change), as: UTF8.self)
+                    let statement = sample == nil ? remove : upsert
+                    sqlite3_reset(statement); sqlite3_clear_bindings(statement)
+                    bind(metric.rawValue, at: 1, in: statement); bind(uuid, at: 2, in: statement)
+                    if sample != nil { bind(payload, at: 3, in: statement) }
+                    try stepDone(statement)
+                    sqlite3_reset(enqueue); sqlite3_clear_bindings(enqueue)
+                    bind(metric.rawValue, at: 1, in: enqueue); bind(uuid, at: 2, in: enqueue); bind(payload, at: 3, in: enqueue)
+                    sqlite3_bind_double(enqueue, 4, now.timeIntervalSince1970); try stepDone(enqueue)
+                }
+                let anchor = try prepare("INSERT INTO anchors(metric,anchor,updated_at) VALUES(?,?,?) ON CONFLICT(metric) DO UPDATE SET anchor=excluded.anchor,updated_at=excluded.updated_at")
+                defer { sqlite3_finalize(anchor) }
+                bind(metric.rawValue, at: 1, in: anchor)
+                encodedAnchorBind(delta.encodedAnchor, statement: anchor, index: 2)
+                sqlite3_bind_double(anchor, 3, now.timeIntervalSince1970); try stepDone(anchor)
+                try setMetadataUnlocked("readRevision", value: String(revision))
+                if !delta.added.isEmpty { try setMetadataUnlocked("hasReadData", value: "true") }
+                try setMetadataUnlocked("lastLocalSync", value: HealthDateFormatter.iso8601.string(from: now))
+                try setMetadataUnlocked("lastError", value: "")
+                try execute("COMMIT")
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
+
+    private func encodedAnchorBind(_ data: Data, statement: OpaquePointer, index: Int32) {
+        data.withUnsafeBytes { sqlite3_bind_blob(statement, index, $0.baseAddress, Int32($0.count), evaOrbitSQLiteTransient) }
+    }
+
+    func takePendingReadBatch(limit: Int, now: Date = Date()) throws -> [HealthReadOutboxItem] {
+        try locked {
+            try execute("BEGIN IMMEDIATE")
+            do {
+                let enabled = HealthReadMetric.enabled(in: self)
+                let statement = try prepare("SELECT id,metric,payload FROM read_outbox WHERE state='pending' AND next_retry<=? ORDER BY id")
+                defer { sqlite3_finalize(statement) }
+                sqlite3_bind_double(statement, 1, now.timeIntervalSince1970)
+                var items: [HealthReadOutboxItem] = []
+                while items.count < limit && sqlite3_step(statement) == SQLITE_ROW {
+                    guard let metric = HealthReadMetric(rawValue: columnText(statement, 1)), enabled.contains(metric) else { continue }
+                    let change = try JSONDecoder().decode(HealthReadChange.self, from: Data(columnText(statement, 2).utf8))
+                    items.append(HealthReadOutboxItem(id: sqlite3_column_int64(statement, 0), change: change))
+                }
+                let update = try prepare("UPDATE read_outbox SET state='inflight',updated_at=? WHERE id=?")
+                defer { sqlite3_finalize(update) }
+                for item in items {
+                    sqlite3_reset(update); sqlite3_clear_bindings(update)
+                    sqlite3_bind_double(update, 1, now.timeIntervalSince1970); sqlite3_bind_int64(update, 2, item.id); try stepDone(update)
+                }
+                try execute("COMMIT")
+                return items
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
+
+    func completeReadUpload(ids: [Int64], now: Date = Date()) throws {
+        try locked {
+            let statement = try prepare("DELETE FROM read_outbox WHERE id=? AND state='inflight'")
+            defer { sqlite3_finalize(statement) }
+            for id in ids { sqlite3_reset(statement); sqlite3_bind_int64(statement, 1, id); try stepDone(statement) }
+            if !ids.isEmpty { try setMetadataUnlocked("lastSuccessfulUpload", value: HealthDateFormatter.iso8601.string(from: now)); try setMetadataUnlocked("lastError", value: "") }
+        }
+    }
+
+    func failReadUpload(ids: [Int64], reason: String, now: Date = Date()) throws {
+        try locked {
+            let select = try prepare("SELECT attempt FROM read_outbox WHERE id=?")
+            let update = try prepare("UPDATE read_outbox SET state='pending',attempt=?,next_retry=?,updated_at=? WHERE id=?")
+            defer { sqlite3_finalize(select); sqlite3_finalize(update) }
+            for id in ids {
+                sqlite3_reset(select); sqlite3_bind_int64(select, 1, id)
+                let attempt = min((sqlite3_step(select) == SQLITE_ROW ? Int(sqlite3_column_int(select, 0)) : 0) + 1, 20)
+                let delay = min(15.0 * pow(2.0, Double(min(attempt - 1, 10))), 21_600.0)
+                sqlite3_reset(update); sqlite3_bind_int(update, 1, Int32(attempt))
+                sqlite3_bind_double(update, 2, now.addingTimeInterval(delay).timeIntervalSince1970)
+                sqlite3_bind_double(update, 3, now.timeIntervalSince1970); sqlite3_bind_int64(update, 4, id); try stepDone(update)
+            }
+            if !ids.isEmpty { try setMetadataUnlocked("lastError", value: String(reason.prefix(240))) }
         }
     }
 
@@ -482,7 +609,9 @@ final class HealthLocalStore {
             let bodyMass = try prepare("SELECT count(*) FROM body_mass_outbox"); defer { sqlite3_finalize(bodyMass) }
             let bodyMassCount = sqlite3_step(bodyMass) == SQLITE_ROW ? Int(sqlite3_column_int(bodyMass, 0)) : 0
             let menstrualFlow = try prepare("SELECT count(*) FROM menstrual_flow_outbox"); defer { sqlite3_finalize(menstrualFlow) }
-            return energy + bodyMassCount + (sqlite3_step(menstrualFlow) == SQLITE_ROW ? Int(sqlite3_column_int(menstrualFlow, 0)) : 0)
+            let read = try prepare("SELECT count(*) FROM read_outbox"); defer { sqlite3_finalize(read) }
+            let readCount = sqlite3_step(read) == SQLITE_ROW ? Int(sqlite3_column_int(read, 0)) : 0
+            return energy + bodyMassCount + readCount + (sqlite3_step(menstrualFlow) == SQLITE_ROW ? Int(sqlite3_column_int(menstrualFlow, 0)) : 0)
         }) ?? 0
     }
 

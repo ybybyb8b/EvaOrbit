@@ -356,6 +356,8 @@ EventKit 同步完成刷新使用 bridge v1 的 `host.notifyDataChanged` → `eo
 
 HealthKit 运行时实现不会改变本 runbook 的续签步骤。Web-only/PWA 不显示授权按钮；设备 token 和 anchor 不写入 Web 日志。服务端接收按自然日、按类型聚合的 kcal 快照、Body Mass 逐样本变化，以及 Menstrual Flow 的 start/end、分类、cycle-start、UUID、source 和 sync identity；不接收能量原始样本。
 
+Sleep / 只读指标扩展见 [`HEALTHKIT_SLEEP.md`](./HEALTHKIT_SLEEP.md)：新增迁移 `202610050002_healthkit_sleep_read_samples.sql`，Host authorization revision `4` 增加 Sleep Analysis、Heart Rate、Resting Heart Rate 与 HRV 读取，不增加四项 write。Sleep 使用独立 interval/stage read DTO 与数据库表；三项心脏指标默认 sync disabled，可通过服务端 `HEALTHKIT_SYNC_METRICS` 和重新连接开启，已具备 v4 能力的 Host 无须再修改。首次安装或升级后仍需由用户在 Settings → Health & Native 更新 Health Access；仅安装/启动不弹授权。迁移 → Web/API → macOS CI IPA → 现有免费重签/安装链的顺序不变。实际睡眠、时间线窗口、fallback、效率、原始时区缺失和 session 分组规则、回滚验证命令以及尚待真机验证的场景均记录在该文档中。
+
 安装包含系统默认本地通知声音的新 IPA 后，在 Notifications 页面确认 `Permission`、`Alerts`、`Sounds` 和 `Scheduled`。Alerts 与 Sounds 都应为 Enabled；旧版 Host 已经授权过的设备可能需要从 `Open iOS Settings` 手动开启 Sounds。点击 `Test notification` 后等待约 5 秒，前台和后台都应出现 banner 并播放 iOS 默认通知音；不会设置 app badge。真实提醒只有在联网成功读取 `/api/notifications` 后才会写入本机，而且 date-only、没有明确时间也没有 snooze 时间的提醒按产品语义不会调度；`Scheduled = 0` 时应先联网 Refresh status 并检查提醒是否有未来明确时间。
 
 ## 常见故障定位
