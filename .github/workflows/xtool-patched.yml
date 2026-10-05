@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Fetch pinned xtool source
         run: |
@@ -60,7 +60,7 @@ jobs:
           cp "$GITHUB_WORKSPACE"/tools/xtool/patches/*.patch .
           sha256sum ./*.patch > PATCH_SHA256SUMS
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: xtool-patched-${{ env.XTOOL_COMMIT }}
           path: ${{ runner.temp }}/xtool-artifact

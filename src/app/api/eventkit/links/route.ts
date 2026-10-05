@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { apiError } from "@/lib/api";
+import { eventKitApiError } from "@/lib/eventkit-api";
 import { HttpError } from "@/lib/errors";
-import { projectEventKitLinks } from "@/lib/eventkit-links";
+import { markMissingEventKitRecords, projectEventKitLinks, readEventKitRows } from "@/lib/eventkit-links";
 import { currentNativeAccount } from "@/lib/native-account";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ValidationError } from "@/lib/validation";
@@ -23,19 +23,19 @@ export async function GET(request: NextRequest) {
     const user = await account(), installationId = installation(request.nextUrl.searchParams.get("installationId"));
     if (request.nextUrl.searchParams.get("protocol") !== "2") throw new HttpError("请刷新 EvaOrbit 后恢复 EventKit 同步", 409);
     const client = await createSupabaseServerClient();
-    async function readAll(table: string) {
-      const rows: Record<string, unknown>[] = []; let cursor: string | number | undefined;
-      for (;;) {
-        let query = client.from(table).select("*").eq("user_id", user.id).order("id");
+    function readAll(table: string, columns = "*") {
+      return readEventKitRows(async cursor => {
+        let query = client.from(table).select(columns).eq("user_id", user.id).order("id");
         if (cursor !== undefined) query = query.gt("id", cursor);
-        const { data, error } = await query.limit(500);
-        if (error) throw error; if (!data?.length) return rows;
-        rows.push(...data); cursor = data[data.length - 1].id;
-      }
+        const { data, error } = await query.limit(500).returns<Record<string, unknown>[]>();
+        if (error) throw error;
+        return data ?? [];
+      });
     }
-    const [logical, bindings] = await Promise.all([readAll("eventkit_logical_links"), readAll("eventkit_links")]);
-    return NextResponse.json(projectEventKitLinks(logical, bindings, installationId));
-  } catch (error) { return apiError(error); }
+    // Check existence across the account, never against a window or truncated list.
+    const [logical, bindings, tasks, reminders, events] = await Promise.all([readAll("eventkit_logical_links"), readAll("eventkit_links"), readAll("tasks", "id"), readAll("reminders", "id"), readAll("calendar_events", "id")]);
+    return NextResponse.json(markMissingEventKitRecords(projectEventKitLinks(logical, bindings, installationId), { task: tasks, reminder: reminders, calendar_event: events }));
+  } catch (error) { return eventKitApiError(error); }
 }
 // Reserve the marker before touching Apple; retries use the same server UUID.
 export async function POST(request: NextRequest) {
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     if (input.p_kind !== "reminder") throw new ValidationError("仅 Reminder 镜像需要预留恢复标记");
     const { data, error } = await client.rpc("reserve_eventkit_link", { ...input, p_next_occurrence: body.nextOccurrence ?? false, p_prepare_creation: true, p_creation_lease: randomUUID() });
     if (error) throw error; return NextResponse.json(data);
-  } catch (error) { return apiError(error); }
+  } catch (error) { return eventKitApiError(error); }
 }
 export async function PUT(request: NextRequest) {
   try {
@@ -62,7 +62,7 @@ export async function PUT(request: NextRequest) {
     if (body.entityType === "task") { const result = await client.from("task_reminders").update({ delivery_channel: deliveryChannel }).eq("task_id", body.eoId); if (result.error) throw result.error; }
     else if (body.entityType === "reminder") { const result = await client.from("reminders").update({ delivery_channel: deliveryChannel }).eq("id", body.eoId); if (result.error) throw result.error; }
     return NextResponse.json(data);
-  } catch (error) { return apiError(error); }
+  } catch (error) { return eventKitApiError(error); }
 }
 export async function DELETE(request: NextRequest) {
   try {
@@ -72,5 +72,5 @@ export async function DELETE(request: NextRequest) {
     if (result.error) throw result.error;
     // A local binding removal never removes the account relationship or changes ownership.
     return new NextResponse(null, { status: 204 });
-  } catch (error) { return apiError(error); }
+  } catch (error) { return eventKitApiError(error); }
 }

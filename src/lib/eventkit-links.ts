@@ -1,5 +1,21 @@
 type Row = Record<string, unknown>;
 
+export async function readEventKitRows(readPage: (cursor?: string | number) => Promise<Row[]>) {
+  const rows: Row[] = []; let cursor: string | number | undefined;
+  for (;;) {
+    const page = await readPage(cursor);
+    if (!page.length) return rows;
+    const next = page[page.length - 1].id;
+    if ((typeof next !== "string" && typeof next !== "number") || next === cursor) throw new Error("EventKit pagination did not advance");
+    rows.push(...page); cursor = next;
+  }
+}
+
+export function markMissingEventKitRecords<T extends { entity_type: unknown; eo_id: unknown }>(links: T[], records: Record<string, Row[]>) {
+  const ids = new Map(Object.entries(records).map(([kind, rows]) => [kind, new Set(rows.map(row => Number(row.id)))]));
+  return links.map(link => ({ ...link, eo_record_missing: !ids.get(String(link.entity_type))?.has(Number(link.eo_id)) }));
+}
+
 /** Account links are returned even when this installation has never synced. */
 export function projectEventKitLinks(logical: Row[], bindings: Row[], installationId: string) {
   const identities = new Map<string, Set<unknown>>();

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus } from "./eventkit-sync.ts";
+import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
 
 type Item = Record<string, unknown>;
 const calendarBase = { title: "Visit", notes: "", startAt: "2026-10-06T02:00:00.000Z", endAt: "2026-10-06T03:00:00.000Z", isAllDay: false, timezone: "Asia/Shanghai", location: "", status: "confirmed" };
@@ -15,7 +15,7 @@ function fixture() {
   let nextEvent = 10000, nextApple = 0;
   const f = {
     events, tasks, links, apple, calls, batchMissing, listMissing, logical,
-    lookupAvailable: true, lookupResult: "", failImport: "", failEORead: false, failBinding: false,
+    lookupAvailable: true, lookupResult: "", failImport: "", failEORead: false, failBinding: false, includeEOFlags: true, failBindingCode: "",
     reinstall() { for (const [id, link] of links) { const token = `00000000-0000-4000-8000-${String(id).padStart(12,"0")}`; logical.set(`${link.entity_type}:${link.eo_id}`, { recovery_token: token, initial_snapshot: link.last_synced_snapshot }); links.set(id, { ...link, logical_link_id: token, recovery_token: token, binding_state: "recovery", bindings: [{ ...link }] }); } },
     linkEvent(id: number) {
       events.set(id, { id, ...calendarBase });
@@ -53,7 +53,7 @@ function fixture() {
       const url = new URL(String(input), "https://eo.test"), path = url.pathname, method = init?.method ?? "GET", body: Item = init?.body ? JSON.parse(String(init.body)) : {};
       calls.push({ method, target: path, body });
       if (path === "/api/eventkit/links") {
-        if (method === "GET") return Response.json([...links.values()]);
+        if (method === "GET") return Response.json([...links.values()].map(link => f.includeEOFlags ? { ...link, eo_record_missing: link.entity_type === "calendar_event" ? !events.has(Number(link.eo_id)) : link.entity_type === "task" ? !tasks.has(Number(link.eo_id)) : true } : link));
         if (method === "DELETE") { links.delete(Number(body.id)); return new Response(null, { status: 204 }); }
         if (method === "POST") {
           const key = `${body.entityType}:${body.eoId}`, reserved = logical.get(key) ?? { recovery_token: `00000000-0000-4000-8000-${String(body.eoId).padStart(12,"0")}`, initial_snapshot: body.lastSyncedSnapshot };
@@ -61,6 +61,7 @@ function fixture() {
           if (![...links.values()].some(link => link.entity_type === body.entityType && link.eo_id === body.eoId)) links.set(Number(body.eoId), { id: 0, logical_link_id: reserved.recovery_token, recovery_token: reserved.recovery_token, binding_state: "pending", entity_type: body.entityType, eo_id: body.eoId, eventkit_entity_type: "reminder", calendar_item_identifier: "", calendar_identifier: "", source_identifier: "", last_synced_snapshot: reserved.initial_snapshot, bindings: [] });
           return Response.json(reserved);
         }
+        if (f.failBindingCode) { const code = f.failBindingCode; f.failBindingCode = ""; return Response.json({ error: "EO record disappeared", code }, { status: 409 }); }
         if (f.failBinding) { f.failBinding = false; return Response.json({ error: "binding failed" }, { status: 500 }); }
         const existing = [...links.values()].find(link => link.entity_type === body.entityType && link.eo_id === body.eoId), id = Number(existing?.id ?? links.size + 1);
         const reserved = logical.get(`${body.entityType}:${body.eoId}`);
@@ -74,6 +75,7 @@ function fixture() {
       if (path === "/api/tasks/1/eventkit") { const patch = body.task as Item; tasks.set(1, { ...tasks.get(1), ...patch, completedAt: patch.completionDate }); return Response.json(tasks.get(1)); }
       if (path === "/api/eventkit/calendar-import") {
         assert.equal(method, "POST");
+        if (f.failImport === "missing-eo-conflict") { f.failImport = ""; return Response.json({ error: "EO record disappeared", code: "eventkit_eo_missing" }, { status: 409 }); }
         if (f.failImport === "before-commit") { f.failImport = ""; return Response.json({ error: "mapping insert failed" }, { status: 500 }); }
         const item = body.apple as Item, linked = [...links.values()].find(link => link.calendar_item_identifier === item.calendarItemIdentifier), id = linked && events.has(Number(linked.eo_id)) ? Number(linked.eo_id) : ++nextEvent;
         if (!events.has(id)) {
@@ -98,7 +100,7 @@ function fixture() {
       }
       throw new Error(`Unexpected request ${method} ${path}`);
     },
-    run(modes = { calendar: "import" as const, list: "two_way" as const }, info = status) { return synchronizeEventKit(info, modes, { tasks: "list" }); },
+    run(modes: EventKitModes = { calendar: "import" as const, list: "two_way" as const }, info = status) { return synchronizeEventKit(info, modes, { tasks: "list" }); },
     writes() { return calls.filter(call => ["POST", "PUT", "PATCH", "DELETE", "eventkit.save", "eventkit.delete"].includes(call.method)); },
   };
   return f;
@@ -120,6 +122,62 @@ test("610 Calendar mappings paginate every EO record and updates keep the origin
   assert.equal(f.calls.filter(call => call.method === "POST").length, 0);
   assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/calendar-events").length, 6);
   assert.ok(f.calls.some(call => call.method === "GET" && call.target === "/api/calendar-events/610"));
+}));
+for (const recovery of [false, true]) for (const flags of [false, true]) {
+  test(`Missing EO records pause only their links and allow a new Calendar import (recovery=${recovery}, flags=${flags})`, async () => withFixture(async f => {
+    f.includeEOFlags = flags;
+    f.linkTask(); f.tasks.clear();
+    for (let id = 2; id <= 611; id++) f.linkEvent(id);
+    f.events.clear();
+    if (recovery) f.reinstall();
+    const oldLinks = structuredClone([...f.links.values()]);
+    f.apple.set("event-new", { ...calendarBase, title: "New appointment", calendarItemIdentifier: "event-new", externalIdentifier: "external-new", calendarIdentifier: "calendar", sourceIdentifier: "source" });
+    const result = await f.run(); await f.run();
+    assert.equal(f.events.size, 1); assert.equal([...f.events.values()][0].title, "New appointment");
+    assert.equal(result.imported, 1); assert.equal(result.conflicts.filter(conflict => conflict.fields.includes("eo_missing")).length, 611);
+    assert.deepEqual([...f.links.values()].slice(0, 611), oldLinks);
+    assert.equal(f.apple.size, 612); assert.equal(f.calls.filter(call => call.method === "eventkit.delete").length, 0);
+    assert.equal(f.calls.filter(call => call.target === "/api/eventkit/calendar-import").length, 1);
+    assert.equal(f.calls.filter(call => call.method === "PUT" && call.target === "/api/eventkit/links").length, 0);
+  }));
+}
+test("Changed Apple identifiers still match a paused missing-EO relationship", async () => withFixture(async f => {
+  f.linkEvent(2); f.events.clear(); f.reinstall();
+  f.apple.delete("event-2"); f.apple.set("event-renamed", { ...calendarBase, calendarItemIdentifier: "event-renamed", externalIdentifier: "external-2", calendarIdentifier: "calendar", sourceIdentifier: "source" });
+  const result = await f.run(); assert.equal(result.imported, 0); assert.equal(f.events.size, 0); assert.equal(f.links.size, 1); assert.equal(f.writes().length, 0);
+}));
+test("An orphan without a durable Apple identity retains the recovery safety barrier", async () => withFixture(async f => {
+  f.linkEvent(2); f.events.clear(); f.links.set(2, { ...f.links.get(2), external_identifier: null }); f.reinstall();
+  f.apple.delete("event-2"); f.apple.set("event-unknown", { ...calendarBase, calendarItemIdentifier: "event-unknown", calendarIdentifier: "calendar", sourceIdentifier: "source" });
+  await f.run(); assert.equal(f.events.size, 0); assert.equal(f.links.size, 1); assert.equal(f.writes().length, 0);
+}));
+test("A changed orphan Reminder marker cannot be adopted by an unrelated Task", async () => withFixture(async f => {
+  f.linkTask(); f.tasks.clear(); f.reinstall();
+  const original = f.apple.get("reminder-1"); f.apple.delete("reminder-1");
+  f.apple.set("reminder-renamed", { ...original, calendarItemIdentifier: "reminder-renamed", externalIdentifier: "new-external", url: eventKitRecoveryURL(String(f.links.get(1)?.recovery_token)) });
+  f.tasks.set(9, { id: 9, ...taskBase, completedAt: null, reminders: [] });
+  await f.run(); assert.equal(f.apple.size, 2); assert.equal(f.links.get(1)?.eo_id, 1);
+  assert.notEqual([...f.links.values()].find(link => link.eo_id === 9)?.calendar_item_identifier, "reminder-renamed");
+}));
+test("An EO record removed during recovery pauses that binding without stopping a new Calendar import", async () => withFixture(async f => {
+  f.linkTask(); f.reinstall(); f.failBindingCode = "eventkit_eo_missing";
+  f.apple.set("event-new", { ...calendarBase, calendarItemIdentifier: "event-new", externalIdentifier: "external-new", calendarIdentifier: "calendar", sourceIdentifier: "source" });
+  const result = await f.run(); assert.equal(result.imported, 1); assert.equal(f.links.get(1)?.binding_state, "recovery");
+  assert.ok(result.conflicts.some(conflict => conflict.eoId === 1 && conflict.fields.includes("eo_missing")));
+}));
+test("An import refused for an old missing-EO identity does not stop unrelated new events", async () => withFixture(async f => {
+  f.linkEvent(1); f.linkEvent(2); f.events.clear(); f.links.clear(); f.failImport = "missing-eo-conflict";
+  const result = await f.run(); assert.equal(f.events.size, 1); assert.equal(result.imported, 1); assert.deepEqual(result.conflicts[0].fields, ["eo_missing"]);
+}));
+test("Calendar diagnostics distinguish reads, new imports, updates and preserved missing-EO links", async () => withFixture(async f => {
+  f.linkEvent(1); f.linkEvent(2); f.linkEvent(3); f.events.delete(2); f.links.delete(3); f.events.delete(3);
+  f.apple.set("event-1", { ...f.apple.get("event-1"), title: "Updated" });
+  const result = await f.run(); assert.equal(result.calendarDiagnostics?.readEvents, 3); assert.equal(result.calendarDiagnostics?.newImports, 1); assert.equal(result.calendarDiagnostics?.updatedEvents, 1);
+  assert.match(eventKitSyncDiagnosticText(result), /读取 3 条，新导入 1 条，更新 1 条/); assert.match(eventKitSyncDiagnosticText(result), /暂停 1 条旧关联/);
+}));
+test("Diagnostics expose a disabled Calendar source without treating it as an empty store", async () => withFixture(async f => {
+  f.linkEvent(1); const result = await f.run({ calendar: "off", list: "two_way" });
+  assert.equal(result.calendarDiagnostics?.readEvents, 0); assert.match(eventKitSyncDiagnosticText(result), /事件所在日历设为 Import only/); assert.equal(f.events.size, 1);
 }));
 test("Mapped Calendar objects outside both batch windows still update the original EO ID", async () => withFixture(async f => {
   f.linkEvent(1); f.batchMissing.add("event-1"); f.listMissing.add(1);

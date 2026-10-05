@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiError } from "@/lib/api";
+import { eventKitApiError } from "@/lib/eventkit-api";
 import { HttpError } from "@/lib/errors";
 import { eventKitCanonicalSnapshot, eventKitSnapshotHash } from "@/lib/eventkit-sync";
 import { currentNativeAccount } from "@/lib/native-account";
@@ -21,5 +21,5 @@ export async function POST(request: NextRequest) {
     const { data, error } = await client.rpc("import_eventkit_calendar_event", { p_installation_id: body.installationId, p_apple: apple, p_snapshot: snapshot, p_hash: await eventKitSnapshotHash(snapshot) });
     if (error) throw error;
     return NextResponse.json({ id: Number(data) });
-  } catch (error) { return apiError(error); }
+  } catch (error) { return eventKitApiError(error); }
 }

@@ -24,7 +24,7 @@ EventKit 稳定性更新新增 bridge v1 的 `eventkit.getItem`：已有 mapping
 
 ### Native Host 构建链
 
-GitHub Actions 的 `iOS Native Host` workflow 使用 `macos-15` runner：
+GitHub Actions 的 `iOS Native Host` workflow 当前配置使用标准 `macos-15-intel` runner（2026-10-05 从 `macos-15` 切换，避开 arm64 容量排队；不是付费 large runner）。同时升级为 Node.js 24 runtime 的 `actions/checkout@v5` / `actions/upload-artifact@v6`。以下打包与签名步骤保持不变；新 runner 的 Simulator 单测和 IPA 构建结果须由下一次 macOS CI 验证，尚不能宣称新配置已实跑通过：
 
 1. 安装 XcodeGen 并从 `ios/EvaOrbitHost/project.yml` 生成 Xcode 工程。
 2. 为 Simulator 编译 Host 和测试 bundle。

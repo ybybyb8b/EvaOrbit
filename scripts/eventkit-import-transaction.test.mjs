@@ -100,5 +100,13 @@ test("EventKit migrations preserve baselines and Calendar RPC is atomic across r
     const suspects=(await db.query("select * from public.eventkit_identity_conflicts where external_identifier='suspected-duplicate'")).rows;
     assert.equal(suspects.length,1);assert.equal(suspects[0].eo_ids.length,2);
     await assert.rejects(call({...apple,calendarItemIdentifier:"suspect-new",externalIdentifier:"suspected-duplicate"}),/Ambiguous EventKit identity/);
+    // Missing EO records leave logical/binding history intact and never reimport that Apple identity.
+    const linksBefore = await count("eventkit_logical_links"), bindingsBefore = await count("eventkit_links");
+    await db.query("delete from public.calendar_events where id=$1", [id]);
+    await assert.rejects(call(), /Linked EO record is missing/);
+    await assert.rejects(call({ ...apple, calendarItemIdentifier: "orphan-after-reinstall" }, "00000000-0000-4000-8000-000000000008"), /Linked EO record is missing/);
+    assert.equal(await count("eventkit_logical_links"), linksBefore); assert.equal(await count("eventkit_links"), bindingsBefore);
+    const newID = (await call({ ...apple, calendarItemIdentifier: "new-after-orphan", externalIdentifier: "new-after-orphan" })).rows[0].id;
+    assert.notEqual(newID, id); assert.equal((await call({ ...apple, calendarItemIdentifier: "new-after-orphan", externalIdentifier: "new-after-orphan" })).rows[0].id, newID);
   } finally { await db.close(); }
 });

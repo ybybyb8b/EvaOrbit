@@ -66,7 +66,7 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 
 ```text
 提交并 push Native 改动
-  → GitHub Actions macos-15 + XcodeGen + Xcode
+  → GitHub Actions macos-15-intel + XcodeGen + Xcode
   → Simulator 编译和 iPhone 16 Pro Simulator 单测
   → iphoneos Release ad-hoc signed .app
   → 校验 HealthKit entitlements 后打包 IPA
@@ -78,6 +78,8 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 这不是“在 Windows 编译 iOS”。Windows/WSL 负责 artifact 验证、个人免费签名和真机安装；Apple 平台编译发生在 macOS GitHub runner。
 
 ### 3.2 CI 的关键约束
+
+2026-10-05 起，workflow 配置使用标准 `macos-15-intel` runner，避开 GitHub 提示的 macOS arm64 容量排队；不使用付费 large runner，也不保证其他队列没有等待。`actions/checkout@v5` 和 `actions/upload-artifact@v6` 使用 Node.js 24 action runtime。此配置更新不改变设备目标、ad-hoc signing、entitlement 校验或 patched xtool；Intel runner 下的 Simulator 单测及完整 IPA 构建仍需下一次 macOS CI 实际验证，不能将此前的成功产物作为新 runner 已通过的证据。
 
 `.github/workflows/ios-native-host.yml` 当前会：
 
