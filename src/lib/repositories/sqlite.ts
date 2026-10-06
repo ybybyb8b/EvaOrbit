@@ -192,6 +192,8 @@ export const sqliteRepository: EvaOrbitRepository = {
   async listTrackerFields(trackerId) { return sqlite.listTrackerFields(trackerId); },
   async createTrackerField(input) { return sqlite.createTrackerField(input); },
   async deleteTrackerField(id) { return sqlite.deleteTrackerField(id); },
+  async updateTrackerField(id, input) { return sqlite.updateTrackerField(id, input); },
+  async purgeTrackerField(id) { return sqlite.purgeTrackerField(id); },
   async listTrackerEntries(trackerId, input) { return sqlite.listTrackerEntries(trackerId, input); },
   async getTrackerEntry(id) { return sqlite.getTrackerEntry(id); },
   async createTrackerEntry(input) { return sqlite.createTrackerEntry(input); },

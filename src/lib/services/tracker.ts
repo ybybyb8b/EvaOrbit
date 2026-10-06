@@ -41,7 +41,7 @@ export async function listTrackerSummaries(): Promise<TrackerSummary[]> {
 
 export async function listQuickLogTrackers() {
   const repository = await getRepository();
-  const trackers = await repository.listTrackers();
+  const trackers = (await repository.listTrackers()).filter(tracker => !tracker.archivedAt);
   return Promise.all(trackers.map(async (tracker) => ({
     id: tracker.id,
     name: tracker.name,
@@ -64,13 +64,20 @@ export async function getTrackerDetail(id: number, query = "") {
   ]);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const entries = normalizedQuery ? allEntries.filter((entry) => `${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(normalizedQuery)) : allEntries;
-  return { tracker, fields, goals, reminders, entries, stats: stats(allEntries, reminders), insights: buildTrackerInsights(allEntries, fields) };
+  const groupNames = [...new Set((await repository.listTrackers()).map(item => item.groupName))];
+  return { tracker, fields, goals, reminders, entries, groupNames, stats: stats(allEntries, reminders), insights: buildTrackerInsights(allEntries, fields) };
 }
 
 export async function createTracker(input: NewTracker) { return (await getRepository()).createTracker(input); }
 export async function updateTracker(id: number, input: Record<string, unknown>) {
   const repository = await getRepository();
   const tracker = await repository.updateTracker(id, input);
+  if (tracker?.archivedAt && input.archivedAt) {
+    for (const rule of await repository.listTrackerReminders(id)) {
+      await repository.updateTrackerReminder(rule.id, { enabled: false });
+      if (rule.reminderId) await repository.updateReminder(rule.reminderId, { isActive: false, status: "cancelled", cancelledAt: new Date().toISOString(), snoozedUntil: null });
+    }
+  }
   if (tracker && input.name !== undefined) {
     for (const rule of await repository.listTrackerReminders(id)) if (rule.reminderId) await repository.updateReminder(rule.reminderId, { title: tracker.name });
   }
@@ -79,7 +86,7 @@ export async function updateTracker(id: number, input: Record<string, unknown>) 
 export async function deleteTracker(id: number) {
   const repository = await getRepository();
   if (!await repository.getTracker(id)) return false;
-  for (const rule of await repository.listTrackerReminders(id)) if (rule.reminderId) await repository.updateReminder(rule.reminderId, { isActive: false, status: "cancelled", cancelledAt: new Date().toISOString(), snoozedUntil: null });
+  for (const rule of await repository.listTrackerReminders(id)) if (rule.reminderId) await repository.deleteReminder(rule.reminderId);
   await resetTrackerIcon(id);
   return repository.deleteTracker(id);
 }
@@ -89,6 +96,16 @@ export async function createTrackerField(input: NewTrackerField) {
   return (await getRepository()).createTrackerField(input);
 }
 export async function deleteTrackerField(id: number) { return (await getRepository()).deleteTrackerField(id); }
+export async function updateTrackerField(trackerId: number, id: number, input: Record<string, unknown>) {
+  const repository = await getRepository();
+  if (!(await repository.listTrackerFields(trackerId)).some(field => field.id === id)) return null;
+  return repository.updateTrackerField(id, input);
+}
+export async function purgeTrackerField(trackerId: number, id: number) {
+  const repository = await getRepository();
+  if (!(await repository.listTrackerFields(trackerId)).some(field => field.id === id)) return false;
+  return repository.purgeTrackerField(id);
+}
 
 function validatedValues(fields: TrackerField[], values: Record<string, unknown>) {
   const result: Record<string, unknown> = {};
@@ -113,6 +130,7 @@ export async function createTrackerEntry(input: NewTrackerEntry) {
   const repository = await getRepository();
   const tracker = await repository.getTracker(input.trackerId);
   if (!tracker) throw new ValidationError("Tracker 不存在");
+  if (tracker.archivedAt) throw new ValidationError("请先恢复已归档的 Tracker，再新增记录");
   const fields = await repository.listTrackerFields(tracker.id);
   return repository.createTrackerEntry({ ...input, values: validatedValues(fields, input.values) });
 }
@@ -157,7 +175,9 @@ async function syncTrackerReminder(rule: TrackerReminder) {
 
 export async function createTrackerReminder(input: NewTrackerReminder) {
   const repository = await getRepository();
-  if (!await repository.getTracker(input.trackerId)) throw new ValidationError("Tracker 不存在");
+  const tracker = await repository.getTracker(input.trackerId);
+  if (!tracker) throw new ValidationError("Tracker 不存在");
+  if (tracker.archivedAt) throw new ValidationError("请先恢复 Tracker，再启用提醒");
   const rule = await repository.createTrackerReminder(input);
   return (await syncTrackerReminder(rule)) ?? rule;
 }
@@ -165,6 +185,8 @@ export async function updateTrackerReminder(id: number, input: NewTrackerReminde
   const repository = await getRepository();
   const existing = await repository.getTrackerReminder(id);
   if (!existing) return null;
+  if (input.trackerId !== existing.trackerId) return null;
+  if (input.enabled && (await repository.getTracker(existing.trackerId))?.archivedAt) throw new ValidationError("请先恢复 Tracker，再启用提醒");
   const updated = await repository.updateTrackerReminder(id, { ...input, trackerId: undefined, reminderId: existing.reminderId });
   if (!updated) return null;
   await syncTrackerReminder(updated);

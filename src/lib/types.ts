@@ -312,6 +312,7 @@ export interface Tracker {
   timeType: TrackerTimeType;
   quickCaptureEnabled: boolean;
   statsConfig: Record<string, unknown>;
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

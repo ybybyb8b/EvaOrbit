@@ -1,6 +1,7 @@
 "use client";
 import { FormSheet } from "@/components/form-sheet";
 import { SuggestedInput } from "@/components/suggested-input";
+import { useLocale } from "@/components/locale-controller";
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -35,8 +36,10 @@ function ago(value: string) {
 }
 
 export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
+  const { english } = useLocale();
   const [trackers, setTrackers] = useState<TrackerSummary[]>(initial);
   const [showForm, setShowForm] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
@@ -106,9 +109,11 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
     setWorking(false);
   }
 
-  const groups = [...new Set(trackers.map((tracker) => tracker.groupName))];
+  const visibleTrackers = trackers.filter(tracker => Boolean(tracker.archivedAt) === showArchived);
+  const groups = [...new Set(visibleTrackers.map((tracker) => tracker.groupName))];
   return <div className="page tracker-page">
     <PageHeader eyebrow="生活" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />新增观测</button>} />
+    {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
     {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
       <p className="tracker-create-intro">What do you want to notice?</p>
       <div className="tracker-create-basics">
@@ -142,12 +147,12 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
       {error && <p className="form-error">{error}</p>}
     </form></FormSheet>}
     {error && !showForm && <p className="form-error">{error}</p>}
-    {loading ? <div className="loading-state">Opening Trackers…</div> : trackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
-      <div className="tracker-group-heading"><h2>{group}</h2><span>{trackers.filter((tracker) => tracker.groupName === group).length}</span></div>
-      <div className="tracker-card-grid">{trackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
+    {loading ? <div className="loading-state">Opening Trackers…</div> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
+      <div className="tracker-group-heading"><h2>{group}</h2><span>{visibleTrackers.filter((tracker) => tracker.groupName === group).length}</span></div>
+      <div className="tracker-card-grid">{visibleTrackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>
-        {tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
+        {tracker.archivedAt ? null : tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
       </article>)}</div>
-    </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>暂无观测</h2><button className="button primary" onClick={() => setShowForm(true)}>新增观测</button></div>}
+    </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>{showArchived?(english?"No archived Trackers":"暂无已归档 Tracker"):"暂无观测"}</h2><button className="button primary" onClick={() => setShowForm(true)}>新增观测</button></div>}
   </div>;
 }

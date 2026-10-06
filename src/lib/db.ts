@@ -1520,6 +1520,9 @@ if (!hasV69) database.exec(`BEGIN;
   CREATE UNIQUE INDEX idx_tracker_fields_key ON tracker_fields(tracker_id,field_key);
   INSERT INTO migrations(version) VALUES(69); COMMIT;`);
 
+const hasV70 = database.prepare("SELECT 1 FROM migrations WHERE version=70").get();
+if (!hasV70) database.exec("BEGIN; ALTER TABLE trackers ADD COLUMN archived_at TEXT; INSERT INTO migrations(version) VALUES(70); COMMIT;");
+
 function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -2189,16 +2192,39 @@ export function updateDrinkLimit(id:number,input:Record<string,unknown>){const m
 export function deleteDrinkLimit(id:number){return database.prepare("DELETE FROM drink_limits WHERE id=?").run(id).changes>0;}
 
 function jsonValue<T>(value: unknown, fallback: T): T { try { return typeof value === "string" ? JSON.parse(value) as T : fallback; } catch { return fallback; } }
-function trackerFromRow(row:Record<string,unknown>):Tracker{return{id:Number(row.id),name:String(row.name),icon:String(row.icon),iconType:(row.icon_type??"default") as Tracker["iconType"],iconValue:String(row.icon_value??""),groupName:String(row.group_name),timeType:row.time_type as Tracker["timeType"],quickCaptureEnabled:Boolean(row.quick_capture_enabled),statsConfig:jsonValue(row.stats_config,{}),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trackerFromRow(row:Record<string,unknown>):Tracker{return{archivedAt:row.archived_at?String(row.archived_at):null,id:Number(row.id),name:String(row.name),icon:String(row.icon),iconType:(row.icon_type??"default") as Tracker["iconType"],iconValue:String(row.icon_value??""),groupName:String(row.group_name),timeType:row.time_type as Tracker["timeType"],quickCaptureEnabled:Boolean(row.quick_capture_enabled),statsConfig:jsonValue(row.stats_config,{}),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listTrackers(){return(database.prepare("SELECT * FROM trackers ORDER BY group_name,name,id").all() as Record<string,unknown>[]).map(trackerFromRow);}
 export function getTracker(id:number){const row=database.prepare("SELECT * FROM trackers WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?trackerFromRow(row):null;}
 export function createTracker(input:Omit<Tracker,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO trackers(name,icon,icon_type,icon_value,group_name,time_type,quick_capture_enabled,stats_config) VALUES(?,?,?,?,?,?,?,?)").run(input.name,input.icon,input.iconType,input.iconValue,input.groupName,"point",Number(input.quickCaptureEnabled),JSON.stringify(input.statsConfig));return getTracker(Number(result.lastInsertRowid))!;}
-export function updateTracker(id:number,input:Record<string,unknown>){const map:Record<string,string>={name:"name",icon:"icon",iconType:"icon_type",iconValue:"icon_value",groupName:"group_name",quickCaptureEnabled:"quick_capture_enabled",statsConfig:"stats_config"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getTracker(id);const value=(key:string)=>key==="quickCaptureEnabled"?Number(input[key]):key==="statsConfig"?JSON.stringify(input[key]):input[key] as string|number;database.prepare(`UPDATE trackers SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>value(key)),id);return getTracker(id);}
+export function updateTracker(id:number,input:Record<string,unknown>){const map:Record<string,string>={name:"name",icon:"icon",iconType:"icon_type",iconValue:"icon_value",groupName:"group_name",quickCaptureEnabled:"quick_capture_enabled",statsConfig:"stats_config",archivedAt:"archived_at"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getTracker(id);const value=(key:string)=>key==="quickCaptureEnabled"?Number(input[key]):key==="statsConfig"?JSON.stringify(input[key]):input[key] as string|number;database.prepare(`UPDATE trackers SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>value(key)),id);return getTracker(id);}
 export function deleteTracker(id:number){return database.prepare("DELETE FROM trackers WHERE id=?").run(id).changes>0;}
 
 function trackerFieldFromRow(row:Record<string,unknown>):TrackerField{return{id:Number(row.id),trackerId:Number(row.tracker_id),key:String(row.field_key??`field_${row.id}`),name:String(row.name),type:row.type as TrackerField["type"],required:Boolean(row.required),defaultValue:row.default_value===null?null:jsonValue(row.default_value,null),options:jsonValue(row.options_json,[]),showAfterQuickCapture:Boolean(row.show_after_quick_capture),includeInStats:Boolean(row.include_in_stats),sortOrder:Number(row.sort_order),unit:String(row.unit??""),precision:Number(row.precision??0),config:jsonValue(row.config_json,{}),archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listTrackerFields(trackerId:number){return(database.prepare("SELECT * FROM tracker_fields WHERE tracker_id=? ORDER BY sort_order,id").all(trackerId) as Record<string,unknown>[]).map(trackerFieldFromRow);}
 export function createTrackerField(input:Omit<TrackerField,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_fields(tracker_id,field_key,name,type,required,default_value,options_json,show_after_quick_capture,include_in_stats,sort_order,unit,precision,config_json,archived_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.trackerId,input.key,input.name,input.type,Number(input.required),input.defaultValue===null?null:JSON.stringify(input.defaultValue),JSON.stringify(input.options),Number(input.showAfterQuickCapture),Number(input.includeInStats),input.sortOrder,input.unit,input.precision,JSON.stringify(input.config),input.archivedAt);return trackerFieldFromRow(database.prepare("SELECT * FROM tracker_fields WHERE id=?").get(Number(result.lastInsertRowid)) as Record<string,unknown>);}
+export function updateTrackerField(id:number,input:Record<string,unknown>) {
+  const map:Record<string,string>={name:'name',required:'required',includeInStats:'include_in_stats',archivedAt:'archived_at'};
+  const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);
+  if(entries.length) database.prepare('UPDATE tracker_fields SET '+entries.map(([,column])=>column+'=?').join(',')+',updated_at=CURRENT_TIMESTAMP WHERE id=?').run(...entries.map(([key])=>['required','includeInStats'].includes(key)?Number(input[key]):input[key] as string|null),id);
+  const row=database.prepare('SELECT * FROM tracker_fields WHERE id=?').get(id) as Record<string,unknown>|undefined;
+  return row?trackerFieldFromRow(row):null;
+}
+export function purgeTrackerField(id:number) {
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    const row=database.prepare('SELECT * FROM tracker_fields WHERE id=?').get(id) as Record<string,unknown>|undefined;
+    if(!row){database.exec('COMMIT');return false;}
+    const field=trackerFieldFromRow(row);
+    const entries=listTrackerEntries(field.trackerId);
+    for(const entry of entries) {
+      const values={...entry.values};let changed=false;
+      for(const key of new Set([field.key,String(id),'field_'+id])) if(Object.hasOwn(values,key)){delete values[key];changed=true;}
+      if(changed) updateTrackerEntry(entry.id,{values});
+    }
+    database.prepare('DELETE FROM tracker_fields WHERE id=?').run(id);
+    database.exec('COMMIT');return true;
+  }catch(error){database.exec('ROLLBACK');throw error;}
+}
 export function deleteTrackerField(id:number){return database.prepare("UPDATE tracker_fields SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL").run(id).changes>0;}
 
 function trackerEntryFromRow(row:Record<string,unknown>):TrackerEntry{return{id:Number(row.id),trackerId:Number(row.tracker_id),occurredAt:String(row.occurred_at),endAt:row.end_at?String(row.end_at):null,values:jsonValue(row.values_json,{}),note:String(row.note),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}

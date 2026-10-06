@@ -404,6 +404,8 @@ export interface EvaOrbitRepository {
   deleteTracker(id: number): Promise<boolean>;
   listTrackerFields(trackerId: number): Promise<TrackerField[]>;
   createTrackerField(input: NewTrackerField): Promise<TrackerField>;
+  updateTrackerField(id: number, input: Record<string, unknown>): Promise<TrackerField | null>;
+  purgeTrackerField(id: number): Promise<boolean>;
   deleteTrackerField(id: number): Promise<boolean>;
   listTrackerEntries(trackerId?: number, input?: { from?: string; to?: string; query?: string }): Promise<TrackerEntry[]>;
   getTrackerEntry(id: number): Promise<TrackerEntry | null>;

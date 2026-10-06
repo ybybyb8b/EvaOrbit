@@ -1253,7 +1253,19 @@ export function parseTrackerPatch(value: unknown) {
   const body = objectValue(value);
   const parsed = parseNewTracker({ name: body.name ?? "placeholder", groupName: body.groupName ?? "日常", quickCaptureEnabled: body.quickCaptureEnabled ?? true, statsConfig: body.statsConfig ?? {} });
   const keys = ["name", "groupName", "quickCaptureEnabled", "statsConfig"] as const;
-  const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  const result: Record<string, unknown> = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
+  if (body.archived !== undefined) result.archivedAt = booleanValue(body.archived, "归档状态", false) ? new Date().toISOString() : null;
+  if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
+  return result;
+}
+
+export function parseTrackerFieldPatch(value: unknown) {
+  const body = objectValue(value);
+  const result: Record<string, unknown> = {};
+  if (body.name !== undefined) result.name = text(body.name, "字段名称", 60)!;
+  if (body.required !== undefined) result.required = booleanValue(body.required, "必填状态", false);
+  if (body.includeInStats !== undefined) result.includeInStats = booleanValue(body.includeInStats, "参与统计", false);
+  if (body.archived !== undefined) result.archivedAt = booleanValue(body.archived, "归档状态", false) ? new Date().toISOString() : null;
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;
 }
