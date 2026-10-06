@@ -14,11 +14,11 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     detail: item.portion || item.description || "饮食记录",
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime ?? true,
-    endAt: null,
-    href: "/food",
+    endAt: item.calendarMeal?.endAt ?? null,
+    href: `/food?date=${dateInEvaOrbit(new Date(item.occurredAt))}&mealType=${item.mealType}`,
     relatedPeople: [],
     relatedPets: [],
-    metadata: { mealType: item.mealType, scene: item.scene, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
+    metadata: { mealType: item.mealType, scene: item.scene, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence, ...(item.calendarMeal ? { calendarMeal: item.calendarMeal, originalOccurredAt: item.originalOccurredAt, originalHasExplicitTime: item.originalHasExplicitTime } : {}) },
   }));
   const drinkEvents: TimelineEvent[] = drinks.map((item) => ({
     id: `drink:${item.id}`,
@@ -92,16 +92,19 @@ export function groupMealTimelineEvents(events: TimelineEvent[]) {
   for (const event of events) {
     const mealType = event.sourceType === "food" && typeof event.metadata.mealType === "string" ? event.metadata.mealType : null;
     if (!mealType) { otherEvents.push(event); continue; }
-    const group = mealGroups.get(mealType) ?? [];
+    const calendarMeal = event.metadata.calendarMeal as FoodLog["calendarMeal"];
+    const key = calendarMeal ? `${mealType}:calendar:${calendarMeal.id}` : mealType;
+    const group = mealGroups.get(key) ?? [];
     group.push(event);
-    mealGroups.set(mealType, group);
+    mealGroups.set(key, group);
   }
-  const meals = [...mealGroups.entries()].map(([mealType, items]) => {
+  const meals = [...mealGroups.entries()].map(([groupKey, items]) => {
     const ordered = [...items].sort(compareTimelineEvents);
     const first = ordered[0];
+    const mealType = String(first.metadata.mealType);
     return {
       ...first,
-      id: `food-meal:${mealType}:${dateInEvaOrbit(new Date(first.occurredAt))}`,
+      id: `food-meal:${groupKey}:${dateInEvaOrbit(new Date(first.occurredAt))}`,
       eventType: "food.meal",
       detail: ordered.map((item) => item.title).join(" · "),
       metadata: { ...first.metadata, mealType, foodItems: ordered.map((item) => ({ title: item.title, detail: item.detail })), count: ordered.length },

@@ -18,6 +18,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
   const [categoryId, setCategoryId] = useState(rule?.categoryId ?? "phone"), [newName, setNewName] = useState("");
   const [enabled, setEnabled] = useState(rule?.enabled ?? true), [include, setInclude] = useState(rule?.includeInSummary ?? true);
   const [icons, setIcons] = useState<Record<string, string | null>>({});
+  const [mealType, setMealType] = useState<CalendarRule["mealType"] | "">(rule?.mealType ?? "");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [conflict, setConflict] = useState(false);
   const category = base.categories.find(item => item.id === categoryId), isSleep = category?.kind === "sleep";
   const icon = Object.hasOwn(icons, categoryId) ? icons[categoryId] : category ? calendarCategoryIcon(category) : null;
@@ -37,7 +38,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
         const key = categoryId === "new" && item.id === nextCategoryId ? "new" : item.id;
         return Object.hasOwn(icons, key) ? { ...item, icon: icons[key] } : item;
       });
-      const updated: CalendarRule = { id: rule?.id ?? crypto.randomUUID(), prefix: prefix.trim(), categoryId: nextCategoryId, enabled, includeInSummary: categories.find(item => item.id === nextCategoryId)?.kind !== "sleep" && include };
+      const updated: CalendarRule = { id: rule?.id ?? crypto.randomUUID(), prefix: prefix.trim(), categoryId: nextCategoryId, enabled, includeInSummary: categories.find(item => item.id === nextCategoryId)?.kind !== "sleep" && include, ...(mealType ? { mealType } : {}) };
       const next = parseCalendarInterpretation({ ...base, categories, rules: rule ? base.rules.map(item => item.id === rule.id ? updated : item) : [...base.rules, updated] });
       const response = await fetch("/api/calendar-interpretation", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
       const result = await response.json();
@@ -68,6 +69,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
       {categoryId === "new" && <label className="field"><span>{english ? "Category name" : "分类名称"}</span><input required maxLength={60} value={newName} onChange={event => setNewName(event.target.value)} disabled={busy} placeholder={english ? "Reading, study…" : "阅读、学习……"} /></label>}
       {!isSleep && <div className="field"><span>{english ? "Category display icon" : "分类显示图标"}</span><ReiconPicker value={icon} onChange={value => setIcons(current => ({ ...current, [categoryId]: value }))} disabled={busy} /><p className="calendar-rule-hint">{english ? "Shared by all prefixes in this category. Saving updates today's and historical summaries." : "同一分类的所有前缀共用此图标。保存后，今日及历史用时总结都会更新。"}</p></div>}
       <label className="calendar-rule-toggle"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={busy} /><span>{english ? "Enable this rule" : "启用这条规则"}</span></label>
+      {!isSleep && <label className="field"><span>{english ? "Match Food meal times" : "关联饮食的用餐时间"}</span><select value={mealType} onChange={event => setMealType(event.target.value as typeof mealType)} disabled={busy}><option value="">{english ? "Not a meal window" : "不是用餐时段"}</option><option value="auto">{english ? "Meal · match automatically" : "用餐 · 自动匹配餐次"}</option><option value="breakfast">{english ? "Breakfast" : "早餐"}</option><option value="lunch">{english ? "Lunch" : "午餐"}</option><option value="dinner">{english ? "Dinner" : "晚餐"}</option><option value="snack">{english ? "Snack" : "加餐"}</option><option value="late_night">{english ? "Late night" : "夜宵"}</option></select>{mealType && <p className="calendar-rule-hint">{english ? "Matched Food records use this event's interval; Timeline shows one meal. Unmatched records stay visible." : "匹配的饮食记录自动采用此事项时段，Timeline 只显示一顿饭；未匹配记录仍正常显示。"}</p>}</label>}
       {!isSleep ? <label className="calendar-rule-toggle"><input type="checkbox" checked={include} onChange={event => setInclude(event.target.checked)} disabled={busy} /><span>{english ? "Include in daily recorded-time summary" : "加入每日用时总结"}</span></label> : <p className="calendar-rule-hint">{english ? "Sleep records contribute to the sleep card, including naps." : "睡眠记录用于睡眠卡片，包含主睡眠和小睡。"}</p>}
       {collision && <p className="form-error" role="alert">{english ? `Prefix conflicts with “${collision.prefix}”. Edit that rule or use another prefix.` : `前缀与「${collision.prefix}」冲突，请编辑已有规则或换一个前缀。`}</p>}
       <section className="calendar-rule-preview" aria-label={english ? "Interpretation preview" : "解读预览"}>

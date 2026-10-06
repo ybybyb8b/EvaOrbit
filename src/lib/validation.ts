@@ -825,6 +825,7 @@ export function parseNewFoodLog(value: unknown) {
   const rating = body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "评价", ["love", "good", "neutral", "dislike"] as const, "neutral");
   if (rating !== null && scene !== "delivery" && scene !== "restaurant") throw new ValidationError("只有外卖或外食记录可以填写评价");
   return {
+    calendarTimeEnabled: booleanValue(body.calendarTimeEnabled, "自动采用日历用餐时间", true),
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()),
     occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "饮食时间精度", true),
     mealType: enumValue(body.mealType, "餐次", ["breakfast", "lunch", "dinner", "snack", "late_night"] as const, "snack"),
@@ -848,12 +849,12 @@ export function parseNewFoodLog(value: unknown) {
 export function parseFoodLogPatch(value: unknown) {
   const body = objectValue(value);
   const parsed = parseNewFoodLog({
-    occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
+    calendarTimeEnabled: body.calendarTimeEnabled, occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
     notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodLibraryItems: body.foodLibraryItems, foodKcalMode: body.foodKcalMode, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
+  const keys = ["calendarTimeEnabled", "occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

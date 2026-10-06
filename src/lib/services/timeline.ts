@@ -8,6 +8,7 @@ import { dateInEvaOrbit, dateRange } from "../time";
 import { catTimeline } from "./cats";
 import { catchUpAutomaticSubscriptionPayments } from "./subscription";
 import type { TimelineEvent, TimelineMonthSummary } from "../types";
+import { combineMealTimeline, resolveMealTimes } from "../meal-calendar";
 
 function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:string;to:string}):TimelineEvent[]{return items.filter(item=>item.occurredAt>=range.from&&item.occurredAt<range.to).map(item=>({id:`cat:${item.kind}:${item.id}`,eventType:`cat.${item.eventType}`,sourceType:"cat",sourceId:item.id,title:item.title,detail:item.summary,occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:item.petId?`/cats/${item.petId}`:"/cats",relatedPeople:[],relatedPets:item.petId?[item.petId]:[],metadata:{kind:item.kind,...item.metadata}}));}
 
@@ -42,18 +43,19 @@ async function loadSources(range: { from: string; to: string }) {
   ]);
   const subscriptions=await repository.listSubscriptions();
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
-  return { repository, foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptions, subscriptionPayments };
+  const settings = await repository.getCalendarInterpretation();
+  return { repository, foods: resolveMealTimes(foods, calendarEvents, settings), drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptions, subscriptionPayments };
 }
 
 function mergeTimelineSources(sources: Awaited<ReturnType<typeof loadSources>>, cats: Awaited<ReturnType<typeof catTimeline>>, range: { from: string; to: string }) {
-  return [
+  return combineMealTimeline([
     ...buildTimelineEvents(sources.foods, sources.drinks, sources.trackerEntries, sources.trackers, sources.healthRecords, sources.weightRecords, sources.menstrualFlows, sources.medicationDoses),
     ...buildTrainingTimelineEvents(sources.trainingLogs),
     ...buildRelationTimelineEvents(sources.relationEvents,sources.relationPeople),
     ...buildSubscriptionTimelineEvents(sources.subscriptionPayments,sources.subscriptions),
     ...catsInRange(cats, range),
     ...buildCalendarTimelineEvents(sources.calendarEvents, range),
-  ].sort(compareTimelineEvents);
+  ]).sort(compareTimelineEvents);
 }
 
 function groupMealsByDay(events: TimelineEvent[]) {
@@ -94,9 +96,11 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     calendarRecordsInRange(range),
   ]);
   const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>item.paidOn===date);
+  const settings = await repository.getCalendarInterpretation();
+  const effectiveFoods = resolveMealTimes(foods, calendarEvents, settings);
   return {
     date,
-    events: groupMealTimelineEvents([...buildTimelineEvents(foods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range), ...buildCalendarTimelineEvents(calendarEvents,range)]),
+    events: groupMealTimelineEvents(combineMealTimeline([...buildTimelineEvents(effectiveFoods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range), ...buildCalendarTimelineEvents(calendarEvents,range)])),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,
     nutrition: calculateDailyNutrition(date, foods, drinks, nutritionSettings),

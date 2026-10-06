@@ -1,5 +1,5 @@
 export type CalendarCategory = { id: string; name: string; kind: "sleep" | "activity"; icon?: string | null };
-export type CalendarRule = { id: string; prefix: string; categoryId: string; enabled: boolean; includeInSummary: boolean };
+export type CalendarRule = { id: string; prefix: string; categoryId: string; enabled: boolean; includeInSummary: boolean; mealType?: "auto" | "breakfast" | "lunch" | "dinner" | "snack" | "late_night" };
 export type CalendarInterpretation = { revision: number; categories: CalendarCategory[]; rules: CalendarRule[] };
 
 export function defaultCalendarInterpretation(): CalendarInterpretation {
@@ -50,7 +50,8 @@ export function parseCalendarInterpretation(value: unknown): CalendarInterpretat
   const rules: CalendarRule[] = body.rules.map(item => {
     const rule = object(item), id = text(rule.id, 80), prefix = text(rule.prefix, 80), categoryId = text(rule.categoryId, 80);
     if (!/^[a-zA-Z0-9_-]+$/.test(id) || !normalizedCalendarPrefix(prefix) || !categories.some(category => category.id === categoryId) || typeof rule.enabled !== "boolean" || typeof rule.includeInSummary !== "boolean") throw new Error("规则格式不正确");
-    return { id, prefix, categoryId, enabled: rule.enabled, includeInSummary: rule.includeInSummary };
+    if (rule.mealType !== undefined && !["auto", "breakfast", "lunch", "dinner", "snack", "late_night"].includes(String(rule.mealType))) throw new Error("用餐用途不正确");
+    return { id, prefix, categoryId, enabled: rule.enabled, includeInSummary: rule.includeInSummary, ...(rule.mealType !== undefined ? { mealType: rule.mealType as CalendarRule["mealType"] } : {}) };
   });
   if (new Set(rules.map(item => item.id)).size !== rules.length) throw new Error("规则重复");
   const active = rules.filter(rule => rule.enabled);

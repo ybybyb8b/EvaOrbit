@@ -434,6 +434,10 @@ export const TASTE_RATINGS = ["love", "good", "neutral", "dislike"] as const;
 export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
+  calendarTimeEnabled?: boolean;
+  originalOccurredAt?: string;
+  originalHasExplicitTime?: boolean;
+  calendarMeal?: { id: number; title: string; startAt: string; endAt: string; notes: string };
   foodLibraryId?: number | null;
   foodLibraryItems?: FoodConsumption[];
   foodKcalMode?: "auto" | "manual";
