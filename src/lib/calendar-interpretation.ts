@@ -1,4 +1,4 @@
-export type CalendarCategory = { id: string; name: string; kind: "sleep" | "activity" };
+export type CalendarCategory = { id: string; name: string; kind: "sleep" | "activity"; icon?: string | null };
 export type CalendarRule = { id: string; prefix: string; categoryId: string; enabled: boolean; includeInSummary: boolean };
 export type CalendarInterpretation = { revision: number; categories: CalendarCategory[]; rules: CalendarRule[] };
 
@@ -14,6 +14,11 @@ export function calendarCategoryLabel(category: CalendarCategory, english: boole
   const defaults = defaultCalendarInterpretation().categories.find(item => item.id === category.id);
   const englishNames: Record<string, string> = { sleep: "Sleep", phone: "phone use", screen: "TV and movies", gaming: "gaming" };
   return english && defaults?.name === category.name ? englishNames[category.id] : category.name;
+}
+
+export function calendarCategoryIcon(category: CalendarCategory) {
+  const defaults: Record<string, string> = { phone: "Iphone", screen: "Tv", gaming: "Gamepad" };
+  return category.icon === undefined ? defaults[category.id] ?? null : category.icon;
 }
 
 export function normalizedCalendarPrefix(value: string) { return value.normalize("NFC").replace(/[\uFE0E\uFE0F]/g, "").trim(); }
@@ -38,7 +43,8 @@ export function parseCalendarInterpretation(value: unknown): CalendarInterpretat
   const categories: CalendarCategory[] = body.categories.map(item => {
     const category = object(item), id = text(category.id, 80), name = text(category.name, 60);
     if (!/^[a-zA-Z0-9_-]+$/.test(id) || !["sleep", "activity"].includes(String(category.kind)) || (category.kind === "sleep" && id !== "sleep")) throw new Error("分类格式不正确");
-    return { id, name, kind: category.kind as CalendarCategory["kind"] };
+    if (category.icon !== undefined && category.icon !== null && (typeof category.icon !== "string" || !/^[A-Z][A-Za-z0-9]{0,79}$/.test(category.icon))) throw new Error("图标名称不正确");
+    return { id, name, kind: category.kind as CalendarCategory["kind"], ...(category.icon !== undefined ? { icon: category.icon as string | null } : {}) };
   });
   if (new Set(categories.map(item => item.id)).size !== categories.length || new Set(categories.map(item => item.name.normalize("NFC").toLowerCase())).size !== categories.length) throw new Error("分类重复");
   const rules: CalendarRule[] = body.rules.map(item => {

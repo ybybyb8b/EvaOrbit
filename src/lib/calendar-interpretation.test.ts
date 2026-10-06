@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { defaultCalendarInterpretation, matchingCalendarRule, parseCalendarInterpretation, suggestedCalendarPrefix } from "./calendar-interpretation.ts";
+import { calendarCategoryIcon, defaultCalendarInterpretation, matchingCalendarRule, parseCalendarInterpretation, suggestedCalendarPrefix } from "./calendar-interpretation.ts";
 import { summarizeCalendarActivity, homeActivitySentence } from "./home-day.ts";
 import type { CalendarEvent } from "./types.ts";
 
@@ -57,6 +57,20 @@ test("quick definition suggests a complete emoji grapheme or a leading text toke
   assert.equal(suggestedCalendarPrefix(" 👩‍💻 专注"), "👩‍💻");
   assert.equal(suggestedCalendarPrefix("📺️ 电影"), "📺️");
   assert.equal(suggestedCalendarPrefix("读书 30m"), "读书");
+});
+
+test("category icons preserve legacy defaults, support text fallback and follow shared classification", () => {
+  const settings = defaultCalendarInterpretation();
+  assert.equal(calendarCategoryIcon(settings.categories[1]), "Iphone");
+  settings.categories[1].icon = null;
+  assert.equal(calendarCategoryIcon(parseCalendarInterpretation(settings).categories[1]), null);
+  settings.categories.push({ id: "reading", name: "阅读", kind: "activity", icon: "Book" });
+  settings.rules.push({ id: "books", prefix: "📚", categoryId: "reading", enabled: true, includeInSummary: true }, { id: "read", prefix: "读书", categoryId: "reading", enabled: true, includeInSummary: true });
+  const parsed = parseCalendarInterpretation(settings);
+  const reading = summarizeCalendarActivity([record, { ...record, id: 2, title: "读书" }], "2026-10-01", parsed).activities.find(item => item.category === "reading")!;
+  assert.equal(reading.icon, "Book");
+  assert.equal(reading.durationMinutes, 60);
+  for (const icon of ["../Iphone", "", 1, "<svg>"]) assert.throws(() => parseCalendarInterpretation({ ...settings, categories: [{ ...settings.categories[1], icon }] }), /图标/);
 });
 
 test("Postgres migration defaults equal SQLite defaults and safely add one owner-scoped preference column", () => {

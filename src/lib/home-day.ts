@@ -1,6 +1,6 @@
 import { dateInEvaOrbit, dateRange } from "./time.ts";
 import type { CalendarEvent, DailyJournalEntry, TimelineEvent } from "./types.ts";
-import { calendarCategoryLabel, defaultCalendarInterpretation, matchingCalendarRule, type CalendarInterpretation } from "./calendar-interpretation.ts";
+import { calendarCategoryIcon, calendarCategoryLabel, defaultCalendarInterpretation, matchingCalendarRule, type CalendarInterpretation } from "./calendar-interpretation.ts";
 import type { DailySleepSummary } from "./sleep.ts";
 
 export type HomeActivityCategory = "sleep" | "phone" | "screen" | "gaming";
@@ -50,7 +50,7 @@ export interface HomeDayOverview {
   sleep: HomeSleepSummary | null;
   sleepSummary?: DailySleepSummary;
   calendarInterpretation: CalendarInterpretation;
-  activities: Array<{ category: string; label?: { en: string; zh: string }; durationMinutes: number }>;
+  activities: Array<{ category: string; label?: { en: string; zh: string }; icon?: string | null; durationMinutes: number }>;
   activityRecords: Array<{ id: number; category: DayActivityCategory; startAt: string; endAt: string; durationMinutes: number; notes: string }>;
 }
 
@@ -87,7 +87,7 @@ export function summarizeCalendarActivity(events: CalendarEvent[], date: string,
   const naps = sleeps.slice(1);
   return {
     sleep: main ? { ...main, napCount: naps.length, napMinutes: naps.reduce((sum, item) => sum + item.durationMinutes, 0), records: sleeps } : null,
-    activities: categories.map(category => ({ category: category.id, label: { en: calendarCategoryLabel(category, true), zh: calendarCategoryLabel(category, false) }, durationMinutes: Math.round((totals.get(category.id) ?? 0) / 60_000) })),
+    activities: categories.map(category => ({ category: category.id, icon: calendarCategoryIcon(category), label: { en: calendarCategoryLabel(category, true), zh: calendarCategoryLabel(category, false) }, durationMinutes: Math.round((totals.get(category.id) ?? 0) / 60_000) })),
     activityRecords: activityRecords.sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id - b.id),
   };
 }

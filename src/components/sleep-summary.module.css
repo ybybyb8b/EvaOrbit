@@ -7,7 +7,7 @@
 .summary .notes { white-space: pre-wrap; color: var(--text-secondary); }
 .preview { display: grid; gap: 10px; min-width: 0; color: var(--text-editorial); line-height: 1.4; }
 .preview > span { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 12px; }
-.preview > span > span { color: var(--text-secondary); font-size: 12px; text-align: right; }
+.preview > span > span { color: var(--text-secondary); font-size: 12px; text-align: right; white-space: nowrap; }
 .preview strong { font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .preview > span[data-kind="main"] strong { font-size: 20px; font-weight: 600; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 6px; }

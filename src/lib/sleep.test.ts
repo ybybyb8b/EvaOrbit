@@ -92,8 +92,9 @@ test("secondary episodes retain measured durations and individually associate ov
   assert.equal(result.secondary[0].window?.notes, "Nap window note");
   assert.equal(result.napMinutes, 133);
   assert.deepEqual(sleepOverviewRows(result), [
-    { kind: "total", durationMinutes: 553 }, { kind: "main", durationMinutes: 420 },
+    { kind: "main", durationMinutes: 420 },
     { kind: "other", durationMinutes: 83 }, { kind: "other", durationMinutes: 30 }, { kind: "other", durationMinutes: 20 },
+    { kind: "total", durationMinutes: 553 },
   ]);
   assert.equal(sleepDisplay(result)?.durationMinutes, 420);
   assert.equal(buildDailySleepSummary("2026-10-04", rows, timeline).secondary.length, 0);
@@ -101,7 +102,8 @@ test("secondary episodes retain measured durations and individually associate ov
   assert.equal(buildDailySleepSummary("2026-10-05", [], timeline).secondary.length, 0);
   assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", [], timeline)), [{ kind: "window", durationMinutes: 480 }]);
   assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", [], null)), []);
-  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", night, null)), [{ kind: "total", durationMinutes: 420 }, { kind: "main", durationMinutes: 420 }]);
+  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", night, null)), [{ kind: "main", durationMinutes: 420 }]);
+  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", night, timeline)), [{ kind: "main", durationMinutes: 420 }]);
 });
 
 test("read payload preserves sleep category/zone/source and heart quantities but default sync enables only sleep", () => {
