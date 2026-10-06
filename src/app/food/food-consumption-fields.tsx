@@ -11,8 +11,8 @@ export function consumptionFromItem(item: FoodLibraryItem): FoodConsumption {
     unit: defaultFoodUnit(nutritionReference), nutritionReference, calculatedKcal: null };
 }
 
-export function FoodConsumptionFields({ value, index, onChange, onLoaded, onRemove }: {
-  value: FoodConsumption; index: number; onChange: (value: FoodConsumption) => void; onLoaded: (item: FoodLibraryItem) => void; onRemove: () => void;
+export function FoodConsumptionFields({ value, index, placeId, onChange, onLoaded, onRemove }: {
+  value: FoodConsumption; index: number; placeId?: string; onChange: (value: FoodConsumption) => void; onLoaded: (item: FoodLibraryItem) => void; onRemove: () => void;
 }) {
   const reference = value.nutritionReference;
   const kcal = reference ? foodReferenceKcal(reference) : null;
@@ -22,7 +22,7 @@ export function FoodConsumptionFields({ value, index, onChange, onLoaded, onRemo
     onChange({ ...value, quantity, unit, calculatedKcal: reference ? calculateFoodKcal(reference, quantity, unit) : null });
   }
   return <div className={`field wide ${styles.consumption}`}>
-    <FoodLibraryPicker label={`Food Library 食品 ${index + 1}`} value={String(value.foodLibraryId)} selectedItem={value.item} onLoaded={onLoaded}
+    <FoodLibraryPicker label={`Food Library 食品 ${index + 1}`} placeId={placeId} value={String(value.foodLibraryId)} selectedItem={value.item} onLoaded={onLoaded}
       onChange={(_, item) => item ? onChange(consumptionFromItem(item)) : onRemove()} />
     <p className="muted">{kcal === null ? "暂无可计算的营养基准，可手动填写热量" : `${Number(kcal.toFixed(2))} kcal / ${suffix}`}</p>
     <div className="form-grid">

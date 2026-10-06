@@ -59,6 +59,20 @@ export async function updateFoodLog(id: number, input: Record<string, unknown>) 
 }
 export async function deleteFoodLog(id: number) { return (await getRepository()).deleteFoodLog(id); }
 export async function searchFoodLibrary(query = "", brand = "", options?: FoodLibrarySearchOptions) { return (await getRepository()).searchFoodLibrary(query, brand, options); }
+export async function searchFoodLibraryForPlace(query = "", brand = "", foodPlaceId?: number) {
+  const repository = await getRepository();
+  const [items, usage] = await Promise.all([
+    repository.searchFoodLibrary(query, brand),
+    foodPlaceId ? repository.getPlaceLibraryItems(foodPlaceId) : Promise.resolve([]),
+  ]);
+  const keyword = query.trim().toLocaleLowerCase();
+  const preferred = usage.filter(({ item }) => !item.archivedAt && (!brand || item.brand === brand) &&
+    (!keyword || `${item.name} ${item.brand}`.toLocaleLowerCase().includes(keyword)))
+    .map(({ item, recordCount }) => ({ ...item, placeRecordCount: recordCount }));
+  // Insert preferred items first without allowing the global list to replace their source metadata.
+  const preferredIds = new Set(preferred.map(item => item.id));
+  return [...preferred, ...items.filter(item => !preferredIds.has(item.id))].slice(0, 100);
+}
 export async function upsertFoodLibraryItem(input: NewFoodLibraryItem) { return (await getRepository()).upsertFoodLibraryItem(input); }
 const foodLibraryFields = [
   "name", "brand", "category", "defaultPortion", "referenceType", "referenceEnergyKj", "referenceKcal",

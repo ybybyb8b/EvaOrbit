@@ -11,10 +11,10 @@ import { meals, scenes } from "../food/food-record-editor";
 import { temperatureLabels } from "../drinks/drink-ui";
 import styles from "./food-drink.module.css";
 
-export function RecordTimeline({ foods, drinks, onFood, onDrink, showDate = false }: {
-  foods: FoodLog[]; drinks: DrinkLog[]; onFood: (record: FoodLog) => void; onDrink: (record: DrinkLog) => void; showDate?: boolean;
+export function RecordTimeline({ foods, drinks, onFood, onDrink, showDate = false, limit }: {
+  foods: FoodLog[]; drinks: DrinkLog[]; onFood: (record: FoodLog) => void; onDrink: (record: DrinkLog) => void; showDate?: boolean; limit?: number;
 }) {
-  return <div className={styles.timeline}>{foodDrinkTimeline(foods, drinks, showDate).map(entry => {
+  return <div className={styles.timeline}>{foodDrinkTimeline(foods, drinks, showDate).slice(0, limit).map(entry => {
     const { record, kind } = entry;
     const title = kind === "food" ? foodRecordDisplay(entry.record).title : drinkRecordName(entry.record);
     const details = kind === "food"

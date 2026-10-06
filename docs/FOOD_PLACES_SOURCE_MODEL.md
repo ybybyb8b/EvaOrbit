@@ -43,6 +43,8 @@ Supabase 在数据库聚合记录数后返回，避免 PostgREST 明细行数上
 - `eo_get(food_place)` 返回记录沉淀的 packaged_food；不提供人工写入商品关系。
 - `food_create / food_update / drink_create / drink_update` 支持 food_library_id，省略表示保留，null 表示解除。
 - Library 单项 GET 供编辑器恢复被归档或不在当前搜索结果中的已选食品。
+- Library 列表 GET 可传 `placeId`：优先返回该来源有 Food / Drink 记录的食品，并附带只读 `placeRecordCount`；其余候选仍来自整个 Library。搜索和品牌筛选同时作用于两部分，按 ID 去重，最多 100 条，已归档食品不作为新候选。
+- Food / Drink 的共享食品选择器使用当前 Place 获取候选；更换来源立即撤下上一来源的候选，但保留已选择食品及历史营养快照。同一食品可在多个 Place 下出现；关系仍由实际记录派生，并非独占归属或人工维护的目录。
 
 ## 迁移与验证
 
