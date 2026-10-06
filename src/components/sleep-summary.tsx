@@ -1,13 +1,13 @@
 "use client";
 import { homeDurationLabel } from "@/lib/home-day";
-import { firstSleepWakeDate, type DailySleepSummary } from "@/lib/sleep";
+import { firstSleepWakeDate, sleepOverviewRows, type DailySleepSummary } from "@/lib/sleep";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
 import styles from "./sleep-summary.module.css";
 
-export function SecondarySleepPreview({ summary, english }: { summary: DailySleepSummary; english: boolean }) {
-  if (!summary.secondary?.length) return null;
-  return <span className={styles.preview}>{summary.secondary.map(({ actual }, index) =>
-    <span key={`${actual.startAt}-${actual.endAt}`}><span>{english ? "Other Sleep" : "其他睡眠"}{summary.secondary.length > 1 ? ` ${index + 1}` : ""}</span><strong>{homeDurationLabel(Math.round(actual.durationMinutes), english)}</strong></span>
+export function SleepOverviewPreview({ summary, english }: { summary: DailySleepSummary; english: boolean }) {
+  const labels = english ? { total: "Total sleep", main: "Main sleep", other: "Other sleep", window: "Sleep window" } : { total: "总睡眠", main: "主睡眠", other: "其他睡眠", window: "睡眠窗口" };
+  return <span className={styles.preview}>{sleepOverviewRows(summary).map(({ kind, durationMinutes }, index) =>
+    <span key={`${kind}-${index}`} data-kind={kind}><strong>{homeDurationLabel(Math.round(durationMinutes), english).replaceAll(" ", "")}</strong><span>{labels[kind]}</span></span>
   )}</span>;
 }
 

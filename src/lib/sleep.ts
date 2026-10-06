@@ -111,3 +111,12 @@ export function buildDailySleepSummary(date: string, samples: SleepSample[], tim
 export function sleepDisplay(summary: DailySleepSummary) {
   return summary.actual ? { ...summary.actual, source: "apple_health" as const } : summary.window ? { ...summary.window, source: "timeline_estimate" as const } : null;
 }
+
+export function sleepOverviewRows(summary: DailySleepSummary): Array<{ kind: "total" | "main" | "other" | "window"; durationMinutes: number }> {
+  if (!summary.actual) return summary.window ? [{ kind: "window", durationMinutes: summary.window.durationMinutes }] : [];
+  return [
+    { kind: "total", durationMinutes: summary.actual.durationMinutes + summary.napMinutes },
+    { kind: "main", durationMinutes: summary.actual.durationMinutes },
+    ...summary.secondary.map(({ actual }) => ({ kind: "other" as const, durationMinutes: actual.durationMinutes })),
+  ];
+}

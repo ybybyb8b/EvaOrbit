@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { actualSleepSessions, buildDailySleepSummary, sleepDisplay, type SleepSample } from "./sleep.ts";
+import { actualSleepSessions, buildDailySleepSummary, sleepDisplay, sleepOverviewRows, type SleepSample } from "./sleep.ts";
 import { enabledHealthKitReadMetrics, parseHealthKitReadChanges } from "./healthkit-read.ts";
 import { parseHealthKitUpload } from "./healthkit.ts";
 import type { HomeSleepSummary } from "./home-day.ts";
@@ -91,10 +91,17 @@ test("secondary episodes retain measured durations and individually associate ov
   assert.deepEqual(result.secondary.map(episode => [episode.actual.durationMinutes, episode.window?.durationMinutes ?? null]), [[83, 104], [30, 40], [20, null]]);
   assert.equal(result.secondary[0].window?.notes, "Nap window note");
   assert.equal(result.napMinutes, 133);
+  assert.deepEqual(sleepOverviewRows(result), [
+    { kind: "total", durationMinutes: 553 }, { kind: "main", durationMinutes: 420 },
+    { kind: "other", durationMinutes: 83 }, { kind: "other", durationMinutes: 30 }, { kind: "other", durationMinutes: 20 },
+  ]);
   assert.equal(sleepDisplay(result)?.durationMinutes, 420);
   assert.equal(buildDailySleepSummary("2026-10-04", rows, timeline).secondary.length, 0);
   assert.ok(buildDailySleepSummary("2026-10-05", rows, null).secondary.every(episode => episode.window === null));
   assert.equal(buildDailySleepSummary("2026-10-05", [], timeline).secondary.length, 0);
+  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", [], timeline)), [{ kind: "window", durationMinutes: 480 }]);
+  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", [], null)), []);
+  assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", night, null)), [{ kind: "total", durationMinutes: 420 }, { kind: "main", durationMinutes: 420 }]);
 });
 
 test("read payload preserves sleep category/zone/source and heart quantities but default sync enables only sleep", () => {
