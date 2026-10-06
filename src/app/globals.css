@@ -6042,7 +6042,7 @@ html[data-theme="mistviolet"] :is(.module-intro-icon,.module-preview-card>span,.
 .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row > input:focus { outline:none; box-shadow:none; }
 .suggested-input .input-candidates-toggle,.suggested-input .input-value-clear { position:absolute; right:0; top:0; bottom:0; width:40px; min-height:44px; padding:0; border:0; border-radius:0; background:transparent; color:var(--text-secondary); font:inherit; cursor:pointer; outline:none; }
 .suggested-input .input-value-clear { right:40px; font-size:20px; }
-.suggested-input .input-candidates-toggle[aria-expanded="true"] { transform:rotate(180deg); }
+.suggested-input .input-candidates-toggle[data-expanded="true"] { transform:rotate(180deg); }
 .suggested-input:focus-within .input-candidates-toggle:not(:focus-visible) { outline:none; }
 .suggested-input .input-candidates-toggle:focus-visible,.suggested-input .input-value-clear:focus-visible { border-radius:8px; outline:2px solid var(--green); outline-offset:-5px; }
 .eo-select-dropdown:popover-open { display:flex; }
@@ -6077,6 +6077,9 @@ html[data-theme="mistviolet"] :is(.module-intro-icon,.module-preview-card>span,.
 .drinks-page .drink-limit-count small { font-size:13px; }
 
 .suggested-input-row > span.input-candidates-toggle { display:grid; place-items:center; min-width:20px; min-height:0; padding:0; background:transparent; pointer-events:none; cursor:default; }
+.place-enum-options { margin:0; flex-wrap:wrap; gap:8px; }
+.place-enum-options button { min-height:44px; padding:9px 15px; font:inherit; font-size:14px; }
+.place-enum-options button:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
 .form-sheet-body .tracker-create-form { margin:0; }
 .tracker-create-intro { margin:0 0 20px; color:var(--text-secondary); font-size:15px; line-height:1.5; }
 .tracker-time-range { min-width:0; margin:0; padding:0; border:0; }

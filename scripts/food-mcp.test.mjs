@@ -26,6 +26,13 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
     async function call(name,args={}){const result=await rpc("tools/call",{name,arguments:args});assert.notEqual(result.isError,true,JSON.stringify(result));return result.structuredContent;}
     try {
       const {tools}=await rpc("tools/list");
+      for(const name of ["food_create","food_update","drink_create","drink_update"]){
+        assert.equal(tools.find(t=>t.name===name).inputSchema.additionalProperties,false);
+        const argumentsValue=name.startsWith("food")?{title:"字段错误的测试",foodPlaceId:1,foodDishIds:[1]}:{name:"字段错误的测试",foodPlaceId:1,drinkMenuId:1};
+        if(name.endsWith("update"))argumentsValue.id=999999;
+        const invalid=await rpc("tools/call",{name,arguments:argumentsValue});
+        assert.equal(invalid.isError,true,"Unknown association fields must not silently create or update an unlinked record");
+      }
       assert.equal(tools.find(t=>t.name==="drink_create").inputSchema.required?.includes("name")??false,false);
       const {record:unnamed}=await call("drink_create",{drink_type:"water",occurred_has_explicit_time:false});assert.equal(unnamed.name,"");
       const {record:manual}=await call("drink_update",{id:unnamed.id,name:"自制饮品"});assert.equal(manual.name,"自制饮品");
@@ -58,6 +65,8 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       assert.deepEqual(linkedDinner,(await call("food_search_recent",{food_place_id:place.id})).records.find(r=>r.id===linkedDinner.id));
       await call("food_delete",{id:linkedDinner.id});
       const {record}=await call("food_create",{title:"午餐",food_place_id:place.id,food_dish_ids:ids,occurred_at:"2026-10-01T12:00:00+08:00",estimated_kcal:450});
+      assert.equal(record.food_place_id,place.id);
+      assert.deepEqual((await call("food_search_recent",{food_place_id:place.id,food_dish_id:ids[1]})).records.find(item=>item.id===record.id),record);
       assert.deepEqual(record.food_dish_ids,ids);assert.deepEqual(record.food_dishes.map(d=>d.name),["鸡腿饭","紫菜汤"]);
       assert.equal(record.food_place_city,"成都");assert.equal(record.food_place_location,"天府和悦");
       const {record:retimed}=await call("food_update",{id:record.id,occurred_at:"2026-10-02T18:35:00+08:00",occurred_has_explicit_time:true});

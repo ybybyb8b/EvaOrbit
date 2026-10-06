@@ -17,7 +17,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | 
   recommendationStyle?: "list" | "chips" | "search";
 };
 
-export function SuggestedInput({ value, onValueChange, suggestions, suggestionLabel, tags = false, recommendationStyle = "list", ...props }: Props) {
+export function SuggestedInput({ value, onValueChange, suggestions, suggestionLabel, tags = false, recommendationStyle = "search", ...props }: Props) {
   const { english } = useLocale();
   const target = useContext(SheetSuggestionTarget);
   const input = useRef<HTMLInputElement>(null);
@@ -36,8 +36,8 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
   const committed = tags && query ? parseInputTags(value.slice(0, -query.length).replace(/,\s*$/, "")) : selected;
   const matches = matchInputValues(suggestions, expanded ? searchQuery : tags ? query : value).filter(option => !tags || !committed.some(tag => tag.toLocaleLowerCase() === option.toLocaleLowerCase()));
   const chipsOnly = recommendationStyle === "chips";
-  const searchOnly = recommendationStyle === "search";
   const searchable = !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
+  const searchOnly = recommendationStyle === "search" && searchable;
   const candidates = tags ? matches : matchInputValues(suggestions, chipsOnly ? value : "");
   const newValue = searchQuery.trim();
   const canCreate = newValue.length > 0 && (!props.maxLength || newValue.length <= props.maxLength) && !suggestions.some(option => option.toLocaleLowerCase() === newValue.toLocaleLowerCase()) && !committed.some(tag => tag.toLocaleLowerCase() === newValue.toLocaleLowerCase());
@@ -60,7 +60,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
     </div>
   </div>;
   return <span className="suggested-input" data-recommendation-style={recommendationStyle} ref={container} onBlur={event => {
-    if (container.current?.contains(event.relatedTarget as Node) || target?.contains(event.relatedTarget as Node)) return;
+    if (container.current?.contains(event.relatedTarget as Node) || (!searchOnly && target?.contains(event.relatedTarget as Node))) return;
     skipFocusOpen.current = false;
     setFocused(false); setExpanded(false);
     if (tags) setQuery("");
@@ -81,13 +81,13 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
       onKeyDown={event => {
         if (event.nativeEvent.isComposing || composing.current) return;
         if (event.key === "Escape" && expanded) { event.preventDefault(); event.stopPropagation(); setExpanded(false); }
-        if (event.key === "ArrowDown" && searchable && !props.disabled && !props.readOnly) { event.preventDefault(); if (expanded) container.current?.querySelector<HTMLButtonElement>('.eo-select-option')?.focus({ preventScroll: true }); else { setSearchQuery(tags ? query : value); setExpanded(true); } }
+        if ((event.key === "ArrowDown" || event.key === "ArrowUp") && searchable && !props.disabled && !props.readOnly) { event.preventDefault(); if (expanded) { const options = container.current?.querySelectorAll<HTMLButtonElement>('.eo-select-option'); const option = event.key === "ArrowDown" ? options?.[0] : options?.[options.length - 1]; option?.focus({ preventScroll: true }); option?.scrollIntoView({ block: "nearest" }); } else { setSearchQuery(tags ? query : value); setExpanded(true); } }
         if (tags && event.key === "Enter") { event.preventDefault(); onValueChange(parseInputTags(value).join(", ")); setQuery(""); }
         else if (event.key === "Enter" && searchable && expanded) { event.preventDefault(); const exact = matches.find(option => option.toLocaleLowerCase() === value.trim().toLocaleLowerCase()); if (exact) pick(exact); else if (canCreate) pick(newValue); else setExpanded(false); }
         props.onKeyDown?.(event);
       }} />
       {searchable && value && !props.readOnly && <button type="button" data-form-change className="input-value-clear" aria-label={`${english ? "Clear" : "清空"} ${suggestionLabel}`} disabled={props.disabled} onPointerDown={event => event.preventDefault()} onClick={() => { onValueChange(""); setQuery(""); setSearchQuery(""); input.current?.focus({ preventScroll: true }); setExpanded(true); }}>×</button>}
-      {searchable && <span className="input-candidates-toggle" aria-hidden="true">⌄</span>}
+      {searchable && <span className="input-candidates-toggle" data-expanded={expanded} aria-hidden="true">⌄</span>}
     </span>
     {expanded && searchable && !props.disabled && !props.readOnly && <SelectDropdown anchor={field} onClose={() => { if (container.current?.querySelector('.eo-select-dropdown')?.contains(document.activeElement)) skipFocusOpen.current = true; setExpanded(false); }} id={id} label={suggestionLabel}>
       <div className="eo-select-results" role="listbox" aria-label={suggestionLabel}>

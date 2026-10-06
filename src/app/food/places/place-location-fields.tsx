@@ -1,5 +1,4 @@
 "use client";
-import { SearchableSelect } from "@/components/searchable-select";
 import { SuggestedInput } from "@/components/suggested-input";
 
 import { useEffect, useId, useState } from "react";
@@ -28,9 +27,9 @@ export function PlaceSuggestionFields({ values, onChange }: {
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 
   return <>
-    <div className="field"><span>来源类型</span><SearchableSelect label="来源类型" searchable={false} value={values.kind??"restaurant"} onValueChange={value=>{const kind=value as FoodPlace["kind"];onChange({kind,scope:values.scope===defaultPlaceScope(values.kind)?defaultPlaceScope(kind):values.scope,serviceType:kind==="drink"?"drink":kind==="restaurant"?"food":"both"});}} options={Object.entries(placeKindLabels).map(([value,label])=>({value,label}))}/></div>
-    <div className="field"><span>地点范围</span><SearchableSelect label="地点范围" searchable={false} value={values.scope??"branch"} onValueChange={value=>onChange({scope:value as FoodPlace["scope"]})} options={Object.entries(placeScopeLabels).map(([value,label])=>({value,label}))}/></div>
-    <div className="field"><span>饮食能力</span><SearchableSelect label="饮食能力" searchable={false} value={values.serviceType??"food"} onValueChange={(value) =>onChange({serviceType:value as FoodPlace["serviceType"]})} options={[...Object.entries(placeServiceLabels).map(([value,label])=>({value:value,label:label}))]}/></div>
+    <div className="field wide"><span>来源类型</span><div className="chip-row place-enum-options" role="group" aria-label="来源类型">{Object.entries(placeKindLabels).map(([value,label])=><button type="button" data-form-change key={value} className={(values.kind??"restaurant")===value?"active":""} aria-pressed={(values.kind??"restaurant")===value} onClick={()=>{const kind=value as FoodPlace["kind"];onChange({kind,scope:values.scope===defaultPlaceScope(values.kind)?defaultPlaceScope(kind):values.scope,serviceType:kind==="drink"?"drink":kind==="restaurant"?"food":"both"});}}>{label}</button>)}</div></div>
+    <div className="field wide"><span>地点范围</span><div className="chip-row place-enum-options" role="group" aria-label="地点范围">{Object.entries(placeScopeLabels).map(([value,label])=><button type="button" data-form-change key={value} className={(values.scope??"branch")===value?"active":""} aria-pressed={(values.scope??"branch")===value} onClick={()=>onChange({scope:value as FoodPlace["scope"]})}>{label}</button>)}</div></div>
+    <div className="field wide"><span>饮食能力</span><div className="chip-row place-enum-options" role="group" aria-label="饮食能力">{Object.entries(placeServiceLabels).map(([value,label])=><button type="button" data-form-change key={value} className={(values.serviceType??"food")===value?"active":""} aria-pressed={(values.serviceType??"food")===value} onClick={()=>onChange({serviceType:value as FoodPlace["serviceType"]})}>{label}</button>)}</div></div>
     {(values.scope??"branch") === "branch" && <><label className="field"><span>分店 / 门店</span><input maxLength={160} value={values.branch} onChange={event=>onChange({branch:event.target.value})} placeholder="例如：天府和悦店"/></label><div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
 
     </div>

@@ -129,10 +129,10 @@ function createServer() {
   server.registerTool("food_search_recent", { description: "Find recent EvaOrbit food records, optionally filtered by place or any linked dish. Includes place location and all linked dishes.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), meal_type: mealType.optional(), food_place_id: z.number().int().positive().optional(), food_dish_id: z.number().int().positive().optional(), limit: z.number().int().min(1).max(50).default(10) }) },
     async ({ query, date: day, meal_type, food_place_id, food_dish_id, limit }) => runTool(async () => ({ records: (await listFoodLogs({ query, date: day, mealType: meal_type, foodPlaceId: food_place_id, foodDishId: food_dish_id, limit })).map(compactFood) })));
 
-  server.registerTool("food_create", { description: "Create one EvaOrbit food record.", inputSchema: z.object(foodFields) },
+  server.registerTool("food_create", { description: "Create one EvaOrbit food record. Search eo_search food_place and food_dish first, then pass their numeric IDs as food_place_id and food_dish_ids. Names in title/description do not establish links. Returns persisted association IDs.", inputSchema: z.object(foodFields).strict() },
     async (input) => runTool(async () => ({ record: compactFood(await createFoodLog(parseNewFoodLog(foodInput(input)))) })));
 
-  server.registerTool("food_update", { description: "Update an existing EvaOrbit food record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...foodFields, title: foodFields.title.optional() }) },
+  server.registerTool("food_update", { description: "Update an existing EvaOrbit food record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...foodFields, title: foodFields.title.optional() }).strict() },
     async ({ id, ...input }) => runTool(async () => { const record = await updateFoodLog(id, parseFoodLogPatch(foodInput(input as z.infer<z.ZodObject<typeof foodFields>>))); if (!record) throw new ConflictError("Food record not found."); return { record: compactFood(record) }; }));
 
   server.registerTool("food_delete", { description: "Delete one EvaOrbit food record by its exact ID.", inputSchema: z.object({ id: z.number().int().positive() }) },
@@ -166,10 +166,10 @@ function createServer() {
   server.registerTool("drink_search_recent", { description: "Find recent EvaOrbit drink records.", inputSchema: z.object({ query: z.string().max(200).optional(), date: date.optional(), drink_type: drinkType.optional(), food_place_id: z.number().int().positive().optional(), drink_menu_id:z.number().int().positive().optional(),limit: z.number().int().min(1).max(50).default(10) }) },
     async ({ query, date: day, drink_type, food_place_id,drink_menu_id, limit }) => runTool(async () => ({ records: (await listDrinkLogs({ query, date: day, drinkType: drink_type, foodPlaceId: food_place_id,drinkMenuId:drink_menu_id })).slice(0, limit).map(compactDrink) })));
 
-  server.registerTool("drink_create", { description: "Create one EvaOrbit drink record.", inputSchema: z.object(drinkFields) },
+  server.registerTool("drink_create", { description: "Create one EvaOrbit drink record. Pass a searched food_place ID as food_place_id and a drink-kind food_dish ID as drink_menu_id. Names and brand do not establish links. Returns persisted association IDs.", inputSchema: z.object(drinkFields).strict() },
     async (input) => runTool(async () => { const result = await createDrinkLog(parseNewDrinkLog(drinkInput(input))); return { record: compactDrink(result.drink), limits: result.limits }; }));
 
-  server.registerTool("drink_update", { description: "Update an existing EvaOrbit drink record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...drinkFields, name: drinkFields.name.optional() }) },
+  server.registerTool("drink_update", { description: "Update an existing EvaOrbit drink record by ID.", inputSchema: z.object({ id: z.number().int().positive(), ...drinkFields, name: drinkFields.name.optional() }).strict() },
     async ({ id, ...input }) => runTool(async () => { const result = await updateDrinkLog(id, parseDrinkLogPatch(drinkInput(input as z.infer<z.ZodObject<typeof drinkFields>>))); if (!result) throw new ConflictError("Drink record not found."); return { record: compactDrink(result.drink), limits: result.limits }; }));
 
   server.registerTool("drink_delete", { description: "Delete one EvaOrbit drink record by its exact ID.", inputSchema: z.object({ id: z.number().int().positive() }) },
