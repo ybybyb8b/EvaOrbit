@@ -467,6 +467,7 @@ export interface EvaOrbitRepository {
   createCatRoutine(input: NewCatRoutine): Promise<CatRoutine>;
   updateCatRoutine(id: number, input: Record<string, unknown>): Promise<CatRoutine | null>;
   archiveCatRoutine(id: number): Promise<boolean>;
+  deleteCatRoutine(id: number): Promise<boolean>;
 
   listReminders(input?: { targetType?: string; targetId?: number | null; activeOnly?: boolean; dueBefore?: string }): Promise<Reminder[]>;
   getReminder(id: number): Promise<Reminder | null>;

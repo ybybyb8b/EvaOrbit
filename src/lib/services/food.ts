@@ -15,6 +15,11 @@ export async function listFoodLogs(input: { date?: string; query?: string; mealT
   return withMealTimes(repository, await repository.listFoodLogs({ ...input, from: range?.from ?? input.from, to: range?.to ?? input.to }));
 }
 export async function getTodayFood() { return listFoodLogs({ date: dateInEvaOrbit() }); }
+export async function getFoodLog(id: number) {
+  const repository = await getRepository(), item = await repository.getFoodLog(id);
+  return item ? (await withMealTimes(repository, [item]))[0] : null;
+}
+export async function getFoodLibraryItem(id: number) { return (await getRepository()).getFoodLibraryItem(id); }
 async function validateFoodLinks(repository:Awaited<ReturnType<typeof getRepository>>,foodPlaceId:number|null,foodDishIds:number[],preservePlace=false){
   if(foodDishIds.length&&foodPlaceId===null)throw new ValidationError("选择菜品前需要先选择店铺");
   if(foodPlaceId!==null){const place=await repository.getFoodPlace(foodPlaceId);if(!place)throw new ValidationError("所选店铺不存在");if(!preservePlace&&!placeSupports(place,"food"))throw new ValidationError("该店铺只提供饮品");}

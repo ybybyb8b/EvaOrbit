@@ -71,3 +71,7 @@ export async function updateDailyEnergy(date: string, input: { restingEnergyKcal
   await (await getRepository()).updateNutritionSettings(date, input);
   return getDailyNutritionSummary(date);
 }
+
+export async function getDailyEnergy(date: string) {
+  return { date, ...await (await getRepository()).getNutritionSettings(date) };
+}

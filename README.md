@@ -93,4 +93,4 @@ npm test
 npm run build
 ```
 
-Food 数据与 AI Tool 流程见 [FOOD_SYSTEM.md](./FOOD_SYSTEM.md)，当前实现状态见 [PROJECT_STATUS.md](./PROJECT_STATUS.md)。未来 MCP 边界与安全约束记录在 `src/lib/mcp/README.md`；Web Push 预留边界记录在 `src/lib/push/README.md`。当前没有公开 MCP endpoint，也没有启用通知订阅或 Scheduler。
+Food 数据与 AI Tool 流程见 [FOOD_SYSTEM.md](./FOOD_SYSTEM.md)，当前实现状态见 [PROJECT_STATUS.md](./PROJECT_STATUS.md)。当前远程 MCP endpoint、OAuth 和工具契约见 [MCP.md](./MCP.md)，业务服务边界记录在 `src/lib/mcp/README.md`；Web Push 边界记录在 `src/lib/push/README.md`。

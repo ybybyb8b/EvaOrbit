@@ -1,8 +1,178 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { parseCatRoutine } from "./cats-validation.ts";
+import { parseDrinkLimit, parseNewTracker } from "./validation.ts";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
 import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, Memo, MemoryEntity, MemoryFact, MemorySource, Project, ProjectItem, Task } from "./types.ts";
+
+test("production schemas describe every action and distinguish create from PATCH", async () => {
+  const operations = fakeOperations().operations;
+  const bindings = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
+  for (const [, key] of bindings.matchAll(/^\s*(\w+):\s*\{/gm)) Object.assign(operations, { [key]: {} });
+  const registry = createResourceRegistry(operations);
+  assert.equal(registry.resources().length, 36);
+  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 37);
+  for (const item of registry.resources()) {
+    const schema = registry.schema(item.resource);
+    assert.deepEqual(Object.keys(schema.action_schemas).sort(), [...item.actions].sort(), item.resource);
+    for (const key of [...schema.create_fields, ...schema.update_fields]) {
+      assert.ok(schema.fields[key], `${item.resource}.${key} has a field definition`);
+      assert.notEqual(schema.fields[key].read_only, true, `${item.resource}.${key} is writable`);
+    }
+    for (const [name, action] of Object.entries(schema.action_schemas)) {
+      assert.equal(action.id_required, true);
+      assert.ok(action.result_description);
+      for (const key of action.required_fields) assert.ok(action.fields[key]);
+      await assert.rejects(() => registry.action(item.resource, { action: name, id: 1, data: { unexpected: true } }), /does not accept: unexpected/);
+    }
+  }
+  assert.deepEqual(registry.schema("lucius_post_comment").update_fields, ["content"]);
+  assert.deepEqual(registry.schema("person_note").update_fields, ["content"]);
+  assert.ok(!registry.schema("media").update_fields.includes("title"));
+  assert.ok(!registry.schema("media").update_fields.includes("watched_date"));
+  assert.ok(!registry.schema("memory_fact").update_fields.includes("predicate"));
+  assert.ok(!registry.schema("memory_source").update_fields.includes("fact_id"));
+  assert.deepEqual(registry.schema("lucius_state").create_fields, []);
+});
+
+test("Drink Limit PATCH preserves omitted configuration and rejects empty or invalid patches", async () => {
+  const item = { ...parseDrinkLimit({ name: "Coffee", targetType: "coffee", period: "daily", limitValue: 3 }), id: 1, createdAt, updatedAt: createdAt };
+  let writes = 0;
+  const registry = createResourceRegistry({ ...fakeOperations().operations, drinkLimit: {
+    async search() { return [item]; }, async create() { throw new Error("unused"); },
+    async update(id, input) { writes++; assert.equal(id, 1); Object.assign(item, input); return item; }, async delete() { return false; },
+  } });
+  const patched = await registry.update("drink_limit", 1, { enabled: false });
+  assert.equal(patched.enabled, false);
+  assert.equal(patched.name, "Coffee"); assert.equal(patched.target_type, "coffee");
+  assert.equal(patched.period, "daily"); assert.equal(patched.limit_value, 3);
+  await registry.update("drink_limit", 1, { limit_value: 2 });
+  assert.equal(item.enabled, false);
+  await assert.rejects(() => registry.update("drink_limit", 1, {}), /No Drink limit fields/);
+  await assert.rejects(() => registry.update("drink_limit", 1, { limit_value: 0 }));
+  await assert.rejects(() => registry.update("drink_limit", 2, { enabled: true }), /not found/);
+  assert.equal(writes, 2);
+});
+
+test("Cat Routine PATCH preserves modern schedule and reminder linkage, including legacy time edits", async () => {
+  const item = { ...parseCatRoutine({ scope: "household", title: "Care", intervalValue: 7, intervalUnit: "day", recurrenceMode: "fixed", anchorDate: "2026-01-01", firstDueDate: "2026-01-01", nextDueDate: "2026-10-08", configuredReminderTime: "08:15", timezone: "UTC", repeatWhileOverdue: true }), id: 1, reminderId: 77, lastCompletedAt: null, createdAt, updatedAt: createdAt };
+  let archives = 0, deletes = 0;
+  const registry = createResourceRegistry({ ...fakeOperations().operations, catRoutine: {
+    async search() { return [item]; }, async get(id) { return id === 1 ? item : null; }, async create() { throw new Error("unused"); },
+    async update(id, input) { assert.equal(id, 1); assert.equal(Object.hasOwn(input, "reminderId"), false); Object.assign(item, input); return item; },
+    async complete() { return {}; }, async skip() { return {}; }, async archive() { archives++; return true; }, async delete(id) { deletes++; return id === 1; },
+  } });
+  const before = { ...item };
+  const patched = await registry.update("cat_routine", 1, { notes: "Only note" });
+  assert.deepEqual(item, { ...before, notes: "Only note" });
+  assert.equal(patched.reminder_id, 77);
+  await registry.update("cat_routine", 1, { next_due_date: "2026-10-10", configured_reminder_time: "09:27" });
+  assert.equal(item.nextDueAt, "2026-10-10T09:27:00.000Z");
+  await registry.update("cat_routine", 1, { next_due_at: "2026-10-12T09:27:00Z" });
+  assert.equal(item.nextDueDate, "2026-10-12");
+  await registry.update("cat_routine", 1, { first_due_at: "2026-01-02T10:33:00Z" });
+  assert.equal(item.firstDueDate, "2026-01-02"); assert.equal(item.configuredReminderTime, "10:33");
+  assert.equal(item.recurrenceMode, "fixed"); assert.equal(item.timezone, "UTC"); assert.equal(item.reminderId, 77);
+  await assert.rejects(() => registry.update("cat_routine", 1, {}), /No Cat routine fields/);
+  assert.deepEqual(await registry.delete("cat_routine", 1), { deleted: true, id: 1 });
+  assert.deepEqual(await registry.action("cat_routine", { id: 1, action: "archive", data: {} }), { archived: true, id: 1 });
+  await assert.rejects(() => registry.action("cat_routine", { id: 1, action: "archive", data: { acted_at: "2026-01-01" } }), /does not accept/);
+  assert.equal(archives, 1); assert.equal(deletes, 1);
+  await assert.rejects(() => registry.delete("cat_routine", 2), /not found/);
+});
+
+test("generic Tracker discovery pages more than 100 Trackers without losing entries", async () => {
+  const operations = fakeOperations().operations;
+  const template = { ...parseNewTracker({ name: "Template" }), id: 1, createdAt, updatedAt: createdAt };
+  const summaries = Array.from({ length: 205 }, (_, index) => ({ ...template, id: index + 1, name: "Tracker " + (index + 1), stats: { today: 0, week: 0, month: 0, year: 0, total: 0, lastOccurredAt: null, reminderDue: false } }));
+  const registry = createResourceRegistry({ ...operations, tracker: {
+    async search() { return [...summaries].reverse(); },
+    async get() { throw new Error("unused"); }, async create() { throw new Error("unused"); }, async update() { throw new Error("unused"); }, async delete() { return false; },
+    async createField() { return {}; }, async deleteField() { return false; }, async createEntry() { return {}; }, async updateEntry() { return null; }, async deleteEntry() { return false; },
+    async createGoal() { return {}; }, async deleteGoal() { return false; }, async createReminder() { return {}; }, async deleteReminder() { return false; },
+  } });
+  const seen: unknown[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await registry.search("tracker", { query: "Tracker ", limit: 100, cursor });
+    seen.push(...page.items.map(record => record.id));
+    cursor = page.next_cursor ?? undefined;
+  } while (cursor);
+  assert.deepEqual(seen, summaries.map(record => record.id));
+  await assert.rejects(() => registry.search("tracker", { limit: 100, cursor: "other:100" }), /Invalid Tracker cursor/);
+  await assert.rejects(() => registry.search("tracker", { limit: 100, cursor: "tracker:9007199254740992" }), /Invalid Tracker cursor/);
+});
+
+function trackerTestRegistry() {
+  const tracker = { ...parseNewTracker({ name: "One" }), id: 1, createdAt, updatedAt: createdAt };
+  const children = { fields: [{ id: 11 }], entries: [{ id: 12 }], goals: [{ id: 13 }], reminders: [{ id: 14 }] };
+  const writes: Array<{ action: string; input: object }> = [];
+  const registry = createResourceRegistry({ ...fakeOperations().operations, tracker: {
+    async search() { return []; }, async get(id) { return id === 1 ? { tracker, ...children, stats: {}, insights: {} } : null; },
+    async create() { return tracker; }, async update() { return tracker; }, async delete() { return true; },
+    async createField(input) { writes.push({ action: "create_field", input }); return input; },
+    async createEntry(input) { writes.push({ action: "create_entry", input }); return input; },
+    async createGoal(input) { writes.push({ action: "create_goal", input }); return input; },
+    async createReminder(input) { writes.push({ action: "create_reminder", input }); return input; },
+    async updateEntry(id, input) { writes.push({ action: "update_entry", input: { id, ...input } }); return input; },
+    async deleteField(id) { writes.push({ action: "delete_field", input: { id } }); return true; },
+    async deleteEntry(id) { writes.push({ action: "delete_entry", input: { id } }); return true; },
+    async deleteGoal(id) { writes.push({ action: "delete_goal", input: { id } }); return true; },
+    async deleteReminder(id) { writes.push({ action: "delete_reminder", input: { id } }); return true; },
+  } });
+  return { registry, writes };
+}
+
+test("Tracker actions persist real Goal and Reminder fields and reject ignored or conflicting inputs", async () => {
+  const { registry, writes } = trackerTestRegistry();
+  const goal = await registry.action("tracker", { id: 1, action: "create_goal", data: { period_type: "custom", custom_period: "Quarter", target_value: 4 } });
+  assert.equal(goal.custom_period, "Quarter"); assert.equal(goal.target_value, 4);
+  for (const key of ["name", "field_id", "period_start", "period_end"]) {
+    await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_goal", data: { [key]: "ignored before" } }), /does not accept/);
+  }
+  const reminder = await registry.action("tracker", { id: 1, action: "create_reminder", data: { reminder_mode: "standard", configured_time: "08:15", period_days: 7, anchor_date: "2026-10-01", timezone: "UTC" } });
+  assert.equal(reminder.reminder_mode, "standard"); assert.equal(reminder.configured_time, "08:15");
+  assert.equal(reminder.period_days, 7); assert.equal(reminder.timezone, "UTC");
+  assert.equal(reminder.next_due_at, "2026-10-01T08:15:00.000Z");
+  const legacy = await registry.action("tracker", { id: 1, action: "create_reminder", data: { reminder_type: "interval", time_of_day: "09:30", interval_days: 3, anchor_date: "2026-10-01", timezone: "UTC" } });
+  assert.equal(legacy.reminder_mode, "missing"); assert.equal(legacy.next_due_at, "2026-10-03T09:30:00.000Z");
+  await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_reminder", data: { days_of_week: [1, 2] } }), /does not accept/);
+  await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_reminder", data: { reminder_type: "unknown" } }), /invalid/);
+  await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_reminder", data: { reminder_mode: "standard", reminder_type: "interval" } }), /conflicts/);
+  await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_reminder", data: { enabled: "false" } }), /must be boolean/);
+  await assert.rejects(() => registry.action("tracker", { id: 1, action: "create_field", data: {} }), /requires data.name/);
+  assert.equal(writes.length, 3);
+});
+
+test("Tracker update and deletion cannot mutate children through the wrong parent", async () => {
+  const { registry, writes } = trackerTestRegistry();
+  for (const [action, id] of [["delete_field", 11], ["delete_entry", 12], ["delete_goal", 13], ["delete_reminder", 14]] as const) {
+    await assert.rejects(() => registry.action("tracker", { id: 2, action, data: { child_id: id } }), /not found in this Tracker/);
+    await assert.rejects(() => registry.action("tracker", { id: 1, action, data: { child_id: 999 } }), /not found in this Tracker/);
+    await registry.action("tracker", { id: 1, action, data: { child_id: id } });
+  }
+  await assert.rejects(() => registry.action("tracker", { id: 2, action: "update_entry", data: { entry_id: 12, note: "wrong parent" } }), /not found in this Tracker/);
+  await registry.action("tracker", { id: 1, action: "update_entry", data: { entry_id: 12, note: "correct parent" } });
+  assert.equal(writes.length, 5);
+});
+
+test("Cat record schema and validation follow the selected kind", async () => {
+  const records = new Map<number, object>();
+  const registry = createResourceRegistry({ ...fakeOperations().operations, catRecord: {
+    async search() { return []; }, async get(kind, id) { return records.get(id) ?? null; },
+    async create(kind, input) { const record = { ...input, id: 1 }; records.set(1, record); return record; },
+    async update(kind, id, input) { const record = { ...input, id }; records.set(id, record); return record; }, async delete() { return true; },
+  } });
+  const schema = registry.schema("cat_record");
+  assert.equal(schema.fields.details.read_only, true);
+  assert.ok(schema.field_variants?.medication.required_fields.includes("started_at"));
+  const measurement = await registry.create("cat_record", { kind: "measurement", pet_id: 1, occurred_at: "2026-10-01T04:00:00Z", occurred_has_explicit_time: false, measurement_type: "weight", value: 4, unit: "kg" });
+  assert.equal(measurement.id, "measurement:1"); assert.equal(measurement.occurred_has_explicit_time, false);
+  assert.equal((await registry.update("cat_record", "measurement:1", { value: 4.2 })).value, 4.2);
+  await assert.rejects(() => registry.create("cat_record", { kind: "measurement", pet_id: 1, diagnosis: "ignored before" }), /does not accept: diagnosis/);
+  await assert.rejects(() => registry.update("cat_record", "measurement:1", { dose: "ignored before" }), /does not accept: dose/);
+});
 
 const createdAt = "2026-08-29T00:00:00Z";
 function fakeOperations() {

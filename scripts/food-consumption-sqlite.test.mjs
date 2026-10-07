@@ -54,10 +54,10 @@ test("food portions persist through CRUD, migrations, library updates, summaries
       const {withMcpRequestRepository}=await import("./src/lib/repositories/index.ts");
       const c=db.upsertFoodLibraryItem(parseFoodLibraryItem({name:"MCP 份量",referenceType:"per_serving",servingKcal:180}));
       const mcp=await withMcpRequestRepository({userId:"local",accessToken:"isolated"},async()=>{
-        const response=await mcpHandler.fetch(new Request("http://localhost/api/mcp",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json, text/event-stream","MCP-Protocol-Version":"2025-03-26"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"food_create",arguments:{title:"MCP 食品",food_kcal_mode:"auto",food_library_items:[{food_library_id:c.id,quantity:0.5,unit:"serving"}]}}})}));
+        const response=await mcpHandler.fetch(new Request("http://localhost/api/mcp",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json, text/event-stream","MCP-Protocol-Version":"2025-03-26"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"eo_create",arguments:{resource:"food_log",data:{title:"MCP 食品",food_kcal_mode:"auto",food_library_items:[{food_library_id:c.id,quantity:0.5,unit:"serving"}]}}}})}));
         const raw=await response.text();return JSON.parse(response.headers.get("content-type")?.includes("text/event-stream")?raw.split("\\n").find(line=>line.startsWith("data:"))?.slice(5):raw).result;
       });
-      assert.notEqual(mcp.isError,true,JSON.stringify(mcp));assert.equal(mcp.structuredContent.record.estimated_kcal,90);assert.equal(mcp.structuredContent.record.food_library_items[0].calculated_kcal,90);
+      assert.notEqual(mcp.isError,true,JSON.stringify(mcp));assert.equal(mcp.structuredContent.item.estimated_kcal,90);assert.equal(mcp.structuredContent.item.food_library_items[0].calculated_kcal,90);
     `);
     run('import "./src/lib/db.ts";');
     const database = new DatabaseSync(databasePath);

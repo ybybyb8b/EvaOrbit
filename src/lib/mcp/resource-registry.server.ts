@@ -1,4 +1,7 @@
 import "server-only";
+import { createFoodLog, deleteFoodLog, getFoodLog, getFoodLibraryItem, listFoodLogs, searchFoodLibrary, upsertFoodLibraryItem, updateFoodLog, updateFoodLibraryItem, removeFoodLibraryItem } from "../services/food";
+import { createDrinkLog, deleteDrinkLog, getDrinkLog, listDrinkLogs, updateDrinkLog } from "../services/drink";
+import { getDailyEnergy, getDailyNutritionSummary, updateDailyEnergy } from "../services/nutrition";
 
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
 import { archiveInbox, createInbox, deleteInbox, getInbox, markInboxProcessed, restoreInbox, searchInbox, updateInbox } from "../services/inbox";
@@ -9,7 +12,7 @@ import { addMediaRewatch, createMedia, createMediaSeries, deleteMedia, deleteMed
 import { createDrinkLimit, deleteDrinkLimit, getDrinkLimits, updateDrinkLimit } from "../services/drink";
 import { createTracker, createTrackerEntry, createTrackerField, createTrackerGoal, createTrackerReminder, deleteTracker, deleteTrackerEntry, deleteTrackerField, deleteTrackerGoal, deleteTrackerReminder, getTrackerDetail, listTrackerSummaries, updateTracker, updateTrackerEntry } from "../services/tracker";
 import { archivePet, catTimeline, createCatRecord, createPet, deleteCatRecord, getCatRecord, getPetDetail, listPets, updateCatRecord, updatePet } from "../services/cats";
-import { archiveCatRoutine, completeCatRoutine, createCatRoutine, getCatRoutine, listCatRoutines, skipCatRoutineOccurrence, updateCatRoutine } from "../services/cat-routine";
+import { deleteCatRoutine, archiveCatRoutine, completeCatRoutine, createCatRoutine, getCatRoutine, listCatRoutines, skipCatRoutineOccurrence, updateCatRoutine } from "../services/cat-routine";
 import { completeReminder, createReminder, deleteReminder, listReminders, skipReminder, snoozeReminder, updateReminder } from "../services/reminder";
 import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../services/memo";
 import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
@@ -22,6 +25,11 @@ import { createTask, deleteTask, getTask, listTasks, updateTask } from "../servi
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
+  foodLog: { search: listFoodLogs, get: getFoodLog, create: createFoodLog, update: updateFoodLog, delete: deleteFoodLog },
+  drinkLog: { search: listDrinkLogs, get: getDrinkLog, create: createDrinkLog, update: updateDrinkLog, delete: deleteDrinkLog },
+  foodLibrary: { search: searchFoodLibrary, get: getFoodLibraryItem, create: upsertFoodLibraryItem, update: updateFoodLibraryItem, delete: removeFoodLibraryItem },
+  nutritionDaily: { get: getDailyNutritionSummary },
+  dailyEnergy: { get: getDailyEnergy, upsert: updateDailyEnergy },
   memoryEntity:{search:listMemoryEntities,get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
   memoryFact:{search:listMemoryFacts,get:getMemoryFactDetail,create:createMemoryFact,update:updateMemoryFact,invalidate:invalidateMemoryFact,restore:restoreMemoryFact},
   memorySource:{search:listMemorySources,get:getMemorySource,create:createMemorySource,update:updateMemorySource,delete:deleteMemorySource},
@@ -43,7 +51,7 @@ export const resourceRegistry = createResourceRegistry({
   tracker: { search: listTrackerSummaries, get: getTrackerDetail, create: createTracker, update: updateTracker, delete: deleteTracker, createField: createTrackerField, deleteField: deleteTrackerField, createEntry: createTrackerEntry, updateEntry: updateTrackerEntry, deleteEntry: deleteTrackerEntry, createGoal: createTrackerGoal, deleteGoal: deleteTrackerGoal, createReminder: createTrackerReminder, deleteReminder: deleteTrackerReminder },
   catPet: { search: listPets, get: getPetDetail, create: createPet, update: updatePet, archive: archivePet },
   catRecord: { search: catTimeline, get: getCatRecord, create: createCatRecord, update: updateCatRecord, delete: deleteCatRecord },
-  catRoutine: { search: listCatRoutines, get: getCatRoutine, create: createCatRoutine, update: updateCatRoutine, complete: completeCatRoutine, skip: skipCatRoutineOccurrence, archive: archiveCatRoutine },
+  catRoutine: { search: listCatRoutines, get: getCatRoutine, create: createCatRoutine, update: updateCatRoutine, complete: completeCatRoutine, skip: skipCatRoutineOccurrence, archive: archiveCatRoutine, delete: deleteCatRoutine },
   reminder: { search: listReminders, create: createReminder, update: updateReminder, delete: deleteReminder, complete: completeReminder, skip: skipReminder, snooze: snoozeReminder },
   subscription: { search: listSubscriptions, get: getSubscriptionDetail, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment },
   project: { search: listProjects, get: getProject, create: createProject, update: updateProject },

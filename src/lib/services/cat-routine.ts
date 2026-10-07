@@ -140,6 +140,16 @@ export async function skipCatRoutineOccurrence(id: number, actedAt = new Date())
   return updated;
 }
 
+export async function deleteCatRoutine(id: number) {
+  const repository = await getRepository();
+  const routine = await repository.getCatRoutine(id);
+  if (!routine) return false;
+  // Remove the owned projection first so a partial failure cannot leave active reminders.
+  // Occurrences cascade with the reminder; generated care records remain independent.
+  if (routine.reminderId) await repository.deleteReminder(routine.reminderId);
+  return repository.deleteCatRoutine(id);
+}
+
 export async function archiveCatRoutine(id: number) {
   const { repository, routine } = await requireRoutine(id);
   const archived = await repository.archiveCatRoutine(id);

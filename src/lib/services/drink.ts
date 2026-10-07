@@ -16,6 +16,7 @@ export async function listDrinkLogs(input: { date?: string; query?: string; from
   return query ? logs.filter((item) => [item.name, item.brand, item.notes, item.foodPlaceName ?? "", item.foodPlaceCity ?? "", item.foodPlaceLocation ?? "", item.foodPlaceBranch ?? ""].some((value) => value.toLocaleLowerCase().includes(query))) : logs;
 }
 export async function getTodayDrinks() { return listDrinkLogs({ date: dateInEvaOrbit() }); }
+export async function getDrinkLog(id: number) { return (await getRepository()).getDrinkLog(id); }
 export async function getDrinkInputSuggestions() { return buildDrinkInputSuggestions(await (await getRepository()).listDrinkLogs()); }
 export async function getDrinkPreferenceSummary() { return buildDrinkPreferenceSummary(await (await getRepository()).listDrinkLogs()); }
 export async function getDrinkLimits() { return (await getRepository()).listDrinkLimits(); }

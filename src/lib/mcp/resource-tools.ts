@@ -15,7 +15,7 @@ export function registerGenericResourceTools(server: McpServer, run: ToolRunner,
   }, async () => run(async () => ({ resources: resourceRegistry.resources() })));
 
   server.registerTool("eo_schema", {
-    description: "Describe one registered EvaOrbit resource, including fields, writable/searchable fields, actions, and validation rules.",
+    description: "Describe one registered EvaOrbit resource, including fields, create_fields, update_fields, searchable fields, action_schemas, and validation rules.",
     inputSchema: z.object({ resource }).strict(),
   }, async ({ resource: name }) => run(async () => ({ schema: resourceRegistry.schema(name) })));
 
@@ -51,7 +51,7 @@ export function registerGenericResourceTools(server: McpServer, run: ToolRunner,
   }, async ({ resource: name, id }) => run(async () => ({ resource: name, ...await resourceRegistry.delete(name, id) })));
 
   server.registerTool("eo_action", {
-    description: "Run a registered non-CRUD business action such as complete, resolve, or add_rewatch. Call eo_schema to discover supported actions.",
+    description: "Run a registered non-CRUD business action such as complete, record_recurrence, or add_viewing. Call eo_schema for action_schemas, required data fields, and the action's ID meaning.",
     inputSchema: z.object({ resource, action: z.string().trim().min(1).max(100), id: resourceId.optional(), data: data.optional() }).strict(),
   }, async ({ resource: name, action, id, data: input }) => run(async () => ({ resource: name, action, result: await resourceRegistry.action(name, { action, id, data: input ?? {} }) })));
 }
