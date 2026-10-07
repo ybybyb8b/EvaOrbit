@@ -1,7 +1,8 @@
 import { ConflictError } from "../errors.ts";
 import type { FoodLog, DrinkLog, DailyNutritionSummary, DrinkLimitStatus } from "../types.ts";
 import { parseNewFoodLog, parseFoodLogPatch, parseNewDrinkLog, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseDailyEnergy } from "../validation.ts";
-import { resourceActionSchemas } from "./resource-actions.ts";
+import { documentedActionSchemas, resourceActionSchemas } from "./resource-actions.ts";
+import { documentedFields, resourceGuidance } from "./resource-guidance.ts";
 import { reminderSourceDefinition } from "../reminder-source-registry.ts";
 import type { CalendarEvent } from "../types.ts";
 import { parseCalendarEventPatch, parseNewCalendarEvent } from "../validation.ts";
@@ -20,9 +21,12 @@ export type ResourceField = {
   description: string;
   format?: string;
   enum?: Array<string | number>;
-  items?: { type: "string" | "object"; properties?: Record<string,ResourceField> };
+  items?: { type: "string" | "object"; properties?: Record<string,ResourceField>; enum?: string[] };
   max_length?: number;
   read_only?: boolean;
+  derived?: boolean;
+  legacy?: boolean;
+  write_only?: boolean;
   nullable?: boolean;
   default?: unknown;
 };
@@ -1078,7 +1082,7 @@ export class ResourceRegistry {
   resources() {
     return [...this.#resources.values()].map((resource) => ({
       resource: resource.schema.resource,
-      description: resource.schema.description,
+      description: resourceGuidance(resource.schema).description,
       capabilities: (["search", "get", "create", "update", "delete", "action"] as const).filter((capability) => Boolean(resource[capability])),
       actions: resource.schema.supported_actions,
     }));
@@ -1086,10 +1090,13 @@ export class ResourceRegistry {
 
   schema(resource: string) {
     const registered = this.#resource(resource), schema = registered.schema;
-    return { ...schema,
+    return { ...schema, ...resourceGuidance(schema), fields: documentedFields(schema),
+      required_fields: schema.required_fields.filter((key) => Object.hasOwn(schema.fields, key)
+        && !(resource === "reminder" && key === "starts_at")
+        && !(resource === "relation_event" && ["items", "flows"].includes(key))),
       create_fields: registered.create ? schema.create_fields ?? schema.writable_fields : [],
       update_fields: registered.update ? schema.update_fields ?? schema.writable_fields : [],
-      action_schemas: resourceActionSchemas[resource] ?? {},
+      action_schemas: documentedActionSchemas(resource),
     };
   }
 

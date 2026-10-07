@@ -1,6 +1,7 @@
 import type { ResourceField } from "./resource-registry.ts";
 
 export type ResourceActionSchema = {
+  description?: string;
   id_required: boolean;
   id_description: string;
   fields: Record<string, ResourceField>;
@@ -8,6 +9,45 @@ export type ResourceActionSchema = {
   validation_rules: string[];
   result_description: string;
 };
+
+// Returned documentation only. The handler continues to enforce the original contracts below.
+const actionGuidance: Record<string, Record<string, string>> = {
+  memory_entity: {
+    merge: "Resolve identities first; never merge on name alone. id is source UUID, target_entity_id is active target UUID. Redirects subject/object/perspective references atomically, retains the merged redirect and reports self_loops; this does not deduplicate Facts.",
+    archive: "Retains Entity and Facts; marks Entity archived. Does not invalidate assertions or close their validity. Archived Entities can appear in default search.",
+    restore: "Returns an archived Entity to active; cannot restore a merged redirect through this action.",
+  },
+  memory_fact: {
+    invalidate: "Withdraws/corrects an active assertion, recording reason/time; retains Fact and sources and does not change real-world valid_to. Do not use merely because validity ended.",
+    restore: "Restores an invalidated assertion to active and clears invalidation metadata; original validity dates still apply. Does not supersede another Fact.",
+  },
+  inbox: { mark_processed: "Marks the capture processed and records processing time; no content is converted or copied elsewhere.", archive: "Retains the capture with archived lifecycle; no conversion.", restore: "Returns the capture to pending inbox state; does not restore a permanently deleted capture." },
+  task: { complete: "Marks Task done, records completion and reconciles owned reminders; this is not merely acknowledging a notification.", reopen: "Returns Task to open, clears completion and reconciles owned reminders; check existing Due/reminder configuration." },
+  lucius_case: { record_recurrence: "Records another actual recurrence atomically, including same-day recurrence. Defaults occurred_date to today's EvaOrbit date; cannot precede latest occurrence. Increments count, updates interval/dates and resets consecutive correct count. Not idempotent; do not retry blindly after uncertain success." },
+  relation_person: { archive: "Retains person/events/notes and hides the profile from normal active listing; relationship_status is independent.", restore: "Clears profile archive; does not change ended/active relationship status or infer closeness." },
+  relation_event: { settle_advance: "id is the advance FLOW id. Creates a linked repayment event, changing settlement balance. Use the outstanding amount from existing data; amount must be positive and cannot exceed unsettled advance. Money is integer fen, not yuan." },
+  media: { add_viewing: "Adds a real dated viewing/rewatch to existing Media, affecting derived counts/latest date and setting Media status to completed; do not create duplicate Media.", update_viewing: "Corrects one viewing belonging to this Media; updates derived history summaries.", delete_viewing: "Removes one viewing belonging to this Media and recomputes summaries; the first viewing cannot be deleted (delete Media instead)." },
+  tracker: {
+    create_field: "Adds an active Tracker field. Select types need nonempty options; time_range derives durationMinutes and fixes unit/precision. Inspect existing fields before duplicating.",
+    delete_field: "Archives the owned field rather than purging it or erasing historical values; current response deleted=true denotes the archive service result.",
+    create_entry: "Creates a point-event record in a nonarchived Tracker. Read fields first; values use field keys or IDs, with defaults for missing values. Empty values is quick capture and bypasses detailed required-field checks. time_range uses explicit startAt/endAt instants; durationMinutes is derived.",
+    update_entry: "Updates an owned entry. Omitted top-level values is preserved; supplied values replaces the entire object, not a per-field merge. Retrieve existing values before a partial field correction.",
+    delete_entry: "Permanently removes an owned entry, affecting counts/statistics/goals.", create_goal: "Adds an entry-count goal, not a field-value aggregation; custom_period is descriptive text, not a date-range selector.", delete_goal: "Removes the owned goal, not its entries.",
+    create_reminder: "Adds a rule to a nonarchived Tracker and creates/synchronizes its Reminder projection. standard is scheduled delivery; missing checks absence of entries in the observation period. Prefer canonical fields over legacy aliases.",
+    delete_reminder: "Removes the owned rule and cancels the linked Reminder projection; keeps historical Tracker entries.",
+  },
+  cat_routine: { complete: "Requires enabled routine; records care/cleaning event and completion occurrence, advances schedule and resets linked reminder. A completion within 30 seconds of the previous completion is rejected.", skip: "Requires enabled routine; records skipped occurrence and cancellation snapshot, advances schedule without creating care history. acted_at is execution time; schedule advances from routine due state.", archive: "Retains routine/execution history and disables routine/reminder; generated care remains. Use eo_delete only for permanent routine/reminder removal." },
+  reminder: { complete: "Requires active reminder. Owner-dependent: completes Task; records/handles Subscription renewal; completes Cat Routine with care event; advances Tracker delivery without creating Tracker entry. Manual interval cat reminders may create care/cleaning events.", skip: "Requires active reminder. Skips/advances the occurrence; Subscription advances renewal without payment, Cat Routine creates no care, Tracker creates no entry. Medication preset skip closes its current window; does not universally disable future schedules.", snooze: "Requires active reminder. custom is required for choice=custom and uses an explicit future time; does not alter owner completion or payment. Medication snooze must remain inside current reminder window." },
+  subscription: { pause: "Retains payment/price history, sets paused and disables owned reminder; may first catch up already due automatic payments.", end: "Sets ended and disables owned reminder, retaining history; may first catch up already due automatic payments. Does not cancel provider-side subscription.", resume: "Sets active and reconciles reminder. If existing renewal is in the past, next_renewal_on is required. Does not restart provider-side billing.", record_payment: "Requires active subscription. Writes immutable actual payment (major currency units), advances renewal and synchronizes reminder; duplicate scheduled cycles conflict. update_current_price additionally appends a price change. This records payment, it does not charge a provider." },
+  daily_energy: { upsert: "Replaces both manual components and notes; get current manual values first when retaining existing data. null permits HealthKit fallback and zero is explicit; no HealthKit source mutation." },
+};
+
+export function documentedActionSchemas(resource: string): Record<string, ResourceActionSchema> {
+  return Object.fromEntries(Object.entries(resourceActionSchemas[resource] ?? {}).map(([name, schema]) => [name, {
+    ...schema, description: actionGuidance[resource]?.[name],
+    fields: Object.fromEntries(Object.entries(schema.fields).map(([key, field]) => [key, /legacy/i.test(field.description) ? { ...field, legacy: true } : { ...field }])),
+  }]));
+}
 
 const actedAt: ResourceField = { type: "string", format: "date-time", description: "Actual execution instant; omitted uses server time." };
 const childId: ResourceField = { type: "integer", description: "Child identifier belonging to this Tracker." };

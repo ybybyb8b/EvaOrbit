@@ -15,6 +15,11 @@ test("production schemas describe every action and distinguish create from PATCH
   assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 37);
   for (const item of registry.resources()) {
     const schema = registry.schema(item.resource);
+    assert.equal(item.description, schema.description);
+    assert.ok(schema.usage_guidance.length > 0, `${item.resource} usage guidance`);
+    assert.ok(schema.operation_semantics.lifecycle, `${item.resource} business semantics`);
+    assert.ok(schema.search_schema.filters);
+    for (const key of schema.required_fields) assert.ok(schema.fields[key], `${item.resource} required fields are real keys`);
     assert.deepEqual(Object.keys(schema.action_schemas).sort(), [...item.actions].sort(), item.resource);
     for (const key of [...schema.create_fields, ...schema.update_fields]) {
       assert.ok(schema.fields[key], `${item.resource}.${key} has a field definition`);
@@ -23,6 +28,7 @@ test("production schemas describe every action and distinguish create from PATCH
     for (const [name, action] of Object.entries(schema.action_schemas)) {
       assert.equal(action.id_required, true);
       assert.ok(action.result_description);
+      assert.ok(action.description, `${item.resource}/${name} explains business effects`);
       for (const key of action.required_fields) assert.ok(action.fields[key]);
       await assert.rejects(() => registry.action(item.resource, { action: name, id: 1, data: { unexpected: true } }), /does not accept: unexpected/);
     }
@@ -34,6 +40,22 @@ test("production schemas describe every action and distinguish create from PATCH
   assert.ok(!registry.schema("memory_fact").update_fields.includes("predicate"));
   assert.ok(!registry.schema("memory_source").update_fields.includes("fact_id"));
   assert.deepEqual(registry.schema("lucius_state").create_fields, []);
+  assert.match(registry.schema("memo").description, /ordinary conversation/);
+  assert.match(registry.schema("memory_fact").usage_guidance.join(" "), /status=active.*valid_on/);
+  assert.match(registry.schema("memory_entity").usage_guidance.join(" "), /Same names are not unique/);
+  assert.match(registry.schema("memo").usage_guidance.join(" "), /Retrieval does not authorize writing/);
+  assert.match(registry.schema("calendar_event").description, /one-way.*do not write back/);
+  assert.equal(registry.schema("relation_event").operation_semantics.update_mode, "complete replacement input");
+  assert.deepEqual(registry.schema("memory_source").search_schema.query_fields, []);
+  assert.equal(registry.schema("tracker").search_schema.pagination, "cursor");
+  assert.ok(registry.schema("memory_fact").search_schema.limitations.some(rule => rule.includes("bounded")));
+  assert.ok(registry.schema("memory_fact").required_conditions.length);
+  assert.equal(registry.schema("food_log").fields.food_dish_id.legacy, true);
+  assert.equal(registry.schema("subscription").fields.amount.write_only, true);
+  assert.equal(registry.schema("nutrition_daily").fields.resting_energy_kcal.read_only, true);
+  assert.doesNotMatch(registry.schema("nutrition_daily").fields.resting_energy_kcal.description, /clears/);
+  assert.doesNotMatch(registry.schema("drink_log").fields.estimated_kcal.description, /Food auto/);
+  assert.ok(registry.schema("relation_event").fields.parties.items?.properties?.key);
 });
 
 test("Drink Limit PATCH preserves omitted configuration and rejects empty or invalid patches", async () => {

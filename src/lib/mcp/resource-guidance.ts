@@ -1,0 +1,188 @@
+import type { ResourceField, ResourceSchema } from "./resource-registry.ts";
+
+// Discovery metadata only: never changes validation, queries or business services.
+export type ResourceGuidance = {
+  description: string;
+  usage_guidance: string[];
+  search_schema: {
+    query_fields: string[];
+    filters: Record<string, string>;
+    defaults: string[];
+    pagination: "cursor" | "none";
+    limitations: string[];
+  };
+  operation_semantics: Record<string, string>;
+  required_conditions: string[];
+};
+
+const memoryWrite = "Retrieve existing records before writing. Write durable memory only when the user explicitly asks to retain, update or correct it; do not persist casual remarks, hypotheticals or assistant guesses. Retrieval does not authorize writing.";
+const guidance: Record<string, [string, string, string]> = {
+  memo: ["Long-term personal context: preferences, rules, past decisions, people and narrative background. Retrieve relevant Memo in ordinary conversation before guessing or asking the user to repeat saved context.", "Start with Memo for broad or narrative context; combine Memory Graph for precise relationships and business resources for current state. Historical Memo is not necessarily current truth.", "PATCH content or lifecycle explicitly; archived/historical/merged retain records. delete permanently removes the Memo; it does not retract Graph facts referencing it."],
+  memory_entity: ["Resolve people, identities, projects, places and concepts in long-term personal context by canonical name or aliases; then retrieve their Memory Facts.", "Search names and aliases first. Same names are not unique identities; inspect candidates before create or merge. Combine Memo for narrative background; relation_person is the human-exchange profile, not the same identifier.", "archive/restore changes Entity state without invalidating its Facts. merge redirects fact references to the active target and retains the source redirect; never merge solely on a matching name. No delete."],
+  memory_fact: ["Retrieve structured long-term assertions and directed relationships about known entities, including preferences and past decisions, with validity, attribution and provenance.", "Resolve Entity IDs first, then query entity_id/direction. For current context request status=active and valid_on for the relevant date; compare epistemic_type, perspective and sources. Combine Memo or Chronicle for narrative and history.", "create currently permits a Fact without sources; add traceable provenance separately. PATCH only confidence, importance and validity dates. invalidate withdraws an assertion without changing valid_to; restore does not extend validity. Superseding via reviewed candidates exists outside current generic MCP; do not invent an action. No delete."],
+  memory_source: ["Trace a Memory Fact to its evidence or reverse-look up Facts sourced from a business record. This is provenance, not an independent memory assertion.", "Get a Fact to read its sources, or filter by source_resource plus opaque source_record_id. Verify excerpts and source records; links have no business-table foreign key and do not synchronize source changes.", "Create only for an existing Fact. PATCH URL, excerpt or note only; delete removes the provenance link, never the Fact. Preserve source IDs as strings."],
+  inbox: ["Temporary user-requested capture awaiting sorting; use Memo for confirmed durable context and Task for executable work.", "Search pending captures before creating duplicates; search other lifecycle states when restoring old context.", "mark_processed/archive/restore only change Inbox lifecycle; no conversion to another resource occurs. delete permanently removes the capture only on explicit request."],
+  task: ["Executable personal to-dos with Due, independent Reminder delivery and explicit completion; use project_item for project requirements and calendar_event for scheduled intervals.", "Search existing title/context before create; an existing requirement and its Task need not be duplicates.", "PATCH omitted fields remain unchanged. Due alone does not enable notifications. complete/reopen changes completion and reconciles owned reminders; delete removes the Task and its reminder rules/projections."],
+  chronicle: ["Dated Markdown history for reconstructing events and past decisions; multiple entries can share a date. Use Memo for continuing context and Calendar for scheduled intervals.", "Search event keywords before create; compare date and event identity, not just title. Combine Memo and Graph when history affects current context.", "PATCH preserves omitted fields and original Markdown; delete permanently removes the entry. Source is manual or chatgpt; do not fabricate history."],
+  lucius_diary: ["Lucius's subjective dated diary, not a source of verified user facts or inferred user feelings.", "Search date/context before adding a repeated diary; use Chronicle for factual history and Memo for durable user context.", "PATCH preserves omitted fields; delete permanently removes the diary. Migration provenance is not ordinary conversational input."],
+  lucius_case: ["Lucius correction cases and recurrence history; retrieve existing mistakes and mandatory rules before repeating them.", "Search the existing error and trigger scene before create; record a repeated case through record_recurrence rather than creating another case or computing counters.", "record_recurrence defaults to today's EvaOrbit date, increments occurrence_count, resets the correct streak and updates recurrence dates atomically; same-day recurrence is still counted. Counters are writable for explicit correction/import, not normal model bookkeeping. delete permanently removes the case."],
+  lucius_state: ["The single persisted Lucius display state, not mood history or generated text.", "Use id=current; update only on an explicit state-change request.", "PATCH status/mood; no create, search, delete or historical mood inference."],
+  project: ["Project containers and current work counts; retrieve these with project_item to recover project context and earlier decisions.", "Search the existing project before create; use project_item for delivery details, Memo for broader background and Graph for relationships.", "PATCH status=archived retains the project; counts and activity timestamps are derived. No delete."],
+  project_item: ["Project delivery source of truth: requirements, issues, research, decisions, blockers and completed work.", "Locate the Project and search existing requirements before create. Retrieve relevant items when resuming a project; avoid duplicating current delivery state in Memo or Graph.", "PATCH explicit work status. done is an implementation claim; verified requires actual user confirmation. Use dropped for abandoned work; no delete. Lifecycle timestamps are server-managed."],
+  relation_person: ["Human-exchange profiles with user-maintained relationship status, preferences and closeness; use Memory Entity for broader graph identity.", "Search name/nickname before create, resolve same-name people by context; get events/notes for richer person context and Graph for assertions. IDs are not interchangeable.", "PATCH closeness and relationship status only from explicit user input. Events do not infer either. archive/restore retains history; ended is independent from archive. Balances and recency are derived; no delete."],
+  relation_event: ["One real multi-person exchange: expenses, gifts, repayment, favors or interaction; this is the source for relationship balances and meeting history.", "Resolve people first and check the same real event before create. One group activity is one aggregate, not one duplicate per participant.", "Update requires a complete event input, NOT PATCH; nested parties/items/flows replace the aggregate and derived balances change. delete removes the event and affects balances. settle_advance uses the advance FLOW id and creates a repayment event; it is not the event id."],
+  person_note: ["A small personal memory fragment attached to one relation_person; use Memo for broad context and Graph for structured attributed assertions.", "Resolve the relation person first, then search with person_id; inspect existing fragments before create.", "PATCH content only; person_id cannot change. delete removes this fragment, not the person or Graph assertions."],
+  calendar_event: ["Faithful calendar intervals. Apple Calendar currently synchronizes one-way into EvaOrbit; MCP writes in EvaOrbit do not write back to Apple Calendar.", "Use for scheduled intervals, not Task completion or narrative Chronicle. Search existing event/time/location before create to avoid duplicating imported events.", "PATCH local EvaOrbit data; status=cancelled retains the event while delete removes it locally. Neither operation updates Apple Calendar. All-day end is exclusive; do not invent a time for date-only input."],
+  lucius_post: ["Short posts on Lucius's private profile; use Diary for subjective history and Memo for durable personal context.", "Search existing posts before a duplicate publication; post comments use lucius_post_comment.", "PATCH content/published_at; publication time is explicit business data. delete removes the post; inspect related comments before deletion."],
+  lucius_post_comment: ["Conversation attached to a Lucius Post; author identifies whose words are recorded.", "Resolve the Post first; query with post_id and optionally author. Never attribute generated text to the user.", "PATCH content only; post_id and author cannot change. Edit/delete user-authored comments only on explicit request."],
+  health_record: ["User-reported symptoms, medications, visits, tests, conditions, treatments and measurements; retrieve actual health history instead of inferring it from Memo.", "Filter type/date/status and inspect records; use training_log for exercise and cat_record for pets. Current search has no keyword query support.", "PATCH omitted fields remain unchanged; details replaces its object and accepts scalar values or null only. Ongoing types use active/resolved; other types normalize to resolved. delete removes the health record."],
+  training_log: ["Actual personal exercise sessions: cardio, strength or mixed; use Tracker for custom capture and Health Record for clinical history.", "Search the relevant date interval before recording the same session; current search has no keyword query support.", "PATCH omitted fields remain unchanged; body_parts replaces the array and must contain valid nonempty choices. delete removes the session."],
+  media: ["Watched or planned movies, TV, anime and documentaries; retrieve viewing history and preferences before recommendations involving past viewing.", "Search original/translated title and series context before create; a rewatch is add_viewing on existing Media, not another Media record.", "PATCH titles/status/metadata; watched_date and legacy title fallback are create-only. Viewing actions manage dated history and derived counts. delete removes Media; cover upload is outside generic MCP."],
+  media_series: ["Series/franchise groups for Media, not individual viewing records.", "Search existing series name before create and use its ID when associating Media.", "Only search/get/create are exposed; no update/delete. item_count is derived."],
+  drink_limit: ["Configured drink-category consumption limits; drink_log returns evaluated statuses, not an enforcement block.", "Read existing limits before creating overlapping rules; search is an unfiltered list and ignores query.", "PATCH configuration; delete removes a rule, not consumption records. limit_value is a drink-record count per calendar period, not volume or caffeine."],
+  tracker: ["Custom structured trackers; retrieve existing fields and entries to restore tracked personal context before creating a new tracking system.", "Search existing trackers and follow cursors; get fields before writing values keyed by field key or ID. Use dedicated business resources when they already model the activity.", "PATCH Tracker metadata. Entry values replace the object; omitted values remain unchanged. delete_field archives the field; delete_entry/goal remove children; delete_reminder removes the rule and cancels its projection. Whole Tracker delete removes it and related data/reminders."],
+  cat_pet: ["Household cats and their related records; use cat_record for care/health events and cat_routine for recurring care.", "Search existing cat by name and context before create; include inactive cats when recovering history.", "delete is a recoverable archive that disables active reminders/routines, not a hard delete. is_active is a profile field; changing it is not equivalent to the archive service."],
+  cat_record: ["Cat or household care events, symptoms, vet visits, medication and measurements; each kind has its own fields and table.", "Resolve the Pet and check existing events before create; search returns timeline summaries, so get kind:id before editing. Use field_variants for kind-specific inputs.", "PATCH the selected kind's flat fields; kind cannot change. Household event requires pet_id=null; other kinds require a Pet. delete removes only that kind's record, not the Pet."],
+  cat_routine: ["Recurring cat or household care schedules; use cat_record for actual care history and reminder for delivery projections.", "Resolve the Pet/scope and search existing schedule before create; configure its owned reminder through this resource.", "complete records care and advances the schedule; skip advances without generating care. completion recurrence follows execution date; fixed follows the anchor. archive retains routine/history and disables reminder; delete permanently removes routine/reminder and occurrences but retains generated care and notification snapshots."],
+  reminder: ["Reminder delivery records, including module-owned projections. Configure Task, Subscription, Cat Routine and Tracker reminders through their owning resource.", "Search target and inspect source ownership before mutation; only cat/cat_household/tracker manual targets are configurable here.", "complete can complete a Task, record Subscription payment, or generate cat care and advance schedules. skip is owner-dependent. delete is cancellation, NOT hard deletion; for Cat Routine projections it skips one occurrence. snooze changes delivery time and may be constrained by the medication window."],
+  subscription: ["Recurring subscriptions, price/payment history and owned renewal reminders. auto_renew permits automatic due-payment bookkeeping, not provider-side charging.", "Search the existing subscription before create or record_payment. search/get currently catch up automatic renewals and may append payments and advance dates; returned payments are not necessarily individually user-confirmed.", "PATCH prices appends price history without rewriting payments. pause/end disables reminder and retains history; overdue resume requires next_renewal_on. record_payment creates immutable payment and advances renewal; skip via reminder advances without payment. No delete."],
+  food_place: ["Shared Food/Drink sources: brand, branch, retail or Homemade; use Food Dish for menus and Food Library for nutrition references.", "Search brand/branch/city context before create. kind and scope are independent; purpose filters food/drink capability rather than consumption scene.", "PATCH source metadata; visits/frequency are derived. delete archives referenced places, otherwise removes the place and menus; existing consumption history is preserved."],
+  food_dish: ["Food or drink menu item owned by one Food Place; menu identity is separate from nutrition references and consumption records.", "Resolve Place first, then search name and kind before create; linked Drink menus fix name but never sugar/temperature.", "PATCH menu metadata. delete archives referenced menus or removes unreferenced ones. Known current MCP result limitation: deleted=true is returned even when archived; do not infer permanent removal from that flag."],
+  food_log: ["An actual food consumption occurrence, with optional source/menu associations, Calendar meal matching and immutable nutrition portion snapshots.", "Check same date/meal/context before create, but allow separate real meals. Search Place/Dish/Library before linking; names alone do not establish associations.", "PATCH preserves omitted links/snapshots/precision; arrays replace and [] clears. Auto calories derive from portions; manual estimates require evidence. Calendar matching can change effective time. delete removes consumption, affecting derived visits and nutrition."],
+  drink_log: ["An actual drink consumption occurrence with menu/source/nutrition links and evaluated Drink Limit statuses.", "Check same date/context before create but allow separate real drinks. Resolve Place and drink-kind menu before linking; do not guess caffeine, energy or rating.", "PATCH omitted links remain; null clears. Create/update includes item.limits; exceeding a limit does not block saving. delete removes consumption and affects derived visits/nutrition."],
+  food_library: ["Reusable nutritional reference data, separate from Place menus and actual Food/Drink consumption.", "Search name+brand before create; use existing ID PATCH for corrections. create is an upsert and omitted values use create defaults, potentially replacing existing values.", "PATCH reference fields; consumption snapshots remain unchanged. delete archives referenced items or removes unreferenced items and reports action/deleted."],
+  nutrition_daily: ["Read-only daily intake, effective energy expenditure, energy balance and manual/HealthKit provenance; use this for daily summaries.", "Get by YYYY-MM-DD; inspect source and missing values before interpreting totals. Food/Drink logs hold consumption; daily_energy holds manual overrides.", "No writes. Manual values override HealthKit per component; null permits fallback, zero is a real override. Energy balance is intake minus expenditure."],
+  daily_energy: ["Manual resting/active energy overrides for one date; use nutrition_daily to read effective energy including HealthKit.", "Get current manual values before upsert when retaining one component or notes; do not copy an effective HealthKit value into a manual override unintentionally.", "upsert replaces both manual values and notes, not PATCH. Both values are required and nullable; omitted notes clears notes. null allows HealthKit fallback; zero is explicit. Returns calculated nutrition summary."],
+};
+
+// Exact filter keys accepted by the current handlers; strings document types and conditions.
+const filters: Record<string, Record<string, string>> = {
+  memory_entity: { entity_type: "string", status: "active|archived|merged", include_merged: "boolean" },
+  memory_fact: { entity_id: "Entity UUID", direction: "in|out|both (default both; subject/object only)", predicate: "exact string", perspective_entity_id: "Entity UUID|null", status: "active|invalidated", valid_on: "YYYY-MM-DD; inclusive validity boundaries" },
+  memory_source: { fact_id: "Fact UUID", source_resource: "string", source_record_id: "opaque string" },
+  inbox: { status: "inbox|processed|archived|all; default inbox" }, task: { status: "all|open|done; default all", priority: "low|medium|high" },
+  memo: { status: "active|merged|archived|historical; default active (no all option)", type: "basic|supplement|event|note", tag: "one exact tag" },
+  lucius_diary: { tag: "string" }, lucius_case: { error_type: "naming|memory_omission|factual|tool_misuse|expression|other", severity: "minor|moderate|serious|habitual", status: "serving|probation|temporary_release|permanent_record", current_only: "boolean; serving/probation" },
+  project: { status: "active|paused|archived" }, project_item: { project: "project name", project_id: "positive integer", status: "to_solve|doing|blocked|done|verified|dropped", type: "feature|bug|ui|migration|research|tech_debt|other", module: "string" },
+  relation_person: { include_archived: "boolean", relationship_status: "active|ended" }, relation_event: { person_id: "positive integer", event_type: "expense|gift|repayment|favor|interaction" }, person_note: { person_id: "required positive integer" },
+  calendar_event: { from: "start boundary string", to: "end boundary string", status: "confirmed|tentative|cancelled" },
+  lucius_post_comment: { post_id: "positive integer", author: "user|lucius" }, health_record: { type: "symptom|medication|visit|test|condition|treatment|measurement|note", status: "active|resolved", from: "inclusive occurrence boundary", to: "exclusive occurrence boundary" }, training_log: { from: "inclusive occurrence boundary", to: "exclusive occurrence boundary" },
+  media: { media_type: "movie|tv|anime|documentary|other", status: "planned|watching|completed|paused|dropped", rating: "EvaOrbit rating", series_id: "positive integer", favorite: "boolean", rewatched: "boolean" },
+  cat_pet: { include_inactive: "boolean" }, cat_record: { pet_id: "positive integer|null (household)" }, cat_routine: { scope: "cat|household", pet_id: "positive integer|null", enabled_only: "boolean" }, reminder: { target_type: "cat|cat_household|cat_food|tracker|health|subscription|task", target_id: "positive integer|null", active_only: "boolean" },
+  subscription: { status: "active|paused|ended" }, food_place: { kind: "restaurant|drink|retail|homemade|other", scope: "brand|branch|virtual", status: "frequent|occasional|paused|avoid|closed", category: "string", purpose: "food|drink" }, food_dish: { food_place_id: "positive integer", kind: "food|drink", recommended: "boolean", rating: "love|good|neutral|dislike" },
+  food_log: { date: "YYYY-MM-DD", meal_type: "breakfast|lunch|dinner|snack|late_night", food_place_id: "positive integer", food_dish_id: "positive integer; contains dish" }, drink_log: { date: "YYYY-MM-DD", drink_type: "coffee|milk_tea|tea|soda|juice|water|alcohol|other", food_place_id: "positive integer", drink_menu_id: "positive integer" }, food_library: { name: "string", brand: "string", category: "staple|dish|snack|drink|other" },
+};
+const queryFields: Record<string, string[]> = {
+  memory_entity: ["canonical_name", "aliases"], memory_fact: ["predicate", "object_value"], memory_source: [],
+  inbox: ["content"], task: ["title", "notes", "tags"], memo: ["title", "content"], chronicle: ["title", "content_md"], lucius_diary: ["content"], lucius_case: ["title", "cause", "mandatory_rule"], lucius_state: [],
+  project: ["name", "description"], project_item: ["title", "description", "resolution"], relation_person: ["name", "nickname", "relation_label"], relation_event: ["title", "note"], person_note: ["content"], calendar_event: ["title", "notes", "location"], lucius_post: ["content"], lucius_post_comment: ["content"], health_record: [], training_log: [],
+  media: ["title"], media_series: ["name"], drink_limit: [], tracker: ["name"], cat_pet: ["name"], cat_record: ["title", "summary"], cat_routine: ["title"], reminder: ["title"], subscription: ["name"], food_place: ["name", "branch", "city", "location", "category", "notes"], food_dish: ["name", "category", "notes"], food_log: ["title", "description", "notes"], drink_log: ["name", "brand", "notes"], food_library: ["name", "brand", "category"], nutrition_daily: [], daily_energy: [],
+};
+
+export function resourceGuidance(schema: ResourceSchema): ResourceGuidance {
+  const name = schema.resource;
+  const [description, use, operations] = guidance[name];
+  const defaults: string[] = [];
+  if (name === "memo") defaults.push("status=active; retrieve other lifecycle states separately for historical context.");
+  if (name === "inbox") defaults.push("status=inbox; status=all includes history.");
+  if (name === "task") defaults.push("status=all.");
+  if (name === "memory_entity") defaults.push("Merged redirects excluded unless include_merged=true or explicit status; archived entities can be returned. Use status=active for current recall.");
+  if (name === "memory_fact") defaults.push("No default status or validity filter. Use status=active and valid_on for current recall.");
+  const limitations = name === "tracker" ? ["Follow next_cursor with the same query."] : ["No cursor pagination; null next_cursor does not prove an exhaustive search. Limit defaults to 20, maximum 100."];
+  if (["memory_fact", "relation_event", "lucius_post", "lucius_post_comment", "media", "drink_log"].includes(name)) limitations.push("Keyword filtering occurs after a bounded service result; empty results can miss older matching records. Narrow structural filters and inspect related records.");
+  if (queryFields[name].length === 0) limitations.push("query is unsupported/ignored; use only listed filters or get by ID.");
+  if (name === "memory_fact") limitations.push("query matches predicate/literal value, not Entity names or source excerpts; resolve Entities first. This is not semantic recall.");
+  if (name === "memory_source") limitations.push("No excerpt/note keyword search; Fact get returns its sources.");
+  return {
+    description,
+    usage_guidance: [use, ...(["memo", "memory_entity", "memory_fact", "memory_source", "person_note"].includes(name) ? [memoryWrite] : ["Search existing identities/references and check event identity before create. Separate real occurrences are not duplicates. Write only within the user's requested scope."]), "Use the owning business resource as the source of current domain state; saved historical context can be stale. Never invent record IDs, unknown times, amounts, ratings or provenance."],
+    search_schema: { query_fields: name === "media" ? ["original_title", "translated_title", "series_name", "season_title", "title"] : name === "drink_log" ? [...queryFields[name], "food_place_name", "food_place_city", "food_place_location", "food_place_branch"] : queryFields[name], filters: filters[name] ?? {}, defaults, pagination: name === "tracker" ? "cursor" : "none", limitations },
+    operation_semantics: { lifecycle: operations, update_mode: name === "relation_event" ? "complete replacement input" : name === "daily_energy" ? "action upsert replacement; no update" : "See update_fields and capabilities; supported updates preserve omitted top-level fields, while supplied arrays/objects can replace their contents.", field_policy: "Use create_fields/update_fields for each operation. IDs/timestamps/derived outputs are not inputs. Legacy aliases are compatibility-only; migration provenance is for explicit imports, not normal conversation." },
+    required_conditions: ({
+      memory_fact: ["Exactly one non-null object_entity_id or object_value; all referenced Entities must be active. valid_to >= valid_from when both present."],
+      memory_source: ["At least one nonempty source_record_id, source_url, excerpt or note."],
+      task: ["due_time requires due_date; at_due requires both; custom requires remind_date and remind_time."],
+      media: ["Requires original_title, translated_title, legacy create title, or a Series for TV/anime; completed create requires watched_date."],
+      cat_record: ["Use field_variants for each kind; household event uses explicit pet_id=null, other kinds require positive pet_id."],
+      cat_routine: ["cat scope requires pet_id; modern create needs first_due_date and configured_reminder_time, or supported legacy instant input."],
+      reminder: ["cat requires target_id; interval/course require interval_value and interval_unit; source ownership restricts create/update."],
+      subscription: ["reminder_enabled requires explicit reminder_time."],
+      relation_event: ["Complete event required on create AND update; exactly one self and unique people; parties.key links flows.from_key/to_key. Expense totals/shares/payments/flows must balance."],
+      health_record: ["ended_at must not precede started_at; symptom/condition/medication/treatment support active/resolved, other types normalize to resolved."],
+    } as Record<string, string[]>)[name] ?? [],
+  };
+}
+
+export function documentedFields(schema: ResourceSchema): Record<string, ResourceField> {
+  const fields = Object.fromEntries(Object.entries(schema.fields).map(([key, field]) => [key, { ...field }]));
+  const describe = (key: string, description: string, extra: Partial<ResourceField> = {}) => {
+    if (fields[key]) fields[key] = { ...fields[key], description, ...extra };
+  };
+  for (const key of ["source_system", "source_id", "source_url", "imported_at"]) {
+    if (schema.resource !== "memory_source" && fields[key]) describe(key, `${fields[key].description} Migration/import provenance only; omit in ordinary conversation and never fabricate it.`);
+  }
+  for (const [key, field] of Object.entries(fields)) {
+    if (field.read_only) describe(key, `${field.description} Output only; never send in create/update.`);
+    if (/legacy/i.test(field.description)) fields[key].legacy = true;
+    if (/derived|calculated/i.test(field.description)) fields[key].derived = true;
+  }
+  if (schema.resource === "memo") {
+    describe("merged_into_id", "Explicit lifecycle linkage to another Memo; not automatic merge/deduplication or Graph linkage.", { nullable: true });
+    describe("confirmed_at", "Explicit confirmation timestamp; do not use model confidence or fabricate user confirmation.", { nullable: true });
+    describe("event_date", "Related historical event date; omit when unknown.", { nullable: true });
+  }
+  if (schema.resource === "memory_fact") {
+    describe("confidence", "Assertion confidence 0-1; create defaults to 1. This default is not evidence of verification. Preserve uncertainty and epistemic_type.", { default: 1 });
+    describe("importance", "Retention importance 1-5; create defaults to 3.", { default: 3 });
+    describe("epistemic_type", "Assertion origin: distinguish user direct statement, recorded observation, derivation, agent judgment and external report; never upgrade inference to confirmed fact.", { default: "unknown" });
+    for (const key of ["object_entity_id", "object_value", "perspective_entity_id", "valid_from", "valid_to"]) fields[key].nullable = true;
+  }
+  if (schema.resource === "memory_entity") describe("aliases", "Up to 50 alternative names, each at most 200 characters; case-insensitive deduplication. PATCH replaces aliases, so retrieve existing aliases before extending.");
+  if (schema.resource === "memory_source") for (const key of ["source_record_id", "source_url", "excerpt", "note"]) fields[key].nullable = true;
+  if (schema.resource === "lucius_case") for (const key of ["occurrence_count", "consecutive_correct_count", "recurrence_interval_days", "is_recurrence"]) describe(key, `${fields[key].description} Service-maintained recurrence state; writable only for explicit correction/import, not normal recurrence recording.`);
+  if (schema.resource === "health_record") describe("details", "Replacement object: at most 50 unique keys (max 80 characters); values string (max 2000), finite number, boolean or null only; total JSON max 10000 characters. No nested objects or arrays.");
+  if (schema.resource === "training_log") {
+    describe("body_parts", "Nonempty unique choices; PATCH replaces the array.", { items: { type: "string", enum: ["胸", "背", "腿", "肩", "手臂", "核心", "全身", "其他"] } });
+    describe("duration_minutes", "Known duration in minutes, 1-1440; null means unknown.", { nullable: true });
+  }
+  if (schema.resource === "drink_limit") {
+    describe("target_type", "Free-form target; evaluation matches drink_type exactly or a case-insensitive substring of drink name. Standard categories: coffee/milk_tea/tea/soda/juice/water/alcohol/other; parser does not restrict the string.");
+    describe("limit_value", "Drink-record count threshold 1-1000; evaluation is advisory, not a save blocker.");
+  }
+  if (schema.resource === "drink_log") {
+    describe("estimated_kcal", "Explicit estimated drink energy in kcal; nullable, never infer from Food portion auto mode.");
+    describe("rating", "Optional taste rating of this drink occurrence, independent of long-term Place/Menu rating.");
+  }
+  if (schema.resource === "reminder") {
+    describe("starts_at", "Start instant; optional create fallback is next_due_at, otherwise server time. Provide explicit intended scheduling rather than relying on defaults.");
+    describe("status", "Manual delivery state; prefer complete/skip/delete actions. Never edit module-owned projections here.", { enum: ["scheduled", "sent", "cancelled", "failed", "completed"] });
+  }
+  if (["cat_record", "cat_routine"].includes(schema.resource)) fields.pet_id.nullable = true;
+  if (schema.resource === "media") describe("rating", "Explicit user's EvaOrbit rating; omit when unknown, never infer from viewing history.", { enum: ["goat", "goat+", "goat-", "dope", "dope+", "dope-", "mid", "mid+", "mid-", "nope", "nope+", "nope-", "shit", "shit+", "shit-"] });
+  if (schema.resource === "subscription") describe("auto_renew", "Enables automatic renewal payment bookkeeping on reads/reconciliation. Does not charge the provider. Overdue cycles may append payments at current stored price and advance renewal.");
+  if (schema.resource === "subscription") fields.amount.write_only = true;
+  if (schema.resource === "nutrition_daily") {
+    for (const key of ["resting_energy_kcal", "active_energy_kcal"]) describe(key, "Read-only effective energy in kcal: manual override, otherwise HealthKit, otherwise null. Never write here.");
+    describe("energy_balance", "Read-only estimated intake minus total expenditure in kcal; positive is surplus, negative deficit.");
+    describe("energy_balance_min", "Read-only lower intake estimate minus expenditure in kcal.");
+    describe("energy_balance_max", "Read-only upper intake estimate minus expenditure in kcal.");
+    describe("total_expenditure_kcal", "Read-only resting plus active expenditure. When one component is missing it contributes zero; null only when both are missing, so inspect component provenance.");
+    describe("estimated_intake_kcal", "Read-only sum of Food/Drink estimates: estimated_kcal, otherwise range midpoint, otherwise one range boundary, otherwise zero. Unknown intake is not proof of no intake.");
+    for (const key of ["intake_min", "intake_max"]) describe(key, "Read-only aggregated intake estimate boundary in kcal.");
+    for (const key of ["manual_resting_energy_kcal", "manual_active_energy_kcal"]) describe(key, "Read-only stored manual override; null means no override, zero is explicit.");
+    for (const key of ["health_kit_resting_energy_kcal", "health_kit_active_energy_kcal"]) describe(key, "Read-only HealthKit source value before manual override, in kcal.");
+    for (const key of ["resting_energy_source", "active_energy_source"]) describe(key, "Read-only effective component provenance: manual, apple_health or null when missing.", { enum: ["manual", "apple_health"] });
+    describe("health_kit_last_ingested_at", "Read-only latest HealthKit ingestion timestamp, not the activity time.", { format: "date-time" });
+    describe("confidence", "Read-only daily intake estimate confidence; not a medical assessment.");
+  }
+  if (schema.resource === "relation_event") {
+    describe("parties", "Full replacement participants. Each input needs unique key, party_type=self|person, person_id for person, and nullable share_amount_minor/paid_amount_minor (integer fen). Output id is not input key.", { items: { type: "object", properties: {
+      key: { type: "string", description: "Required temporary participant key; max 80 characters." }, party_type: { type: "string", enum: ["self", "person"], description: "Required; exactly one self." }, person_id: { type: "integer", nullable: true, description: "Existing Relation Person id for person; null for self." }, share_amount_minor: { type: "integer", nullable: true, description: "Expense share in nonnegative integer fen; null for non-expenses." }, paid_amount_minor: { type: "integer", nullable: true, description: "Expense paid amount in nonnegative integer fen; null for non-expenses." },
+    } } });
+    describe("items", "Full replacement expense line items; [] when none.", { items: { type: "object", properties: { label: { type: "string", description: "Required nonempty label, max 200 characters." }, amount_minor: { type: "integer", description: "Required nonnegative integer fen." }, sort_order: { type: "integer", description: "Optional order; defaults to array index." } } } });
+    describe("flows", "Full replacement directed flows using participant input keys, not output party IDs.", { items: { type: "object", properties: { from_key: { type: "string", description: "Required source participant key." }, to_key: { type: "string", description: "Required destination participant key." }, flow_type: { type: "string", enum: ["advance", "treat", "gift", "repayment", "favor"], description: "Required directed value-flow type." }, amount_minor: { type: "integer", description: "Required nonnegative integer fen." }, settles_flow_id: { type: "integer", nullable: true, description: "Optional existing advance Flow id for repayment." }, note: { type: "string", nullable: true, description: "Optional flow note, max 1000 characters." } } } });
+    fields.total_amount_minor.nullable = true;
+    fields.is_in_person.nullable = true;
+  }
+  return fields;
+}
