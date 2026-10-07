@@ -377,11 +377,11 @@ export function parseLuciusDiaryPatch(value: unknown) {
 
 export function parseLuciusStatePatch(value: unknown) {
   const body = objectValue(value);
+  if (Object.keys(body).some((key) => !["status", "mood"].includes(key))) throw new ValidationError("Lucius state 仅支持 status 和 mood");
   const moodText = body.mood === undefined ? undefined : text(body.mood, "Lucius mood", 80);
   const mood = moodText === undefined ? undefined : normalizeLuciusMood(moodText);
   if (mood === null) throw new ValidationError("Lucius mood 必须是单个 emoji");
   const result = {
-    currentNote: body.currentNote === undefined ? undefined : text(body.currentNote, "Lucius 当前便签", 2_000, false),
     status: body.status === undefined ? undefined : text(body.status, "Lucius 状态", 80),
     mood,
   };

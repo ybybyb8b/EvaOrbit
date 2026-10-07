@@ -12,7 +12,7 @@ function fakeOperations() {
   const memos: Memo[] = [];
   const diary: LuciusDiaryEntry[] = [];
   const cases: LuciusCase[] = [];
-  const luciusState: LuciusState = { currentNote: "", status: "quiet", mood: "composed", updatedAt: null };
+  const luciusState: LuciusState = { status: "quiet", mood: "composed", updatedAt: null };
   const projects: Project[] = [];
   const projectItems: ProjectItem[] = [];
   const memoryEntities: MemoryEntity[] = [];
@@ -243,8 +243,9 @@ test("food place and dish resources expose safe generic CRUD",async()=>{
 test("Lucius state is a single explicit MCP-updatable display resource", async () => {
   const registry = createResourceRegistry(fakeOperations().operations);
   assert.equal((await registry.get("lucius_state", "current")).status, "quiet");
-  const updated = await registry.update("lucius_state", "current", { current_note: "I remember today.", status: "resting", mood: "composed" });
-  assert.equal(updated.current_note, "I remember today.");
+  const updated = await registry.update("lucius_state", "current", { status: "resting", mood: "composed" });
+  assert.equal("current_note" in updated, false);
+  await assert.rejects(() => registry.update("lucius_state", "current", { current_note: "retired" }), /does not accept/);
   assert.equal(updated.updated_at, "2026-09-01T14:41:00Z");
   await assert.rejects(() => registry.get("lucius_state", "other"), /id must be current/);
   await assert.rejects(() => registry.update("lucius_state", "current", { affection: 91 }), /does not accept/);

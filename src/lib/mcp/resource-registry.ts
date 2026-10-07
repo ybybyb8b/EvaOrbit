@@ -116,7 +116,7 @@ export type LuciusCaseResourceOperations = {
 
 export type LuciusStateResourceOperations = {
   get(): Promise<LuciusState>;
-  update(input: Partial<Pick<LuciusState, "currentNote" | "status" | "mood">>): Promise<LuciusState>;
+  update(input: Partial<Pick<LuciusState, "status" | "mood">>): Promise<LuciusState>;
 };
 
 export type ResourceRegistryOperations = {
@@ -381,11 +381,11 @@ function luciusCaseRecord(item: LuciusCase): ResourceRecord {
 }
 
 function luciusStateRecord(item: LuciusState): ResourceRecord {
-  return { id: "current", current_note: item.currentNote, status: item.status, mood: item.mood, updated_at: item.updatedAt };
+  return { id: "current", status: item.status, mood: item.mood, updated_at: item.updatedAt };
 }
 
 function luciusStateResource(operations: LuciusStateResourceOperations): RegisteredResource {
-  const writableFields = ["current_note", "status", "mood"];
+  const writableFields = ["status", "mood"];
   const current = (id: ResourceId) => { if (id !== "current") throw new ValidationError("Lucius state id must be current."); };
   return {
     schema: {
@@ -393,7 +393,6 @@ function luciusStateResource(operations: LuciusStateResourceOperations): Registe
       description: "The single persisted display state for the Lucius space. It does not generate text or keep mood history.",
       fields: {
         id: { type: "string", description: "Stable singleton id: current.", read_only: true },
-        current_note: { type: "string", max_length: 2000, description: "The last explicitly saved Lucius note; empty is allowed." },
         status: { type: "string", max_length: 80, description: "Short persisted status text." },
         mood: { type: "string", max_length: 80, description: "A single emoji representing Lucius's current mood. Legacy mood words are normalized to emoji." },
         updated_at: { type: "string", format: "date-time", description: "Server-managed last update timestamp, or null before first save.", read_only: true },
@@ -402,7 +401,7 @@ function luciusStateResource(operations: LuciusStateResourceOperations): Registe
       validation_rules: ["use resource id current", "mood must be a single emoji", "state changes only through explicit update", "no mood history, scores, or generated text", "unknown fields are rejected"],
     },
     async get(id) { current(id); return luciusStateRecord(await operations.get()); },
-    async update(id, data) { current(id); assertOnlyKeys(data, writableFields, "lucius_state update"); return luciusStateRecord(await operations.update(parseLuciusStatePatch(mappedInput(data, { current_note: "currentNote", status: "status", mood: "mood" })))); },
+    async update(id, data) { current(id); assertOnlyKeys(data, writableFields, "lucius_state update"); return luciusStateRecord(await operations.update(parseLuciusStatePatch(mappedInput(data, { status: "status", mood: "mood" })))); },
   };
 }
 

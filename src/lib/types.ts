@@ -890,7 +890,6 @@ export interface LuciusDiaryEntry extends MigrationTrace {
 }
 
 export interface LuciusState {
-  currentNote: string;
   status: string;
   mood: string;
   updatedAt: string | null;

@@ -87,7 +87,6 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
         <p className="lucius-profile-handle">@quiet_lucius</p>
         <span className="lucius-profile-rule" aria-hidden="true">✦</span>
         <p className="lucius-profile-state">{state.status}</p>
-        <p className="lucius-profile-bio">{state.currentNote ? `“${plainExcerpt(state.currentNote, 100)}”` : "“安静地观察，是为了更好地守护。”"}</p>
       </div>
 
       <nav className="lucius-profile-tabs" aria-label="Lucius sections">

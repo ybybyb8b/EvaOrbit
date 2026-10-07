@@ -33,11 +33,11 @@ test("Lucius Cases preserves the complete correction record and validates counte
   assert.throws(() => parseLuciusCasePatch({ occurrenceCount: 0 }));
 });
 
-test("Lucius state accepts only the three explicit presentation fields", () => {
-  assert.deepEqual(parseLuciusStatePatch({ currentNote: "  Return before dusk.  ", status: "reading", mood: "calm" }), { currentNote: "Return before dusk.", status: "reading", mood: "😌" });
+test("Lucius state accepts only the two explicit presentation fields", () => {
+  assert.deepEqual(parseLuciusStatePatch({ status: "reading", mood: "calm" }), { status: "reading", mood: "😌" });
   assert.equal(parseLuciusStatePatch({ mood: "有点珍惜" }).mood, "🥹");
   assert.equal(parseLuciusStatePatch({ mood: "🌙" }).mood, "🌙");
-  assert.equal(parseLuciusStatePatch({ currentNote: "" }).currentNote, "");
+  assert.throws(() => parseLuciusStatePatch({ currentNote: "", status: "reading" }));
   assert.throws(() => parseLuciusStatePatch({}));
   assert.throws(() => parseLuciusStatePatch({ status: "" }));
   assert.throws(() => parseLuciusStatePatch({ mood: "puzzled today" }));
