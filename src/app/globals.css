@@ -5940,9 +5940,14 @@ html[data-mode="dark"] .home-day-pane {
   --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .06),0 8px 20px rgb(var(--shadow-rgb) / .06);
   position:relative;
   /* A uniform face and close contact shadow lift the whole plane evenly. */
+  padding-block:8px;
   background:var(--due-fill);
   box-shadow:var(--due-shadow);
 }
+.due-stack .due-list .due-stack-top { padding-block:0 16px; }
+.due-stack .due-stack-card-head { margin-bottom:0; }
+.due-section .due-actions button { min-height:26px; }
+.due-stack .due-actions button { min-height:32px; }
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))) {
   .due-section:not(.due-stack),
   .due-stack .due-list article {
@@ -5963,8 +5968,14 @@ html[data-mode="dark"] .due-stack-shell::after {
 }
 @media (max-width:720px) {
   .due-section:not(.due-stack),.due-stack .due-list article {
+    padding-block:6px;
     --due-shadow:0 2px 3px rgb(var(--shadow-rgb) / .04),0 4px 10px rgb(var(--shadow-rgb) / .035);
   }
+  .due-stack .due-list .due-stack-top { padding-block:0 12px; }
+  .due-section :is(.due-list article,.due-stack-card-body) { gap:6px; }
+  .due-section .due-actions button { position:relative;min-height:38px; }
+  /* Keep the compact visual button easy to tap without enlarging its surface. */
+  .due-section .due-actions button::after { content:"";position:absolute;inset:-3px 0; }
   html[data-mode="dark"] .due-section:not(.due-stack),
   html[data-mode="dark"] .due-stack .due-list article {
     --due-shadow:0 3px 4px rgb(var(--shadow-rgb) / .3),0 6px 12px rgb(var(--shadow-rgb) / .18);
@@ -5991,6 +6002,38 @@ html[data-mode="dark"] .due-stack-shell::after {
   .cat-food-overview::before,
   .due-section:not(.due-stack)::before,
   .due-stack .due-list article::before { display:none; }
+}
+/* Almond Blue reminders pair the brand blue with a cream foreground. */
+html[data-theme="powderblue"] .due-section {
+  --due-blue:#0e71ac;
+  --due-cream:#fdf5e5;
+  color:var(--due-cream);
+}
+html[data-theme="powderblue"][data-mode="dark"] .due-section { --due-blue:#075b8b; }
+html[data-theme="powderblue"] .due-section:not(.due-stack),
+html[data-theme="powderblue"] .due-stack .due-list article {
+  --due-fill:var(--due-blue);
+  background:var(--due-fill);
+}
+html[data-theme="powderblue"] .due-section :is(.due-card-copy,.due-list strong,.due-list small,.eyebrow,.due-stack-toggle,.due-stack-toggle-icon,.due-stack-card-head > a,.section-heading a) {
+  color:var(--due-cream);
+}
+html[data-theme="powderblue"] .due-stack-count {
+  background:color-mix(in srgb,var(--due-cream) 16%,transparent);
+  color:var(--due-cream);
+}
+html[data-theme="powderblue"] .due-section .due-actions button {
+  background:var(--due-cream);
+  color:var(--due-blue);
+  border:0;
+}
+html[data-theme="powderblue"] .due-section .due-actions button:hover {
+  background:#fffaf0;
+  color:var(--due-blue);
+}
+html[data-theme="powderblue"] .due-section :is(.due-actions button,.due-stack-toggle):focus-visible {
+  outline:2px solid var(--due-cream);
+  outline-offset:3px;
 }
 html[data-theme="mistviolet"] .home-sleep-pane header > svg { color:var(--state-info); }
 html[data-theme="mistviolet"] .home-journal-pane header > svg { color:var(--state-warning); }
