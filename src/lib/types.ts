@@ -434,6 +434,7 @@ export const TASTE_RATINGS = ["love", "good", "neutral", "dislike"] as const;
 export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
+  consumedWeightG?: number | null;
   calendarTimeEnabled?: boolean;
   originalOccurredAt?: string;
   originalHasExplicitTime?: boolean;
@@ -500,6 +501,8 @@ export interface FoodPlace {
 }
 
 export interface FoodDish {
+  foodLibraryId?: number | null;
+  drinkType?: Exclude<DrinkType, "water"> | null;
   kind?: "food" | "drink";
   id: number;
   foodPlaceId: number;
@@ -538,6 +541,8 @@ export interface FoodConsumption {
 }
 export type FoodDataSource = "package_label" | "official" | "estimated" | "manual";
 export interface FoodLibraryItem {
+  foodPlaceId?: number | null;
+  drinkType?: Exclude<DrinkType, "water"> | null;
   id: number;
   name: string;
   brand: string;
@@ -946,6 +951,8 @@ export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
 export const DRINK_TEMPERATURES = ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const;
 export type DrinkTemperature = typeof DRINK_TEMPERATURES[number];
 export interface DrinkLog {
+  consumedVolumeMl?: number | null;
+  nutritionReference?: FoodNutritionReference | null;
   drinkMenuId?: number | null;
   drinkMenuName?: string | null;
   foodPlaceId?: number | null;
@@ -982,8 +989,8 @@ export interface DrinkInputSuggestions {
 export interface DrinkPreferenceSummary {
   totalRecords: number;
   commonTypes: Array<{ value: DrinkType; count: number }>;
-  commonDrinks: Array<{ name: string; brand: string; count: number }>;
-  preferredDrinks: Array<{ name: string; brand: string; count: number; score: number; ratingCount: number }>;
+  commonDrinks: Array<{ name: string; brand: string; count: number; sourceKey?: string }>;
+  preferredDrinks: Array<{ name: string; brand: string; count: number; score: number; ratingCount: number; sourceKey?: string }>;
   commonBrands: Array<{ value: string; count: number }>;
   sugarTendency: Array<{ value: string; count: number }>;
   temperatureTendency: Array<{ value: DrinkTemperature; count: number }>;

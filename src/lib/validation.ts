@@ -1,3 +1,4 @@
+import { DRINK_TYPES } from "./drink-types.ts";
 import { normalizeTrackerTimeRange } from "./tracker-time-range.ts";
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
@@ -816,6 +817,12 @@ function parseFoodConsumptions(value: unknown) {
   });
 }
 
+function consumedAmount(value: unknown, label: string, maximum: number) {
+  const amount = optionalNumber(value, label, 0, maximum);
+  if (amount !== null && Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) throw new ValidationError(`${label}最多保留两位小数`);
+  return amount;
+}
+
 export function parseNewFoodLog(value: unknown) {
   const body = objectValue(value);
   const kcalMin = optionalNumber(body.kcalMin, "热量下限");
@@ -825,6 +832,7 @@ export function parseNewFoodLog(value: unknown) {
   const rating = body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "评价", ["love", "good", "neutral", "dislike"] as const, "neutral");
   if (rating !== null && scene !== "delivery" && scene !== "restaurant") throw new ValidationError("只有外卖或外食记录可以填写评价");
   return {
+    consumedWeightG: consumedAmount(body.consumedWeightG, "食用量（克）", 1000000),
     calendarTimeEnabled: booleanValue(body.calendarTimeEnabled, "自动采用日历用餐时间", true),
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()),
     occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "饮食时间精度", true),
@@ -849,12 +857,12 @@ export function parseNewFoodLog(value: unknown) {
 export function parseFoodLogPatch(value: unknown) {
   const body = objectValue(value);
   const parsed = parseNewFoodLog({
-    calendarTimeEnabled: body.calendarTimeEnabled, occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
+    consumedWeightG: body.consumedWeightG, calendarTimeEnabled: body.calendarTimeEnabled, occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", portion: body.portion ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
     notes: body.notes ?? "", imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodLibraryItems: body.foodLibraryItems, foodKcalMode: body.foodKcalMode, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["calendarTimeEnabled", "occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
+  const keys = ["consumedWeightG", "calendarTimeEnabled", "occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "portion", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "notes", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;
@@ -892,6 +900,8 @@ export function parseFoodDish(value: unknown) {
   const foodPlaceId = optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER);
   if (foodPlaceId === null) throw new ValidationError("菜品必须属于一家店铺");
   return {
+    drinkType: body.drinkType == null || body.drinkType === "" ? null : enumValue(body.drinkType, "饮品类型", DRINK_TYPES, "other"),
+    foodLibraryId: healthId(body.foodLibraryId, "食品库 ID", true),
     kind: enumValue(body.kind, "菜单类型", ["food", "drink"] as const, "food"),
     foodPlaceId,
     name: text(body.name, "菜名", 200)!,
@@ -904,8 +914,8 @@ export function parseFoodDish(value: unknown) {
 
 export function parseFoodDishPatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseFoodDish({ foodPlaceId: body.foodPlaceId ?? 1, kind: body.kind, name: body.name ?? "placeholder", category: body.category, rating: body.rating, recommended: body.recommended, notes: body.notes });
-  const keys = ["kind", "foodPlaceId", "name", "category", "rating", "recommended", "notes"] as const;
+  const parsed = parseFoodDish({ foodPlaceId: body.foodPlaceId ?? 1, kind: body.kind, foodLibraryId: body.foodLibraryId, drinkType: body.drinkType, name: body.name ?? "placeholder", category: body.category, rating: body.rating, recommended: body.recommended, notes: body.notes });
+  const keys = ["kind", "foodLibraryId", "drinkType", "foodPlaceId", "name", "category", "rating", "recommended", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的菜品字段");
   return result;
@@ -914,6 +924,8 @@ export function parseFoodDishPatch(value: unknown) {
 export function parseFoodLibraryItem(value: unknown) {
   const body = objectValue(value);
   return {
+    foodPlaceId: healthId(body.foodPlaceId, "店铺 ID", true),
+    drinkType: body.drinkType == null || body.drinkType === "" ? null : enumValue(body.drinkType, "饮品类型", DRINK_TYPES, "other"),
     name: text(body.name, "食品名称", 200)!, brand: text(body.brand ?? "", "品牌", 120, false) ?? "",
     category: enumValue(body.category, "食品分类", ["staple", "dish", "snack", "drink", "other"] as const, "other"),
     defaultPortion: text(body.defaultPortion ?? "", "默认分量", 160, false) ?? "",
@@ -931,6 +943,7 @@ export function parseFoodLibraryItemPatch(value: unknown) {
     name: body.name === undefined ? "placeholder" : body.name,
     brand: body.brand,
     category: body.category,
+    drinkType: body.drinkType,
     defaultPortion: body.defaultPortion,
     referenceType: body.referenceType,
     referenceEnergyKj: body.referenceEnergyKj,
@@ -941,7 +954,7 @@ export function parseFoodLibraryItemPatch(value: unknown) {
     notes: body.notes,
   });
   const keys = [
-    "name", "brand", "category", "defaultPortion", "referenceType", "referenceEnergyKj", "referenceKcal",
+    "name", "brand", "category", "foodPlaceId", "drinkType", "defaultPortion", "referenceType", "referenceEnergyKj", "referenceKcal",
     "servingWeight", "servingKcal", "dataSource", "notes",
   ] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
@@ -1184,8 +1197,8 @@ export function parseNewDrinkLog(value: unknown) {
   return {
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()), occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true), name: text(body.name ?? "", "饮品名称", 200, false) ?? "",
     brand: text(body.brand ?? "", "品牌", 120, false) ?? "",
-    drinkType: enumValue(body.drinkType, "饮品类型", ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"] as const, "other"),
-    volumeMl: optionalNumber(body.volumeMl, "容量", 0, 10000), sugarLevel: enumValue(body.sugarLevel, "糖度", ["", ...SUGAR_LEVELS] as const, ""),
+    drinkType: enumValue(body.drinkType, "饮品类型", DRINK_TYPES, "other"),
+    consumedVolumeMl: consumedAmount(body.consumedVolumeMl, "饮用量（毫升）", 10000), volumeMl: optionalNumber(body.volumeMl, "容量", 0, 10000), sugarLevel: enumValue(body.sugarLevel, "糖度", ["", ...SUGAR_LEVELS] as const, ""),
     temperature: body.temperature === undefined || body.temperature === null || body.temperature === "" ? null : enumValue(body.temperature, "冷热 / 冰量", ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const, "room_temperature"),
     rating: body.rating === undefined || body.rating === null || body.rating === "" ? null : enumValue(body.rating, "评价", ["love", "good", "neutral", "dislike"] as const, "neutral"),
     caffeineMg: optionalNumber(body.caffeineMg, "咖啡因", 0, 5000), estimatedKcal: optionalNumber(body.estimatedKcal, "估算热量"), kcalMin, kcalMax,
@@ -1197,8 +1210,9 @@ export function parseNewDrinkLog(value: unknown) {
 
 export function parseDrinkLogPatch(value: unknown) {
   const body = objectValue(value);
-  const parsed = parseNewDrinkLog({ occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime ?? true, name: body.name ?? "placeholder", brand: body.brand ?? "", drinkType: body.drinkType ?? "other", volumeMl: body.volumeMl, sugarLevel: body.sugarLevel ?? "", temperature: body.temperature, rating: body.rating, caffeineMg: body.caffeineMg, estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low", drinkMenuId: body.drinkMenuId, foodPlaceId: body.foodPlaceId, foodLibraryId: body.foodLibraryId, notes: body.notes ?? "" });
-  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "brand", "drinkType", "volumeMl", "sugarLevel", "temperature", "rating", "caffeineMg", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "drinkMenuId", "notes"] as const;
+  const parsed = parseNewDrinkLog({ occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime ?? true, name: body.name ?? "placeholder", brand: body.brand ?? "", drinkType: body.drinkType === "water" ? "other" : body.drinkType ?? "other", consumedVolumeMl: body.consumedVolumeMl, volumeMl: body.volumeMl, sugarLevel: body.sugarLevel ?? "", temperature: body.temperature, rating: body.rating, caffeineMg: body.caffeineMg, estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low", drinkMenuId: body.drinkMenuId, foodPlaceId: body.foodPlaceId, foodLibraryId: body.foodLibraryId, notes: body.notes ?? "" });
+  if (body.drinkType === "water") (parsed as { drinkType: string }).drinkType = "water";
+  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "brand", "drinkType", "consumedVolumeMl", "volumeMl", "sugarLevel", "temperature", "rating", "caffeineMg", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "drinkMenuId", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import Link from "next/link";
@@ -77,7 +78,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
       <div className="editor-title"><div><span className="eyebrow">EDIT ENTRY</span><h2>Edit Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Date</span><input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
-        <label className="field"><span>Source</span><select value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value as ChronicleSource })}><option value="manual">Manual</option><option value="chatgpt">ChatGPT</option></select></label>
+        <label className="field"><span>Source</span><ChoiceSelect value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value as ChronicleSource })}><option value="manual">Manual</option><option value="chatgpt">ChatGPT</option></ChoiceSelect></label>
         <label className="field wide"><span>Title</span><input required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label className="field wide"><span>Markdown</span><textarea required rows={18} maxLength={100000} value={draft.contentMd} onChange={(event) => setDraft({ ...draft, contentMd: event.target.value })} /></label>
       </div>

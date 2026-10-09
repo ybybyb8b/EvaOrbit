@@ -1,19 +1,24 @@
 "use client";
+import { useLocale } from "@/components/locale-controller";
+import { translateUiCopy } from "@/lib/ui-copy";
 import { SearchableSelect } from "@/components/searchable-select";
 import { showActionToast } from "@/components/action-toast";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { compactDateTimePayload, compactDateTimeValue, DateTimeField } from "@/components/date-time-field";
 import { FoodDeleteAction } from "./food-delete-action";
-import { FoodLibraryPicker } from "./food-library-picker";
+import { FoodNameInput } from "./food-name-input";
+import type { FoodCatalogItem } from "@/lib/food-catalog";
 import { consumptionFromItem, FoodConsumptionFields } from "./food-consumption-fields";
 import { calculateFoodKcal, foodCalculatedTotal } from "@/lib/food-calculation";
 import type { FoodConsumption } from "@/lib/types";
 import { FoodLinkPicker } from "./food-link-picker";
 import { FormSheet } from "@/components/form-sheet";
 import { TASTE_RATINGS } from "@/lib/types";
-import type { ApiError, EstimateConfidence, FoodDish, FoodLog, FoodPlace, FoodScene, MealType, TasteRating } from "@/lib/types";
+import type { ApiError, EstimateConfidence, FoodLog, FoodPlace, FoodScene, MealType, TasteRating } from "@/lib/types";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
+import { usualMeal } from "@/lib/meal-calendar";
+import styles from "./food-record-editor.module.css";
 
 const meals: { value: MealType; label: string }[] = [{ value: "breakfast", label: "早餐" }, { value: "lunch", label: "午餐" }, { value: "dinner", label: "晚餐" }, { value: "snack", label: "加餐" }, { value: "late_night", label: "夜宵" }];
 const scenes: { value: FoodScene; label: string }[] = [{ value: "home", label: "自制" }, { value: "delivery", label: "外卖" }, { value: "restaurant", label: "外食" }, { value: "packaged_food", label: "包装食品" }, { value: "other", label: "其他" }];
@@ -23,28 +28,50 @@ const empty: Draft = { foodLibraryId:"",occurredAt: "", title: "", description: 
 function canRate(scene: FoodScene) { return scene === "delivery" || scene === "restaurant"; }
 function draftFromRecord(item?: FoodLog, date = ""): Draft { return item ? { foodLibraryId:item.foodLibraryId?.toString()??"",occurredAt: compactDateTimeValue(item.occurredAt, item.occurredHasExplicitTime ?? true), title: item.title, description: item.description, mealType: item.mealType, scene: item.scene, rating: item.rating ?? "", estimatedKcal: item.estimatedKcal?.toString() || "", kcalMin: item.kcalMin?.toString() || "", kcalMax: item.kcalMax?.toString() || "", confidence: item.confidence, portion: item.portion, notes: item.notes, foodPlaceId: item.foodPlaceId?.toString() ?? "", foodDishIds: item.foodDishIds ?? (item.foodDishId ? [item.foodDishId] : []) } : { ...empty, occurredAt: date }; }
 
-export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: { date: string; record?: FoodLog; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
-  const [draft, setDraft] = useState<Draft>(() => draftFromRecord(record, date));
+export function FoodRecordEditor({ date, record, initialMealType, onClose, onSaved, onDeleted }: { date: string; record?: FoodLog; initialMealType?: MealType; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+  const { english } = useLocale();
+  const t = (value: string) => translateUiCopy(value, english ? "en" : "zh-CN");
+  const [suggestedMeal] = useState(() => usualMeal(new Date().getHours()));
+  const [draft, setDraft] = useState<Draft>(() => ({ ...draftFromRecord(record, date), ...(!record ? { mealType: initialMealType ?? suggestedMeal } : {}) }));
+  const mealChosen = useRef(Boolean(record || initialMealType));
   const [calendarTimeEnabled, setCalendarTimeEnabled] = useState(record?.calendarTimeEnabled ?? true);
   const [consumptions, setConsumptions] = useState<FoodConsumption[]>(() => record?.foodLibraryItems?.length ? record.foodLibraryItems : record?.foodLibraryId ? [{ foodLibraryId: record.foodLibraryId, quantity: null, unit: "serving" }] : []);
+  const [consumedWeight, setConsumedWeight] = useState(() => (record?.consumedWeightG ?? (record?.foodLibraryItems?.length === 1 && record.foodLibraryItems[0].unit === "g" ? record.foodLibraryItems[0].quantity : null))?.toFixed(2) ?? "");
+  function changeWeight(value: string) {
+    setConsumedWeight(value);
+    if (consumptions.length === 1) {
+      const item = consumptions[0], quantity = value === "" ? null : Number(value);
+      const calculatedKcal = item.nutritionReference ? calculateFoodKcal(item.nutritionReference, quantity, "g") : null;
+      setConsumptions([{ ...item, quantity, unit: "g", calculatedKcal }]);
+      setKcalMode(!item.nutritionReference || calculatedKcal !== null ? "auto" : "manual");
+    }
+  }
   const [kcalMode, setKcalMode] = useState<"auto" | "manual">(() => record?.foodKcalMode ?? (record ? "manual" : "auto"));
   const calculatedTotal = foodCalculatedTotal(consumptions);
-  const estimatedKcal = kcalMode === "auto" && consumptions.length ? calculatedTotal?.toString() ?? "" : draft.estimatedKcal;
+  const estimatedKcal = kcalMode === "auto" && consumptions.length ? calculatedTotal?.toFixed(2) ?? "" : draft.estimatedKcal;
   function preserveReference(value: FoodConsumption): FoodConsumption {
     const previous = record?.foodLibraryItems?.find(item => item.foodLibraryId === value.foodLibraryId);
     return previous?.nutritionReference ? { ...value, item: previous.item, nutritionReference: previous.nutritionReference, calculatedKcal: calculateFoodKcal(previous.nutritionReference, value.quantity, value.unit) } : value;
   }
   function changeConsumption(index: number, value: FoodConsumption) {
     if (consumptions.some((item, other) => other !== index && item.foodLibraryId === value.foodLibraryId)) { setError("该食品已关联，请修改已有食用量"); return; }
-    setError(""); setConsumptions(items => items.map((item, position) => position === index ? preserveReference(value) : item));
+    setError(""); updateConsumptions(consumptions.map((item, position) => position === index ? preserveReference(value) : item));
   }
   const [places, setPlaces] = useState<FoodPlace[]>([]);
-  const [dishes, setDishes] = useState<FoodDish[]>([]);
+  const [chosen,setChosen]=useState<FoodCatalogItem>();
+  const [browseQuery,setBrowseQuery]=useState("");
   const automaticTitle = useRef<string | null>(null);
+  const titleSource = useRef<"dish" | "library" | null>(null);
+  function updateConsumptions(items: FoodConsumption[]) {
+    setConsumptions(items);
+    if (!draft.title.trim() || (titleSource.current === "library" && draft.title === automaticTitle.current)) {
+      const title = items.map(item => item.item?.name).filter(Boolean).join(" + ").slice(0, 200);
+      automaticTitle.current = title; titleSource.current = "library";
+      setDraft(current => ({ ...current, title }));
+    }
+  }
   const [placeQuery, setPlaceQuery] = useState("");
-  const [dishQuery, setDishQuery] = useState("");
   const [placeLoading, setPlaceLoading] = useState(false); const [placeError, setPlaceError] = useState(""); const [placeAttempt, setPlaceAttempt] = useState(0);
-  const [dishLoading, setDishLoading] = useState(false); const [dishError, setDishError] = useState(""); const [dishAttempt, setDishAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -52,19 +79,14 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
     const timer = setTimeout(() => { setPlaceLoading(true); setPlaceError(""); void fetch(`/api/food/places?purpose=food&limit=200&q=${encodeURIComponent(placeQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodPlace[]>; }).then(items => setPlaces(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setPlaceError("店铺加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setPlaceLoading(false); }); }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [placeQuery, placeAttempt]);
-  useEffect(() => {
-    if (!draft.foodPlaceId) return;
-    const controller = new AbortController();
-    const timer = setTimeout(() => { setDishLoading(true); setDishError(""); void fetch(`/api/food/places/${draft.foodPlaceId}/dishes?kind=food&q=${encodeURIComponent(dishQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodDish[]>; }).then(items => setDishes(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setDishError("菜品加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setDishLoading(false); }); }, 150);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [draft.foodPlaceId, dishQuery, dishAttempt]);
-  const dishOptions = [...new Map([...(record?.foodPlaceId === Number(draft.foodPlaceId) ? record.foodDishes ?? (record.foodDishId && record.foodDishName ? [{ id: record.foodDishId, name: record.foodDishName }] : []) : []), ...dishes.map(dish => ({ id: dish.id, name: dish.name, detail: [dish.category, dish.recommended ? "推荐" : ""].filter(Boolean).join(" · ") }))].map(dish => [dish.id, dish])).values()];
-  const placeOptions = [...new Map([...(record?.foodPlaceId && record.foodPlaceName ? [{ id: record.foodPlaceId, name: record.foodPlaceName, detail: [record.foodPlaceCity, record.foodPlaceLocation, record.foodPlaceBranch].filter(Boolean).join(" · ") }] : []), ...places.map(place => ({ id: place.id, name: place.name, detail: [place.city, place.location, place.branch].filter(Boolean).join(" · ") }))].map(place => [place.id, place])).values()];
-  function selectDishes(ids: number[]) {
-    const title = ids.map(id => dishOptions.find(dish => dish.id === id)?.name).filter(Boolean).join(" + ").slice(0, 200);
-    const fill = !draft.title.trim() || draft.title === automaticTitle.current;
-    if (fill) automaticTitle.current = title;
-    setDraft({ ...draft, foodDishIds: ids, ...(fill ? { title } : {}) });
+  const placeOptions = [...new Map([...(record?.foodPlaceId && record.foodPlaceName ? [{ id: record.foodPlaceId, name: record.foodPlaceName }] : []), ...(chosen?.placeId?[{id:chosen.placeId,name:chosen.placeName}]:[]), ...places.map(place=>({id:place.id,name:place.name,detail:[place.city,place.location,place.branch].filter(Boolean).join(" · ")}))].map(place=>[place.id,place])).values()];
+  function selectItem(item:FoodCatalogItem){
+    setChosen(item);setBrowseQuery("");automaticTitle.current=item.name;titleSource.current=item.menu?"dish":"library";
+    const consumption=item.library?preserveReference(consumptionFromItem(item.library)):null;
+    if(consumption && item.servingKcal!==null){consumption.quantity=1;consumption.unit="serving";consumption.calculatedKcal=calculateFoodKcal(consumption.nutritionReference!,1,"serving");}
+    if(consumption && consumedWeight!==""){consumption.quantity=Number(consumedWeight);consumption.unit="g";consumption.calculatedKcal=calculateFoodKcal(consumption.nutritionReference!,consumption.quantity,"g");}
+    setConsumptions(consumption?[consumption]:[]);setKcalMode(consumption?"auto":"manual");
+    setDraft({...draft,title:item.name,foodPlaceId:item.placeId?.toString()??"",foodDishIds:item.menu?[item.menu.id]:[],foodLibraryId:item.library?.id.toString()??"",estimatedKcal:"",kcalMin:"",kcalMax:""});
   }
 
   async function submit(event: FormEvent) {
@@ -73,7 +95,7 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
       const occurred = compactDateTimePayload(draft.occurredAt);
       const unchangedTime = record && draft.occurredAt === compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime ?? true);
       const body = { ...draft, calendarTimeEnabled, rating: canRate(draft.scene) && draft.rating ? draft.rating : null, occurredAt: unchangedTime ? record.originalOccurredAt ?? record.occurredAt : occurred.value, occurredHasExplicitTime: unchangedTime ? record.originalHasExplicitTime ?? record.occurredHasExplicitTime ?? true : occurred.hasExplicitTime, estimatedKcal: draft.estimatedKcal ? Number(draft.estimatedKcal) : null, kcalMin: draft.kcalMin ? Number(draft.kcalMin) : null, kcalMax: draft.kcalMax ? Number(draft.kcalMax) : null, foodLibraryId:draft.foodLibraryId?Number(draft.foodLibraryId):null,foodPlaceId: draft.foodPlaceId ? Number(draft.foodPlaceId) : null, foodDishIds: draft.foodDishIds, imageUrl: null, attachmentId: null };
-      const payload = { ...body, foodLibraryId: consumptions[0]?.foodLibraryId ?? null, foodLibraryItems: consumptions.map(({ foodLibraryId, quantity, unit }) => ({ foodLibraryId, quantity, unit })), foodKcalMode: consumptions.length ? kcalMode : "manual", estimatedKcal: estimatedKcal ? Number(estimatedKcal) : null };
+      const payload = { ...body, consumedWeightG: consumedWeight === "" ? null : Number(consumedWeight), foodLibraryId: consumptions[0]?.foodLibraryId ?? null, foodLibraryItems: consumptions.map(({ foodLibraryId, quantity, unit }) => ({ foodLibraryId, quantity, unit })), foodKcalMode: consumptions.length ? kcalMode : "manual", estimatedKcal: estimatedKcal ? Number(estimatedKcal) : null };
       const response = await fetch(record ? `/api/food/logs/${record.id}` : "/api/food/logs", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
       await onSaved(); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose();
@@ -83,25 +105,38 @@ export function FoodRecordEditor({ date, record, onClose, onSaved, onDeleted }: 
     if (!record || !onDeleted || saving) return; setSaving(true); setError("");
     try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) throw new Error("无法删除这条饮食记录，请重试"); await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
   }
-  return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}><form id="food-record-form" className="editor-card compact-editor" onSubmit={submit}><DateTimeField label="日期" minuteStep={1} value={{date:draft.occurredAt.slice(0,10),time:draft.occurredAt.length>10?draft.occurredAt.slice(11,16):""}} onChange={value=>{setDraft({...draft,occurredAt:value.date+(value.time?`T${value.time}`:"")});if(record)setCalendarTimeEnabled(false);}}/><label className="calendar-rule-toggle"><input type="checkbox" checked={calendarTimeEnabled} onChange={event=>setCalendarTimeEnabled(event.target.checked)}/><span>自动采用匹配的日历用餐时段</span></label><p className="muted">{record?.calendarMeal && calendarTimeEnabled ? `时间来自日历：${record.calendarMeal.title}；原饮食时间保留，取消自动采用可恢复。` : "没有匹配时保留填写的时间；直接修改日期或时间后，以你的修改为准。"}</p><div className="form-grid">
-    <div className="field"><span>餐次</span><SearchableSelect label="餐次" searchable={false} value={draft.mealType} onValueChange={(value) => setDraft({ ...draft, mealType: value as MealType })} options={[...meals.map((meal) => ({value:meal.value,label:meal.label}))]}/></div>
-    <div className="field"><span>场景</span><SearchableSelect label="场景" searchable={false} value={draft.scene} onValueChange={(value) => { const scene = value as FoodScene; setDraft({ ...draft, scene, rating: canRate(scene) ? draft.rating : "" }); }} options={[...scenes.map((scene) => ({value:scene.value,label:scene.label}))]}/></div>
-    <label className="field"><span>吃了什么</span><input required value={draft.title} placeholder="可手动填写，或选择菜品自动生成" maxLength={200} onChange={(event) => { automaticTitle.current = null; setDraft({ ...draft, title: event.target.value }); }} /></label>
-    <FoodLinkPicker label="店铺（可选）" options={placeOptions} selected={draft.foodPlaceId ? [Number(draft.foodPlaceId)] : []} loading={placeLoading} error={placeError} onRetry={() => setPlaceAttempt(value => value + 1)} onSearch={setPlaceQuery} onChange={ids => { setDishes([]); setDishQuery(""); setDishError(""); setDishLoading(false); const clearTitle = draft.title === automaticTitle.current; if (clearTitle) automaticTitle.current = ""; setDraft({ ...draft, foodPlaceId: ids[0]?.toString() ?? "", foodDishIds: [], ...(clearTitle ? { title: "" } : {}) }); }} />
-    {draft.foodPlaceId && <FoodLinkPicker key={draft.foodPlaceId} label="菜品（可选，可多选）" options={dishOptions} selected={draft.foodDishIds} multiple loading={dishLoading} error={dishError} onRetry={() => setDishAttempt(value => value + 1)} onSearch={setDishQuery} onChange={selectDishes} />}
-    {consumptions.map((item, index) => <FoodConsumptionFields placeId={draft.foodPlaceId} key={item.foodLibraryId} value={item} index={index} onChange={value => changeConsumption(index, value)} onRemove={() => setConsumptions(items => items.filter((_, position) => position !== index))} onLoaded={libraryItem => setConsumptions(items => items.map(value => value.foodLibraryId === libraryItem.id && !value.nutritionReference ? { ...consumptionFromItem(libraryItem), quantity: value.quantity } : value))} />)}
-    {consumptions.length < 50 && <FoodLibraryPicker placeId={draft.foodPlaceId} label={consumptions.length ? "添加 Food Library 食品" : "Food Library 食品（可选）"} value="" onChange={(_, item) => {
-      if (!item) return;
-      if (consumptions.some(value => value.foodLibraryId === item.id)) { setError("该食品已关联，请修改已有食用量"); return; }
-      setError(""); setConsumptions(items => [...items, preserveReference(consumptionFromItem(item))]);
-      if (!draft.title || draft.title === automaticTitle.current) { automaticTitle.current = [...consumptions.map(value => value.item?.name), item.name].filter(Boolean).join(" + ").slice(0, 200); setDraft({ ...draft, title: automaticTitle.current }); }
-    }} />}
-    {canRate(draft.scene) && <div className="field"><span>评价</span><SearchableSelect label="评价" searchable={false} value={draft.rating} onValueChange={(value) => setDraft({ ...draft, rating: value as TasteRating | "" })} options={[{value:"",label:"未评价"},...TASTE_RATINGS.map((value) => ({value:value,label:tasteLabels[value]}))]}/></div>}
-    <label className="field wide"><span>明细</span><textarea rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-    {consumptions.length > 0 && <div className="field wide"><output aria-live="polite">{calculatedTotal === null ? "食品热量尚未全部可计算，请补充食用量或手动估算" : `食品热量合计：约 ${calculatedTotal} kcal`}</output><div className="field"><span>最终热量</span><SearchableSelect label="最终热量计算方式" searchable={false} value={kcalMode} onValueChange={value => { if (value === "manual") setDraft({ ...draft, estimatedKcal }); setKcalMode(value as "auto" | "manual"); }} options={[{value:"auto",label:"按食品自动汇总"},{value:"manual",label:"手动估算 / 覆盖"}]} /></div>{record?.foodLibraryItems?.length ? <p className="muted">食用量按记录保存的营养基准换算</p> : null}</div>}
-    <label className="field"><span>热量估算 kcal</span><input type="number" min="0" step="any" value={estimatedKcal} onChange={(event) => { setKcalMode("manual"); setDraft({ ...draft, estimatedKcal: event.target.value }); }} /></label>
-    <label className="field"><span>范围 kcal</span><div className="range-pair"><input type="number" placeholder="最低" value={draft.kcalMin} onChange={(event) => setDraft({ ...draft, kcalMin: event.target.value })} /><input type="number" placeholder="最高" value={draft.kcalMax} onChange={(event) => setDraft({ ...draft, kcalMax: event.target.value })} /></div></label>
-  </div>{error && <p className="form-error">{error}</p>}{record && onDeleted && <FoodDeleteAction label="删除这条饮食记录" description={`确定删除「${record.title}」？删除后无法恢复。`} onDelete={remove} disabled={saving}/>}</form></FormSheet>;
+  return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}>
+    <form id="food-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>
+      <FoodNameInput kind="food" label="吃了什么" required value={draft.title} onSelect={selectItem} onValueChange={title=>{automaticTitle.current=null;titleSource.current=null;if(chosen){setConsumptions([]);setKcalMode("manual");}setChosen(undefined);setDraft({...draft,title,...(chosen?{foodPlaceId:"",foodDishIds:[],foodLibraryId:"",estimatedKcal:""}:{})});}}/>
+      {(chosen?.placeName||record?.foodPlaceName)&&draft.foodPlaceId&&<p className="muted user-content">{chosen?.placeName??record?.foodPlaceName}</p>}
+      <DateTimeField inline label="日期" minuteStep={1} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={value => {
+        setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : ""), ...(!mealChosen.current && value.time ? { mealType: usualMeal(Number(value.time.slice(0, 2))) } : {}) });
+        if (record) setCalendarTimeEnabled(false);
+      }} />
+      {record?.calendarMeal && calendarTimeEnabled && <p className="muted">时间来自日历：<span className="user-content">{record.calendarMeal.title}</span></p>}
+      <div className="field"><span>餐次</span><SearchableSelect label="餐次" searchable={false} value={draft.mealType} options={meals} onValueChange={value=>{mealChosen.current=true;setDraft({...draft,mealType:value as MealType});}}/></div>
+      <div className="field"><span>场景</span><SearchableSelect label="场景" searchable={false} value={draft.scene} options={scenes} onValueChange={value=>{const scene=value as FoodScene;setDraft({...draft,scene,rating:canRate(scene)?draft.rating:""});}}/></div>
+      {draft.foodPlaceId && !canRate(draft.scene) && <p className="muted">外卖或外食可补充本次口味评价。</p>}
+      {canRate(draft.scene) && <div className="field"><span>评价</span><SearchableSelect label="评价" searchable={false} clearable value={draft.rating} options={TASTE_RATINGS.map(value=>({value,label:tasteLabels[value]}))} onValueChange={value=>setDraft({...draft,rating:value as TasteRating|""})}/></div>}
+      <div className={styles.nutrition}>
+          <div className={styles.amountEnergy}>
+          <label className="field"><span>吃了多少（克）</span><input type="number" inputMode="decimal" min="0" max="1000000" step="0.01" value={consumedWeight} onChange={event => changeWeight(event.target.value)} onBlur={() => { if (consumedWeight !== "" && Number.isFinite(Number(consumedWeight))) { const formatted = Number(consumedWeight).toFixed(2); if (Number(formatted) !== Number(consumedWeight)) changeWeight(formatted); else setConsumedWeight(formatted); } }} /></label>
+          <label className="field"><span>热量估算 kcal</span><input type="number" inputMode="decimal" min="0" step="any" readOnly={consumptions.length > 0 && kcalMode === "auto"} value={estimatedKcal} onChange={event => { setKcalMode("manual"); setDraft({ ...draft, estimatedKcal: event.target.value }); }} /></label>
+          </div>
+          {consumptions.map((item, index) => <FoodConsumptionFields hideQuantity={consumptions.length === 1} placeId={draft.foodPlaceId} key={item.foodLibraryId} value={item} index={index} onChange={value => changeConsumption(index, value)} onRemove={() => updateConsumptions(consumptions.filter((_, position) => position !== index))} onLoaded={libraryItem => setConsumptions(items => items.map(value => value.foodLibraryId === libraryItem.id && !value.nutritionReference ? { ...consumptionFromItem(libraryItem), quantity: value.quantity, unit: value.unit, calculatedKcal: calculateFoodKcal(consumptionFromItem(libraryItem).nutritionReference!, value.quantity, value.unit) } : value))} />)}
+          {consumptions.length > 0 && <div className={styles.energy}><output aria-live="polite">{kcalMode === "manual" ? estimatedKcal ? `${english?"Manual estimate:":"手动估算："} ${Number(estimatedKcal).toFixed(2)} kcal` : t("尚未估算热量") : calculatedTotal === null ? t("部分食品缺少食用量或营养基准，可直接保存") : `${english?"Total: about":"合计：约"} ${calculatedTotal.toFixed(2)} kcal`}</output><button type="button" className="text-button" data-form-change onClick={() => { if (kcalMode === "auto") setDraft({ ...draft, estimatedKcal }); setKcalMode(kcalMode === "auto" ? "manual" : "auto"); }}>{kcalMode === "auto" ? "手动修改" : "恢复自动计算"}</button></div>}
+          {record?.foodLibraryItems?.length ? <p className="muted">食用量按记录保存的营养基准换算</p> : null}
+      </div>
+      <div className={styles.browser}><FoodLinkPicker label="店铺" options={placeOptions} selected={draft.foodPlaceId?[Number(draft.foodPlaceId)]:[]} loading={placeLoading} error={placeError} onRetry={()=>setPlaceAttempt(value=>value+1)} onSearch={setPlaceQuery} onChange={ids=>{setChosen(undefined);setBrowseQuery("");setDraft({...draft,foodPlaceId:ids[0]?.toString()??"",foodDishIds:[]});}}/>
+        {draft.foodPlaceId&&<FoodNameInput key={draft.foodPlaceId} kind="food" placeId={draft.foodPlaceId} label="店铺食品" value={browseQuery} onValueChange={setBrowseQuery} onSelect={selectItem}/>}
+      </div>
+      <label className="field"><span>明细</span><textarea rows={3} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
+      {record?.portion && <label className="field"><span>份量说明</span><input value={draft.portion} onChange={event => setDraft({ ...draft, portion: event.target.value })} /></label>}
+      {record?.notes && <label className="field"><span>备注</span><textarea rows={2} value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} /></label>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {record && onDeleted && <FoodDeleteAction label="删除这条饮食记录" description={`确定删除「${record.title}」？删除后无法恢复。`} onDelete={remove} disabled={saving} />}
+    </form>
+  </FormSheet>;
 }
 
 export { meals, scenes, tasteLabels };

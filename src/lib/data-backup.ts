@@ -1,5 +1,5 @@
 export const BACKUP_VERSION = 8 as const;
-export const BACKUP_SCHEMA_VERSION = "202610040003_place_services_drink_menu";
+export const BACKUP_SCHEMA_VERSION = "202610100003_consumed_amounts";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -15,8 +15,8 @@ export const BACKUP_TABLES = [
   "chat_sessions",
   "chat_messages",
   "inbox_items",
-  "food_library",
   "food_places",
+  "food_library",
   "food_dishes",
   "food_logs",
   "drink_logs",

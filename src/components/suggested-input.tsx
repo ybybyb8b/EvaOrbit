@@ -4,6 +4,7 @@ import { createContext, useContext, useId, useRef, useState, type InputHTMLAttri
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-controller";
 import { matchInputValues, parseInputTags } from "@/lib/form-input";
+import { Icon } from "./icons";
 import { SelectDropdown } from "./select-dropdown";
 
 export const SheetSuggestionTarget = createContext<HTMLElement | null>(null);
@@ -35,9 +36,10 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
   // The partial tag is already in the parent value, so submitting without Enter loses nothing.
   const committed = tags && query ? parseInputTags(value.slice(0, -query.length).replace(/,\s*$/, "")) : selected;
   const matches = matchInputValues(suggestions, expanded ? searchQuery : tags ? query : value).filter(option => !tags || !committed.some(tag => tag.toLocaleLowerCase() === option.toLocaleLowerCase()));
-  const chipsOnly = recommendationStyle === "chips";
+  const effectiveStyle = recommendationStyle === "chips" && suggestions.length > 5 ? "search" : recommendationStyle;
+  const chipsOnly = effectiveStyle === "chips";
   const searchable = !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
-  const searchOnly = recommendationStyle === "search" && searchable;
+  const searchOnly = effectiveStyle === "search" && searchable;
   const candidates = tags ? matches : matchInputValues(suggestions, chipsOnly ? value : "");
   const newValue = searchQuery.trim();
   const canCreate = newValue.length > 0 && (!props.maxLength || newValue.length <= props.maxLength) && !suggestions.some(option => option.toLocaleLowerCase() === newValue.toLocaleLowerCase()) && !committed.some(tag => tag.toLocaleLowerCase() === newValue.toLocaleLowerCase());
@@ -59,7 +61,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
       {undo !== null && <button type="button" data-form-change onPointerDown={event => event.preventDefault()} onClick={() => { onValueChange(undo); setUndo(null); setQuery(""); input.current?.focus({ preventScroll: true }); }}>{english ? "Undo" : "撤销"}</button>}
     </div>
   </div>;
-  return <span className="suggested-input" data-recommendation-style={recommendationStyle} ref={container} onBlur={event => {
+  return <span className="suggested-input" data-recommendation-style={effectiveStyle} ref={container} onBlur={event => {
     if (container.current?.contains(event.relatedTarget as Node) || (!searchOnly && target?.contains(event.relatedTarget as Node))) return;
     skipFocusOpen.current = false;
     setFocused(false); setExpanded(false);
@@ -87,7 +89,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
         props.onKeyDown?.(event);
       }} />
       {searchable && value && !props.readOnly && <button type="button" data-form-change className="input-value-clear" aria-label={`${english ? "Clear" : "清空"} ${suggestionLabel}`} disabled={props.disabled} onPointerDown={event => event.preventDefault()} onClick={() => { onValueChange(""); setQuery(""); setSearchQuery(""); input.current?.focus({ preventScroll: true }); setExpanded(true); }}>×</button>}
-      {searchable && <span className="input-candidates-toggle" data-expanded={expanded} aria-hidden="true">⌄</span>}
+      {searchable && <span className="input-candidates-toggle" data-expanded={expanded} aria-hidden="true"><Icon name="chevronDown"/></span>}
     </span>
     {expanded && searchable && !props.disabled && !props.readOnly && <SelectDropdown anchor={field} onClose={() => { if (container.current?.querySelector('.eo-select-dropdown')?.contains(document.activeElement)) skipFocusOpen.current = true; setExpanded(false); }} id={id} label={suggestionLabel}>
       <div className="eo-select-results" role="listbox" aria-label={suggestionLabel}>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calendarMealType, combineMealTimeline, resolveMealTimes } from "./meal-calendar.ts";
+import { calendarMealType, combineMealTimeline, resolveMealTimes, usualMeal } from "./meal-calendar.ts";
 import { defaultCalendarInterpretation } from "./calendar-interpretation.ts";
 import { buildCalendarTimelineEvents } from "./calendar-timeline.ts";
 import { buildTimelineEvents, groupMealTimelineEvents } from "./timeline.ts";
@@ -9,6 +9,9 @@ import { parseNewFoodLog } from "./validation.ts";
 import type { CalendarEvent, FoodLog } from "./types.ts";
 
 const settings = defaultCalendarInterpretation();
+test("Food form recommendations share Calendar meal boundaries without assigning a timestamp", () => {
+  for (const [hour, meal] of [[0, "late_night"], [3, "late_night"], [4, "breakfast"], [10, "breakfast"], [11, "lunch"], [15, "lunch"], [16, "dinner"], [21, "dinner"], [22, "late_night"], [23, "late_night"]] as const) assert.equal(usualMeal(hour), meal);
+});
 const food: FoodLog = { ...parseNewFoodLog({ title: "咖喱鸡饭", mealType: "lunch", occurredAt: "2026-10-06T12:30:00+08:00" }), id: 1, createdAt: "", updatedAt: "" };
 const window: CalendarEvent = { id: 9, title: "🍚吃饭饭", startAt: "2026-10-06T12:09:00+08:00", endAt: "2026-10-06T12:26:00+08:00", notes: "原日历评论", isAllDay: false, status: "confirmed", location: "", timezone: "Asia/Shanghai", createdAt: "", updatedAt: "" };
 

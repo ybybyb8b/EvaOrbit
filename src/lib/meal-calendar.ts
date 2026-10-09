@@ -12,7 +12,7 @@ export function calendarMealType(event: CalendarEvent, settings: CalendarInterpr
   return match ? names[match[1]] : null;
 }
 
-function usualMeal(hour: number): MealType {
+export function usualMeal(hour: number): MealType {
   return hour < 4 || hour >= 22 ? "late_night" : hour < 11 ? "breakfast" : hour < 16 ? "lunch" : "dinner";
 }
 

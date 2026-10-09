@@ -32,10 +32,10 @@ test("food portions persist through CRUD, migrations, library updates, summaries
       const b=db.upsertFoodLibraryItem(parseFoodLibraryItem({name:"牛奶",referenceType:"per_100ml",referenceKcal:40}));
       const portions=[{foodLibraryId:a.id,quantity:18.6,unit:"g"},{foodLibraryId:b.id,quantity:250,unit:"ml"}];
       const saved=await food.createFoodLog(parseNewFoodLog({title:"早餐",occurredAt:"2026-10-05T04:00:00.000Z",occurredHasExplicitTime:false,foodPlaceId:place.id,foodLibraryItems:portions,foodKcalMode:"auto",estimatedKcal:999}));
-      assert.equal(saved.estimatedKcal,199);assert.equal(saved.foodLibraryItems[0].calculatedKcal,98.58);assert.equal(saved.foodLibraryId,a.id);assert.equal(saved.occurredHasExplicitTime,false);
+      assert.equal(saved.estimatedKcal,198.58);assert.equal(saved.foodLibraryItems[0].calculatedKcal,98.58);assert.equal(saved.foodLibraryId,a.id);assert.equal(saved.occurredHasExplicitTime,false);
       assert.equal(db.getPlaceLibraryItems(place.id).length,2);assert.equal(db.getPlaceLibraryItems(place.id)[0].recordCount,1);
       db.updateFoodLibraryItem(a.id,{...a,referenceKcal:800});
-      const titleEdit=await food.updateFoodLog(saved.id,parseFoodLogPatch({title:"改名字"}));assert.equal(titleEdit.estimatedKcal,199);assert.deepEqual(titleEdit.foodLibraryItems,saved.foodLibraryItems);
+      const titleEdit=await food.updateFoodLog(saved.id,parseFoodLogPatch({title:"改名字"}));assert.equal(titleEdit.estimatedKcal,198.58);assert.deepEqual(titleEdit.foodLibraryItems,saved.foodLibraryItems);
       const portionEdit=await food.updateFoodLog(saved.id,parseFoodLogPatch({foodLibraryItems:[{...portions[0],quantity:40},portions[1]]}));assert.equal(portionEdit.estimatedKcal,312);assert.equal(portionEdit.foodLibraryItems[0].nutritionReference.referenceKcal,530);
       const manual=await food.updateFoodLog(saved.id,parseFoodLogPatch({estimatedKcal:500,kcalMin:450,kcalMax:550}));assert.equal(manual.foodKcalMode,"manual");
       const changed=await food.updateFoodLog(saved.id,parseFoodLogPatch({foodLibraryItems:portions}));assert.equal(changed.estimatedKcal,500);assert.equal(changed.kcalMin,450);

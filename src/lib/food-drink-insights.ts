@@ -2,7 +2,7 @@ import type { FoodLog, DrinkLog, DrinkLimit, DrinkLimitStatus } from "./types";
 import type { FoodDrinkEntry } from "./food-drink-timeline";
 import { foodRecordDisplay } from "./food-record-display.ts";
 import { drinkTypeLabels } from "./drink-display.ts";
-import { buildDrinkPreferenceSummary } from "./drink-preferences.ts";
+import { buildDrinkPreferenceSummary, drinkIdentity } from "./drink-preferences.ts";
 import { dateInEvaOrbit, shiftDate } from "./time.ts";
 
 export interface FoodDrinkInsight { id: string; title: string; body: string; href?: string }
@@ -66,12 +66,12 @@ export function buildFoodDrinkInsights(foods: FoodLog[], drinks: DrinkLog[], dat
   }
   const preferences = buildDrinkPreferenceSummary(md, new Date(`${date}T12:00:00Z`));
   const commonDrink = preferences.commonDrinks[0];
-  const sameDrink = commonDrink ? md.filter(row => key(row.drinkMenuName || row.name) === key(commonDrink.name) && key(row.brand) === key(commonDrink.brand)) : [];
+  const sameDrink = commonDrink ? md.filter(row => commonDrink.sourceKey ? drinkIdentity(row) === commonDrink.sourceKey : key(row.drinkMenuName || row.name) === key(commonDrink.name) && key(row.brand) === key(commonDrink.brand)) : [];
   if (commonDrink?.count >= 3 && activeDays(sameDrink) >= 2) {
     add("common-drink", "drink", 59 + Math.min(commonDrink.count, 10), `「${commonDrink.name}」最近喝了好几次`, `${commonDrink.brand ? commonDrink.brand + " · " : ""}近 30 天 ${commonDrink.count} 杯，分布在 ${activeDays(sameDrink)} 天。`, "/drinks/history");
   }
   const preferred = preferences.preferredDrinks.find(item => {
-    const rows = md.filter(row => key(row.drinkMenuName || row.name) === key(item.name) && key(row.brand) === key(item.brand));
+    const rows = md.filter(row => item.sourceKey ? drinkIdentity(row) === item.sourceKey : key(row.drinkMenuName || row.name) === key(item.name) && key(row.brand) === key(item.brand));
     const positive = rows.filter(row => row.rating === "love" || row.rating === "good").length;
     return item.ratingCount >= 3 && positive / item.ratingCount >= .67 && activeDays(rows) >= 2 && item.name !== commonDrink?.name;
   });
@@ -80,18 +80,18 @@ export function buildFoodDrinkInsights(foods: FoodLog[], drinks: DrinkLog[], dat
   if (likedFood?.count >= 3 && likedFood.name !== commonFood?.name) add("preferred-food", "preference", 63, `「${likedFood.name}」吃过几次，都挺喜欢`, `近 30 天 ${likedFood.count} 次正向评价。`, "/food");
 
   const sortedDrinks = [...md].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt) || b.id - a.id);
-  for (const dimension of ["sugarLevel", "temperature", "drinkType", "brand"] as const) {
-    const filled = sortedDrinks.filter(row => String(row[dimension] ?? "").trim());
+  for (const dimension of ["sugarLevel", "temperature", "drinkType"] as const) {
+    const filled = sortedDrinks.filter(row => String(row[dimension] ?? "").trim() && (dimension !== "drinkType" || !["other","water"].includes(row.drinkType)));
     if (filled.length < 6 || activeDays(filled) < 3) continue;
     const currentRows = filled.slice(0, 10), pastRows = filled.slice(10, 20);
     const current = ranked(currentRows.map(row => String(row[dimension])))[0], past = ranked(pastRows.map(row => String(row[dimension])))[0];
     if (current.count < 4 || current.count / currentRows.length < .65) continue;
     const display = (value: string) => dimension === "temperature" ? temperatureLabels[value as keyof typeof temperatureLabels] ?? value : dimension === "drinkType" ? drinkTypeLabels[value as DrinkLog["drinkType"]] ?? value : value;
-    const label = dimension === "sugarLevel" ? "糖度" : dimension === "temperature" ? "冷热" : dimension === "brand" ? "品牌" : "饮品类型";
+    const label = dimension === "sugarLevel" ? "糖度" : dimension === "temperature" ? "冷热" : "饮品类型";
     const changed = complete && pastRows.length >= 5 && activeDays(pastRows) >= 2 && past && past.count / pastRows.length >= .65 && key(past.name) !== key(current.name);
     // Prefer a frequency change to a second headline saying the same thing about coffee or milk tea.
     if (dimension === "drinkType" && candidates.some(item => item.id === `change-${current.name}`)) continue;
-    const title = changed ? `最近${label}更偏向「${display(current.name)}」` : dimension === "drinkType" ? `最近更偏爱${display(current.name)}` : dimension === "temperature" ? `最近喝饮品更常选${display(current.name)}` : dimension === "brand" ? `最近更常选「${display(current.name)}」` : `最近更常选「${display(current.name)}」糖度`;
+    const title = changed ? `最近${label}更偏向「${display(current.name)}」` : dimension === "drinkType" ? `最近更偏爱${display(current.name)}` : dimension === "temperature" ? `最近喝饮品更常选${display(current.name)}` : `最近更常选「${display(current.name)}」糖度`;
     const evidence = filled.length > 10 ? `最近 ${currentRows.length} 杯有${label}记录的饮品中` : `近 30 天，有${label}记录的 ${currentRows.length} 杯中`;
     add(`preference-${dimension}`, "preference", changed ? 86 : 57 + Math.min(current.count, 10), title, `${evidence}，${current.count} 杯选了${display(current.name)}。${changed ? `此前 ${pastRows.length} 杯更常选${display(past.name)}。` : ""}`);
   }

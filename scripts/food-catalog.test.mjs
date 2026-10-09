@@ -1,0 +1,77 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import test from "node:test";
+import { pathToFileURL } from "node:url";
+
+test("catalog search resolves same names by stable source and fills links/calories without rewriting snapshots", () => {
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),"evaorbit-catalog-"));
+  const loader=pathToFileURL(path.join(process.cwd(),"scripts/typescript-test-loader.mjs")).href;
+  try {
+    const result=spawnSync(process.execPath,["--experimental-loader",loader,"--input-type=module","--eval",`
+      import assert from 'node:assert/strict';
+      import * as db from './src/lib/db.ts';
+      import * as food from './src/lib/services/food.ts';
+      import * as drink from './src/lib/services/drink.ts';
+      import {searchFoodCatalog} from './src/lib/services/food-catalog.ts';
+      import {catalogServingKcal} from './src/lib/food-catalog.ts';
+      import {parseFoodLibraryItem,parseFoodDish,parseFoodPlace,parseNewDrinkLog,parseNewFoodLog,parseDrinkLogPatch,parseFoodLogPatch} from './src/lib/validation.ts';
+      const a=await food.createFoodPlace(parseFoodPlace({name:'A店',serviceType:'both'}));
+      const b=await food.createFoodPlace(parseFoodPlace({name:'B店',serviceType:'both'}));
+      const ref=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'A店乌龙',category:'drink',foodPlaceId:a.id,drinkType:'tea',referenceKcal:80}));
+      const menu=await food.createFoodDish(parseFoodDish({name:'同名茶',kind:'drink',foodPlaceId:a.id,foodLibraryId:ref.id,drinkType:'tea'}));
+      const second=await food.createFoodDish(parseFoodDish({name:'同名茶',kind:'drink',foodPlaceId:b.id}));
+      const choices=await searchFoodCatalog('drink','同名茶');assert.equal(choices.length,2);assert.notEqual(choices[0].key,choices[1].key);
+      assert.equal(choices.find(item=>item.menu.id===menu.id).servingKcal,80);
+      assert.equal((await searchFoodCatalog('drink','',a.id)).length,1);
+      const mlRef=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'毫升测试',category:'drink',referenceType:'per_100ml',referenceKcal:40}));
+      const measured=(await drink.createDrinkLog(parseNewDrinkLog({foodLibraryId:mlRef.id,consumedVolumeMl:250.25,volumeMl:500}))).drink;
+      assert.equal(measured.consumedVolumeMl,250.25);assert.equal(measured.estimatedKcal,100.1);assert.equal(measured.volumeMl,500);
+      await food.updateFoodLibraryItem(mlRef.id,{referenceKcal:80});
+      assert.equal((await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({consumedVolumeMl:100.25}))).drink.estimatedKcal,40.1);
+      assert.equal((await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({consumedVolumeMl:0}))).drink.estimatedKcal,0);
+      const manual=(await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({consumedVolumeMl:150.25,estimatedKcal:33.33}))).drink;
+      assert.equal(manual.estimatedKcal,33.33);
+      assert.equal((await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({notes:'不改热量'}))).drink.estimatedKcal,33.33);
+      const noReference=(await drink.createDrinkLog(parseNewDrinkLog({name:'手填',consumedVolumeMl:80.25,estimatedKcal:20}))).drink;assert.equal(noReference.estimatedKcal,20);
+      const gramRef=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'克数测试',referenceType:'per_100g',referenceKcal:530}));
+      const weighed=await food.createFoodLog(parseNewFoodLog({title:'称重',consumedWeightG:18.62,foodLibraryItems:[{foodLibraryId:gramRef.id,quantity:null,unit:'g'}],foodKcalMode:'auto'}));
+      assert.equal(weighed.consumedWeightG,18.62);assert.equal(weighed.estimatedKcal,98.69);
+      await food.updateFoodLibraryItem(gramRef.id,{referenceKcal:1000});
+      assert.equal((await food.updateFoodLog(weighed.id,parseFoodLogPatch({consumedWeightG:20.25}))).estimatedKcal,107.33);
+      assert.equal((await food.updateFoodLog(weighed.id,parseFoodLogPatch({consumedWeightG:0}))).estimatedKcal,0);
+      const standalone=await food.createFoodLog(parseNewFoodLog({title:'未关联',consumedWeightG:52.25,estimatedKcal:10.5}));assert.equal(standalone.consumedWeightG,52.25);assert.equal(standalone.estimatedKcal,10.5);
+      for(const bad of [-1,1.001,Infinity]){assert.throws(()=>parseNewFoodLog({title:'非法',consumedWeightG:bad}));assert.throws(()=>parseNewDrinkLog({consumedVolumeMl:bad}));}
+      assert.equal('consumedVolumeMl' in parseDrinkLogPatch({notes:'不改量'}),false);
+      assert.equal('consumedWeightG' in parseFoodLogPatch({notes:'不改量'}),false);
+      await assert.rejects(()=>food.createFoodDish(parseFoodDish({name:'错误',kind:'drink',foodPlaceId:b.id,foodLibraryId:ref.id})),/归属/);
+      const saved=(await drink.createDrinkLog(parseNewDrinkLog({drinkMenuId:menu.id}))).drink;
+      assert.equal(saved.foodPlaceId,a.id);assert.equal(saved.foodLibraryId,ref.id);assert.equal(saved.estimatedKcal,80);
+      await food.updateFoodLibraryItem(ref.id,{referenceKcal:100});
+      assert.equal((await drink.updateDrinkLog(saved.id,parseDrinkLogPatch({notes:'历史'}))).drink.estimatedKcal,80);
+      const raw=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'通用茶',category:'drink',referenceType:'per_100ml',referenceKcal:40}));
+      assert.equal(catalogServingKcal(raw),null);
+      const common=(await drink.createDrinkLog(parseNewDrinkLog({foodLibraryId:raw.id}))).drink;assert.equal(common.foodPlaceId,null);assert.equal(common.estimatedKcal,null);
+      const foodRef=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'A店蛋糕',category:'snack',foodPlaceId:a.id,servingKcal:250}));
+      const dish=await food.createFoodDish(parseFoodDish({name:'蛋糕',foodPlaceId:a.id,foodLibraryId:foodRef.id}));
+      const meal=await food.createFoodLog(parseNewFoodLog({title:'蛋糕',foodDishIds:[dish.id]}));
+      assert.equal(meal.foodPlaceId,a.id);assert.equal(meal.estimatedKcal,250);assert.equal(meal.foodLibraryItems[0].quantity,1);
+      await food.updateFoodLibraryItem(foodRef.id,{servingKcal:500});
+      assert.equal((await food.updateFoodLog(meal.id,parseFoodLogPatch({notes:'历史'}))).estimatedKcal,250);
+      assert.throws(()=>db.updateFoodLibraryItem(foodRef.id,{...foodRef,foodPlaceId:b.id}),/其他店铺/);
+      const spare=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'菜单营养',category:'drink'}));
+      await food.createFoodDish(parseFoodDish({name:'无记录菜单',kind:'drink',foodPlaceId:b.id,foodLibraryId:spare.id}));
+      assert.equal((await food.removeFoodLibraryItem(spare.id)).action,'archived');
+      const owner=await food.createFoodPlace(parseFoodPlace({name:'只有物品'}));
+      await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'专属食品',foodPlaceId:owner.id}));
+      assert.equal((await food.removeFoodPlace(owner.id)).action,'archived');
+      const commonMenu=await food.createFoodDish(parseFoodDish({name:'通用营养关联',kind:'drink',foodPlaceId:b.id,foodLibraryId:raw.id}));
+      await food.createFoodDish(parseFoodDish({name:'通用营养关联',kind:'drink',foodPlaceId:a.id,foodLibraryId:raw.id}));
+      assert.throws(()=>db.updateFoodLibraryItem(raw.id,{...raw,foodPlaceId:a.id}),/其他店铺/);
+      await food.removeFoodDish(commonMenu.id);assert.equal((await searchFoodCatalog('drink','通用营养关联')).length,1);
+    `],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"test.db"),VERCEL:""}});
+    assert.equal(result.status,0,result.stderr||result.stdout);
+  } finally {fs.rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
+});

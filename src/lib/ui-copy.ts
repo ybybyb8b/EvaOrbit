@@ -3,6 +3,22 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["食用量（克）最多保留两位小数", "Amount eaten (g) supports up to two decimal places"], ["饮用量（毫升）最多保留两位小数", "Amount drunk (ml) supports up to two decimal places"],
+  ["吃了多少（克）", "Amount eaten (g)"], ["喝了多少（毫升）", "Amount drunk (ml)"],
+  ["按已关联的每 100 毫升营养基准换算；没有可换算基准时手动估算热量。", "Calculated from the linked nutrition per 100 ml; estimate calories manually if no convertible reference is available."],
+  ["热量估算 kcal", "Calories kcal"], ["最低 kcal", "Minimum kcal"], ["最高 kcal", "Maximum kcal"], ["部分食品缺少食用量或营养基准，可直接保存", "Some items lack an amount or nutrition reference; you can still save"], ["尚未估算热量", "Calories not estimated"], ["手动修改", "Edit manually"], ["恢复自动计算", "Restore automatic calculation"],
+  ["暂无营养基准，可留空或手动估算", "No nutrition reference; leave blank or estimate manually"], ["本次食用量", "Amount consumed"], ["填写实际食用量", "Enter the amount consumed"], ["填写食用量后计算", "Enter an amount to calculate"], ["当前基准与单位无法换算，可手动估算", "This reference cannot convert the chosen unit; estimate manually"], ["更换食品", "Change item"], ["移除食品", "Remove item"], ["毫升", "ml"], ["克", "g"], ["份", "serving"],
+
+  ["喝了什么", "What did you drink?"], ["饮品", "Drink"], ["店铺", "Place"], ["店铺饮品", "Place drinks"], ["店铺食品", "Place food"], ["按店铺查找（备选）", "Browse by place"], ["通用食品", "Library item"],
+  ["输入名称，搜索已有物品或直接记录", "Search existing items or enter a name"], ["输入名称搜索食品库和店铺物品", "Search library and place items by name"], ["没有匹配物品，可直接记录名称", "No matching items; you can record the name directly"], ["物品加载失败，请重试", "Could not load items. Please retry"],
+  ["未关联饮品", "No linked drink"], ["饮品菜单（可选）", "Drink menu (optional)"], ["店铺 / 门店", "Place / branch"], ["店铺加载失败，请重试", "Could not load places. Please retry"], ["饮品菜单加载失败", "Could not load the drink menu"], ["难喝", "Poor"],
+  ["找饮品、品牌、店铺或地点…", "Search drinks, brands, places or locations…"], ["换一个饮品、品牌、店铺或类型试试。", "Try another drink, brand, place or type."],
+  ["估算范围（可选）", "Estimate range (optional)"], ["热量与营养 · 可选", "Calories and nutrition (optional)"], ["补充信息", "Additional details"], ["外卖或外食可补充本次口味评价。", "Add a taste rating for delivery or eating out."], ["明细", "Details"], ["份量说明", "Portion notes"], ["食用量按记录保存的营养基准换算", "Amounts use the nutrition reference saved with this record"],
+
+  ["关联来源（可选）", "Source (optional)"], ["食品库", "Library"], ["店铺 / 菜单", "Place / menu"], ["食品库饮品", "Library drink"],
+  ["喝了什么（可选）", "Drink name (optional)"], ["输入饮品名称，或关联店铺菜单", "Name, or choose a menu item"], ["热量估算 kcal（可选）", "Calories kcal (optional)"], ["不知道可以留空", "Leave blank if unknown"], ["备注（可选）", "Notes (optional)"], ["未分类", "Unclassified"], ["未关联食品", "No linked item"],
+  ["这条历史记录同时关联了食品库和店铺。切换来源后只保留所选的一边。", "This historical record links both sources. Switching keeps only the chosen source."],
+  ["名称来自已关联的饮品菜单", "Name comes from the linked menu"], ["改为手填名称", "Enter name manually"], ["水（历史分类）", "Water (historical)"],
   ["时间段", "Time range"], ["开始、结束与自动时长", "Start, end and automatic duration"],
   ["停留时长、到访…", "Stay duration, Visit…"], ["先添加或取消正在编辑的属性，再创建观测。", "Add or cancel the property before creating the Tracker."],
   ["创建失败，请重试。", "Could not create the Tracker. Please try again."],

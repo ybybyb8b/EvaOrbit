@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { useFormHistory, historyValues } from "@/components/use-form-history";
 import { showActionToast } from "@/components/action-toast";
@@ -70,7 +71,7 @@ export function MemoryView() {
 
     <div className="memory-toolbar">
       <label className="search-box"><Icon name="search" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="找找以前…" aria-label="找找以前记过的" />{query && <button onClick={() => setQuery("")} aria-label="清空搜索">×</button>}</label>
-      <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="按分类筛选"><option value="">全部分类</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+      <ChoiceSelect value={category} onChange={(e) => setCategory(e.target.value)} aria-label="按分类筛选"><option value="">全部分类</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</ChoiceSelect>
       <span className="result-count">{memories.length} 条</span>
     </div>
     {loading ? <div className="loading-state">在翻以前记过的…</div> : memories.length ? <div className="memory-grid">{memories.map((memory) => <article className="memory-card" key={memory.id}>

@@ -29,3 +29,17 @@ test("Food and Drink taste migration preserves old rows and adds constrained nul
   assert.match(postgres,/occurred_has_explicit_time boolean not null default true/);
   assert.match(postgres,/normal_ice.*less_ice.*no_ice.*room_temperature.*hot/);
 });
+
+test("source identities survive renamed drinks and changing brands, while identical names at different sources stay separate", () => {
+  const summary = buildDrinkPreferenceSummary([
+    drink(1,"2026-10-01T04:00:00.000Z","旧名","love",{drinkMenuId:7,brand:"旧品牌"}),
+    drink(2,"2026-10-02T04:00:00.000Z","新名","good",{drinkMenuId:7}),
+    drink(3,"2026-10-03T04:00:00.000Z","新名","love",{drinkMenuId:8}),
+    drink(4,"2026-10-04T04:00:00.000Z","产品旧名","love",{foodLibraryId:9}),
+    drink(5,"2026-10-05T04:00:00.000Z","产品新名","love",{foodLibraryId:9}),
+  ]);
+  assert.equal(summary.commonDrinks.find(item=>item.sourceKey==="menu:7")!.count,2);
+  assert.equal(summary.commonDrinks.find(item=>item.sourceKey==="library:9")!.count,2);
+  assert.equal(summary.commonDrinks.find(item=>item.sourceKey==="menu:8")!.count,1);
+  assert.equal(summary.preferredDrinks.find(item=>item.sourceKey==="menu:7")!.ratingCount,2);
+});

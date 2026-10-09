@@ -1,5 +1,6 @@
 "use client";
 
+import { ChoiceSelect } from "@/components/choice-select";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { currentLocalDate, dateTimeDraft, dateTimePayload, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
@@ -39,10 +40,10 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
   return <form className="editor-card reminder-editor" onSubmit={submit}>
     <div className="editor-title"><div><span className="eyebrow">ONE-TIME</span><h2>{editing ? "Edit one-time task" : "Do once"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
     <div className="form-grid">
-      <label className="field"><span>Subject</span><select value={draft.target} onChange={(event) => setDraft({ ...draft, target: event.target.value })}>{pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}<option value="household">Household</option></select></label>
+      <label className="field"><span>Subject</span><ChoiceSelect value={draft.target} onChange={(event) => setDraft({ ...draft, target: event.target.value })}>{pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}<option value="household">Household</option></ChoiceSelect></label>
       <label className="field"><span>Title</span><input required maxLength={200} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })}/></label>
       <DateTimeField label="Due date" value={draft.due} onChange={(due) => setDraft({ ...draft, due })}/>
-      {draft.due.time ? <label className="field"><span>Remind</span><select value={draft.leadTimeMinutes} onChange={(event) => setDraft({ ...draft, leadTimeMinutes: Number(event.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></select></label> : <p className="date-only-note">Date-only tasks stay in Upcoming but do not send a push notification until a time is added.</p>}
+      {draft.due.time ? <label className="field"><span>Remind</span><ChoiceSelect value={draft.leadTimeMinutes} onChange={(event) => setDraft({ ...draft, leadTimeMinutes: Number(event.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></ChoiceSelect></label> : <p className="date-only-note">Date-only tasks stay in Upcoming but do not send a push notification until a time is added.</p>}
       {draft.due.time && <label className="check-row wide"><input type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>Remind me daily while overdue</span></label>}
       <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
     </div>

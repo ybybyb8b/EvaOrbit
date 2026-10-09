@@ -1,4 +1,6 @@
 import "server-only";
+import { catalogServingKcal } from "../food-catalog";
+import { calculateFoodKcal, foodNutritionReference } from "../food-calculation";
 import { validateLibraryLink } from "./food-library-link";
 import { placeSupports } from "../place-menu";
 import { ValidationError } from "../validation";
@@ -33,22 +35,52 @@ async function validateDrinkLinks(repository:Awaited<ReturnType<typeof getReposi
  if(menuId!==null){const menu=await repository.getFoodDish(menuId);if(!menu||menu.foodPlaceId!==placeId||menu.kind!=="drink"||(!preserve&&menu.archivedAt))throw new ValidationError("饮品菜单不属于所选店铺或已归档");}
 }
 export async function createDrinkLog(input: NewDrinkLog) {
+  if(input.drinkType==="water")throw new ValidationError("水分类已停用");
   const repository = await getRepository();
-  await validateLibraryLink(repository,input.foodLibraryId);
-  await validateDrinkLinks(repository,input.foodPlaceId??null,input.drinkMenuId??null);
   const menu=input.drinkMenuId?await repository.getFoodDish(input.drinkMenuId):null;
-  const drink = await repository.createDrinkLog(menu?{...input,name:menu.name}:input);
+  const libraryId=input.foodLibraryId??menu?.foodLibraryId??null;
+  await validateLibraryLink(repository,libraryId);
+  const library=libraryId?await repository.getFoodLibraryItem(libraryId):null;
+  const placeId=input.foodPlaceId??menu?.foodPlaceId??library?.foodPlaceId??null;
+  if(library?.foodPlaceId && library.foodPlaceId!==placeId)throw new ValidationError("所选物品不属于该店铺");
+  await validateDrinkLinks(repository,placeId,input.drinkMenuId??null);
+  const nutritionReference=library?foodNutritionReference(library):null;
+  const calculated=input.consumedVolumeMl!=null&&nutritionReference?calculateFoodKcal(nutritionReference,input.consumedVolumeMl,"ml"):input.consumedVolumeMl==null?catalogServingKcal(library):null;
+  const drink=await repository.createDrinkLog({...input,nutritionReference,foodLibraryId:libraryId,foodPlaceId:placeId,name:menu?.name||input.name||library?.name||"",drinkType:menu?.drinkType??library?.drinkType??input.drinkType,estimatedKcal:input.estimatedKcal??calculated});
   return { drink, limits: await checkDrinkLimits(new Date(drink.occurredAt)) };
 }
 export async function updateDrinkLog(id: number, input: Record<string, unknown>) {
+  const explicitKcal = input.estimatedKcal !== undefined;
   const repository = await getRepository();
   const existing = await repository.getDrinkLog(id);
   if (!existing) return null;
+  if(input.drinkMenuId && input.drinkMenuId!==existing.drinkMenuId){
+    const menu=await repository.getFoodDish(input.drinkMenuId as number);
+    if(menu)input={...input,foodPlaceId:input.foodPlaceId??menu.foodPlaceId,foodLibraryId:input.foodLibraryId??menu.foodLibraryId??null};
+  }
+  if(input.foodLibraryId && input.foodLibraryId!==existing.foodLibraryId && input.foodPlaceId==null){const library=await repository.getFoodLibraryItem(input.foodLibraryId as number);if(library?.foodPlaceId)input={...input,foodPlaceId:library.foodPlaceId};}
   await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
   const placeId=input.foodPlaceId===undefined?existing.foodPlaceId??null:input.foodPlaceId as number|null;
   const menuId=input.drinkMenuId===undefined?existing.drinkMenuId??null:input.drinkMenuId as number|null;
   await validateDrinkLinks(repository,placeId,menuId,placeId===(existing.foodPlaceId??null)&&menuId===(existing.drinkMenuId??null));
   const menu=menuId!==null&&(menuId!==(existing.drinkMenuId??null)||input.name!==undefined)?await repository.getFoodDish(menuId):null;
+  const libraryId=input.foodLibraryId===undefined?existing.foodLibraryId:input.foodLibraryId as number|null;
+  const sourceChanged=menuId!==(existing.drinkMenuId??null)||libraryId!==existing.foodLibraryId;
+  if(sourceChanged){
+    const sourceMenu=menuId?await repository.getFoodDish(menuId):null;
+    const library=libraryId?await repository.getFoodLibraryItem(libraryId):null;
+    if(library?.foodPlaceId && library.foodPlaceId!==placeId)throw new ValidationError("所选物品不属于该店铺");
+    input={...input,drinkType:sourceMenu?.drinkType??library?.drinkType??input.drinkType??"other",...(input.estimatedKcal===undefined && (libraryId||menuId)?{estimatedKcal:catalogServingKcal(library)}:{})};
+    if(!menuId && library && !String(input.name??existing.name).trim())input.name=library.name;
+  }
+  if(input.drinkType==="water" && existing.drinkType!=="water")throw new ValidationError("水分类已停用");
+  if(sourceChanged || input.consumedVolumeMl!==undefined){
+    const library=libraryId?await repository.getFoodLibraryItem(libraryId):null;
+    const reference=sourceChanged?library?foodNutritionReference(library):null:existing.nutritionReference??(library?foodNutritionReference(library):null);
+    const amount=(input.consumedVolumeMl===undefined?existing.consumedVolumeMl:input.consumedVolumeMl) as number|null|undefined;
+    const calculated=reference&&amount!=null?calculateFoodKcal(reference,amount,"ml"):null;
+    input={...input,nutritionReference:reference,...(!explicitKcal && (input.consumedVolumeMl!==undefined || amount!=null)?{estimatedKcal:calculated}:{})};
+  }
   const drink = await repository.updateDrinkLog(id, menu?{...input,name:menu.name}:input);
   return drink ? { drink, limits: await checkDrinkLimits(new Date(drink.occurredAt)) } : null;
 }

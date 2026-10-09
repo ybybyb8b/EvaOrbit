@@ -12,7 +12,7 @@ test("portions honor nutrition reference, decimals, servings, kJ and incompatibl
   assert.equal(calculateFoodKcal(reference, 1.5, "serving"), 159);
   assert.equal(calculateFoodKcal(reference, 18.6, "ml"), null);
   assert.equal(calculateFoodKcal({ ...reference, referenceType: "per_100ml", referenceKcal: 40 }, 250, "ml"), 100);
-  assert.equal(calculateFoodKcal({ ...reference, referenceType: "per_100ml" }, 1, "serving"), null);
+  assert.equal(calculateFoodKcal({ ...reference, referenceType: "per_100ml", servingKcal:null }, 1, "serving"), null);
   const serving = { ...reference, referenceType: "per_serving" as const };
   assert.equal(calculateFoodKcal(serving, 0.5, "serving"), 53);
   assert.equal(calculateFoodKcal(serving, 10, "g"), 53);
@@ -31,7 +31,7 @@ test("server snapshots ignore forged nutrition, survive library edits and do not
   assert.deepEqual(await snapshotFoodConsumptions(saved, saved, noLookup), saved);
   const edited = await snapshotFoodConsumptions([{ foodLibraryId: 1, quantity: 40, unit: "g" }], saved, noLookup);
   assert.equal(edited[0].calculatedKcal, 212);
-  assert.equal(foodCalculatedTotal([...saved, ...edited]), 311);
+  assert.equal(foodCalculatedTotal([...saved, ...edited]), 310.58);
   assert.equal(foodCalculatedTotal([{ foodLibraryId: 1, quantity: null, unit: "g", calculatedKcal: null }]), null);
   assert.equal(foodCalculatedTotal([]), null);
   await assert.rejects(() => snapshotFoodConsumptions(saved, [], async () => null), /不存在/);

@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 
 import { currentLocalDate } from "@/components/date-time-field";
@@ -13,9 +14,9 @@ export function casePayload(draft: LuciusCaseDraft) { return { ...draft, trigger
 export function CaseEditor({ draft, setDraft }: { draft: LuciusCaseDraft; setDraft: (value: LuciusCaseDraft) => void }) {
   return <div className="form-grid case-form-grid">
     <label className="field wide"><span>案底名称</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-    <label className="field"><span>错误类型</span><select value={draft.errorType} onChange={(event) => setDraft({ ...draft, errorType: event.target.value as LuciusCaseErrorType })}>{luciusCaseErrorTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-    <label className="field"><span>严重程度</span><select value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value as LuciusCaseSeverity })}>{luciusCaseSeverityOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-    <label className="field"><span>状态</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LuciusCaseStatus })}>{luciusCaseStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+    <label className="field"><span>错误类型</span><ChoiceSelect value={draft.errorType} onChange={(event) => setDraft({ ...draft, errorType: event.target.value as LuciusCaseErrorType })}>{luciusCaseErrorTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
+    <label className="field"><span>严重程度</span><ChoiceSelect value={draft.severity} onChange={(event) => setDraft({ ...draft, severity: event.target.value as LuciusCaseSeverity })}>{luciusCaseSeverityOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
+    <label className="field"><span>状态</span><ChoiceSelect value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LuciusCaseStatus })}>{luciusCaseStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
     <div className="field"><span>触发场景 <small>回车添加</small></span><SuggestedInput suggestionLabel="触发场景" suggestions={[]} tags value={draft.triggerScenes} onValueChange={nextValue => setDraft({ ...draft, triggerScenes: nextValue })} /></div>
     <label className="field"><span>首次发生</span><input required type="date" value={draft.firstOccurredDate} onChange={(event) => setDraft({ ...draft, firstOccurredDate: event.target.value, latestOccurredDate: draft.latestOccurredDate === draft.firstOccurredDate ? event.target.value : draft.latestOccurredDate })} /></label>
     <label className="field"><span>最近发生</span><input required type="date" value={draft.latestOccurredDate} onChange={(event) => setDraft({ ...draft, latestOccurredDate: event.target.value })} /></label>

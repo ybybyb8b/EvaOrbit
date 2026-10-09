@@ -70,7 +70,7 @@ test("normalizes core life capture records", () => {
   assert.equal(datedDrink.occurredHasExplicitTime, false);
   assert.equal(datedDrink.temperature, "less_ice");
   assert.equal(datedDrink.rating, "good");
-  for (const drinkType of ["coffee", "milk_tea", "tea", "soda", "juice", "water", "alcohol", "other"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", drinkType }).drinkType, drinkType);
+  for (const drinkType of ["coffee", "milk_tea", "tea", "soda", "juice", "alcohol", "other"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", drinkType }).drinkType, drinkType);
   for (const sugarLevel of ["", "无糖", "微糖", "半糖", "少糖", "标准", "多糖"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", sugarLevel }).sugarLevel, sugarLevel);
   for (const temperature of ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", temperature }).temperature, temperature);
   for (const rating of ["love", "good", "neutral", "dislike"]) assert.equal(parseNewDrinkLog({ name: "测试饮品", rating }).rating, rating);
@@ -96,7 +96,7 @@ test("validates lightweight food places, dishes, and optional Food Record links"
   assert.deepEqual(parseFoodPlacePatch({city:"",location:""}),{city:"",location:""});
   assert.throws(()=>parseFoodPlace({name:"店",city:"城".repeat(101)}),ValidationError);
   assert.throws(()=>parseFoodPlacePatch({location:"地".repeat(201)}),ValidationError);
-  assert.deepEqual(parseFoodDish({foodPlaceId:3,name:" 番茄米线 ",recommended:true}),{kind:"food",foodPlaceId:3,name:"番茄米线",category:"",rating:null,recommended:true,notes:""});
+  assert.deepEqual(parseFoodDish({foodPlaceId:3,name:" 番茄米线 ",recommended:true}),{kind:"food",drinkType:null,foodLibraryId:null,foodPlaceId:3,name:"番茄米线",category:"",rating:null,recommended:true,notes:""});
   assert.deepEqual(parseFoodPlacePatch({serviceType:"drink"}),{serviceType:"drink"});
   assert.deepEqual(parseFoodDishPatch({kind:"drink"}),{kind:"drink"});
   assert.throws(()=>parseFoodPlace({name:"店",serviceType:"any"}),ValidationError);

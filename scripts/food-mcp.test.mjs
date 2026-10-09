@@ -35,7 +35,7 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
         }
       }
       assert.equal((await call("eo_schema",{resource:"drink_log"})).schema.required_fields.includes("name"),false);
-      const {item:unnamed}=await call("eo_create",{resource:"drink_log",data:{drink_type:"water",occurred_has_explicit_time:false}});assert.equal(unnamed.name,"");
+      const {item:unnamed}=await call("eo_create",{resource:"drink_log",data:{drink_type:"other",occurred_has_explicit_time:false}});assert.equal(unnamed.name,"");
       const {item:manual}=await call("eo_update",{resource:"drink_log",id:unnamed.id,data:{name:"自制饮品"}});assert.equal(manual.name,"自制饮品");
       assert.equal((await call("eo_update",{resource:"drink_log",id:unnamed.id,data:{name:""}})).item.name,"");await call("eo_delete",{resource:"drink_log",id:unnamed.id});
       assert.equal((await call("eo_schema",{resource:"food_log"})).schema.fields.food_dish_ids.type,"array");
@@ -56,6 +56,11 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const {item:drinkUnlinked}=await call("eo_update",{resource:"drink_log",id:drink.id,data:{food_place_id:null}});assert.equal(drinkUnlinked.food_place_id,null);
       await call("eo_update",{resource:"drink_log",id:drink.id,data:{food_place_id:place.id}});
       const {item:drinkPlaceStats}=await call("eo_get",{resource:"food_place",id:place.id});assert.equal(drinkPlaceStats.drink_visit_count,1);assert.equal(drinkPlaceStats.visit_count,1);
+      const {item:sourceMenu}=await call("eo_create",{resource:"food_dish",data:{food_place_id:place.id,kind:"drink",name:"拿铁",drink_type:"coffee"}});
+      const {item:sourceDrink}=await call("eo_create",{resource:"drink_log",data:{food_place_id:place.id,drink_menu_id:sourceMenu.id,drink_type:"tea"}});assert.equal(sourceDrink.drink_type,"coffee");
+      await call("eo_update",{resource:"food_dish",id:sourceMenu.id,data:{drink_type:"tea"}});
+      assert.equal((await call("eo_update",{resource:"drink_log",id:sourceDrink.id,data:{notes:"只改备注"}})).item.drink_type,"coffee");
+      await call("eo_delete",{resource:"drink_log",id:sourceDrink.id});await call("eo_delete",{resource:"food_dish",id:sourceMenu.id});
       const ids=[];
       for(const name of ["鸡腿饭","紫菜汤"]){const {item}=await call("eo_create",{resource:"food_dish",data:{food_place_id:place.id,name,category:"午餐"}});ids.push(item.id);}
       const {items:dishes}=await call("eo_search",{resource:"food_dish",query:"汤",filters:{food_place_id:place.id}});assert.equal(dishes[0].id,ids[1]);

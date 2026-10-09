@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -156,7 +157,7 @@ export function AiProvidersSettings() {
           <div className="provider-editor-title"><div><strong>{selected ? `编辑 ${selected.name}` : "添加 Provider"}</strong><small>{selected?.hasApiKey ? `Key ${selected.maskedApiKey ?? "••••••••"}` : "尚未保存 API Key"}</small></div><label className="switch-row"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /><span>启用</span></label></div>
           <div className="form-grid">
             <label className="field"><span>Provider 名称</span><input required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-            <label className="field"><span>协议</span><select value={draft.providerType} onChange={(event) => setDraft({ ...draft, providerType: event.target.value })}><option value="openai-compatible">OpenAI-compatible</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="ollama">Ollama</option></select></label>
+            <label className="field"><span>协议</span><ChoiceSelect value={draft.providerType} onChange={(event) => setDraft({ ...draft, providerType: event.target.value })}><option value="openai-compatible">OpenAI-compatible</option><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="ollama">Ollama</option></ChoiceSelect></label>
             <label className="field wide"><span>Base URL</span><input required type="url" maxLength={500} value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} /></label>
             <label className="field wide"><span>API Key <small>只在服务端加密保存</small></span><div className="api-key-control"><input type="password" autoComplete="new-password" maxLength={1000} disabled={Boolean(selected?.hasApiKey) && !editingKey || draft.clearApiKey} value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} placeholder={selected?.hasApiKey && !editingKey ? selected.maskedApiKey ?? "••••••••" : draft.providerType === "ollama" ? "本地服务可留空" : "输入 API Key"} />{selected?.hasApiKey && <button type="button" className="text-button" onClick={() => { setEditingKey(!editingKey); setDraft({ ...draft, apiKey: "", clearApiKey: false }); }}>{editingKey ? "取消更换" : "更换 Key"}</button>}</div></label>
           </div>

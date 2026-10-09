@@ -1,5 +1,6 @@
 "use client";
 
+import { ChoiceSelect } from "@/components/choice-select";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
@@ -80,7 +81,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
     <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} data-form-change onClick={() => selectType(item.value)}><span>{item.label}</span></button>)}</div></div>
     <div className="form-grid health-form-grid">
       <div className="field"><span>Title</span><SuggestedInput suggestionLabel="Title" suggestions={["symptom", "condition", "medication"].includes(draft.type) ? historyValues(history, "title") : []} required maxLength={200} value={draft.title} onValueChange={title => setDraft({ ...draft, title })} placeholder="What should you remember?" /></div>
-      {healthRecordUsesStatus(draft.type) && <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>}
+      {healthRecordUsesStatus(draft.type) && <label className="field"><span>Status</span><ChoiceSelect value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as HealthRecordStatus })}>{Object.entries(healthRecordStatusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</ChoiceSelect></label>}
       <HealthDateTime label="Occurred" value={draft.occurredAt} onChange={(occurredAt)=>setDraft({...draft,occurredAt})}/>
       <HealthDateTime label="Started" value={draft.startedAt} onChange={(startedAt)=>setDraft({...draft,startedAt})} optional/>
       <HealthDateTime label="Ended" value={draft.endedAt} onChange={(endedAt)=>setDraft({...draft,endedAt})} optional/>

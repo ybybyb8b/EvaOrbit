@@ -1,4 +1,8 @@
 "use client";
+import { DRINK_TYPE_OPTIONS } from "@/lib/drink-types";
+import type { DrinkType } from "@/lib/types";
+import { FoodLinkPicker } from "../food-link-picker";
+import type { FoodPlace } from "@/lib/types";
 import { SearchableSelect } from "@/components/searchable-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
@@ -10,7 +14,7 @@ import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import type { ApiError, FoodCategory, FoodDataSource, FoodLibraryItem, FoodReferenceType } from "@/lib/types";
 
-const empty = { name: "", brand: "", category: "other" as FoodCategory, defaultPortion: "", referenceType: "per_serving" as FoodReferenceType, referenceEnergyKj: "", referenceKcal: "", servingWeight: "", servingKcal: "", dataSource: "manual" as FoodDataSource, notes: "" };
+const empty = { foodPlaceId:"", name: "", brand: "", category: "other" as FoodCategory, drinkType: "" as Exclude<DrinkType,"water"> | "", defaultPortion: "", referenceType: "per_serving" as FoodReferenceType, referenceEnergyKj: "", referenceKcal: "", servingWeight: "", servingKcal: "", dataSource: "manual" as FoodDataSource, notes: "" };
 type Draft = typeof empty;
 
 const cardSourceLabels: Partial<Record<FoodDataSource, string>> = {
@@ -20,9 +24,11 @@ const cardSourceLabels: Partial<Record<FoodDataSource, string>> = {
 
 function draftFromItem(item: FoodLibraryItem): Draft {
   return {
+    foodPlaceId: item.foodPlaceId?.toString()??"",
     name: item.name,
     brand: item.brand,
     category: item.category,
+    drinkType: item.drinkType ?? "",
     defaultPortion: item.defaultPortion,
     referenceType: item.referenceType,
     referenceEnergyKj: item.referenceEnergyKj === null ? "" : String(item.referenceEnergyKj),
@@ -46,6 +52,8 @@ function libraryItemDetails(item: FoodLibraryItem) {
 }
 
 export function FoodLibraryView() {
+  const [places,setPlaces]=useState<FoodPlace[]>([]),[placeQuery,setPlaceQuery]=useState("");
+  useEffect(()=>{const controller=new AbortController();void fetch(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(async response=>{if(response.ok)setPlaces(await response.json());}).catch(()=>undefined);return()=>controller.abort();},[placeQuery]);
   const [items, setItems] = useState<FoodLibraryItem[]>([]);
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -78,7 +86,7 @@ export function FoodLibraryView() {
   async function submit(event: FormEvent) {
     event.preventDefault(); if (saving) return; setError(""); setNotice(""); setSaving(true);
     const optionalNumber = (value: string) => value ? Number(value) : null;
-    const body = { ...draft, referenceEnergyKj: optionalNumber(draft.referenceEnergyKj), referenceKcal: optionalNumber(draft.referenceKcal), servingWeight: optionalNumber(draft.servingWeight), servingKcal: optionalNumber(draft.servingKcal) };
+    const body = { ...draft, foodPlaceId:draft.foodPlaceId?Number(draft.foodPlaceId):null, drinkType: draft.category === "drink" ? draft.drinkType || null : null, referenceEnergyKj: optionalNumber(draft.referenceEnergyKj), referenceKcal: optionalNumber(draft.referenceKcal), servingWeight: optionalNumber(draft.servingWeight), servingKcal: optionalNumber(draft.servingKcal) };
     const editing = editingId;
     const response = await fetch(editing ? `/api/food/library/${editing}` : "/api/food/library", { method: editing ? "PATCH" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setSaving(false);
@@ -103,8 +111,10 @@ export function FoodLibraryView() {
       <div className="editor-title"><h2>{editingId ? "Edit Item" : "Add Item"}</h2><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>
       <div className="form-grid">
         <label className="field"><span>Name</span><input required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+        <FoodLinkPicker label="归属店铺（通用食品留空）" options={places.map(place=>({id:place.id,name:place.name,detail:place.branch}))} selected={draft.foodPlaceId?[Number(draft.foodPlaceId)]:[]} onSearch={setPlaceQuery} onChange={ids=>setDraft({...draft,foodPlaceId:ids[0]?.toString()??""})}/>
         <div className="field"><span>Brand</span><SuggestedInput recommendationStyle="search" suggestionLabel="品牌" suggestions={items.map(item => item.brand)} value={draft.brand} onValueChange={nextValue => setDraft({ ...draft, brand: nextValue })} placeholder="Optional" /></div>
-        <div className="field"><span>Category</span><SearchableSelect label="Category" searchable={false} value={draft.category} onValueChange={(value) => setDraft({ ...draft, category: value as FoodCategory })} options={[{value:"staple",label:"Staple"},{value:"dish",label:"Dish"},{value:"snack",label:"Snack"},{value:"drink",label:"Drink"},{value:"other",label:"Other"}]}/></div>
+        <div className="field"><span>Category</span><SearchableSelect label="Category" searchable={false} value={draft.category} onValueChange={(value) => setDraft({ ...draft, category: value as FoodCategory, drinkType: value === "drink" ? draft.drinkType : "" })} options={[{value:"staple",label:"Staple"},{value:"dish",label:"Dish"},{value:"snack",label:"Snack"},{value:"drink",label:"Drink"},{value:"other",label:"Other"}]}/></div>
+        {draft.category === "drink" && <div className="field"><span>饮品类型</span><SearchableSelect label="饮品类型" searchable={false} value={draft.drinkType} onValueChange={value=>setDraft({...draft,drinkType:value as Draft["drinkType"]})} options={[{value:"",label:"未分类"},...DRINK_TYPE_OPTIONS.map(([value,label])=>({value,label}))]}/></div>}
         <div className="field"><span>Reference</span><SearchableSelect label="Reference" searchable={false} value={draft.referenceType} onValueChange={(value) => setDraft({ ...draft, referenceType: value as FoodReferenceType })} options={[{value:"per_serving",label:"Per serving"},{value:"per_100g",label:"Per 100g"},{value:"per_100ml",label:"Per 100ml"}]}/></div>
         <div className="field"><span>Default portion</span><SuggestedInput recommendationStyle="chips" suggestionLabel="份量" suggestions={[...items.map(item => item.defaultPortion), "1 份", "1 碗", "1 个"]} value={draft.defaultPortion} onValueChange={nextValue => setDraft({ ...draft, defaultPortion: nextValue })} placeholder="1 cup / 35 g" /></div>
         <label className="field"><span>Reference kcal</span><input type="number" min={0} value={draft.referenceKcal} onChange={(event) => setDraft({ ...draft, referenceKcal: event.target.value })} /></label>

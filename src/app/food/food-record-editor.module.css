@@ -1,0 +1,10 @@
+.editor { display: grid; gap: 20px; }
+.nutrition { min-width: 0; display: grid; gap: 18px; }
+.amountEnergy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.energy { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.energy button { min-height: 44px; }
+.browser { display: grid; gap: 14px; padding-top: 8px; }
+.browser > p { margin: 0; font-weight: 600; color: var(--muted); }
+
+
+

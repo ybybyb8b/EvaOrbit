@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice } from "@/components/action-toast";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -113,8 +114,8 @@ export function AiPreferences() {
         <div className="persona-heading"><span className="eyebrow">SELF PERSONA</span><h2>{english ? "Voice & response" : "说话和反应"}</h2><p>{english ? <><code>SELF_PERSONA.md</code> is the baseline. These preferences do not add personal facts to it.</> : <><code>SELF_PERSONA.md</code> 是默认底稿。这里的偏好不会写入具体生活事实。</>}</p></div>
         <div className="form-grid persona-form">
           <label className="field wide"><span>{english ? "Persona notes" : "Persona 补充"} <small>{english ? "Leave blank to use the default persona" : "留空则使用默认 Persona"}</small></span><textarea rows={4} maxLength={5000} value={draft.systemPrompt} onChange={(event) => setDraft({ ...draft, systemPrompt: event.target.value })} placeholder={english ? "For example: lead with the conclusion on technical questions." : "例如：技术问题直接给结论；日常聊天再短一点。"} /></label>
-          <label className="field"><span>{english ? "Response length" : "回复长度"}</span><select value={draft.responseLength} onChange={(event) => setDraft({ ...draft, responseLength: event.target.value as Draft["responseLength"] })}><option value="brief">{english ? "Brief" : "简短"}</option><option value="balanced">{english ? "Balanced" : "适中"}</option><option value="detailed">{english ? "Detailed when needed" : "需要时详细"}</option></select></label>
-          <label className="field"><span>{english ? "Initiative" : "主动程度"}</span><select value={draft.initiative} onChange={(event) => setDraft({ ...draft, initiative: event.target.value as Draft["initiative"] })}><option value="quiet">{english ? "Quiet" : "安静"}</option><option value="balanced">{english ? "When useful" : "必要时"}</option><option value="active">{english ? "Point out clear omissions" : "提醒明显遗漏"}</option></select></label>
+          <label className="field"><span>{english ? "Response length" : "回复长度"}</span><ChoiceSelect value={draft.responseLength} onChange={(event) => setDraft({ ...draft, responseLength: event.target.value as Draft["responseLength"] })}><option value="brief">{english ? "Brief" : "简短"}</option><option value="balanced">{english ? "Balanced" : "适中"}</option><option value="detailed">{english ? "Detailed when needed" : "需要时详细"}</option></ChoiceSelect></label>
+          <label className="field"><span>{english ? "Initiative" : "主动程度"}</span><ChoiceSelect value={draft.initiative} onChange={(event) => setDraft({ ...draft, initiative: event.target.value as Draft["initiative"] })}><option value="quiet">{english ? "Quiet" : "安静"}</option><option value="balanced">{english ? "When useful" : "必要时"}</option><option value="active">{english ? "Point out clear omissions" : "提醒明显遗漏"}</option></ChoiceSelect></label>
         </div>
         <div className="persona-toggles">
           <label><input type="checkbox" checked={draft.allowSuggestions} onChange={(event) => setDraft({ ...draft, allowSuggestions: event.target.checked })} /><span><strong>{english ? "Allow suggestions" : "可以给建议"}</strong><small>{english ? "Only when useful; do not create plans automatically" : "仅在必要时提出，不自动生成计划"}</small></span></label>

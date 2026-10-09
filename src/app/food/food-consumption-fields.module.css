@@ -1,5 +1,9 @@
 .consumption { gap: 12px; padding-block: 8px; }
 .consumption p { margin: 0; overflow-wrap: anywhere; }
+.heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.heading strong { min-width: 0; overflow-wrap: anywhere; }
+.heading button { min-height: 44px; }
+.unit { display: flex; align-items: center; min-height: 44px; }
 .result { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; font-variant-numeric: tabular-nums; }
 .result output { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .result button { flex: none; min-height: 44px; }

@@ -19,7 +19,7 @@ export function RecordTimeline({ foods, drinks, onFood, onDrink, showDate = fals
     const title = kind === "food" ? foodRecordDisplay(entry.record).title : drinkRecordName(entry.record);
     const details = kind === "food"
       ? [meals.find(meal => meal.value === entry.record.mealType)?.label, scenes.find(scene => scene.value === entry.record.scene)?.label, entry.record.portion]
-      : [entry.record.brand, entry.record.volumeMl ? `${entry.record.volumeMl} ml` : "", entry.record.sugarLevel, entry.record.caffeineMg !== null ? `咖啡因 ${entry.record.caffeineMg} mg` : "", entry.record.temperature ? temperatureLabels[entry.record.temperature] : ""];
+      : [entry.record.brand, entry.record.volumeMl ? `${entry.record.volumeMl} ml` : "", entry.record.sugarLevel, entry.record.temperature ? temperatureLabels[entry.record.temperature] : ""];
     const kcal = record.kcalMin !== null && record.kcalMax !== null ? `${record.kcalMin}–${record.kcalMax} kcal` : record.estimatedKcal !== null ? `约 ${record.estimatedKcal} kcal` : "未估算热量";
     return <article className={styles.record} key={`${kind}:${record.id}`}>
       <div className={styles.recordTime}>{showDate && <span>{dateInEvaOrbit(new Date(record.occurredAt))}</span>}<time dateTime={record.occurredHasExplicitTime === false ? dateInEvaOrbit(new Date(record.occurredAt)) : record.occurredAt}>{record.occurredHasExplicitTime === false ? "仅日期" : new Date(record.occurredAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: EVAORBIT_TIME_ZONE })}</time></div>

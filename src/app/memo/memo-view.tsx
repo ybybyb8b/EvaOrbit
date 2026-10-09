@@ -1,4 +1,5 @@
 "use client";
+import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -56,8 +57,8 @@ export function MemoView({ initial }: { initial: Memo[] }) {
       <div className="editor-title"><div><span className="eyebrow">NEW MEMO</span><h2>Keep something important</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
       <div className="form-grid">
         <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-        <label className="field"><span>Type</span><select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as MemoType })}>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-        <label className="field"><span>Status</span><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as MemoStatus })}>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+        <label className="field"><span>Type</span><ChoiceSelect value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as MemoType })}>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
+        <label className="field"><span>Status</span><ChoiceSelect value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as MemoStatus })}>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
         <label className="field"><span>Event date <small>Optional</small></span><input type="date" value={draft.eventDate} onChange={(event) => setDraft({ ...draft, eventDate: event.target.value })} /></label>
         <label className="field"><span>Confirmed at <small>Optional</small></span><input type="datetime-local" value={draft.confirmedAt} onChange={(event) => setDraft({ ...draft, confirmedAt: event.target.value })} /></label>
         <div className="field wide"><span>Tags <small>Enter to add</small></span><SuggestedInput suggestionLabel="标签" suggestions={knownTags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder="人物, 规则, 长期资料" /></div>
@@ -69,9 +70,9 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     {!showForm && error && <p className="form-error" role="alert">{error}</p>}
     <div className="long-term-toolbar" aria-busy={loading}>
       <label className="search-box"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title and content…" aria-label="Search Memo" /></label>
-      <select value={tag} onChange={(event) => setTag(event.target.value)} aria-label="Filter Memo by tag"><option value="">All tags</option>{knownTags.map((item) => <option value={item} key={item}>{item}</option>)}</select>
-      <select value={type} onChange={(event) => setType(event.target.value as "" | MemoType)} aria-label="Filter Memo by type"><option value="">All types</option>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select>
-      <select value={status} onChange={(event) => setStatus(event.target.value as "" | MemoStatus)} aria-label="Filter Memo by status"><option value="">All statuses</option>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select>
+      <ChoiceSelect value={tag} onChange={(event) => setTag(event.target.value)} aria-label="Filter Memo by tag"><option value="">All tags</option>{knownTags.map((item) => <option value={item} key={item}>{item}</option>)}</ChoiceSelect>
+      <ChoiceSelect value={type} onChange={(event) => setType(event.target.value as "" | MemoType)} aria-label="Filter Memo by type"><option value="">All types</option>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect>
+      <ChoiceSelect value={status} onChange={(event) => setStatus(event.target.value as "" | MemoStatus)} aria-label="Filter Memo by status"><option value="">All statuses</option>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect>
       <span className="result-count">{items.length}</span>
     </div>
     {items.length ? <div className="memo-list" aria-busy={loading}>{items.map((item) => <Link className="memo-row" href={`/memo/${item.id}`} key={item.id}>

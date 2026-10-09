@@ -18,6 +18,7 @@ export function foodReferenceKcal(reference: FoodNutritionReference) {
 export function calculateFoodKcal(reference: FoodNutritionReference, quantity: number | null, unit: FoodQuantityUnit): number | null {
   if (quantity === null || !Number.isFinite(quantity) || quantity < 0) return null;
   const kcal = foodReferenceKcal(reference);
+  if (unit === "serving" && reference.servingKcal !== null && (kcal === null || reference.referenceType === "per_100ml" || !reference.servingWeight)) return Math.round(reference.servingKcal * quantity * 100) / 100;
   if (kcal === null || !Number.isFinite(kcal) || kcal < 0) return null;
   let factor: number;
   if (unit === defaultFoodUnit(reference)) factor = reference.referenceType === "per_serving" ? quantity : quantity / 100;
@@ -33,7 +34,7 @@ export function calculateFoodKcal(reference: FoodNutritionReference, quantity: n
 
 export function foodCalculatedTotal(items: FoodConsumption[]): number | null {
   if (!items.length || items.some(item => item.calculatedKcal == null)) return null;
-  return Math.round(items.reduce((sum, item) => sum + item.calculatedKcal!, 0));
+  return Math.round(items.reduce((sum, item) => sum + item.calculatedKcal!, 0) * 100) / 100;
 }
 
 // Existing references are immutable: changing a portion uses the historical reference.
