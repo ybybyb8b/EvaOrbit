@@ -48,7 +48,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
 
     <div className="memory-graph-layout">
       <section className="memory-fact-stream">
-        <header className="memory-section-heading"><span><strong>{entityFilter?entityById.get(entityFilter)?.canonicalName:"Fact 路径"}</strong><small>{facts.length} 条可见</small></span><label><input type="checkbox" checked={showHistory} onChange={event=>setShowHistory(event.target.checked)}/>显示历史</label></header>
+        <header className="memory-section-heading"><span><strong>{entityFilter?entityById.get(entityFilter)?.canonicalName:"Fact 路径"}</strong><small>{facts.length} 条可见</small></span><label><input role="switch" className="toggle-switch" type="checkbox" checked={showHistory} onChange={event=>setShowHistory(event.target.checked)}/>显示历史</label></header>
         {facts.length?facts.map(fact=>{const subject=entityById.get(fact.subjectEntityId),object=fact.objectEntityId?entityById.get(fact.objectEntityId):null,replaces=fact.supersedesFactId?data.facts.find(item=>item.id===fact.supersedesFactId):null;return <button type="button" className={`memory-fact-path ${selectedId===fact.id?"selected":""}`} data-status={fact.status} onClick={()=>selectFact(fact)} key={fact.id}>
           {replaces&&<span className="memory-lineage-note">修正了 {entityById.get(replaces.subjectEntityId)?.canonicalName??"旧 Fact"} · {replaces.predicate}</span>}
           <span className="memory-node"><em>{subject?.canonicalName.slice(0,1)}</em><strong>{subject?.canonicalName??"未知实体"}</strong><small>{subject?.entityType}</small></span>

@@ -6212,3 +6212,68 @@ html .tracker-page .tracker-card:hover { background: var(--surface-raised); }
 
 .date-time-inline > .field > span:first-child { line-height: 1.5; }
 .date-time-inline > .field > span:first-child small { font-size: inherit; line-height: inherit; }
+
+/* Dark sheets need a recessed writing surface, separate from the raised sheet. */
+html[data-mode="dark"] .form-sheet-panel {
+  --sheet-control-surface:color-mix(in srgb,var(--surface-canvas) 88%,var(--surface-card));
+  --sheet-control-focus:color-mix(in srgb,var(--accent-primary) 20%,var(--surface-canvas));
+  --sheet-control-depth:inset 0 2px 5px rgb(var(--shadow-rgb) / .18);
+}
+html[data-mode="dark"] .form-sheet-body :is(
+  input:not([type="checkbox"],[type="radio"],[type="file"],[type="hidden"],.choice-select-native,.searchable-select-validation),
+  textarea,select:not(.choice-select-native),.searchable-select summary,.food-link-picker summary,
+  :where(.suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row)
+) {
+  border:0; background-color:var(--sheet-control-surface); color:var(--text-primary);
+  border-radius:var(--form-control-radius); box-shadow:var(--sheet-control-depth);
+}
+html[data-mode="dark"] .form-sheet-body :is(
+  input:not([type="checkbox"],[type="radio"],[type="file"],[type="hidden"],.choice-select-native,.searchable-select-validation),
+  textarea,select:not(.choice-select-native)
+):focus,
+html[data-mode="dark"] .form-sheet-body :is(.searchable-select summary,.food-link-picker summary):focus-visible,
+html[data-mode="dark"] .form-sheet-body .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row:focus-within {
+  background-color:var(--sheet-control-focus); outline:0;
+  box-shadow:var(--sheet-control-depth);
+}
+/* Composite text fields own one surface, including their clear and picker actions. */
+html[data-mode="dark"] .form-sheet-body .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row > input {
+  background:transparent; box-shadow:none; outline:0;
+}
+html[data-mode="dark"] .form-sheet-body :is(input,textarea)::placeholder { color:var(--text-tertiary); opacity:1; }
+
+/* Setting switches keep the native input, label, form value and keyboard behavior. */
+label:has(> .toggle-switch):not(.meal-reminder-settings label) { display:flex; align-items:center; gap:12px; }
+:is(input[type="checkbox"],button).toggle-switch[role="switch"] {
+  -webkit-appearance:none; appearance:none; position:relative; display:inline-block;
+  width:46px; min-width:46px; max-width:46px; height:44px; min-height:44px; max-height:44px;
+  flex:0 0 46px; align-self:center; vertical-align:middle; box-sizing:border-box;
+  margin:0; padding:0; border:0; border-radius:14px; outline:0;
+  background:transparent; box-shadow:none; color:transparent; font-size:0; cursor:pointer;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+}
+.toggle-switch[role="switch"]::before {
+  content:""; position:absolute; inset:8px 0; border-radius:999px;
+  background:color-mix(in srgb,var(--text-primary) 50%,var(--surface-raised));
+  transition:background-color var(--motion-base) var(--motion-ease);
+}
+.toggle-switch[role="switch"]::after {
+  content:""; position:absolute; top:10px; left:2px; width:24px; height:24px; border-radius:50%;
+  background:#fffdf7; box-shadow:0 1px 3px rgb(var(--shadow-rgb) / .22);
+  transform:translateX(0); transition:transform var(--motion-base) var(--motion-ease-out);
+}
+.toggle-switch[role="switch"]:is(:checked,[aria-checked="true"])::before { background:var(--accent-primary); }
+.toggle-switch[role="switch"]:is(:checked,[aria-checked="true"])::after { transform:translateX(18px); }
+.toggle-switch[role="switch"]:focus-visible::before { outline:2px solid var(--focus-ring); outline-offset:3px; }
+.toggle-switch[role="switch"]:disabled { opacity:.4; cursor:not-allowed; }
+@media (prefers-reduced-motion:reduce) {
+  .toggle-switch[role="switch"]::before,.toggle-switch[role="switch"]::after { transition:none; }
+}
+@media (forced-colors:active) {
+  .toggle-switch[role="switch"] { forced-color-adjust:none; }
+  .toggle-switch[role="switch"]::before { background:Canvas; border:1px solid CanvasText; }
+  .toggle-switch[role="switch"]::after { background:CanvasText; box-shadow:none; }
+  .toggle-switch[role="switch"]:is(:checked,[aria-checked="true"])::before { background:Highlight; }
+  .toggle-switch[role="switch"]:is(:checked,[aria-checked="true"])::after { background:HighlightText; }
+  .toggle-switch[role="switch"]:focus-visible::before { outline-color:Highlight; }
+}
