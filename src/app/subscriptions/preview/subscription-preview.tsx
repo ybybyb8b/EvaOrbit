@@ -61,7 +61,10 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
         }
         const depth = Math.min(1, amount);
         card.slide.style.transform = `translate3d(${progress * card.width * .38}px,${reducedMotion.matches ? 0 : depth * 18}px,0) scale(${reducedMotion.matches ? 1 : 1 - depth * .07})`;
-        card.slide.style.clipPath = `inset(0 ${depth * 26}%)`;
+        // The viewport-facing edge is cut straight; only the inward card corners round.
+        const corner = `calc(var(--radius-content) * ${depth})`;
+        const corners = progress < 0 ? `0 ${corner} ${corner} 0` : `${corner} 0 0 ${corner}`;
+        card.slide.style.clipPath = depth === 0 ? "none" : `inset(0 ${depth * 26}% round ${corners})`;
         card.slide.style.visibility = "visible";
         card.slide.style.opacity = String(Math.min(1, (1.6 - amount) / .6));
         card.slide.style.setProperty("--preview-content-opacity", String(Math.max(0, 1 - amount * 2)));
