@@ -125,7 +125,27 @@ test("fixed shared choices use capsules while searchable resources retain a drop
   const h = harness("src/components/searchable-select.tsx", "SearchableSelect", { label: "评价", value, options, searchable: false, onValueChange: next => { value = next; h.setProps({ value }); } });
   h.render(); h.nodes().find(node => node.type === "button" && node.props.children[0] === "b").props.onClick(); h.render();
   assert.equal(value, "b"); assert.equal(h.nodes().some(node => node.type === "details"), false);
+  assert.equal(h.nodes().filter(node => node.type === "button").length, 4);
+  h.nodes().find(node => node.type === "button" && node.props.children[0] === "b").props.onClick(); h.render();
+  assert.equal(value, "");
   h.setProps({ searchable: true }); h.render(); assert.equal(h.nodes().some(node => node.type === "details"), true);
+});
+
+test("native capsule choices omit the empty option, toggle off and retain native required validation", () => {
+  let value = "";
+  const options = ["", "a", "b", "c", "d", "e"].map(value => ({ type: "option", props: { value, children: value || "Not rated" } }));
+  const h = harness("src/components/choice-select.tsx", "ChoiceSelect", { value, required: true, children: options, onChange: event => { value = event.target.value; h.setProps({ value }); } });
+  h.render();
+  h.slots[0].current = { value: "", dispatchEvent() { h.nodes().find(node => node.type === "select").props.onChange({ target: this }); } };
+  assert.equal(h.nodes().filter(node => node.type === "button").length, 5);
+  assert.equal(h.nodes().some(node => node.type === "button" && node.props.children === "Not rated"), false);
+  const pick = () => h.nodes().find(node => node.type === "button" && node.props.children === "b").props.onClick();
+  pick(); h.render(); assert.equal(value, "b");
+  pick(); h.render(); assert.equal(value, "");
+  const native = h.nodes().find(node => node.type === "select");
+  assert.equal(native.props.required, true);
+  assert.equal(native.props.children.length, 6);
+  assert.equal(h.nodes().some(node => node.type === "button" && node.props["aria-pressed"]), false);
 });
 
 test("fixed and searchable dropdowns share a top-layer panel and Reicon arrow, while fixed labels follow locale", () => {

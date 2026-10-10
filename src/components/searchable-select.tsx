@@ -23,9 +23,10 @@ export function SearchableSelect({ value, options, onValueChange, label, require
   const [query, setQuery] = useState("");
   const selected = options.find(option => option.value === value);
   const matches = options.filter(option => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  const capsuleOptions = clearable ? options.filter(option => option.value !== "") : options;
+  const canClear = clearable || options.some(option => option.value === "");
+  const capsuleOptions = options.filter(option => option.value !== "");
   if ((presentation === "capsules" || usesCapsules(capsuleOptions.length, searchable)) && !onSearch && !loading && !error) return <span className="choice-select">
-    <span className="choice-capsules" role="group" aria-label={label}>{capsuleOptions.map(option => <button key={option.value} type="button" data-form-change aria-pressed={option.value === value} disabled={disabled || option.disabled} onClick={() => onValueChange(clearable && option.value === value ? "" : option.value)}>{searchable&&option.value?option.label:t(option.label)}{option.detail && <small>{option.detail}</small>}</button>)}</span>
+    <span className="choice-capsules" role="group" aria-label={label}>{capsuleOptions.map(option => <button key={option.value} type="button" data-form-change aria-pressed={option.value === value} disabled={disabled || option.disabled} onClick={() => onValueChange(canClear && option.value === value ? "" : option.value)}>{searchable&&option.value?option.label:t(option.label)}{option.detail && <small>{option.detail}</small>}</button>)}</span>
     {required && <input className="choice-select-native" tabIndex={-1} aria-label={label} value={value} required disabled={disabled} onChange={() => undefined} onInvalid={event => { event.preventDefault(); event.currentTarget.parentElement?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus(); }} />}
   </span>;
   function close() { setOpen(false); if (details.current) details.current.open = false; details.current?.querySelector("summary")?.focus({ preventScroll: true }); }

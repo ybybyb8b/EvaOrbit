@@ -8,18 +8,21 @@ export function ChoiceSelect(props: SelectHTMLAttributes<HTMLSelectElement>) {
   const select = useRef<HTMLSelectElement>(null);
   const children = Children.toArray(props.children);
   const options = children.filter((child): child is ReactElement<OptionHTMLAttributes<HTMLOptionElement>> => isValidElement(child) && child.type === "option");
-  if (props.multiple || props.size || props.value === undefined || options.length !== children.length || !usesCapsules(options.length)) return <select {...props} />;
+  const optionValue = (option: ReactElement<OptionHTMLAttributes<HTMLOptionElement>>) => String(option.props.value ?? option.props.children ?? "");
+  const clearable = options.some(option => optionValue(option) === "");
+  const capsuleOptions = options.filter(option => optionValue(option) !== "");
+  if (props.multiple || props.size || props.value === undefined || options.length !== children.length || !usesCapsules(capsuleOptions.length)) return <select {...props} />;
   return <span className="choice-select">
     <span className="choice-capsules" role="group" aria-label={props["aria-label"]} aria-labelledby={props["aria-labelledby"]} ref={element => {
       if (!element || props["aria-label"] || props["aria-labelledby"]) return;
       const label = element.closest("label,.field")?.querySelector(":scope > span");
       if (label && !label.contains(element)) element.setAttribute("aria-label", label.textContent ?? "");
     }}>
-      {options.map(option => {
-        const value = String(option.props.value ?? option.props.children ?? "");
+      {capsuleOptions.map(option => {
+        const value = optionValue(option);
         return <button type="button" data-form-change key={value} disabled={props.disabled || option.props.disabled} aria-label={typeof option.props.children === "string" ? option.props.children : undefined} aria-pressed={String(props.value) === value} onClick={() => {
           if (!select.current) return;
-          select.current.value = value;
+          select.current.value = clearable && String(props.value) === value ? "" : value;
           select.current.dispatchEvent(new Event("change", { bubbles: true }));
         }}>{option.props.children}</button>;
       })}
