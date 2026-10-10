@@ -21,6 +21,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const [currency, setCurrency] = useState("");
   const [month, setMonth] = useState(today.slice(0, 7));
   const rail = useRef<HTMLDivElement>(null);
+  const faces = useRef<HTMLDivElement>(null);
   // Preview-only image sources; does not invent an icon field in the subscription model.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
     const source = iconSources?.[item.id] ?? subscriptionBrand(item.name)?.icon;
@@ -37,7 +38,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     let frame = 0;
     let width = 0;
     let maxLeft = 0;
-    let cards: { slide: HTMLElement; face: HTMLElement; center: number; width: number }[] = [];
+    let cards: { slide: HTMLElement; center: number; width: number }[] = [];
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     function paint() {
       frame = 0;
@@ -49,18 +50,21 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       const poses = cards.map((card, index) => {
         const delta = card.center - center;
         if (Math.abs(delta) < distance) { nearest = index; distance = Math.abs(delta); }
-        const amount = Math.min(1, Math.abs(delta) / card.width);
-        return { card, amount, delta };
+        const progress = delta / card.width;
+        return { card, amount: Math.abs(progress), progress };
       });
-      // Only transforms change during scrolling; snap targets keep their layout geometry.
-      for (const { card, amount, delta } of poses) {
-        if (amount >= 1) {
-          if (card.face.style.visibility !== "hidden") card.face.style.visibility = "hidden";
+      // The faces live outside the native scrolling layer: no asynchronous counter-scroll.
+      for (const { card, amount, progress } of poses) {
+        if (amount >= 1.6) {
+          if (card.slide.style.visibility !== "hidden") card.slide.style.visibility = "hidden";
           continue;
         }
-        card.face.style.transform = `translate3d(${-delta * .8}px,${reducedMotion.matches ? 0 : amount * 30}px,0) scale(${reducedMotion.matches ? 1 : 1 - amount * .09})`;
-        card.face.style.visibility = "visible";
-        card.face.style.setProperty("--preview-content-opacity", String(Math.max(0, 1 - amount * 2)));
+        const depth = Math.min(1, amount);
+        card.slide.style.transform = `translate3d(${progress * card.width * .38}px,${reducedMotion.matches ? 0 : depth * 18}px,0) scale(${reducedMotion.matches ? 1 : 1 - depth * .07})`;
+        card.slide.style.clipPath = `inset(0 ${depth * 26}%)`;
+        card.slide.style.visibility = "visible";
+        card.slide.style.opacity = String(Math.min(1, (1.6 - amount) / .6));
+        card.slide.style.setProperty("--preview-content-opacity", String(Math.max(0, 1 - amount * 2)));
         card.slide.style.zIndex = String(100 - Math.round(amount * 50));
       }
       setFocused(previous => previous === nearest ? previous : nearest);
@@ -69,9 +73,9 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     function measure() {
       width = node!.clientWidth;
       maxLeft = Math.max(0, node!.scrollWidth - width);
-      cards = Array.from(node!.children).map(child => {
-        const slide = child as HTMLElement;
-        return { slide, face: slide.firstElementChild as HTMLElement, center: slide.offsetLeft + slide.offsetWidth / 2, width: slide.offsetWidth };
+      cards = Array.from(node!.children).map((child, index) => {
+        const target = child as HTMLElement;
+        return { slide: faces.current!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
       });
       schedule();
     }
@@ -136,8 +140,29 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     setFocused(nearest);
   }
 
+  const cardLabel = (item: Subscription) => `${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`;
+  function featuredCard(item: Subscription, decorative = false) {
+    const brand = subscriptionBrand(item.name);
+    const accent = colors[item.id] ?? (iconSources?.[item.id] ? null : brand?.color ?? null);
+    return <Link href={`/subscriptions/${item.id}`} className={styles.featureCard} tabIndex={decorative ? -1 : undefined} style={{ "--preview-tone": accent ?? "var(--accent-primary)", ...palette(accent) } as CSSProperties} aria-label={cardLabel(item)}>
+      <div className={styles.cardContent}>
+        <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>
+        <strong className={styles.cardPrice}>{money(item.currentAmountMinor, item.currency, english)}</strong>
+        <div className={styles.cardBottom}><small>{cycle(item)}</small><div><small>{item.status === "active" ? t("Next renewal", "下次续费") : statusLabel(item.status)}</small><span>{item.status === "active" ? date(item.nextRenewalOn, true) : t("No scheduled charge", "暂无续费计划")}</span></div></div>
+      </div>
+    </Link>;
+  }
+  function navigateCards(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const index = Math.max(0, Math.min(featured.length - 1, focused + (event.key === "ArrowRight" ? 1 : -1)));
+    move(index);
+    const target = rail.current?.children[index] as HTMLElement | undefined;
+    (refined ? target : target?.firstElementChild as HTMLElement | undefined)?.focus({ preventScroll: true });
+  }
+
   const summary = <dl className={styles.summary}>
-    <div><dt>{t("Active", "进行中")}</dt><dd className={styles.count}>{active.length}<small>{t("subscriptions", "个订阅")}</small></dd></div>
+    <div><dt>{refined && view === "home" ? t("Active subscriptions", "有效订阅") : t("Active", "进行中")}</dt><dd className={styles.count}>{active.length}{(!refined || view !== "home") && <small>{t("subscriptions", "个订阅")}</small>}</dd></div>
     <div><dt>{t("Expected this month", "本月预计")}</dt><dd>{totals(stats.expected)}</dd></div>
     <div><dt>{t("Paid this month", "本月已付")}</dt><dd>{totals(stats.actual[stats.currentMonth])}</dd></div>
   </dl>;
@@ -155,21 +180,16 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     {view === "home" ? <>
       {featured.length > 0 && <section className={styles.featured} aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
         <div className={styles.sectionHead}><h2>{t("On the horizon", "即将续费")}</h2><span>{t("Swipe to explore", "左右滑动浏览")}</span></div>
-        <div className={styles.rail} ref={rail} onScroll={refined ? undefined : followScroll} onKeyDown={event => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          event.preventDefault();
-          const index = Math.max(0, Math.min(featured.length - 1, focused + (event.key === "ArrowRight" ? 1 : -1)));
-          move(index);
-          (rail.current?.children[index]?.firstElementChild as HTMLElement | undefined)?.focus({ preventScroll: true });
-        }}>
-          {featured.map((item, index) => { const brand = subscriptionBrand(item.name); const accent = colors[item.id] ?? (iconSources?.[item.id] ? null : brand?.color ?? null); return <div key={item.id} className={styles.slide} data-focused={index === focused}><Link href={`/subscriptions/${item.id}`} className={styles.featureCard} style={{ ...(accent ? { "--preview-tone": accent } as CSSProperties : { "--preview-tone": "var(--accent-primary)" } as CSSProperties), ...palette(accent) }} aria-label={`${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`}>
-            <div className={styles.cardContent}>
-              <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>
-              <strong className={styles.cardPrice}>{money(item.currentAmountMinor, item.currency, english)}</strong>
-              <div className={styles.cardBottom}><small>{cycle(item)}</small><div><small>{item.status === "active" ? t("Next renewal", "下次续费") : statusLabel(item.status)}</small><span>{item.status === "active" ? date(item.nextRenewalOn, true) : t("No scheduled charge", "暂无续费计划")}</span></div></div>
-            </div>
-          </Link></div>; })}
-        </div>
+        {refined ? <div className={styles.stackStage}>
+          <div className={styles.stackFaces} ref={faces} aria-hidden="true">
+            {featured.map((item, index) => <div key={item.id} className={styles.stackFace} data-focused={index === focused}>{featuredCard(item, true)}</div>)}
+          </div>
+          <div className={styles.stackTrack} ref={rail} onKeyDown={navigateCards}>
+            {featured.map((item, index) => <Link key={item.id} className={styles.stackTarget} href={`/subscriptions/${item.id}`} aria-label={cardLabel(item)} data-focused={index === focused} />)}
+          </div>
+        </div> : <div className={styles.rail} ref={rail} onScroll={followScroll} onKeyDown={navigateCards}>
+          {featured.map((item, index) => <div key={item.id} className={styles.slide} data-focused={index === focused}>{featuredCard(item)}</div>)}
+        </div>}
         {featured.length > 1 && <div className={styles.railControls} role="group" aria-label={t("Select a subscription", "选择订阅卡片")}>
           {featured.slice(dotStart, dotStart + 5).map((item, offset) => <button key={item.id} aria-label={t(`Show ${item.name}`, `查看 ${item.name}`)} aria-pressed={focused === dotStart + offset} onClick={() => move(dotStart + offset)}><i /></button>)}
         </div>}
