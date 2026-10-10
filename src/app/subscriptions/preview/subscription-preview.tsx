@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import type { Subscription, SubscriptionPayment, SubscriptionStatus } from "@/lib/types";
@@ -13,7 +13,7 @@ const money = (amount: number, currency: string, english: boolean) => new Intl.N
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
-export function SubscriptionPreview({ items, payments, today, iconSources, onCreate }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void }) {
+export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
   const { english } = useLocale();
   const [view, setView] = useState<"home" | "trends">("home");
   const [status, setStatus] = useState<"all" | SubscriptionStatus>("all");
@@ -30,7 +30,63 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const stats = useMemo(() => subscriptionPreviewStats(items, payments, today), [items, payments, today]);
   const selectedCurrency = currency || stats.currencies[0] || "CNY";
   const active = items.filter(item => item.status === "active");
-  const featured = [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || a.nextRenewalOn.localeCompare(b.nextRenewalOn) || a.id - b.id);
+  const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || a.nextRenewalOn.localeCompare(b.nextRenewalOn) || a.id - b.id), [items]);
+  useEffect(() => {
+    const node = rail.current;
+    if (!refined || view !== "home" || !node) return;
+    let frame = 0;
+    let width = 0;
+    let maxLeft = 0;
+    let cards: { slide: HTMLElement; face: HTMLElement; center: number; width: number }[] = [];
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    function paint() {
+      frame = 0;
+      if (!node) return;
+      // Safari can report overscroll beyond either edge during its rubber-band gesture.
+      const left = Math.max(0, Math.min(node.scrollLeft, maxLeft));
+      const center = left + width / 2;
+      let nearest = 0, distance = Infinity;
+      const poses = cards.map((card, index) => {
+        const delta = card.center - center;
+        if (Math.abs(delta) < distance) { nearest = index; distance = Math.abs(delta); }
+        const amount = Math.min(1, Math.abs(delta) / card.width);
+        return { card, amount, delta };
+      });
+      // Only transforms change during scrolling; snap targets keep their layout geometry.
+      for (const { card, amount, delta } of poses) {
+        if (amount >= 1) {
+          if (card.face.style.visibility !== "hidden") card.face.style.visibility = "hidden";
+          continue;
+        }
+        card.face.style.transform = `translate3d(${-delta * .8}px,${reducedMotion.matches ? 0 : amount * 30}px,0) scale(${reducedMotion.matches ? 1 : 1 - amount * .09})`;
+        card.face.style.visibility = "visible";
+        card.face.style.setProperty("--preview-content-opacity", String(Math.max(0, 1 - amount * 2)));
+        card.slide.style.zIndex = String(100 - Math.round(amount * 50));
+      }
+      setFocused(previous => previous === nearest ? previous : nearest);
+    }
+    function schedule() { if (!frame) frame = requestAnimationFrame(paint); }
+    function measure() {
+      width = node!.clientWidth;
+      maxLeft = Math.max(0, node!.scrollWidth - width);
+      cards = Array.from(node!.children).map(child => {
+        const slide = child as HTMLElement;
+        return { slide, face: slide.firstElementChild as HTMLElement, center: slide.offsetLeft + slide.offsetWidth / 2, width: slide.offsetWidth };
+      });
+      schedule();
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    node.addEventListener("scroll", schedule, { passive: true });
+    reducedMotion.addEventListener("change", schedule);
+    measure();
+    return () => {
+      observer.disconnect();
+      node.removeEventListener("scroll", schedule);
+      reducedMotion.removeEventListener("change", schedule);
+      cancelAnimationFrame(frame);
+    };
+  }, [refined, view, featured]);
   const visible = featured.filter(item => status === "all" || item.status === status);
   const dotStart = Math.max(0, Math.min(focused - 2, featured.length - 5));
   const parts = stats.breakdown(month, selectedCurrency);
@@ -58,7 +114,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     const node = rail.current;
     const card = node?.children[index] as HTMLElement | undefined;
     if (!node || !card) return;
-    setFocused(index);
+    if (!refined) setFocused(index);
     node.scrollTo({ left: card.offsetLeft - (node.clientWidth - card.offsetWidth) / 2, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }
   function followScroll() {
@@ -80,7 +136,13 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     setFocused(nearest);
   }
 
-  return <div className={`page ${styles.page}`} data-view={view}>
+  const summary = <dl className={styles.summary}>
+    <div><dt>{t("Active", "进行中")}</dt><dd className={styles.count}>{active.length}<small>{t("subscriptions", "个订阅")}</small></dd></div>
+    <div><dt>{t("Expected this month", "本月预计")}</dt><dd>{totals(stats.expected)}</dd></div>
+    <div><dt>{t("Paid this month", "本月已付")}</dt><dd>{totals(stats.actual[stats.currentMonth])}</dd></div>
+  </dl>;
+
+  return <div className={`page ${styles.page}`} data-view={view} data-refined={refined || undefined}>
     <header className={styles.header}>
       <h1>{t("Subscriptions", "订阅")}</h1>
       {onCreate && <button className="button primary" onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</button>}
@@ -89,15 +151,11 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       <button aria-pressed={view === "home"} onClick={() => { setFocused(0); setView("home"); }}>{t("Overview", "订阅首页")}</button>
       <button aria-pressed={view === "trends"} onClick={() => setView("trends")}>{t("Trends", "趋势统计")}</button>
     </div>
-    <dl className={styles.summary}>
-      <div><dt>{t("Active", "进行中")}</dt><dd className={styles.count}>{active.length}<small>{t("subscriptions", "个订阅")}</small></dd></div>
-      <div><dt>{t("Expected this month", "本月预计")}</dt><dd>{totals(stats.expected)}</dd></div>
-      <div><dt>{t("Paid this month", "本月已付")}</dt><dd>{totals(stats.actual[stats.currentMonth])}</dd></div>
-    </dl>
+    {(!refined || view !== "home") && summary}
     {view === "home" ? <>
       {featured.length > 0 && <section className={styles.featured} aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
         <div className={styles.sectionHead}><h2>{t("On the horizon", "即将续费")}</h2><span>{t("Swipe to explore", "左右滑动浏览")}</span></div>
-        <div className={styles.rail} ref={rail} onScroll={followScroll} onKeyDown={event => {
+        <div className={styles.rail} ref={rail} onScroll={refined ? undefined : followScroll} onKeyDown={event => {
           if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
           event.preventDefault();
           const index = Math.max(0, Math.min(featured.length - 1, focused + (event.key === "ArrowRight" ? 1 : -1)));
@@ -116,6 +174,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
           {featured.slice(dotStart, dotStart + 5).map((item, offset) => <button key={item.id} aria-label={t(`Show ${item.name}`, `查看 ${item.name}`)} aria-pressed={focused === dotStart + offset} onClick={() => move(dotStart + offset)}><i /></button>)}
         </div>}
       </section>}
+      {refined && summary}
       <section className={styles.ledger}>
         <div className={styles.sectionHead}><h2>{t("Your ledger", "订阅账簿")}</h2><span>{visible.length} {t("subscriptions", "个订阅")}</span></div>
         <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended"] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>
