@@ -26,6 +26,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const [month, setMonth] = useState(today.slice(0, 7));
   const rail = useRef<HTMLDivElement>(null);
   const faces = useRef<HTMLDivElement>(null);
+  const scrollController = useRef<ReturnType<typeof trackSubscriptionScroll> | null>(null);
   // Sample uploaded images only. Built-in SVGs are monochrome masks, coloured by
   // mark() with their published brand palette; their raw pixels are always black.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
@@ -73,6 +74,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       setFocused(previous => previous === nearest ? previous : nearest);
     }
     const scroll = trackSubscriptionScroll(node, paint);
+    scrollController.current = scroll;
     function measure() {
       width = node!.clientWidth;
       maxLeft = Math.max(0, node!.scrollWidth - width);
@@ -90,6 +92,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       observer.disconnect();
       reducedMotion.removeEventListener("change", scroll.invalidate);
       scroll.dispose();
+      scrollController.current = null;
     };
   }, [refined, view, featured]);
   const visible = featured.filter(item => status === "all" || item.status === status);
@@ -121,7 +124,10 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     const card = node?.children[index] as HTMLElement | undefined;
     if (!node || !card) return;
     if (!refined) setFocused(index);
-    node.scrollTo({ left: card.offsetLeft - (node.clientWidth - card.offsetWidth) / 2, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    const left = index === 0 ? 0 : index === featured.length - 1 ? node.scrollWidth - node.clientWidth : card.offsetLeft - (node.clientWidth - card.offsetWidth) / 2;
+    const instant = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (refined && scrollController.current) scrollController.current.snapTo(left, instant);
+    else node.scrollTo({ left, behavior: instant ? "instant" : "smooth" });
   }
   function followScroll() {
     const node = rail.current;

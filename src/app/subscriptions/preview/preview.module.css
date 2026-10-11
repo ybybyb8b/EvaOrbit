@@ -219,6 +219,7 @@
 .stackFace[data-focused="true"] { visibility: visible; }
 .stackTrack { position: relative; z-index: 200; height: 100%; display: flex; overflow-x: auto; padding-inline: 10%; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; overflow-anchor: none; }
 .stackTrack::-webkit-scrollbar { display: none; }
+.stackTrack { touch-action: pan-y pinch-zoom; }
 .stackTarget { flex: 0 0 100%; height: calc(100% - 40px); margin-top: 10px; scroll-snap-align: center; scroll-snap-stop: always; }
 .stackFaces .cardContent { opacity: 1; }
 .stackStage:has(.stackTarget[data-focused="true"]:focus-visible) .stackFace[data-focused="true"] .featureCard { outline: 2px solid var(--accent-primary); outline-offset: -3px; }

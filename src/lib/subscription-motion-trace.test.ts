@@ -12,7 +12,7 @@ test("diagnostics are opt-in, capture release and per-frame samples, and detach 
   recordSubscriptionFrame(trace, trace.started + 16, trace.started + 17, 30, true, .5, false);
   const result = stop();
   assert.equal(subscriptionMotionTrace(node), null);
-  assert.deepEqual(result.frames.map(([raf, callback, ...values]) => [Math.round(raf), Math.round(callback), ...values]), [[8,9,25,false,.2,false], [16,17,30,true,.5,false]]);
+  assert.deepEqual(result.frames.map(([raf, callback, ...values]) => [Math.round(raf), Math.round(callback), ...values]), [[8,9,25,false,.2,false,25], [16,17,30,true,.5,false,25]]);
   assert.equal(result.events[0][1], "touchend");
   node.dispatchEvent(new Event("scroll"));
   assert.equal(result.events.length, 1);
