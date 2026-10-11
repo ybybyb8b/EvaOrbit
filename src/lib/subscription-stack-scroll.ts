@@ -1,3 +1,5 @@
+import { recordSubscriptionFrame, subscriptionMotionTrace } from "./subscription-motion-trace.ts";
+
 /** Follow native momentum/snap on every display frame, even between scroll events. */
 export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number) => void) {
   let frame = 0;
@@ -9,13 +11,17 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
   const idleWindow = 160;
   function tick(now: number) {
     frame = 0;
+    const trace = subscriptionMotionTrace(node);
+    const callbackTime = trace ? performance.now() : 0;
     const left = node.scrollLeft;
+    const painted = dirty || left !== previousLeft;
     if (left !== previousLeft) lastActivity = now;
-    if (dirty || left !== previousLeft) {
+    if (painted) {
       previousLeft = left;
       dirty = false;
       paint(left);
     }
+    if (trace) recordSubscriptionFrame(trace, now, callbackTime, left, painted, performance.now() - callbackTime, touching);
     if (touching || now - lastActivity < idleWindow) frame = requestAnimationFrame(tick);
   }
   function wake() {

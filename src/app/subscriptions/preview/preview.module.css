@@ -1,5 +1,7 @@
 .page { max-width: 960px; padding-bottom: calc(100px + env(safe-area-inset-bottom)); font-family: var(--font-ui); }
 .page button { font: inherit; cursor: pointer; }
+.motionDiagnostics { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 12px; margin: 10px 0; background: var(--surface-raised); border-radius: var(--radius-control); color: var(--text-secondary); font-size: 12px; }
+.motionDiagnostics button,.motionDiagnostics a { min-height: 36px; display: inline-flex; align-items: center; padding: 6px 12px; border: 0; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--text-primary); }
 .page :is(button,a):focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 4px; }
 .page ::selection { background: var(--accent-primary); color: var(--accent-on); }
 .header { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }

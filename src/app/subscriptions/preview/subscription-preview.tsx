@@ -11,6 +11,7 @@ import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
 import { trackSubscriptionScroll } from "@/lib/subscription-stack-scroll";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
+import { MotionDiagnostics } from "./motion-diagnostics";
 
 const money = (amount: number, currency: string, english: boolean) => new Intl.NumberFormat(english ? "en-US" : "zh-CN", { style: "currency", currency }).format(amount / 100);
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
@@ -173,6 +174,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       <h1>{t("Subscriptions", "订阅")}</h1>
       {onCreate && <button className="button primary" onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</button>}
     </header>
+    {refined && view === "home" && <MotionDiagnostics rail={rail} />}
     <div className={styles.switcher} role="group" aria-label={t("Subscriptions view", "订阅视图")}>
       <button aria-pressed={view === "home"} onClick={() => { setFocused(0); setView("home"); }}>{t("Overview", "订阅首页")}</button>
       <button aria-pressed={view === "trends"} onClick={() => setView("trends")}>{t("Trends", "趋势统计")}</button>
