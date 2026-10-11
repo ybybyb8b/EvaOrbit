@@ -24,9 +24,10 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const [month, setMonth] = useState(today.slice(0, 7));
   const rail = useRef<HTMLDivElement>(null);
   const faces = useRef<HTMLDivElement>(null);
-  // Stored uploads override built-in brand marks; iconSources also supports isolated QA.
+  // Sample uploaded images only. Built-in SVGs are monochrome masks, coloured by
+  // mark() with their published brand palette; their raw pixels are always black.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
-    const source = iconSources?.[item.id] ?? subscriptionIconSource(item) ?? subscriptionBrand(item.name)?.icon;
+    const source = iconSources?.[item.id] ?? subscriptionIconSource(item);
     return source ? [[item.id, source]] : [];
   })), [items, iconSources]);
   const { colors, transparent, palette, neutralFilter } = useIconColors(sources);
