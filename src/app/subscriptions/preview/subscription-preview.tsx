@@ -8,6 +8,7 @@ import type { Subscription, SubscriptionPayment, SubscriptionStatus } from "@/li
 import { subscriptionBrand, subscriptionPreviewStats } from "@/lib/subscription-preview";
 import { subscriptionIconSource } from "@/lib/subscription-icon";
 import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
+import { trackSubscriptionScroll } from "@/lib/subscription-stack-scroll";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
 
@@ -38,18 +39,15 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   useEffect(() => {
     const node = rail.current;
     if (!refined || view !== "home" || !node) return;
-    let frame = 0;
     let width = 0;
     let maxLeft = 0;
     let cards: { slide: HTMLElement; center: number; width: number }[] = [];
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    function paint() {
-      frame = 0;
-      if (!node) return;
+    function paint(scrollLeft: number) {
       // Safari can report overscroll beyond either edge during its rubber-band gesture.
-      const boundedLeft = Math.max(0, Math.min(node.scrollLeft, maxLeft));
+      const boundedLeft = Math.max(0, Math.min(scrollLeft, maxLeft));
       // Keep the native rubber-band continuous, with restrained movement at the ends.
-      const left = boundedLeft + (node.scrollLeft - boundedLeft) * .25;
+      const left = boundedLeft + (scrollLeft - boundedLeft) * .25;
       const center = left + width / 2;
       let nearest = 0, distance = Infinity;
       const poses = cards.map((card, index) => {
@@ -73,7 +71,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       }
       setFocused(previous => previous === nearest ? previous : nearest);
     }
-    function schedule() { if (!frame) frame = requestAnimationFrame(paint); }
+    const scroll = trackSubscriptionScroll(node, paint);
     function measure() {
       width = node!.clientWidth;
       maxLeft = Math.max(0, node!.scrollWidth - width);
@@ -81,18 +79,16 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
         const target = child as HTMLElement;
         return { slide: faces.current!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
       });
-      schedule();
+      scroll.invalidate();
     }
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    node.addEventListener("scroll", schedule, { passive: true });
-    reducedMotion.addEventListener("change", schedule);
+    reducedMotion.addEventListener("change", scroll.invalidate);
     measure();
     return () => {
       observer.disconnect();
-      node.removeEventListener("scroll", schedule);
-      reducedMotion.removeEventListener("change", schedule);
-      cancelAnimationFrame(frame);
+      reducedMotion.removeEventListener("change", scroll.invalidate);
+      scroll.dispose();
     };
   }, [refined, view, featured]);
   const visible = featured.filter(item => status === "all" || item.status === status);
