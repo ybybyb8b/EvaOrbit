@@ -24,10 +24,6 @@ test("C follows release and snap between scroll events, stops at rest and cleans
     const tracker = trackSubscriptionScroll(node as unknown as HTMLElement, left => painted.push(left));
     step();
     assert.deepEqual(painted, [0]);
-    touch("touchstart", 1);
-    step(200);
-    assert.equal(frames.size, 1, "a stationary finger must not terminate tracking");
-    touch("touchend", 0);
     // Native scrollLeft advances without emitting another scroll event.
     for (const left of [40, 80, 110, 125, 132, 134, 134.5]) {
       node.scrollLeft = left; step();
@@ -65,6 +61,24 @@ test("C follows release and snap between scroll events, stops at rest and cleans
     assert.equal(visuals.at(-1), 293);
     assert.equal(nativeLeft, 293);
     assert.equal(frames.size, 0, "fractional settlement also stops at rest");
+
+    const finger = (type: string, x: number, y = 50, count = 1) => {
+      const event = Object.assign(new Event(type, { cancelable: true }), {
+        touches: count ? [{ identifier: 7, clientX: x, clientY: y }] : [],
+      });
+      gestureRail.dispatchEvent(event);
+      return event;
+    };
+    finger("touchstart", 220); step(200);
+    assert.equal(frames.size, 1, "a stationary finger keeps tracking alive");
+    assert.equal(finger("touchmove", 100).defaultPrevented, true, "horizontal touch owns scrolling");
+    step(); assert.equal(visuals.at(-1), 413, "touch drag follows the finger without pointer events");
+    step(120); finger("touchend", 100, 50, 0);
+    for (let i = 0; i < 180; i++) step();
+    assert.equal(visuals.at(-1), 293);
+    finger("touchstart", 220);
+    assert.equal(finger("touchmove", 220, 100).defaultPrevented, false, "vertical page scrolling is preserved");
+    finger("touchcancel", 220, 100, 0); step(200);
     fractional.dispose();
   } finally {
     for (const [key, descriptor] of originals) {

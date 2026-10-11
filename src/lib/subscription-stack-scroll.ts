@@ -10,7 +10,7 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
   let lastActivity = performance.now();
   let presentation: number | null = null;
   let settling: { from: number; to: number; velocity: number; started: number } | null = null;
-  let gesture: { id: number; x: number; y: number; from: number; max: number; dragging: boolean; samples: [number, number][] } | null = null;
+  let gesture: { id: number; x: number; y: number; from: number; max: number; dragging: boolean; touch: boolean; samples: [number, number][] } | null = null;
   let suppressClick = false;
   const nativeSnap = node.style.scrollSnapType;
   const eventRoot = node.ownerDocument?.defaultView ?? node;
@@ -59,25 +59,30 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
     } else settling = { from, to, velocity: velocity * 1000, started: performance.now() };
     invalidate();
   }
-  function pointerDown(event: PointerEvent) {
-    if (!event.isPrimary || event.button !== 0 || gesture) return;
+  function begin(id: number, x: number, y: number, touch: boolean) {
+    if (gesture) return;
     suppressClick = false;
     const from = presentation ?? node.scrollLeft;
     settling = null; presentation = from;
     node.style.scrollSnapType = "none";
     node.scrollLeft = from;
     touching = true;
-    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, from,
+    gesture = { id, x, y, from, touch,
       max: Math.max(0, node.scrollWidth - node.clientWidth), dragging: false, samples: [[performance.now(), from]] };
     wake();
   }
+  function pointerDown(event: PointerEvent) {
+    if (event.pointerType === "touch" || !event.isPrimary || event.button !== 0) return;
+    begin(event.pointerId, event.clientX, event.clientY, false);
+  }
   function pointerMove(event: PointerEvent) {
+    if (event.pointerType === "touch") return;
     if (!gesture || gesture.id !== event.pointerId) return;
     const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
     if (!gesture.dragging) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8 || Math.abs(dy) >= Math.abs(dx)) return;
       gesture.dragging = true;
-      node.setPointerCapture(event.pointerId);
+      if (!gesture.touch) node.setPointerCapture(event.pointerId);
     }
     const now = performance.now();
     presentation = Math.max(-node.clientWidth * .3, Math.min(gesture.max + node.clientWidth * .3, gesture.from - dx));
@@ -88,10 +93,11 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
   }
   function pointerEnd(input: Event) {
     const event = input as PointerEvent;
+    if (event.pointerType === "touch") return;
     if (!gesture || gesture.id !== event.pointerId) return;
     const ended = gesture;
     gesture = null; touching = false;
-    if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
+    if (!ended.touch && node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
     if (ended.dragging) {
       suppressClick = true;
       const now = performance.now(), first = ended.samples[0], last = ended.samples.at(-1)!;
@@ -111,9 +117,29 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
     }
   }
   function wheel() { settling = null; presentation = null; node.style.scrollSnapType = nativeSnap; wake(); }
-  function touchStart() { touching = true; wake(); }
+  // Safari can hand a scrollable rail to native touch handling and cancel pointer
+  // delivery. Own horizontal touch movement explicitly; vertical pans stay native.
+  function touchStart(event: TouchEvent) {
+    if (event.touches.length !== 1) {
+      if (gesture?.touch) pointerEnd(Object.assign(new Event("pointercancel"), { pointerId: gesture.id }));
+      return;
+    }
+    const touch = event.touches[0];
+    begin(touch.identifier, touch.clientX, touch.clientY, true);
+  }
+  function touchMove(event: TouchEvent) {
+    if (!gesture?.touch || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    if (touch.identifier !== gesture.id) return;
+    pointerMove({ pointerId: touch.identifier, clientX: touch.clientX, clientY: touch.clientY } as PointerEvent);
+    if (gesture.dragging && event.cancelable) event.preventDefault();
+  }
   function touchEnd(event: Event) {
-    touching = (event as TouchEvent).touches.length > 0;
+    const input = event as TouchEvent;
+    if (gesture?.touch && !Array.from(input.touches).some(touch => touch.identifier === gesture!.id)) {
+      pointerEnd(Object.assign(new Event(event.type === "touchcancel" ? "pointercancel" : "pointerup"), { pointerId: gesture.id }));
+    }
+    touching = input.touches.length > 0;
     wake();
   }
   node.addEventListener("scroll", wake, { passive: true });
@@ -124,8 +150,9 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
   eventRoot.addEventListener("pointercancel", pointerEnd);
   node.addEventListener("click", click, true);
   node.addEventListener("touchstart", touchStart, { passive: true });
-  node.addEventListener("touchend", touchEnd, { passive: true });
-  node.addEventListener("touchcancel", touchEnd, { passive: true });
+  node.addEventListener("touchmove", touchMove, { passive: false });
+  eventRoot.addEventListener("touchend", touchEnd, { passive: true });
+  eventRoot.addEventListener("touchcancel", touchEnd, { passive: true });
   invalidate();
   return {
     invalidate,
@@ -141,8 +168,9 @@ export function trackSubscriptionScroll(node: HTMLElement, paint: (left: number)
       node.removeEventListener("click", click, true);
       node.style.scrollSnapType = nativeSnap;
       node.removeEventListener("touchstart", touchStart);
-      node.removeEventListener("touchend", touchEnd);
-      node.removeEventListener("touchcancel", touchEnd);
+      node.removeEventListener("touchmove", touchMove);
+      eventRoot.removeEventListener("touchend", touchEnd);
+      eventRoot.removeEventListener("touchcancel", touchEnd);
     },
   };
 }
