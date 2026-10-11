@@ -1,4 +1,4 @@
-/** Quantized, alpha-aware sampling. Neutral/empty marks deliberately have no accent. */
+/** Quantized, alpha-aware sampling; monochrome ink shares ChatGPT's neutral accent. */
 export function iconHasTransparency(pixels: ArrayLike<number>): boolean {
   for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 250) return true;
   return false;
@@ -6,10 +6,17 @@ export function iconHasTransparency(pixels: ArrayLike<number>): boolean {
 
 export function representativeIconColor(pixels: ArrayLike<number>): string | null {
   const buckets = new Map<string, { weight: number; r: number; g: number; b: number }>();
+  const transparent = iconHasTransparency(pixels);
+  let monochromeInk = false;
   for (let i = 0; i + 3 < pixels.length; i += 4) {
     const [r, g, b, alpha] = [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    if (alpha < 160 || max < 35 || min > 235 || max - min < 30) continue;
+    if (alpha < 160) continue;
+    if (max - min < 30) {
+      if (min < 235 || transparent) monochromeInk = true;
+      continue;
+    }
+    if (max < 35 || min > 235) continue;
     const weight = alpha / 255 * (1 + (max - min) / 255);
     const key = `${r >> 5}:${g >> 5}:${b >> 5}`;
     const bucket = buckets.get(key) ?? { weight: 0, r: 0, g: 0, b: 0 };
@@ -17,7 +24,7 @@ export function representativeIconColor(pixels: ArrayLike<number>): string | nul
     buckets.set(key, bucket);
   }
   const winner = [...buckets.values()].sort((a, b) => b.weight - a.weight)[0];
-  return winner ? `#${[winner.r, winner.g, winner.b].map(value => Math.round(value / winner.weight).toString(16).padStart(2, "0")).join("")}` : null;
+  return winner ? `#${[winner.r, winner.g, winner.b].map(value => Math.round(value / winner.weight).toString(16).padStart(2, "0")).join("")}` : monochromeInk ? "#000000" : null;
 }
 
 type RGB = [number, number, number];

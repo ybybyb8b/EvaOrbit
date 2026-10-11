@@ -7,6 +7,7 @@ import { useLocale } from "@/components/locale-controller";
 import type { Subscription, SubscriptionPayment, SubscriptionStatus } from "@/lib/types";
 import { subscriptionBrand, subscriptionPreviewStats } from "@/lib/subscription-preview";
 import { subscriptionIconSource } from "@/lib/subscription-icon";
+import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
 
@@ -45,31 +46,28 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       frame = 0;
       if (!node) return;
       // Safari can report overscroll beyond either edge during its rubber-band gesture.
-      const left = Math.max(0, Math.min(node.scrollLeft, maxLeft));
+      const boundedLeft = Math.max(0, Math.min(node.scrollLeft, maxLeft));
+      // Keep the native rubber-band continuous, with restrained movement at the ends.
+      const left = boundedLeft + (node.scrollLeft - boundedLeft) * .25;
       const center = left + width / 2;
       let nearest = 0, distance = Infinity;
       const poses = cards.map((card, index) => {
         const delta = card.center - center;
         if (Math.abs(delta) < distance) { nearest = index; distance = Math.abs(delta); }
         const progress = delta / card.width;
-        return { card, amount: Math.abs(progress), progress };
+        return { card, progress };
       });
       // The faces live outside the native scrolling layer: no asynchronous counter-scroll.
-      for (const { card, amount, progress } of poses) {
-        if (amount >= 1.6) {
+      for (const { card, progress } of poses) {
+        const pose = subscriptionStackPose(progress, reducedMotion.matches);
+        // Hide only after the WHOLE card is outside the viewport, never mid-transition.
+        if ((Math.abs(pose.x) - pose.scale / 2) * card.width > width / 2 + 12) {
           if (card.slide.style.visibility !== "hidden") card.slide.style.visibility = "hidden";
           continue;
         }
-        const depth = Math.min(1, amount);
-        card.slide.style.transform = `translate3d(${progress * card.width * .38}px,${reducedMotion.matches ? 0 : depth * 18}px,0) scale(${reducedMotion.matches ? 1 : 1 - depth * .07})`;
-        // The viewport-facing edge is cut straight; only the inward card corners round.
-        const corner = `calc(var(--radius-content) * ${depth})`;
-        const corners = progress < 0 ? `0 ${corner} ${corner} 0` : `${corner} 0 0 ${corner}`;
-        card.slide.style.clipPath = depth === 0 ? "none" : `inset(0 ${depth * 26}% round ${corners})`;
+        card.slide.style.transform = `translate3d(${pose.x * card.width}px,${pose.y}px,0) scale(${pose.scale})`;
         card.slide.style.visibility = "visible";
-        card.slide.style.opacity = String(Math.min(1, (1.6 - amount) / .6));
-        card.slide.style.setProperty("--preview-content-opacity", String(Math.max(0, 1 - amount * 2)));
-        card.slide.style.zIndex = String(100 - Math.round(amount * 50));
+        card.slide.style.zIndex = String(pose.zIndex);
       }
       setFocused(previous => previous === nearest ? previous : nearest);
     }

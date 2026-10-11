@@ -212,13 +212,13 @@
 .page[data-refined][data-view="home"] .railControls { margin-top: -18px; }
 .page[data-refined][data-view="home"] .featured { margin: 16px 0 0; }
 .stackStage { position: relative; isolation: isolate; height: calc(clamp(166px,43vw,224px) + 40px); }
-.stackFaces { position: absolute; inset: 0; pointer-events: none; }
+.stackFaces { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .stackFace { position: absolute; top: 10px; left: 10%; width: 80%; will-change: transform; visibility: hidden; }
 .stackFace[data-focused="true"] { visibility: visible; }
 .stackTrack { position: relative; z-index: 200; height: 100%; display: flex; overflow-x: auto; padding-inline: 10%; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; overflow-anchor: none; }
 .stackTrack::-webkit-scrollbar { display: none; }
 .stackTarget { flex: 0 0 100%; height: calc(100% - 40px); margin-top: 10px; scroll-snap-align: center; scroll-snap-stop: always; }
-.stackFace[data-focused="true"] .cardContent { opacity: var(--preview-content-opacity,1); }
+.stackFaces .cardContent { opacity: 1; }
 .stackStage:has(.stackTarget[data-focused="true"]:focus-visible) .stackFace[data-focused="true"] .featureCard { outline: 2px solid var(--accent-primary); outline-offset: -3px; }
 .page .stackTarget:focus-visible { outline: none; }
 .page[data-refined][data-view="home"] .row { padding: 11px 12px; }

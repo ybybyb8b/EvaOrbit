@@ -6,8 +6,16 @@ test("icon sampling ignores transparency and neutral backgrounds and is determin
   const pixels = [255,255,255,255, 0,0,0,255, 255,0,0,0, 210,40,55,255, 210,40,55,255, 30,90,200,255];
   assert.equal(representativeIconColor(pixels), "#d22837");
   assert.equal(representativeIconColor(pixels), representativeIconColor(pixels));
-  assert.equal(representativeIconColor([0,0,0,255, 255,255,255,255]), null);
+  assert.equal(representativeIconColor([0,0,0,255, 255,255,255,255]), "#000000");
   assert.equal(representativeIconColor([210,40,55,0]), null);
+});
+
+test("black, gray and transparent white marks share the neutral ChatGPT palette", () => {
+  assert.equal(representativeIconColor([0,0,0,255,0,0,0,0]), "#000000");
+  assert.equal(representativeIconColor([120,120,120,255]), "#000000");
+  assert.equal(representativeIconColor([255,255,255,255,0,0,0,0]), "#000000");
+  assert.equal(representativeIconColor([255,255,255,255]), null);
+  assert.equal(representativeIconColor([0,0,0,0]), null);
 });
 
 test("brand tints keep main and auxiliary text readable on both gradient stops", () => {
