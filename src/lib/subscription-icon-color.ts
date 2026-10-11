@@ -1,4 +1,9 @@
 /** Quantized, alpha-aware sampling. Neutral/empty marks deliberately have no accent. */
+export function iconHasTransparency(pixels: ArrayLike<number>): boolean {
+  for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 250) return true;
+  return false;
+}
+
 export function representativeIconColor(pixels: ArrayLike<number>): string | null {
   const buckets = new Map<string, { weight: number; r: number; g: number; b: number }>();
   for (let i = 0; i + 3 < pixels.length; i += 4) {

@@ -797,6 +797,8 @@ export type SubscriptionIntervalUnit = "day" | "week" | "month" | "year";
 export interface Subscription {
   id: number;
   name: string;
+  /** Versioned private image key; absent on records created before icon uploads. */
+  iconPath?: string;
   currentAmountMinor: number;
   currency: string;
   billingIntervalValue: number;

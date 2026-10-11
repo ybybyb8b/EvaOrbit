@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import type { Subscription, SubscriptionPayment, SubscriptionStatus } from "@/lib/types";
 import { subscriptionBrand, subscriptionPreviewStats } from "@/lib/subscription-preview";
+import { subscriptionIconSource } from "@/lib/subscription-icon";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
 
@@ -22,12 +23,12 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const [month, setMonth] = useState(today.slice(0, 7));
   const rail = useRef<HTMLDivElement>(null);
   const faces = useRef<HTMLDivElement>(null);
-  // Preview-only image sources; does not invent an icon field in the subscription model.
+  // Stored uploads override built-in brand marks; iconSources also supports isolated QA.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
-    const source = iconSources?.[item.id] ?? subscriptionBrand(item.name)?.icon;
+    const source = iconSources?.[item.id] ?? subscriptionIconSource(item) ?? subscriptionBrand(item.name)?.icon;
     return source ? [[item.id, source]] : [];
   })), [items, iconSources]);
-  const { colors, palette, neutralFilter } = useIconColors(sources);
+  const { colors, transparent, palette, neutralFilter } = useIconColors(sources);
   const stats = useMemo(() => subscriptionPreviewStats(items, payments, today), [items, payments, today]);
   const selectedCurrency = currency || stats.currencies[0] || "CNY";
   const active = items.filter(item => item.status === "active");
@@ -108,11 +109,12 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const spend = (item: Subscription) => Object.entries(item.spendByCurrency).map(([key, value]) => money(value, key, english)).join(" / ") || t("Not recorded", "尚未记录");
   function mark(item: Subscription) {
     const brand = subscriptionBrand(item.name);
-    if (iconSources?.[item.id]) return <span key={iconSources[item.id]} className={styles.brandIcon} aria-hidden="true">
+    const uploaded = iconSources?.[item.id] ?? subscriptionIconSource(item);
+    if (uploaded) return <span key={uploaded} className={`${styles.brandIcon} ${styles.uploadedIcon}`} data-transparent={transparent[item.id]} aria-hidden="true">
       <b hidden>{item.name.slice(0, 1).toUpperCase()}</b>
       {/* Tiny unoptimized source is also the input to the canvas sampler. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={iconSources[item.id]} alt="" style={colors[item.id] === null ? { filter: neutralFilter } : undefined} ref={node => { if (node?.complete && !node.naturalWidth) { node.style.display = "none"; node.previousElementSibling?.removeAttribute("hidden"); } }} onError={event => { event.currentTarget.style.display = "none"; event.currentTarget.previousElementSibling?.removeAttribute("hidden"); }} />
+      <img src={uploaded} alt="" style={transparent[item.id] && colors[item.id] === null ? { filter: neutralFilter } : undefined} ref={node => { if (node?.complete && !node.naturalWidth) { node.style.display = "none"; node.previousElementSibling?.removeAttribute("hidden"); } }} onError={event => { event.currentTarget.style.display = "none"; event.currentTarget.previousElementSibling?.removeAttribute("hidden"); }} />
     </span>;
     return brand ? <span className={styles.brandIcon} aria-hidden="true"><span style={{ maskImage: `url("${brand.icon}")`, WebkitMaskImage: `url("${brand.icon}")`, backgroundColor: ["#000000", "#181717"].includes(brand.color) ? "currentColor" : brand.color }} /></span> : <span className={styles.monogram} aria-hidden="true">{item.name.slice(0, 1).toUpperCase()}</span>;
   }
@@ -146,7 +148,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const cardLabel = (item: Subscription) => `${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`;
   function featuredCard(item: Subscription, decorative = false) {
     const brand = subscriptionBrand(item.name);
-    const accent = colors[item.id] ?? (iconSources?.[item.id] ? null : brand?.color ?? null);
+    const accent = colors[item.id] ?? (iconSources?.[item.id] || subscriptionIconSource(item) ? null : brand?.color ?? null);
     return <Link href={`/subscriptions/${item.id}`} className={styles.featureCard} tabIndex={decorative ? -1 : undefined} style={{ "--preview-tone": accent ?? "var(--accent-primary)", ...palette(accent) } as CSSProperties} aria-label={cardLabel(item)}>
       <div className={styles.cardContent}>
         <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>

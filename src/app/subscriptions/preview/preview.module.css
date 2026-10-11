@@ -39,6 +39,10 @@
 .brandIcon > span { width: 100%; height: 100%; mask-size: contain; mask-repeat: no-repeat; mask-position: center; -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; }
 .brandIcon { position: relative; }
 .brandIcon > img { width: 100%; height: 100%; object-fit: contain; position: absolute; }
+.brandIcon.uploadedIcon { border-radius: 11px; overflow: hidden; }
+.brandIcon.uploadedIcon[data-transparent="true"] { border-radius: 0; overflow: visible; }
+.uploadedIcon > img { object-fit: cover; border-radius: 11px; }
+.uploadedIcon[data-transparent="true"] > img { object-fit: contain; border-radius: 0; }
 .brandIcon > b { color: inherit; font-weight: 400; font-size: 22px; }
 .cardCycle { display: flex; flex-direction: column; gap: 3px; font-size: 16px; }
 .cardCycle small { color: var(--text-secondary); font-size: 14px; }

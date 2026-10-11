@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { iconContrast, representativeIconColor, subscriptionCardPalette } from "@/lib/subscription-icon-color";
+import { iconContrast, iconHasTransparency, representativeIconColor, subscriptionCardPalette } from "@/lib/subscription-icon-color";
 import type { CSSProperties } from "react";
 
-const cache = new Map<string, Promise<string | null>>();
+type IconSample = { color: string | null; transparent: boolean };
+const cache = new Map<string, Promise<IconSample | null>>();
 function extract(source: string) {
   const existing = cache.get(source);
   if (existing) return existing;
-  const result = new Promise<string | null>(resolve => {
+  const result = new Promise<IconSample | null>(resolve => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     const timeout = window.setTimeout(() => { image.src = ""; resolve(null); }, 5000);
@@ -19,7 +20,8 @@ function extract(source: string) {
         const context = canvas.getContext("2d", { willReadFrequently: true });
         if (!context) { resolve(null); return; }
         context.drawImage(image, 0, 0, 32, 32);
-        resolve(representativeIconColor(context.getImageData(0, 0, 32, 32).data));
+        const pixels = context.getImageData(0, 0, 32, 32).data;
+        resolve({ color: representativeIconColor(pixels), transparent: iconHasTransparency(pixels) });
       } catch { resolve(null); }
     };
     image.onerror = () => { clearTimeout(timeout); resolve(null); };
@@ -32,11 +34,13 @@ function extract(source: string) {
 }
 
 export function useIconColors(sources: Record<number, string>) {
-  const [colors, setColors] = useState<Record<number, string | null>>({});
+  const [samples, setSamples] = useState<Record<number, { source: string; sample: IconSample | null }>>({});
+  const colors = Object.fromEntries(Object.entries(sources).map(([id, source]) => [id, samples[Number(id)]?.source === source ? samples[Number(id)].sample?.color ?? null : undefined]));
+  const transparent = Object.fromEntries(Object.entries(sources).map(([id, source]) => [id, samples[Number(id)]?.source === source && samples[Number(id)].sample?.transparent === true]));
   const [theme, setTheme] = useState<{ surface: [number,number,number]; end: [number,number,number]; text: [number,number,number] } | null>(null);
   useEffect(() => {
     let alive = true;
-    Promise.all(Object.entries(sources).map(async ([id, source]) => [id, await extract(source)] as const)).then(entries => { if (alive) setColors(Object.fromEntries(entries)); });
+    Promise.all(Object.entries(sources).map(async ([id, source]) => [id, { source, sample: await extract(source) }] as const)).then(entries => { if (alive) setSamples(Object.fromEntries(entries)); });
     return () => { alive = false; };
   }, [sources]);
   useEffect(() => {
@@ -64,5 +68,5 @@ export function useIconColors(sources: Record<number, string>) {
     return Object.fromEntries(Object.entries(values).map(([key,value]) => [`--preview-${key}`, `rgb(${value.join(" ")})`])) as CSSProperties;
   }
   const neutralFilter = theme && iconContrast(theme.text, [0,0,0]) > iconContrast(theme.text, [255,255,255]) ? "brightness(0) invert(1)" : "brightness(0)";
-  return { colors, palette, neutralFilter };
+  return { colors, transparent, palette, neutralFilter };
 }
