@@ -24,6 +24,17 @@ test("depth handoff happens while the two complete card faces are separated", ()
   assert.ok(pose(-.75).zIndex < pose(.25).zIndex);
 });
 
+test("A variant changes each card's depth once per slide, including reversal", () => {
+  const outgoing = Array.from({ length: 1001 }, (_, i) => pose(-i / 1000).zIndex);
+  const incoming = Array.from({ length: 1001 }, (_, i) => pose(1 - i / 1000).zIndex);
+  const changes = (values: number[]) => values.slice(1).filter((value, i) => value !== values[i]).length;
+  assert.equal(changes(outgoing), 1);
+  assert.equal(changes(incoming), 1);
+  assert.equal(changes([...outgoing, ...outgoing.toReversed()]), 2);
+  assert.ok(pose(-.499).zIndex > pose(.501).zIndex);
+  assert.ok(pose(-.501).zIndex < pose(.499).zIndex);
+});
+
 test("drag, snap and reversal share a continuous path, including resting neighbours", () => {
   for (let progress = -2; progress < 2; progress += .001) {
     const current = pose(progress), next = pose(progress + .001);

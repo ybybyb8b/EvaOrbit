@@ -11,6 +11,7 @@ export function subscriptionStackPose(progress: number, reducedMotion = false) {
     x: Math.sign(progress) * travel,
     y: reducedMotion ? 0 : depth * 18,
     scale: reducedMotion ? 1 : 1 - depth * .07,
-    zIndex: 100 - Math.round(Math.min(amount, 3) * 30),
+    // Stable depth bands: exchange order at half a slide, when faces are apart.
+    zIndex: 100 - Math.floor(Math.min(amount, 3) + .5),
   };
 }

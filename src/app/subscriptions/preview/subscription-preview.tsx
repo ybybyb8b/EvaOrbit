@@ -68,7 +68,8 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
         }
         card.slide.style.transform = `translate3d(${pose.x * card.width}px,${pose.y}px,0) scale(${pose.scale})`;
         card.slide.style.visibility = "visible";
-        card.slide.style.zIndex = String(pose.zIndex);
+        const zIndex = String(pose.zIndex);
+        if (card.slide.style.zIndex !== zIndex) card.slide.style.zIndex = zIndex;
       }
       setFocused(previous => previous === nearest ? previous : nearest);
     }
