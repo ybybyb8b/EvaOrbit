@@ -200,6 +200,41 @@ test("Diagnostics expose a disabled Calendar source without treating it as an em
   f.linkEvent(1); const result = await f.run({ calendar: "off", list: "two_way" });
   assert.equal(result.calendarDiagnostics?.readEvents, 0); assert.match(eventKitSyncDiagnosticText(result), /事件所在日历设为 Import only/); assert.equal(f.events.size, 1);
 }));
+
+test("Reminders diagnostics separate bidirectional changes from Calendar and reset on an unchanged retry", async () => withFixture(async f => {
+  f.linkTask(); f.linkEvent(2);
+  f.tasks.set(1, { ...f.tasks.get(1), notes: "EO notes" });
+  f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Apple title" });
+  f.apple.set("event-2", { ...f.apple.get("event-2"), title: "Calendar update" });
+  const result = await f.run();
+  assert.equal(result.imported, 2);
+  assert.deepEqual(result.reminderDiagnostics, { selectedLists: 1, readReminders: 1, imported: 1, exported: 1, merged: 1, conflicts: 0, excludedReminders: 0 });
+  assert.match(eventKitSyncDiagnosticText(result), /Reminders：读取 1 个列表、1 条提醒，从 Apple 同步到 EO 1 条，写入 Apple 1 条，双向合并 1 条，0 个冲突/);
+  const retry = await f.run();
+  assert.equal(retry.reminderDiagnostics?.imported, 0);
+  assert.equal(retry.reminderDiagnostics?.exported, 0);
+  assert.equal(retry.reminderDiagnostics?.merged, 0);
+}));
+
+test("Reminders diagnostics report their own conflicts and excluded reminders", async () => withFixture(async f => {
+  f.linkTask(); f.linkEvent(2);
+  f.tasks.set(1, { ...f.tasks.get(1), title: "EO title" });
+  f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Apple title" });
+  f.events.set(2, { ...f.events.get(2), title: "EO Calendar title" });
+  f.apple.set("event-2", { ...f.apple.get("event-2"), title: "Apple Calendar title" });
+  f.apple.set("excluded", { title: "续火花", calendarItemIdentifier: "excluded", calendarIdentifier: "list" });
+  const result = await f.run();
+  assert.equal(result.conflicts.length, 2);
+  assert.equal(result.reminderDiagnostics?.conflicts, 1);
+  assert.equal(result.reminderDiagnostics?.excludedReminders, 1);
+  assert.match(eventKitSyncDiagnosticText(result), /有 1 条标题包含“续火花”/);
+}));
+
+test("Reminders diagnostics explain when no source or route is enabled", async () => withFixture(async () => {
+  const result = await synchronizeEventKit(status, { calendar: "off", list: "off" });
+  assert.deepEqual(result.reminderDiagnostics, { selectedLists: 0, readReminders: 0, imported: 0, exported: 0, merged: 0, conflicts: 0, excludedReminders: 0 });
+  assert.match(eventKitSyncDiagnosticText(result), /尚未启用 Reminder 来源或设置 EO → Reminder List/);
+}));
 test("Mapped Calendar objects outside both batch windows still update the original EO ID", async () => withFixture(async f => {
   f.linkEvent(1); f.batchMissing.add("event-1"); f.listMissing.add(1);
   f.apple.set("event-1", { ...f.apple.get("event-1"), title: "Moved", startAt: "2030-01-01T01:00:00Z", endAt: "2030-01-01T02:00:00Z" });
