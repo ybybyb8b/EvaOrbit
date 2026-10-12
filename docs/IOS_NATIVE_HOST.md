@@ -298,6 +298,12 @@ bash scripts/ios/xtool-install.sh /mnt/d/下载/EvaOrbitHost-ad-hoc.ipa
 
 ## 场景 B：7 天后续签 / 重新 install
 
+安装脚本现在会在 `xtool install` 成功后，自动记录安装时间并更新一条「重新签名安装 EO Host」任务，默认在安装后第 6 天提醒。依赖 Windows 或 WSL 的 Node.js 24+，以及本仓库 `.env.local` 中可连接的 `DATABASE_URL`；多账户需设置 `EVAORBIT_ALLOWED_EMAIL`。提醒写入使用现有任务/提醒表的事务，不改变签名和传输链。
+
+安装成功后打开 Host，并保持 Apple Integration 中 Tasks 路由及目标列表的双向同步启用，任务才会自动同步为 Apple 提醒事项。每次重装更新同一条任务及关联的 Apple Reminder，不新增每周重复系列。实际签名有效期从 profile 签发时起算，脚本当前仅按安装后 7 天估算，未读取重签后的真实到期时间。
+
+数据库暂时不可达时，安装结果仍然成功，安装时间保存在 Git 忽略的 `tmp/ios-host-installation.json`。恢复连接后，在仓库根目录执行 `node scripts/ios/host-renewal-reminder.mjs --retry`；它沿用记录中的安装日期。直接调用 `xtool install` 绕过包装脚本不会记录时间或更新提醒。尚无安装记录时不得用重试当作一次新安装。
+
 免费签名需要周期性重新安装。续签不需要重新构建 Native Host；可以继续使用同一个可信 IPA，除非 EvaOrbit Native Host 代码已经更新。
 
 最短流程：

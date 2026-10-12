@@ -1578,6 +1578,11 @@ if (!hasV76) {
   database.exec("BEGIN; ALTER TABLE subscriptions ADD COLUMN icon_path TEXT NOT NULL DEFAULT ''; INSERT INTO migrations(version) VALUES(76); COMMIT;");
 }
 
+const hasV77=database.prepare("SELECT 1 FROM migrations WHERE version=77").get();
+if(!hasV77)database.exec("BEGIN; CREATE TABLE bark_notification_settings(user_id TEXT PRIMARY KEY DEFAULT 'local',enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN(0,1)),ciphertext TEXT NOT NULL,iv TEXT NOT NULL,auth_tag TEXT NOT NULL); INSERT INTO migrations(version) VALUES(77); COMMIT;");
+export function getBarkSettings():import("./push/bark").BarkSettings|null{const row=database.prepare("SELECT * FROM bark_notification_settings WHERE user_id='local'").get();return row?{enabled:Boolean(row.enabled),ciphertext:String(row.ciphertext),iv:String(row.iv),authTag:String(row.auth_tag)}:null;}
+export function saveBarkSettings(input:import("./push/bark").BarkSettings){database.prepare("INSERT INTO bark_notification_settings(user_id,enabled,ciphertext,iv,auth_tag) VALUES('local',?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled,ciphertext=excluded.ciphertext,iv=excluded.iv,auth_tag=excluded.auth_tag").run(Number(input.enabled),input.ciphertext,input.iv,input.authTag);}
+
 
 function taskReminderFromRow(row: Record<string, unknown>): TaskReminder {
   return { id:Number(row.id),taskId:Number(row.task_id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),triggerType:row.trigger_type as TaskReminder["triggerType"],absoluteDate:row.absolute_date?String(row.absolute_date):null,absoluteTime:row.absolute_time?String(row.absolute_time).slice(0,5):null,relativeTo:row.relative_to as TaskReminder["relativeTo"],offsetMinutes:row.offset_minutes===null?null:Number(row.offset_minutes),timezone:String(row.timezone),repeatWhileOverdue:Boolean(row.repeat_while_overdue),deliveryChannel:(row.delivery_channel??"pwa") as TaskReminder["deliveryChannel"],createdAt:String(row.created_at),updatedAt:String(row.updated_at) };

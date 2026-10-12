@@ -221,6 +221,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async listNotificationDeliveries(limit) { return sqlite.listNotificationDeliveries(limit); }, async createNotificationDelivery(input) { return sqlite.createNotificationDelivery(input); },
   async listMealReminderRules() { return sqlite.listMealReminderRules(); }, async updateMealReminderRules(input) { return sqlite.updateMealReminderRules(input); },
   async listPushSubscriptions() { return sqlite.listPushSubscriptions(); }, async upsertPushSubscription(input) { return sqlite.upsertPushSubscription(input); }, async deletePushSubscription(endpoint) { return sqlite.deletePushSubscription(endpoint); },
+  async getBarkSettings(){return sqlite.getBarkSettings();},async saveBarkSettings(input){sqlite.saveBarkSettings(input);},
   async getNutritionSettings(date) { return sqlite.getNutritionSettings(date); },
   async listNutritionSettings(limit) { return sqlite.listNutritionSettings(limit); },
   async updateNutritionSettings(date, input) { sqlite.updateNutritionSettings(date, input); },

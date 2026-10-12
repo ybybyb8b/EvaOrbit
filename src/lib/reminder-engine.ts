@@ -69,15 +69,23 @@ export function notificationSendAt(reminder: Pick<Reminder, "nextDueAt" | "snooz
   return scheduled.toISOString();
 }
 
-export function appleOwnsInitialNotification(reminder:Pick<Reminder,"nextDueAt"|"overdueAfter"|"repeatWhileOverdue"|"deliveryChannel">,now=new Date()){
-  const boundary=reminder.overdueAfter??reminder.nextDueAt;
+type OverdueSchedule = Pick<Reminder,"nextDueAt"> & Partial<Pick<Reminder,"overdueAfter"|"sourceType">>;
+
+export function notificationOverdueBoundary(reminder:OverdueSchedule){
+  // Tasks can have an independent Due (or no Due); other sources become overdue at their next occurrence.
+  if(reminder.sourceType==="task_reminder"||reminder.sourceType==="task_due")return reminder.overdueAfter===undefined?reminder.nextDueAt:reminder.overdueAfter;
+  return reminder.overdueAfter??reminder.nextDueAt;
+}
+
+export function appleOwnsInitialNotification(reminder:Pick<Reminder,"nextDueAt"|"overdueAfter"|"repeatWhileOverdue"|"deliveryChannel"> & Partial<Pick<Reminder,"sourceType">>,now=new Date()){
+  const boundary=notificationOverdueBoundary(reminder);
   return reminder.deliveryChannel==="apple_reminders"&&(!reminder.repeatWhileOverdue||!boundary||now.toISOString()<=boundary);
 }
 
-export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & { overdueAfter?: string | null }, now = new Date()) {
+export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & OverdueSchedule, now = new Date()) {
   const initial = notificationSendAt(reminder);
   if (!initial || !reminder.nextDueAt) return null;
-  const overdueBoundary=reminder.overdueAfter===undefined?reminder.nextDueAt:reminder.overdueAfter;
+  const overdueBoundary=notificationOverdueBoundary(reminder);
   if (!reminder.repeatWhileOverdue || !overdueBoundary || now.getTime() < new Date(overdueBoundary).getTime()) return initial;
   if (reminder.snoozedUntil) return initial;
   const due = zonedDateParts(reminder.nextDueAt, reminder.timezone);
@@ -87,7 +95,7 @@ export function notificationDeliverySlot(reminder: Pick<Reminder, "nextDueAt" | 
   return new Date(daily).getTime() <= now.getTime() ? daily : null;
 }
 
-export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & { overdueAfter?: string | null }, now = new Date()) {
+export function notificationShouldSend(reminder: Pick<Reminder, "nextDueAt" | "snoozedUntil" | "leadTimeMinutes" | "lastNotifiedAt" | "dueHasExplicitTime" | "timezone" | "repeatWhileOverdue"> & OverdueSchedule, now = new Date()) {
   const scheduledAt = notificationDeliverySlot(reminder, now);
   return Boolean(scheduledAt) && new Date(scheduledAt!).getTime() <= now.getTime() && (!reminder.lastNotifiedAt || new Date(reminder.lastNotifiedAt).getTime() < new Date(scheduledAt!).getTime());
 }

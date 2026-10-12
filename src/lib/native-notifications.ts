@@ -1,5 +1,5 @@
 import type { NativeNotificationSchedule, ScheduledNotification } from "./types";
-import { notificationSendAt } from "./reminder-engine.ts";
+import { notificationOverdueBoundary, notificationSendAt } from "./reminder-engine.ts";
 import { reminderNotificationCopy } from "./notification-copy.ts";
 import { shiftDate, zonedDateParts, zonedDateTimeToUtc } from "./time.ts";
 import { reminderSourceAllows } from "./reminder-source-registry.ts";
@@ -15,6 +15,7 @@ export function isManagedNativeNotification(id: string) {
 }
 
 export function nativeReminderNotification(item: ScheduledNotification, locale = "zh-CN", now = new Date()): NativeNotificationSchedule | null {
+  if(item.deliveryChannel==="apple_reminders")return null;
   const triggerAt = notificationSendAt(item);
   if (!item.isActive || !reminderSourceAllows(item.sourceType, "native_local") || !triggerAt || new Date(triggerAt).getTime() <= now.getTime()) return null;
   const copy = reminderNotificationCopy(item, locale);
@@ -27,7 +28,7 @@ export function nativeReminderNotifications(item: ScheduledNotification, locale 
   const initial = nativeReminderNotification(item, locale, now);
   if (!item.nextDueAt) return initial ? [initial] : [];
   const reminderTime = zonedDateParts(item.nextDueAt, item.timezone).time;
-  const overdueBoundary=item.overdueAfter===undefined?item.nextDueAt:item.overdueAfter;
+  const overdueBoundary=notificationOverdueBoundary(item);
   if(!overdueBoundary)return initial?[initial]:[];
   const overdueDate=zonedDateParts(overdueBoundary,item.timezone).date;
   const today = zonedDateParts(now, item.timezone).date;

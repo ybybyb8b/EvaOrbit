@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getBarkStatus } from "@/lib/services/bark";
 import { apiError } from "@/lib/api";
 import { listNotificationHistory, listReminders, listScheduledNotifications } from "@/lib/services/reminder";
 import { listCatRoutines } from "@/lib/services/cat-routine";
@@ -12,15 +13,16 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const now = new Date();
-    const [upcoming, routines, reminders, history, mealRules, preferences] = await Promise.all([
+    const [upcoming, routines, reminders, history, mealRules, preferences, bark] = await Promise.all([
       listScheduledNotifications(),
       listCatRoutines(),
       listReminders(),
       listNotificationHistory(),
       listMealReminderRules(),
       getUiPreferences(),
+      getBarkStatus(),
     ]);
-    const nativeNotifications = buildNativeNotificationSchedules({ upcoming, locale: preferences.uiLanguage === "en" ? "en" : "zh-CN", now });
+    const nativeNotifications = bark.enabled ? [] : buildNativeNotificationSchedules({ upcoming, locale: preferences.uiLanguage === "en" ? "en" : "zh-CN", now });
     return NextResponse.json({ upcoming, routines, reminders: reminders.filter(item => reminderSourceDefinition(item.sourceType).projectionOwner === "reminder"), history, mealRules, nativeNotifications });
   } catch (error) { return apiError(error); }
 }

@@ -111,6 +111,8 @@ bash scripts/ios/xtool-install.sh "/mnt/d/下载/EvaOrbitHost-ad-hoc.ipa"
 
 脚本会再次检查 transport，然后调用 patched xtool 重签并安装。
 
+安装成功后还会自动记录时间，使用 `.env.local` 中的 `DATABASE_URL` 更新「重新签名安装 EO Host」任务，在 6 天后提醒。需要 Node.js 24+（优先使用 Windows 的 `node.exe`）；多账户设置 `EVAORBIT_ALLOWED_EMAIL`。打开 Host，确认 Apple Integration 的 Tasks 路由及目标列表已启用双向同步，任务即可进入 Apple 提醒事项。写入失败时安装不受影响，恢复数据库连接后可在仓库根目录运行 `node scripts/ios/host-renewal-reminder.mjs --retry`，它保留原安装日期。
+
 ## 6. 安装后检查
 
 在 iPhone 上：

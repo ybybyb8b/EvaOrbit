@@ -1,4 +1,6 @@
 import "server-only";
+import { resolveAiApiKey } from "../ai-secret";
+import { sendBark } from "./bark";
 
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -21,6 +23,13 @@ function createDeliveryClient(url: string, secret: string) {
 type DeliveryClient = ReturnType<typeof createDeliveryClient>;
 
 async function sendToUser(client: DeliveryClient, userId: string, payload: EvaPushPayload) {
+  const bark = await client.from("bark_notification_settings").select("enabled,ciphertext,iv,auth_tag").eq("user_id", userId).maybeSingle();
+  if (bark.error) throw new Error("Could not read notification channel settings");
+  if (bark.data?.enabled) {
+    const delivered = await sendBark(resolveAiApiKey({ ciphertext: bark.data.ciphertext, iv: bark.data.iv, authTag: bark.data.auth_tag }), payload);
+    return { delivered, sent: Number(delivered) };
+  }
+  if (!process.env.EVAORBIT_VAPID_PUBLIC_KEY || !process.env.EVAORBIT_VAPID_PRIVATE_KEY || !process.env.EVAORBIT_VAPID_SUBJECT) return { delivered: false, sent: 0 };
   const result = await client.from("push_subscriptions").select("*").eq("user_id", userId);
   if (result.error) return { delivered: false, sent: 0 };
   let delivered = false;
@@ -116,6 +125,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
     timezone: String(row.timezone ?? "Asia/Shanghai"),
     repeatWhileOverdue: Boolean(row.repeat_while_overdue),
     overdueAfter: row.overdue_after ? String(row.overdue_after) : null,
+    sourceType: row.source_type ? String(row.source_type) : null,
   }, now));
   const preferencesResult = due.length
     ? await client.from("ui_preferences").select("user_id,ui_language").in("user_id", [...new Set(due.map((row) => String(row.user_id)))])
@@ -123,7 +133,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
   const languages = new Map(((preferencesResult.data ?? []) as Row[]).map((row) => [String(row.user_id), String(row.ui_language)]));
   let sent = 0;
   for (const reminder of due) {
-    if(appleOwnsInitialNotification({deliveryChannel:reminder.delivery_channel as "pwa"|"apple_reminders"|undefined,repeatWhileOverdue:Boolean(reminder.repeat_while_overdue),overdueAfter:reminder.overdue_after?String(reminder.overdue_after):null,nextDueAt:reminder.next_due_at?String(reminder.next_due_at):null},now))continue;
+    if(appleOwnsInitialNotification({sourceType:reminder.source_type?String(reminder.source_type):null,deliveryChannel:reminder.delivery_channel as "pwa"|"apple_reminders"|undefined,repeatWhileOverdue:Boolean(reminder.repeat_while_overdue),overdueAfter:reminder.overdue_after?String(reminder.overdue_after):null,nextDueAt:reminder.next_due_at?String(reminder.next_due_at):null},now))continue;
     if(String(reminder.source_type??"")==="task_reminder"&&reminder.source_id){const rule=await client.from("task_reminders").select("delivery_channel,repeat_while_overdue").eq("id",Number(reminder.source_id)).maybeSingle();if(rule.error)throw new Error("Could not read Task reminder ownership");if(rule.data?.delivery_channel==="apple_reminders"&&(!rule.data.repeat_while_overdue||!reminder.overdue_after||now.toISOString()<=String(reminder.overdue_after)))continue;}
     const deliveryScheduledAt = notificationDeliverySlot({
       nextDueAt: reminder.next_due_at ? String(reminder.next_due_at) : null,
@@ -133,6 +143,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       timezone: String(reminder.timezone ?? "Asia/Shanghai"),
       repeatWhileOverdue: Boolean(reminder.repeat_while_overdue),
       overdueAfter: reminder.overdue_after ? String(reminder.overdue_after) : null,
+      sourceType: reminder.source_type ? String(reminder.source_type) : null,
     }, now);
     if (!deliveryScheduledAt) continue;
     let trackerRule: TrackerReminder | null = null;
@@ -191,7 +202,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       kind: "reminder_due",
       title: copy.title,
       body: copy.body,
-      url: "/notifications",
+      url: reminder.target_type === "task" && reminder.target_id ? `/tasks?taskId=${Number(reminder.target_id)}` : `/settings/notifications?reminderId=${Number(reminder.id)}`,
       tag: `reminder-${reminder.id}-${deliveryScheduledAt.slice(0,10)}`,
     });
     sent += delivery.sent;
@@ -330,10 +341,10 @@ export async function deliverDueReminderPushes(now = new Date()) {
   const privateKey = process.env.EVAORBIT_VAPID_PRIVATE_KEY?.trim();
   const publicKey = process.env.EVAORBIT_VAPID_PUBLIC_KEY?.trim();
   const subject = process.env.EVAORBIT_VAPID_SUBJECT?.trim();
-  if (!secret || !privateKey || !publicKey || !subject) throw new Error("Push delivery is not configured");
+  if (!secret) throw new Error("Push delivery is not configured");
   const { url } = supabaseConfig();
   const client = createDeliveryClient(url, secret);
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  if (subject && publicKey && privateKey) webpush.setVapidDetails(subject, publicKey, privateKey);
   const validPeriodMedicationKeys = await reconcilePeriodMedicationPushProjections(client, now);
   const [reminders, meals, weights] = await Promise.all([deliverReminderPushes(client, now, validPeriodMedicationKeys), deliverMissingMealPushes(client, now), deliverMissingWeightPushes(client,now)]);
   return { due: reminders.due, sent: reminders.sent, mealDue: meals.due, mealSent: meals.sent, weightDue:weights.due, weightSent:weights.sent };

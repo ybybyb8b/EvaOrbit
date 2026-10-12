@@ -34,6 +34,20 @@ test("native overdue follow-ups are opt-in", () => {
   assert.deepEqual(nativeReminderNotifications({ ...reminder(null), nextDueAt: "2026-09-05T01:00:00.000Z" }, "zh-CN", new Date("2026-09-05T02:00:00.000Z"), 3), []);
 });
 
+test("persisted Cat Routine null boundaries still stage daily follow-ups",()=>{
+  const item={...reminder("cat_routine"),nextDueAt:"2026-09-05T01:00:00.000Z",overdueAfter:null,repeatWhileOverdue:true};
+  const now=new Date("2026-09-05T02:00:00.000Z");
+  assert.equal(nativeReminderNotifications(item,"zh-CN",now,3).length,2);
+  assert.deepEqual(nativeReminderNotifications({...item,sourceType:"task_reminder"},"zh-CN",now,3),[]);
+});
+
+test("Apple-owned Cat Routines stage overdue days before Due without duplicating the Apple alert",()=>{
+  const item={...reminder("cat_routine"),nextDueAt:"2026-09-05T01:00:00.000Z",overdueAfter:null,repeatWhileOverdue:true,deliveryChannel:"apple_reminders" as const};
+  const result=nativeReminderNotifications(item,"zh-CN",new Date("2026-09-04T02:00:00.000Z"),4);
+  assert.deepEqual(result.map(entry=>entry.triggerAt),["2026-09-06T01:00:00.000Z","2026-09-07T01:00:00.000Z"]);
+  assert.deepEqual(nativeReminderNotifications({...item,isActive:false},"zh-CN",new Date("2026-09-04T02:00:00.000Z"),4),[]);
+});
+
 test("native Task follow-ups start only after the independent Due boundary",()=>{
   const item={...reminder("task_reminder"),nextDueAt:"2026-09-20T07:00:00.000Z",overdueAfter:"2026-09-21T10:00:00.000Z",repeatWhileOverdue:true};
   const result=nativeReminderNotifications(item,"zh-CN",new Date("2026-09-20T08:00:00.000Z"),4);

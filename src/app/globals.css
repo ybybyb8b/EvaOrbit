@@ -1742,6 +1742,10 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 
 /* Notification channels */
 .notification-channels { margin:0 0 21px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
+.bark-channel,.notification-channels > .channel-note { grid-column:1 / -1; }
+.bark-address { display:grid;gap:8px;margin:18px 0 12px;font-size:12px; }
+.bark-address input { width:100%;min-width:0;font-size:16px; }
+.bark-channel .notification-channel-actions { flex-wrap:wrap; }
 .notification-channel { min-width:0;padding:18px;border-radius:17px; }
 .notification-channel.native-channel { background:var(--surface-tint); }.notification-channel.web-channel { background:var(--surface-warm); }
 .notification-channel-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:14px; }
@@ -5069,10 +5073,10 @@ html[data-mode="dark"] .subscription-card:hover { background:rgb(255 255 255 / .
 .task-month-weekdays { padding:8px 0 12px;color:var(--text-secondary);font-size:11px;text-align:center; }
 .task-month-day { min-width:0;min-height:98px;padding:7px 4px;border:0;border-radius:8px;display:flex;flex-direction:column;align-items:stretch;gap:7px;background:rgb(var(--surface-tint-rgb) / .38);color:var(--text-primary);font:inherit;text-align:left;cursor:pointer; }
 .task-month-day:hover { background:var(--surface-tint); }
-.task-month-day[aria-pressed="true"] { background:var(--surface-accent-soft);box-shadow:inset 0 0 0 2px var(--accent-primary); }
 .task-month-number { width:25px;min-height:25px;display:grid;place-items:center;align-self:center;border-radius:50%;font-size:12px;font-variant-numeric:tabular-nums; }
 .task-month-day[aria-current="date"] .task-month-number { background:var(--accent-primary);color:var(--accent-on); }
 .task-month-day.outside-month { color:var(--text-secondary);background:transparent; }
+.task-month-day[aria-pressed="true"] { background:color-mix(in srgb,var(--accent-primary) 16%,var(--surface-card));color:var(--text-primary); }
 .task-month-tasks { display:flex;flex-direction:column;gap:3px;min-width:0; }
 .task-month-tasks > span { padding:3px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--surface-accent-soft);font-size:9px;line-height:1.3; }
 .task-month-tasks > .high { background:var(--surface-warm); }

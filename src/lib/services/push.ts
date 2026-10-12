@@ -1,4 +1,6 @@
 import "server-only";
+import { resolveAiApiKey } from "../ai-secret";
+import { sendBark } from "../push/bark";
 import webpush from "web-push";
 import type { EvaOrbitRepository } from "../repositories/types";
 import type { EvaPushPayload } from "../push/types";
@@ -13,8 +15,13 @@ export async function notifyLuciusActivity(repository: EvaOrbitRepository, paylo
   const publicKey = process.env.EVAORBIT_VAPID_PUBLIC_KEY?.trim();
   const privateKey = process.env.EVAORBIT_VAPID_PRIVATE_KEY?.trim();
   const subject = process.env.EVAORBIT_VAPID_SUBJECT?.trim();
-  if (!publicKey || !privateKey || !subject) return;
   try {
+    const bark = await repository.getBarkSettings();
+    if (bark?.enabled) {
+      if (!await sendBark(resolveAiApiKey(bark), payload)) console.error("Bark notification delivery failed");
+      return;
+    }
+    if (!publicKey || !privateKey || !subject) return;
     webpush.setVapidDetails(subject, publicKey, privateKey);
     const subscriptions = await repository.listPushSubscriptions();
     await Promise.all(subscriptions.map(async (subscription) => {

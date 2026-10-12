@@ -141,6 +141,8 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 
 免费个人 Team 的安装通常约 7 天需要重新签名/安装。不要因此改掉现有构建链，也不要把 Apple ID、密码、2FA、token、cookie、UDID、IMEI 或序列号写入仓库、聊天、issue 或日志。
 
+`xtool-install.sh` 仅在安装成功后调用 `scripts/ios/host-renewal-reminder.mjs`：先把 UTC 安装时间保存到 Git 忽略的 `tmp/ios-host-installation.json`，再通过本地 `.env.local` 的 `DATABASE_URL` 事务更新同一条「重新签名安装 EO Host」Task、Task Reminder 与派生 Reminder。默认安装后 6 天提醒，7 天是安装时刻的估算值，并非读取了重签后的 profile 到期时间。Windows Node.js 24+ 优先，WSL Node.js 24+ 可作替代。数据库连接使用 TLS；多账户时必须配置 `EVAORBIT_ALLOWED_EMAIL`，不猜测账户。提醒写入失败不改变 xtool 的安装成功结果，保留安装记录，可用 `node scripts/ios/host-renewal-reminder.mjs --retry` 重试，重试不会移动安装日期。打开 Host 后由现有 EventKit Tasks 双向同步导出/更新同一条 Apple Reminder；必须启用对应列表的 Tasks 路由，离线或不打开 Host 时不保证即时导出。没有新增 Native capability、entitlement 或 bridge。
+
 ### 3.5 Windows → WSL → iPhone 通信
 
 已验证 transport 是：
@@ -251,6 +253,8 @@ Web 侧 `reconcileNativeNotifications()` 才是校准逻辑：
 4. 排序后最多保留 48 条即将发生的 Native pending reminders。
 5. 取消 iOS 中已不在 Web desired set 的 `evaorbit-scheduled-*`（同时兼容旧 `evaorbit-reminder-*`）。
 6. 重新 schedule desired set；稳定 identifier 使缺失项补建、修改项覆盖、相同项不产生重复。
+
+逾期每日提醒：Task 的独立 Due 边界允许为空（没有 Due 时不推断逾期）；Cat Routine、手工 Reminder 等来源则使用 `nextDueAt` 作为逾期边界，数据库返回 `overdue_after=null` 不得关闭它们的每日重复。Apple 负责首次通知的重复来源仍需进入 upcoming 投影，提前预排后续每日 Native 通知；其首次 Native 通知被抑制以免与 Apple 双响。当前预排今天起 7 天的日期窗口，并受 48 条上限约束，打开/恢复 Host 后补充；不是无限后台排程。
 
 reconcile 在 App shell 初始化、`evaorbit:native-ready`、`evaorbit:native-active`、页面重新可见、用户 Refresh status，以及相关 reminder 创建/修改/完成/删除操作后触发。业务 source of truth 仍是 Web/API，不得在 Swift 再建 reminder 数据库。
 

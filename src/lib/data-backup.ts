@@ -79,6 +79,7 @@ export type BackupRow = Record<string, unknown>;
 export type BackupResources = Record<BackupTable, BackupRow[]>;
 
 export const EXCLUDED_BACKUP_TABLES = [
+  "bark_notification_settings",
   "ai_settings",
   "ai_providers",
   "ai_model_configs",

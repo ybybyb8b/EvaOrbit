@@ -8,6 +8,7 @@ import type { ChineseFont, EnglishFont } from "../font-preferences";
 import type { CalendarInterpretation } from "../calendar-interpretation";
 import type { CalendarEvent } from "../types";
 import type { DailyJournalEntry } from "../types";
+import type { BarkSettings } from "../push/bark";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -480,6 +481,8 @@ export interface EvaOrbitRepository {
   listMealReminderRules(): Promise<MealReminderRule[]>;
   updateMealReminderRules(input: Array<Pick<MealReminderRule, "mealType" | "remindAt" | "enabled">>): Promise<MealReminderRule[]>;
   listPushSubscriptions(): Promise<PushSubscriptionRecord[]>;
+  getBarkSettings(): Promise<BarkSettings | null>;
+  saveBarkSettings(input:BarkSettings): Promise<void>;
   upsertPushSubscription(input: Pick<PushSubscriptionRecord, "endpoint" | "p256dh" | "auth">): Promise<PushSubscriptionRecord>;
   deletePushSubscription(endpoint: string): Promise<boolean>;
 
