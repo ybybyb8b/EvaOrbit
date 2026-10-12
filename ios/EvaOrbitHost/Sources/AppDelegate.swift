@@ -24,6 +24,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         healthKitCoordinator.restoreAtLaunch()
         let controller = WebViewController(configuration: .production, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager, eventKitSyncEngine: eventKitSyncEngine)
         eventKitSyncEngine.onStoreChanged = { [weak controller] in controller?.notifyEventKitStoreChanged() }
+        if let url = launchOptions?[.url] as? URL { controller.openDeepLink(url) }
         window.rootViewController = controller
         window.makeKeyAndVisible()
         self.window = window
@@ -34,6 +35,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationDidBecomeActive(_ application: UIApplication) {
         healthKitCoordinator.applicationDidBecomeActive()
         (window?.rootViewController as? WebViewController)?.notifyApplicationDidBecomeActive()
+    }
+
+    func application(_ application: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        return (window?.rootViewController as? WebViewController)?.openDeepLink(url) ?? false
     }
 
     func application(

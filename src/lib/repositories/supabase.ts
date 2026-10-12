@@ -5,7 +5,7 @@ import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { maskApiKey } from "../ai-provider";
 import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
 import { allowedEmail, supabaseConfig } from "../config";
-import { ConflictError } from "../errors";
+import { ConflictError, HttpError } from "../errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation } from "../calendar-interpretation";
 import { normalizeAppearanceMode, normalizeColorTheme } from "../theme";
 import { normalizeUiLanguage } from "../locale";
@@ -28,6 +28,13 @@ function postgrestQuoted(value: string) { return `"${value.replace(/\\/g, "\\\\"
 
 function fail(error: { message: string } | null, operation: string) {
   if (error) throw new Error(`${operation}失败：${error.message}`);
+}
+
+function failBarkSettings(error: { code?: string; message: string } | null, operation: string) {
+  if (error && ["PGRST205", "PGRST204", "42P01", "42703"].includes(error.code ?? "")) {
+    throw new HttpError("Bark 服务尚未初始化，请先应用数据库迁移后重试。", 503);
+  }
+  fail(error, operation);
 }
 
 function taskFromRow(row: Row): Task {
@@ -741,8 +748,8 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async listMealReminderRules(){const{data,error}=await client.from("meal_reminder_rules").select("meal_type,remind_at,enabled,updated_at").order("remind_at");fail(error,"读取三餐提醒");return(data as Row[]).map(mealReminderRuleFromRow);},
     async updateMealReminderRules(input){const rows=input.map(rule=>({user_id:userId,meal_type:rule.mealType,remind_at:rule.remindAt,enabled:rule.enabled}));const{error}=await client.from("meal_reminder_rules").upsert(rows,{onConflict:"user_id,meal_type"});fail(error,"保存三餐提醒");return repository.listMealReminderRules();},
     async listPushSubscriptions(){const{data,error}=await client.from("push_subscriptions").select("*").order("id");fail(error,"读取通知订阅");return(data as Row[]).map(pushSubscriptionFromRow);},
-    async getBarkSettings(){const{data,error}=await client.from("bark_notification_settings").select("enabled,ciphertext,iv,auth_tag").eq("user_id",userId).maybeSingle();fail(error,"读取 Bark 设置");return data?{enabled:Boolean(data.enabled),ciphertext:String(data.ciphertext),iv:String(data.iv),authTag:String(data.auth_tag)}:null;},
-    async saveBarkSettings(input){const{error}=await client.from("bark_notification_settings").upsert({user_id:userId,enabled:input.enabled,ciphertext:input.ciphertext,iv:input.iv,auth_tag:input.authTag,updated_at:new Date().toISOString()},{onConflict:"user_id"});fail(error,"保存 Bark 设置");},
+    async getBarkSettings(){const{data,error}=await client.from("bark_notification_settings").select("enabled,open_in_host,ciphertext,iv,auth_tag").eq("user_id",userId).maybeSingle();failBarkSettings(error,"读取 Bark 设置");return data?{enabled:Boolean(data.enabled),openInHost:Boolean(data.open_in_host),ciphertext:String(data.ciphertext),iv:String(data.iv),authTag:String(data.auth_tag)}:null;},
+    async saveBarkSettings(input){const{error}=await client.from("bark_notification_settings").upsert({user_id:userId,enabled:input.enabled,open_in_host:Boolean(input.openInHost),ciphertext:input.ciphertext,iv:input.iv,auth_tag:input.authTag,updated_at:new Date().toISOString()},{onConflict:"user_id"});failBarkSettings(error,"保存 Bark 设置");},
     async upsertPushSubscription(input){const{data,error}=await client.from("push_subscriptions").upsert({user_id:userId,endpoint:input.endpoint,p256dh:input.p256dh,auth:input.auth,last_used_at:new Date().toISOString()},{onConflict:"user_id,endpoint"}).select().single();fail(error,"保存通知订阅");return pushSubscriptionFromRow(data);},
     async deletePushSubscription(endpoint){const{data,error}=await client.from("push_subscriptions").delete().eq("endpoint",endpoint).select("id").maybeSingle();fail(error,"删除通知订阅");return Boolean(data);},
     async getNutritionSettings(date){const{data,error}=await client.from("daily_nutrition_summaries").select("resting_energy_kcal,active_energy_kcal,notes").eq("date",date).maybeSingle();fail(error,"读取能量设置");return{restingEnergyKcal:data?.resting_energy_kcal===null||data?.resting_energy_kcal===undefined?null:Number(data.resting_energy_kcal),activeEnergyKcal:data?.active_energy_kcal===null||data?.active_energy_kcal===undefined?null:Number(data.active_energy_kcal),notes:data?String(data.notes):""};},

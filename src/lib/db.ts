@@ -1580,8 +1580,10 @@ if (!hasV76) {
 
 const hasV77=database.prepare("SELECT 1 FROM migrations WHERE version=77").get();
 if(!hasV77)database.exec("BEGIN; CREATE TABLE bark_notification_settings(user_id TEXT PRIMARY KEY DEFAULT 'local',enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN(0,1)),ciphertext TEXT NOT NULL,iv TEXT NOT NULL,auth_tag TEXT NOT NULL); INSERT INTO migrations(version) VALUES(77); COMMIT;");
-export function getBarkSettings():import("./push/bark").BarkSettings|null{const row=database.prepare("SELECT * FROM bark_notification_settings WHERE user_id='local'").get();return row?{enabled:Boolean(row.enabled),ciphertext:String(row.ciphertext),iv:String(row.iv),authTag:String(row.auth_tag)}:null;}
-export function saveBarkSettings(input:import("./push/bark").BarkSettings){database.prepare("INSERT INTO bark_notification_settings(user_id,enabled,ciphertext,iv,auth_tag) VALUES('local',?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled,ciphertext=excluded.ciphertext,iv=excluded.iv,auth_tag=excluded.auth_tag").run(Number(input.enabled),input.ciphertext,input.iv,input.authTag);}
+const hasV78=database.prepare("SELECT 1 FROM migrations WHERE version=78").get();
+if(!hasV78)database.exec("BEGIN; ALTER TABLE bark_notification_settings ADD COLUMN open_in_host INTEGER NOT NULL DEFAULT 0 CHECK(open_in_host IN(0,1)); INSERT INTO migrations(version) VALUES(78); COMMIT;");
+export function getBarkSettings():import("./push/bark").BarkSettings|null{const row=database.prepare("SELECT * FROM bark_notification_settings WHERE user_id='local'").get();return row?{enabled:Boolean(row.enabled),openInHost:Boolean(row.open_in_host),ciphertext:String(row.ciphertext),iv:String(row.iv),authTag:String(row.auth_tag)}:null;}
+export function saveBarkSettings(input:import("./push/bark").BarkSettings){database.prepare("INSERT INTO bark_notification_settings(user_id,enabled,open_in_host,ciphertext,iv,auth_tag) VALUES('local',?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled,open_in_host=excluded.open_in_host,ciphertext=excluded.ciphertext,iv=excluded.iv,auth_tag=excluded.auth_tag").run(Number(input.enabled),Number(Boolean(input.openInHost)),input.ciphertext,input.iv,input.authTag);}
 
 
 function taskReminderFromRow(row: Record<string, unknown>): TaskReminder {

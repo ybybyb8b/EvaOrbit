@@ -23,10 +23,10 @@ function createDeliveryClient(url: string, secret: string) {
 type DeliveryClient = ReturnType<typeof createDeliveryClient>;
 
 async function sendToUser(client: DeliveryClient, userId: string, payload: EvaPushPayload) {
-  const bark = await client.from("bark_notification_settings").select("enabled,ciphertext,iv,auth_tag").eq("user_id", userId).maybeSingle();
+  const bark = await client.from("bark_notification_settings").select("enabled,open_in_host,ciphertext,iv,auth_tag").eq("user_id", userId).maybeSingle();
   if (bark.error) throw new Error("Could not read notification channel settings");
   if (bark.data?.enabled) {
-    const delivered = await sendBark(resolveAiApiKey({ ciphertext: bark.data.ciphertext, iv: bark.data.iv, authTag: bark.data.auth_tag }), payload);
+    const delivered = await sendBark(resolveAiApiKey({ ciphertext: bark.data.ciphertext, iv: bark.data.iv, authTag: bark.data.auth_tag }), payload,fetch,Boolean(bark.data.open_in_host));
     return { delivered, sent: Number(delivered) };
   }
   if (!process.env.EVAORBIT_VAPID_PUBLIC_KEY || !process.env.EVAORBIT_VAPID_PRIVATE_KEY || !process.env.EVAORBIT_VAPID_SUBJECT) return { delivered: false, sent: 0 };

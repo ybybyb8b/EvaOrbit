@@ -9,6 +9,7 @@ final class WebViewController: UIViewController {
     private let loadingOverlay: LoadingOverlayView
     private var loadingCoordinator: LoadingExperienceCoordinator!
     private var navigationTimeoutWorkItem: DispatchWorkItem?
+    private var launchURL: URL?
     private static let navigationTimeout: TimeInterval = 25
 
     init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
@@ -105,7 +106,18 @@ final class WebViewController: UIViewController {
     }
 
     private func loadEvaOrbit() {
-        webView.load(URLRequest(url: hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
+        webView.load(URLRequest(url: launchURL ?? hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
+    }
+
+    @discardableResult
+    func openDeepLink(_ deepLink: URL) -> Bool {
+        guard let target = hostConfiguration.navigationURL(for: deepLink) else { return false }
+        launchURL = target
+        if isViewLoaded {
+            loadingCoordinator.beginRecovery()
+            webView.load(URLRequest(url: target, cachePolicy: .reloadRevalidatingCacheData))
+        }
+        return true
     }
 
     @objc private func refresh() {

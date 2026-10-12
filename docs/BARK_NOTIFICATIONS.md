@@ -14,4 +14,10 @@ Apple 提醒事项已经负责的首次提醒保持原有归属；开启「逾�
 
 定时通知继续使用 `/api/reminders/deliver`，需要服务器 `SUPABASE_SECRET_KEY` 和调度器发送 `Authorization: Bearer <CRON_SECRET>`，建议每分钟调用。Bark 不依赖 VAPID、PWA 安装或 Host 同步到 Apple；但必须有活动提醒和有效推送时间。仅有日期、未设置提醒时间的记录不会凭空产生通知时间。
 
-本次不修改睡眠分界、循环任务日期语义或原生 IPA。
+## 打开 EO Host
+
+应用 `202610130002_bark_host_links.sql` 后，每个账户可选择「打开网页」或「打开 Host」。默认仍为网页；安装支持 `evaorbit://open/...` 的新版 Host 后，点击「改为打开 Host」并发送测试通知。旧 IPA 未注册该协议，不能直接唤起；暂停/恢复 Bark 不改变打开方式。
+
+Host 将链接映射为配置中的 EO HTTPS 源，仅接收 Tasks、通知设置、Food、Health、Lucius 和 Memo 页面，拒绝凭据、外部主机、非页面路径和目录穿越。不通过链接自动完成任务或请求系统权限。冷启动和已运行时均处理该入口。只添加 Info.plist URL Types，不新增 framework、entitlement、APNs 或 bridge 方法。
+
+修改 Host 后需要按既有 macOS CI → ad-hoc IPA → patched xtool → WSL 安装链构建并重装；网页部署与原生安装分别验证。睡眠分界和循环任务日期语义保持原有行为。

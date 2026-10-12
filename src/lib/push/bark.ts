@@ -1,7 +1,7 @@
 import type { EvaPushPayload } from "./types.ts";
 
-export type BarkSettings = { enabled: boolean; ciphertext: string; iv: string; authTag: string };
-export type BarkStatus = { configured: boolean; enabled: boolean };
+export type BarkSettings = { enabled: boolean; openInHost?: boolean; ciphertext: string; iv: string; authTag: string };
+export type BarkStatus = { configured: boolean; enabled: boolean; openInHost?: boolean };
 
 export function barkDeviceKey(value: unknown) {
   if(typeof value!=="string"||value.length>2048)throw new Error("请粘贴 Bark 的推送地址");
@@ -12,16 +12,16 @@ export function barkDeviceKey(value: unknown) {
   return key;
 }
 
-export function barkPayload(key: string, payload: EvaPushPayload) {
+export function barkPayload(key: string, payload: EvaPushPayload, openInHost = false) {
   if(!payload.url.startsWith("/")||payload.url.startsWith("//"))throw new Error("Notification link must be an EO path");
   const url = new URL(payload.url,"https://eva-orbit.vercel.app");
   if (url.origin !== "https://eva-orbit.vercel.app") throw new Error("Notification link must stay within EO");
-  return { device_key:key,title:payload.title,body:payload.body,url:url.href,group:"EvaOrbit" };
+  return { device_key:key,title:payload.title,body:payload.body,url:openInHost ? `evaorbit://open${url.pathname}${url.search}${url.hash}` : url.href,group:"EvaOrbit" };
 }
 
-export async function sendBark(key: string, payload: EvaPushPayload, request: typeof fetch = fetch) {
+export async function sendBark(key: string, payload: EvaPushPayload, request: typeof fetch = fetch, openInHost = false) {
   try {
-    const response=await request("https://api.day.app/push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(barkPayload(key,payload)),signal:AbortSignal.timeout(10_000),redirect:"error"});
+    const response=await request("https://api.day.app/push",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(barkPayload(key,payload,openInHost)),signal:AbortSignal.timeout(10_000),redirect:"error"});
     if(!response.ok)return false;
     const result=await response.json() as {code?:number};
     return result.code===200;

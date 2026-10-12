@@ -9,6 +9,8 @@ test("Bark accepts official copied URLs, rejects other hosts and credentials", (
 });
 test("Bark carries a clickable EO link without allowing an external redirect", () => {
   assert.equal(barkPayload("test-key", payload).url, "https://eva-orbit.vercel.app/settings/notifications?reminderId=42");
+  assert.equal(barkPayload("test-key", payload, true).url, "evaorbit://open/settings/notifications?reminderId=42");
+  assert.equal(barkPayload("test-key", {...payload,url:"/tasks?taskId=123"},true).url,"evaorbit://open/tasks?taskId=123");
   for (const url of ["https://evil.example", "//evil.example", "/\\evil.example"]) assert.throws(() => barkPayload("test-key", { ...payload, url }));
 });
 test("Bark only reports accepted delivery on a successful API response", async () => {

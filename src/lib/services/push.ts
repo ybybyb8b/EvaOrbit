@@ -18,7 +18,7 @@ export async function notifyLuciusActivity(repository: EvaOrbitRepository, paylo
   try {
     const bark = await repository.getBarkSettings();
     if (bark?.enabled) {
-      if (!await sendBark(resolveAiApiKey(bark), payload)) console.error("Bark notification delivery failed");
+      if (!await sendBark(resolveAiApiKey(bark), payload,fetch,Boolean(bark.openInHost))) console.error("Bark notification delivery failed");
       return;
     }
     if (!publicKey || !privateKey || !subject) return;

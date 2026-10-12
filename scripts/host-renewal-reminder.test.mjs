@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
+import fs from "node:fs";
+import { X509Certificate } from "node:crypto";
 import { hostRenewalSchedule, updateHostRenewalReminder } from "./ios/host-renewal-reminder.mjs";
+
+test("Host renewal trusts the published Supabase root certificate",()=>{
+  const certificate=new X509Certificate(fs.readFileSync(new URL("./ios/supabase-root-2021.crt",import.meta.url)));
+  assert.equal(certificate.fingerprint256,"80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA");
+  assert.equal(certificate.ca,true);
+});
 
 test("Host renewal is six days after successful installation and retry keeps the same deadline",()=>{
   const schedule=hostRenewalSchedule("2026-10-12T15:59:48Z");

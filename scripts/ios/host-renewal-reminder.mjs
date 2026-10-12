@@ -60,7 +60,7 @@ async function main() {
     fs.renameSync(`${receiptPath}.tmp`, receiptPath);
   }
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required in .env.local; installation receipt was saved");
-  const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false, ssl: true, connect_timeout: 15, onnotice: () => {} });
+  const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false, ssl: { rejectUnauthorized: true, ca: fs.readFileSync(new URL("./supabase-root-2021.crt", import.meta.url), "utf8") }, connect_timeout: 15, onnotice: () => {} });
   const timeout = setTimeout(() => { void sql.end({ timeout: 1 }); }, 30_000);
   try {
     const result = await updateHostRenewalReminder(sql, schedule, process.env.EVAORBIT_ALLOWED_EMAIL?.trim());

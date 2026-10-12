@@ -352,6 +352,14 @@ Swift 新方法需要按现有链路构建新 IPA，兼容 Web 可先部署并�
 
 ## 八、禁止事项与维护原则
 
+### Bark 通知链接与续签提醒证书
+
+Host 在 Info.plist 注册 `evaorbit` URL scheme，由 AppDelegate 将 `evaorbit://open/<page>?...` 交给 WebViewController。HostConfiguration 只把允许的页面路径映射到配置中的 HTTPS 源，拒绝跨源、凭据、端口和目录穿越；冷启动先保存目标，前台收到链接重新导航。`evaorbit://eventkit/<token>` 仍仅是恢复标记，不作为导航入口。没有新增 bridge、系统权限、framework 或 entitlement，但需要重新构建/安装 IPA。
+
+Bark 的 `open_in_host` 默认 false；安装新版后才能在通知设置切换，旧 IPA 继续使用网页。部署前应用 `202610130002_bark_host_links.sql`。
+
+安装后的续签脚本使用公开的 `scripts/ios/supabase-root-2021.crt` 验证数据库 TLS，保持 `rejectUnauthorized: true`。证书来源为 Supabase 官方下载 `https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt`，SHA-256 指纹 `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA`，有效期至 2031-04-26。更新时核验来源与指纹，不关闭证书校验。
+
 - 不在 Windows 本地伪造 Xcode 构建结果；Swift build/test 以 macOS CI 为准。
 - 不把设备 Release 包改成完全 unsigned。
 - 不删除 HealthKit background-delivery entitlement、对应 xtool patch 或打包断言。

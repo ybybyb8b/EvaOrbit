@@ -16,6 +16,15 @@ final class HostConfigurationTests: XCTestCase {
         XCTAssertNil(HostConfiguration(validating: URL(string: "http://eva-orbit.vercel.app")!))
     }
 
+    func testNotificationDeepLinksStayOnTheConfiguredOrigin() throws {
+        let configuration = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app")!))
+        XCTAssertEqual(configuration.navigationURL(for: URL(string: "evaorbit://open/tasks?taskId=123")!)?.absoluteString, "https://eva-orbit.vercel.app/tasks?taskId=123")
+        XCTAssertEqual(configuration.navigationURL(for: URL(string: "evaorbit://open/settings/notifications?reminderId=42")!)?.path, "/settings/notifications")
+        for raw in ["https://example.com/tasks", "evaorbit://other/tasks", "evaorbit://user@open/tasks", "evaorbit://open:443/tasks", "evaorbit://open//example.com/tasks", "evaorbit://open/api/tasks", "evaorbit://open/tasks/../api/tasks", "evaorbit://open/tasks/%2e%2e/api/tasks", "evaorbit://open/eventkit/private"] {
+            XCTAssertNil(configuration.navigationURL(for: URL(string: raw)!), raw)
+        }
+    }
+
     func testBridgeBootstrapExposesVersionedCallSurface() {
         XCTAssertTrue(NativeBridge.bootstrapScript.contains("EvaOrbitNative"))
         XCTAssertTrue(NativeBridge.bootstrapScript.contains("version: 1"))

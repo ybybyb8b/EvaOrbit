@@ -1,5 +1,11 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+## Bark 通知打开 Host（需要新版 IPA）
+
+新版注册 `evaorbit://open/<页面路径>`，点击 Bark 通知可打开 Host 的对应页面。先部署兼容 Web 与 `202610130002_bark_host_links.sql`，再按原有 CI/xtool 链路构建并安装新版；安装后到「设置 → 通知 → Bark」点击「改为打开 Host」并发送测试通知。旧版保持打开网页，不能仅靠重签旧 IPA 获得此入口。
+
+安装成功后，`xtool-install.sh` 会记录实际安装时间，更新同一条续签 Task 为安装后 6 天提醒；再次安装更新原 Task，不新建重复项。脚本现在使用仓库内公开的 Supabase CA 校验数据库 TLS；失败仍保留安装记录，可用 `node scripts/ios/host-renewal-reminder.mjs --retry` 重试。验证时检查 EO Task 的日期和通知规则，并在 Host 前台同步 Apple 提醒事项；不要把数据库保存成功当作已经收到手机通知。
+
 > 后续开发会话在修改 Native Host、iOS 权限/capability、bridge、打包或签名之前，还必须先阅读维护契约 [`docs/IOS_NATIVE_MAINTENANCE.md`](./IOS_NATIVE_MAINTENANCE.md)。本文保留已经真机走通的详细安装、续签和故障排查步骤。
 >
 > 只想安装已经打包好的 IPA 时，先看 [`docs/IOS_IPA_INSTALL_QUICKSTART.md`](./IOS_IPA_INSTALL_QUICKSTART.md)。
