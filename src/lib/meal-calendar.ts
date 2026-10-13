@@ -25,7 +25,6 @@ export function resolveMealTimes(foods: FoodLog[], calendar: CalendarEvent[], se
   });
   const groups = new Map<string, FoodLog[]>();
   for (const food of foods) {
-    if (food.calendarTimeEnabled === false) continue;
     const key = `${dateInEvaOrbit(new Date(food.occurredAt))}:${food.mealType}`;
     groups.set(key, [...groups.get(key) ?? [], food]);
   }

@@ -34,7 +34,6 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
   const [suggestedMeal] = useState(() => usualMeal(new Date().getHours()));
   const [draft, setDraft] = useState<Draft>(() => ({ ...draftFromRecord(record, date), ...(!record ? { mealType: initialMealType ?? suggestedMeal } : {}) }));
   const mealChosen = useRef(Boolean(record || initialMealType));
-  const [calendarTimeEnabled, setCalendarTimeEnabled] = useState(record?.calendarTimeEnabled ?? true);
   const [consumptions, setConsumptions] = useState<FoodConsumption[]>(() => record?.foodLibraryItems?.length ? record.foodLibraryItems : record?.foodLibraryId ? [{ foodLibraryId: record.foodLibraryId, quantity: null, unit: "serving" }] : []);
   const [consumedWeight, setConsumedWeight] = useState(() => (record?.consumedWeightG ?? (record?.foodLibraryItems?.length === 1 && record.foodLibraryItems[0].unit === "g" ? record.foodLibraryItems[0].quantity : null))?.toFixed(2) ?? "");
   function changeWeight(value: string) {
@@ -94,7 +93,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
     try {
       const occurred = compactDateTimePayload(draft.occurredAt);
       const unchangedTime = record && draft.occurredAt === compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime ?? true);
-      const body = { ...draft, calendarTimeEnabled, rating: canRate(draft.scene) && draft.rating ? draft.rating : null, occurredAt: unchangedTime ? record.originalOccurredAt ?? record.occurredAt : occurred.value, occurredHasExplicitTime: unchangedTime ? record.originalHasExplicitTime ?? record.occurredHasExplicitTime ?? true : occurred.hasExplicitTime, estimatedKcal: draft.estimatedKcal ? Number(draft.estimatedKcal) : null, kcalMin: draft.kcalMin ? Number(draft.kcalMin) : null, kcalMax: draft.kcalMax ? Number(draft.kcalMax) : null, foodLibraryId:draft.foodLibraryId?Number(draft.foodLibraryId):null,foodPlaceId: draft.foodPlaceId ? Number(draft.foodPlaceId) : null, foodDishIds: draft.foodDishIds, imageUrl: null, attachmentId: null };
+      const body = { ...draft, calendarTimeEnabled: true, rating: canRate(draft.scene) && draft.rating ? draft.rating : null, occurredAt: unchangedTime ? record.originalOccurredAt ?? record.occurredAt : occurred.value, occurredHasExplicitTime: unchangedTime ? record.originalHasExplicitTime ?? record.occurredHasExplicitTime ?? true : occurred.hasExplicitTime, estimatedKcal: draft.estimatedKcal ? Number(draft.estimatedKcal) : null, kcalMin: draft.kcalMin ? Number(draft.kcalMin) : null, kcalMax: draft.kcalMax ? Number(draft.kcalMax) : null, foodLibraryId:draft.foodLibraryId?Number(draft.foodLibraryId):null,foodPlaceId: draft.foodPlaceId ? Number(draft.foodPlaceId) : null, foodDishIds: draft.foodDishIds, imageUrl: null, attachmentId: null };
       const payload = { ...body, consumedWeightG: consumedWeight === "" ? null : Number(consumedWeight), foodLibraryId: consumptions[0]?.foodLibraryId ?? null, foodLibraryItems: consumptions.map(({ foodLibraryId, quantity, unit }) => ({ foodLibraryId, quantity, unit })), foodKcalMode: consumptions.length ? kcalMode : "manual", estimatedKcal: estimatedKcal ? Number(estimatedKcal) : null };
       const response = await fetch(record ? `/api/food/logs/${record.id}` : "/api/food/logs", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
@@ -111,9 +110,8 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
       {(chosen?.placeName||record?.foodPlaceName)&&draft.foodPlaceId&&<p className="muted user-content">{chosen?.placeName??record?.foodPlaceName}</p>}
       <DateTimeField inline label="日期" minuteStep={1} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={value => {
         setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : ""), ...(!mealChosen.current && value.time ? { mealType: usualMeal(Number(value.time.slice(0, 2))) } : {}) });
-        if (record) setCalendarTimeEnabled(false);
       }} />
-      {record?.calendarMeal && calendarTimeEnabled && <p className="muted">时间来自日历：<span className="user-content">{record.calendarMeal.title}</span></p>}
+      {record?.calendarMeal && <p className="muted">时间来自日历：<span className="user-content">{record.calendarMeal.title}</span></p>}
       <div className="field"><span>餐次</span><SearchableSelect label="餐次" searchable={false} value={draft.mealType} options={meals} onValueChange={value=>{mealChosen.current=true;setDraft({...draft,mealType:value as MealType});}}/></div>
       <div className="field"><span>场景</span><SearchableSelect label="场景" searchable={false} value={draft.scene} options={scenes} onValueChange={value=>{const scene=value as FoodScene;setDraft({...draft,scene,rating:canRate(scene)?draft.rating:""});}}/></div>
       {draft.foodPlaceId && !canRate(draft.scene) && <p className="muted">外卖或外食可补充本次口味评价。</p>}

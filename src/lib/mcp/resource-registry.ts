@@ -939,7 +939,7 @@ function foodLogResource(operations: NonNullable<ResourceRegistryOperations["foo
       resource: "food_log", description: "Food consumption records with Calendar meal matching, ordered dishes and immutable Food Library portion snapshots.",
       fields: { ...logFields,
         consumed_weight_g: { type: "number", nullable: true, description: "Actual intake in grams, 0-1000000, up to two decimals. Single linked Food portion uses this quantity in g; multiple portions remain individually specified. null means unknown, omitted PATCH preserves." },
-        calendar_time_enabled: { type: "boolean", default: true, description: "Use confidently matched Calendar meal time; changing manual time disables matching unless explicitly enabled." },
+        calendar_time_enabled: { type: "boolean", default: true, description: "Legacy compatibility field. Calendar meal matching is always automatic; false no longer disables it. Original Food time is preserved." },
         original_occurred_at: { type: "string", read_only: true, description: "Original manual Food time." },
         original_has_explicit_time: { type: "boolean", read_only: true, description: "Original time precision." },
         calendar_meal: { type: "object", read_only: true, description: "Matched Calendar interval, when present." },

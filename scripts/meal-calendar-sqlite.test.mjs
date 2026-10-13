@@ -23,8 +23,8 @@ test("meal migration preserves Food times; CRUD, history, Home and month summari
       const day=await getHomeDayOverview('2026-10-06');assert.equal(day.events.length,1);assert.equal(day.events[0].endAt,event.endAt);assert.equal(day.meals.length,1);
       assert.equal((await getTimelineMonthSummary('2026-10')).days['2026-10-06'].count,1);
       await food.updateFoodLog(record.id,parseFoodLogPatch({title:'更新菜名',occurredAt:record.occurredAt,occurredHasExplicitTime:true}));assert.equal(db.getFoodLog(record.id).occurredAt,'2026-10-06T04:30:00.000Z');assert.equal(db.getFoodLog(record.id).calendarTimeEnabled,true);
-      await food.updateFoodLog(record.id,parseFoodLogPatch({occurredAt:'2026-10-06T14:00:00+08:00'}));assert.equal(db.getFoodLog(record.id).calendarTimeEnabled,false);
-      assert.equal((await food.listFoodLogs({date:'2026-10-06'}))[0].occurredAt,'2026-10-06T06:00:00.000Z');
+      await food.updateFoodLog(record.id,parseFoodLogPatch({occurredAt:'2026-10-06T14:00:00+08:00'}));assert.equal(db.getFoodLog(record.id).calendarTimeEnabled,true);
+      assert.equal((await food.listFoodLogs({date:'2026-10-06'}))[0].occurredAt,event.startAt);
       await food.updateFoodLog(record.id,{calendarTimeEnabled:true});db.updateCalendarEvent(event.id,{startAt:'2026-10-06T04:11:00.000Z'});
       assert.equal((await food.listFoodLogs({date:'2026-10-06',query:'更新菜名'}))[0].occurredAt,'2026-10-06T04:11:00.000Z');
       db.updateCalendarEvent(event.id,{status:'cancelled'});assert.equal((await food.listFoodLogs({date:'2026-10-06'}))[0].occurredAt,'2026-10-06T06:00:00.000Z');assert.equal((await getHomeDayOverview('2026-10-06')).events.length,1);

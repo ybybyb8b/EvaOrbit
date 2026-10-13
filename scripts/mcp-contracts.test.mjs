@@ -119,7 +119,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const {item:matchedPatch}=await call("eo_update",{resource:"food_log",id:matched.id,data:{notes:"Keep original time",occurred_at:matched.occurred_at,occurred_has_explicit_time:true}});
       assert.equal(matchedPatch.original_occurred_at,matched.original_occurred_at);
       const {item:manualTime}=await call("eo_update",{resource:"food_log",id:matched.id,data:{occurred_at:"2026-10-09T14:00:00+08:00"}});
-      assert.equal(manualTime.calendar_time_enabled,false);assert.equal(manualTime.occurred_at,"2026-10-09T06:00:00.000Z");
+      assert.equal(manualTime.calendar_time_enabled,true);assert.equal(manualTime.occurred_at,calendarMeal.start_at);assert.equal(manualTime.original_occurred_at,"2026-10-09T06:00:00.000Z");
       await call("eo_delete",{resource:"food_log",id:matched.id});
 
       const {item:one}=await call("eo_create",{resource:"tracker",data:{name:"One"}});

@@ -28,17 +28,25 @@ test("delayed Food entries use the real meal interval and merge Timeline without
   assert.ok("calendarEvent" in events[0].metadata);
 });
 
-test("standalone, manual, ambiguous, distant and non-meal records retain their original precision", () => {
+test("legacy disabled records match automatically while ambiguous, distant and unmatched records retain precision", () => {
   assert.deepEqual(resolveMealTimes([food], [], settings), [food]);
   for (const changed of [{ ...window, status: "cancelled" as const }, { ...window, status: "tentative" as const }, { ...window, title: "午餐计划" }, { ...window, isAllDay: true }]) assert.deepEqual(resolveMealTimes([food], [changed], settings), [food]);
   const manual = { ...food, calendarTimeEnabled: false };
-  assert.deepEqual(resolveMealTimes([manual], [window], settings), [manual]);
+  assert.equal(resolveMealTimes([manual], [window], settings)[0].calendarMeal?.id, window.id);
   const late = { ...food, occurredAt: "2026-10-06T20:00:00+08:00" };
   assert.deepEqual(resolveMealTimes([late], [window], settings), [late]);
   assert.deepEqual(resolveMealTimes([food], [window, { ...window, id: 10, startAt: "2026-10-06T12:00:00+08:00" }], settings), [food]);
   const dateOnly = { ...food, occurredAt: "2026-10-06T12:00:00+08:00", occurredHasExplicitTime: false };
   assert.equal(resolveMealTimes([dateOnly], [window], settings)[0].calendarMeal?.id, window.id);
   assert.equal(resolveMealTimes([dateOnly], [window], settings)[0].originalHasExplicitTime, false);
+  const legacy = { ...dateOnly, calendarTimeEnabled: false };
+  const [resolved] = resolveMealTimes([legacy], [window], settings);
+  const [meal] = groupMealTimelineEvents(buildTimelineEvents([resolved], []));
+  assert.equal(meal.hasExplicitTime, true);
+  assert.equal(meal.occurredAt, window.startAt);
+  assert.equal(meal.endAt, window.endAt);
+  assert.equal(legacy.occurredHasExplicitTime, false);
+  assert.equal(resolveMealTimes([legacy], [], settings)[0].occurredHasExplicitTime, false);
 });
 
 test("custom rules take precedence, one window cannot supply two different meals, and matches update or fall back", () => {

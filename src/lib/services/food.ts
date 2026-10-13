@@ -68,9 +68,9 @@ export async function updateFoodLog(id: number, input: Record<string, unknown>) 
   const [effective] = await withMealTimes(repository, [existing]);
   input = await applyCatalogFoodLinks(repository,{ ...input },existing);
   const sameTime = (value: unknown, target: string) => typeof value === "string" && Date.parse(value) === Date.parse(target);
-  if (input.occurredAt !== undefined && effective.calendarMeal && sameTime(input.occurredAt, effective.occurredAt) && input.calendarTimeEnabled !== false && input.occurredHasExplicitTime !== false) {
+  if (input.occurredAt !== undefined && effective.calendarMeal && sameTime(input.occurredAt, effective.occurredAt) && input.occurredHasExplicitTime !== false) {
     delete input.occurredAt; delete input.occurredHasExplicitTime;
-  } else if (input.calendarTimeEnabled === undefined && ((input.occurredAt !== undefined && !sameTime(input.occurredAt, existing.occurredAt)) || (input.occurredHasExplicitTime !== undefined && input.occurredHasExplicitTime !== (existing.occurredHasExplicitTime ?? true)))) input.calendarTimeEnabled = false;
+  }
   if (input.foodLibraryItems === undefined) await validateLibraryLink(repository,input.foodLibraryId as number|null|undefined,existing.foodLibraryId);
   const scene = (input.scene ?? existing.scene) as FoodLog["scene"];
   const rating = input.rating === undefined ? existing.rating : input.rating;
