@@ -1,5 +1,6 @@
 import type { CatRoutine, Reminder, ReminderIntervalUnit, TrackerEntry, TrackerReminder } from "./types.ts";
 import { addCalendarInterval, zonedDateParts, zonedDateTimeToUtc } from "./time.ts";
+import { recurrenceCompletionDate } from "./life-day.ts";
 
 export function addReminderInterval(value: string | Date, amount: number, unit: ReminderIntervalUnit) {
   const next = new Date(value);
@@ -12,8 +13,7 @@ export function addReminderInterval(value: string | Date, amount: number, unit: 
 
 type RoutineSchedule = Pick<CatRoutine, "intervalValue" | "intervalUnit" | "recurrenceMode" | "anchorDate" | "nextDueDate" | "configuredReminderTime" | "timezone">;
 
-export function catRoutineCompletionPatch(routine: RoutineSchedule, actedAt = new Date()) {
-  const completedDate = zonedDateParts(actedAt, routine.timezone).date;
+export function catRoutineCompletionPatch(routine: RoutineSchedule, actedAt = new Date(), completedDate = recurrenceCompletionDate(actedAt, zonedDateTimeToUtc(routine.nextDueDate, routine.configuredReminderTime, routine.timezone), routine.timezone)) {
   const plannedNextDate = addCalendarInterval(routine.nextDueDate, routine.intervalValue, routine.intervalUnit);
   const reanchor = routine.recurrenceMode === "completion" || completedDate >= plannedNextDate;
   const anchorDate = reanchor ? completedDate : routine.anchorDate;
@@ -108,14 +108,21 @@ export function reminderIsDue(reminder: Pick<Reminder, "isActive" | "nextDueAt" 
 
 export function selectDueReminders<T extends Pick<Reminder,"isActive"|"nextDueAt"|"snoozedUntil"|"dueHasExplicitTime">>(reminders:T[],now=new Date(),limit=50){return reminders.filter(item=>reminderIsDue(item,now)).sort((a,b)=>(effectiveDueAt(a)??"").localeCompare(effectiveDueAt(b)??"")).slice(0,limit);}
 
-export function reminderActionPatch(reminder: Reminder, action: "complete" | "skip", actedAt = new Date()) {
-  const scheduled = effectiveDueAt(reminder) ?? reminder.startsAt;
+export function reminderActionPatch(reminder: Reminder, action: "complete" | "skip", actedAt = new Date(), completedDate?: string) {
+  const scheduled = reminder.nextDueAt ?? reminder.startsAt;
   if (reminder.scheduleType === "one_time") {
     return { isActive: false, nextDueAt: null, snoozedUntil: null, ...(action === "complete" ? { lastCompletedAt: actedAt.toISOString() } : {}) };
   }
   if (!reminder.intervalValue || !reminder.intervalUnit) throw new Error("Recurring reminder has no interval");
   const base = action === "complete" ? actedAt : new Date(scheduled);
-  const next = reminder.scheduleType === "course" ? nextCourseTime(reminder,base) ?? addReminderInterval(base,reminder.intervalValue,reminder.intervalUnit) : addReminderInterval(base,reminder.intervalValue,reminder.intervalUnit);
+  let next: Date;
+  if (reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour") {
+    const local = zonedDateParts(scheduled, reminder.timezone);
+    const date = action === "complete" ? completedDate ?? recurrenceCompletionDate(actedAt, scheduled, reminder.timezone) : local.date;
+    next = new Date(zonedDateTimeToUtc(addCalendarInterval(date, reminder.intervalValue, reminder.intervalUnit), local.time, reminder.timezone));
+  } else {
+    next = reminder.scheduleType === "course" ? nextCourseTime(reminder,base) ?? addReminderInterval(base,reminder.intervalValue,reminder.intervalUnit) : addReminderInterval(base,reminder.intervalValue,reminder.intervalUnit);
+  }
   const expired = reminder.endsAt !== null && next.getTime() > new Date(reminder.endsAt).getTime();
   return {
     isActive: !expired,

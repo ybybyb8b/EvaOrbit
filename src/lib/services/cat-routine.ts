@@ -6,6 +6,7 @@ import { getRepository } from "../repositories";
 import type { NewCatRoutine } from "../repositories/types";
 import type { CatRoutine, Reminder } from "../types";
 import { REMINDER_SOURCE_REGISTRY } from "../reminder-source-registry";
+import { getRecurrenceCompletionDate } from "./life-day";
 
 const RESET_NOTIFICATION = {
   status: "scheduled" as const,
@@ -107,6 +108,8 @@ export async function completeCatRoutine(id: number, actedAt = new Date()) {
   const { repository, routine } = await requireRoutine(id);
   if (!routine.enabled) throw new ConflictError("Routine is disabled.");
   if (routine.lastCompletedAt && actedAt.getTime() - new Date(routine.lastCompletedAt).getTime() < 30_000) throw new ConflictError("Routine was just completed.");
+  const completionDate = await getRecurrenceCompletionDate(actedAt, routine.nextDueAt, routine.timezone);
+  const completion = catRoutineCompletionPatch(routine, actedAt, completionDate);
   const event = await repository.createCatEvent({
     petId: routine.scope === "cat" ? routine.petId : null,
     eventType: routine.scope === "cat" ? "care" : "cleaning",
@@ -117,7 +120,6 @@ export async function completeCatRoutine(id: number, actedAt = new Date()) {
     sourceType: "cat_routine",
     sourceId: routine.id,
   });
-  const completion = catRoutineCompletionPatch(routine, actedAt);
   const nextDueAt = completion.nextDueAt;
   const updated = await repository.updateCatRoutine(id, completion);
   if (routine.reminderId) {

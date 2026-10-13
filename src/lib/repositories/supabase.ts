@@ -20,6 +20,7 @@ import type { AiModelConfig, AiProvider, CatEvent, CatMeasurement, CatMedication
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, EvaOrbitRepository, FoodLibrarySearchOptions, HealthRecordListInput, InternalAiProvider, InternalAiSettings, LuciusCasePatch, LuciusDiaryPatch, LuciusPostCommentPatch, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MemoPatch, MemoryFactPatch, NewTask, ProjectItemPatch, ProjectPatch, TaskFilter } from "./types";
 import type { DailyJournalEntry } from "../types";
 import type { DailyJournalEntryPatch } from "./types";
+import type { SleepSample } from "../sleep";
 
 type Row = Record<string, unknown>;
 
@@ -374,6 +375,34 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       const { data, error } = await client.from("ui_preferences").select("home_module_order,appearance_mode,color_theme,ui_language,chinese_font,english_font,updated_at").maybeSingle();
       fail(error, "Read UI preferences");
       return { homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), appearanceMode: normalizeAppearanceMode(data?.appearance_mode), colorTheme: normalizeColorTheme(data?.color_theme), uiLanguage: normalizeUiLanguage(data?.ui_language), chineseFont: normalizeChineseFont(data?.chinese_font), englishFont: normalizeEnglishFont(data?.english_font), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
+    },
+    async getLifeDayStart() {
+      const { data, error } = await client.from("ui_preferences").select("life_day_start").eq("user_id", userId).maybeSingle();
+      fail(error, "读取生活日设置");
+      return data?.life_day_start ? String(data.life_day_start) : "06:00";
+    },
+    async listSleepSamples({ from, to }) {
+      const rows: SleepSample[] = [];
+      // Use the repository client so browser and OAuth/MCP requests share the same owner scope.
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await client.from("healthkit_read_samples")
+          .select("sample_id,start_at,end_at,time_zone,time_zone_source,stage,source_bundle,source_name,sync_identifier,sync_version,installation_id")
+          .eq("user_id", userId).eq("metric", "sleep").eq("deleted", false).lt("start_at", to).gt("end_at", from)
+          .order("sample_id").order("installation_id").range(offset, offset + 499);
+        if (error?.code === "42P01" || error?.code === "PGRST205") return [];
+        fail(error, "读取 Apple Health 睡眠");
+        rows.push(...(data ?? []).map(row => ({
+          sampleId: String(row.sample_id), startAt: String(row.start_at), endAt: String(row.end_at),
+          timeZone: String(row.time_zone), timeZoneSource: row.time_zone_source as SleepSample["timeZoneSource"],
+          stage: Number(row.stage), sourceBundle: String(row.source_bundle ?? ""), sourceName: String(row.source_name ?? "Apple Health"),
+          ...(row.sync_identifier ? { syncIdentifier: String(row.sync_identifier) } : {}), ...(row.sync_version ? { syncVersion: Number(row.sync_version) } : {}),
+        })));
+        if (!data || data.length < 500) return rows;
+      }
+    },
+    async updateLifeDayStart(time) {
+      const { error } = await client.from("ui_preferences").upsert({ user_id: userId, life_day_start: time }, { onConflict: "user_id" });
+      fail(error, "保存生活日设置");
     },
     async getCalendarInterpretation() {
       const { data, error } = await client.from("ui_preferences").select("calendar_interpretation").eq("user_id", userId).maybeSingle();

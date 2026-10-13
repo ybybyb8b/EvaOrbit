@@ -9,6 +9,7 @@ import type { CalendarInterpretation } from "../calendar-interpretation";
 import type { CalendarEvent } from "../types";
 import type { DailyJournalEntry } from "../types";
 import type { BarkSettings } from "../push/bark";
+import type { SleepSample } from "../sleep";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -217,6 +218,9 @@ export interface EvaOrbitRepository {
 
   getDashboardSummary(): Promise<DashboardSummary>;
   getUiPreferences(): Promise<UiPreferences>;
+  getLifeDayStart(): Promise<string>;
+  listSleepSamples(range: { from: string; to: string }): Promise<SleepSample[]>;
+  updateLifeDayStart(time: string): Promise<void>;
   getCalendarInterpretation(): Promise<CalendarInterpretation>;
   updateCalendarInterpretation(input: CalendarInterpretation): Promise<CalendarInterpretation>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;

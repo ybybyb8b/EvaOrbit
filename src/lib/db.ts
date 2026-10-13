@@ -1455,6 +1455,19 @@ CREATE INDEX idx_drink_logs_menu ON drink_logs(drink_menu_id);
 UPDATE food_places SET service_type=CASE WHEN EXISTS(SELECT 1 FROM food_logs WHERE food_place_id=food_places.id) OR EXISTS(SELECT 1 FROM food_dishes WHERE food_place_id=food_places.id) THEN 'both' ELSE 'drink' END WHERE EXISTS(SELECT 1 FROM drink_logs WHERE food_place_id=food_places.id);
 INSERT INTO migrations(version) VALUES(66);COMMIT;`);
 
+const hasV79 = database.prepare("SELECT 1 FROM migrations WHERE version=79").get();
+if (!hasV79) database.exec(`BEGIN;
+ALTER TABLE ui_preferences ADD COLUMN life_day_start TEXT NOT NULL DEFAULT '06:00' CHECK(life_day_start GLOB '[0-2][0-9]:[0-5][0-9]' AND life_day_start<'24:00');
+INSERT INTO migrations(version) VALUES(79);
+COMMIT;`);
+
+export function getLifeDayStart() {
+  return (database.prepare("SELECT life_day_start FROM ui_preferences WHERE id=1").get() as { life_day_start: string }).life_day_start;
+}
+export function updateLifeDayStart(time: string) {
+  database.prepare("UPDATE ui_preferences SET life_day_start=?,updated_at=CURRENT_TIMESTAMP WHERE id=1").run(time);
+}
+
 export function getCalendarInterpretation(): CalendarInterpretation {
   const row = database.prepare("SELECT calendar_interpretation FROM ui_preferences WHERE id=1").get() as { calendar_interpretation: string };
   return parseCalendarInterpretation(JSON.parse(row.calendar_interpretation));

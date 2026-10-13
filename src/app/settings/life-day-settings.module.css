@@ -1,0 +1,9 @@
+.iconLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.iconLabel > svg {
+  flex-shrink: 0;
+}

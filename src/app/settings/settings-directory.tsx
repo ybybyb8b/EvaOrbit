@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Calendar, ChevronRight, Cpu, Database, Health, Notification as NotificationIcon, Palette, type IconComponent } from "reicon-react";
+import { Calendar, ChevronRight, Cpu, Database, Health, Notification as NotificationIcon, Palette, Sunrise, type IconComponent } from "reicon-react";
 import { PageHeader } from "@/components/page-header";
 import { getNativeHostInfo, healthKitSupported, nativeNotificationsSupported } from "@/lib/native-bridge";
 import { useLocale } from "@/components/locale-controller";
@@ -35,6 +35,7 @@ export function SettingsDirectory() {
     </div>
     <nav className="settings-directory" aria-label="Settings sections">
       <DirectoryItem href="/settings/app-appearance" icon={Palette} title={english ? "App & Appearance" : "应用与外观"} meta={english ? "Language, type and theme" : "语言、字体与主题"} />
+      <DirectoryItem href="/settings/life-day" icon={Sunrise} title={english ? "Life day" : "生活日"} meta={english ? "Sleep boundaries and recurring tasks" : "睡眠分界与循环任务归期"} />
       <DirectoryItem href="/settings/ai-connection" icon={Cpu} title={english ? "AI & Connection" : "AI 与连接"} meta={english ? "Provider, endpoint and model" : "服务商、地址与模型"} />
       <DirectoryItem href="/settings/notifications" icon={NotificationIcon} title={english ? "Notifications" : "通知"} meta={english ? status.nativeNotifications ? "Native notifications available" : "Web notifications" : status.nativeNotifications ? "原生通知可用" : `网页通知${status.webNotifications}`} />
       <DirectoryItem href="/settings/health-native" icon={Health} title={english ? "Health & Native" : "健康与原生能力"} meta={english ? status.health ? "Apple Health available" : status.nativeHost ? "HealthKit unavailable" : "Connect through the iOS Host" : status.health ? "Apple Health 可用" : status.nativeHost ? "HealthKit 不可用" : "请在 iOS Host 中连接"} />

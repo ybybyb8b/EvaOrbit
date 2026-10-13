@@ -10,6 +10,7 @@ import { completeCatRoutine, skipCatRoutineOccurrence } from "./cat-routine";
 import { periodMedicationSnoozeDeadline, reconcilePeriodMedicationReminder, reconcilePeriodMedicationReminders } from "./period-medication-reminder";
 import { catchUpAutomaticSubscriptionPayments, disableSubscriptionReminder, recordSubscriptionPaymentFromReminder, skipSubscriptionRenewal } from "./subscription";
 import { completeTaskFromReminder, disableTaskReminder } from "./task";
+import { getRecurrenceCompletionDate } from "./life-day";
 
 async function subjectLabel(reminder: Reminder) {
   if (reminder.targetType === "cat_household") return "Household";
@@ -129,12 +130,15 @@ export async function completeReminder(id: number, actedAt = new Date()) {
     return repository.getReminder(id);
   }
   let createdEventId: number | null = null;
+  const completionDate = reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour"
+    ? await getRecurrenceCompletionDate(actedAt, reminder.nextDueAt ?? reminder.startsAt, reminder.timezone) : undefined;
+  const completion = reminderActionPatch(reminder, "complete", actedAt, completionDate);
   if (reminder.scheduleType === "interval" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) {
     const event = await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: actedAt.toISOString(), occurredHasExplicitTime: true, title: reminder.title, note: "", sourceType: "reminder", sourceId: reminder.id });
     createdEventId = event.id;
   }
-  await repository.createReminderOccurrence({ reminderId: id, action: "completed", scheduledFor: effectiveDueAt(reminder) ?? reminder.startsAt, actedAt: actedAt.toISOString(), createdEventId });
-  return repository.updateReminder(id, { ...reminderActionPatch(reminder, "complete", actedAt), status: reminder.scheduleType === "one_time" ? "completed" : "scheduled", sentAt: reminder.scheduleType === "one_time" ? reminder.sentAt : null, lastNotifiedAt: reminder.scheduleType === "one_time" ? reminder.lastNotifiedAt : null });
+  await repository.createReminderOccurrence({ reminderId: id, action: "completed", scheduledFor: reminder.nextDueAt ?? reminder.startsAt, actedAt: actedAt.toISOString(), createdEventId });
+  return repository.updateReminder(id, { ...completion, status: reminder.scheduleType === "one_time" ? "completed" : "scheduled", sentAt: reminder.scheduleType === "one_time" ? reminder.sentAt : null, lastNotifiedAt: reminder.scheduleType === "one_time" ? reminder.lastNotifiedAt : null });
 }
 
 export async function skipReminder(id: number, actedAt = new Date()) {
@@ -144,7 +148,7 @@ export async function skipReminder(id: number, actedAt = new Date()) {
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) return skipCatRoutineOccurrence(reminder.sourceId, actedAt);
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "skipped", actedAt);
   if(source.projectionOwner==="subscription"&&reminder.sourceId)return skipSubscriptionRenewal(reminder.sourceId);
-  const scheduledFor = effectiveDueAt(reminder) ?? reminder.startsAt;
+  const scheduledFor = reminder.nextDueAt ?? reminder.startsAt;
   await repository.createReminderOccurrence({ reminderId: id, action: "skipped", scheduledFor, actedAt: actedAt.toISOString(), createdEventId: null });
   if (source.projectionOwner === "medication_preset") return repository.updateReminder(id, { isActive: false, nextDueAt: null, snoozedUntil: null, status: "completed", lastCompletedAt: actedAt.toISOString() });
   return repository.updateReminder(id, { ...reminderActionPatch(reminder, "skip", actedAt), status: reminder.scheduleType === "one_time" ? "cancelled" : "scheduled", cancelledAt: reminder.scheduleType === "one_time" ? actedAt.toISOString() : null, lastNotifiedAt: null });
