@@ -15,7 +15,7 @@ export async function listDrinkLogs(input: { date?: string; query?: string; from
   const range = input.date ? dateRange(input.date) : null;
   const logs = await (await getRepository()).listDrinkLogs({ from: range?.from ?? input.from, to: range?.to ?? input.to, drinkType: input.drinkType, foodPlaceId: input.foodPlaceId, drinkMenuId:input.drinkMenuId, limit: input.limit });
   const query = input.query?.trim().toLocaleLowerCase();
-  return query ? logs.filter((item) => [item.name, item.brand, item.notes, item.foodPlaceName ?? "", item.foodPlaceCity ?? "", item.foodPlaceLocation ?? "", item.foodPlaceBranch ?? ""].some((value) => value.toLocaleLowerCase().includes(query))) : logs;
+  return query ? logs.filter((item) => [item.name, item.notes, item.foodPlaceName ?? "", item.foodPlaceCity ?? "", item.foodPlaceLocation ?? "", item.foodPlaceBranch ?? ""].some((value) => value.toLocaleLowerCase().includes(query))) : logs;
 }
 export async function getTodayDrinks() { return listDrinkLogs({ date: dateInEvaOrbit() }); }
 export async function getDrinkLog(id: number) { return (await getRepository()).getDrinkLog(id); }

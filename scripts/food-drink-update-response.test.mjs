@@ -17,12 +17,12 @@ test("Supabase food and drink creates and updates hydrate committed associations
    const row=rows[table];assert.ok(row);
    if(url.searchParams.get("id")==="eq.999")return Response.json([]);
    if(method==="POST"){
-    const payload=JSON.parse(init.body);if(payload.notes==="fail")return Response.json({message:"test write failure"},{status:500});Object.assign(row,payload);
+    const payload=JSON.parse(init.body);if(payload.title==="fail"||payload.notes==="fail")return Response.json({message:"test write failure"},{status:500});Object.assign(row,payload);
     // INSERT representations may omit associations; persisted state must be read back.
     return Response.json(url.searchParams.get("select")==="id"?{id:row.id}:{...row,food_place_id:null,food_dish_id:null,food_dish_ids:[],drink_menu_id:null});
    }
    if(method==="PATCH"){
-    const before=structuredClone(row),patch=JSON.parse(init.body);if(patch.notes==="fail")return Response.json({message:"test write failure"},{status:500});Object.assign(row,patch);
+    const before=structuredClone(row),patch=JSON.parse(init.body);if(patch.title==="fail"||patch.notes==="fail")return Response.json({message:"test write failure"},{status:500});Object.assign(row,patch);
     // Model a stale relational mutation response; a new SELECT observes the committed row.
     return Response.json([url.searchParams.get("select")==="id"?{id:row.id}:before]);
    }
@@ -32,7 +32,7 @@ test("Supabase food and drink creates and updates hydrate committed associations
   const createdFood=await repo.createFoodLog({title:"午餐",foodPlaceId:7,foodDishIds:[11,12],foodDishId:11,occurredHasExplicitTime:false});
   assert.equal(createdFood.foodPlaceId,7);assert.deepEqual(createdFood.foodDishIds,[11,12]);assert.equal(createdFood.foodDishId,11);assert.equal(createdFood.foodPlaceName,"新店");assert.deepEqual(createdFood.foodDishes.map(d=>d.name),["饭","汤"]);assert.deepEqual(createdFood,await repo.getFoodLog(createdFood.id));
   const createdDrink=await repo.createDrinkLog({name:"奶茶",foodPlaceId:7,drinkMenuId:15,occurredHasExplicitTime:false});assert.equal(createdDrink.foodPlaceId,7);assert.equal(createdDrink.drinkMenuId,15);assert.equal(createdDrink.drinkMenuName,"奶茶");assert.deepEqual(createdDrink,await repo.getDrinkLog(createdDrink.id));
-  for(const create of [repo.createFoodLog,repo.createDrinkLog])await assert.rejects(()=>create({notes:"fail"}),/test write failure/);
+  for(const create of [repo.createFoodLog,repo.createDrinkLog])await assert.rejects(()=>create({title:"fail",notes:"fail"}),/test write failure/);
   const food=await repo.updateFoodLog(1,{foodPlaceId:7,foodDishIds:[11,12],foodDishId:11});
   assert.equal(food.foodPlaceId,7);assert.equal(food.foodPlaceName,"新店");assert.deepEqual(food.foodDishIds,[11,12]);assert.deepEqual(food.foodDishes.map(d=>d.name),["饭","汤"]);assert.equal(food.occurredHasExplicitTime,false);
   assert.deepEqual(food,await repo.getFoodLog(1));
@@ -40,7 +40,7 @@ test("Supabase food and drink creates and updates hydrate committed associations
   const drink=await repo.updateDrinkLog(1,{foodPlaceId:7,drinkMenuId:15,name:"奶茶"});assert.equal(drink.foodPlaceId,7);assert.equal(drink.drinkMenuId,15);assert.equal(drink.drinkMenuName,"奶茶");assert.equal(drink.foodPlaceName,"新店");assert.equal(drink.sugarLevel,"无糖");assert.equal(drink.temperature,"hot");assert.equal(drink.occurredHasExplicitTime,false);
   assert.deepEqual(drink,await repo.getDrinkLog(1));
   const noMenu=await repo.updateDrinkLog(1,{foodPlaceId:null,drinkMenuId:null});assert.equal(noMenu.foodPlaceId,null);assert.equal(noMenu.drinkMenuId,null);assert.equal(noMenu.drinkMenuName,null);
-  for(const update of [repo.updateFoodLog,repo.updateDrinkLog]){assert.equal(await update(999,{notes:"missing"}),null);await assert.rejects(()=>update(1,{notes:"fail"}),/test write failure/);}
+  for(const update of [repo.updateFoodLog,repo.updateDrinkLog]){assert.equal(await update(999,{notes:"missing"}),null);await assert.rejects(()=>update(1,{title:"fail",notes:"fail"}),/test write failure/);}
   for(const request of requests.filter(r=>r.method==="PATCH"||r.method==="POST"))assert.equal(request.select,"id");
  `;
  const loader=pathToFileURL(path.join(process.cwd(),"scripts/typescript-test-loader.mjs")).href;

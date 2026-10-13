@@ -8,7 +8,7 @@ import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { invalidateCachedJson, loadCachedJson, prefetchCachedJson } from "@/lib/client-json-cache";
-import type { ApiError, DrinkInputSuggestions, Pet, Tracker, TrackerField } from "@/lib/types";
+import type { ApiError, Pet, Tracker, TrackerField } from "@/lib/types";
 import { CatRecordEditor } from "./cats/cat-record-editor";
 import { DrinkRecordEditor } from "./drinks/drink-ui";
 import { FoodRecordEditor } from "./food/food-record-editor";
@@ -19,10 +19,8 @@ import { TrackerIcon } from "@/components/tracker-icon";
 
 type QuickEntryKind = "food" | "drink" | "tracker" | "cats" | "inbox" | HealthQuickLogKind;
 type QuickKind = "picker" | QuickEntryKind;
-const emptyDrinkSuggestions: DrinkInputSuggestions = { names: [], brands: [] };
 const quickLogUrls = {
   cats: "/api/cats/pets",
-  drinks: "/api/drinks/suggestions",
   trackers: "/api/trackers/quick-log",
   training: "/api/health/training/suggestions",
 } as const;
@@ -34,7 +32,6 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
   const [active, setActive] = useState<QuickKind | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [drinkSuggestions, setDrinkSuggestions] = useState(emptyDrinkSuggestions);
   const [pets, setPets] = useState<Pet[]>([]);
   const [trackers, setTrackers] = useState<QuickTracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<QuickTracker>();
@@ -49,7 +46,6 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
   }, []);
   const close = () => { setActive(null); setError(""); setSelectedTracker(undefined); };
   async function saved() {
-    if (active === "drink") invalidateCachedJson(quickLogUrls.drinks);
     if (active === "training") invalidateCachedJson(quickLogUrls.training);
     if (active === "weight") invalidateCachedJson("/api/health/weight?limit=1");
     if (active === "period" || active === "medication-dose") invalidateCachedJson("/api/health/periods?limit=30");
@@ -61,7 +57,6 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
     if (kind === "food" || kind === "inbox" || getHealthQuickLog(kind)) { setActive(kind); return; }
     if (kind === "drink") {
       setActive(kind);
-      void loadCachedJson<DrinkInputSuggestions>(quickLogUrls.drinks).then(setDrinkSuggestions).catch(() => undefined);
       return;
     }
     setLoading(true);
@@ -93,7 +88,7 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
     <button type="button" className="home-quick-log-trigger" aria-label={english ? "Quick Log" : "快速记录"} onClick={() => { playNativeHaptic("light"); setActive("picker"); }}><Icon name="plus" variant="stroke" /></button>
     {active === "picker" && <FormSheet title={english ? "Quick Log" : "快速记录"} onClose={close}><div className="home-quick-log-grid">{options.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
-    {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} suggestions={drinkSuggestions} onClose={close} onSaved={saved} />}
+    {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {active === "cats" && <FormSheet title={english ? "New cat record" : "新增猫咪记录"} onClose={close} submitLabel={english ? "Save record" : "保存记录"} busy={loading}><CatRecordEditor key={`cats-${selectedDate}`} pets={pets} initialDate={selectedDate} onSavingChange={setLoading} onCancel={close} onSaved={async () => { await saved(); close(); }} /></FormSheet>}
     {active === "inbox" && <FormSheet title="Inbox" onClose={close} formId="home-inbox-capture" submitLabel={english ? "Save" : "记下"} busy={loading}><InboxCaptureForm formId="home-inbox-capture" sheet onSaved={async () => { await saved(); close(); }} /></FormSheet>}

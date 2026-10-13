@@ -18,8 +18,8 @@ test("optional drink names use menu, manual name, then type without fabricating 
  assert.equal(summary.totalRecords,2);assert.equal(summary.commonDrinks.length,1);assert.equal(summary.commonDrinks[0].name,"茉莉奶茶");
  assert.equal(record.name,"");
 });
-test("brand search retains the full ranked history beyond thirty brands",()=>{
- const records=Array.from({length:55},(_,index)=>({...record,id:index+1,brand:`品牌${index}`}));
+test("name suggestions no longer offer a separate brand input",()=>{
+ const records=Array.from({length:55},(_,index)=>({...record,id:index+1,foodPlaceName:`店铺${index}`}));
  const suggestions=buildDrinkInputSuggestions(records);
- assert.equal(suggestions.brands.length,55);assert.equal(suggestions.names.length,0);
+ assert.equal("brands" in suggestions,false);assert.equal(suggestions.names.length,0);
 });

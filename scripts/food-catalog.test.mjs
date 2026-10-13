@@ -27,8 +27,8 @@ test("catalog search resolves same names by stable source and fills links/calori
       assert.equal(choices.find(item=>item.menu.id===menu.id).servingKcal,80);
       assert.equal((await searchFoodCatalog('drink','',a.id)).length,1);
       const mlRef=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'毫升测试',category:'drink',referenceType:'per_100ml',referenceKcal:40}));
-      const measured=(await drink.createDrinkLog(parseNewDrinkLog({foodLibraryId:mlRef.id,consumedVolumeMl:250.25,volumeMl:500}))).drink;
-      assert.equal(measured.consumedVolumeMl,250.25);assert.equal(measured.estimatedKcal,100.1);assert.equal(measured.volumeMl,500);
+      const measured=(await drink.createDrinkLog(parseNewDrinkLog({foodLibraryId:mlRef.id,consumedVolumeMl:250.25}))).drink;
+      assert.equal(measured.consumedVolumeMl,250.25);assert.equal(measured.estimatedKcal,100.1);assert.equal("volumeMl" in measured,false);
       await food.updateFoodLibraryItem(mlRef.id,{referenceKcal:80});
       assert.equal((await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({consumedVolumeMl:100.25}))).drink.estimatedKcal,40.1);
       assert.equal((await drink.updateDrinkLog(measured.id,parseDrinkLogPatch({consumedVolumeMl:0}))).drink.estimatedKcal,0);
@@ -45,7 +45,7 @@ test("catalog search resolves same names by stable source and fills links/calori
       const standalone=await food.createFoodLog(parseNewFoodLog({title:'未关联',consumedWeightG:52.25,estimatedKcal:10.5}));assert.equal(standalone.consumedWeightG,52.25);assert.equal(standalone.estimatedKcal,10.5);
       for(const bad of [-1,1.001,Infinity]){assert.throws(()=>parseNewFoodLog({title:'非法',consumedWeightG:bad}));assert.throws(()=>parseNewDrinkLog({consumedVolumeMl:bad}));}
       assert.equal('consumedVolumeMl' in parseDrinkLogPatch({notes:'不改量'}),false);
-      assert.equal('consumedWeightG' in parseFoodLogPatch({notes:'不改量'}),false);
+      assert.equal('consumedWeightG' in parseFoodLogPatch({description:'不改量'}),false);
       await assert.rejects(()=>food.createFoodDish(parseFoodDish({name:'错误',kind:'drink',foodPlaceId:b.id,foodLibraryId:ref.id})),/归属/);
       const saved=(await drink.createDrinkLog(parseNewDrinkLog({drinkMenuId:menu.id}))).drink;
       assert.equal(saved.foodPlaceId,a.id);assert.equal(saved.foodLibraryId,ref.id);assert.equal(saved.estimatedKcal,80);
@@ -59,7 +59,7 @@ test("catalog search resolves same names by stable source and fills links/calori
       const meal=await food.createFoodLog(parseNewFoodLog({title:'蛋糕',foodDishIds:[dish.id]}));
       assert.equal(meal.foodPlaceId,a.id);assert.equal(meal.estimatedKcal,250);assert.equal(meal.foodLibraryItems[0].quantity,1);
       await food.updateFoodLibraryItem(foodRef.id,{servingKcal:500});
-      assert.equal((await food.updateFoodLog(meal.id,parseFoodLogPatch({notes:'历史'}))).estimatedKcal,250);
+      assert.equal((await food.updateFoodLog(meal.id,parseFoodLogPatch({description:'历史'}))).estimatedKcal,250);
       assert.throws(()=>db.updateFoodLibraryItem(foodRef.id,{...foodRef,foodPlaceId:b.id}),/其他店铺/);
       const spare=await food.upsertFoodLibraryItem(parseFoodLibraryItem({name:'菜单营养',category:'drink'}));
       await food.createFoodDish(parseFoodDish({name:'无记录菜单',kind:'drink',foodPlaceId:b.id,foodLibraryId:spare.id}));

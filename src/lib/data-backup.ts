@@ -1,5 +1,6 @@
+import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
 export const BACKUP_VERSION = 8 as const;
-export const BACKUP_SCHEMA_VERSION = "202610100003_consumed_amounts";
+export const BACKUP_SCHEMA_VERSION = "202610130003_simplify_consumption_records";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -106,7 +107,7 @@ export function emptyBackupResources(): BackupResources {
 }
 
 export function sanitizeExportRow(table: BackupTable, source: BackupRow): BackupRow {
-  const row = { ...source };
+  const row = table === "food_logs" || table === "drink_logs" ? migrateFoodDrinkRecord(table, source) : { ...source };
   delete row.user_id;
   // Provider/model records contain secrets and are intentionally excluded. Keep
   // conversation content useful locally without leaving dangling foreign keys.
@@ -127,7 +128,7 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
 }
 
 export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRow): BackupRow {
-  const row = { ...source };
+  const row = table === "food_logs" || table === "drink_logs" ? migrateFoodDrinkRecord(table, source) : { ...source };
   delete row.user_id;
   if (table === "chat_sessions" || table === "chat_messages") {
     row.provider_id = null;
@@ -198,5 +199,6 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
       throw new Error(`备份格式错误：resources.${table} 必须只包含对象`);
     }
   }
+  for (const table of ["food_logs", "drink_logs"] as const) resources[table] = (resources[table] as BackupRow[]).map(row => migrateFoodDrinkRecord(table, row));
   return { ...(value as EvaOrbitBackup), resources: resources as BackupResources };
 }

@@ -189,7 +189,7 @@ test("food meals reuse shared capsules, have no recommendation badge, and detail
 
 test("food hides calorie bounds but preserves them on edit, with context before calories and details after place", async () => {
   let payload;
-  const record = { id: 1, title: "午餐", description: "原有明细", occurredAt: "2026-10-09T04:00:00.000Z", occurredHasExplicitTime: false, mealType: "lunch", scene: "restaurant", rating: "good", estimatedKcal: 180, kcalMin: 0, kcalMax: 240, confidence: "medium", portion: "原有份量", notes: "原有备注", foodPlaceId: 2, foodPlaceName: "餐厅", foodDishIds: [3] };
+  const record = { id: 1, title: "午餐", description: "原有明细\n\n份量说明：原有份量\n\n原有备注", occurredAt: "2026-10-09T04:00:00.000Z", occurredHasExplicitTime: false, mealType: "lunch", scene: "restaurant", rating: "good", estimatedKcal: 180, kcalMin: 0, kcalMax: 240, confidence: "medium", portion: "原有份量", notes: "原有备注", foodPlaceId: 2, foodPlaceName: "餐厅", foodDishIds: [3] };
   const h = harness("src/app/food/food-record-editor.tsx", "FoodRecordEditor", { date: "2026-10-10", record, onClose() {}, onSaved() {} }, { fetch: async (_, options) => { payload = JSON.parse(options.body); return { ok: true }; } });
   h.render();
   const labels = h.nodes().filter(node => node.type === "span").map(node => node.props.children);
@@ -202,7 +202,7 @@ test("food hides calorie bounds but preserves them on edit, with context before 
   assert.equal(nodes.some(node => node.type === "p" && node.props.children === "按店铺查找（备选）"), false);
   await nodes.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
   assert.equal(payload.kcalMin, 0); assert.equal(payload.kcalMax, 240); assert.equal(payload.estimatedKcal, 180);
-  assert.equal(payload.description, "原有明细"); assert.equal(payload.portion, "原有份量"); assert.equal(payload.notes, "原有备注");
+  assert.equal(payload.description, "原有明细\n\n份量说明：原有份量\n\n原有备注"); assert.equal("portion" in payload, false); assert.equal("notes" in payload, false); assert.equal(nodes.filter(node => node.type === "textarea").length, 1);
   assert.equal(payload.occurredHasExplicitTime, false); assert.deepEqual(payload.foodDishIds, [3]);
 });
 
@@ -233,7 +233,7 @@ test("measured food and drink amounts calculate decimal calories and persist sep
     await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
     assert.equal(payload[kind === "food" ? "consumedWeightG" : "consumedVolumeMl"], 250.25);
     assert.equal(payload.estimatedKcal, 100.1);
-    if (kind === "drink") assert.equal(payload.volumeMl, null);
+    if (kind === "drink") assert.equal("volumeMl" in payload, false);
     amount().props.onChange({ target: { value: "0" } }); h.render();
     await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
     assert.equal(payload.estimatedKcal, 0);
@@ -249,7 +249,7 @@ test("name selection preserves historical links until choosing another item and 
   h.render();await save();h.render();assert.equal(payload.foodLibraryId,3);assert.equal(payload.drinkMenuId,2);assert.equal(payload.kcalMax,120);
   name().props.onSelect({key:"menu:5",name:"乌龙茶",placeId:4,placeName:"茶店",menu:{id:5,drinkType:"tea"},library:{id:9,drinkType:"tea"},servingKcal:80});h.render();await save();h.render();
   assert.equal(payload.foodPlaceId,4);assert.equal(payload.foodLibraryId,9);assert.equal(payload.drinkMenuId,5);assert.equal(payload.drinkType,"tea");assert.equal(payload.estimatedKcal,80);
-  assert.equal(payload.occurredHasExplicitTime,false);assert.equal(payload.caffeineMg,0);assert.equal(payload.brand,"历史品牌");assert.equal(payload.volumeMl,350);
+  assert.equal(payload.occurredHasExplicitTime,false);assert.equal("caffeineMg" in payload,false);assert.equal("brand" in payload,false);assert.equal("volumeMl" in payload,false);
   name().props.onValueChange("手填饮品");h.render();await save();
   assert.equal(payload.name,"手填饮品");assert.equal(payload.foodPlaceId,null);assert.equal(payload.foodLibraryId,null);assert.equal(payload.drinkMenuId,null);assert.equal(payload.estimatedKcal,null);
 });

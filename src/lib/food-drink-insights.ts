@@ -66,12 +66,12 @@ export function buildFoodDrinkInsights(foods: FoodLog[], drinks: DrinkLog[], dat
   }
   const preferences = buildDrinkPreferenceSummary(md, new Date(`${date}T12:00:00Z`));
   const commonDrink = preferences.commonDrinks[0];
-  const sameDrink = commonDrink ? md.filter(row => commonDrink.sourceKey ? drinkIdentity(row) === commonDrink.sourceKey : key(row.drinkMenuName || row.name) === key(commonDrink.name) && key(row.brand) === key(commonDrink.brand)) : [];
+  const sameDrink = commonDrink ? md.filter(row => commonDrink.sourceKey ? drinkIdentity(row) === commonDrink.sourceKey : key(row.drinkMenuName || row.name) === key(commonDrink.name) && key(row.foodPlaceName ?? "") === key(commonDrink.sourceName)) : [];
   if (commonDrink?.count >= 3 && activeDays(sameDrink) >= 2) {
-    add("common-drink", "drink", 59 + Math.min(commonDrink.count, 10), `「${commonDrink.name}」最近喝了好几次`, `${commonDrink.brand ? commonDrink.brand + " · " : ""}近 30 天 ${commonDrink.count} 杯，分布在 ${activeDays(sameDrink)} 天。`, "/drinks/history");
+    add("common-drink", "drink", 59 + Math.min(commonDrink.count, 10), `「${commonDrink.name}」最近喝了好几次`, `${commonDrink.sourceName ? commonDrink.sourceName + " · " : ""}近 30 天 ${commonDrink.count} 杯，分布在 ${activeDays(sameDrink)} 天。`, "/drinks/history");
   }
   const preferred = preferences.preferredDrinks.find(item => {
-    const rows = md.filter(row => item.sourceKey ? drinkIdentity(row) === item.sourceKey : key(row.drinkMenuName || row.name) === key(item.name) && key(row.brand) === key(item.brand));
+    const rows = md.filter(row => item.sourceKey ? drinkIdentity(row) === item.sourceKey : key(row.drinkMenuName || row.name) === key(item.name) && key(row.foodPlaceName ?? "") === key(item.sourceName));
     const positive = rows.filter(row => row.rating === "love" || row.rating === "good").length;
     return item.ratingCount >= 3 && positive / item.ratingCount >= .67 && activeDays(rows) >= 2 && item.name !== commonDrink?.name;
   });

@@ -5,12 +5,12 @@ import { buildRelationTimelineEvents, buildTimelineEvents, buildTrainingTimeline
 import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types.ts";
 
 const food: FoodLog = {
-  id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "", portion: "半碗饭", scene: "home", rating: null,
-  estimatedKcal: 300, kcalMin: 260, kcalMax: 340, confidence: "medium", notes: "", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "",
+  id: 7, occurredAt: "2026-08-26T04:00:00.000Z", mealType: "lunch", title: "午饭", description: "份量说明：半碗饭", scene: "home", rating: null,
+  estimatedKcal: 300, kcalMin: 260, kcalMax: 340, confidence: "medium", imageUrl: null, attachmentId: null, createdAt: "", updatedAt: "",
 };
 const drink: DrinkLog = {
-  id: 3, occurredAt: "2026-08-26T06:00:00.000Z", occurredHasExplicitTime: true, name: "咖啡", brand: "", drinkType: "coffee", volumeMl: 300, sugarLevel: "none", temperature: null, rating: null,
-  caffeineMg: 90, estimatedKcal: 5, kcalMin: 0, kcalMax: 10, confidence: "high", foodLibraryId: null, notes: "", createdAt: "", updatedAt: "",
+  id: 3, occurredAt: "2026-08-26T06:00:00.000Z", occurredHasExplicitTime: true, name: "咖啡", foodPlaceName: "", drinkType: "coffee", consumedVolumeMl: 300, sugarLevel: "none", temperature: null, rating: null,
+  estimatedKcal: 5, kcalMin: 0, kcalMax: 10, confidence: "high", foodLibraryId: null, notes: "", createdAt: "", updatedAt: "",
 };
 const tracker: Tracker = {
   id: 11, name: "吃药", icon: "💊", iconType: "default", iconValue: "", groupName: "健康", timeType: "point", quickCaptureEnabled: true,
@@ -55,12 +55,12 @@ test("puts timed events before date-only events on the same EvaOrbit day", () =>
 });
 
 test("groups food records into one home timeline row per meal", () => {
-  const secondFood = { ...food, id: 8, title: "青菜", portion: "一碟" };
+  const secondFood = { ...food, id: 8, title: "青菜", description: "份量说明：一碟" };
   const events = groupMealTimelineEvents(buildTimelineEvents([food, secondFood], [drink]));
   assert.deepEqual(events.map((event) => event.id), ["drink:3", "food-meal:lunch:2026-08-26"]);
   assert.equal(events[1].eventType, "food.meal");
   assert.equal(events[1].metadata.count, 2);
-  assert.deepEqual(events[1].metadata.foodItems, [{ title: "青菜", detail: "一碟" }, { title: "午饭", detail: "半碗饭" }]);
+  assert.deepEqual(events[1].metadata.foodItems, [{ title: "青菜", detail: "份量说明：一碟" }, { title: "午饭", detail: "份量说明：半碗饭" }]);
 });
 
 test("maps training logs into editable date-aware timeline events", () => {

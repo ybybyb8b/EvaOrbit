@@ -435,7 +435,6 @@ export type TasteRating = typeof TASTE_RATINGS[number];
 export type EstimateConfidence = "high" | "medium" | "low";
 export interface FoodLog {
   consumedWeightG?: number | null;
-  calendarTimeEnabled?: boolean;
   originalOccurredAt?: string;
   originalHasExplicitTime?: boolean;
   calendarMeal?: { id: number; title: string; startAt: string; endAt: string; notes: string };
@@ -448,14 +447,12 @@ export interface FoodLog {
   mealType: MealType;
   title: string;
   description: string;
-  portion: string;
   scene: FoodScene;
   rating: TasteRating | null;
   estimatedKcal: number | null;
   kcalMin: number | null;
   kcalMax: number | null;
   confidence: EstimateConfidence;
-  notes: string;
   imageUrl: string | null;
   attachmentId: string | null;
   foodPlaceId?: number | null;
@@ -966,13 +963,10 @@ export interface DrinkLog {
   occurredAt: string;
   occurredHasExplicitTime: boolean;
   name: string;
-  brand: string;
   drinkType: DrinkType;
-  volumeMl: number | null;
   sugarLevel: string;
   temperature: DrinkTemperature | null;
   rating: TasteRating | null;
-  caffeineMg: number | null;
   estimatedKcal: number | null;
   kcalMin: number | null;
   kcalMax: number | null;
@@ -986,14 +980,13 @@ export interface DrinkLog {
 export type LimitPeriod = "daily" | "weekly" | "monthly";
 export interface DrinkInputSuggestions {
   names: string[];
-  brands: string[];
 }
 export interface DrinkPreferenceSummary {
   totalRecords: number;
   commonTypes: Array<{ value: DrinkType; count: number }>;
-  commonDrinks: Array<{ name: string; brand: string; count: number; sourceKey?: string }>;
-  preferredDrinks: Array<{ name: string; brand: string; count: number; score: number; ratingCount: number; sourceKey?: string }>;
-  commonBrands: Array<{ value: string; count: number }>;
+  commonDrinks: Array<{ name: string; sourceName: string; count: number; sourceKey?: string }>;
+  preferredDrinks: Array<{ name: string; sourceName: string; count: number; score: number; ratingCount: number; sourceKey?: string }>;
+  commonPlaces: Array<{ value: string; count: number }>;
   sugarTendency: Array<{ value: string; count: number }>;
   temperatureTendency: Array<{ value: DrinkTemperature; count: number }>;
   recent: DrinkLog[];

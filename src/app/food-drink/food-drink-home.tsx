@@ -9,7 +9,7 @@ import { dateInEvaOrbit, EVAORBIT_TIME_ZONE } from "@/lib/time";
 import { foodRecordDisplay } from "@/lib/food-record-display";
 import { drinkRecordName } from "@/lib/drink-display";
 import type { FoodDrinkHomeData } from "@/lib/food-drink-insights";
-import type { DrinkLog, FoodLog, DrinkInputSuggestions, DrinkLimit } from "@/lib/types";
+import type { DrinkLog, FoodLog, DrinkLimit } from "@/lib/types";
 import { FoodRecordEditor } from "../food/food-record-editor";
 import { DrinkRecordEditor } from "../drinks/drink-ui";
 import { LimitEditor, limitStateLabels, limitPeriodLabels } from "./limit-editor";
@@ -26,7 +26,6 @@ const severity = { exceeded_limit: 3, reached_limit: 2, near_limit: 1, within_li
 
 export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "drink" }) {
   const [data, setData] = useState<FoodDrinkHomeData | null>(null);
-  const [suggestions, setSuggestions] = useState<DrinkInputSuggestions>({ names: [], brands: [] });
   const [editor, setEditor] = useState<Editor>(initialRecord ? { kind: initialRecord } : null);
   const [limitEditor, setLimitEditor] = useState<DrinkLimit | "new" | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
@@ -41,12 +40,6 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
     finally { if (!signal?.aborted) setLoading(false); }
   }, []);
   useEffect(() => { const controller = new AbortController(); const timer = setTimeout(() => void load(controller.signal), 0); return () => { clearTimeout(timer); controller.abort(); }; }, [load]);
-  useEffect(() => {
-    if (editor?.kind !== "drink") return;
-    const controller = new AbortController();
-    void fetch("/api/drinks/suggestions", { signal: controller.signal }).then(async response => { if (response.ok && !controller.signal.aborted) setSuggestions(await response.json()); }).catch(() => { /* Suggestions are optional. */ });
-    return () => controller.abort();
-  }, [editor?.kind]);
   const latest = data?.brief.latest;
   const latestTitle = latest ? latest.kind === "food" ? foodRecordDisplay(latest.record).title : drinkRecordName(latest.record) : "";
   const warning = data?.limitStatuses.filter(status => status.state !== "within_limit").sort((a, b) => severity[b.state] - severity[a.state])[0];
@@ -75,6 +68,6 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
     {limitEditor && <LimitEditor limit={limitEditor === "new" ? undefined : limitEditor} onClose={() => setLimitEditor(null)} onSaved={load} />}
     {editor?.kind === "choose" && <FormSheet title="新增记录" onClose={() => setEditor(null)}><div className={styles.recordChoices}><button onClick={() => setEditor({ kind: "food" })}><Icon name="food" /><span><strong>Record food</strong><small>记录一餐、加餐或包装食品</small></span><Icon name="arrow" variant="stroke" /></button><button onClick={() => setEditor({ kind: "drink" })}><Icon name="drink" /><span><strong>Record drink</strong><small>记录饮品、糖度、冷热与容量</small></span><Icon name="arrow" variant="stroke" /></button></div></FormSheet>}
     {editor?.kind === "food" && <FoodRecordEditor date={data?.date ?? dateInEvaOrbit()} record={editor.record} onClose={() => setEditor(null)} onSaved={load} onDeleted={load} />}
-    {editor?.kind === "drink" && <DrinkRecordEditor initialDate={data?.date ?? dateInEvaOrbit()} record={editor.record} suggestions={suggestions} onClose={() => setEditor(null)} onSaved={load} onDeleted={load} />}
+    {editor?.kind === "drink" && <DrinkRecordEditor initialDate={data?.date ?? dateInEvaOrbit()} record={editor.record} onClose={() => setEditor(null)} onSaved={load} onDeleted={load} />}
   </div>;
 }

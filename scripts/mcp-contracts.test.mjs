@@ -53,14 +53,14 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const {item:library}=await call("eo_create",{resource:"food_library",data:{name:"Reference",brand:"Brand",reference_type:"per_100g",reference_kcal:200}});
       assert.equal((await call("eo_create",{resource:"food_library",data:{name:"Reference",brand:"Brand",reference_type:"per_100g",reference_kcal:200}})).item.id,library.id);
       assert.equal((await call("eo_search",{resource:"food_library",query:"Ref",filters:{brand:"Brand",category:"other"}})).items[0].id,library.id);
-      const {item:meal}=await call("eo_create",{resource:"food_log",data:{title:"Rice",scene:"restaurant",rating:"good",occurred_at:"2026-10-05T12:00:00+08:00",occurred_has_explicit_time:false,food_place_id:place.id,food_dish_ids:[dish.id],food_library_items:[{food_library_id:library.id,quantity:50,unit:"g"}],food_kcal_mode:"auto",calendar_time_enabled:false}});
+      const {item:meal}=await call("eo_create",{resource:"food_log",data:{title:"Rice",scene:"restaurant",rating:"good",occurred_at:"2026-10-05T12:00:00+08:00",occurred_has_explicit_time:false,food_place_id:place.id,food_dish_ids:[dish.id],food_library_items:[{food_library_id:library.id,quantity:50,unit:"g"}],food_kcal_mode:"auto"}});
       assert.equal(meal.estimated_kcal,100);assert.equal(meal.food_library_items[0].nutrition_reference.reference_kcal,200);
       assert.equal(meal.food_place_city,"成都");assert.equal(meal.food_place_location,"商场");assert.deepEqual(meal.food_dish_ids,[dish.id]);
       assert.equal((await call("eo_get",{resource:"food_log",id:meal.id})).item.occurred_has_explicit_time,false);
       assert.equal((await call("eo_search",{resource:"food_log",filters:{date:"2026-10-05",meal_type:"snack",food_dish_id:dish.id}})).items[0].id,meal.id);
       assert.equal((await call("eo_get",{resource:"nutrition_daily",id:"2026-10-05"})).item.estimated_intake_kcal,100);
       await call("eo_update",{resource:"food_library",id:library.id,data:{reference_kcal:300}});
-      const {item:noteEdit}=await call("eo_update",{resource:"food_log",id:meal.id,data:{notes:"Preserve snapshot"}});
+      const {item:noteEdit}=await call("eo_update",{resource:"food_log",id:meal.id,data:{description:"Preserve snapshot"}});
       assert.deepEqual(noteEdit.food_library_items,meal.food_library_items);assert.equal(noteEdit.estimated_kcal,100);
       assert.equal(noteEdit.occurred_has_explicit_time,false);assert.equal(noteEdit.occurred_at,meal.occurred_at);
       await reject("eo_update",{resource:"food_log",id:meal.id,data:{food_dish_id:dish.id}},/does not accept/);
@@ -78,13 +78,13 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       assert.equal(cleared.estimated_kcal,150);
 
       const {item:drinkLimit}=await call("eo_create",{resource:"drink_limit",data:{name:"Tea daily",target_type:"tea",period:"daily",limit_value:1}});
-      const {item:drink}=await call("eo_create",{resource:"drink_log",data:{name:"Placeholder",drink_type:"tea",food_place_id:place.id,drink_menu_id:menu.id,food_library_id:library.id,occurred_at:"2026-10-06T12:00:00+08:00",occurred_has_explicit_time:false,sugar_level:"无糖",temperature:"hot",caffeine_mg:0,estimated_kcal:50}});
-      assert.equal(drink.name,"Tea");assert.equal(drink.caffeine_mg,0);
+      const {item:drink}=await call("eo_create",{resource:"drink_log",data:{name:"Placeholder",drink_type:"tea",food_place_id:place.id,drink_menu_id:menu.id,food_library_id:library.id,occurred_at:"2026-10-06T12:00:00+08:00",occurred_has_explicit_time:false,sugar_level:"无糖",temperature:"hot",estimated_kcal:50}});
+      assert.equal(drink.name,"Tea");assert.equal("caffeine_mg" in drink,false);
       assert.ok(drink.limits.some(status=>status.limit.id===drinkLimit.id));
       assert.equal((await call("eo_get",{resource:"drink_log",id:drink.id})).item.occurred_has_explicit_time,false);
       assert.equal((await call("eo_search",{resource:"drink_log",query:"Tea",filters:{date:"2026-10-06",drink_menu_id:menu.id}})).items[0].id,drink.id);
       const {item:drinkPatch}=await call("eo_update",{resource:"drink_log",id:drink.id,data:{notes:"Only note"}});
-      for(const key of ["food_place_id","drink_menu_id","food_library_id","occurred_at","occurred_has_explicit_time","temperature","sugar_level","caffeine_mg"])assert.deepEqual(drinkPatch[key],drink[key],key);
+      for(const key of ["food_place_id","drink_menu_id","food_library_id","occurred_at","occurred_has_explicit_time","temperature","sugar_level"])assert.deepEqual(drinkPatch[key],drink[key],key);
       assert.ok(Array.isArray(drinkPatch.limits));
       await reject("eo_update",{resource:"drink_log",id:drink.id,data:{drink_menu_id:dish.id}},/菜单/);
       assert.equal((await call("eo_delete",{resource:"food_library",id:library.id})).action,"archived");
@@ -116,10 +116,10 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       assert.equal(matched.occurred_at,calendarMeal.start_at);assert.equal(matched.calendar_meal.id,calendarMeal.id);
       assert.equal((await call("eo_get",{resource:"food_log",id:matched.id})).item.occurred_at,calendarMeal.start_at);
       assert.equal((await call("eo_search",{resource:"food_log",filters:{date:"2026-10-09"}})).items[0].occurred_at,calendarMeal.start_at);
-      const {item:matchedPatch}=await call("eo_update",{resource:"food_log",id:matched.id,data:{notes:"Keep original time",occurred_at:matched.occurred_at,occurred_has_explicit_time:true}});
+      const {item:matchedPatch}=await call("eo_update",{resource:"food_log",id:matched.id,data:{description:"Keep original time",occurred_at:matched.occurred_at,occurred_has_explicit_time:true}});
       assert.equal(matchedPatch.original_occurred_at,matched.original_occurred_at);
       const {item:manualTime}=await call("eo_update",{resource:"food_log",id:matched.id,data:{occurred_at:"2026-10-09T14:00:00+08:00"}});
-      assert.equal(manualTime.calendar_time_enabled,true);assert.equal(manualTime.occurred_at,calendarMeal.start_at);assert.equal(manualTime.original_occurred_at,"2026-10-09T06:00:00.000Z");
+      assert.equal("calendar_time_enabled" in manualTime,false);assert.equal(manualTime.occurred_at,calendarMeal.start_at);assert.equal(manualTime.original_occurred_at,"2026-10-09T06:00:00.000Z");
       await call("eo_delete",{resource:"food_log",id:matched.id});
 
       const {item:one}=await call("eo_create",{resource:"tracker",data:{name:"One"}});

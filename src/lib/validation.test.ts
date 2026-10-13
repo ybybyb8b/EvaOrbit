@@ -61,10 +61,9 @@ test("normalizes core life capture records", () => {
   assert.equal(parseNewFoodLog({ title: "面", scene: "delivery", rating: "love" }).rating, "love");
   assert.throws(() => parseNewFoodLog({ title: "面", scene: "home", rating: "love" }), /外卖或外食/);
   assert.throws(() => parseNewFoodLog({ title: "面", kcalMin: 600, kcalMax: 400 }), /热量下限/);
-  const drink = parseNewDrinkLog({ name: " 拿铁 ", brand: " 品牌 A ", drinkType: "coffee", volumeMl: 350, sugarLevel: "半糖" });
+  const drink = parseNewDrinkLog({ name: " 拿铁 ", drinkType: "coffee", consumedVolumeMl: 350, sugarLevel: "半糖" });
   assert.equal(drink.name, "拿铁");
-  assert.equal(drink.brand, "品牌 A");
-  assert.equal(drink.volumeMl, 350);
+  assert.equal(drink.consumedVolumeMl, 350);
   assert.equal(drink.sugarLevel, "半糖");
   const datedDrink = parseNewDrinkLog({ name: "冰茶", occurredAt: "2026-08-20T12:00:00+08:00", occurredHasExplicitTime: false, temperature: "less_ice", rating: "good" });
   assert.equal(datedDrink.occurredHasExplicitTime, false);
@@ -142,11 +141,13 @@ test("validates tracker fields and keeps entries as point events", () => {
   assert.equal(entry.endAt, null);
 });
 
-test("optional drink caffeine preserves zero and validates the existing input boundary", () => {
-  assert.equal(parseNewDrinkLog({name:"无咖啡因饮品",caffeineMg:0}).caffeineMg,0);
-  assert.equal(parseNewDrinkLog({name:"咖啡",caffeineMg:120}).caffeineMg,120);
-  assert.equal(parseNewDrinkLog({name:"未填写"}).caffeineMg,null);
-  assert.deepEqual(parseDrinkLogPatch({notes:"只改备注"}),{notes:"只改备注"});
-  assert.deepEqual(parseDrinkLogPatch({caffeineMg:null}),{caffeineMg:null});
-  assert.throws(()=>parseNewDrinkLog({name:"咖啡",caffeineMg:5001}),ValidationError);
+test("retired consumption fields are rejected rather than silently ignored", () => {
+  for (const key of ["brand", "volumeMl", "caffeineMg"]) {
+    assert.throws(() => parseNewDrinkLog({ name: "茶", [key]: null }), /已停用/);
+    assert.throws(() => parseDrinkLogPatch({ [key]: null }), /已停用/);
+  }
+  for (const key of ["portion", "notes", "calendarTimeEnabled"]) {
+    assert.throws(() => parseNewFoodLog({ title: "饭", [key]: "" }), /已停用/);
+  }
+  assert.deepEqual(parseDrinkLogPatch({ notes: "只改备注" }), { notes: "只改备注" });
 });

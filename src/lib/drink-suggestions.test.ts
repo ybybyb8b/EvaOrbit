@@ -5,11 +5,11 @@ import { buildDrinkInputSuggestions } from "./drink-suggestions.ts";
 import { monthRange } from "./time.ts";
 import type { DrinkLog } from "./types.ts";
 
-function drink(id: number, occurredAt: string, name: string, brand: string, notes = ""): DrinkLog {
-  return { id, occurredAt, occurredHasExplicitTime: true, name, brand, drinkType: "coffee", volumeMl: null, sugarLevel: "", temperature: null, rating: null, caffeineMg: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", foodLibraryId: null, notes, createdAt: occurredAt, updatedAt: occurredAt };
+function drink(id: number, occurredAt: string, name: string, foodPlaceName: string, notes = ""): DrinkLog {
+  return { id, occurredAt, occurredHasExplicitTime: true, name, foodPlaceName, drinkType: "coffee", sugarLevel: "", temperature: null, rating: null, estimatedKcal: null, kcalMin: null, kcalMax: null, confidence: "medium", foodLibraryId: null, notes, createdAt: occurredAt, updatedAt: occurredAt };
 }
 
-test("ranks trimmed Drink name and brand history by frequency then recency", () => {
+test("ranks trimmed Drink name and place history by frequency then recency", () => {
   const suggestions = buildDrinkInputSuggestions([
     drink(1, "2026-08-01T08:00:00Z", " Latte ", "Brand A", "notes are not suggestions"),
     drink(2, "2026-08-20T08:00:00Z", "latte", " Brand A "),
@@ -17,7 +17,6 @@ test("ranks trimmed Drink name and brand history by frequency then recency", () 
     drink(4, "2026-08-29T08:00:00Z", "Soda", "Brand C"),
   ]);
   assert.deepEqual(suggestions.names, ["latte", "Tea", "Soda"]);
-  assert.deepEqual(suggestions.brands, ["Brand A", "Brand B", "Brand C"]);
   assert.equal(suggestions.names.includes("notes are not suggestions"), false);
 });
 

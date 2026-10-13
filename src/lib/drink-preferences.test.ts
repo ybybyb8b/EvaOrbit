@@ -4,12 +4,12 @@ import test from "node:test";
 import { buildDrinkPreferenceSummary } from "./drink-preferences.ts";
 import type { DrinkLog } from "./types.ts";
 
-function drink(id:number,occurredAt:string,name:string,rating:DrinkLog["rating"],extra:Partial<DrinkLog>={}):DrinkLog{return{id,occurredAt,occurredHasExplicitTime:false,name,brand:"",drinkType:"tea",volumeMl:null,sugarLevel:"",temperature:null,rating,caffeineMg:null,estimatedKcal:null,kcalMin:null,kcalMax:null,confidence:"medium",foodLibraryId:null,notes:"",createdAt:occurredAt,updatedAt:occurredAt,...extra};}
+function drink(id:number,occurredAt:string,name:string,rating:DrinkLog["rating"],extra:Partial<DrinkLog>={}):DrinkLog{return{id,occurredAt,occurredHasExplicitTime:false,name,foodPlaceName:"",drinkType:"tea",sugarLevel:"",temperature:null,rating,estimatedKcal:null,kcalMin:null,kcalMax:null,confidence:"medium",foodLibraryId:null,notes:"",createdAt:occurredAt,updatedAt:occurredAt,...extra};}
 
 test("Drink preferences combine rating, repurchase frequency and recency without calling a frequent neutral drink a favorite",()=>{
   const logs=[
-    drink(1,"2026-08-29T04:00:00.000Z","喜欢的茶","love",{brand:"A",sugarLevel:"微糖",temperature:"less_ice"}),
-    drink(2,"2026-08-27T04:00:00.000Z","喜欢的茶","good",{brand:"A",sugarLevel:"微糖",temperature:"less_ice"}),
+    drink(1,"2026-08-29T04:00:00.000Z","喜欢的茶","love",{foodPlaceName:"A",sugarLevel:"微糖",temperature:"less_ice"}),
+    drink(2,"2026-08-27T04:00:00.000Z","喜欢的茶","good",{foodPlaceName:"A",sugarLevel:"微糖",temperature:"less_ice"}),
     ...Array.from({length:6},(_,index)=>drink(10+index,`2026-08-${String(20+index).padStart(2,"0")}T04:00:00.000Z`,"经常但一般","neutral")),
   ];
   const summary=buildDrinkPreferenceSummary(logs,new Date("2026-08-31T04:00:00.000Z"));
@@ -32,7 +32,7 @@ test("Food and Drink taste migration preserves old rows and adds constrained nul
 
 test("source identities survive renamed drinks and changing brands, while identical names at different sources stay separate", () => {
   const summary = buildDrinkPreferenceSummary([
-    drink(1,"2026-10-01T04:00:00.000Z","旧名","love",{drinkMenuId:7,brand:"旧品牌"}),
+    drink(1,"2026-10-01T04:00:00.000Z","旧名","love",{drinkMenuId:7,foodPlaceName:"旧品牌"}),
     drink(2,"2026-10-02T04:00:00.000Z","新名","good",{drinkMenuId:7}),
     drink(3,"2026-10-03T04:00:00.000Z","新名","love",{drinkMenuId:8}),
     drink(4,"2026-10-04T04:00:00.000Z","产品旧名","love",{foodLibraryId:9}),

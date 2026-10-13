@@ -3,6 +3,14 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["浏览方式", "View"], ["概览", "Overview"], ["按模块", "By module"], ["全部条目", "All Items"], ["未完成", "Unfinished"],
+  ["模块", "Module"], ["全部模块", "All modules"], ["未分配模块", "No module"], ["仅一级模块", "Module only"],
+  ["新增模块", "New module"], ["新增子分类", "New category"], ["新模块名称", "New module name"], ["新子分类名称", "New category name"], ["使用此名称", "Use name"],
+  ["记录条目", "Record Item"], ["新建条目", "Record an Item"], ["没有符合筛选条件的条目。", "No Items match these filters."],
+  ["点击使用此名称后选中；保存条目时加入项目目录。", "Use name to select it; saving this Item adds it to the project directory."],
+  ["改饮食记录", "Edit food record"], ["改饮品记录", "Edit drink record"], ["补一条饮食", "Add food record"], ["补一杯", "Add drink record"],
+  ["改好了", "Save changes"], ["记下", "Save"], ["正在修改…", "Saving changes…"], ["正在保存…", "Saving…"],
+  ["明细 / 备注", "Details / notes"],
   ["食用量（克）最多保留两位小数", "Amount eaten (g) supports up to two decimal places"], ["饮用量（毫升）最多保留两位小数", "Amount drunk (ml) supports up to two decimal places"],
   ["吃了多少（克）", "Amount eaten (g)"], ["喝了多少（毫升）", "Amount drunk (ml)"],
   ["按已关联的每 100 毫升营养基准换算；没有可换算基准时手动估算热量。", "Calculated from the linked nutrition per 100 ml; estimate calories manually if no convertible reference is available."],

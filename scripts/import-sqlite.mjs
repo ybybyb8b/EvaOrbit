@@ -1,3 +1,4 @@
+import { migrateFoodDrinkRecord } from "../src/lib/food-drink-record-migration.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -33,9 +34,9 @@ const memories = rows("memories");
 const sessions = rows("chat_sessions");
 const messages = rows("chat_messages");
 const inboxItems = optionalRows("inbox_items");
-const foodLogs = optionalRows("food_logs");
+const foodLogs = optionalRows("food_logs").map(row => migrateFoodDrinkRecord("food_logs", row));
 const foodLibrary = optionalRows("food_library");
-const drinkLogs = optionalRows("drink_logs");
+const drinkLogs = optionalRows("drink_logs").map(row => migrateFoodDrinkRecord("drink_logs", row));
 const drinkLimits = optionalRows("drink_limits");
 const nutritionSummaries = optionalRows("daily_nutrition_summaries", "date");
 const settings = sqlite.prepare("select * from ai_settings where id = 1").get();
@@ -85,11 +86,11 @@ try {
         converted_type=excluded.converted_type,converted_id=excluded.converted_id,created_at=excluded.created_at,updated_at=excluded.updated_at
       where inbox_items.user_id=excluded.user_id`;
     for (const row of foodLogs) await tx`
-      insert into public.food_logs (id,user_id,occurred_at,meal_type,title,description,portion,scene,estimated_kcal,kcal_min,kcal_max,confidence,notes,image_url,attachment_id,created_at,updated_at)
-      values (${row.id},${userId},${timestamp(row.occurred_at)},${row.meal_type},${row.title},${row.description},${row.portion},${row.scene},${row.estimated_kcal},${row.kcal_min},${row.kcal_max},${row.confidence},${row.notes},${row.image_url},${row.attachment_id},${timestamp(row.created_at)},${timestamp(row.updated_at)})
+      insert into public.food_logs (id,user_id,occurred_at,meal_type,title,description,scene,estimated_kcal,kcal_min,kcal_max,confidence,image_url,attachment_id,created_at,updated_at)
+      values (${row.id},${userId},${timestamp(row.occurred_at)},${row.meal_type},${row.title},${row.description},${row.scene},${row.estimated_kcal},${row.kcal_min},${row.kcal_max},${row.confidence},${row.image_url},${row.attachment_id},${timestamp(row.created_at)},${timestamp(row.updated_at)})
       on conflict (id) do update set occurred_at=excluded.occurred_at,meal_type=excluded.meal_type,title=excluded.title,description=excluded.description,
-        portion=excluded.portion,scene=excluded.scene,estimated_kcal=excluded.estimated_kcal,kcal_min=excluded.kcal_min,kcal_max=excluded.kcal_max,
-        confidence=excluded.confidence,notes=excluded.notes,image_url=excluded.image_url,attachment_id=excluded.attachment_id,created_at=excluded.created_at,updated_at=excluded.updated_at
+        scene=excluded.scene,estimated_kcal=excluded.estimated_kcal,kcal_min=excluded.kcal_min,kcal_max=excluded.kcal_max,
+        confidence=excluded.confidence,image_url=excluded.image_url,attachment_id=excluded.attachment_id,created_at=excluded.created_at,updated_at=excluded.updated_at
       where food_logs.user_id=excluded.user_id`;
     for (const row of foodLibrary) await tx`
       insert into public.food_library (id,user_id,name,brand,category,default_portion,reference_type,reference_energy_kj,reference_kcal,serving_weight,serving_kcal,data_source,notes,updated_at)
@@ -99,10 +100,10 @@ try {
         serving_weight=excluded.serving_weight,serving_kcal=excluded.serving_kcal,data_source=excluded.data_source,notes=excluded.notes,updated_at=excluded.updated_at
       where food_library.user_id=excluded.user_id`;
     for (const row of drinkLogs) await tx`
-      insert into public.drink_logs (id,user_id,occurred_at,name,brand,drink_type,volume_ml,sugar_level,caffeine_mg,estimated_kcal,kcal_min,kcal_max,confidence,food_library_id,notes,created_at,updated_at)
-      values (${row.id},${userId},${timestamp(row.occurred_at)},${row.name},${row.brand},${row.drink_type},${row.volume_ml},${row.sugar_level},${row.caffeine_mg},${row.estimated_kcal},${row.kcal_min},${row.kcal_max},${row.confidence},${row.food_library_id},${row.notes},${timestamp(row.created_at)},${timestamp(row.updated_at)})
-      on conflict (id) do update set occurred_at=excluded.occurred_at,name=excluded.name,brand=excluded.brand,drink_type=excluded.drink_type,
-        volume_ml=excluded.volume_ml,sugar_level=excluded.sugar_level,caffeine_mg=excluded.caffeine_mg,estimated_kcal=excluded.estimated_kcal,
+      insert into public.drink_logs (id,user_id,occurred_at,name,drink_type,sugar_level,estimated_kcal,kcal_min,kcal_max,confidence,food_library_id,notes,created_at,updated_at)
+      values (${row.id},${userId},${timestamp(row.occurred_at)},${row.name},${row.drink_type},${row.sugar_level},${row.estimated_kcal},${row.kcal_min},${row.kcal_max},${row.confidence},${row.food_library_id},${row.notes},${timestamp(row.created_at)},${timestamp(row.updated_at)})
+      on conflict (id) do update set occurred_at=excluded.occurred_at,name=excluded.name,drink_type=excluded.drink_type,
+        sugar_level=excluded.sugar_level,estimated_kcal=excluded.estimated_kcal,
         kcal_min=excluded.kcal_min,kcal_max=excluded.kcal_max,confidence=excluded.confidence,food_library_id=excluded.food_library_id,
         notes=excluded.notes,created_at=excluded.created_at,updated_at=excluded.updated_at where drink_logs.user_id=excluded.user_id`;
     for (const row of drinkLimits) await tx`

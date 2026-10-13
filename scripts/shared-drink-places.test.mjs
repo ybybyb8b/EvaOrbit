@@ -19,15 +19,15 @@ test("shared places preserve legacy drinks, count both histories and archive dri
     run('import "./src/lib/db.ts";');
     const old = new DatabaseSync(databasePath);
     old.exec(`DROP INDEX idx_drink_logs_place_occurred; ALTER TABLE drink_logs DROP COLUMN food_place_id;
-      DELETE FROM migrations WHERE version=63;
+      ALTER TABLE food_logs ADD COLUMN portion TEXT NOT NULL DEFAULT '';ALTER TABLE food_logs ADD COLUMN notes TEXT NOT NULL DEFAULT '';ALTER TABLE food_logs ADD COLUMN calendar_time_enabled INTEGER NOT NULL DEFAULT 1;ALTER TABLE drink_logs ADD COLUMN brand TEXT NOT NULL DEFAULT '';ALTER TABLE drink_logs ADD COLUMN volume_ml REAL;ALTER TABLE drink_logs ADD COLUMN caffeine_mg REAL;DELETE FROM migrations WHERE version IN(63,80);
       INSERT INTO drink_logs(id,occurred_at,name,brand,drink_type) VALUES(1,'2026-10-01T18:35:00+08:00','旧奶茶','原品牌','milk_tea');`);
     old.close();
     run(`import assert from "node:assert/strict";
       import * as db from "./src/lib/db.ts";
       import {parseNewDrinkLog,parseDrinkLogPatch,parseFoodPlace,parseNewFoodLog,parseFoodDish} from "./src/lib/validation.ts";
-      const old=db.getDrinkLog(1);assert.equal(old.brand,"原品牌");assert.equal(old.foodPlaceId,null);assert.equal(old.occurredAt,"2026-10-01T18:35:00+08:00");
+      const old=db.getDrinkLog(1);assert.equal(old.notes,"品牌：原品牌");assert.equal("brand" in old,false);assert.equal(old.foodPlaceId,null);assert.equal(old.occurredAt,"2026-10-01T18:35:00+08:00");
       const place=db.createFoodPlace(parseFoodPlace({name:"茶店",city:"成都",location:"高新区",branch:"一店"}));
-      const drink=db.createDrinkLog(parseNewDrinkLog({name:"奶茶",brand:"品牌",foodPlaceId:place.id,occurredAt:"2026-10-03T12:00:00+08:00",occurredHasExplicitTime:false}));
+      const drink=db.createDrinkLog(parseNewDrinkLog({name:"奶茶",foodPlaceId:place.id,occurredAt:"2026-10-03T12:00:00+08:00",occurredHasExplicitTime:false}));
       assert.equal(drink.foodPlaceName,"茶店");assert.equal(drink.foodPlaceCity,"成都");assert.equal(drink.foodPlaceBranch,"一店");
       db.createFoodLog(parseNewFoodLog({title:"蛋糕",foodPlaceId:place.id,occurredAt:"2026-10-02T12:00:00+08:00"}));
       for(const name of ["蛋糕","小食"])db.createFoodDish(parseFoodDish({foodPlaceId:place.id,name}));

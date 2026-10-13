@@ -11,7 +11,7 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     sourceType: "food",
     sourceId: item.id,
     title: item.title,
-    detail: item.portion || item.description || "饮食记录",
+    detail: item.description || "饮食记录",
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime ?? true,
     endAt: item.calendarMeal?.endAt ?? null,
@@ -26,14 +26,14 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
     sourceType: "drink",
     sourceId: item.id,
     title: drinkRecordName(item),
-    detail: [item.foodPlaceName, item.volumeMl ? `${item.volumeMl} ml` : item.brand].filter(Boolean).join(" · ") || "饮品记录",
+    detail: [item.foodPlaceName, item.consumedVolumeMl != null ? `${item.consumedVolumeMl.toFixed(2)} ml` : ""].filter(Boolean).join(" · ") || "饮品记录",
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime,
     endAt: null,
     href: "/drinks/history",
     relatedPeople: [],
     relatedPets: [],
-    metadata: { foodPlaceId:item.foodPlaceId,foodPlaceName:item.foodPlaceName,foodPlaceCity:item.foodPlaceCity,foodPlaceLocation:item.foodPlaceLocation,foodPlaceBranch:item.foodPlaceBranch,drinkType: item.drinkType, brand: item.brand, volumeMl: item.volumeMl, sugarLevel: item.sugarLevel, temperature: item.temperature, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
+    metadata: { foodPlaceId:item.foodPlaceId,foodPlaceName:item.foodPlaceName,foodPlaceCity:item.foodPlaceCity,foodPlaceLocation:item.foodPlaceLocation,foodPlaceBranch:item.foodPlaceBranch,drinkType: item.drinkType, consumedVolumeMl: item.consumedVolumeMl, sugarLevel: item.sugarLevel, temperature: item.temperature, rating: item.rating, estimatedKcal: item.estimatedKcal, confidence: item.confidence },
   }));
   const trackerMap = new Map(trackers.map((tracker) => [tracker.id, tracker]));
   const trackerEvents: TimelineEvent[] = trackerEntries.map((entry) => {

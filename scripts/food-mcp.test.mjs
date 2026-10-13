@@ -26,6 +26,16 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
     async function call(name,args={}){const result=await rpc("tools/call",{name,arguments:args});assert.notEqual(result.isError,true,JSON.stringify(result));return result.structuredContent;}
     try {
       const {tools}=await rpc("tools/list");
+      for (const [resource, retired] of [["food_log", ["portion", "notes", "calendar_time_enabled"]], ["drink_log", ["brand", "volume_ml", "caffeine_mg"]]]) {
+        const { schema } = await call("eo_schema", { resource });
+        for (const field of retired) {
+          assert.equal(field in schema.fields, false);
+          for (const name of ["eo_create", "eo_update"]) {
+            const result = await rpc("tools/call", { name, arguments: { resource, data: { [field]: null }, ...(name === "eo_update" ? { id: 999999 } : {}) } });
+            assert.equal(result.isError, true);
+          }
+        }
+      }
       for(const resource of ["food_log","drink_log"]){
         for(const name of ["eo_create","eo_update"]){
           assert.equal(tools.find(t=>t.name===name).inputSchema.additionalProperties,false);
@@ -47,8 +57,8 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       const {item:updated}=await call("eo_update",{resource:"food_place",id:place.id,data:{location:"天府和悦",category:"快餐"}});assert.equal(updated.location,"天府和悦");
       const {items:places}=await call("eo_search",{resource:"food_place",query:"天府和悦",filters:{category:"快餐"}});assert.equal(places[0].id,place.id);
       assert.ok((await call("eo_schema",{resource:"drink_log"})).schema.update_fields.includes("food_place_id"));
-      const {item:drink}=await call("eo_create",{resource:"drink_log",data:{name:"奶茶",brand:"测试品牌",drink_type:"milk_tea",food_place_id:place.id,occurred_at:"2026-10-03T12:00:00+08:00",occurred_has_explicit_time:false}});
-      assert.equal(drink.food_place_city,"成都");assert.equal(drink.food_place_location,"天府和悦");assert.equal(drink.brand,"测试品牌");
+      const {item:drink}=await call("eo_create",{resource:"drink_log",data:{name:"奶茶",drink_type:"milk_tea",food_place_id:place.id,occurred_at:"2026-10-03T12:00:00+08:00",occurred_has_explicit_time:false}});
+      assert.equal(drink.food_place_city,"成都");assert.equal(drink.food_place_location,"天府和悦");assert.equal("brand" in drink,false);
       assert.equal((await call("eo_search",{resource:"drink_log",filters:{food_place_id:place.id}})).items[0].id,drink.id);
       assert.equal((await call("eo_search",{resource:"drink_log",query:"天府和悦",filters:{}})).items[0].id,drink.id);
       const {item:drinkRenamed}=await call("eo_update",{resource:"drink_log",id:drink.id,data:{name:"换名字"}});assert.equal(drinkRenamed.food_place_id,place.id);assert.equal(drinkRenamed.occurred_has_explicit_time,false);
