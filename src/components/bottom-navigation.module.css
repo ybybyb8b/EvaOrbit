@@ -1,0 +1,83 @@
+/* Shared mobile navigation material; content and desktop navigation keep their theme styles. */
+.shell {
+  --nav-glass-rgb:var(--surface-raised-rgb);
+  --nav-material-shadow:0 2px 4px rgb(var(--shadow-rgb) / .04),0 8px 20px rgb(var(--shadow-rgb) / .075);
+  --nav-grain-opacity:.045;
+}
+:global(html[data-mode="dark"]) .shell {
+  --nav-material-shadow:0 3px 5px rgb(var(--shadow-rgb) / .18),0 8px 20px rgb(var(--shadow-rgb) / .16);
+  --nav-grain-opacity:.025;
+}
+@media (max-width:720px) {
+  .shell:global(.app-shell) { --mobile-bottom-bar-height:64px;--mobile-bottom-bar-offset:max(12px,env(safe-area-inset-bottom)); }
+  .shell :global(.main-content) { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+  /* Keep the floating layout, with the original theme's softer frosted material. */
+  .shell:global(.app-shell) :global(.mobile-nav) {
+    inset:auto max(14px,env(safe-area-inset-right)) var(--mobile-bottom-bar-offset) max(14px,env(safe-area-inset-left));
+    height:64px;
+    padding:5px;
+    border:0;
+    border-radius:32px;
+    background:rgb(var(--nav-glass-rgb) / .72);
+    -webkit-backdrop-filter:blur(26px) saturate(110%);
+    backdrop-filter:blur(26px) saturate(110%);
+    box-shadow:var(--nav-material-shadow);
+  }
+  .shell:has(:global(.home-page)) :global(.mobile-nav) { right:88px; }
+  .shell:global(.app-shell) :global(.mobile-nav::before) {
+    content:"";display:block;position:absolute;inset:0;z-index:0;
+    border-radius:inherit;background:url("/textures/frosted-grain.svg") repeat;
+    opacity:var(--nav-grain-opacity);filter:none;pointer-events:none;
+  }
+  .shell:global(.app-shell) :global(.mobile-nav::after) {
+    content:"";
+    position:absolute;
+    z-index:0;
+    top:5px;
+    bottom:5px;
+    left:5px;
+    width:calc((100% - 10px) / 3);
+    border-radius:27px;
+    background:rgb(var(--surface-raised-rgb) / .68);
+    box-shadow:0 1px 3px rgb(var(--shadow-rgb) / .035);
+    transform:translateX(calc(var(--nav-tab-index,0) * 100%));
+    opacity:0;
+    pointer-events:none;
+    transition:transform 220ms cubic-bezier(.2,.8,.2,1),opacity 120ms ease-out;
+  }
+  .shell:global(.app-shell) :global(.mobile-nav[data-active-tab]::after) { opacity:1; }
+  .shell:global(.app-shell) :global(.mobile-nav[data-active-tab="1"]) { --nav-tab-index:1; }
+  .shell:global(.app-shell) :global(.mobile-nav[data-active-tab="2"]) { --nav-tab-index:2; }
+  :global(html[data-mode="dark"]) .shell:global(.app-shell) :global(.mobile-nav::after) { background:rgb(255 255 255 / .1); }
+  .shell:global(.app-shell) :global(.mobile-nav a) {
+    min-height:52px;
+    gap:4px;
+    background:transparent;
+    color:var(--text-secondary);
+    border-radius:27px;
+    box-shadow:none;
+    font-size:11px;
+    font-weight:650;
+    opacity:1;
+  }
+  .shell:global(.app-shell) :global(.mobile-nav a.active) { color:var(--accent-primary);background:transparent;box-shadow:none;font-weight:800; }
+  :global(html[data-mode="dark"]) .shell:global(.app-shell) :global(.mobile-nav a.active) { color:var(--text-primary); }
+  .shell:global(.app-shell) :global(.mobile-nav .icon) { width:25px;height:25px; }
+  .shell:has(:global(.home-page)) :global(.home-quick-log-trigger) {
+    bottom:var(--mobile-bottom-bar-offset);
+    right:max(14px,env(safe-area-inset-right));
+    width:64px;height:64px;border-radius:50%;
+    background:rgb(var(--nav-glass-rgb) / .72);
+    color:var(--accent-primary);
+    -webkit-backdrop-filter:blur(26px) saturate(110%);
+    backdrop-filter:blur(26px) saturate(110%);
+    box-shadow:var(--nav-material-shadow);
+  }
+}
+@media (prefers-reduced-transparency:reduce) {
+  .shell:global(.app-shell) :global(:is(.mobile-nav,.home-quick-log-trigger)) { background:rgb(var(--nav-glass-rgb));-webkit-backdrop-filter:none;backdrop-filter:none; }
+  .shell:global(.app-shell) :global(.mobile-nav::before) { display:none; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .shell :global(.mobile-nav a),.shell:global(.app-shell) :global(.mobile-nav::after) { transition:none; }
+}

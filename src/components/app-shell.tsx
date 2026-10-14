@@ -17,6 +17,7 @@ import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
 import { PageBackButton } from "./page-back-button";
 import { pageNavigationState, isFoodDrinkPath } from "@/lib/page-navigation";
+import bottomNav from "./bottom-navigation.module.css";
 
 const navigationGroups = [
   { label: "LIFE", items: [
@@ -165,7 +166,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
   if (pathname === "/login") return children;
   const spacesTrigger = <button ref={spacesTriggerRef} type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>;
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${bottomNav.shell}`}>
       <ThemeController />
       <NativeHapticController />
       <NativeNotificationReconciler />
@@ -196,10 +197,10 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
       </main>
       {hasGlobalHeader ? <header className={`mobile-global-header ${globalHeaderScrolled ? "is-scrolled" : ""}`}>{hasPageBack && <PageBackButton />}{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
-      <nav className="mobile-nav" aria-label={english ? "Mobile navigation" : "移动端导航"}>
-        <Link href="/" className={pathname === "/" ? "active" : ""}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
-        <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
-        <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
+      <nav className="mobile-nav" data-active-tab={pathname === "/" ? 0 : pathname.startsWith("/lucius") ? 1 : pathname.startsWith("/settings") ? 2 : undefined} aria-label={english ? "Mobile navigation" : "移动端导航"}>
+        <Link href="/" className={pathname === "/" ? "active" : ""} aria-current={pathname === "/" ? "page" : undefined}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
+        <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""} aria-current={pathname.startsWith("/lucius") ? "page" : undefined}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
+        <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""} aria-current={pathname.startsWith("/settings") ? "page" : undefined}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
       {spacesDrawerMounted && <div ref={spacesLayerRef} className="space-drawer-layer" data-state={spacesDrawerPhase} role="presentation">
         <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer} />

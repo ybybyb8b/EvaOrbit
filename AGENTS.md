@@ -51,6 +51,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Do not create commits or push by default. Unless the current task explicitly requests otherwise, leave completed changes in the working tree and report them.
 - Do not alter unrelated Git history or branches.
 
+## Project progress write-back (trial)
+
+- After completing an EvaOrbit project task and receiving the user's approval of its result, write its progress back to EvaOrbit Project through the connected tools without asking for approval again. This is a trial rule; stop applying it if the user cancels it.
+- Prefer a known Project Item ID. Otherwise search the owning project with focused task keywords, inspecting only relevant matches; reuse a matching Item and avoid duplicates. If no suitable Item exists, create one with the actual request, appropriate module/type, and a concise outcome. Ask only if the owning project or matching Item remains ambiguous.
+- Distinguish approval from acceptance testing: implementation approved but actual usage unverified means `done`; explicit user confirmation that the result works as intended means `verified`. For approved partial progress, retain `doing` and record the remaining work; do not complete a broader Item for a smaller subtask.
+- Keep write-backs short: status, outcome, necessary validation/limitations, and remaining next steps. Reuse existing module names and preserve unrelated content, existing data, and server-managed lifecycle timestamps.
+- Track independent tasks, not every edit, test, or commit. Do not create Items for ordinary questions, unadopted proposals, or casual discussion. Avoid full Project scans, lengthy conversation copies, and repeated writes when progress has not changed.
+- Verify the returned record before reporting success. If the connector is unavailable or the write fails, report that progress was not saved and identify the pending update; never claim a successful write.
+
 ## Scope discipline
 
 - Stay strictly within the current task. Report adjacent findings, but do not implement them unless they block the requested work.
