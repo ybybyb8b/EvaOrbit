@@ -1,7 +1,8 @@
 "use client";
 import { ToastNotice } from "@/components/action-toast";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useBottomLogAction } from "@/components/bottom-log";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
@@ -79,6 +80,8 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const editorRef = useRef<HTMLFormElement>(null);
+  useBottomLogAction({ label: t("Log energy", "记录能量"), onClick: openEditor, disabled: loading || saving || editing });
 
   async function loadDate(date: string) {
     setSelectedDate(date);
@@ -113,6 +116,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     setEditing(true);
     setMessage("");
     setError("");
+    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: "center" }));
   }
 
   function closeEditor() {
@@ -174,7 +178,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
   return <section className="daily-energy-card health-section health-energy-section" aria-labelledby="daily-energy-title">
     <div className="daily-energy-heading">
       <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "8px 14px" }}><h2 id="daily-energy-title">{t("Calorie balance", "能量收支")}</h2><small style={{ color: "var(--text-secondary)" }}>{isToday ? t("Today in progress", "截至目前") : shortDate(selectedDate, english)}</small></div>
-      {!editing && <button className="text-button daily-energy-edit" onClick={openEditor}>{t("Edit", "编辑")}</button>}
+      {!editing && <button className="text-button daily-energy-edit page-log-action" onClick={openEditor}>{t("Edit", "编辑")}</button>}
     </div>
     <div className="daily-energy-primary">
       <PrimaryEnergyMetric label={t("Intake", "摄入")} value={summary.estimatedIntakeKcal} english={english} />
@@ -186,7 +190,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       {sourceLabel && <small>{sourceLabel}</small>}
     </div>
     {loading && <span className="daily-energy-loading">{t("Loading…", "加载中…")}</span>}
-    {editing && <form className="daily-energy-editor" onSubmit={(event) => void save(event)}>
+    {editing && <form ref={editorRef} className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">
         <label className="field wide"><span>{t("Date", "日期")}</span><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
         <label className="field"><span>{t("Resting kcal", "静息能量（kcal）")} <small>{t("(optional)", "（选填）")}</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder={t("e.g. 1500", "例如 1500")} /></label>

@@ -24,7 +24,7 @@
     box-shadow:var(--nav-material-shadow);
   }
   .shell:global(.app-shell) :global(.mobile-nav) { right:calc(max(14px,env(safe-area-inset-right)) + 74px); }
-  .shell :global(.page-log-action) { display:none; }
+  .shell:global(.app-shell) :global(.page-log-action), .shell:global(.app-shell) :global(.page-log-controls) { display:none; }
   .shell:global(.app-shell) :global(.mobile-nav::before) {
     content:"";display:block;position:absolute;inset:0;z-index:0;
     border-radius:inherit;background:url("/textures/frosted-grain.svg") repeat;

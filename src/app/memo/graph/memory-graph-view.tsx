@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
@@ -25,7 +24,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
   function selectFact(fact:MemoryFact){setSelectedId(fact.id);}
 
   return <div className="page memory-graph-page">
-    <PageHeader eyebrow="MEMORY GRAPH" title="记忆如何相连" description="查看事实、来源、视角与修正路径。" action={<Link className="button secondary" href="/memo"><Icon name="memory"/>返回 Memo</Link>}/>
+    <PageHeader eyebrow="MEMORY GRAPH" title="记忆如何相连" description="查看事实、来源、视角与修正路径。"/>
 
     <section className="memory-graph-summary" aria-label="Memory Graph 摘要">
       <span><strong>{data.entities.filter(item=>item.status==="active").length}</strong><small>活跃实体</small></span>

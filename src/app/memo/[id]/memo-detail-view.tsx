@@ -5,7 +5,6 @@ import { SuggestedInput } from "@/components/suggested-input";
 import { useFormHistory, historyValues } from "@/components/use-form-history";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -28,7 +27,7 @@ export function MemoDetailView({ initial }: { initial: Memo }) {
   async function submit(event: FormEvent) { event.preventDefault(); await patch({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null, mergedIntoId: draft.mergedIntoId ? Number(draft.mergedIntoId) : null }, "Memo updated."); }
   async function remove() { if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); router.push("/memo"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
 
-  return <div className="page memo-page long-term-detail"><Link className="back-link" href="/memo">← Memo</Link><PageHeader eyebrow={`${optionLabel(memoTypeOptions, item.type)} · ${optionLabel(memoStatusOptions, item.status)}`} title={item.title} description={item.eventDate ? `Event date · ${item.eventDate}` : "Long-term context"} />
+  return <div className="page memo-page long-term-detail"><PageHeader eyebrow={`${optionLabel(memoTypeOptions, item.type)} · ${optionLabel(memoStatusOptions, item.status)}`} title={item.title} description={item.eventDate ? `Event date · ${item.eventDate}` : "Long-term context"} />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <p className="form-error">{error}</p>}
     {editing ? <FormSheet title="Edit Memo" onClose={() => { setDraft(fromMemo(item)); setEditing(false); }} formId="memo-edit-form" submitLabel="Save changes" busy={busy}><form id="memo-edit-form" className="editor-card long-term-editor" onSubmit={submit}><div className="form-grid">
       <label className="field wide"><span>Title</span><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>

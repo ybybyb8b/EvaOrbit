@@ -1,4 +1,6 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
+import { PageLogAction } from "@/components/bottom-log";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -18,6 +20,7 @@ const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-second
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
 export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+  const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
   const [view, setView] = useState<"home" | "trends">("home");
   const [status, setStatus] = useState<"all" | SubscriptionStatus>("all");
@@ -175,10 +178,10 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     <div><dt>{t("Paid this month", "本月已付")}</dt><dd>{totals(stats.actual[stats.currentMonth])}</dd></div>
   </dl>;
 
-  return <div className={`page ${styles.page}`} data-view={view} data-refined={refined || undefined}>
+  return <div ref={copyScope} className={`page ${styles.page}`} data-view={view} data-refined={refined || undefined}>
     <header className={styles.header}>
       <h1>{t("Subscriptions", "订阅")}</h1>
-      {onCreate && <button className="button primary" onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</button>}
+      {onCreate && <PageLogAction label={t("Add subscription", "新增订阅")} onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</PageLogAction>}
     </header>
     {refined && view === "home" && <MotionDiagnostics rail={rail} />}
     <div className={styles.switcher} role="group" aria-label={t("Subscriptions view", "订阅视图")}>

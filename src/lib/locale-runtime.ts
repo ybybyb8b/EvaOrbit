@@ -17,9 +17,16 @@ export function applyUiLanguage(language: UiLanguage, persist = true) {
 }
 
 const COPY_ATTRIBUTES = ["aria-label", "placeholder", "title"] as const;
-const PERSONAL_CONTENT = ".user-content,.markdown-content,.message-content,.long-term-prose,[contenteditable='true'],[data-no-translate]";
+const PERSONAL_CONTENT = "script,style,noscript,.user-content,.markdown-content,.message-content,.long-term-prose,[contenteditable='true'],[data-no-translate]";
 const TEXT_COPY_STATE = new WeakMap<Text, { source: string; translated: string }>();
 const ATTRIBUTE_COPY_STATE = new WeakMap<Element, Map<string, { source: string; translated: string }>>();
+
+function canTranslate(element: Element) {
+  if (element.matches(PERSONAL_CONTENT) || element.closest(PERSONAL_CONTENT)) return false;
+  // Layout effects may run while an App Router page is still dehydrated.
+  if (element.closest(".main-content")) return Boolean(element.closest('[data-ui-copy-ready="true"]'));
+  return Boolean(element.closest(".app-shell,.form-sheet-layer,.space-drawer-layer,.action-toast-viewport"));
+}
 
 function translateTextNode(node: Text, language: UiLanguage) {
   const current = node.nodeValue ?? "";
@@ -31,7 +38,7 @@ function translateTextNode(node: Text, language: UiLanguage) {
 }
 
 function translateElement(element: Element, language: UiLanguage) {
-  if (element.matches(PERSONAL_CONTENT) || element.closest(PERSONAL_CONTENT)) return;
+  if (!canTranslate(element)) return;
   for (const attribute of COPY_ATTRIBUTES) {
     const value = element.getAttribute(attribute);
     if (!value) continue;
@@ -49,7 +56,7 @@ function translateTree(root: Node, language: UiLanguage) {
   if (root instanceof Element) translateElement(root, language);
   if (root.nodeType === Node.TEXT_NODE) {
     const parent = root.parentElement;
-    if (parent && !parent.matches(PERSONAL_CONTENT) && !parent.closest(PERSONAL_CONTENT)) {
+    if (parent && canTranslate(parent)) {
       translateTextNode(root as Text, language);
     }
   }
@@ -59,7 +66,7 @@ function translateTree(root: Node, language: UiLanguage) {
     if (node instanceof Element) translateElement(node, language);
     if (node.nodeType === Node.TEXT_NODE) {
       const parent = node.parentElement;
-      if (parent && !parent.matches(PERSONAL_CONTENT) && !parent.closest(PERSONAL_CONTENT)) {
+      if (parent && canTranslate(parent)) {
         translateTextNode(node as Text, language);
       }
     }
@@ -68,6 +75,11 @@ function translateTree(root: Node, language: UiLanguage) {
 }
 
 export function installUiCopyBridge(language: UiLanguage) {
+  const translateCommittedPage = (event: Event) => {
+    const root = (event as CustomEvent<{ root: Element }>).detail?.root;
+    if (root instanceof Element) translateTree(root, language);
+  };
+  window.addEventListener("evaorbit:ui-copy-ready", translateCommittedPage);
   const translateTitle = () => {
     const suffix = " · EvaOrbit";
     if (!document.title.endsWith(suffix)) return;
@@ -87,5 +99,5 @@ export function installUiCopyBridge(language: UiLanguage) {
   observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: [...COPY_ATTRIBUTES] });
   const titleObserver = new MutationObserver(translateTitle);
   titleObserver.observe(document.head, { subtree: true, childList: true, characterData: true });
-  return () => { observer.disconnect(); titleObserver.disconnect(); };
+  return () => { observer.disconnect(); titleObserver.disconnect(); window.removeEventListener("evaorbit:ui-copy-ready", translateCommittedPage); };
 }

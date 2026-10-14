@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
@@ -17,6 +18,7 @@ function responseError(value: unknown, fallback: string) {
 }
 
 export function AppleHealthSection() {
+ const copyScope=useUiCopyScope<HTMLElement>();
   const [nativeHost, setNativeHost] = useState(false);
   const [status, setStatus] = useState<HealthKitStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,7 +103,7 @@ export function AppleHealthSection() {
     } finally { setBusy(false); }
   }
 
-  return <section className="apple-health-section" aria-labelledby="apple-health-title">
+  return <section ref={copyScope} className="apple-health-section" aria-labelledby="apple-health-title">
     <div className="apple-health-heading">
       <div><span className="eyebrow">APPLE HEALTH</span><h2 id="apple-health-title">Energy, weight, menstrual flow & sleep</h2><p>Sleep retains intervals and stages. Heart Rate, Resting Heart Rate and HRV are requested read-only and stay sync disabled by default.</p></div>
       <span className={`status-pill ${nativeHost ? "" : "disabled"}`}>{nativeHost ? "Native Host" : "Web only"}</span>

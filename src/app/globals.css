@@ -6288,6 +6288,19 @@ html .tracker-page .tracker-card:hover { background: var(--surface-raised); }
 .tracker-timeline-section .tracker-search { min-height: 46px; }
 .tracker-timeline-section .tracker-search input { font-size: 14px; }
 .tracker-timeline-section .tracker-filters { gap: 10px; }
+.project-detail-page .project-item-row { grid-template-columns:max-content minmax(0,1fr) auto; column-gap:14px; }
+.project-detail-page .item-status { white-space:nowrap; }
+.project-detail-page .item-copy strong { overflow-wrap:anywhere; }
+@media (max-width:760px) {
+  .project-detail-page .project-item-row { grid-template-columns:max-content minmax(0,1fr); column-gap:12px; }
+}
+.tracker-timeline-section .tracker-filters { grid-template-columns:repeat(2,minmax(0,1fr)); padding:14px; border-radius:16px; background:var(--surface-soft); }
+.tracker-timeline-section .tracker-filters .searchable-select { width:100%; min-width:0; }
+.tracker-timeline-section .tracker-filters .searchable-select summary { min-height:46px; padding:10px 12px; border:0; border-radius:12px; background:var(--surface-raised); font-size:14px; }
+.tracker-timeline-section .tracker-field-value { grid-column:1 / -1; min-width:0; }
+.tracker-timeline-section .tracker-field-value > label { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.tracker-timeline-section .tracker-field-value > label > span { color:var(--text-secondary); font-size:12px; }
+.tracker-timeline-section .tracker-clear-filters { grid-column:1 / -1; justify-self:end; min-height:44px; background:transparent; color:var(--accent-primary); }
 .tracker-timeline-section .tracker-filters > label > span { font-size: 12px; color: var(--text-secondary); }
 .tracker-timeline-section .tracker-filters select, .tracker-timeline-section .tracker-filters input, .tracker-timeline-section .tracker-filters > button { min-height: 46px; font-size: 14px; }
 .tracker-timeline-groups { display: grid; gap: 28px; }

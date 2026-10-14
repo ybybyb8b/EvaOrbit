@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { SearchableSelect } from "@/components/searchable-select";
 import { showActionToast } from "@/components/action-toast";
 
@@ -18,6 +19,7 @@ const starters = [
 ];
 
 export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { initialPrompt: string; initialSessionId: number | null; autoSend: boolean }) {
+  const copyScope = useUiCopyScope<HTMLDivElement>();
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -165,9 +167,9 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   }
 
-  if (loading) return <div className="page ai-page"><div className="loading-state">{autoSend && initialPrompt.trim() ? "正在接住你刚才的话…" : "在翻本地数据…"}</div></div>;
+  if (loading) return <div ref={copyScope} className="page ai-page"><div className="loading-state">{autoSend && initialPrompt.trim() ? "正在接住你刚才的话…" : "在翻本地数据…"}</div></div>;
 
-  return <div className="ai-workspace">
+  return <div ref={copyScope} className="ai-workspace">
     {historyOpen && <button className="drawer-backdrop" onClick={() => setHistoryOpen(false)} aria-label="关闭会话列表" />}
     {historyOpen && <aside className="chat-history open">
       <div className="chat-history-head"><div><span className="eyebrow">CONVERSATIONS</span><h2>聊过这些</h2></div><div><button onClick={() => void createSession()} aria-label="新开一段"><Icon name="plus" /></button><button onClick={() => setHistoryOpen(false)} aria-label="收起"><Icon name="close" /></button></div></div>

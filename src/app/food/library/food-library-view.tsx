@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { DRINK_TYPE_OPTIONS } from "@/lib/drink-types";
 import type { DrinkType } from "@/lib/types";
 import { FoodLinkPicker } from "../food-link-picker";
@@ -105,7 +106,7 @@ export function FoodLibraryView() {
   }
 
   return <div className="page food-library-page">
-    <PageHeader eyebrow="Food & Drink" title="Food Library" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />Add Item</button>} />
+    <PageHeader eyebrow="Food & Drink" title="Food Library" action={<PageLogAction label="Add Item" onClick={openCreate}><Icon name="plus" />Add Item</PageLogAction>} />
 
     {showForm && <FormSheet title={editingId ? "Edit Item" : "Add Item"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "Save Changes" : "Add Item"} busy={saving}><form id="food-library-form" className="editor-card compact-editor" onSubmit={submit}>
       <div className="editor-title"><h2>{editingId ? "Edit Item" : "Add Item"}</h2><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>

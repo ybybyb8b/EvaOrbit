@@ -1,10 +1,12 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
 
 import { useEffect, useState } from "react";
 
 const LAST_EXPORT_KEY = "evaorbit:last-backup-exported-at";
 
 export function BackupExportCard() {
+ const copyScope=useUiCopyScope<HTMLElement>();
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "exporting" | "error">("idle");
   const [error, setError] = useState("");
@@ -42,7 +44,7 @@ export function BackupExportCard() {
     }
   }
 
-  return <section className="backup-export-card">
+  return <section ref={copyScope} className="backup-export-card">
     <div><span className="eyebrow">PORTABLE BACKUP</span><h2>导出完整业务数据</h2><p>生成单个 JSON 文件，用于恢复到独立的本地开发 SQLite。导出只读取线上数据，不包含密钥、登录凭证、设备凭证或 HealthKit 数据。</p></div>
     <div className="backup-export-actions">
       <span>{lastExportedAt ? `最近导出：${new Date(lastExportedAt).toLocaleString("zh-CN")}` : "尚未在此设备导出"}</span>

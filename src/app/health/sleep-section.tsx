@@ -1,5 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { BottomLogScope } from "@/components/bottom-log";
+import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { SleepSummary } from "@/components/sleep-summary";
 import { homeDurationLabel } from "@/lib/home-day";
@@ -14,6 +17,7 @@ export function SleepSection({ initial }: { initial: DailySleepSummary }) {
   const { english } = useLocale();
   const [summary, setSummary] = useState(initial);
   const [error, setError] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const refresh = useCallback(async () => {
     try {
       const response = await fetch(`/api/health/sleep?date=${encodeURIComponent(summary.date)}`, { cache: "no-store" });
@@ -28,6 +32,8 @@ export function SleepSection({ initial }: { initial: DailySleepSummary }) {
   const clock = (value: string) => new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zone }).format(new Date(value));
   const duration = (minutes: number) => homeDurationLabel(Math.round(minutes), english);
   return <section className="health-section health-sleep-section" aria-labelledby="health-sleep-title">
+    <BottomLogScope label={english ? "Sleep data sources" : "睡眠数据来源"} onClick={() => setSourcesOpen(true)} />
+    {sourcesOpen && <FormSheet title={english ? "Sleep data sources" : "睡眠数据来源"} onClose={() => setSourcesOpen(false)}><div className="editor-card"><p>{english ? "Measured sleep comes from Apple Health. Sleep windows come from 3×3 or Apple Calendar. Manage the original records in those apps; EO reads and displays them here." : "实际睡眠来自 Apple 健康，睡眠窗口来自 3×3 或 Apple Calendar。请在对应应用管理原始记录，EO 会读取并展示。"}</p><div className="form-grid"><Link className="button secondary" href="/settings/health-native">{english ? "Apple Health & sync" : "Apple 健康与同步设置"}</Link><Link className="button secondary" href="/settings/apple-integration">{english ? "Calendar connection" : "日历连接与权限"}</Link></div></div></FormSheet>}
     <div className={`section-heading ${styles.dateHeading}`}><div><h2 id="health-sleep-title">{english ? "Daily sleep" : "当日睡眠"}</h2><p>{summary.date} · {english ? "Wake date" : "醒来日期"}</p></div><button className="text-button" onClick={() => void refresh()}>{english ? "Refresh" : "刷新"}</button></div>
     <div className={styles.main}>
       {display ? <>

@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
@@ -25,6 +26,7 @@ const blankProvider: ProviderDraft = {
 };
 
 export function AiProvidersSettings() {
+ const copyScope=useUiCopyScope<HTMLElement>();
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [selectedId, setSelectedId] = useState<number | "new">("new");
   const [draft, setDraft] = useState<ProviderDraft>(blankProvider);
@@ -145,7 +147,7 @@ export function AiProvidersSettings() {
     await load(); setNotice("Provider 已删除。");
   }
 
-  return <section className="ai-providers-panel">
+  return <section ref={copyScope} className="ai-providers-panel">
     <div className="provider-heading"><div><span className="eyebrow">AI PROVIDERS</span><h2>模型连接</h2><p>一套 Provider 保存一枚加密 Key，再为它添加多个模型。</p></div><button className="button secondary" type="button" onClick={() => selectProvider("new")}>新增 Provider</button></div>
     <div className="provider-manager">
       <nav className="provider-list" aria-label="AI Provider 列表">

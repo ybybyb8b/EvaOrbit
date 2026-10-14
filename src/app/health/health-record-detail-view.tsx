@@ -1,4 +1,5 @@
 "use client";
+import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import { useState } from "react";
@@ -10,6 +11,7 @@ import { HealthRecordEditor } from "./health-record-editor";
 import { formatRecordMoment, healthRecordStatusLabels, healthRecordTypeLabels, healthRecordUsesStatus } from "./health-record-utils";
 
 export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
+  const copyScope = useUiCopyScope<HTMLDivElement>();
   const router = useRouter();
   const [record, setRecord] = useState(initial);
   const [editing, setEditing] = useState(false);
@@ -39,7 +41,7 @@ export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
     } catch { setError("Could not delete this record"); }
   }
 
-  return <div className="page health-page health-detail-page">
+  return <div ref={copyScope} className="page health-page health-detail-page">
     <header className="health-detail-header"><div><span className="eyebrow">{healthRecordTypeLabels[record.type]}</span><h1>{record.title}</h1><div className="health-detail-meta">{healthRecordUsesStatus(record.type) && <span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span>}<time>{formatRecordMoment(record.occurredAt,record.occurredHasExplicitTime)}</time></div></div><span className="health-detail-header-icon"><Icon name="health" /></span></header>
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <p className="form-error">{error}</p>}

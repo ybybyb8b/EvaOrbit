@@ -146,7 +146,6 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
   const seriesRepeatsName = detail.seriesName && [displayTitle.primary, detail.originalTitle, detail.translatedTitle].some((name) => mediaNameKey(name) === mediaNameKey(detail.seriesName));
 
   return <div className="page media-page media-detail-page">
-    <Link className="back-link media-back-link" href="/media">← Media</Link>
     <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={displayTitle.primary} description={displayTitle.secondary ?? "A single item from your private shelf."} />
 
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
