@@ -5,16 +5,15 @@ import { eventKitReminderExcluded, synchronizeEventKit, type EventKitStatus } fr
 import { dataChangedEvent, subscribeDataChanged } from "./data-changed.ts";
 
 function schedulerFixture() {
-  const timers = new Map<number, () => void>(); let next = 0, interval = () => {};
+  const timers = new Map<number, () => void>(), delays = new Map<number, number>(); let next = 0;
   const win = Object.assign(new EventTarget(), {
     navigator: { onLine: true },
-    setTimeout: (fn: () => void) => { timers.set(++next, fn); return next; },
-    clearTimeout: (id: number) => { timers.delete(id); },
-    setInterval: (fn: () => void, ms: number) => { assert.equal(ms, 60_000); interval = fn; return 1; },
-    clearInterval: () => { interval = () => {}; },
+    setTimeout: (fn: () => void, ms: number) => { timers.set(++next, fn); delays.set(next, ms); return next; },
+    clearTimeout: (id: number) => { timers.delete(id); delays.delete(id); },
   });
   const doc = Object.assign(new EventTarget(), { visibilityState: "visible" });
-  return { win, doc, timers, tick: () => interval(), flush: async () => { const ready = [...timers.values()]; timers.clear(); ready.forEach(fn => fn()); await new Promise(resolve => setImmediate(resolve)); } };
+  function fire(ms: number) { const ready = [...timers].filter(([id]) => delays.get(id) === ms); for (const [id, fn] of ready) { timers.delete(id); delays.delete(id); fn(); } }
+  return { win, doc, timers, tick: () => fire(60_000), flush: async () => { fire(1500); fire(50); await new Promise(resolve => setImmediate(resolve)); } };
 }
 
 test("global EventKit scheduler debounces triggers, pauses offline/hidden and cleans up", async () => {
@@ -46,8 +45,19 @@ test("Sync completion and data refetch notifications never schedule another Even
   const unsubscribe = subscribeDataChanged(["calendar"], () => { refreshes++; win.dispatchEvent(new Event("web-refetched")); }, win);
   const stop = startEventKitAutoSync(async () => { calls++; win.dispatchEvent(new CustomEvent(dataChangedEvent, { detail: { domains: ["calendar"], source: "eventkit" } })); }, win, f.doc as unknown as Document);
   await f.flush(); await f.flush(); await f.flush();
-  assert.equal(calls, 1); assert.equal(refreshes, 1); assert.equal(f.timers.size, 0);
+  assert.equal(calls, 1); assert.equal(refreshes, 1); assert.equal(f.timers.size, 1);
   stop(); unsubscribe();
+});
+
+test("periodic compensation waits until a slow sync finishes instead of queueing another run", async () => {
+  const f = schedulerFixture(); let calls = 0, release!: () => void;
+  const stop = startEventKitAutoSync(async () => { calls++; if (calls === 1) await new Promise<void>(resolve => { release = resolve; }); }, f.win as unknown as Window & typeof globalThis, f.doc as unknown as Document);
+  await f.flush(); f.tick(); f.tick(); await f.flush();
+  assert.equal(calls, 1); assert.equal(f.timers.size, 0);
+  release(); await new Promise(resolve => setImmediate(resolve)); await f.flush();
+  assert.equal(calls, 1); assert.equal(f.timers.size, 1);
+  f.tick(); await f.flush(); assert.equal(calls, 2);
+  stop(); assert.equal(f.timers.size, 0);
 });
 
 test("续火花 excludes imports, exports and existing links without deleting either side", async () => {

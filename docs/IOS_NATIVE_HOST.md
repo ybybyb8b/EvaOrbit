@@ -16,7 +16,7 @@ EventKit 接入不新增 entitlement，也不改变本 runbook 的 ad-hoc IPA、
 
 本文的主体仍是已经实际跑通的构建、签名、安装与续签 runbook。仓库包含 HealthKit 能量读取、Body Mass 与 Menstrual Flow 双向同步：能量按日聚合，体重逐样本处理，经量使用独立 CategorySample 路径并保留 source/sample/sync identity。三者复用原生 SQLite/outbox、设备凭据、后台 anchored query 和同步 API。部署时须按顺序应用 `supabase/migrations/202609010001_healthkit_energy.sql`、`supabase/migrations/202609090002_weight.sql`、`supabase/migrations/202609130001_period_medication.sql`、`supabase/migrations/202609130002_period_medication_reminder_projection.sql` 与 `supabase/migrations/202609130003_healthkit_menstrual_flow.sql`，再发布 Web，最后构建并重签新的 IPA。签名、patched xtool 和 Windows/WSL 通信基线没有改变。
 
-EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线每 60 秒补偿；无需进入设置页，手动 Sync now 仍可用。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。App 不运行时仍不保证即时同步。
+EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线在上一轮结束后等待 60 秒再补偿；无需进入设置页，手动 Sync now 仍可用。本轮批量 EO 记录复用于核对，仅批次缺失/窗口外关联单独读取；关联恢复完成后先同步并刷新 Calendar，再处理 Reminders。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。App 不运行时仍不保证即时同步。
 
 EventKit 稳定性更新新增 bridge v1 的 `eventkit.getItem`：已有 mapping 的 Apple 对象未出现在批量结果时，按 identifier 直接查找，并区分 found、明确 missing 与 unavailable。Calendar 移出发现窗口仍更新原 EO ID；权限异常、来源暂停或不可读不会被当作删除。旧 IPA 通过 capability detection 安全降级，保留未读到的关联并暂停删除/重建；完整行为需要重新构建和安装 IPA。没有新增 framework、Info.plist 权限或 entitlement，原构建、免费 Team 重签及 Windows/WSL 安装链不变。
 

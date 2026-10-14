@@ -122,7 +122,7 @@ test("610 Calendar mappings paginate every EO record and updates keep the origin
   assert.equal(f.events.get(610)?.title, "Updated"); assert.equal(f.events.get(610)?.isAllDay, true);
   assert.equal(f.calls.filter(call => call.method === "POST").length, 0);
   assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/calendar-events").length, 6);
-  assert.ok(f.calls.some(call => call.method === "GET" && call.target === "/api/calendar-events/610"));
+  assert.equal(f.calls.filter(call => call.method === "GET" && /^\/api\/calendar-events\/\d+$/.test(call.target)).length, 0);
 }));
 test("EventKit completion announces Calendar changes once and an unchanged retry stays quiet", async () => withFixture(async f => {
   const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
@@ -138,11 +138,47 @@ test("Controlled Apple Task edits notify Task and Due Reminder consumers", async
   f.linkTask(); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Apple title" });
   await f.run(); assert.deepEqual(notifications.map(item => item.domains), [["tasks", "reminders"]]);
 }));
+
+test("Calendar is visible before a slow Reminder write finishes; batch reads avoid per-Task GETs", async () => withFixture(async f => {
+  f.linkEvent(2); f.linkTask();
+  f.apple.set("event-2", { ...f.apple.get("event-2"), title: "New Calendar title" });
+  f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "New Task title" });
+  const notifications: DataChangedDetail[] = [];
+  window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
+  const fetch = globalThis.fetch; let release!: () => void, started!: () => void;
+  const reminderStarted = new Promise<void>(resolve => { started = resolve; });
+  globalThis.fetch = async (url, init) => {
+    if (String(url) === "/api/tasks/1/eventkit") { started(); await new Promise<void>(resolve => { release = resolve; }); }
+    return fetch(url, init);
+  };
+  const sync = f.run();
+  try {
+    await reminderStarted;
+    assert.equal(f.events.get(2)?.title, "New Calendar title");
+    assert.deepEqual(notifications.map(item => item.domains), [["calendar"]]);
+    assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/tasks/1").length, 0);
+  } finally { release(); await sync; }
+  assert.deepEqual(notifications.map(item => item.domains), [["calendar"], ["tasks", "reminders"]]);
+}));
 test("Changes committed before a later failure still notify Web consumers", async () => withFixture(async f => {
   const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
-  f.linkTask(); f.linkEvent(2); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Committed title" }); f.failEORead = true;
+  f.linkTask(); f.linkEvent(2); f.listMissing.add(2); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Committed title" }); f.failEORead = true;
   await assert.rejects(f.run(), /database unavailable/);
   assert.equal(f.tasks.get(1)?.title, "Committed title"); assert.deepEqual(notifications.map(item => item.domains), [["tasks", "reminders"]]);
+}));
+
+test("A Reminder failure preserves Calendar progress and its early notification", async () => withFixture(async f => {
+  f.linkEvent(2); f.linkTask();
+  f.apple.set("event-2", { ...f.apple.get("event-2"), title: "Committed Calendar" });
+  f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Failed Task" });
+  const notifications: DataChangedDetail[] = [];
+  window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
+  const fetch = globalThis.fetch;
+  globalThis.fetch = (url, init) => String(url) === "/api/tasks/1/eventkit" ? Promise.resolve(Response.json({ error: "Reminder unavailable" }, { status: 503 })) : fetch(url, init);
+  await assert.rejects(f.run(), /Reminder unavailable/);
+  assert.equal(f.events.get(2)?.title, "Committed Calendar");
+  assert.equal(f.tasks.get(1)?.title, taskBase.title);
+  assert.deepEqual(notifications.map(item => item.domains), [["calendar"]]);
 }));
 for (const recovery of [false, true]) for (const flags of [false, true]) {
   test(`Missing EO records pause only their links and allow a new Calendar import (recovery=${recovery}, flags=${flags})`, async () => withFixture(async f => {
@@ -256,7 +292,7 @@ for (const reason of ["unavailable", "legacy-host", "paused", "revoked", "source
   }));
 }
 test("EO direct-read errors never unlink or reimport a mapped Calendar event", async () => withFixture(async f => {
-  f.linkEvent(1); f.failEORead = true; await assert.rejects(f.run(), /database unavailable/); assert.equal(f.writes().length, 0);
+  f.linkEvent(1); f.listMissing.add(1); f.failEORead = true; await assert.rejects(f.run(), /database unavailable/); assert.equal(f.writes().length, 0);
 }));
 for (const failure of ["before-commit", "after-commit"]) {
   test(`Calendar import retry reuses one EO record after failure ${failure}`, async () => withFixture(async f => {

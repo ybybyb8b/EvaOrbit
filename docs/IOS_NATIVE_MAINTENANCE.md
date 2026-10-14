@@ -284,14 +284,14 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - all-day 边界使用 date-only、end exclusive；timed event 保留 ISO instant 与 IANA timezone。
 - Reminder 映射包含 title、notes、Due 日期/明确时间、completed 与 completion date。带明确时间的 Due 创建普通的零偏移 Apple alert；date-only Due 不创建定时通知，也不映射 priority。更新既有 Apple Reminder 时保留 Apple 侧已有的自定义 alarm 与 priority。Tags、URL、location 与 Apple recurrence 不进入 EO 业务模型；EO 镜像的空 URL 可保存 `evaorbit://eventkit/<opaque UUID>` 恢复标记，用户已有 URL 永不覆盖；EO recurrence 只投影当前一期，完成后由原业务服务推进并创建下一期 Apple Reminder。
 - 实际已有 Apple alert 的已映射 Task 或 domain Reminder 由 `apple_reminders` channel 负责首次通知；没有 Apple alert 时继续由 EO 投递。Due 卡与投递渠道无关，`repeat_while_overdue` 在 Due 后继续由 EO 投递，避免首次通知双响。
-- 全局 App shell 挂载 EventKit reconciler，不依赖 Apple Integration 页。启动、bridge ready、回到前台/页面可见、网络恢复、来源/路由配置变动与 `EKEventStoreChanged` 都触发同步（Web 1.5 秒防抖；Native store change 另有 1.5 秒防抖）。前台在线每 60 秒补偿同步 EO/远端修改；隐藏或离线时跳过，重叠调用复用 single-flight，运行期间到达的事件保留一轮补偿。失败等待下一次触发重试；设置页显示自动同步时间/错误，导入后刷新当前页面。自动同步不请求权限，选定来源权限被撤销时停止该轮，避免误判删除。没有 APNs silent push，App 长期不运行时不保证即时同步。
+- 全局 App shell 挂载 EventKit reconciler，不依赖 Apple Integration 页。启动、bridge ready、回到前台/页面可见、网络恢复、来源/路由配置变动与 `EKEventStoreChanged` 都触发同步（Web 1.5 秒防抖；Native store change 另有 1.5 秒防抖）。前台在线在上一轮结束后等待 60 秒再补偿同步 EO/远端修改（运行期间不累计定时重跑）；隐藏或离线时跳过，重叠调用复用 single-flight，运行期间到达的事件保留一轮补偿。失败等待下一次触发重试；设置页显示自动同步时间/错误，导入后刷新当前页面。自动同步不请求权限，选定来源权限被撤销时停止该轮，避免误判删除。没有 APNs silent push，App 长期不运行时不保证即时同步。
 - Reminders 标题包含 `续火花` 时排除导入、导出和已有关联项的更新/删除/重建；匹配 Apple 当前标题、EO 当前标题和映射基线标题。保留已有数据和映射，不把屏蔽项当成 Apple 删除；不影响 Calendar。
 
 ## 五、JS↔Swift bridge 安全契约
 
 ### 同步完成后的 Web 数据刷新
 
-EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。一次 single-flight 同步结束后，Web 汇总已成功写入 EO 的 `calendar / tasks / reminders` domains，再调用 bridge v1 的 `host.notifyDataChanged`；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
+EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。Web 复用本轮完整分页 Calendar 和 Tasks 的批量读取结果；窗口外或批次缺失的 EO 记录才按 ID 单独读取，只有明确 404 表示不存在。关联恢复安全屏障完成后先核对 Calendar，已提交的 Calendar 变化立即通过 bridge v1 的 `host.notifyDataChanged` 通知页面，再处理 Reminder 镜像；其余已提交的 `tasks / reminders` 变化在 single-flight 结束时通知。已成功通知的 Calendar domain 不重复发送，后续失败仍报告错误并保留已提交变化；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
 
 旧 IPA 未声明该方法或通知调用失败时，Web 本地发出相同事件；通知失败不撤销已提交的数据。无 EO 变化的同步不发通知；若同步后段失败但前段已提交 EO 变化，仍通知这些已提交的 domains。Homepage 的 client 日历缓存只 refetch 当前日期及可见月份，其他缓存失效，选中日期、展开状态和未保存日记保持；Tasks/Reminders 变化另用 `router.refresh()` 更新服务端 Due 卡片，不跳转、不整页 reload。新事件不是 EventKit scheduler 的触发源，刷新组件不启动同步，原启动/前台/store-change/定时等触发时机不变。
 

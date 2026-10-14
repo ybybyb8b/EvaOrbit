@@ -110,15 +110,23 @@ export async function syncConfiguredEventKit() {
 
 /** Global foreground scheduler. Events during a run get one follow-up, not lost work. */
 export function startEventKitAutoSync(sync: () => Promise<unknown>, win = window, doc = document) {
-  let stopped = false, running = false, pending = false, timer: number | undefined;
+  let stopped = false, running = false, pending = false, timer: number | undefined, compensation: number | undefined;
+  const compensate = () => {
+    if (compensation !== undefined) win.clearTimeout(compensation);
+    if (!stopped) compensation = win.setTimeout(() => { compensation = undefined; void run(); }, 60_000);
+  };
   const run = async () => {
+    if (timer !== undefined) win.clearTimeout(timer);
     timer = undefined;
-    if (stopped || doc.visibilityState !== "visible" || win.navigator.onLine === false) return;
+    if (compensation !== undefined) win.clearTimeout(compensation);
+    compensation = undefined;
+    if (stopped) return;
+    if (doc.visibilityState !== "visible" || win.navigator.onLine === false) { compensate(); return; }
     if (running) { pending = true; return; }
     running = true;
     try { await sync(); }
     catch (error) { win.dispatchEvent(new CustomEvent(eventKitSyncFinished, { detail: { error: error instanceof Error ? error.message : "同步失败" } })); }
-    finally { running = false; if (pending && !stopped) { pending = false; schedule(); } }
+    finally { running = false; if (pending && !stopped) { pending = false; schedule(); } else compensate(); }
   };
   const schedule = () => {
     if (timer !== undefined) win.clearTimeout(timer);
@@ -127,12 +135,11 @@ export function startEventKitAutoSync(sync: () => Promise<unknown>, win = window
   const events = ["evaorbit:native-ready", "evaorbit:native-active", "evaorbit:eventkit-store-changed", eventKitConfigChanged, "online"];
   events.forEach(event => win.addEventListener(event, schedule));
   doc.addEventListener("visibilitychange", schedule);
-  const interval = win.setInterval(() => { void run(); }, 60_000);
   schedule();
   return () => {
     stopped = true;
     if (timer !== undefined) win.clearTimeout(timer);
-    win.clearInterval(interval);
+    if (compensation !== undefined) win.clearTimeout(compensation);
     events.forEach(event => win.removeEventListener(event, schedule));
     doc.removeEventListener("visibilitychange", schedule);
   };
