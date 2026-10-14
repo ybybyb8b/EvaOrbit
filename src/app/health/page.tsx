@@ -9,7 +9,7 @@ import { getWeightRecord, getWeightSettings, listWeightRecords } from "../../lib
 import { listMedicationDoseEvents,listMedicationPresets,listMenstrualFlowRecords,listMenstrualPeriods } from "../../lib/services/period-medication";
 import { listScheduledNotifications } from "../../lib/services/reminder";
 import { PERIOD_MEDICATION_REMINDER_SOURCE } from "../../lib/reminder-source-registry";
-import { HealthView } from "./health-view";
+import { HealthView, type HealthViewName } from "./health-view";
 import { getDailySleepSummary } from "../../lib/services/sleep";
 
 export const metadata: Metadata = {
@@ -18,13 +18,16 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function HealthPage({ searchParams }: { searchParams: Promise<{ training?: string; weight?: string }> }) {
+export default async function HealthPage({ searchParams }: { searchParams: Promise<{ training?: string; weight?: string; view?: string }> }) {
   const today = dateInEvaOrbit();
   const params = await searchParams;
   const requestedTraining = Number(params.training);
   const trainingId = Number.isSafeInteger(requestedTraining) && requestedTraining > 0 ? requestedTraining : null;
   const requestedWeight = Number(params.weight);
   const weightId = Number.isSafeInteger(requestedWeight) && requestedWeight > 0 ? requestedWeight : null;
+  const views: HealthViewName[] = ["overview", "sleep", "weight", "training", "energy", "cycle", "records"];
+  // Preserve direct Timeline editor links.
+  const view: HealthViewName = weightId ? "weight" : trainingId ? "training" : views.includes(params.view as HealthViewName) ? params.view as HealthViewName : "overview";
   const initialSleep = await getDailySleepSummary(today);
   const [records, dailyEnergy, energyHistory, training, recentTraining, trainingSuggestions, focusedTraining, weights, weightSettings, focusedWeight, periods, menstrualFlows, medicationPresets, medicationDoses, scheduledNotifications] = await Promise.all([
     listHealthRecords({ limit: 100 }),
@@ -44,5 +47,5 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
     listScheduledNotifications(),
   ]);
 
-  return <HealthView initialSleep={initialSleep} initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={periods} initialMenstrualFlows={menstrualFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={medicationDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
+  return <HealthView key={view} view={view} initialSleep={initialSleep} initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={periods} initialMenstrualFlows={menstrualFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={medicationDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
 }
