@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
@@ -39,7 +40,7 @@ export function HealthView({ initialSleep, initial, initialEnergy, initialEnergy
   function openEdit(record: HealthRecord) { setError(""); setMessage(""); setEditing(record); setEditorOpen(true); }
 
   return <div className="page health-page" data-has-current={dashboard.current.length > 0}>
-    <PageHeader eyebrow="生活" title="Health" action={<button className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</button>} />
+    <PageHeader eyebrow="生活" title="Health" action={<PageLogAction label="新增健康记录" className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</PageLogAction>} />
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <p className="form-error">{error}</p>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-record-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage("Health record saved"); void load(); }} /></FormSheet>}

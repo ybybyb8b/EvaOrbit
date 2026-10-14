@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice } from "@/components/action-toast";
@@ -52,7 +53,7 @@ export function MediaView({initial,initialSeries}:{initial:MediaListItem[];initi
   function clearFilters(){setQuery("");setMediaType("");setStatus("");setRating("");setFavoriteOnly(false);setRewatchedOnly(false);}
 
   return <div className="page media-page">
-    <PageHeader eyebrow="私人收藏" title="Media" action={<button className="button primary" onClick={()=>{setDraft(emptyDraft());setError("");setShowForm(true);}}><Icon name="plus"/>新增内容</button>}/>
+    <PageHeader eyebrow="私人收藏" title="Media" action={<PageLogAction label="新增内容" className="button primary" onClick={()=>{setDraft(emptyDraft());setError("");setShowForm(true);}}><Icon name="plus"/>新增内容</PageLogAction>}/>
     {showForm&&<FormSheet title="Add media" onClose={()=>setShowForm(false)} formId="media-record-form" submitLabel="Add media" busy={saving}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}><div className="form-grid">
       <label className="media-cover-picker wide"><span className="media-cover-picker-preview">{coverFile?<span>{coverFile.name}</span>:<><Icon name="media"/><strong>Choose cover</strong><small>JPG, PNG or WebP · up to 4 MB</small></>}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event=>setCoverFile(event.target.files?.[0]??null)}/></label>
       <label className="field"><span>Original title <small>Optional</small></span><input autoFocus maxLength={300} value={draft.originalTitle} onChange={event=>setDraft({...draft,originalTitle:event.target.value})}/></label>

@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { parseInputTags } from "@/lib/form-input";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -206,7 +207,7 @@ export function TasksView() {
   }
 
   return <div className="page tasks-page">
-    <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<button className="button primary" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "New task" : "新增任务"}</button>} />
+    <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
     {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className="editor-card" onSubmit={submit}>
       <label className="field wide quick-title"><span>{english ? "Task" : "任务内容"}</span><input autoFocus required maxLength={160} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
       <div className="quick-date-field"><span>{english ? "Due" : "截止日期"}</span><div>{([['today',english ? 'Today' : '今天'],['tomorrow',english ? 'Tomorrow' : '明天'],['week',english ? 'This week' : '本周'],['none',english ? 'No due date' : '不设日期']] as const).map(([value,label])=><button type="button" key={value} onClick={()=>quickDate(value)}>{label}</button>)}</div>{draft.dueDate&&<small>{english ? `Due ${draft.dueDate}${draft.dueTime ? ` at ${draft.dueTime}` : ""}` : `截止 ${draft.dueDate}${draft.dueTime ? ` ${draft.dueTime}` : ""}`}</small>}</div>

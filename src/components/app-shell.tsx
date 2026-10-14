@@ -18,6 +18,8 @@ import { PullToRefresh } from "./pull-to-refresh";
 import { PageBackButton } from "./page-back-button";
 import { pageNavigationState, isFoodDrinkPath } from "@/lib/page-navigation";
 import bottomNav from "./bottom-navigation.module.css";
+import { BottomLogProvider } from "./bottom-log";
+import { HomeQuickLog } from "@/app/home-quick-log";
 
 const navigationGroups = [
   { label: "LIFE", items: [
@@ -54,6 +56,10 @@ type SpacesDrawerPhase = "closed" | "opening" | "open" | "closing";
 const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
 
 export function AppShell({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
+  return <BottomLogProvider><AppShellContent cloudMode={cloudMode}>{children}</AppShellContent></BottomLogProvider>;
+}
+
+function AppShellContent({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
   const { english } = useLocale();
   const pathname = usePathname();
   const hasPageBack = pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/") && !pathname.startsWith("/lucius");
@@ -202,6 +208,7 @@ export function AppShell({ children, cloudMode }: { children: React.ReactNode; c
         <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""} aria-current={pathname.startsWith("/lucius") ? "page" : undefined}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""} aria-current={pathname.startsWith("/settings") ? "page" : undefined}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
+      <HomeQuickLog key={pathname} />
       {spacesDrawerMounted && <div ref={spacesLayerRef} className="space-drawer-layer" data-state={spacesDrawerPhase} role="presentation">
         <button className="space-drawer-backdrop" type="button" aria-label={english ? "Close spaces" : "关闭空间导航"} onClick={closeSpacesDrawer} />
         <aside ref={spacesDrawerRef} className="space-drawer" role="dialog" aria-modal="true" aria-label={english ? "All spaces" : "总览"} tabIndex={-1} onTransitionEnd={finishSpacesDrawerClose}>

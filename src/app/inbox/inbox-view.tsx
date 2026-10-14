@@ -3,6 +3,7 @@ import { showActionToast } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { BottomLogScope } from "@/components/bottom-log";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import type { InboxItem, InboxStatus } from "@/lib/types";
@@ -38,6 +39,7 @@ export function InboxView() {
 
   return <div className="page inbox-page">
     <PageHeader eyebrow={english ? "SPACE" : "空间"} title="Inbox" />
+    <BottomLogScope label={english ? "Capture Inbox" : "记下散落"} picker="inbox" onSaved={async () => { setStatus("inbox"); await load(); }} />
     <InboxCaptureForm onSaved={async()=>{setStatus("inbox");await load();}} />
     <div className="toolbar inbox-toolbar">
       <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>

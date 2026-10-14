@@ -16,6 +16,8 @@ import { getHealthQuickLog, HEALTH_QUICK_LOGS, type HealthQuickLogKind } from ".
 import { InboxCaptureForm } from "./inbox/inbox-capture-form";
 import { TrackerEntryEditor } from "./trackers/tracker-entry-editor";
 import { TrackerIcon } from "@/components/tracker-icon";
+import { useBottomLog } from "@/components/bottom-log";
+import { dateInEvaOrbit } from "@/lib/time";
 
 type QuickEntryKind = "food" | "drink" | "tracker" | "cats" | "inbox" | HealthQuickLogKind;
 type QuickKind = "picker" | QuickEntryKind;
@@ -26,7 +28,9 @@ const quickLogUrls = {
 } as const;
 type QuickTracker = Pick<Tracker, "id" | "name" | "groupName" | "quickCaptureEnabled" | "icon" | "iconType" | "iconValue" | "updatedAt"> & { fields: TrackerField[] };
 
-export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; onSaved: () => Promise<void> }) {
+export function HomeQuickLog() {
+  const action = useBottomLog();
+  const [selectedDate, setSelectedDate] = useState(dateInEvaOrbit);
   const { english } = useLocale();
   const router = useRouter();
   const [active, setActive] = useState<QuickKind | null>(null);
@@ -50,7 +54,7 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
     if (active === "weight") invalidateCachedJson("/api/health/weight?limit=1");
     if (active === "period" || active === "medication-dose") invalidateCachedJson("/api/health/periods?limit=30");
     if (active === "medication-dose") invalidateCachedJson("/api/health/medications?limit=100");
-    await onSaved(); router.refresh();
+    await action?.onSaved?.(); router.refresh();
   }
   async function choose(kind: QuickEntryKind) {
     playNativeHaptic("selection"); setError("");
@@ -82,11 +86,12 @@ export function HomeQuickLog({ selectedDate, onSaved }: { selectedDate: string; 
     { kind: "food", icon: ForkKnife, en: "Food", zh: "饮食" }, { kind: "drink", icon: Cup, en: "Drink", zh: "饮品" }, ...HEALTH_QUICK_LOGS,
     { kind: "tracker", icon: Activity, en: "Tracker", zh: "观测" }, { kind: "cats", icon: Cat, en: "Cats", zh: "猫咪" }, { kind: "inbox", icon: Inbox, en: "Inbox", zh: "散落" },
   ];
+  const visibleOptions = action?.picker ? options.filter(option => option.kind === action.picker) : options;
   const healthQuickLog = getHealthQuickLog(active);
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
-    <button type="button" className="home-quick-log-trigger" aria-label={english ? "Quick Log" : "快速记录"} onClick={() => { playNativeHaptic("light"); setActive("picker"); }}><Icon name="plus" variant="stroke" /></button>
-    {active === "picker" && <FormSheet title={english ? "Quick Log" : "快速记录"} onClose={close}><div className="home-quick-log-grid">{options.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
+    <button type="button" className="home-quick-log-trigger" aria-label={action?.label ?? (english ? "Quick Log" : "快速记录")} title={action?.label ?? (english ? "Quick Log" : "快速记录")} aria-haspopup="dialog" disabled={action?.disabled || loading} onClick={() => { playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}><Icon name="plus" variant="stroke" /></button>
+    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close}><div className="home-quick-log-grid">{visibleOptions.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}

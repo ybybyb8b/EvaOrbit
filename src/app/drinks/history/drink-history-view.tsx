@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { BottomLogScope } from "@/components/bottom-log";
 import type { DrinkLog, DrinkType } from "@/lib/types";
 import { DrinkRecordCard, DrinkRecordEditor, drinkTypes } from "../drink-ui";
 
@@ -13,6 +14,7 @@ export function DrinkHistoryView(){
   const load=useCallback(async()=>{const params=new URLSearchParams();if(query.trim())params.set("q",query.trim());if(type)params.set("drinkType",type);const recordsResponse=await fetch(`/api/drinks/logs?${params}`);if(recordsResponse.ok)setLogs(await recordsResponse.json());},[query,type]);
   useEffect(()=>{const timer=setTimeout(()=>void load(),150);return()=>clearTimeout(timer);},[load]);
   return <div className="page drinks-page drink-history-page">
+    <BottomLogScope label="记录饮品" picker="drink" onSaved={load} />
     <PageHeader eyebrow="Food & Drink" title="Drink records" action={<Link className="button secondary" href="/food-drink"><Icon name="arrow"/>Food & Drink</Link>}/>
     <div className="drink-history-toolbar"><label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="找饮品、品牌、店铺或地点…"/></label><SearchableSelect label="饮品类型" searchable={false} value={type} onValueChange={value=>setType(value as DrinkType|"")} options={[{value:"",label:"全部类型"},...drinkTypes.map(([value,label])=>({value,label}))]}/></div>
     {logs.length?<div className="drink-record-list">{logs.map(log=><DrinkRecordCard log={log} onEdit={setEditing} showDate key={log.id}/>)}</div>:<div className="empty-state"><h2>没有匹配的饮品记录</h2><p>换一个饮品、品牌、店铺或类型试试。</p></div>}

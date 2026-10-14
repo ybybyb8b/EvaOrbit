@@ -20,11 +20,12 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
   const calendar = readFileSync(new URL("../app/home-calendar-timeline.tsx", import.meta.url), "utf8");
   const quickLog = readFileSync(new URL("../app/home-quick-log.tsx", import.meta.url), "utf8");
+  const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
-  assert.match(calendar, /<HomeQuickLog/);
-  assert.doesNotMatch(calendar, /home-day-heading[^\n]*<HomeQuickLog/);
-  assert.match(quickLog, /aria-label=\{english \? "Quick Log" : "快速记录"\}/);
+  assert.match(calendar, /<BottomLogScope selectedDate=\{selected\} onSaved=\{refreshSelectedDate\}/);
+  assert.match(shell, /<HomeQuickLog key=\{pathname\}/);
+  assert.match(quickLog, /aria-label=\{action\?\.label \?\? \(english \? "Quick Log" : "快速记录"\)\}/);
   assert.doesNotMatch(quickLog, /<span>Log<\/span>/);
   assert.match(quickLog, /\.\.\.HEALTH_QUICK_LOGS/);
   for (const kind of ["training", "weight", "period", "medication-dose", "health-record"]) assert.match(healthQuickLog, new RegExp(`kind: "${kind}"`));

@@ -23,7 +23,8 @@
     backdrop-filter:blur(26px) saturate(110%);
     box-shadow:var(--nav-material-shadow);
   }
-  .shell:has(:global(.home-page)) :global(.mobile-nav) { right:88px; }
+  .shell:global(.app-shell) :global(.mobile-nav) { right:calc(max(14px,env(safe-area-inset-right)) + 74px); }
+  .shell :global(.page-log-action) { display:none; }
   .shell:global(.app-shell) :global(.mobile-nav::before) {
     content:"";display:block;position:absolute;inset:0;z-index:0;
     border-radius:inherit;background:url("/textures/frosted-grain.svg") repeat;
@@ -63,7 +64,7 @@
   .shell:global(.app-shell) :global(.mobile-nav a.active) { color:var(--accent-primary);background:transparent;box-shadow:none;font-weight:800; }
   :global(html[data-mode="dark"]) .shell:global(.app-shell) :global(.mobile-nav a.active) { color:var(--text-primary); }
   .shell:global(.app-shell) :global(.mobile-nav .icon) { width:25px;height:25px; }
-  .shell:has(:global(.home-page)) :global(.home-quick-log-trigger) {
+  .shell:global(.app-shell) :global(.home-quick-log-trigger) {
     bottom:var(--mobile-bottom-bar-offset);
     right:max(14px,env(safe-area-inset-right));
     width:64px;height:64px;border-radius:50%;
@@ -73,6 +74,9 @@
     backdrop-filter:blur(26px) saturate(110%);
     box-shadow:var(--nav-material-shadow);
   }
+}
+@media (min-width:721px) {
+  .shell:not(:has(:global(.home-page))) :global(.home-quick-log-trigger) { display:none; }
 }
 @media (prefers-reduced-transparency:reduce) {
   .shell:global(.app-shell) :global(:is(.mobile-nav,.home-quick-log-trigger)) { background:rgb(var(--nav-glass-rgb));-webkit-backdrop-filter:none;backdrop-filter:none; }

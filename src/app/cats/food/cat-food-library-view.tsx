@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -21,7 +22,7 @@ export function CatFoodLibraryView({ initialItems }: { initialItems: CatFoodSumm
   const packages = items.reduce((total, item) => total + item.stockPackages, 0), low = items.filter(item => item.stockState !== "available").length, records = items.reduce((total, item) => total + item.purchases.length, 0);
   async function load() { const response = await fetch("/api/cats/food"); if (response.ok) setItems(await response.json()); }
   function openPurchase(id?: number) { const next = id ?? items[0]?.id; if (!next) { setPanel("item"); return; } setSelectedId(next); setPanel("purchase"); }
-  return <div className="page cat-food-page"><Link className="back-link" href="/cats">← Cats</Link><PageHeader eyebrow="CATS · FOOD" title="猫咪食品库" description="记住买过的猫粮，轻量看库存，也看得出哪里更划算。" action={<button className="button primary" onClick={() => openPurchase()}><Icon name="plus"/>记录购买</button>}/>
+  return <div className="page cat-food-page"><Link className="back-link" href="/cats">← Cats</Link><PageHeader eyebrow="CATS · FOOD" title="猫咪食品库" description="记住买过的猫粮，轻量看库存，也看得出哪里更划算。" action={<PageLogAction label="记录购买" className="button primary" onClick={() => openPurchase()}><Icon name="plus"/>记录购买</PageLogAction>}/>
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     <section className={`cat-food-overview ${low ? "has-attention" : ""}`} aria-label="猫咪食品库概览"><div className="cat-food-overview-copy"><span className="eyebrow">AT HOME</span><h2>{packages ? `家里还有 ${packages} 包` : items.length ? "库存需要补充" : "猫咪食品库还是空的"}</h2><p>{low ? `${low} 款猫咪食品库存偏低，补货时可以直接参考历史价格。` : items.length ? "目前库存状态很好，可以安心照常记录。" : "添加猫咪食品并记下第一次购买后，这里会形成库存与价格印象。"}</p></div><dl><div><dt>食品</dt><dd>{items.length}<small> 款</small></dd></div><div><dt>购买</dt><dd>{records}<small> 次</small></dd></div><div className={low ? "needs-attention" : ""}><dt>留意</dt><dd>{low}<small> 款</small></dd></div></dl></section>
     <div className="cat-food-toolbar"><label className="cat-food-search"><Icon name="search" variant="stroke"/><span className="sr-only">搜索食品</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索名称、品牌或口味"/></label><span className="cat-food-result-count">{query ? `${filtered.length} 个结果` : `${items.length} 款食品`}</span><button className="button secondary" onClick={() => setPanel("item")}><Icon name="plus"/>添加食品</button></div>

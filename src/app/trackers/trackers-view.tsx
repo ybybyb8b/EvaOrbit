@@ -8,6 +8,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { BottomLogScope } from "@/components/bottom-log";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
@@ -113,6 +114,7 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   const visibleTrackers = trackers.filter(tracker => Boolean(tracker.archivedAt) === showArchived);
   const groups = [...new Set(visibleTrackers.map((tracker) => tracker.groupName))];
   return <div className="page tracker-page">
+    <BottomLogScope label={english ? "Log Tracker" : "记录观测"} picker="tracker" onSaved={load} />
     <PageHeader eyebrow="生活" title="Trackers" action={<button className="button primary" onClick={() => setShowForm((value) => !value)}><Icon name="plus" />新增观测</button>} />
     {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
     {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>

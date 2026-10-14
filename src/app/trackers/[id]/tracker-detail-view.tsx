@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { groupTrackerTimeline, matchesTrackerSearch } from "@/lib/tracker-timeline";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -97,7 +98,7 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
   const timelineGroups=groupTrackerTimeline(timelineEntries);
   return <div className="page tracker-detail-page">
     <Link className="back-link" href="/trackers">← All Trackers</Link>
-    <PageHeader eyebrow={`${tracker.groupName} · MOMENT`} title={<span className="tracker-title"><TrackerIcon tracker={tracker} size={58}/><span>{tracker.name}</span></span>} action={tracker.archivedAt?<span className="tracker-archived-label">{english?"Archived":"已归档"}</span>:tracker.quickCaptureEnabled?<button className="button primary" disabled={working} onClick={()=>void quick()}><Icon name="plus"/>Record now</button>:<button className="button primary" disabled={working} onClick={openEntryForm}><Icon name="plus"/>Add record</button>}/>
+    <PageHeader eyebrow={`${tracker.groupName} · MOMENT`} title={<span className="tracker-title"><TrackerIcon tracker={tracker} size={58}/><span>{tracker.name}</span></span>} action={tracker.archivedAt?<span className="tracker-archived-label">{english?"Archived":"已归档"}</span>:tracker.quickCaptureEnabled?<PageLogAction label={english?"Record now":"立即记录"} disabled={working} onClick={()=>void quick()}><Icon name="plus"/>Record now</PageLogAction>:<PageLogAction label={english?"Add record":"新增记录"} disabled={working} onClick={openEntryForm}><Icon name="plus"/>Add record</PageLogAction>}/>
     <nav className="tracker-tabs" aria-label="Tracker views">{(["timeline","insights","settings"] as Tab[]).map((value)=><button aria-current={tab===value?"page":undefined} className={tab===value?"active":""} onClick={()=>setTab(value)} key={value}>{value[0].toUpperCase()+value.slice(1)}</button>)}</nav>
     {error&&<p className="form-error">{error}</p>}
     {tracker.archivedAt&&<p className="tracker-archive-note">{english?"History is preserved. Restore this Tracker in Settings to record again; reminders remain off until you enable them.":"历史数据已保留。可在设置中恢复 Tracker，恢复后请按需重新开启提醒。"}</p>}

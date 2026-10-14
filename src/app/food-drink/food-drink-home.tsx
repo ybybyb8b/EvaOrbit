@@ -1,4 +1,5 @@
 "use client";
+import { PageLogAction } from "@/components/bottom-log";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -47,7 +48,7 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
   const latestTime = latest?.record.occurredHasExplicitTime === false ? "仅日期" : latest ? new Date(latest.record.occurredAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: EVAORBIT_TIME_ZONE }) : "";
   const ready = !loading && !error && data;
   return <div className={`page ${styles.page}`}>
-    <PageHeader eyebrow="生活" title="Food & Drink" action={<button className="button primary" onClick={() => setEditor({ kind: "choose" })}><Icon name="plus" />新增记录</button>} />
+    <PageHeader eyebrow="生活" title="Food & Drink" action={<PageLogAction label="Add record" className="button primary" onClick={() => setEditor({ kind: "choose" })}><Icon name="plus" />新增记录</PageLogAction>} />
     <nav className={styles.destinations} aria-label="Food & Drink 核心入口">{destinations.map(destination => <Link href={destination.href} key={destination.href}><Icon name={destination.icon} variant="feature" /><span>{destination.label}</span></Link>)}</nav>
     <section className={styles.brief} aria-labelledby="brief-title"><h2 id="brief-title">Brief</h2>
       {error ? <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></p> : loading ? <p className={styles.hint} role="status">正在读取饮食简报…</p> : data && <>
