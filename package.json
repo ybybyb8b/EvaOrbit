@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:online": "node --env-file-if-exists=.env.local scripts/dev-online.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

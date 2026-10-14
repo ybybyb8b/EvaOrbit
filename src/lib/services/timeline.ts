@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { calculateDailyNutrition } from "../nutrition";
 import { buildCalendarTimelineEvents, readCalendarTimelineRecords } from "../calendar-timeline";
@@ -9,6 +10,9 @@ import { catTimeline } from "./cats";
 import { catchUpAutomaticSubscriptionPayments } from "./subscription";
 import type { TimelineEvent, TimelineMonthSummary } from "../types";
 import { combineMealTimeline, resolveMealTimes } from "../meal-calendar";
+
+// Daily and monthly Home views share this read only within one server render.
+const requestCatTimeline = cache(catTimeline);
 
 function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:string;to:string}):TimelineEvent[]{return items.filter(item=>item.occurredAt>=range.from&&item.occurredAt<range.to).map(item=>({id:`cat:${item.kind}:${item.id}`,eventType:`cat.${item.eventType}`,sourceType:"cat",sourceId:item.id,title:item.title,detail:item.summary,occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:item.petId?`/cats/${item.petId}`:"/cats",relatedPeople:[],relatedPets:item.petId?[item.petId]:[],metadata:{kind:item.kind,...item.metadata}}));}
 
@@ -24,10 +28,16 @@ async function calendarRecordsInRange(range: { from: string; to: string }) {
   return readCalendarTimelineRecords(range, query => repository.listCalendarEvents(query));
 }
 
+async function subscriptionSources(repository: Awaited<ReturnType<typeof getRepository>>) {
+  const subscriptions = await repository.listSubscriptions();
+  const subscriptionPayments = (await Promise.all(subscriptions.map(item => repository.listSubscriptionPayments(item.id)))).flat();
+  return { subscriptions, subscriptionPayments };
+}
+
 async function loadSources(range: { from: string; to: string }) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
-  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptionData, settings] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
@@ -40,10 +50,11 @@ async function loadSources(range: { from: string; to: string }) {
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
     calendarRecordsInRange(range),
+    subscriptionSources(repository),
+    repository.getCalendarInterpretation(),
   ]);
-  const subscriptions=await repository.listSubscriptions();
-  const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
-  const settings = await repository.getCalendarInterpretation();
+  const { subscriptions } = subscriptionData;
+  const subscriptionPayments = subscriptionData.subscriptionPayments.filter(item=>`${item.paidOn}T12:00:00.000Z`>=range.from&&`${item.paidOn}T12:00:00.000Z`<range.to);
   return { repository, foods: resolveMealTimes(foods, calendarEvents, settings), drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptions, subscriptionPayments };
 }
 
@@ -70,7 +81,7 @@ function groupMealsByDay(events: TimelineEvent[]) {
 export async function listTimeline(input: { date?: string; limit?: number } = {}) {
   const date = input.date ?? dateInEvaOrbit();
   const range = dateRange(date);
-  const [sources, cats] = await Promise.all([loadSources(range), catTimeline()]);
+  const [sources, cats] = await Promise.all([loadSources(range), requestCatTimeline()]);
   return mergeTimelineSources(sources, cats, range).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
 }
 
@@ -78,13 +89,13 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const range = dateRange(date);
-  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptions, calendarEvents] = await Promise.all([
+  const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptionData, calendarEvents, settings] = await Promise.all([
     repository.listFoodLogs(range),
     repository.listDrinkLogs(range),
     repository.listTrackerEntries(undefined, range),
     repository.listTrackers(),
     repository.getNutritionSettings(date),
-    catTimeline(),
+    requestCatTimeline(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationPeople({ includeArchived: true }),
@@ -92,11 +103,12 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
     repository.listMedicationDoseEvents({from:range.from,to:range.to,limit:100}),
-    repository.listSubscriptions(),
+    subscriptionSources(repository),
     calendarRecordsInRange(range),
+    repository.getCalendarInterpretation(),
   ]);
-  const subscriptionPayments=(await Promise.all(subscriptions.map(item=>repository.listSubscriptionPayments(item.id)))).flat().filter(item=>item.paidOn===date);
-  const settings = await repository.getCalendarInterpretation();
+  const { subscriptions } = subscriptionData;
+  const subscriptionPayments = subscriptionData.subscriptionPayments.filter(item=>item.paidOn===date);
   const effectiveFoods = resolveMealTimes(foods, calendarEvents, settings);
   return {
     date,
@@ -109,16 +121,17 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
 
 export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 7)): Promise<TimelineMonthSummary> {
   const range = monthDateRange(month);
-  const [sources, cats] = await Promise.all([loadSources(range), catTimeline()]);
+  const repository = await getRepository();
+  const periodData = repository.listMenstrualPeriods({ limit: 500 }).then(async menstrualPeriods => {
+    const openPeriod = menstrualPeriods.find((item) => item.endedOn === null);
+    const calendarFlows = openPeriod ? await repository.listMenstrualFlowRecords({ periodId: openPeriod.id, limit: 500 }) : [];
+    return { menstrualPeriods, calendarFlows };
+  });
+  const [sources, cats, { menstrualPeriods, calendarFlows }] = await Promise.all([loadSources(range), requestCatTimeline(), periodData]);
   const first = `${month}-01`;
   const next = new Date(`${first}T12:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);
   const nextMonth = next.toISOString().slice(0, 10);
-  const menstrualPeriods = await sources.repository.listMenstrualPeriods({ limit: 500 });
-  const openPeriod = menstrualPeriods.find((item) => item.endedOn === null);
-  const calendarFlows = openPeriod
-    ? await sources.repository.listMenstrualFlowRecords({ periodId: openPeriod.id, limit: 500 })
-    : [];
   const periods = periodRangesForCalendar(menstrualPeriods, calendarFlows).filter((item) => item.startedOn < nextMonth && item.endedOn >= first);
   return { month, days: summarizeTimelineDays(groupMealsByDay(mergeTimelineSources(sources, cats, range))), periods };
 }

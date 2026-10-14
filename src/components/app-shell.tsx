@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Book, Calendar, ChatRoundDots, ClipboardCheck, CupPaper, DirectInbox, Film, Folder, FoodTray, Heart, Home, Menu4, NoteText, Pet, Settings, Sparkles, Users } from "reicon-react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
@@ -177,7 +177,7 @@ function AppShellContent({ children, cloudMode }: { children: React.ReactNode; c
       <NativeHapticController />
       <NativeNotificationReconciler />
       <EventKitReconciler />
-      <DataChangeReconciler />
+      <Suspense fallback={null}><DataChangeReconciler /></Suspense>
       <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>

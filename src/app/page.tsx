@@ -26,9 +26,8 @@ function greeting(english: boolean) {
 }
 
 export default async function HomePage() {
-  const preferences = await getUiPreferences();
+  const [preferences, today, monthSummary, due] = await Promise.all([getUiPreferences(), getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders()]);
   const english = preferences.uiLanguage === "en";
-  const [today, monthSummary, due] = await Promise.all([getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders()]);
 
   return <div className="page home-page">
     <header className="home-masthead">

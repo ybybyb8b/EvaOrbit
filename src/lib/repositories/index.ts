@@ -1,18 +1,29 @@
 import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import { cache } from "react";
 import { usesSupabase } from "../config";
 import type { McpOAuthIdentity } from "../mcp-oauth";
 import type { EvaOrbitRepository } from "./types";
 
 const repositoryContext = new AsyncLocalStorage<EvaOrbitRepository>();
+// React cache lasts only for this server render, never across users or requests.
+const requestSupabaseRepository = cache(async () => {
+  const { createSupabaseRepository } = await import("./supabase");
+  const repository = await createSupabaseRepository();
+  return {
+    ...repository,
+    getCalendarInterpretation: cache(repository.getCalendarInterpretation.bind(repository)),
+    getUiPreferences: cache(repository.getUiPreferences.bind(repository)),
+    listTrackers: cache(repository.listTrackers.bind(repository)),
+  };
+});
 
 export async function getRepository(): Promise<EvaOrbitRepository> {
   const contextual = repositoryContext.getStore();
   if (contextual) return contextual;
   if (usesSupabase()) {
-    const { createSupabaseRepository } = await import("./supabase");
-    return createSupabaseRepository();
+    return requestSupabaseRepository();
   }
   const { sqliteRepository } = await import("./sqlite");
   return sqliteRepository;

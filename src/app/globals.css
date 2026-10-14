@@ -4445,15 +4445,6 @@ html[data-mode="dark"] .meal-reminder-settings label > input[type="time"] { back
 
 /* Health hierarchy */
 .health-refined .page-header .eyebrow:empty { display:none; }
-.health-overview-back { display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-bottom:12px;color:var(--text-secondary);font-size:13px;text-decoration:none; }
-.health-overview-back .icon { width:16px;transform:rotate(180deg); }
-.health-overview-back:focus-visible { outline:2px solid var(--accent-primary);outline-offset:4px; }
-.health-refined[data-view]:not([data-view="overview"]) > .health-section { margin-top:0;padding-top:0;border-top:0; }
-.health-refined[data-view]:not([data-view="overview"]) > .health-records-section { margin-top:24px!important;padding-top:0!important;border-top:0!important; }
-.health-refined[data-view]:not([data-view="overview"]) > .health-section > .section-heading { margin-bottom:20px; }
-.health-refined[data-view="sleep"] > .health-section > .section-heading h2,
-.health-refined[data-view="weight"] > .health-section > .section-heading h2,
-.health-refined[data-view="cycle"] > .health-section > .section-heading h2 { display:none; }
 .health-refined .health-section > .section-heading .eyebrow { display:none; }
 .health-refined[data-view="overview"] .health-current-section { margin-top:0;padding:var(--overview-padding,24px);border-radius:16px;background:rgb(var(--surface-card-rgb) / .65);box-shadow:none; }
 .health-refined[data-view="overview"] .health-current-section .section-heading h2 { font-size:17px;font-weight:600;line-height:1.3; }

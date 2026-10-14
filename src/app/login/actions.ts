@@ -20,7 +20,13 @@ export async function login(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) redirect("/login?error=invalid");
+  if (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[login] Supabase authentication failed", { name: error.name, code: error.code, status: error.status });
+    }
+    const networkFailure = error.name === "AuthRetryableFetchError" || (error.status ?? 0) >= 500;
+    redirect(networkFailure ? "/login?error=network" : "/login?error=invalid");
+  }
   redirect(destination);
 }
 

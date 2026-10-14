@@ -1,0 +1,106 @@
+.detail > :global(.page-header) { margin-bottom:24px; }
+.detail[data-view] > :global(.health-section) { margin-top:0; padding-top:0; border:0; }
+.detail :global(.section-heading) { align-items:center; gap:12px; }
+.detail > :global(.health-section) > :global(.section-heading) { margin-bottom:16px; }
+.detail :global(.section-heading h2),
+.detail :global(.daily-energy-heading h2) { margin:0; font-size:17px; font-weight:600; line-height:1.4; }
+.detail :global(.section-heading p) { margin:6px 0 0; color:var(--text-secondary); font-size:12px; }
+.detail :global(.text-button) { min-height:44px; font-size:13px; font-weight:500; }
+.detail :global(.health-inline-empty) { padding:18px; border-radius:16px; background:var(--surface-soft); color:var(--text-secondary); font-size:13px; line-height:1.6; }
+.detail :global(.training-history), .detail :global(.period-history) { margin-top:20px; }
+.detail :global(.training-history > summary), .detail :global(.period-history > summary) { min-height:64px; padding:12px 16px; border-radius:16px; background:var(--surface-soft); }
+.detail :global(.training-history > summary strong), .detail :global(.period-history-heading strong) { font-size:14px; font-weight:500; }
+.detail :global(.training-history > summary small), .detail :global(.period-history-heading small) { color:var(--text-secondary); font-size:12px; font-weight:400; letter-spacing:0; }
+.detail :global(.training-history > summary > span:first-child) { flex-direction:column-reverse; gap:5px; }
+.detail :global(.training-history > summary > span:last-child) { background:transparent; color:var(--text-secondary); font-size:12px; font-weight:400; }
+.detail :global(.training-history-note) { margin-top:14px; color:var(--text-secondary); font-size:12px; line-height:1.6; }
+.detail :global(summary:focus-visible) { outline:2px solid var(--accent-primary); outline-offset:3px; }
+
+.detail :global(.weight-overview), .detail :global(.period-overview) { margin-top:0; padding:20px; border-radius:16px; gap:20px; background:var(--surface-soft); }
+.detail :global(.weight-current) { grid-template-columns:max-content max-content; }
+.detail :global(.weight-current > span) { margin:0 0 10px; color:var(--text-secondary); font-size:12px; font-weight:400; letter-spacing:0; }
+.detail :global(.weight-current strong) { font-size:38px; }
+.detail :global(.weight-current-date) { grid-column:1 / -1; margin-top:10px; color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.detail :global(.weight-overview dl) { gap:16px; }
+.detail :global(.weight-overview dl > div) { border:0; padding:0; gap:7px; }
+.detail :global(.weight-overview dt) { font-size:12px; font-weight:400; }
+.detail :global(.weight-overview dd) { font-size:14px; font-weight:500; }
+.detail :global(.weight-chart-card) { padding:16px 0 0; border-radius:0; background:transparent; }
+.detail :global(.weight-range-tabs) { gap:2px; }
+.detail :global(.weight-range-tabs button) { min-height:44px; min-width:44px; font-size:12px; }
+.detail :global(.weight-chart-legend) { margin-top:12px; font-size:12px; }
+.detail :global(.weight-record-list) { padding:4px 12px; background:transparent; }
+.detail :global(.weight-record-list article) { border:0; }
+.detail :global(.weight-record-list button) { min-height:64px; }
+.detail :global(.weight-record-list time), .detail :global(.weight-record-list span) { color:var(--text-secondary); font-size:12px; }
+
+.detail :global(.training-log-list) { padding:8px 12px; border-radius:16px; background:var(--surface-soft); }
+.detail :global(.training-log-main) { display:grid; justify-content:start; gap:8px; padding:14px 0; }
+.detail :global(.training-log-main strong) { font-size:15px; font-weight:500; }
+.detail :global(.training-log-main small), .detail :global(.training-log-meta) { max-width:none; white-space:normal; overflow:visible; color:var(--text-secondary); font-size:12px; line-height:1.6; text-align:left; overflow-wrap:anywhere; }
+.detail :global(.training-log-row .icon-button) { min-width:44px; min-height:44px; }
+
+.detail :global(.period-day > span) { font-size:12px; font-weight:400; letter-spacing:0; }
+.detail :global(.period-day strong) { color:var(--text-primary); font-size:32px; font-weight:500; }
+.detail :global(.period-day small) { font-size:12px; }
+.detail :global(.period-overview dl) { gap:14px; }
+.detail :global(.period-overview dl > div) { min-height:0; padding:0; border:0; gap:6px; }
+.detail :global(.period-overview dt) { font-size:12px; font-weight:400; }
+.detail :global(.period-overview dd) { color:var(--text-primary); font-size:13px; font-weight:500; }
+.detail :global(.period-primary-actions) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:16px; gap:10px; }
+.detail :global(.period-primary-actions .button) { min-height:44px; width:auto; padding-inline:8px; font-size:13px; font-weight:500; white-space:nowrap; }
+.detail :global(.period-management-actions) { display:flex; justify-content:flex-end; gap:20px; margin-top:4px; }
+.detail :global(.period-empty) { padding:20px; background:var(--surface-soft); }
+.detail :global(.period-empty p) { font-size:13px; }
+.detail :global(.period-medication-section .weight-record-list article > .text-button) { min-height:44px; font-size:12px; }
+.detail :global(.period-medication-section .weight-record-list article > button:first-child) { grid-template-columns:minmax(0,1fr) auto; gap:6px; padding-right:58px; }
+.detail :global(.period-medication-section .weight-record-list button > span) { grid-column:1; white-space:normal; overflow:visible; }
+.detail :global(.period-medication-section .weight-record-list button > .icon) { grid-column:2; grid-row:1; }
+
+.detail[data-view] > :global(.daily-energy-card) { width:100%; margin:0; padding:20px; border-radius:16px; background:var(--surface-soft); }
+.detail :global(.daily-energy-heading) { align-items:center; gap:12px; }
+.detail :global(.daily-energy-primary) { margin-top:24px; gap:16px; }
+.detail :global(.daily-energy-primary-metric) { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px; }
+.detail :global(.daily-energy-primary-metric + .daily-energy-primary-metric) { padding-left:0; border:0; }
+.detail :global(.daily-energy-primary-metric strong) { font-size:28px; }
+.detail :global(.daily-energy-primary-metric.missing strong) { font-size:13px; font-weight:400; color:var(--text-secondary); }
+.detail :global(.daily-energy-primary-metric small) { flex-basis:100%; margin-top:4px; font-size:12px; }
+.detail :global(.daily-energy-breakdown), .detail :global(.daily-energy-history-heading) { margin-top:24px; padding-top:0; border:0; }
+.detail :global(.daily-energy-breakdown p), .detail :global(.daily-energy-breakdown > small),
+.detail :global(.daily-energy-progress-note), .detail :global(.daily-energy-note),
+.detail :global(.daily-energy-history button span), .detail :global(.daily-energy-history button small),
+.detail :global(.daily-energy-history-empty) { color:var(--text-secondary); font-size:12px; line-height:1.6; letter-spacing:0; }
+.detail :global(.daily-energy-history button strong) { font-size:14px; font-weight:500; }
+.detail :global(.daily-energy-history-heading > span) { font-size:14px; font-weight:500; }
+.detail :global(.daily-energy-note) { border:0; padding-top:0; margin-top:20px; }
+
+.detail[data-view] > :global(.health-current-section), .detail[data-view] > :global(.health-records-section) { padding:20px; border-radius:16px; background:var(--surface-soft); box-shadow:none; }
+.detail[data-view] > :global(.health-records-section) { margin-top:24px!important; padding-top:20px!important; border:0!important; }
+.detail :global(.health-current-section .health-current-card) { padding:12px 0; background:transparent; }
+.detail :global(.health-current-main strong) { font-size:15px; font-weight:500; }
+.detail :global(.health-current-main small) { margin-top:6px; color:var(--text-secondary); font-size:12px; }
+.detail :global(.health-record-card) { display:flex; flex-direction:column; align-items:stretch; gap:10px; padding:16px 0; border:0; border-radius:0; }
+.detail :global(.health-record-date) { display:flex; flex-direction:row; align-items:baseline; gap:10px; }
+.detail :global(.health-record-date strong), .detail :global(.health-record-date small) { color:var(--text-secondary); font-size:12px; font-weight:400; }
+.detail :global(.health-record-card h3) { font-size:15px; font-weight:500; }
+.detail :global(.health-record-card p) { display:block; white-space:normal; color:var(--text-secondary); font-size:13px; line-height:1.6; }
+.detail :global(.health-record-card > .icon) { display:none; }
+.detail :global(.health-type-label), .detail :global(.health-status-pill) { font-size:11px; }
+.detail :global(.health-records-section .health-empty) { min-height:0; padding:8px 0; border:0; background:transparent; text-align:left; align-items:flex-start; }
+.detail :global(.health-empty-icon) { display:none; }
+.detail :global(.health-empty h2) { margin:0; font-size:15px; font-weight:500; }
+.detail :global(.health-empty p) { font-size:13px; }
+
+@media (max-width:720px) {
+  .detail :global(.weight-overview), .detail :global(.period-overview) { grid-template-columns:1fr; }
+  .detail :global(.period-overview dl) { grid-template-columns:1fr; }
+  .detail :global(.period-overview dl > div) { display:grid; grid-template-columns:90px minmax(0,1fr); align-items:baseline; gap:12px; }
+  .detail :global(.period-overview dd) { text-align:right; }
+  .detail :global(.daily-energy-primary) { gap:10px; }
+  .detail :global(.daily-energy-primary-metric strong) { font-size:24px; }
+  .detail :global(.weight-record-list button) { grid-template-columns:minmax(0,1fr) auto 16px; gap:8px; }
+  .detail :global(.weight-record-list time) { grid-column:1; grid-row:1; white-space:normal; }
+  .detail :global(.weight-record-list strong) { grid-column:2; grid-row:1; }
+  .detail :global(.weight-record-list button > span) { grid-column:1 / 3; grid-row:2; }
+  .detail :global(.weight-record-list button > .icon) { grid-column:3; grid-row:1 / 3; }
+}

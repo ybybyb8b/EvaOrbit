@@ -1,7 +1,6 @@
 "use client";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
@@ -41,7 +40,6 @@ export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
   }
 
   return <div className="page health-page health-detail-page">
-    <Link className="back-link" href="/health/records">← Health records</Link>
     <header className="health-detail-header"><div><span className="eyebrow">{healthRecordTypeLabels[record.type]}</span><h1>{record.title}</h1><div className="health-detail-meta">{healthRecordUsesStatus(record.type) && <span className={`health-status-pill ${record.status}`}>{healthRecordStatusLabels[record.status]}</span>}<time>{formatRecordMoment(record.occurredAt,record.occurredHasExplicitTime)}</time></div></div><span className="health-detail-header-icon"><Icon name="health" /></span></header>
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <p className="form-error">{error}</p>}

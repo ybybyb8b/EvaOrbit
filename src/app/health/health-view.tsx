@@ -24,6 +24,7 @@ import { HealthOverview } from "./health-overview";
 import { HEALTH_QUICK_LOGS, getHealthQuickLog, type HealthQuickLogKind } from "./health-quick-log";
 import { healthRecordTypeLabels } from "./health-record-utils";
 import { translateUiCopy } from "@/lib/ui-copy";
+import styles from "./health-detail.module.css";
 
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 export type HealthViewName = "overview" | "sleep" | "weight" | "training" | "energy" | "cycle" | "records";
@@ -48,8 +49,7 @@ export function HealthView({ view = "overview", initialSleep, initial, initialEn
 
   const attention = dashboard.current.length > 0 ? <section className="health-section health-current-section"><div className="section-heading"><div><h2>{english ? "In view now" : "当前关注"}</h2></div><span>{dashboard.current.length}</span></div><div className="health-record-list">{dashboard.current.map((record) => <HealthRecordPreview key={record.id} record={record} onEdit={() => openEdit(record)} />)}</div></section> : null;
   const titles = { overview: "Health", sleep: english ? "Sleep" : "睡眠", weight: english ? "Weight" : "体重", training: english ? "Training" : "训练", energy: english ? "Energy" : "能量", cycle: english ? "Period & medication" : "经期与用药", records: english ? "Health records" : "健康记录" };
-  return <div className="page health-page health-refined" data-view={view} data-has-current={dashboard.current.length > 0}>
-    {view !== "overview" && <Link href="/health" className="health-overview-back"><Icon name="arrow" />{english ? "Health overview" : "健康总览"}</Link>}
+  return <div className={`page health-page health-refined${view !== "overview" ? ` ${styles.detail}` : ""}`} data-view={view} data-has-current={dashboard.current.length > 0}>
     <PageHeader eyebrow="" title={titles[view]} action={(view === "overview" || view === "records") ? <PageLogAction label={view === "overview" ? "记录健康" : "新增健康记录"} className="button primary" onClick={view === "overview" ? () => setQuickPicker(true) : openCreate}><Icon name="plus" />{english ? "Log" : "记录"}</PageLogAction> : undefined} />
     {quickPicker && <FormSheet title={english ? "Log health" : "记录健康"} onClose={() => setQuickPicker(false)}><div className="health-log-choices">{HEALTH_QUICK_LOGS.map(item => <button type="button" key={item.kind} onClick={() => { setQuickPicker(false); setQuickKind(item.kind); }}><item.icon /><span>{english ? item.en : item.zh}</span><Icon name="arrow" /></button>)}</div></FormSheet>}
     {QuickEditor && <QuickEditor initialDate={today} onClose={() => setQuickKind(null)} onSaved={async () => { router.refresh(); }} />}
