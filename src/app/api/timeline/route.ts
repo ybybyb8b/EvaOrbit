@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   try {
     const month = request.nextUrl.searchParams.get("month");
     if (month !== null) return NextResponse.json(await getTimelineMonthSummary(requiredMonth(month)));
-    return NextResponse.json(await getDailyTimelineOverview(requiredDate(request.nextUrl.searchParams.get("date"))));
+    const { date, events, mealTypes, drinkCount, nutrition } = await getDailyTimelineOverview(requiredDate(request.nextUrl.searchParams.get("date")));
+    return NextResponse.json({ date, events, mealTypes, drinkCount, nutrition });
   } catch (error) {
     return apiError(error);
   }

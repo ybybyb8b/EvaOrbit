@@ -112,6 +112,9 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   const effectiveFoods = resolveMealTimes(foods, calendarEvents, settings);
   return {
     date,
+    mealEvents: buildTimelineEvents(effectiveFoods, []),
+    calendarEvents,
+    calendarInterpretation: settings,
     events: groupMealTimelineEvents(combineMealTimeline([...buildTimelineEvents(effectiveFoods, drinks, trackerEntries, trackers, healthRecords, weightRecords, menstrualFlows, medicationDoses), ...buildTrainingTimelineEvents(trainingLogs), ...buildRelationTimelineEvents(relationEvents,relationPeople), ...buildSubscriptionTimelineEvents(subscriptionPayments,subscriptions), ...catsInRange(cats,range), ...buildCalendarTimelineEvents(calendarEvents,range)])),
     mealTypes: foods.map((item) => item.mealType),
     drinkCount: drinks.length,

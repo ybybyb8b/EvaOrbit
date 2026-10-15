@@ -320,8 +320,9 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async createPersonMemoryNote(personId,content){const{data,error}=await client.from("person_memory_notes").insert({user_id:userId,person_id:personId,content}).select().single();fail(error,"创建记忆碎片");return memoryNoteFromRow(data);},
     async updatePersonMemoryNote(id,content){const{data,error}=await client.from("person_memory_notes").update({content}).eq("id",id).select().maybeSingle();fail(error,"更新记忆碎片");return data?memoryNoteFromRow(data):null;},
     async deletePersonMemoryNote(id){const{data,error}=await client.from("person_memory_notes").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除记忆碎片");return Boolean(data);},
-    async listTasks(filter: TaskFilter = "all") {
+    async listTasks(filter: TaskFilter = "all", dueDate?: string) {
       let query = client.from("tasks").select("*");
+      if (dueDate) query = query.eq("due_date", dueDate);
       if (filter === "open") query = query.eq("completed", false);
       if (filter === "done") query = query.eq("completed", true);
       const { data, error } = await query.order("completed").order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });

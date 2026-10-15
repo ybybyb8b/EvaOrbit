@@ -1,11 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyCalendarEvent, homeActivitySentence, summarizeCalendarActivity } from "./home-day.ts";
-import type { CalendarEvent } from "./types.ts";
+import { classifyCalendarEvent, homeActivitySentence, homeMeals, summarizeCalendarActivity } from "./home-day.ts";
+import type { CalendarEvent, TimelineEvent } from "./types.ts";
 
 function event(id: number, title: string, startAt: string, endAt: string): CalendarEvent {
   return { id, title, notes: "这只是用户评论，不能作为标签", startAt, endAt, isAllDay: false, timezone: "Asia/Shanghai", location: "", status: "confirmed", createdAt: startAt, updatedAt: startAt };
 }
+
+test("Home Meals keeps regular meal order and interleaves each timed snack without changing Timeline", () => {
+  function meal(id: number, mealType: string, time: string, hasExplicitTime = true): TimelineEvent {
+    return { id: `food:${id}`, sourceId: id, eventType: "food.logged", sourceType: "food", title: `food ${id}`, detail: "dish detail", occurredAt: `2026-10-16T${time}:00+08:00`, hasExplicitTime, endAt: null, href: "/food", relatedPeople: [], relatedPets: [], metadata: { mealType } };
+  }
+  const input = [meal(4,"late_night","23:00"),meal(7,"snack","20:00"),meal(3,"dinner","18:00"),meal(6,"snack","15:00"),meal(2,"lunch","12:00"),meal(5,"snack","10:00"),meal(1,"breakfast","08:00"),meal(8,"snack","06:00"),meal(9,"snack","00:00",false)];
+  const original = structuredClone(input);
+  assert.deepEqual(homeMeals(input).map(item=>item.mealType),["snack","breakfast","snack","lunch","snack","dinner","snack","late_night","snack"]);
+  assert.deepEqual(homeMeals(input).map(item=>item.detail),["food 8","food 1","food 5","food 2","food 6","food 3","food 7","food 4","food 9"]);
+  assert.deepEqual(input,original);
+  assert.deepEqual(homeMeals([meal(2,"lunch","06:00"),meal(1,"breakfast","14:00")]).map(item=>item.mealType),["breakfast","lunch"]);
+  assert.deepEqual(homeMeals([meal(2,"lunch","00:00",false),meal(1,"breakfast","00:00",false)]).map(item=>item.mealType),["breakfast","lunch"]);
+  assert.deepEqual(homeMeals([meal(6,"snack","15:00"),meal(5,"snack","10:00")]).map(item=>item.title),["food 5","food 6"]);
+  assert.deepEqual(homeMeals([]),[]);
+});
 
 test("calendar activity classification only uses title prefixes", () => {
   assert.equal(classifyCalendarEvent("🍠 2h"), "phone");

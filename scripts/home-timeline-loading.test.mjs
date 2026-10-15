@@ -59,3 +59,29 @@ test("daily and monthly Timeline start independent subscription, settings and pe
     assert.equal(result.status, 0, result.stderr || result.stdout);
   } finally { fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); }
 });
+
+test("Home reads only tasks due that day and shares Timeline calendar/settings reads", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "evaorbit-home-queries-"));
+  try {
+    const program = String.raw`
+      import assert from "node:assert/strict";
+      import { getRepository } from "./src/lib/repositories/index.ts";
+      import { getHomeDayOverview } from "./src/lib/services/home-day.ts";
+      const repository = await getRepository(), date = "2026-10-16";
+      for (const dueDate of [date, "2026-10-15", null]) await repository.createTask({ title: "Task " + dueDate, notes: "", dueDate, dueTime: null, priority: "low", tags: [] });
+      assert.equal((await repository.listTasks("all", date)).length, 1);
+      assert.equal((await repository.listTasks("all")).length, 3);
+      let calendars = 0, settings = 0;
+      const calendar = repository.listCalendarEvents.bind(repository), interpretation = repository.getCalendarInterpretation.bind(repository), tasks = repository.listTasks.bind(repository);
+      repository.listCalendarEvents = async input => { calendars++; return calendar(input); };
+      repository.getCalendarInterpretation = async () => { settings++; return interpretation(); };
+      repository.listTasks = async (filter, dueDate) => { assert.equal(dueDate, date); return tasks(filter, dueDate); };
+      const home = await getHomeDayOverview(date);
+      assert.equal(home.tasks.length, 1); assert.equal(home.tasks[0].title, "Task " + date);
+      assert.equal(calendars, 1); assert.equal(settings, 1);
+    `;
+    const loader = pathToFileURL(path.join(process.cwd(), "scripts/typescript-test-loader.mjs")).href;
+    const result = spawnSync(process.execPath, ["--conditions=react-server", "--experimental-loader", loader, "--input-type=module", "--eval", program], { encoding: "utf8", timeout: 30000, env: { ...process.env, NODE_ENV: "development", EVAORBIT_DATA_BACKEND: "sqlite", EVAORBIT_SQLITE_PATH: path.join(directory, "home.db"), VERCEL: "" } });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  } finally { fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); }
+});

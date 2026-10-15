@@ -21,8 +21,7 @@ import type { FoodLog, CalendarEvent, DailyJournalEnergy, DailyJournalMood, Dail
 import { buildDailySleepSummary } from "@/lib/sleep";
 import { SleepSummary, SleepOverviewPreview } from "@/components/sleep-summary";
 import { BottomLogScope } from "@/components/bottom-log";
-import { subscribeDataChanged } from "@/lib/data-changed";
-import { fetchHomeData } from "@/lib/home-data-refresh";
+import { homeCacheChanged, readHomeSnapshot, saveHomeSnapshot } from "@/lib/home-cache";
 import capsuleStyles from "./home-calendar-timeline.module.css";
 
 const sourceMeta: Record<TimelineEvent["sourceType"], { en: string; zh: string }> = {
@@ -69,7 +68,7 @@ function detailFor(item: TimelineEvent, english: boolean) {
   return [peopleLabel, amountLabel, note].filter(Boolean).join(" · ") || item.detail;
 }
 
-export function HomeCalendarTimeline({ initialDay, initialSummary, language }: { initialDay: HomeDayOverview; initialSummary: TimelineMonthSummary; language: UiLanguage }) {
+export function HomeCalendarTimeline({ initialDay, initialSummary, language, cacheScope }: { initialDay: HomeDayOverview; initialSummary: TimelineMonthSummary; language: UiLanguage; cacheScope: string }) {
   const english = language === "en", today = initialDay.date;
   const [month, setMonth] = useState(initialSummary.month), [summaries, setSummaries] = useState<Record<string, TimelineMonthSummary>>({ [initialSummary.month]: initialSummary });
   const [selected, setSelected] = useState(today), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
@@ -115,41 +114,68 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
     setDays(current => current[date] ? { [date]: current[date] } : {});
     setSummaries(current => Object.fromEntries(Object.entries(current).filter(([value]) => requiredMonths.includes(value))));
     try {
-      const next = await fetchHomeData(date, requiredMonths, controller.signal);
+      const [nextDay, nextSummaries] = await Promise.all([
+        readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, () => {}, true),
+        Promise.all(requiredMonths.map(value => readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${value}`, controller.signal, () => {}, true))),
+      ]);
+      const next = { day: nextDay, summaries: nextSummaries };
       if (controller.signal.aborted) return;
       setDays({ [date]: next.day }); setSummaries(Object.fromEntries(next.summaries.map(summary => [summary.month, summary])));
     } catch {
       if (!controller.signal.aborted) setError(english ? "Synced data could not refresh. Please try again." : "同步数据刷新失败，请重试。");
     }
   });
-  useEffect(() => subscribeDataChanged(["calendar", "tasks", "reminders", "health"], () => { void refreshChangedData(); }), []);
+  useEffect(() => {
+    void saveHomeSnapshot(cacheScope, `/api/home-day?date=${initialDay.date}`, initialDay);
+    void saveHomeSnapshot(cacheScope, `/api/timeline?month=${initialSummary.month}`, initialSummary);
+  }, [cacheScope, initialDay, initialSummary]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => { clearTimeout(timer); timer = setTimeout(() => { void refreshChangedData(); }, 100); };
+    const changedStorage = (event: StorageEvent) => { if (event.key === "eo:home-revision" || event.key === null) refresh(); };
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener(homeCacheChanged, refresh);
+    window.addEventListener("storage", changedStorage);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(homeCacheChanged, refresh);
+      window.removeEventListener("storage", changedStorage);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", visible);
+      dayRequest.current?.abort(); monthRequest.current?.abort(); nativeRefreshRequest.current?.abort();
+    };
+  }, []);
   useEffect(() => () => nativeRefreshRequest.current?.abort(), [selected, month, calendarExpanded]);
 
   useEffect(() => {
+    if (loadingMonth) return;
     const requiredMonths = calendarExpanded ? [month] : [...new Set(visibleWeek.map((date) => date.slice(0, 7)))], missingMonths = requiredMonths.filter((value) => !summaries[value]);
     if (!missingMonths.length) return;
     const controller = new AbortController();
     backgroundMonthRequest.current = controller;
-    void Promise.all(missingMonths.map(async (value) => { const response = await fetch(`/api/timeline?month=${encodeURIComponent(value)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); return response.json() as Promise<TimelineMonthSummary>; })).then((results) => { if (!controller.signal.aborted) setSummaries((current) => Object.fromEntries([...Object.entries(current), ...results.map((result) => [result.month, result])])); }).catch(() => undefined);
+    void Promise.all(missingMonths.map(value => readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${value}`, controller.signal, () => {}))).then((results) => { if (!controller.signal.aborted) setSummaries((current) => Object.fromEntries([...Object.entries(current), ...results.map((result) => [result.month, result])])); }).catch(() => undefined);
     return () => controller.abort();
-  }, [calendarExpanded, month, summaries, visibleWeek]);
+  }, [calendarExpanded, month, summaries, visibleWeek, cacheScope, loadingMonth]);
 
   async function loadDay(date: string, force = false) {
     setSelected(date); setTimelineExpanded(false); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
-    if (days[date] && !force) return;
     dayRequest.current?.abort(); const controller = new AbortController(); dayRequest.current = controller; setLoadingDate(date);
-    try { const response = await fetch(`/api/home-day?date=${encodeURIComponent(date)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as HomeDayOverview; if (controller.signal.aborted) return; setDays((current) => ({ ...current, [date]: result })); }
+    try { const show = (result: HomeDayOverview) => setDays(current => ({ ...current, [date]: result })); const result = await readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, show, force); if (!controller.signal.aborted) show(result); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this day" : "无法读取这一天"); }
     finally { if (dayRequest.current === controller) setLoadingDate(null); }
   }
   async function refreshSelectedDate(invalidateRules = false) {
     const date = selected;
-    try { const [dayResponse, summaryResponse] = await Promise.all([fetch(`/api/home-day?date=${encodeURIComponent(date)}`, { cache: "no-store" }), fetch(`/api/timeline?month=${encodeURIComponent(date.slice(0, 7))}`, { cache: "no-store" })]); if (!dayResponse.ok || !summaryResponse.ok) throw new Error(); const [nextDay, summary] = await Promise.all([dayResponse.json() as Promise<HomeDayOverview>, summaryResponse.json() as Promise<TimelineMonthSummary>]); setDays((current) => ({ ...(invalidateRules ? {} : current), [date]: nextDay })); setSummaries((current) => ({ ...current, [summary.month]: summary })); }
+    try { const signal = new AbortController().signal; const [nextDay, summary] = await Promise.all([readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, signal, () => {}, true), readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${date.slice(0, 7)}`, signal, () => {}, true)]); setDays((current) => ({ ...(invalidateRules ? {} : current), [date]: nextDay })); setSummaries((current) => ({ ...current, [summary.month]: summary })); }
     catch { setError(english ? "Saved, but this day could not refresh" : "已保存，但这一天刷新失败"); }
   }
   async function changeMonth(nextMonth: string) {
     monthRequest.current?.abort(); const controller = new AbortController(); monthRequest.current = controller; setLoadingMonth(true); setError("");
-    try { const response = await fetch(`/api/timeline?month=${encodeURIComponent(nextMonth)}`, { cache: "no-store", signal: controller.signal }); if (!response.ok) throw new Error(); const result = await response.json() as TimelineMonthSummary, nextDate = today.startsWith(nextMonth) ? today : `${nextMonth}-01`; if (controller.signal.aborted) return; setMonth(nextMonth); setSummaries((current) => ({ ...current, [nextMonth]: result })); playNativeHaptic("selection"); await loadDay(nextDate); }
+    setMonth(nextMonth); playNativeHaptic("selection");
+    const nextDate = today.startsWith(nextMonth) ? today : `${nextMonth}-01`;
+    try { const show = (result: TimelineMonthSummary) => setSummaries(current => ({ ...current, [nextMonth]: result })); await Promise.all([loadDay(nextDate), readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${nextMonth}`, controller.signal, show).then(result => { if (!controller.signal.aborted) show(result); })]); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this month" : "无法读取这个月份"); }
     finally { if (monthRequest.current === controller) setLoadingMonth(false); }
   }
@@ -194,7 +220,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language }: {
     </section>
     <header className="home-selected-date-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
     {error && <p className="form-error" role="alert">{error}</p>}
-    {loadingDate === selected || !day ? <div className="home-timeline-loading" aria-label={english ? "Loading day" : "正在读取这一天"}><span /><span /><span /></div> : <>
+    {!day ? <div className="home-timeline-loading" aria-label={english ? "Loading day" : "正在读取这一天"}><span /><span /><span /></div> : <>
       <div className="home-day-grid">
         <article className="home-day-pane home-sleep-pane"><button type="button" className="home-pane-open" onClick={() => setSleepSheetOpen(true)} aria-label={english ? "View sleep records" : "查看睡眠记录"}><header><MoonSleep size={19} weight="Outline" aria-hidden="true" /><h3>{english ? "Sleep" : "睡眠"}</h3><ArrowRight2 size={14} weight="Outline" aria-hidden="true" /></header>{sleepSummary && (sleepSummary.actual || sleepSummary.window) ? <><SleepOverviewPreview summary={sleepSummary} english={english} />{!sleepSummary.actual && <small>{english ? "Timeline estimate" : "时间线估算"} · {timeLabel(sleepSummary.window!.startAt)}–{timeLabel(sleepSummary.window!.endAt)}</small>}</> : <p className="home-pane-empty">{english ? "No sleep record ending this day" : "没有在这一天结束的睡眠记录"}</p>}</button></article>
         <article className="home-day-pane"><header><Checklist size={19} weight="Outline" aria-hidden="true" /><h3><Link href="/tasks">{english ? "Tasks" : "任务"}</Link></h3><small>{day.tasks.filter((task) => task.completed).length}/{day.tasks.length}</small></header>{day.tasks.length ? <ul className="home-pane-list">{day.tasks.slice(0, 4).map((task) => <li key={task.id} data-completed={task.completed}><Link href={`/tasks?taskId=${task.id}`}>{task.completed ? <CheckCircle size={15} weight="Outline" aria-hidden="true" /> : <RecordCircle size={15} weight="Outline" aria-hidden="true" />}<strong>{task.title}</strong>{task.dueTime && <time>{task.dueTime}</time>}</Link></li>)}</ul> : <p className="home-pane-empty">{english ? "No tasks due" : "这一天没有到期任务"}</p>}</article>

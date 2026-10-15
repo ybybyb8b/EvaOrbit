@@ -6,6 +6,7 @@ import { EVAORBIT_TIME_ZONE } from "@/lib/time";
 import { DueReminders } from "@/components/due-reminders";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import styles from "./home.module.css";
+import { getHomeCacheScope } from "@/lib/services/home-cache-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ function greeting(english: boolean) {
 }
 
 export default async function HomePage() {
-  const [preferences, today, monthSummary, due] = await Promise.all([getUiPreferences(), getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders()]);
+  const [preferences, today, monthSummary, due, cacheScope] = await Promise.all([getUiPreferences(), getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders(), getHomeCacheScope()]);
   const english = preferences.uiLanguage === "en";
 
   return <div className="page home-page">
@@ -38,7 +39,7 @@ export default async function HomePage() {
     <DueReminders items={due} compact />
 
     <section className={`home-overview ${styles.overview}`}>
-      <HomeCalendarTimeline initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage} />
+      <HomeCalendarTimeline key={cacheScope} cacheScope={cacheScope} initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage} />
     </section>
   </div>;
 }

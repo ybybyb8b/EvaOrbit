@@ -56,9 +56,12 @@ test("Global mobile chrome excludes Login and Lucius from the scroll-aware heade
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(shell, /pathname !== "\/login" && !pathname\.startsWith\("\/lucius"\)/);
-  assert.match(shell, /window\.scrollY > 6/);
-  assert.match(shell, /<header className=\{`mobile-global-header/);
+  assert.match(shell, /window\.scrollY \/ 80/);
+  assert.match(shell, /<header ref=\{globalHeaderRef\} className="mobile-global-header"/);
   assert.match(css, /\.mobile-global-header \{[^}]*env\(safe-area-inset-top\)[^}]*z-index:55/);
-  assert.match(css, /\.mobile-global-header::before \{[^}]*backdrop-filter:blur\(22px\)[^}]*mask-image:linear-gradient/);
-  assert.match(css, /\.mobile-global-header\.is-scrolled::before \{ opacity:1; \}/);
+  assert.match(css, /\.mobile-global-header::before \{[^}]*background:var\(--surface-canvas\)/);
+  assert.match(css, /\.mobile-global-header::before \{[^}]*backdrop-filter:blur\(12px\)/);
+  assert.match(css, /\.mobile-global-header::before \{[^}]*inset:0 0 -56px[^}]*mask-image:linear-gradient/);
+  assert.match(css, /\.mobile-global-header::before \{[^}]*opacity:var\(--header-opacity,0\)/);
+  assert.doesNotMatch(css, /\.mobile-global-header::before \{[^}]*transition:opacity/);
 });

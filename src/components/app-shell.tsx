@@ -66,7 +66,7 @@ function AppShellContent({ children, cloudMode }: { children: React.ReactNode; c
   const hasGlobalHeader = pathname !== "/login" && !pathname.startsWith("/lucius");
   const previousUrlRef = useRef<string | null>(null);
   const [evaOpen, setEvaOpen] = useState(false);
-  const [globalHeaderScrolled, setGlobalHeaderScrolled] = useState(false);
+  const globalHeaderRef = useRef<HTMLElement>(null);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
   const spacesTriggerRef = useRef<HTMLButtonElement>(null);
   const spacesLayerRef = useRef<HTMLDivElement>(null);
@@ -91,13 +91,22 @@ function AppShellContent({ children, cloudMode }: { children: React.ReactNode; c
   }, []);
 
   useEffect(() => {
-    if (!hasGlobalHeader) return;
-    const updateHeader = () => setGlobalHeaderScrolled(window.scrollY > 6);
-    const frame = window.requestAnimationFrame(updateHeader);
-    window.addEventListener("scroll", updateHeader, { passive: true });
+    const header = globalHeaderRef.current;
+    if (!hasGlobalHeader || !header) return;
+    let frame: number | null = null;
+    const updateHeader = () => {
+      frame = null;
+      header.style.setProperty("--header-opacity", String(Math.min(1, Math.max(0, window.scrollY / 80))));
+    };
+    const onScroll = () => {
+      if (frame === null) frame = window.requestAnimationFrame(updateHeader);
+    };
+    updateHeader();
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", updateHeader);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
     };
   }, [hasGlobalHeader, pathname]);
 
@@ -201,7 +210,7 @@ function AppShellContent({ children, cloudMode }: { children: React.ReactNode; c
         {hasPageBack && <header className="desktop-page-navigation"><PageBackButton /></header>}
         {children}
       </main>
-      {hasGlobalHeader ? <header className={`mobile-global-header ${globalHeaderScrolled ? "is-scrolled" : ""}`}>{hasPageBack && <PageBackButton />}{spacesTrigger}</header> : spacesTrigger}
+      {hasGlobalHeader ? <header ref={globalHeaderRef} className="mobile-global-header">{hasPageBack && <PageBackButton />}{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
       <nav className="mobile-nav" data-active-tab={pathname === "/" ? 0 : pathname.startsWith("/lucius") ? 1 : pathname.startsWith("/settings") ? 2 : undefined} aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""} aria-current={pathname === "/" ? "page" : undefined}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>

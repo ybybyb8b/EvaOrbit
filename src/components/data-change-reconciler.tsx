@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { dataChangedDomains, dataChangedEvent, subscribeDataChanged } from "@/lib/data-changed";
 import { createPageFreshness, isAppDataMutation } from "@/lib/page-navigation";
+import { invalidateHomeCache } from "@/lib/home-cache";
 
 /** Server-owned Home Due cards; the timeline refetches its own client cache. */
 export function DataChangeReconciler() {
@@ -25,12 +26,12 @@ export function DataChangeReconciler() {
     const wrapped: typeof fetch = async (input, init) => {
       const mutation = isAppDataMutation(input, init, window.location.origin);
       const response = await original.call(window, input, init);
-      if (active && mutation && response.ok) freshness.current.invalidate();
+      if (active && mutation && response.ok) { freshness.current.invalidate(); invalidateHomeCache(); }
       return response;
     };
     window.fetch = wrapped;
     const synced = (event: Event) => {
-      if (dataChangedDomains((event as CustomEvent).detail).length) freshness.current.invalidate();
+      if (dataChangedDomains((event as CustomEvent).detail).length) { freshness.current.invalidate(); invalidateHomeCache(); }
     };
     window.addEventListener(dataChangedEvent, synced);
     return () => {

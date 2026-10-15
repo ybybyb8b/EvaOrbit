@@ -2,6 +2,24 @@ import { dateInEvaOrbit, dateRange } from "./time.ts";
 import type { CalendarEvent, DailyJournalEntry, TimelineEvent } from "./types.ts";
 import { calendarCategoryIcon, calendarCategoryLabel, defaultCalendarInterpretation, matchingCalendarRule, type CalendarInterpretation } from "./calendar-interpretation.ts";
 import type { DailySleepSummary } from "./sleep.ts";
+import { groupMealTimelineEvents } from "./timeline.ts";
+
+/** Meals is a reading order, independent of the reverse-chronological Timeline. */
+export function homeMeals(events: TimelineEvent[]): HomeDayOverview["meals"] {
+  const foods = events.filter(event => event.sourceType === "food");
+  const order = ["breakfast", "lunch", "dinner", "late_night"];
+  const meals = groupMealTimelineEvents(foods.filter(event => event.metadata.mealType !== "snack"))
+    .sort((a, b) => order.indexOf(String(a.metadata.mealType)) - order.indexOf(String(b.metadata.mealType)) || Date.parse(a.occurredAt) - Date.parse(b.occurredAt));
+  const snacks = foods.filter(event => event.metadata.mealType === "snack")
+    .sort((a, b) => Number(b.hasExplicitTime) - Number(a.hasExplicitTime) || Date.parse(a.occurredAt) - Date.parse(b.occurredAt) || a.id.localeCompare(b.id));
+  const slots = Array.from({ length: meals.length + 1 }, () => [] as TimelineEvent[]);
+  for (const snack of snacks) {
+    const before = snack.hasExplicitTime ? meals.findIndex(meal => meal.hasExplicitTime && Date.parse(meal.occurredAt) > Date.parse(snack.occurredAt)) : -1;
+    slots[before < 0 ? meals.length : before].push(snack);
+  }
+  return meals.flatMap((meal, index) => [...slots[index], meal]).concat(slots[meals.length])
+    .map(event => ({ mealType: String(event.metadata.mealType ?? "other"), title: event.title, detail: event.eventType === "food.meal" ? event.detail : event.title }));
+}
 
 export type HomeActivityCategory = "sleep" | "phone" | "screen" | "gaming";
 type DayActivityCategory = string;

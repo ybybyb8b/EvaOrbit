@@ -14,7 +14,7 @@ function load(relative, require, win) {
 
 function fixture(initial = '/health', responseOk = true) {
   const win = new EventTarget();
-  const count = { reload: 0, refresh: 0, back: 0, replaced: [] };
+  const count = { reload: 0, refresh: 0, back: 0, invalidated: 0, replaced: [] };
   const originalFetch = async () => ({ ok: responseOk });
   Object.assign(win, { fetch: originalFetch, history: { state: { evaOrbitCanGoBack: true } },
     location: { origin: 'https://eo.test', search: '', reload: () => count.reload++ }, setTimeout, clearTimeout });
@@ -35,6 +35,7 @@ function fixture(initial = '/health', responseOk = true) {
   const helpers = load('../src/lib/page-navigation.ts', () => ({}), win);
   const changed = load('../src/lib/data-changed.ts', () => ({}), win);
   const require = name => ({ react, 'next/navigation': navigation, '@/lib/page-navigation': helpers, '@/lib/data-changed': changed,
+    '@/lib/home-cache': { invalidateHomeCache: () => count.invalidated++ },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     './locale-controller': { useLocale: () => ({ english: false }) }, 'reicon-react': { ArrowLeft2: () => null } })[name];
   const { DataChangeReconciler } = load('../src/components/data-change-reconciler.tsx', require, win);
@@ -55,6 +56,7 @@ test('Ordinary navigation and Back keep the document; successful writes refresh 
     f.render('/health?view=weight');f.back();f.render('/health');
     assert.equal(f.count.back, 1);assert.equal(f.count.reload, 0);
     await f.win.fetch('/api/health/weight', { method: 'POST' });
+    assert.equal(f.count.invalidated, 1, 'writes invalidate Home even when another page is mounted');
     assert.equal(f.count.reload, 0, 'a write does not immediately reload');
     f.render('/health?view=weight');assert.equal(f.count.reload, 1);
     f.render('/health?view=weight');assert.equal(f.count.reload, 1, 'same URL render stays fresh');
