@@ -6376,9 +6376,10 @@ html .tracker-page .tracker-card:hover { background: var(--surface-raised); }
 .tracker-timeline-day h3 { margin: 0; font-size: 16px; font-weight: 600; }
 .tracker-timeline-day > header > span { flex: none; color: var(--muted); font-size: 12px; }
 .tracker-timeline-day .tracker-entry-list { gap: 8px; }
-.tracker-timeline-day .tracker-entry-list article { padding: 16px; border: 0; border-radius: 14px; grid-template-columns: 58px minmax(0,1fr) 44px; gap: 16px; background: var(--surface-list); }
+.tracker-timeline-day .tracker-entry-list article { padding: 12px 14px; border: 0; border-radius: 14px; grid-template-columns: 50px minmax(0,1fr) 44px; gap: 12px; background: var(--surface-list); }
 .tracker-timeline-day .tracker-entry-time time { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tracker-timeline-day .tracker-entry-values { grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr)); gap: 12px 20px; }
+.tracker-timeline-day .tracker-entry-values { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 18px; }
+.tracker-timeline-day .tracker-entry-values > span { flex: 0 1 auto; width: max-content; min-width: min(100%,3.5rem); max-width: 100%; gap: 2px; }
 .tracker-timeline-day .tracker-entry-values small { font-size: 12px; color: var(--muted); white-space: normal; }
 .tracker-timeline-day .tracker-entry-values strong { font-size: 14px; line-height: 1.6; }
 .tracker-timeline-day .tracker-entry-content p { font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
@@ -6391,8 +6392,10 @@ html .tracker-page .tracker-card:hover { background: var(--surface-raised); }
 .tracker-timeline-day .tracker-entry-actions summary:focus-visible, .tracker-timeline-day .tracker-entry-actions button:focus-visible { outline: 2px solid var(--text-action); outline-offset: 3px; }
 @media (max-width: 720px) {
   .tracker-timeline-section .tracker-search input, .tracker-timeline-section .tracker-filters input, .tracker-timeline-section .tracker-filters select { font-size: 16px; }
-  .tracker-timeline-day .tracker-entry-list article { padding: 14px; grid-template-columns: minmax(0,1fr) 44px; gap: 10px; }
-  .tracker-timeline-day .tracker-entry-time { align-self: center; }
+  .tracker-timeline-day .tracker-entry-list article { padding: 12px; grid-template-columns: minmax(0,1fr) 44px; gap: 6px 8px; }
+  .tracker-timeline-day .tracker-entry-time { align-self: start; }
+  .tracker-timeline-day .tracker-entry-content { grid-column: 1; grid-row: 2; }
+  .tracker-timeline-day .tracker-entry-actions { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
 }
 
 /* Shared dropdown affordances: menus stay in the top layer, never expand the form. */
