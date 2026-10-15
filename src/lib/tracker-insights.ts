@@ -8,6 +8,17 @@ function shiftDate(date: string, days: number) {
   return value.toISOString().slice(0, 10);
 }
 
+export type TrackerInsightPeriod = "month" | "90d" | "year";
+
+export function trackerInsightEntries(entries: TrackerEntry[], period: TrackerInsightPeriod, now = new Date()) {
+  const today = dateInEvaOrbit(now);
+  const start = period === "month" ? `${today.slice(0, 7)}-01` : shiftDate(today, period === "90d" ? -89 : -364);
+  return entries.filter(entry => {
+    const date = dateInEvaOrbit(new Date(entry.occurredAt));
+    return date >= start && date <= today;
+  });
+}
+
 export function shiftTrackerMonth(month: string, offset: number) {
   const value = new Date(`${month}-15T12:00:00Z`);
   value.setUTCMonth(value.getUTCMonth() + offset);
@@ -35,11 +46,11 @@ export function trackerCalendarMonth(heatmap: TrackerHeatmapDay[], month: string
   };
 }
 
-function monthKeys(today: string) {
+function monthKeys(today: string, count = 12) {
   const anchor = new Date(`${today.slice(0, 7)}-15T12:00:00Z`);
-  return Array.from({ length: 12 }, (_, index) => {
+  return Array.from({ length: count }, (_, index) => {
     const value = new Date(anchor);
-    value.setUTCMonth(value.getUTCMonth() - 11 + index);
+    value.setUTCMonth(value.getUTCMonth() - count + 1 + index);
     return value.toISOString().slice(0, 7);
   });
 }
@@ -68,6 +79,14 @@ function dayPart(hour: number) {
   return "night";
 }
 
+export function trackerDistributionEntries(entries: TrackerEntry[], kind: "monthly" | "weekdays" | "dayParts", key: string) {
+  return entries.filter(entry => {
+    const date = dateInEvaOrbit(new Date(entry.occurredAt));
+    const value = kind === "monthly" ? date.slice(0, 7) : kind === "weekdays" ? String(new Date(`${date}T12:00:00Z`).getUTCDay()) : dayPart(localHour(entry.occurredAt));
+    return value === key;
+  });
+}
+
 function numericInsights(entries: TrackerEntry[], fields: TrackerField[]): TrackerNumericInsight[] {
   return fields.filter((field) => field.includeInStats && (field.type === "number" || field.type === "rating" || field.type === "time_range")).flatMap((field) => {
     const values = entries.map((entry) => field.type === "time_range" ? trackerDurationMinutes(fieldValue(entry, field)) : fieldValue(entry, field)).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -91,13 +110,13 @@ function choiceInsights(entries: TrackerEntry[], fields: TrackerField[]): Tracke
   });
 }
 
-export function buildTrackerInsights(entries: TrackerEntry[], fields: TrackerField[], now = new Date()): TrackerInsights {
+export function buildTrackerInsights(entries: TrackerEntry[], fields: TrackerField[], now = new Date(), monthCount = 12): TrackerInsights {
   const today = dateInEvaOrbit(now);
   const dates = Array.from({ length: 365 }, (_, index) => shiftDate(today, index - 364));
   const entryDates = entries.map((entry) => dateInEvaOrbit(new Date(entry.occurredAt)));
   const counts = new Map<string, number>();
   entryDates.forEach((date) => counts.set(date, (counts.get(date) ?? 0) + 1));
-  const months = monthKeys(today);
+  const months = monthKeys(today, monthCount);
   const weekdayKeys = [
     { key: "1", label: "Mon" }, { key: "2", label: "Tue" }, { key: "3", label: "Wed" }, { key: "4", label: "Thu" }, { key: "5", label: "Fri" }, { key: "6", label: "Sat" }, { key: "0", label: "Sun" },
   ];
