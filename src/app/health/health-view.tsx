@@ -9,7 +9,7 @@ import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { PageHeader } from "@/components/page-header";
-import type { DailyNutritionSummary, HealthRecord, MedicationDoseEvent, MedicationPreset, MenstrualFlowRecord, MenstrualPeriod, ScheduledNotification, TrainingInputSuggestions, TrainingLog, WeightRecord, WeightSettings } from "@/lib/types";
+import type { DailyNutritionSummary, HealthRecord, MedicationDoseEvent, MedicationPreset, MenstrualFlowRecord, MenstrualPeriod, ScheduledNotification, TrainingInputSuggestions, TrainingLog, TrainingPlan, WeightRecord, WeightSettings } from "@/lib/types";
 import { DailyEnergyCard } from "./daily-energy-card";
 import { HealthRecordEditor } from "./health-record-editor";
 import { HealthRecordList } from "./health-record-card";
@@ -29,7 +29,7 @@ import styles from "./health-detail.module.css";
 type Dashboard = { current: HealthRecord[]; recent: HealthRecord[] };
 export type HealthViewName = "overview" | "sleep" | "weight" | "training" | "energy" | "cycle" | "records";
 
-export function HealthView({ view = "overview", initialSleep, initial, initialEnergy, initialEnergyHistory, initialTraining, initialRecentTraining, initialTrainingSuggestions, initialFocusedTraining, initialWeights, initialWeightSettings, initialFocusedWeight, initialPeriods, initialMenstrualFlows, initialMedicationPresets, initialMedicationDoses, initialMedicationReminders, today }: { view?: HealthViewName; initialSleep: DailySleepSummary; initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialRecentTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; initialFocusedTraining?: TrainingLog; initialWeights: WeightRecord[]; initialWeightSettings: WeightSettings; initialFocusedWeight?: WeightRecord; initialPeriods:MenstrualPeriod[]; initialMenstrualFlows:MenstrualFlowRecord[]; initialMedicationPresets:MedicationPreset[]; initialMedicationDoses:MedicationDoseEvent[]; initialMedicationReminders:ScheduledNotification[]; today: string }) {
+export function HealthView({ view = "overview", initialSleep, initial, initialEnergy, initialEnergyHistory, initialTraining, initialRecentTraining, initialTrainingSuggestions, initialFocusedTraining, initialTrainingPlan, initialWeights, initialWeightSettings, initialFocusedWeight, initialPeriods, initialMenstrualFlows, initialMedicationPresets, initialMedicationDoses, initialMedicationReminders, today }: { view?: HealthViewName; initialSleep: DailySleepSummary; initial: Dashboard; initialEnergy: DailyNutritionSummary; initialEnergyHistory: DailyNutritionSummary[]; initialTraining: TrainingLog[]; initialRecentTraining: TrainingLog[]; initialTrainingSuggestions: TrainingInputSuggestions; initialFocusedTraining?: TrainingLog; initialTrainingPlan: TrainingPlan | null; initialWeights: WeightRecord[]; initialWeightSettings: WeightSettings; initialFocusedWeight?: WeightRecord; initialPeriods:MenstrualPeriod[]; initialMenstrualFlows:MenstrualFlowRecord[]; initialMedicationPresets:MedicationPreset[]; initialMedicationDoses:MedicationDoseEvent[]; initialMedicationReminders:ScheduledNotification[]; today: string }) {
   const { english } = useLocale();
   const router = useRouter();
   const [quickPicker, setQuickPicker] = useState(false);
@@ -61,7 +61,7 @@ export function HealthView({ view = "overview", initialSleep, initial, initialEn
     {view === "cycle" && <PeriodMedicationSection initialPeriods={initialPeriods} initialFlows={initialMenstrualFlows} initialPresets={initialMedicationPresets} initialDoses={initialMedicationDoses} initialReminders={initialMedicationReminders}/>}
     {view === "weight" && <WeightSection initialRecords={initialWeights} initialSettings={initialWeightSettings} initialFocused={initialFocusedWeight} />}
     {view === "sleep" && <SleepSection initial={initialSleep} />}
-    {view === "training" && <TrainingSection initial={initialTraining} initialRecent={initialRecentTraining} initialSuggestions={initialTrainingSuggestions} initialFocused={initialFocusedTraining} today={today} />}
+    {view === "training" && <TrainingSection initialPlan={initialTrainingPlan} initial={initialTraining} initialRecent={initialRecentTraining} initialSuggestions={initialTrainingSuggestions} initialFocused={initialFocusedTraining} today={today} />}
     {view === "energy" && <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />}
     {view === "records" && <section className="health-section health-records-section"><div className="section-heading"><div><h2>{english ? "Recent records" : "近期记录"}</h2></div><Link href="/health/records">{english ? "View all" : "查看全部"} <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>}
   </div>;

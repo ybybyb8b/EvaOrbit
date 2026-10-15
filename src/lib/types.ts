@@ -581,6 +581,22 @@ export const ONGOING_HEALTH_RECORD_TYPES = ["symptom", "condition", "medication"
 export type TrainingType = "cardio" | "strength" | "mixed";
 export const TRAINING_BODY_PARTS = ["胸", "背", "腿", "肩", "手臂", "核心", "全身", "其他"] as const;
 export type TrainingBodyPart = typeof TRAINING_BODY_PARTS[number];
+export interface TrainingPlanDay {
+  id: string;
+  name: string;
+  trainingType: TrainingType;
+  bodyParts: TrainingBodyPart[];
+  durationMinutes: number | null;
+  content: string;
+  videoUrls: string[];
+}
+export interface TrainingPlan {
+  name: string;
+  days: TrainingPlanDay[];
+  currentDayId: string | null;
+  version: number;
+  updatedAt: string;
+}
 export interface TrainingLog {
   id: number;
   occurredAt: string;

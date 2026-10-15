@@ -8,6 +8,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
 import { PageLogAction } from "@/components/bottom-log";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
@@ -149,7 +150,7 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
       {error && <p className="form-error">{error}</p>}
     </form></FormSheet>}
     {error && !showForm && <p className="form-error">{error}</p>}
-    {loading ? <div className="loading-state">Opening Trackers…</div> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
+    {loading ? <PageLoading title="观测" englishTitle="Trackers" inline /> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
       <div className="tracker-group-heading"><h2>{group}</h2><span>{visibleTrackers.filter((tracker) => tracker.groupName === group).length}</span></div>
       <div className="tracker-card-grid">{visibleTrackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>

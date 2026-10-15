@@ -3,12 +3,14 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { showActionToast } from "@/components/action-toast";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { TRAINING_BODY_PARTS, type TrainingBodyPart, type TrainingInputSuggestions, type TrainingLog, type TrainingType } from "@/lib/types";
+import type { TrainingPlan } from "@/lib/types";
+import { trainingDayDraft } from "@/lib/training-plan";
 
 export const trainingTypeLabels: Record<TrainingType, { zh: string; en: string }> = { cardio: { zh: "有氧", en: "Cardio" }, strength: { zh: "无氧", en: "Strength" }, mixed: { zh: "混合", en: "Mixed" } };
 export const trainingBodyPartLabels: Record<TrainingBodyPart, { zh: string; en: string }> = { "胸": { zh: "胸", en: "Chest" }, "背": { zh: "背", en: "Back" }, "腿": { zh: "腿", en: "Legs" }, "肩": { zh: "肩", en: "Shoulders" }, "手臂": { zh: "手臂", en: "Arms" }, "核心": { zh: "核心", en: "Core" }, "全身": { zh: "全身", en: "Full body" }, "其他": { zh: "其他", en: "Other" } };
@@ -17,9 +19,16 @@ function emptyDraft(initialDate?: string): Draft { return { occurredAt: initialD
 function draftFromLog(log: TrainingLog): Draft { return { occurredAt: compactDateTimeValue(log.occurredAt, log.occurredHasExplicitTime), trainingType: log.trainingType, bodyParts: log.bodyParts, teacher: log.teacher, course: log.course, durationMinutes: log.durationMinutes === null ? "" : String(log.durationMinutes), notes: log.notes }; }
 function getError(result: unknown, fallback: string) { return result && typeof result === "object" && "error" in result && typeof result.error === "string" ? result.error : fallback; }
 
-export function TrainingLogEditor({ record, initialDate, suggestions, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+export function TrainingLogEditor({ record, initialDate, suggestions, planCompletion, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
   const { english } = useLocale();
-  const [draft, setDraft] = useState<Draft>(() => record ? draftFromLog(record) : emptyDraft(initialDate));
+  const [draft, setDraft] = useState<Draft>(() => {
+    if (record) return draftFromLog(record);
+    const empty = emptyDraft(initialDate);
+    if (!planCompletion) return empty;
+    const fields = trainingDayDraft(planCompletion.plan);
+    return { ...empty, ...fields, durationMinutes: fields.durationMinutes === null ? "" : String(fields.durationMinutes) };
+  });
+  const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const typeLabel = (type: TrainingType) => trainingTypeLabels[type][english ? "en" : "zh"];
@@ -28,18 +37,21 @@ export function TrainingLogEditor({ record, initialDate, suggestions, onClose, o
   const [presetUndo, setPresetUndo] = useState<Draft | null>(null);
   function applyPreset(preset: TrainingInputSuggestions["presets"][number]) { if ((draft.teacher || draft.course || draft.durationMinutes || draft.bodyParts.length) && !window.confirm(english ? "Replace training fields with this preset? Date and notes stay unchanged." : "使用预设替换训练字段？日期和备注会保留。")) return; setPresetUndo(draft); setDraft((current) => ({ ...current, trainingType: preset.trainingType, bodyParts: preset.bodyParts, teacher: preset.teacher, course: preset.course, durationMinutes: preset.durationMinutes === null ? "" : String(preset.durationMinutes) })); }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setError("");
+    event.preventDefault(); if (savingRef.current) return; setError("");
     if (!draft.bodyParts.length) { setError(english ? "Choose at least one training area" : "请至少选择一个训练部位"); return; }
-    const occurred = compactDateTimePayload(draft.occurredAt); setSaving(true);
+    const occurred = compactDateTimePayload(draft.occurredAt); savingRef.current = true; setSaving(true);
     try {
-      const response = await fetch(record ? `/api/health/training/${record.id}` : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ occurredAt: occurred.value, occurredHasExplicitTime: occurred.hasExplicitTime, trainingType: draft.trainingType, bodyParts: draft.bodyParts, teacher: draft.teacher, course: draft.course, durationMinutes: draft.durationMinutes ? Number(draft.durationMinutes) : null, notes: draft.notes }) });
+      const log = { occurredAt: occurred.value, occurredHasExplicitTime: occurred.hasExplicitTime, trainingType: draft.trainingType, bodyParts: draft.bodyParts, teacher: draft.teacher, course: draft.course, durationMinutes: draft.durationMinutes ? Number(draft.durationMinutes) : null, notes: draft.notes };
+      const payload = planCompletion ? { expectedVersion: planCompletion.plan.version, dayId: planCompletion.plan.currentDayId, requestKey: planCompletion.requestKey, log } : log;
+      const response = await fetch(record ? `/api/health/training/${record.id}` : planCompletion ? "/api/health/training/plan/complete" : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json().catch(() => null); if (!response.ok) { setError(getError(result, "Could not save training")); return; }
-      invalidateCachedJson("/api/health/training/suggestions"); await onSaved(); onClose();
-    } catch { setError("Could not save training"); } finally { setSaving(false); }
+      invalidateCachedJson("/api/health/training/suggestions"); await onSaved(planCompletion ? result.plan : undefined); onClose();
+    } catch { setError("Could not save training"); } finally { savingRef.current = false; setSaving(false); }
   }
   async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); showActionToast(english ? "Training log deleted" : "训练记录已删除", "deleted"); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
   return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving}>
     <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>
+      {planCompletion && <p className="training-plan-hint">{english ? "Your plan advances only after this record is saved. Cancel to keep your place." : "保存这条记录后才进入下一个训练日；取消不会改变进度。"}</p>}
       {!record && suggestions.presets.length > 0 && <section className="training-presets"><div><span>{english ? "RECENT & COMMON" : "近期与常用"}</span><small>{english ? "Date and notes stay unchanged" : "日期和当次备注不会被覆盖"}</small></div><div>{suggestions.presets.map((preset) => <button type="button" key={JSON.stringify([preset.teacher,preset.course,preset.trainingType,preset.bodyParts,preset.durationMinutes])} data-form-change onClick={() => applyPreset(preset)}><strong>{preset.course || typeLabel(preset.trainingType)}</strong><span>{[preset.teacher,preset.bodyParts.map(bodyPartLabel).join(" · "),preset.durationMinutes ? `${preset.durationMinutes} min` : ""].filter(Boolean).join(" · ")}</span><small>{preset.useCount > 1 ? `${preset.useCount}×` : english ? "Recent" : "最近"}</small></button>)}</div></section>}
       {presetUndo && <button type="button" data-form-change className="text-button" onClick={() => { setDraft(current => ({ ...presetUndo, occurredAt: current.occurredAt, notes: current.notes })); setPresetUndo(null); }}>{english ? "Undo preset" : "撤销预设"}</button>}
       <DateTimeField label={english ? "Date" : "日期"} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={(value) => setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : "") })} />

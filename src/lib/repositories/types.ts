@@ -282,6 +282,9 @@ export interface EvaOrbitRepository {
   deleteHealthRecord(id: number): Promise<boolean>;
 
   listTrainingLogs(input?: TrainingLogListInput): Promise<TrainingLog[]>;
+  getTrainingPlan(): Promise<import("../types").TrainingPlan | null>;
+  saveTrainingPlan(input: import("../training-plan").TrainingPlanWrite): Promise<import("../types").TrainingPlan>;
+  completeTrainingPlan(input: import("../training-plan").TrainingPlanCompletion): Promise<{ plan: import("../types").TrainingPlan; log: TrainingLog }>;
   getTrainingLog(id: number): Promise<TrainingLog | null>;
   createTrainingLog(input: NewTrainingLog): Promise<TrainingLog>;
   updateTrainingLog(id: number, input: TrainingLogPatch): Promise<TrainingLog | null>;

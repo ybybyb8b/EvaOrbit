@@ -23,6 +23,13 @@ import type { DailyJournalEntryPatch } from "./types";
 import type { SleepSample } from "../sleep";
 
 type Row = Record<string, unknown>;
+function trainingPlanFromRow(row: Row): import("../types").TrainingPlan {
+  return { name: String(row.name), days: row.days as import("../types").TrainingPlanDay[], currentDayId: row.current_day_id === null ? null : String(row.current_day_id), version: Number(row.version), updatedAt: String(row.updated_at) };
+}
+function failTrainingPlan(error: { message: string } | null) {
+  if (error?.message.includes("TRAINING_PLAN_CONFLICT")) throw new ConflictError("训练计划或进度已更新，请刷新后重试；已填写的内容会保留。");
+  fail(error, "保存训练计划");
+}
 
 function foodLibrarySearchValue(value: string) { return value.trim().replace(/[\\%_]/g, "\\$&").replace(/[(),]/g, " "); }
 function postgrestQuoted(value: string) { return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`; }
@@ -259,6 +266,22 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     return logs.map(log => ({ ...log, foodDishes: (log.foodDishIds ?? []).filter(id => names.has(id)).map(id => ({ id, name: names.get(id)! })) }));
   }
   const repository: EvaOrbitRepository = {
+    async getTrainingPlan() {
+      const { data, error } = await client.from("training_plans").select("*").maybeSingle();
+      fail(error, "读取训练计划");
+      return data ? trainingPlanFromRow(data) : null;
+    },
+    async saveTrainingPlan(input) {
+      const { data, error } = await client.rpc("save_training_plan", { p_expected_version: input.expectedVersion, p_name: input.name, p_days: input.days, p_current_day_id: input.currentDayId });
+      failTrainingPlan(error);
+      return trainingPlanFromRow(data as Row);
+    },
+    async completeTrainingPlan(input) {
+      const { data, error } = await client.rpc("complete_training_plan", { p_expected_version: input.expectedVersion, p_day_id: input.dayId, p_request_key: input.requestKey, p_log: input.log });
+      failTrainingPlan(error);
+      const result = data as { plan: Row; log: Row };
+      return { plan: trainingPlanFromRow(result.plan), log: trainingLogFromRow(result.log) };
+    },
     async listMemoryEntities(input={}){const limit=Math.min(Math.max(input.limit??100,1),200);if(input.query){const{data,error}=await client.rpc("search_memory_entities",{p_query:input.query,p_entity_type:input.entityType??null,p_status:input.status??null,p_include_merged:input.includeMerged??false,p_limit:limit});fail(error,"搜索 Memory Entities");return(data as Row[]).map(memoryEntityFromRow);}let request=client.from("memory_entities").select("*");if(!input.includeMerged&&!input.status)request=request.neq("status","merged");if(input.status)request=request.eq("status",input.status);if(input.entityType)request=request.eq("entity_type",input.entityType);const{data,error}=await request.order("updated_at",{ascending:false}).order("id").limit(limit);fail(error,"读取 Memory Entities");return(data as Row[]).map(memoryEntityFromRow);},
     async getMemoryEntity(id){const{data,error}=await client.from("memory_entities").select("*").eq("id",id).maybeSingle();fail(error,"读取 Memory Entity");return data?memoryEntityFromRow(data):null;},
     async createMemoryEntity(input){const{data,error}=await client.from("memory_entities").insert({id:input.id,user_id:userId,canonical_name:input.canonicalName,entity_type:input.entityType,aliases:input.aliases,description:input.description,status:input.status}).select().single();fail(error,"创建 Memory Entity");return memoryEntityFromRow(data);},

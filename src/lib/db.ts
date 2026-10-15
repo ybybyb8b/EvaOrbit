@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { parseTrainingPlanWrite, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
+import type { TrainingPlan } from "./types";
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration";
 import fs from "node:fs";
 import path from "node:path";
@@ -1607,6 +1609,55 @@ if (!hasV80) {
       database.prepare("UPDATE drink_logs SET notes=? WHERE id=?").run(migrateFoodDrinkRecord("drink_logs", row).notes as string, row.id as number);
     }
     database.exec("ALTER TABLE food_logs DROP COLUMN portion; ALTER TABLE food_logs DROP COLUMN notes; ALTER TABLE food_logs DROP COLUMN calendar_time_enabled; ALTER TABLE drink_logs DROP COLUMN brand; ALTER TABLE drink_logs DROP COLUMN volume_ml; ALTER TABLE drink_logs DROP COLUMN caffeine_mg; INSERT INTO migrations(version) VALUES(80); COMMIT;");
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
+
+const hasV81 = database.prepare("SELECT 1 FROM migrations WHERE version=81").get();
+if (!hasV81) database.exec(`BEGIN;
+  CREATE TABLE training_plans (
+    user_id TEXT PRIMARY KEY DEFAULT 'local',name TEXT NOT NULL,days TEXT NOT NULL CHECK(json_valid(days) AND json_type(days)='array'),
+    current_day_id TEXT,version INTEGER NOT NULL CHECK(version>0),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK((json_array_length(days)=0 AND current_day_id IS NULL) OR (json_array_length(days)>0 AND current_day_id IS NOT NULL))
+  );
+  CREATE TRIGGER training_plan_valid_day_insert BEFORE INSERT ON training_plans
+    WHEN NEW.current_day_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM json_each(NEW.days) WHERE json_extract(value,'$.id')=NEW.current_day_id)
+    BEGIN SELECT RAISE(ABORT,'Invalid training day'); END;
+  CREATE TRIGGER training_plan_valid_day_update BEFORE UPDATE ON training_plans
+    WHEN NEW.current_day_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM json_each(NEW.days) WHERE json_extract(value,'$.id')=NEW.current_day_id)
+    BEGIN SELECT RAISE(ABORT,'Invalid training day'); END;
+  ALTER TABLE training_logs ADD COLUMN plan_completion_key TEXT;
+  CREATE UNIQUE INDEX idx_training_logs_completion ON training_logs(user_id,plan_completion_key) WHERE plan_completion_key IS NOT NULL;
+  INSERT INTO migrations(version) VALUES(81); COMMIT;
+`);
+
+export function getTrainingPlan(): TrainingPlan | null {
+  const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();
+  return row ? { name: String(row.name), days: JSON.parse(String(row.days)), currentDayId: row.current_day_id === null ? null : String(row.current_day_id), version: Number(row.version), updatedAt: String(row.updated_at) } : null;
+}
+export function saveTrainingPlan(input: TrainingPlanWrite): TrainingPlan {
+  input = parseTrainingPlanWrite(input);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    if ((getTrainingPlan()?.version ?? 0) !== input.expectedVersion) throw new ConflictError("训练计划或进度已更新，请刷新后重试；已填写的内容会保留。");
+    database.prepare("INSERT INTO training_plans(user_id,name,days,current_day_id,version) VALUES('local',?,?,?,1) ON CONFLICT(user_id) DO UPDATE SET name=excluded.name,days=excluded.days,current_day_id=excluded.current_day_id,version=training_plans.version+1,updated_at=CURRENT_TIMESTAMP").run(input.name,JSON.stringify(input.days),input.currentDayId);
+    const plan = getTrainingPlan()!;
+    database.exec("COMMIT"); return plan;
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
+export function completeTrainingPlan(input: TrainingPlanCompletion): { plan: TrainingPlan; log: TrainingLog } {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const plan = getTrainingPlan();
+    if (!plan) throw new ConflictError("训练计划不存在，请刷新后重试。");
+    const existing = database.prepare("SELECT id FROM training_logs WHERE user_id='local' AND plan_completion_key=?").get(input.requestKey);
+    if (existing) { database.exec("COMMIT"); return { plan, log: getTrainingLog(Number(existing.id))! }; }
+    if (plan.version !== input.expectedVersion || !plan.currentDayId || plan.currentDayId !== input.dayId) throw new ConflictError("训练计划或进度已更新，请刷新后重试；已填写的内容会保留。");
+    const log = createTrainingLog(input.log);
+    database.prepare("UPDATE training_logs SET plan_completion_key=? WHERE id=?").run(input.requestKey,log.id);
+    const index = plan.days.findIndex(day => day.id === plan.currentDayId);
+    database.prepare("UPDATE training_plans SET current_day_id=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE user_id='local'").run(plan.days[(index+1)%plan.days.length].id);
+    const next = getTrainingPlan()!;
+    database.exec("COMMIT"); return { plan: next, log };
   } catch (error) { database.exec("ROLLBACK"); throw error; }
 }
 

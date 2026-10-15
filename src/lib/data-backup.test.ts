@@ -92,6 +92,24 @@ test("SQLite conversion preserves scalars and serializes structured values", () 
   assert.equal(toSqliteValue({ value: 3 }), '{"value":3}');
 });
 
+test("training plans are backed up with their cursor, while v8 restores with an empty plan", () => {
+  assert.ok(BACKUP_TABLES.includes("training_plans"));
+  const resources = emptyBackupResources();
+  const row = { user_id: "owner", name: "Plan", days: [{ id: "day-1" }], current_day_id: "day-1", version: 4, updated_at: "2026-10-15T04:00:00Z" };
+  resources.training_plans.push(sanitizeExportRow("training_plans", row));
+  const backup = { backup_version: BACKUP_VERSION, exported_at: "2026-10-15T04:00:00Z", schema: { supabase_migration: BACKUP_SCHEMA_VERSION }, source: { backend: "supabase" }, resources };
+  const plan = parseBackupDocument(backup).resources.training_plans[0];
+  assert.equal(plan.current_day_id, "day-1");
+  assert.equal(plan.version, 4);
+  assert.equal(plan.user_id, undefined);
+  assert.equal(toSqliteValue(plan.days), '[{"id":"day-1"}]');
+  const oldResources = { ...resources } as Record<string, unknown>;
+  delete oldResources.training_plans;
+  assert.deepEqual(parseBackupDocument({ ...backup, backup_version: 8, resources: oldResources }).resources.training_plans, []);
+  assert.throws(() => parseBackupDocument({ ...backup, resources: oldResources }), /training_plans/);
+  assert.equal(normalizeBackupRowForSqlite("training_logs", { plan_completion_key: "request" }).plan_completion_key, "request");
+});
+
 test("Postgres time values are compatible with the local minute-only reminder schema", () => {
   assert.equal(sanitizeExportRow("meal_reminder_rules", { remind_at: "10:30:00" }).remind_at, "10:30");
   assert.equal(normalizeBackupRowForSqlite("meal_reminder_rules", { remind_at: "20:15:00.000000" }).remind_at, "20:15");

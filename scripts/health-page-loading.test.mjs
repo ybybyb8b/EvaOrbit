@@ -33,12 +33,12 @@ const expected = {
   overview: ['getDailySleepSummary', 'listHealthRecords', 'getDailyNutritionSummary', 'listTrainingLogs', 'listWeightRecords', 'listMenstrualPeriods', 'listScheduledNotifications'],
   sleep: ['getDailySleepSummary'],
   weight: ['listWeightRecords', 'getWeightSettings'],
-  training: ['listTrainingLogs', 'listTrainingLogs', 'getTrainingInputSuggestions'],
+  training: ['listTrainingLogs', 'listTrainingLogs', 'getTrainingInputSuggestions', 'getTrainingPlan'],
   energy: ['getDailyNutritionSummary', 'listDailyNutritionHistory'],
   cycle: ['listMenstrualPeriods', 'listMenstrualFlowRecords', 'listMedicationPresets', 'listMedicationDoseEvents', 'listScheduledNotifications', 'listMenstrualPeriods'],
   records: ['listHealthRecords'],
 };
-const queried = call => /^(getDailySleepSummary|listHealthRecords|getDailyNutritionSummary|listDailyNutritionHistory|listTrainingLogs|getTrainingInputSuggestions|getTrainingLog|listWeightRecords|getWeightSettings|getWeightRecord|listMenstrualPeriods|listMenstrualFlowRecords|listMedicationPresets|listMedicationDoseEvents|listScheduledNotifications)$/.test(call.name);
+const queried = call => /^(getDailySleepSummary|listHealthRecords|getDailyNutritionSummary|listDailyNutritionHistory|listTrainingLogs|getTrainingInputSuggestions|getTrainingLog|getTrainingPlan|listWeightRecords|getWeightSettings|getWeightRecord|listMenstrualPeriods|listMenstrualFlowRecords|listMedicationPresets|listMedicationDoseEvents|listScheduledNotifications)$/.test(call.name);
 
 test('Health routes query only their displayed data; sleep does not serialize overview queries', async () => {
   for (const [view, names] of Object.entries(expected)) {

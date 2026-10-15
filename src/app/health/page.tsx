@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { listHealthRecords } from "../../lib/services/health";
 import { buildHealthDashboard } from "../../lib/health-dashboard";
 import { getDailyNutritionSummary, listDailyNutritionHistory } from "../../lib/services/nutrition";
-import { getTrainingInputSuggestions, getTrainingLog, listTrainingLogs } from "../../lib/services/training";
+import { getTrainingInputSuggestions, getTrainingLog, listTrainingLogs, getTrainingPlan } from "../../lib/services/training";
 import { dateInEvaOrbit, dateRange, shiftDate } from "../../lib/time";
 import { getWeightRecord, getWeightSettings, listWeightRecords } from "../../lib/services/weight";
 import { listMedicationDoseEvents,listMedicationPresets,listMenstrualFlowRecords,listMenstrualPeriods } from "../../lib/services/period-medication";
@@ -35,7 +35,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   const cycleFrom = view === "cycle" ? healthPeriodHistoryFrom(today) : undefined;
   const cycleFromInstant = cycleFrom ? dateRange(cycleFrom).from : undefined;
   // Unused props retain empty values; quick editors load their own inputs when opened.
-  const [initialSleep, records, dailyEnergy, energyHistory, training, recentTraining, trainingSuggestions, focusedTraining, weights, weightSettings, focusedWeight, periods, menstrualFlows, medicationPresets, medicationDoses, scheduledNotifications, activePeriods] = await Promise.all([
+  const [initialSleep, records, dailyEnergy, energyHistory, training, recentTraining, trainingSuggestions, focusedTraining, weights, weightSettings, focusedWeight, periods, menstrualFlows, medicationPresets, medicationDoses, scheduledNotifications, activePeriods, trainingPlan] = await Promise.all([
     overview || view === "sleep" ? getDailySleepSummary(today) : buildDailySleepSummary(today, [], null),
     overview || view === "records" ? listHealthRecords({ limit: 100 }) : [],
     overview || view === "energy" ? getDailyNutritionSummary(today) : calculateDailyNutrition(today, [], [], { restingEnergyKcal: null, activeEnergyKcal: null, notes: "" }),
@@ -53,6 +53,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
     view === "cycle" ? listMedicationDoseEvents({limit:30, from: cycleFromInstant}) : [],
     overview || view === "cycle" ? listScheduledNotifications() : [],
     view === "cycle" ? listMenstrualPeriods({activeOnly:true,limit:1}) : [],
+    view === "training" ? getTrainingPlan() : null,
   ]);
   const oldActive = activePeriods.find(item => cycleFrom && item.startedOn < cycleFrom);
   const [activeFlows, activeDoses] = oldActive ? await Promise.all([listMenstrualFlowRecords({periodId:oldActive.id,limit:30}), listMedicationDoseEvents({periodId:oldActive.id,limit:30})]) : [[], []];
@@ -60,5 +61,5 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   const cycleFlows = [...new Map([...menstrualFlows, ...activeFlows].map(item => [item.id, item])).values()].sort((a,b) => b.occurredAt.localeCompare(a.occurredAt));
   const cycleDoses = [...new Map([...medicationDoses, ...activeDoses].map(item => [item.id, item])).values()].sort((a,b) => b.takenAt.localeCompare(a.takenAt));
 
-  return <HealthView key={view} view={view} initialSleep={initialSleep} initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={cyclePeriods} initialMenstrualFlows={cycleFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={cycleDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
+  return <HealthView key={view} view={view} initialSleep={initialSleep} initial={buildHealthDashboard(records)} initialEnergy={dailyEnergy} initialEnergyHistory={energyHistory} initialTrainingPlan={trainingPlan} initialTraining={training} initialRecentTraining={recentTraining} initialTrainingSuggestions={trainingSuggestions} initialFocusedTraining={focusedTraining ?? undefined} initialWeights={weights} initialWeightSettings={weightSettings} initialFocusedWeight={focusedWeight ?? undefined} initialPeriods={cyclePeriods} initialMenstrualFlows={cycleFlows} initialMedicationPresets={medicationPresets} initialMedicationDoses={cycleDoses} initialMedicationReminders={scheduledNotifications.filter(item=>item.sourceType===PERIOD_MEDICATION_REMINDER_SOURCE)} today={today} />;
 }

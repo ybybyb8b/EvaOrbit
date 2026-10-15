@@ -5,6 +5,11 @@ import { getRepository } from "../repositories";
 import type { NewTrainingLog, TrainingLogListInput, TrainingLogPatch } from "../repositories/types";
 import { dateRange } from "../time";
 import { buildTrainingPresets } from "../training-presets";
+import type { TrainingPlanWrite, TrainingPlanCompletion } from "../training-plan";
+
+export async function getTrainingPlan() { return (await getRepository()).getTrainingPlan(); }
+export async function saveTrainingPlan(input: TrainingPlanWrite) { return (await getRepository()).saveTrainingPlan(input); }
+export async function completeTrainingPlan(input: TrainingPlanCompletion) { return (await getRepository()).completeTrainingPlan(input); }
 
 function monthRange(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);

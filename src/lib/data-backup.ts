@@ -1,6 +1,6 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
-export const BACKUP_VERSION = 8 as const;
-export const BACKUP_SCHEMA_VERSION = "202610130003_simplify_consumption_records";
+export const BACKUP_VERSION = 9 as const;
+export const BACKUP_SCHEMA_VERSION = "202610150001_training_plans";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -46,6 +46,7 @@ export const BACKUP_TABLES = [
   "reminder_occurrences",
   "health_records",
   "training_logs",
+  "training_plans",
   "weight_records",
   "weight_settings",
   "menstrual_periods",
@@ -161,7 +162,7 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== BACKUP_VERSION) {
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== BACKUP_VERSION) {
     throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 至 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {
@@ -189,10 +190,11 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
     resources.medication_presets ??= [];
     resources.medication_dose_events ??= [];
   }
-  if(document.backup_version!==BACKUP_VERSION){resources.subscriptions??=[];resources.subscription_payments??=[];resources.subscription_price_changes??=[];}
-  if(document.backup_version!==BACKUP_VERSION)resources.memory_fact_candidates??=[];
-  if(document.backup_version!==BACKUP_VERSION){resources.cat_food_items??=[];resources.cat_food_purchases??=[];}
-  if(document.backup_version!==BACKUP_VERSION)resources.daily_journal_entries??=[];
+  if(Number(document.backup_version)<8){resources.subscriptions??=[];resources.subscription_payments??=[];resources.subscription_price_changes??=[];}
+  if(Number(document.backup_version)<8)resources.memory_fact_candidates??=[];
+  if(Number(document.backup_version)<8){resources.cat_food_items??=[];resources.cat_food_purchases??=[];}
+  if(Number(document.backup_version)<8)resources.daily_journal_entries??=[];
+  if(document.backup_version!==BACKUP_VERSION)resources.training_plans??=[];
   for (const table of BACKUP_TABLES) {
     if (!Array.isArray(resources[table])) throw new Error(`备份不完整：resources.${table} 缺失或格式错误`);
     if (!(resources[table] as unknown[]).every((row) => row && typeof row === "object" && !Array.isArray(row))) {
