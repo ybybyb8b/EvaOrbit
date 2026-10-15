@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 
 import { useEffect, useRef, useState } from "react";
 import { BarkNotificationControl } from "@/components/bark-notification-control";
@@ -23,11 +25,12 @@ function reminderDate(reminder:Reminder){return reminder.nextDueAt?(reminder.due
 function month(value: string) { const date = new Date(value); const now = new Date(); if (date.toDateString() === now.toDateString()) return "今天"; return date.toLocaleDateString("zh-CN", { month: "long", year: "numeric" }); }
 
 export function NotificationsView({ pets, initial }: { pets: Pet[]; initial: Data }) {
+  useDataRefresh("/notifications", () => load());
   const { english } = useLocale();
   const [barkEnabled, setBarkEnabled] = useState(false);
   const openedReminder = useRef(false);
-  const [data, setData] = useState(initial);
-  const [tab, setTab] = useState<Tab>("upcoming"); const [panel, setPanel] = useState<"new" | "routine" | "reminder" | null>(null); const [selected, setSelected] = useState<ScheduledNotification | null>(null); const [editingRoutine, setEditingRoutine] = useState<CatRoutine>(); const [editingReminder, setEditingReminder] = useState<Reminder>(); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [sheetBusy, setSheetBusy] = useState(false); const [actionBusyId, setActionBusyId] = useState<number | null>(null);
+  const [data, setData] = useServerDataState(initial);
+  const [tab, setTab] = useRememberedState<Tab>("NotificationsView:tab", "upcoming"); const [panel, setPanel] = useState<"new" | "routine" | "reminder" | null>(null); const [selected, setSelected] = useState<ScheduledNotification | null>(null); const [editingRoutine, setEditingRoutine] = useState<CatRoutine>(); const [editingReminder, setEditingReminder] = useState<Reminder>(); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [sheetBusy, setSheetBusy] = useState(false); const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   useEffect(() => {
     if (openedReminder.current) return;
     const id = Number(new URLSearchParams(window.location.search).get("reminderId"));

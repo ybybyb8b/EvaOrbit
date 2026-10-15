@@ -15,10 +15,11 @@ async function database() {
   if (storageUnavailable) throw new Error("Persistent cache requires a shared invalidation marker");
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open("eo-home-v1", 1);
+    let blocked = false;
     request.onupgradeneeded = () => request.result.createObjectStore("snapshots");
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => { if (blocked) request.result.close(); else resolve(request.result); };
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("Home cache is blocked"));
+    request.onblocked = () => { blocked = true; reject(new Error("Home cache is blocked")); };
   });
 }
 
@@ -35,16 +36,25 @@ async function stored<T>(key: string): Promise<Snapshot<T> | undefined> {
   } catch { return undefined; } // Private browsing/storage denial must not break Home.
 }
 
+export async function getClientSnapshot<T>(scope: string, url: string): Promise<Snapshot<T> | undefined> {
+  return (memory.get(JSON.stringify([scope, url])) ?? await stored<T>(JSON.stringify([scope, url]))) as Snapshot<T> | undefined;
+}
+
 export async function saveHomeSnapshot<T>(scope: string, url: string, data: T, expectedRevision = revision()) {
   if (expectedRevision !== revision()) return;
+  return putClientSnapshot(scope, url, { data, savedAt: Date.now(), revision: expectedRevision }, () => expectedRevision === revision());
+}
+
+export async function putClientSnapshot<T>(scope: string, url: string, snapshot: Snapshot<T>, current = () => true) {
+  if (!current()) return;
+  if (JSON.stringify(snapshot.data).length > 1_000_000) return;
   const key = JSON.stringify([scope, url]);
-  const snapshot = { data, savedAt: Date.now(), revision: expectedRevision };
   memory.delete(key); memory.set(key, snapshot);
-  if (memory.size > 90) memory.delete(memory.keys().next().value!);
+  if (memory.size > 250) memory.delete(memory.keys().next().value!);
   try {
     const db = await database();
     try {
-      if (expectedRevision !== revision()) return;
+      if (!current()) return;
       await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction("snapshots", "readwrite"), store = transaction.objectStore("snapshots");
         store.put(snapshot, key);
@@ -54,7 +64,7 @@ export async function saveHomeSnapshot<T>(scope: string, url: string, data: T, e
         cursor.onsuccess = () => {
           const item = cursor.result;
           if (!item) {
-            retained.sort((a, b) => b.savedAt - a.savedAt).slice(90).forEach(entry => store.delete(entry.key));
+            retained.sort((a, b) => b.savedAt - a.savedAt).slice(250).forEach(entry => store.delete(entry.key));
             return;
           }
           if (Date.now() - item.value.savedAt > 7 * 86400000) item.delete();
@@ -67,6 +77,20 @@ export async function saveHomeSnapshot<T>(scope: string, url: string, data: T, e
       });
     } finally { db.close(); }
   } catch { /* Memory remains usable when persistent storage is unavailable. */ }
+}
+
+export async function clearPrivateSnapshots() {
+  memory.clear();
+  try {
+    const db = await database();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction("snapshots", "readwrite");
+        transaction.objectStore("snapshots").clear();
+        transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); transaction.onabort = () => reject(transaction.error);
+      });
+    } finally { db.close(); }
+  } catch { /* Storage may be unavailable. */ }
 }
 
 export function invalidateHomeCache() {

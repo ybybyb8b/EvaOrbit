@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
@@ -33,10 +34,10 @@ function viewingLabel(viewing: MediaViewing) {
 
 export function MediaDetailView({ initial, initialSeries }: { initial: MediaDetail; initialSeries:MediaSeries[] }) {
   const router = useRouter();
-  const [detail, setDetail] = useState(initial);
+  const [detail, setDetail] = useServerDataState(initial);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<MediaDraft>(() => draftFromDetail(initial));
-  const [series,setSeries]=useState(initialSeries);
+  const [series,setSeries]=useServerDataState(initialSeries);
   const [coverFile,setCoverFile]=useState<File|null>(null);
   const [rewatchOpen, setRewatchOpen] = useState(false);
   const [rewatchDate, setRewatchDate] = useState(currentLocalDate);

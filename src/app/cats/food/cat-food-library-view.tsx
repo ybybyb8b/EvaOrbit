@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice } from "@/components/action-toast";
@@ -17,7 +19,8 @@ const unitLabel = { kg: "kg", L: "L", piece: "个" };
 const money = (value: number) => `¥${(value / 100).toFixed(2)}`;
 
 export function CatFoodLibraryView({ initialItems }: { initialItems: CatFoodSummary[] }) {
-  const [items, setItems] = useState(initialItems), [query, setQuery] = useState(""), [panel, setPanel] = useState<"item" | "purchase" | null>(null), [selectedId, setSelectedId] = useState(initialItems[0]?.id ?? 0), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
+  useDataRefresh("/cats/food", () => load());
+  const [items, setItems] = useServerDataState(initialItems), [query, setQuery] = useRememberedState("CatFoodLibraryView:query", ""), [panel, setPanel] = useState<"item" | "purchase" | null>(null), [selectedId, setSelectedId] = useState(initialItems[0]?.id ?? 0), [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const filtered = useMemo(() => { const term = query.trim().toLocaleLowerCase(); return term ? items.filter(item => [item.name, item.brand, item.flavor].some(value => value.toLocaleLowerCase().includes(term))) : items; }, [items, query]);
   const packages = items.reduce((total, item) => total + item.stockPackages, 0), low = items.filter(item => item.stockState !== "available").length, records = items.reduce((total, item) => total + item.purchases.length, 0);
   async function load() { const response = await fetch("/api/cats/food"); if (response.ok) setItems(await response.json()); }

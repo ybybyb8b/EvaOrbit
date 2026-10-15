@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useRef, useState } from "react";
@@ -70,9 +71,9 @@ function getError(result: unknown, fallback: string, english: boolean) {
 export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNutritionSummary; initialHistory: DailyNutritionSummary[] }) {
   const { english } = useLocale();
   const t = (en: string, zh: string) => english ? en : zh;
-  const [summary, setSummary] = useState(initial);
-  const [history, setHistory] = useState(initialHistory);
   const [selectedDate, setSelectedDate] = useState(initial.date);
+  const [summary, setSummary] = useServerDataState(initial, selectedDate === initial.date);
+  const [history, setHistory] = useServerDataState(initialHistory);
   const [draft, setDraft] = useState(() => draftFromSummary(initial));
   const [editing, setEditing] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);

@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -46,7 +47,8 @@ export function routineCadence(routine: CatRoutine) { return `Every ${routine.in
 export function routineLastDoneLabel(value: string | null | undefined) { return value ? `Last done ${routineDate(value)}` : "Not completed yet"; }
 
 export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: Dashboard; foodSummary: { items: number; packages: number; lowStock: number } }) {
-  const [dashboard, setDashboard] = useState(initialDashboard);
+  useDataRefresh("/cats", () => load());
+  const [dashboard, setDashboard] = useServerDataState(initialDashboard);
   const [panel, setPanel] = useState<"record" | "pet" | "care" | "reminder" | "routine" | null>(null);
   const [editingRecord, setEditingRecord] = useState<{ kind: CatTimelineEntry["kind"]; id: number; record: Record<string, unknown> }>();
   const [editingRoutine, setEditingRoutine] = useState<CatRoutine>();

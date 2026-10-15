@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 
 import Link from "next/link";
@@ -13,9 +15,12 @@ import { FoodRecordEditor, meals, scenes, tasteLabels } from "./food-record-edit
 function shiftDate(date:string,days:number){const value=new Date(`${date}T12:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
 
 export function FoodView({initialDate,initialMealType}:{initialDate?:string;initialMealType?:string}={}){
-  const today=new Date().toLocaleDateString("en-CA");const[date,setDate]=useState(initialDate??today);const[mealFilter,setMealFilter]=useState(meals.some(meal=>meal.value===initialMealType)?initialMealType!:"");const[query,setQuery]=useState("");const[logs,setLogs]=useState<FoodLog[]>([]);const[editing,setEditing]=useState<FoodLog>();const[showForm,setShowForm]=useState(false);
+
+  const today=new Date().toLocaleDateString("en-CA");const[date,setDate]=useRememberedState("FoodView:date", initialDate??today);const[mealFilter,setMealFilter]=useRememberedState("FoodView:mealFilter", meals.some(meal=>meal.value===initialMealType)?initialMealType!:"");const[query,setQuery]=useRememberedState("FoodView:query", "");const[logs,setLogs]=useState<FoodLog[]>([]);const[editing,setEditing]=useState<FoodLog>();const[showForm,setShowForm]=useState(false);
   const load=useCallback(async()=>{const params=new URLSearchParams({date});if(mealFilter)params.set("mealType",mealFilter);if(query)params.set("q",query);const recordsResponse=await fetch(`/api/food/logs?${params}`);if(recordsResponse.ok)setLogs(await recordsResponse.json());},[date,mealFilter,query]);
-  useEffect(()=>{const timer=setTimeout(()=>void load(),120);return()=>clearTimeout(timer);},[load]);
+  useDataRefresh("/food", () => load());
+
+  useEffect(()=>{const timer=setTimeout(()=>void load(),query?120:0);return()=>clearTimeout(timer);},[load,query]);
   useEffect(()=>subscribeDataChanged(["calendar"],()=>{void load();}),[load]);
   function edit(item:FoodLog){setEditing(item);setShowForm(true);}
   return <div className="page food-page"><PageHeader eyebrow="Food & Drink" title="Food records" action={<PageLogAction label="Add record" className="button primary" onClick={()=>{setEditing(undefined);setShowForm(true);}}><Icon name="plus"/>新增记录</PageLogAction>}/>

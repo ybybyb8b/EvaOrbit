@@ -1,4 +1,5 @@
 "use client";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 
 import Link from "next/link";
@@ -26,6 +27,8 @@ const destinations = [
 const severity = { exceeded_limit: 3, reached_limit: 2, near_limit: 1, within_limit: 0 };
 
 export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "drink" }) {
+
+
   const [data, setData] = useState<FoodDrinkHomeData | null>(null);
   const [editor, setEditor] = useState<Editor>(initialRecord ? { kind: initialRecord } : null);
   const [limitEditor, setLimitEditor] = useState<DrinkLimit | "new" | null>(null);
@@ -40,18 +43,19 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
     } catch (reason) { if (!signal?.aborted) setError(reason instanceof Error ? reason.message : "饮食简报加载失败"); }
     finally { if (!signal?.aborted) setLoading(false); }
   }, []);
+  useDataRefresh("/food-drink", () => load());
   useEffect(() => { const controller = new AbortController(); const timer = setTimeout(() => void load(controller.signal), 0); return () => { clearTimeout(timer); controller.abort(); }; }, [load]);
   const latest = data?.brief.latest;
   const latestTitle = latest ? latest.kind === "food" ? foodRecordDisplay(latest.record).title : drinkRecordName(latest.record) : "";
   const warning = data?.limitStatuses.filter(status => status.state !== "within_limit").sort((a, b) => severity[b.state] - severity[a.state])[0];
   const latestDay = latest ? dateInEvaOrbit(new Date(latest.record.occurredAt)) : "";
   const latestTime = latest?.record.occurredHasExplicitTime === false ? "仅日期" : latest ? new Date(latest.record.occurredAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: EVAORBIT_TIME_ZONE }) : "";
-  const ready = !loading && !error && data;
+  const ready = !error && data;
   return <div className={`page ${styles.page}`}>
     <PageHeader eyebrow="生活" title="Food & Drink" action={<PageLogAction label="Add record" className="button primary" onClick={() => setEditor({ kind: "choose" })}><Icon name="plus" />新增记录</PageLogAction>} />
     <nav className={styles.destinations} aria-label="Food & Drink 核心入口">{destinations.map(destination => <Link href={destination.href} key={destination.href}><Icon name={destination.icon} variant="feature" /><span>{destination.label}</span></Link>)}</nav>
     <section className={styles.brief} aria-labelledby="brief-title"><h2 id="brief-title">Brief</h2>
-      {error ? <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></p> : loading ? <p className={styles.hint} role="status">正在读取饮食简报…</p> : data && <>
+      {error ? <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></p> : loading && !data ? <p className={styles.hint} role="status">正在读取饮食简报…</p> : data && <>
         <p className={styles.briefLead}>今天吃了 {data.brief.foodCount} 次，喝了 {data.brief.drinkCount} 杯。</p>
         {latest ? <p className={styles.latest}>最近一条：{latestDay === data.date ? "今天" : latestDay}{latest.record.occurredHasExplicitTime === false ? "（仅日期）" : ` ${latestTime}`}，{latest.kind === "food" ? "吃了" : "喝了"}「<button className={`${styles.latestLink} user-content`} onClick={() => setEditor(latest.kind === "food" ? { kind: "food", record: latest.record } : { kind: "drink", record: latest.record })} aria-label={`编辑最近记录 ${latestTitle}`}>{latestTitle}</button>」。</p> : <p className={styles.hint}>还没有记录，从第一餐或第一杯开始。</p>}
         {warning ? <button className={styles.briefWarning} onClick={() => setLimitEditor(warning.limit)}><span className="user-content">{warning.limit.name}</span> · {limitStateLabels[warning.state]} <Icon name="arrow" /></button> : <p className={styles.hint}>{data.limitStatuses.length ? "当前限额均在范围内。" : "当前没有启用中的限额。"}</p>}

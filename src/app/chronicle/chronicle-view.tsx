@@ -1,10 +1,12 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice } from "@/components/action-toast";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
@@ -35,7 +37,7 @@ async function responseError(response: Response, fallback: string) {
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const { english } = useLocale();
   const [items, setItems] = useState(initial);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedState("ChronicleView:query", "");
   const [draft, setDraft] = useState<ChronicleDraft>(emptyDraft);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,22 +45,25 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
       setLoading(true); setError("");
       try {
-        const response = await fetch(`/api/chronicle?q=${encodeURIComponent(query)}&limit=100`, { cache: "no-store", signal: controller.signal });
+        const response = await fetch(`/api/chronicle?q=${encodeURIComponent(query)}&limit=100`, { cache: "no-store", signal });
         if (!response.ok) throw new Error(await responseError(response, "Could not load Chronicle."));
-        setItems(await response.json() as ChronicleEntry[]);
+        const next = await response.json() as ChronicleEntry[];
+        if (!signal?.aborted) setItems(next);
       } catch (reason) {
         if ((reason as Error).name !== "AbortError") setError(reason instanceof Error ? reason.message : "Could not load Chronicle.");
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       }
-    }, 250);
-    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [query]);
+  useDataRefresh("/chronicle", () => load());
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => { void load(controller.signal); }, 180);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [load]);
 
   function openCreate() {
     setDraft(emptyDraft()); setError(""); setNotice(""); setShowForm(true);

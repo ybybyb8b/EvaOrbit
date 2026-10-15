@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -17,7 +18,8 @@ const money = (value: number) => `¥${(value / 100).toFixed(2)}`;
 const amount = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1);
 
 export function CatFoodDetailView({ initialItem }: { initialItem: CatFoodSummary }) {
-  const router = useRouter(), [item, setItem] = useState(initialItem), [panel, setPanel] = useState<"item" | "purchase" | "restock" | null>(null), [editingPurchase, setEditingPurchase] = useState<CatFoodPurchase>(), [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [error, setError] = useState("");
+  useDataRefresh("/cats/food", () => load());
+  const router = useRouter(), [item, setItem] = useServerDataState(initialItem), [panel, setPanel] = useState<"item" | "purchase" | "restock" | null>(null), [editingPurchase, setEditingPurchase] = useState<CatFoodPurchase>(), [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [error, setError] = useState("");
   const suggestion = item.cadenceSuggestion, activeReminder = Boolean(item.restockReminderId);
   const [restock, setRestock] = useState({ enabled: activeReminder, intervalDays: String(item.restockIntervalDays ?? suggestion?.intervalDays ?? 30), leadDays: String(item.restockLeadDays ?? 5), reminderTime: item.restockReminderTime ?? "10:00" });
   async function load() { const response = await fetch(`/api/cats/food/${item.id}`); if (response.ok) setItem(await response.json()); }

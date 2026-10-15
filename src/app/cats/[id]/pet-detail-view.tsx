@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -24,8 +26,9 @@ const health = new Set(["symptom", "vet_visit", "medication", "measurement"]);
 function timelineType(item: CatTimelineEntry) { return item.eventType.replaceAll("_", " ").replace(/\b\w/g, value => value.toUpperCase()); }
 
 export function PetDetailView({ initial }: { initial: Detail }) {
+  useDataRefresh("/cats", () => load());
   const copyScope = useUiCopyScope<HTMLDivElement>();
-  const [detail, setDetail] = useState(initial); const [tab, setTab] = useState<Tab>("timeline"); const [editor, setEditor] = useState<"record" | "care" | "reminder" | "routine" | null>(null); const [editing, setEditing] = useState<{ kind: CatRecordKind; id: number; record: Record<string, unknown> }>(); const [editingRoutine, setEditingRoutine] = useState<CatRoutine>(); const [editingReminder, setEditingReminder] = useState<Reminder>(); const [expanded, setExpanded] = useState<string | null>(null); const [recordDetails, setRecordDetails] = useState<Record<string, Record<string, unknown>>>({}); const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [sheetBusy, setSheetBusy] = useState(false);
+  const [detail, setDetail] = useServerDataState(initial); const [tab, setTab] = useRememberedState<Tab>("PetDetailView:tab", "timeline"); const [editor, setEditor] = useState<"record" | "care" | "reminder" | "routine" | null>(null); const [editing, setEditing] = useState<{ kind: CatRecordKind; id: number; record: Record<string, unknown> }>(); const [editingRoutine, setEditingRoutine] = useState<CatRoutine>(); const [editingReminder, setEditingReminder] = useState<Reminder>(); const [expanded, setExpanded] = useState<string | null>(null); const [recordDetails, setRecordDetails] = useState<Record<string, Record<string, unknown>>>({}); const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [sheetBusy, setSheetBusy] = useState(false);
   async function load() { const response = await fetch(`/api/cats/pets/${detail.pet.id}`); if (response.ok) setDetail(await response.json()); }
   async function edit(item: CatTimelineEntry) { const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`); if (!response.ok) return; setEditing({ kind: item.kind, id: item.id, record: await response.json() }); setEditor("record"); }
   async function toggle(item: CatTimelineEntry) { const key = `${item.kind}-${item.id}`; if (expanded === key) { setExpanded(null); return; } setExpanded(key); if (recordDetails[key]) return; const response = await fetch(`/api/cats/records/${item.kind}/${item.id}`); if (response.ok) { const record = await response.json(); setRecordDetails(current => ({ ...current, [key]: record })); } }

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { parseInputTags } from "@/lib/form-input";
@@ -42,7 +44,7 @@ export function TasksView() {
   const taskId = params.get("taskId");
   const openedTask = useRef<string | null>(null);
   const initialStatus = params.get("status");
-  const [status, setStatus] = useState<Status>(initialStatus === "open" || initialStatus === "done" ? initialStatus : "all");
+  const [status, setStatus] = useRememberedState<Status>("TasksView:status", initialStatus === "open" || initialStatus === "done" ? initialStatus : "all");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(params.get("new") === "1");
@@ -51,12 +53,13 @@ export function TasksView() {
   const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useRememberedState<string | null>("TasksView:selectedTag", null);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
   const [clock, setClock] = useState<Date | null>(null);
-  const [view, setView] = useState<"list" | "month">("list");
-  const [dateScope, setDateScope] = useState<string>(initialStatus || taskId ? "all" : "today");
-  const [period, setPeriod] = useState<string>("today");
+  const [view, setView] = useRememberedState<"list" | "month">("TasksView:view", "list");
+  const [dateScope, setDateScope] = useRememberedState<string>("TasksView:dateScope", initialStatus || taskId ? "all" : "today");
+  const [period, setPeriod] = useRememberedState<string>("TasksView:period", "today");
+
 
   useEffect(() => {
     const update = () => setClock(new Date());
@@ -80,6 +83,7 @@ export function TasksView() {
     setTasks(await response.json() as Task[]);
     setLoading(false);
   }, [english]);
+  useDataRefresh("/tasks", () => load());
 
   useEffect(() => {
     let cancelled = false;

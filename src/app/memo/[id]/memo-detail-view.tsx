@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -22,7 +23,7 @@ export function MemoDetailView({ initial }: { initial: Memo }) {
   const router = useRouter();
   const [mergeQuery,setMergeQuery] = useState("");
   const mergeHistory = useFormHistory(`/api/memos?limit=200&q=${encodeURIComponent(mergeQuery)}`);
-  const tagHistory = useFormHistory("/api/memos?limit=200"); const [item, setItem] = useState(initial); const [draft, setDraft] = useState(() => fromMemo(initial)); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const tagHistory = useFormHistory("/api/memos?limit=200"); const [item, setItem] = useServerDataState(initial); const [draft, setDraft] = useState(() => fromMemo(initial)); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   async function patch(body: Record<string, unknown>, success: string) { setBusy(true); setError(""); try { const response = await fetch(`/api/memos/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(await responseError(response, "Could not update Memo.")); const updated = await response.json() as Memo; setItem(updated); setDraft(fromMemo(updated)); setEditing(false); setNotice(success); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Memo."); } finally { setBusy(false); } }
   async function submit(event: FormEvent) { event.preventDefault(); await patch({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null, mergedIntoId: draft.mergedIntoId ? Number(draft.mergedIntoId) : null }, "Memo updated."); }
   async function remove() { if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); router.push("/memo"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }

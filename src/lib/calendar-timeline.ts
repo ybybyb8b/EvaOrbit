@@ -1,4 +1,4 @@
-import { dateInEvaOrbit, dateRange, shiftDate, zonedDateParts } from "./time.ts";
+import { dateInEvaOrbit, dateRange, formatDurationMinutes, shiftDate, zonedDateParts } from "./time.ts";
 import type { CalendarEvent, TimelineEvent } from "./types.ts";
 
 // Calendar boundaries mix date-only and UTC values; query broadly, then apply
@@ -42,6 +42,15 @@ export function buildCalendarTimelineEvents(records: CalendarEvent[], range: { f
   return events;
 }
 
+export function timelineDurationLabel(event: TimelineEvent) {
+  if (!event.hasExplicitTime || event.metadata.isAllDay) return "";
+  const meal = event.metadata.calendarMeal as { startAt: string; endAt: string } | undefined;
+  const start = meal?.startAt ?? (event.sourceType === "calendar" ? String(event.metadata.startAt) : event.occurredAt);
+  const end = meal?.endAt ?? event.endAt;
+  const minutes = end ? (Date.parse(end) - Date.parse(start)) / 60000 : NaN;
+  return minutes > 0 ? formatDurationMinutes(minutes) : "";
+}
+
 export function calendarTimelineRangeLabel(event: TimelineEvent, english: boolean, selectedDate?: string) {
   const start = String(event.metadata.startAt), end = String(event.metadata.endAt);
   if (event.metadata.isAllDay) {
@@ -55,5 +64,5 @@ export function calendarTimelineRangeLabel(event: TimelineEvent, english: boolea
       : selectedDate && date === shiftDate(selectedDate, 1) ? english ? "Next day" : "次日" : date;
     return `${label} ${time}`;
   };
-  return `${boundary(start)} → ${boundary(end)}`;
+  return [`${boundary(start)} → ${boundary(end)}`, timelineDurationLabel(event)].filter(Boolean).join(" · ");
 }

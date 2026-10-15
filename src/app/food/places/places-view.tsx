@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { SearchableSelect } from "@/components/searchable-select";
 import styles from "./places-filter.module.css";
@@ -21,9 +23,12 @@ const filterLabels={kind:"来源类型",scope:"地点范围",serviceType:"店铺
 type FilterKind=keyof typeof filterLabels|"";
 
 export function FoodPlacesView(){
-  const[items,setItems]=useState<FoodPlace[]>([]),[query,setQuery]=useState(""),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState(empty),[saving,setSaving]=useState(false),[error,setError]=useState("");
-  const[filterKind,setFilterKind]=useState<FilterKind>(""),[filterValue,setFilterValue]=useState(""),[candidates,setCandidates]=useState<FoodPlace[]>([]),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState("");
+
+
+  const[items,setItems]=useState<FoodPlace[]>([]),[query,setQuery]=useRememberedState("FoodPlacesView:query", ""),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState(empty),[saving,setSaving]=useState(false),[error,setError]=useState("");
+  const[filterKind,setFilterKind]=useRememberedState<FilterKind>("FoodPlacesView:filterKind", ""),[filterValue,setFilterValue]=useRememberedState("FoodPlacesView:filterValue", ""),[candidates,setCandidates]=useState<FoodPlace[]>([]),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState("");
   const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setLoadError("");try{const params=new URLSearchParams({q:query,limit:"200"});if(filterKind&&filterValue)params.set(filterKind,filterValue);const response=await fetch(`/api/food/places?${params}`,{signal});if(!response.ok)throw new Error("店铺加载失败，请重试");const next=await response.json();if(!signal?.aborted)setItems(next);}catch(reason){if(!signal?.aborted)setLoadError(reason instanceof Error?reason.message:"店铺加载失败，请重试");}finally{if(!signal?.aborted)setLoading(false);}},[query,filterKind,filterValue]);
+  useDataRefresh("/food/places", () => load());
   const loadCandidates=useCallback(async(signal?:AbortSignal)=>{try{const response=await fetch("/api/food/places?limit=200",{signal});if(response.ok){const next=await response.json();if(!signal?.aborted)setCandidates(next);}}catch{/* Optional candidate lists do not block type, rating or status filters. */}},[]);
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>void load(controller.signal),120);return()=>{clearTimeout(timer);controller.abort();};},[load]);
   useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>void loadCandidates(controller.signal),0);return()=>{clearTimeout(timer);controller.abort();};},[loadCandidates]);

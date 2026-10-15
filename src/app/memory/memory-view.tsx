@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { useFormHistory, historyValues } from "@/components/use-form-history";
@@ -18,7 +20,7 @@ export function MemoryView() {
   const params = useSearchParams();
   const categoryHistory = useFormHistory("/api/memories");
   const [memories, setMemories] = useState<Memory[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedState("MemoryView:query", "");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(params.get("new") === "1");
@@ -35,6 +37,8 @@ export function MemoryView() {
     const response = await fetch(`/api/memories?${search}`);
     setMemories(await response.json()); setLoading(false);
   }, [query, category]);
+  useDataRefresh("/memory", () => load());
+
 
   useEffect(() => { const timer = window.setTimeout(load, 180); return () => window.clearTimeout(timer); }, [load]);
 

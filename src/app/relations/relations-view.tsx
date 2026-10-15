@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 
 import Link from "next/link";
@@ -34,11 +36,12 @@ function ViewOptions({sort,status,onSort,onStatus,english}:{sort:RelationPeopleS
 }
 
 export function RelationsView({initialPeople}:{initialPeople:RelationPersonSummary[]}){
+  useDataRefresh("/relations", () => load());
   const{english}=useLocale();
-  const[people,setPeople]=useState(initialPeople),[query,setQuery]=useState("");
-  const[sort,setSort]=useState<RelationPeopleSort>("latest_event"),[status,setStatus]=useState<RelationshipStatusFilter>("active"),[preferenceReady,setPreferenceReady]=useState(false);
+  const[people,setPeople]=useServerDataState(initialPeople),[query,setQuery]=useRememberedState("RelationsView:query", "");
+  const[sort,setSort]=useState<RelationPeopleSort>("latest_event"),[status,setStatus]=useRememberedState<RelationshipStatusFilter>("RelationsView:status", "active"),[preferenceReady,setPreferenceReady]=useState(false);
   const[panel,setPanel]=useState<"person"|"event"|"view"|null>(null),[busy,setBusy]=useState(false);
-  useEffect(()=>{const frame=window.requestAnimationFrame(()=>{try{const saved=JSON.parse(localStorage.getItem(preferenceKey)??"null") as {sort?:RelationPeopleSort;status?:RelationshipStatusFilter}|null;if(saved?.sort&&["last_met","latest_event","closeness","name"].includes(saved.sort))setSort(saved.sort);if(saved?.status&&["all","active","ended"].includes(saved.status))setStatus(saved.status);}catch{}setPreferenceReady(true);});return()=>window.cancelAnimationFrame(frame);},[]);
+  useEffect(()=>{const frame=window.requestAnimationFrame(()=>{try{const saved=JSON.parse(localStorage.getItem(preferenceKey)??"null") as {sort?:RelationPeopleSort;status?:RelationshipStatusFilter}|null;if(saved?.sort&&["last_met","latest_event","closeness","name"].includes(saved.sort))setSort(saved.sort);if(saved?.status&&["all","active","ended"].includes(saved.status))setStatus(saved.status);}catch{}setPreferenceReady(true);});return()=>window.cancelAnimationFrame(frame);},[setStatus]);
   useEffect(()=>{if(preferenceReady)localStorage.setItem(preferenceKey,JSON.stringify({sort,status}));},[preferenceReady,sort,status]);
   const visible=useMemo(()=>sortRelationPeople(filterRelationPeople(people,query,status),sort),[people,query,sort,status]);
   const relationshipSuggestions=useMemo(()=>relationLabelSuggestions(people),[people]);

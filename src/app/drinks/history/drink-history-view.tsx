@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 
 import { SearchableSelect } from "@/components/searchable-select";
 import { useCallback, useEffect, useState } from "react";
@@ -9,9 +11,12 @@ import type { DrinkLog, DrinkType } from "@/lib/types";
 import { DrinkRecordCard, DrinkRecordEditor, drinkTypes } from "../drink-ui";
 
 export function DrinkHistoryView(){
-  const[logs,setLogs]=useState<DrinkLog[]>([]);const[query,setQuery]=useState("");const[type,setType]=useState<DrinkType|"">("");const[editing,setEditing]=useState<DrinkLog>();
+
+  const[logs,setLogs]=useState<DrinkLog[]>([]);const[query,setQuery]=useRememberedState("DrinkHistoryView:query", "");const[type,setType]=useRememberedState<DrinkType|"">("DrinkHistoryView:type", "");const[editing,setEditing]=useState<DrinkLog>();
   const load=useCallback(async()=>{const params=new URLSearchParams();if(query.trim())params.set("q",query.trim());if(type)params.set("drinkType",type);const recordsResponse=await fetch(`/api/drinks/logs?${params}`);if(recordsResponse.ok)setLogs(await recordsResponse.json());},[query,type]);
-  useEffect(()=>{const timer=setTimeout(()=>void load(),150);return()=>clearTimeout(timer);},[load]);
+  useDataRefresh("/drinks/history", () => load());
+
+  useEffect(()=>{const timer=setTimeout(()=>void load(),query?150:0);return()=>clearTimeout(timer);},[load,query]);
   return <div className="page drinks-page drink-history-page">
     <BottomLogScope label="记录饮品" picker="drink" onSaved={load} />
     <PageHeader eyebrow="Food & Drink" title="Drink records"/>

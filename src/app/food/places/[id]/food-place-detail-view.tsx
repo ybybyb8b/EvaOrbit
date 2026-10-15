@@ -1,4 +1,5 @@
 "use client";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { DRINK_TYPE_OPTIONS } from "@/lib/drink-types";
 import type { DrinkType } from "@/lib/types";
 import { FoodLibraryPicker } from "../../food-library-picker";
@@ -27,12 +28,15 @@ const statusLabels:Record<FoodPlaceStatus,string>={frequent:"正常",occasional:
 const emptyDish={foodLibraryId:"",drinkType:"" as Exclude<DrinkType,"water">|"",kind:"food" as "food"|"drink",name:"",category:"",rating:"" as TasteRating|"",recommended:false,notes:""};
 
 export function FoodPlaceDetailView({id}:{id:number}){
+
+
   const router=useRouter();
   const [editingDrink,setEditingDrink]=useState<DrinkLog>();
   const [editingFood,setEditingFood]=useState<FoodLog>();
   function openDrink(log:DrinkLog){setEditingDrink(log);}
   const[data,setData]=useState<FoodPlaceDetail|null>(null),[notFound,setNotFound]=useState(false),[panel,setPanel]=useState<"place"|"dish"|null>(null),[editingDish,setEditingDish]=useState<FoodDish|null>(null),[placeDraft,setPlaceDraft]=useState({kind:"restaurant" as FoodPlace["kind"],scope:"branch" as FoodPlace["scope"],address:"",serviceType:"food" as FoodPlace["serviceType"],name:"",branch:"",city:"",location:"",category:"",rating:"" as TasteRating|"",status:"occasional" as FoodPlaceStatus,notes:""}),[dishDraft,setDishDraft]=useState(emptyDish),[saving,setSaving]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
-  const load=useCallback(async()=>{const response=await fetch(`/api/food/places/${id}`);if(response.status===404){setNotFound(true);return;}if(response.ok){const next=await response.json() as FoodPlaceDetail;setData(next);setPlaceDraft({kind:next.place.kind??"restaurant",scope:next.place.scope??"branch",address:next.place.address??"",serviceType:next.place.serviceType??"food",name:next.place.name,branch:next.place.branch,city:next.place.city??"",location:next.place.location??"",category:next.place.category,rating:next.place.rating??"",status:next.place.status==="frequent"?"occasional":next.place.status,notes:next.place.notes});}},[id]);
+  const load=useCallback(async(preserveDraft=false)=>{const response=await fetch(`/api/food/places/${id}`);if(response.status===404){setNotFound(true);return;}if(response.ok){const next=await response.json() as FoodPlaceDetail;setData(next);if(!preserveDraft)setPlaceDraft({kind:next.place.kind??"restaurant",scope:next.place.scope??"branch",address:next.place.address??"",serviceType:next.place.serviceType??"food",name:next.place.name,branch:next.place.branch,city:next.place.city??"",location:next.place.location??"",category:next.place.category,rating:next.place.rating??"",status:next.place.status==="frequent"?"occasional":next.place.status,notes:next.place.notes});}},[id]);
+  useDataRefresh("/food/places", () => load(panel === "place"));
   useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer);},[load]);
   async function savePlace(event:FormEvent){event.preventDefault();setSaving(true);setError("");const response=await fetch(`/api/food/places/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...placeDraft,rating:placeDraft.rating||null})});setSaving(false);if(!response.ok){setError(((await response.json())as ApiError).error);return;}setPanel(null);setNotice("店铺信息已更新");await load();}
   function openDish(item?:FoodDish,kind:"food"|"drink"="food"){setEditingDish(item??null);setDishDraft(item?{kind:item.kind??"food",foodLibraryId:item.foodLibraryId?.toString()??"",drinkType:item.drinkType??"",name:item.name,category:item.category,rating:item.rating??"",recommended:item.recommended,notes:item.notes}:{...emptyDish,kind});setError("");setPanel("dish");}

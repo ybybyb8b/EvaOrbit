@@ -1,8 +1,10 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ToastNotice } from "@/components/action-toast";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
@@ -11,8 +13,8 @@ import { HealthRecordEditor } from "./health-record-editor";
 import { HealthRecordList } from "./health-record-card";
 
 export function HealthRecordsView({ initial }: { initial: HealthRecord[] }) {
-  const [records, setRecords] = useState(initial);
-  const [filter, setFilter] = useState<"" | HealthRecordStatus>("");
+  const [filter, setFilter] = useRememberedState<"" | HealthRecordStatus>("HealthRecordsView:filter", "");
+  const [records, setRecords] = useServerDataState(initial, !filter);
   const [editing, setEditing] = useState<HealthRecord | undefined>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,11 +24,13 @@ export function HealthRecordsView({ initial }: { initial: HealthRecord[] }) {
   const load = useCallback(async (requestedFilter: "" | HealthRecordStatus = filter) => {
     const response = await fetch(`/api/health/records?limit=100${requestedFilter ? `&status=${requestedFilter}` : ""}`);
     if (response.ok) setRecords(await response.json());
-  }, [filter]);
+  }, [filter, setRecords]);
+  useDataRefresh("/health", () => load());
+  useEffect(() => { void load(); }, [load]);
+
 
   function selectFilter(nextFilter: "" | HealthRecordStatus) {
     setFilter(nextFilter);
-    void load(nextFilter);
   }
 
   function openCreate() { setEditing(undefined); setEditorOpen(true); setError(""); setMessage(""); }

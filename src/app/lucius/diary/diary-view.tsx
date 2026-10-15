@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
@@ -14,9 +16,11 @@ import type { ApiError, LuciusDiaryEntry } from "@/lib/types";
 
 async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 export function DiaryView({ initial }: { initial: LuciusDiaryEntry[] }) {
-  const [items, setItems] = useState(initial); const [query, setQuery] = useState(""); const [tag, setTag] = useState(""); const [showForm, setShowForm] = useState(false); const [date, setDate] = useState(currentLocalDate); const [content, setContent] = useState(""); const [tags, setTags] = useState(""); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const [items, setItems] = useState(initial); const [query, setQuery] = useRememberedState("DiaryView:query", ""); const [tag, setTag] = useRememberedState("DiaryView:tag", ""); const [showForm, setShowForm] = useState(false); const [date, setDate] = useState(currentLocalDate); const [content, setContent] = useState(""); const [tags, setTags] = useState(""); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const knownTags = useMemo(() => [...new Set([...diarySuggestedTags, ...items.flatMap((item) => item.tags)])], [items]);
   const load = useCallback(async () => { setLoading(true); setError(""); const params = new URLSearchParams({ limit: "100" }); if (query.trim()) params.set("q", query.trim()); if (tag) params.set("tag", tag); try { const response = await fetch(`/api/lucius/diary?${params}`, { cache: "no-store" }); if (!response.ok) throw new Error(await responseError(response, "Could not load Diary.")); setItems(await response.json() as LuciusDiaryEntry[]); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load Diary."); } finally { setLoading(false); } }, [query, tag]);
+  useDataRefresh("/lucius/diary", () => load());
+
   useEffect(() => { const timer = window.setTimeout(() => void load(), 180); return () => window.clearTimeout(timer); }, [load]);
   async function submit(event: FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const response = await fetch("/api/lucius/diary", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, content, tags: parseTagInput(tags) }) }); if (!response.ok) throw new Error(await responseError(response, "Could not create Diary entry.")); await response.json() as LuciusDiaryEntry; setShowForm(false); setNotice("Diary entry saved."); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create Diary entry."); } finally { setSaving(false); } }
   return <div className="page diary-page"><PageHeader eyebrow="LUCIUS" title="Diary" action={<button className="button primary" onClick={() => { setDate(currentLocalDate()); setContent(""); setTags(""); setShowForm(true); }}><Icon name="plus" />新增记录</button>} />

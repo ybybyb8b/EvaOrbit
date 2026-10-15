@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight2, Plus } from "reicon-react";
@@ -9,7 +10,7 @@ import type { CalendarInterpretation, CalendarRule } from "@/lib/calendar-interp
 import type { CalendarEvent } from "@/lib/types";
 
 export function CalendarInterpretationView({ initialSettings, records }: { initialSettings: CalendarInterpretation; records: CalendarEvent[] }) {
-  const { english } = useLocale(), [settings, setSettings] = useState(initialSettings), [editor, setEditor] = useState<{ rule?: CalendarRule } | null>(null);
+  const { english } = useLocale(), [settings, setSettings] = useServerDataState(initialSettings), [editor, setEditor] = useState<{ rule?: CalendarRule } | null>(null);
   return <div className="page settings-detail-page calendar-interpretation-page">
     <PageHeader eyebrow={english ? "CALENDAR" : "日历"} title={english ? "Calendar interpretation" : "日历解读"} description={english ? "Give title prefixes a meaning in EO. Multiple prefixes can share a category." : "为标题前缀定义 EO 含义。多个前缀可以归入同一分类。"} action={<Link className="settings-back-link" href="/settings">{english ? "All settings" : "全部设置"}</Link>} />
     <section className="calendar-rule-directory">

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -17,8 +19,8 @@ function monthDay(value:string){const valueDate=new Date(value);return {month:ne
 function ItemRow({item,grouped=false}:{item:ProjectItem;grouped?:boolean}){return <Link className="project-item-row" href={`/projects/${item.projectId}/items/${item.id}`}><span className="item-status" data-status={item.status}>{statusLabels[item.status]}</span><span className="item-copy"><strong><span className="project-item-id">#{item.id}</span> {item.title}</strong><small>{[grouped?null:item.module,typeLabels[item.type],item.priority].filter(Boolean).join(" · ")}</small>{item.nextStep&&["doing","blocked"].includes(item.status)&&<em>{item.nextStep}</em>}</span><time>{date(item.updatedAt)}</time></Link>;}
 export function ProjectDetailView({initialProject,initialItems}:{initialProject:Project;initialItems:ProjectItem[]}){
   const copyScope = useUiCopyScope<HTMLDivElement>();
-  const [items,setItems]=useState(initialItems);const [show,setShow]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState("");const [draft,setDraft]=useState({title:"",description:"",type:"feature" as ProjectItemType,module:"",priority:"",nextStep:""});
-  const [view,setView]=useState("overview");
+  const [items,setItems]=useServerDataState(initialItems);const [show,setShow]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState("");const [draft,setDraft]=useState({title:"",description:"",type:"feature" as ProjectItemType,module:"",priority:"",nextStep:""});
+  const [view,setView]=useRememberedState("ProjectDetailView:view", "overview");
   const [statusFilter,setStatusFilter]=useState<ProjectItemStatus | "unfinished" | "">("");
   const [typeFilter,setTypeFilter]=useState<ProjectItemType | "">("");
   const [moduleFilter,setModuleFilter]=useState("");

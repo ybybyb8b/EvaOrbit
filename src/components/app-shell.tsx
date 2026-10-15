@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Activity, Book, Calendar, ChatRoundDots, ClipboardCheck, CupPaper, DirectInbox, Film, Folder, FoodTray, Heart, Home, Menu4, NoteText, Pet, Settings, Sparkles, Users } from "reicon-react";
 import { Icon } from "./icons";
 import { EvaWakePanel } from "./eva-wake-panel";
@@ -20,6 +20,10 @@ import { pageNavigationState, isFoodDrinkPath } from "@/lib/page-navigation";
 import bottomNav from "./bottom-navigation.module.css";
 import { BottomLogProvider } from "./bottom-log";
 import { HomeQuickLog } from "@/app/home-quick-log";
+import { configureClientCache } from "@/lib/client-data-cache";
+import { clearPrivateSnapshots } from "@/lib/home-cache";
+import { clearClientJsonCache } from "@/lib/client-json-cache";
+import { clearRememberedViews } from "./use-remembered-state";
 
 const navigationGroups = [
   { label: "LIFE", items: [
@@ -55,11 +59,16 @@ const sidebarIcons = {
 type SpacesDrawerPhase = "closed" | "opening" | "open" | "closing";
 const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
 
-export function AppShell({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
-  return <BottomLogProvider><AppShellContent cloudMode={cloudMode}>{children}</AppShellContent></BottomLogProvider>;
+export function AppShell({ children, cloudMode, cacheScope }: { children: React.ReactNode; cloudMode: boolean; cacheScope: string | null }) {
+  useLayoutEffect(() => {
+    configureClientCache(cacheScope);
+    clearClientJsonCache();
+    if (!cacheScope) { clearRememberedViews(); void clearPrivateSnapshots(); }
+  }, [cacheScope]);
+  return <BottomLogProvider key={cacheScope ?? "anonymous"}><AppShellContent cloudMode={cloudMode} cacheScope={cacheScope}>{children}</AppShellContent></BottomLogProvider>;
 }
 
-function AppShellContent({ children, cloudMode }: { children: React.ReactNode; cloudMode: boolean }) {
+function AppShellContent({ children, cloudMode, cacheScope }: { children: React.ReactNode; cloudMode: boolean; cacheScope: string | null }) {
   const { english } = useLocale();
   const pathname = usePathname();
   const hasPageBack = pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/") && !pathname.startsWith("/lucius");
@@ -186,7 +195,7 @@ function AppShellContent({ children, cloudMode }: { children: React.ReactNode; c
       <NativeHapticController />
       <NativeNotificationReconciler />
       <EventKitReconciler />
-      <Suspense fallback={null}><DataChangeReconciler /></Suspense>
+      <Suspense fallback={null}><DataChangeReconciler cacheScope={cacheScope} /></Suspense>
       <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>

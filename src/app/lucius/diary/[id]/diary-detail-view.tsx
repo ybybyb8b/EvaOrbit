@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -12,7 +13,7 @@ import type { ApiError, LuciusDiaryEntry } from "@/lib/types";
 
 async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 export function DiaryDetailView({ initial }: { initial: LuciusDiaryEntry }) {
-  const router = useRouter(); const [item, setItem] = useState(initial); const [date, setDate] = useState(initial.date); const [content, setContent] = useState(initial.content); const [tags, setTags] = useState(initial.tags.join(", ")); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+  const router = useRouter(); const [item, setItem] = useServerDataState(initial); const [date, setDate] = useState(initial.date); const [content, setContent] = useState(initial.content); const [tags, setTags] = useState(initial.tags.join(", ")); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(""); try { const response = await fetch(`/api/lucius/diary/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, content, tags: parseTagInput(tags) }) }); if (!response.ok) throw new Error(await responseError(response, "Could not update Diary.")); const updated = await response.json() as LuciusDiaryEntry; setItem(updated); setEditing(false); setNotice("Diary entry updated."); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Diary."); } finally { setBusy(false); } }
   async function remove() { if (!window.confirm(`Delete Diary entry from ${item.date}? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/lucius/diary/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Diary entry.")); showActionToast("Diary entry deleted", "deleted"); router.push("/lucius/diary"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Diary entry."); } finally { setBusy(false); } }
   return <div className="page diary-page long-term-detail"><PageHeader eyebrow="LUCIUS DIARY" title={item.date} description={`Updated ${new Date(item.updatedAt).toLocaleString()}`} />{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <p className="form-error">{error}</p>}

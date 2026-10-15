@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCalendarTimelineEvents, calendarTimelineQuery, calendarTimelineRangeLabel, readCalendarTimelineRecords } from "./calendar-timeline.ts";
+import { buildCalendarTimelineEvents, calendarTimelineQuery, calendarTimelineRangeLabel, readCalendarTimelineRecords, timelineDurationLabel } from "./calendar-timeline.ts";
 import { compareTimelineEvents, summarizeTimelineDays } from "./timeline.ts";
 import { dateRange } from "./time.ts";
 import type { CalendarEvent } from "./types.ts";
@@ -18,11 +18,25 @@ test("Calendar timeline keeps true intervals and original content across days an
     assert.equal(event.metadata.notes, overnight.notes);
     assert.equal(event.hasExplicitTime, true);
   }
-  assert.equal(calendarTimelineRangeLabel(events[1], false, "2026-10-01"), "前一日 23:00 → 07:00");
-  assert.equal(calendarTimelineRangeLabel(events[0], true, "2026-09-30"), "23:00 → Next day 07:00");
-  assert.equal(calendarTimelineRangeLabel(events[1], false), "2026-09-30 23:00 → 2026-10-01 07:00");
+  assert.equal(calendarTimelineRangeLabel(events[1], false, "2026-10-01"), "前一日 23:00 → 07:00 · 8h");
+  assert.equal(calendarTimelineRangeLabel(events[0], true, "2026-09-30"), "23:00 → Next day 07:00 · 8h");
+  assert.equal(calendarTimelineRangeLabel(events[1], false), "2026-09-30 23:00 → 2026-10-01 07:00 · 8h");
   assert.deepEqual(Object.keys(summarizeTimelineDays(events)), ["2026-09-30", "2026-10-01"]);
   assert.equal([...events].sort(compareTimelineEvents)[0].metadata.timelineDate, "2026-10-01");
+});
+
+test("timeline durations preserve full intervals, meal boundaries and unknown-time semantics", () => {
+  const [event] = buildCalendarTimelineEvents([overnight], dateRange("2026-10-01"));
+  assert.equal(timelineDurationLabel({ ...event, endAt: "2026-10-02T17:30:00Z" }), "2d2h30m");
+  assert.equal(timelineDurationLabel({ ...event, sourceType: "food", metadata: { calendarMeal: { startAt: overnight.startAt, endAt: "2026-09-30T16:30:00Z" } } }), "1h30m");
+  for (const invalid of [
+    { ...event, hasExplicitTime: false },
+    { ...event, metadata: { ...event.metadata, isAllDay: true } },
+    { ...event, endAt: null },
+    { ...event, endAt: "invalid" },
+    { ...event, endAt: event.occurredAt },
+    { ...event, endAt: "2026-09-29T00:00:00Z" },
+  ]) assert.equal(timelineDurationLabel(invalid), "");
 });
 
 test("Calendar timeline includes unclassified and tentative events, excludes cancelled, and never fuzzy-deduplicates titles", () => {

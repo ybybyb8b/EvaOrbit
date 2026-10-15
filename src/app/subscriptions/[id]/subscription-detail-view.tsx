@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { BottomLogScope, PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -16,7 +17,8 @@ const today=()=>new Date().toLocaleDateString("en-CA"),money=(minor:number,curre
 const spend=(item:SubscriptionDetail,english:boolean)=>Object.entries(item.spendByCurrency).map(([currency,total])=>money(total,currency)).join(" / ")||(english?"Not recorded":"尚未记录");
 const cycle=(item:SubscriptionDetail,english:boolean)=>english?`${item.billingIntervalValue} ${item.billingIntervalUnit}${item.billingIntervalValue===1?"":"s"}`:`每${item.billingIntervalValue===1?"":item.billingIntervalValue}${({day:"天",week:"周",month:"个月",year:"年"}[item.billingIntervalUnit])}`;
 async function errorText(response:Response){const body=await response.json().catch(()=>null) as ApiError|null;return body?.error||"Request failed.";}
-export function SubscriptionDetailView({initial}:{initial:SubscriptionDetail}){const{english}=useLocale();const[item,setItem]=useState(initial),[panel,setPanel]=useState<"edit"|"payment"|"resume"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+export function SubscriptionDetailView({initial}:{initial:SubscriptionDetail}){
+  useDataRefresh("/subscriptions", () => reload());const{english}=useLocale();const[item,setItem]=useServerDataState(initial),[panel,setPanel]=useState<"edit"|"payment"|"resume"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [iconFile, setIconFile] = useState<File | null>(null), [removeIcon, setRemoveIcon] = useState(false);
   const[edit,setEdit]=useState(()=>({name:item.name,amount:amount(item.currentAmountMinor),currency:item.currency,billingIntervalValue:String(item.billingIntervalValue),billingIntervalUnit:item.billingIntervalUnit,startedOn:item.startedOn,nextRenewalOn:item.nextRenewalOn,autoRenew:item.autoRenew,reminderEnabled:item.reminderEnabled,reminderDaysBefore:String(item.reminderDaysBefore),reminderTime:item.reminderTime??"09:00",notes:item.notes}));
   const[payment,setPayment]=useState(()=>({scheduledFor:item.nextRenewalOn,paidOn:today(),amount:amount(item.currentAmountMinor),currency:item.currency,note:"",updateCurrentPrice:false})),[resumeDate,setResumeDate]=useState(item.nextRenewalOn<today()?today():item.nextRenewalOn);

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState } from "@/components/use-data-refresh";
 
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -12,7 +14,7 @@ function literal(value:unknown){if(typeof value==="string")return value;if(value
 function date(value:string){const zoned=value.endsWith("Z")||/[+-]\d\d:\d\d$/.test(value)?value:`${value.replace(" ","T")}Z`;return new Intl.DateTimeFormat("zh-CN",{year:"numeric",month:"short",day:"numeric"}).format(new Date(zoned));}
 
 export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
-  const[data,setData]=useState(initial),[query,setQuery]=useState(""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useState(false),[entityFilter,setEntityFilter]=useState<string|null>(null),[error,setError]=useState("");
+  const[data,setData]=useServerDataState(initial),[query,setQuery]=useRememberedState("MemoryGraphView:query", ""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useRememberedState("MemoryGraphView:showHistory", false),[entityFilter,setEntityFilter]=useRememberedState<string|null>("MemoryGraphView:entityFilter", null),[error,setError]=useState("");
   const entityById=useMemo(()=>new Map(data.entities.map(entity=>[entity.id,entity])),[data.entities]);
   const sourcesByFact=useMemo(()=>{const map=new Map<string,typeof data.sources>();for(const source of data.sources){const values=map.get(source.factId)??[];values.push(source);map.set(source.factId,values);}return map;},[data]);
   const facts=useMemo(()=>data.facts.filter(fact=>(showHistory||fact.status==="active")&&(!entityFilter||fact.subjectEntityId===entityFilter||fact.objectEntityId===entityFilter||fact.perspectiveEntityId===entityFilter)),[data,entityFilter,showHistory]);

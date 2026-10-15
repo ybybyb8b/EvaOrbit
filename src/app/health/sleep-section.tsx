@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { BottomLogScope } from "@/components/bottom-log";
@@ -15,7 +16,7 @@ import type { DailySleepSummary } from "@/lib/sleep";
 
 export function SleepSection({ initial }: { initial: DailySleepSummary }) {
   const { english } = useLocale();
-  const [summary, setSummary] = useState(initial);
+  const [summary, setSummary] = useServerDataState(initial);
   const [error, setError] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const refresh = useCallback(async () => {
@@ -25,7 +26,7 @@ export function SleepSection({ initial }: { initial: DailySleepSummary }) {
       setSummary(await response.json() as DailySleepSummary);
       setError(false);
     } catch { setError(true); }
-  }, [summary.date]);
+  }, [setSummary, summary.date]);
   useEffect(() => subscribeDataChanged(["health", "calendar"], () => { void refresh(); }), [refresh]);
   const display = sleepDisplay(summary);
   const zone = display && "timeZone" in display ? display.timeZone : EVAORBIT_TIME_ZONE;

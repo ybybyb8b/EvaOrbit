@@ -1,5 +1,14 @@
 export const EVAORBIT_TIME_ZONE = process.env.EVAORBIT_TIME_ZONE || "Asia/Shanghai";
 
+export function formatDurationMinutes(value: number) {
+  if (!Number.isFinite(value) || value < 0) return "";
+  const minutes = Number(value.toFixed(2));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const remainder = Number((minutes % 60).toFixed(2));
+  return `${days ? `${days}d` : ""}${hours ? `${hours}h` : ""}${remainder ? `${remainder}m` : ""}` || "0m";
+}
+
 export function zonedDateParts(value: string | Date, timeZone = EVAORBIT_TIME_ZONE) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",

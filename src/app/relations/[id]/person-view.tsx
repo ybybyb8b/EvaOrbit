@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { showActionToast } from "@/components/action-toast";
 
@@ -28,9 +29,10 @@ function SettleEditor({flow,outstanding,onBusy,onSaved}:{flow:RelationEventFlow;
 }
 
 export function RelationPersonView({initial,people}:{initial:Detail;people:RelationPersonSummary[]}){
+  useDataRefresh("/relations", () => load());
  const copyScope=useUiCopyScope<HTMLDivElement>();
   const router=useRouter();
-  const[data,setData]=useState(initial),[panel,setPanel]=useState<"profile"|"event"|"note"|"settle"|null>(null),[editing,setEditing]=useState<RelationEvent>(),[settling,setSettling]=useState<{flow:RelationEventFlow;outstanding:number}>(),[busy,setBusy]=useState(false),[note,setNote]=useState("");
+  const[data,setData]=useServerDataState(initial),[panel,setPanel]=useState<"profile"|"event"|"note"|"settle"|null>(null),[editing,setEditing]=useState<RelationEvent>(),[settling,setSettling]=useState<{flow:RelationEventFlow;outstanding:number}>(),[busy,setBusy]=useState(false),[note,setNote]=useState("");
   async function load(){const response=await fetch(`/api/relations/people/${data.person.id}`);if(response.ok)setData(await response.json());}
   function openEvent(event?:RelationEvent){setEditing(event);setPanel("event");}
   async function removeEvent(id:number){if(!confirm("Delete this exchange?"))return;const response=await fetch(`/api/relations/events/${id}`,{method:"DELETE"});if(response.ok){showActionToast("Exchange deleted","deleted");void load();}}

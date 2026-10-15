@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -13,8 +15,11 @@ import { CaseEditor, casePayload, emptyCaseDraft, type LuciusCaseDraft } from ".
 
 async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 export function CasesView({ initial }: { initial: LuciusCase[] }) {
-  const [items, setItems] = useState(initial); const [view, setView] = useState<"current" | "all">("current"); const [query, setQuery] = useState(""); const [errorType, setErrorType] = useState<"" | LuciusCaseErrorType>(""); const [severity, setSeverity] = useState<"" | LuciusCaseSeverity>(""); const [showForm, setShowForm] = useState(false); const [draft, setDraft] = useState<LuciusCaseDraft>(emptyCaseDraft); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
+
+
+  const [items, setItems] = useState(initial); const [view, setView] = useRememberedState<"current" | "all">("CasesView:view", "current"); const [query, setQuery] = useRememberedState("CasesView:query", ""); const [errorType, setErrorType] = useState<"" | LuciusCaseErrorType>(""); const [severity, setSeverity] = useState<"" | LuciusCaseSeverity>(""); const [showForm, setShowForm] = useState(false); const [draft, setDraft] = useState<LuciusCaseDraft>(emptyCaseDraft); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const load = useCallback(async () => { setLoading(true); setError(""); const params = new URLSearchParams({ view, limit: "100" }); if (query.trim()) params.set("q", query.trim()); if (errorType) params.set("errorType", errorType); if (severity) params.set("severity", severity); try { const response = await fetch(`/api/lucius/cases?${params}`, { cache: "no-store" }); if (!response.ok) throw new Error(await responseError(response, "Could not load Cases.")); setItems(await response.json() as LuciusCase[]); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load Cases."); } finally { setLoading(false); } }, [errorType, query, severity, view]);
+  useDataRefresh("/lucius/cases", () => load());
   useEffect(() => { const timer = window.setTimeout(() => void load(), 180); return () => window.clearTimeout(timer); }, [load]);
   async function submit(event: FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { const response = await fetch("/api/lucius/cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(casePayload(draft)) }); if (!response.ok) throw new Error(await responseError(response, "Could not create Case.")); await response.json() as LuciusCase; setShowForm(false); setNotice("Case saved."); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create Case."); } finally { setSaving(false); } }
   return <div className="page cases-page"><PageHeader eyebrow="LUCIUS" title="Cases" description="错误、复发与必须遵守的纠正规则。" action={<button className="button primary" onClick={() => { setDraft(emptyCaseDraft()); setShowForm(true); }}><Icon name="plus" />New case</button>} />

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { showActionToast } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
@@ -14,7 +16,7 @@ export function InboxView() {
   const filters = [["inbox", english ? "Unsorted" : "没整理"], ["processed", english ? "Processed" : "处理过"], ["archived", english ? "Archived" : "归档"], ["all", english ? "All" : "全部"]] as const;
   const statusLabels: Record<InboxStatus, string> = { inbox: english ? "Unsorted" : "没整理", processed: english ? "Processed" : "处理过", archived: english ? "Archived" : "已归档" };
   const [items, setItems] = useState<InboxItem[]>([]);
-  const [status, setStatus] = useState<InboxStatus | "all">("inbox");
+  const [status, setStatus] = useRememberedState<InboxStatus | "all">("InboxView:status", "inbox");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -23,6 +25,8 @@ export function InboxView() {
     setItems(response.ok ? await response.json() : []);
     setLoading(false);
   }, [status]);
+  useDataRefresh("/inbox", () => load());
+
 
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
 
@@ -45,7 +49,7 @@ export function InboxView() {
       <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
       <span className="result-count">{english ? `${items.length} ${items.length === 1 ? "entry" : "entries"}` : `${items.length} 条`}</span>
     </div>
-    {loading ? <div className="loading-state">{english ? "Loading Inbox…" : "在翻 Inbox…"}</div> : items.length ? <div className="inbox-list">{items.map((item) => <article className="inbox-row" key={item.id}>
+    {loading && !items.length ? <div className="loading-state">{english ? "Loading Inbox…" : "在翻 Inbox…"}</div> : items.length ? <div className="inbox-list" aria-busy={loading}>{items.map((item) => <article className="inbox-row" key={item.id}>
       <p className="user-content">{item.content}</p>
       <div className="inbox-row-footer">
         <div className="inbox-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(english ? "en-US" : "zh-CN")}</time><span>{statusLabels[item.status]}</span>{item.convertedType && <span>{english ? "Converted from legacy" : "旧版已转为"} {item.convertedType}</span>}</div>

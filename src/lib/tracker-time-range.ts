@@ -1,3 +1,5 @@
+import { formatDurationMinutes } from "./time.ts";
+
 export type TrackerTimeRange = { startAt: string; endAt: string; durationMinutes: number };
 
 /** Duration is derived from explicit instants; an overnight stay uses different dates. */
@@ -21,7 +23,8 @@ export function trackerDurationMinutes(value: unknown): number | null {
 export function formatTrackerTimeRange(value: unknown, english = false): string {
   try {
     const range = normalizeTrackerTimeRange(value);
+    const duration = formatDurationMinutes(range.durationMinutes);
     const formatter = new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    return `${formatter.format(new Date(range.startAt))} – ${formatter.format(new Date(range.endAt))} · ${Number(range.durationMinutes.toFixed(2))} ${english ? "min" : "分钟"}`;
+    return `${formatter.format(new Date(range.startAt))} – ${formatter.format(new Date(range.endAt))} · ${duration}`;
   } catch { return ""; }
 }

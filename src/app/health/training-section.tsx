@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,13 +15,14 @@ import { TrainingPlanEditor } from "./training-plan-editor";
 function trainingMeta(log: TrainingLog, english: boolean) { return [log.occurredHasExplicitTime ? compactDateTimeValue(log.occurredAt, true).slice(11) : "", log.course, log.teacher, log.durationMinutes ? english ? `${log.durationMinutes} min` : `${log.durationMinutes} 分钟` : ""].filter(Boolean).join(" · "); }
 
 export function TrainingSection({ initial, initialRecent, initialSuggestions, initialFocused, initialPlan, today }: { initial: TrainingLog[]; initialRecent: TrainingLog[]; initialSuggestions: TrainingInputSuggestions; initialFocused?: TrainingLog; initialPlan: TrainingPlan | null; today: string }) {
+  useDataRefresh("/health", () => reload());
   const { english } = useLocale();
-  const [logs, setLogs] = useState(initial);
-  const [recent, setRecent] = useState(initialRecent);
-  const [suggestions, setSuggestions] = useState(initialSuggestions);
+  const [logs, setLogs] = useServerDataState(initial);
+  const [recent, setRecent] = useServerDataState(initialRecent);
+  const [suggestions, setSuggestions] = useServerDataState(initialSuggestions);
   const [editing, setEditing] = useState<TrainingLog | undefined>(initialFocused);
   const [open, setOpen] = useState(Boolean(initialFocused));
-  const [plan, setPlan] = useState(initialPlan);
+  const [plan, setPlan] = useServerDataState(initialPlan);
   const [planEditing, setPlanEditing] = useState(false);
   const [planCompletion, setPlanCompletion] = useState<{ plan: TrainingPlan; requestKey: string }>();
   const [planError, setPlanError] = useState("");
@@ -44,7 +46,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
     const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", visible); document.addEventListener("visibilitychange", visible);
     return () => { active = false; window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible); };
-  }, []);
+  }, [setPlan]);
   async function switchDay(dayId: string) {
     if (!plan || plan.currentDayId === dayId || switchLock.current) return;
     const dayIndex = plan.days.findIndex(day => day.id === dayId);

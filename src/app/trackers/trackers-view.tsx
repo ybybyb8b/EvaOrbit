@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { FormSheet } from "@/components/form-sheet";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -40,7 +41,7 @@ function ago(value: string) {
 
 export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   const { english } = useLocale();
-  const [trackers, setTrackers] = useState<TrackerSummary[]>(initial);
+  const [trackers, setTrackers] = useServerDataState<TrackerSummary[]>(initial);
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
@@ -52,7 +53,9 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   const [error, setError] = useState("");
   const iconPreview = useMemo(() => iconFile ? URL.createObjectURL(iconFile) : "", [iconFile]);
   useEffect(() => () => { if (iconPreview) URL.revokeObjectURL(iconPreview); }, [iconPreview]);
-  const load = useCallback(async () => { setLoading(true); const response = await fetch("/api/trackers", { cache: "no-store" }); if (response.ok) setTrackers(await response.json()); else setError("Trackers are unavailable right now."); setLoading(false); }, []);
+  const load = useCallback(async () => { setLoading(true); const response = await fetch("/api/trackers", { cache: "no-store" }); if (response.ok) setTrackers(await response.json()); else setError("Trackers are unavailable right now."); setLoading(false); }, [setTrackers]);
+  useDataRefresh("/trackers", () => load());
+
 
   function chooseIcon(file: File | undefined) {
     setError("");

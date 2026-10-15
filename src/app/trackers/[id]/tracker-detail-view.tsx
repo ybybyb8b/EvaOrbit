@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -44,11 +46,11 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
   const router=useRouter();
   const {english,language}=useLocale();
   const copy=(value:string)=>translateUiCopy(value,language);
-  const [detail,setDetail]=useState<Detail|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useState(""),[tab,setTab]=useState<Tab>("timeline");
+  const [detail,setDetail]=useServerDataState<Detail|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useRememberedState("TrackerDetailView:query", ""),[tab,setTab]=useRememberedState<Tab>("TrackerDetailView:tab", "timeline");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
   const [trackerGroup,setTrackerGroup]=useState(""),[trackerQuick,setTrackerQuick]=useState(true),[editingFieldId,setEditingFieldId]=useState<number|null>(null);
-  const [periodFilter,setPeriodFilter]=useState<TimelinePeriod>("all"),[fieldFilter,setFieldFilter]=useState(""),[fieldValueFilter,setFieldValueFilter]=useState("");
+  const [periodFilter,setPeriodFilter]=useState<TimelinePeriod>("all"),[fieldFilter,setFieldFilter]=useRememberedState("TrackerDetailView:fieldFilter", ""),[fieldValueFilter,setFieldValueFilter]=useState("");
   const [fieldDraft,setFieldDraft]=useState(emptyField),[goalDraft,setGoalDraft]=useState(emptyGoal),[reminderDraft,setReminderDraft]=useState(emptyReminder);
   const [editingReminderId,setEditingReminderId]=useState<number|null>(null);
   const [confirmation,setConfirmation]=useState<SettingsConfirmation|null>(null);
@@ -66,7 +68,8 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
     const timer=window.setTimeout(()=>void commitDeletion(),5000);
     return()=>window.clearTimeout(timer);
   },[pendingDeletion,working]);
-  const load=useCallback(async()=>{setLoading(true);try{const response=await fetch(`/api/trackers/${trackerId}`,{cache:"no-store"});if(response.ok)setDetail(await response.json());else setError(((await response.json())as ApiError).error);}catch{setError(english?"Could not refresh records. Reload the page to try again.":"刷新记录失败，请重新加载页面。");}finally{setLoading(false);}},[trackerId,english]);
+  const load=useCallback(async()=>{setLoading(true);try{const response=await fetch(`/api/trackers/${trackerId}`,{cache:"no-store"});if(response.ok)setDetail(await response.json());else setError(((await response.json())as ApiError).error);}catch{setError(english?"Could not refresh records. Reload the page to try again.":"刷新记录失败，请重新加载页面。");}finally{setLoading(false);}},[trackerId, setDetail, english]);
+  useDataRefresh("/trackers", () => load());
   async function request(url:string,options:RequestInit,success?:string){if(working)return false;setWorking(true);setError("");setMessage("");try{const response=await fetch(url,options);if(!response.ok){setError(((await response.json())as ApiError).error);return false;}invalidateCachedJson("/api/trackers/quick-log");await load();try{await reconcileNativeNotifications();}catch{/* Web Push remains the fallback. */}if(success)setMessage(success);return true;}catch(reason){setError(reason instanceof Error?reason.message:(english?"Could not save this change. Please try again.":"保存失败，请重试。"));return false;}finally{setWorking(false);}}
   async function quick(){if(await request(`/api/trackers/${trackerId}/entries`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:new Date().toISOString(),values:{},note:""})},english?"Record saved":"记录已保存")){playNativeHaptic("light");setShowEntry(false);}}
   function openEntryForm(){setEditingEntry(undefined);setTab("timeline");setShowEntry(true);}
@@ -124,6 +127,7 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
     {tracker.archivedAt&&<p className="tracker-archive-note">{english?"History is preserved. Restore this Tracker in Settings to record again; reminders remain off until you enable them.":"历史数据已保留。可在设置中恢复 Tracker，恢复后请按需重新开启提醒。"}</p>}
     {message&&<ToastNotice message={message} onShown={() => setMessage("")} />}
     {pendingDeletion&&<div className="tracker-delete-undo" role="status"><span>{english?"Deleting in 5 seconds. Leaving this page cancels deletion.":"5 秒后删除，离开页面将取消删除。"}</span><button className="text-button" disabled={working} onClick={()=>setPendingDeletion(null)}>{english?"Undo":"撤销"}</button></div>}
+
 
     {tab==="insights"&&<>
       <header className="tracker-insights-heading"><h2>{english?"Your activity":"记录概览"}</h2><SearchableSelect label={english?"Statistics period":"统计周期"} presentation="dropdown" searchable={false} value={insightPeriod} onValueChange={value=>setInsightPeriod(value as TrackerInsightPeriod)} options={(["month","90d","year"] as const).map(value=>({value,label:english?{month:"This month","90d":"Last 90 days",year:"Last 365 days"}[value]:{month:"本月","90d":"最近 90 天",year:"最近一年"}[value]}))}/></header>

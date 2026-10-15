@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -18,10 +20,10 @@ async function responseError(response: Response, fallback: string) { const resul
 
 export function MemoView({ initial }: { initial: Memo[] }) {
   const [items, setItems] = useState(initial);
-  const [query, setQuery] = useState("");
-  const [tag, setTag] = useState("");
-  const [type, setType] = useState<"" | MemoType>("");
-  const [status, setStatus] = useState<"" | MemoStatus>("");
+  const [query, setQuery] = useRememberedState("MemoView:query", "");
+  const [tag, setTag] = useRememberedState("MemoView:tag", "");
+  const [type, setType] = useRememberedState<"" | MemoType>("MemoView:type", "");
+  const [status, setStatus] = useRememberedState<"" | MemoStatus>("MemoView:status", "");
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<MemoDraft>(emptyDraft);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,8 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load Memo."); }
     finally { setLoading(false); }
   }, [query, status, tag, type]);
+  useDataRefresh("/memo", () => load());
+
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 180); return () => window.clearTimeout(timer); }, [load]);
 

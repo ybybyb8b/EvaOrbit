@@ -8,7 +8,7 @@ function load(relative, require, win) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const exports = {};
-  new Function('require', 'exports', 'window', code)(require, exports, win);
+  new Function('require', 'exports', 'window', 'document', code)(require, exports, win, win.document);
   return exports;
 }
 
@@ -17,7 +17,7 @@ function fixture(initial = '/health', responseOk = true) {
   const count = { reload: 0, refresh: 0, back: 0, invalidated: 0, replaced: [] };
   const originalFetch = async () => ({ ok: responseOk });
   Object.assign(win, { fetch: originalFetch, history: { state: { evaOrbitCanGoBack: true } },
-    location: { origin: 'https://eo.test', search: '', reload: () => count.reload++ }, setTimeout, clearTimeout });
+    document: new EventTarget(), location: { origin: 'https://eo.test', pathname: initial, search: '', reload: () => count.reload++ }, setTimeout, clearTimeout });
   const router = { refresh: () => count.refresh++, back: () => count.back++, replace: url => count.replaced.push(url) };
   let path = initial, search = '', cursor = 0;
   const hooks = [], pending = [];
@@ -32,17 +32,23 @@ function fixture(initial = '/health', responseOk = true) {
     useTransition: () => [false, action => action()],
   };
   const navigation = { usePathname: () => path, useSearchParams: () => new URLSearchParams(search), useRouter: () => router };
+  react.useLayoutEffect = react.useEffect;
   const helpers = load('../src/lib/page-navigation.ts', () => ({}), win);
   const changed = load('../src/lib/data-changed.ts', () => ({}), win);
+  const policy = load('../src/lib/cache-policy.ts', () => ({}), win);
   const require = name => ({ react, 'next/navigation': navigation, '@/lib/page-navigation': helpers, '@/lib/data-changed': changed,
     '@/lib/home-cache': { invalidateHomeCache: () => count.invalidated++ },
+    '@/lib/cache-policy': policy,
+    './use-back-scroll-restoration': { useBackScrollRestoration: () => {} },
+    '@/lib/client-json-cache': { clearClientJsonCache: () => {} },
+    '@/lib/client-data-cache': { cachedClientFetch: (input, init, network) => network(input, init), configureClientCache: () => {}, invalidateClientData: domains => { const event = new Event('cache-change'); event.detail = { domains, reason: 'invalidate' }; win.dispatchEvent(event); }, clientDataChanged: 'cache-change', isClientDataStorageKey: () => false, clientChangeAffects: () => false },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     './locale-controller': { useLocale: () => ({ english: false }) }, 'reicon-react': { ArrowLeft2: () => null } })[name];
   const { DataChangeReconciler } = load('../src/components/data-change-reconciler.tsx', require, win);
   const { PageBackButton } = load('../src/components/page-back-button.tsx', require, win);
   function render(url = path + (search ? '?' + search : '')) {
     const next = new URL(url, win.location.origin);path = next.pathname;search = next.search.slice(1);win.location.search = next.search;
-    cursor = 0;DataChangeReconciler();pending.splice(0).forEach(effect => effect());
+    win.location.pathname = path;cursor = 0;DataChangeReconciler({ cacheScope: 'test-account' });pending.splice(0).forEach(effect => effect());
   }
   render();
   return { win, count, originalFetch, render, back: () => PageBackButton().props.onClick(),
@@ -58,10 +64,10 @@ test('Ordinary navigation and Back keep the document; successful writes refresh 
     await f.win.fetch('/api/health/weight', { method: 'POST' });
     assert.equal(f.count.invalidated, 1, 'writes invalidate Home even when another page is mounted');
     assert.equal(f.count.reload, 0, 'a write does not immediately reload');
-    f.render('/health?view=weight');assert.equal(f.count.reload, 1);
-    f.render('/health?view=weight');assert.equal(f.count.reload, 1, 'same URL render stays fresh');
-    f.render('/new-unvisited-page');assert.equal(f.count.reload, 1);
-    f.render('/health?view=weight');assert.equal(f.count.reload, 1, 'consumed stale URL stays fresh');
+    f.render('/health?view=weight');assert.equal(f.count.refresh, 1);
+    f.render('/health?view=weight');assert.equal(f.count.refresh, 1, 'same URL render stays fresh');
+    f.render('/new-unvisited-page');assert.equal(f.count.refresh, 1);
+    f.render('/health?view=weight');assert.equal(f.count.refresh, 1, 'consumed stale URL stays fresh');
   } finally { f.unmount(); }
 });
 
@@ -76,8 +82,8 @@ test('GET, failed writes, and cross-origin writes do not invalidate; native even
   const f = fixture();
   try {
     f.render('/health?view=weight');f.synced(['invalid']);f.render('/health');assert.equal(f.count.reload, 0);
-    f.synced(['health']);f.render('/health?view=weight');assert.equal(f.count.reload, 1);
-    f.render('/health?view=sleep');assert.equal(f.count.reload, 1);
+    f.synced(['health']);f.render('/health?view=weight');assert.equal(f.count.refresh, 1);
+    f.render('/health?view=sleep');assert.equal(f.count.refresh, 1);
   } finally { f.unmount(); }
 });
 

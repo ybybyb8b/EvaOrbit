@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -13,7 +14,7 @@ import { formatRecordMoment, healthRecordStatusLabels, healthRecordTypeLabels, h
 export function HealthRecordDetailView({ initial }: { initial: HealthRecord }) {
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const router = useRouter();
-  const [record, setRecord] = useState(initial);
+  const [record, setRecord] = useServerDataState(initial);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);

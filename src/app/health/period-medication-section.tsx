@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { BottomLogScope } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -25,8 +26,9 @@ function periodLabel(item: MenstrualPeriod, english: boolean) { return `${item.s
 function periodLength(item: MenstrualPeriod) { return item.endedOn ? Math.floor((Date.parse(`${item.endedOn}T12:00:00Z`) - Date.parse(`${item.startedOn}T12:00:00Z`)) / 86_400_000) + 1 : null; }
 
 export function PeriodMedicationSection({ initialPeriods, initialFlows, initialPresets, initialDoses, initialReminders }: { initialPeriods: MenstrualPeriod[]; initialFlows: MenstrualFlowRecord[]; initialPresets: MedicationPreset[]; initialDoses: MedicationDoseEvent[]; initialReminders: ScheduledNotification[] }) {
+  useDataRefresh("/health", () => reload());
   const { english } = useLocale();
-  const [periods, setPeriods] = useState(initialPeriods), [flows, setFlows] = useState(initialFlows), [presets, setPresets] = useState(initialPresets), [doses, setDoses] = useState(initialDoses), [reminders, setReminders] = useState(initialReminders);
+  const [periods, setPeriods] = useServerDataState(initialPeriods), [flows, setFlows] = useServerDataState(initialFlows), [presets, setPresets] = useServerDataState(initialPresets), [doses, setDoses] = useServerDataState(initialDoses), [reminders, setReminders] = useServerDataState(initialReminders);
   const [open, setOpen] = useState<"start" | "period" | "flow" | "dose" | "preset" | null>(null), [editingFlow, setEditingFlow] = useState<MenstrualFlowRecord>(), [editingDose, setEditingDose] = useState<MedicationDoseEvent>(), [editingPreset, setEditingPreset] = useState<MedicationPreset>();
   const [editingPeriod, setEditingPeriod] = useState<MenstrualPeriod>();
   const [endingPeriod, setEndingPeriod] = useState(false);

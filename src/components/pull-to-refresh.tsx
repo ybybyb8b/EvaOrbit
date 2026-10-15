@@ -9,6 +9,8 @@ import {
   shouldTriggerPullRefresh,
 } from "@/lib/pull-refresh-gesture";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import { invalidateClientData } from "@/lib/client-data-cache";
+import { dataDependencies } from "@/lib/cache-policy";
 
 type RefreshPhase = "idle" | "pulling" | "ready" | "refreshing";
 
@@ -149,6 +151,7 @@ export function PullToRefresh({ enabled }: { enabled: boolean }) {
       settleTo(54);
       setPhase("refreshing");
       refreshStartedRef.current = true;
+      invalidateClientData(dataDependencies(pathname));
       startRefreshTransition(() => router.refresh());
       refreshFallbackRef.current = window.setTimeout(() => {
         refreshStartedRef.current = false;

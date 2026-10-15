@@ -1,4 +1,6 @@
 "use client";
+import { useDataRefresh } from "@/components/use-data-refresh";
+import { invalidateClientData } from "@/lib/client-data-cache";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { SearchableSelect } from "@/components/searchable-select";
 import { showActionToast } from "@/components/action-toast";
@@ -42,6 +44,14 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
     const response = await fetch("/api/ai/sessions", { cache: "no-store" });
     if (response.ok) setSessions(await response.json() as ChatSession[]);
   }, []);
+  useDataRefresh("/ai", async () => {
+    if (streaming) return;
+    await refreshSessions();
+    if (activeId) {
+      const response = await fetch(`/api/ai/sessions/${activeId}/messages`);
+      if (response.ok) setMessages(await response.json() as ChatMessage[]);
+    }
+  });
 
   useEffect(() => {
     Promise.all([
@@ -147,6 +157,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
           if (streamEvent.delta) setMessages((current) => current.map((item) => item.id === optimisticAssistant.id ? { ...item, content: item.content + streamEvent.delta } : item));
         }
       }
+      invalidateClientData(["*"]); // Tools may have changed any life module during the stream.
       const messageResponse = await fetch(`/api/ai/sessions/${sessionId}/messages`);
       if (messageResponse.ok) setMessages(await messageResponse.json() as ChatMessage[]);
       await refreshSessions();

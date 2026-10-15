@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -28,7 +29,7 @@ async function responseError(response: Response, fallback: string) {
 
 export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
   const router = useRouter();
-  const [entry, setEntry] = useState(initial);
+  const [entry, setEntry] = useServerDataState(initial);
   const [draft, setDraft] = useState<ChronicleDraft>(() => draftFromEntry(initial));
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);

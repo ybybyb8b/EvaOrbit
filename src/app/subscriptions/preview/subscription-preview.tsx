@@ -1,4 +1,5 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log";
 
@@ -22,8 +23,8 @@ const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length]
 export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
-  const [view, setView] = useState<"home" | "trends">("home");
-  const [status, setStatus] = useState<"all" | SubscriptionStatus>("all");
+  const [view, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
+  const [status, setStatus] = useRememberedState<"all" | SubscriptionStatus>("SubscriptionPreview:status", "all");
   const [focused, setFocused] = useState(0);
   const [currency, setCurrency] = useState("");
   const [month, setMonth] = useState(today.slice(0, 7));

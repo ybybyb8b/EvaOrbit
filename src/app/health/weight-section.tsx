@@ -1,4 +1,5 @@
 "use client";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -18,8 +19,9 @@ const MIN_WEIGHT=20,MAX_WEIGHT=300,TICK_STEP_KG=.1,TICK_PX=10,SNAP_PX=TICK_PX*WE
 function errorText(value:unknown,fallback:string){return value&&typeof value==="object"&&"error" in value&&typeof value.error==="string"?value.error:fallback;}
 
 export function WeightSection({ initialRecords, initialSettings, initialFocused }: { initialRecords:WeightRecord[];initialSettings:WeightSettings;initialFocused?:WeightRecord }) {
+  useDataRefresh("/health", () => reload());
   const { english }=useLocale();
-  const [records,setRecords]=useState(initialRecords),[settings,setSettings]=useState(initialSettings),[range,setRange]=useState<WeightRange>("30d");
+  const [records,setRecords]=useState(initialRecords),[settings,setSettings]=useServerDataState(initialSettings),[range,setRange]=useState<WeightRange>("30d");
   const editableFocus=initialFocused?.source==="manual"?initialFocused:undefined;
   const [editing,setEditing]=useState<WeightRecord|undefined>(editableFocus),[editorOpen,setEditorOpen]=useState(Boolean(editableFocus)),[settingsOpen,setSettingsOpen]=useState(false);
   const [message,setMessage]=useState(""),[error,setError]=useState("");

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 import { DRINK_TYPE_OPTIONS } from "@/lib/drink-types";
 import type { DrinkType } from "@/lib/types";
@@ -56,7 +58,7 @@ export function FoodLibraryView() {
   const [places,setPlaces]=useState<FoodPlace[]>([]),[placeQuery,setPlaceQuery]=useState("");
   useEffect(()=>{const controller=new AbortController();void fetch(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(async response=>{if(response.ok)setPlaces(await response.json());}).catch(()=>undefined);return()=>controller.abort();},[placeQuery]);
   const [items, setItems] = useState<FoodLibraryItem[]>([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useRememberedState("FoodLibraryView:query", "");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -65,10 +67,12 @@ export function FoodLibraryView() {
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
 
+
   const load = useCallback(async () => {
     const response = await fetch(`/api/food/library?q=${encodeURIComponent(query)}`);
     if (response.ok) setItems(await response.json());
   }, [query]);
+  useDataRefresh("/food/library", () => load());
 
   useEffect(() => { const timer = setTimeout(() => void load(), 120); return () => clearTimeout(timer); }, [load]);
 

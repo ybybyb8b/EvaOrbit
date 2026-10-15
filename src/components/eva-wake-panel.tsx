@@ -1,4 +1,5 @@
 "use client";
+import { invalidateClientData } from "@/lib/client-data-cache";
 
 import Link from "next/link";
 import { KeyboardEvent, TransitionEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -135,6 +136,7 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
           if (event.delta) setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: message.content + event.delta } : message));
         }
       }
+      invalidateClientData(["*"]);
       const history = await fetch(`/api/ai/sessions/${resolvedSessionId}/messages`, { cache: "no-store" });
       if (history.ok) setMessages(await history.json() as ChatMessage[]);
       await refreshSessions();

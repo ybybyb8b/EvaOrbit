@@ -29,7 +29,7 @@ export function pageNavigationState(state: Record<string, unknown> | null, hasPr
 export function createPageFreshness() {
   const visited = new Set<string>(), stale = new Set<string>();
   return {
-    invalidate() { for (const url of visited) stale.add(url); },
+    invalidate(affected: (url: string) => boolean = () => true) { for (const url of visited) if (affected(url)) stale.add(url); },
     visit(url: string) {
       visited.add(url);
       return stale.delete(url);

@@ -1,4 +1,6 @@
 "use client";
+import { useRememberedState } from "@/components/use-remembered-state";
+import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -36,15 +38,17 @@ function seriesQuantity(group:MediaSeries,items:MediaListItem[]){const complete=
 function SeriesCard({group,items}:{group:MediaSeries;items:MediaListItem[]}){const previews=[...items].sort((left,right)=>Number(Boolean(right.coverUrl))-Number(Boolean(left.coverUrl))).slice(0,3);return <Link className="media-series-card" href={`/media/series/${group.id}`}><span className="media-series-preview" aria-hidden="true">{previews.length?previews.map(item=><span className="media-series-preview-cover" key={item.id}><MediaCover item={item}/></span>):<span className="media-series-preview-empty"><Icon name="media"/></span>}</span><span className="media-series-copy"><strong>{group.name}</strong><small>{seriesQuantity(group,items)}</small></span></Link>;}
 
 export function MediaView({initial,initialSeries}:{initial:MediaListItem[];initialSeries:MediaSeries[]}){
-  const[items,setItems]=useState(initial),[series,setSeries]=useState(initialSeries),[query,setQuery]=useState("");
-  const[mediaType,setMediaType]=useState<""|MediaType>(""),[status,setStatus]=useState<""|MediaStatus>("");
-  const[rating,setRating]=useState<""|MediaRating>("");
-  const[favoriteOnly,setFavoriteOnly]=useState(false),[rewatchedOnly,setRewatchedOnly]=useState(false);
+  const[items,setItems]=useState(initial),[series,setSeries]=useServerDataState(initialSeries),[query,setQuery]=useRememberedState("MediaView:query", "");
+  const[mediaType,setMediaType]=useRememberedState<""|MediaType>("MediaView:mediaType", ""),[status,setStatus]=useRememberedState<""|MediaStatus>("MediaView:status", "");
+  const[rating,setRating]=useRememberedState<""|MediaRating>("MediaView:rating", "");
+  const[favoriteOnly,setFavoriteOnly]=useRememberedState("MediaView:favoriteOnly", false),[rewatchedOnly,setRewatchedOnly]=useRememberedState("MediaView:rewatchedOnly", false);
   const[loading,setLoading]=useState(false),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState<MediaDraft>(emptyDraft);
   const[coverFile,setCoverFile]=useState<File|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false);
   const filtered=Boolean(query.trim()||mediaType||status||rating||favoriteOnly||rewatchedOnly);
 
+
   const load=useCallback(async()=>{setLoading(true);const params=new URLSearchParams({limit:"200"});if(query.trim())params.set("q",query.trim());if(mediaType)params.set("mediaType",mediaType);if(status)params.set("status",status);if(rating)params.set("rating",rating);if(favoriteOnly)params.set("favorite","true");if(rewatchedOnly)params.set("rewatched","true");try{const response=await fetch(`/api/media?${params}`,{cache:"no-store"});if(!response.ok){setError(await responseError(response,"Could not load media."));return;}setItems(await response.json() as MediaListItem[]);}catch{setError("Could not load media.");}finally{setLoading(false);}},[favoriteOnly,mediaType,query,rating,rewatchedOnly,status]);
+  useDataRefresh("/media", () => load());
   useEffect(()=>{const timer=window.setTimeout(()=>void load(),140);return()=>window.clearTimeout(timer);},[load]);
   const shelves=useMemo(()=>({movies:items.filter(item=>item.mediaType==="movie"),tv:items.filter(item=>item.mediaType==="tv"),anime:items.filter(item=>item.mediaType==="anime"),favorites:items.filter(item=>item.isFavorite),rewatched:items.filter(item=>item.viewingCount>1)}),[items]);
   const seriesItems=useMemo(()=>{const grouped=new Map<number,MediaListItem[]>();for(const item of items){if(!item.seriesId)continue;const current=grouped.get(item.seriesId)??[];current.push(item);grouped.set(item.seriesId,current);}return grouped;},[items]);
