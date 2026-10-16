@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useId, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -28,7 +29,7 @@ export function FoodLinkPicker({ itemType, label, options, selected, multiple = 
         <div className="food-link-options">
           {!multiple && <button type="button" data-form-change onClick={() => { onChange([]); closeMenu(); setQuery(""); onSearch(""); }}>未关联{noun}</button>}
           {matches.map(option => multiple ? <label className="food-link-option" key={option.id}><input type="checkbox" checked={selected.includes(option.id)} onChange={event => onChange(event.target.checked ? [...selected, option.id] : selected.filter(value => value !== option.id))} /><span className="user-content">{option.name}{option.detail && <small>{option.detail}</small>}</span></label> : <button type="button" data-form-change className="user-content" key={option.id} aria-pressed={selected.includes(option.id)} onClick={() => { onChange([option.id]); closeMenu(); setQuery(""); onSearch(""); }}>{option.name}{option.detail && <small>{option.detail}</small>}</button>)}
-          {loading && <p role="status">正在搜索…</p>}
+          {loading && <p><PageLoading title="搜索结果" englishTitle="search results" compact /></p>}
           {error && <div role="alert"><p>{error}</p>{onRetry && <button type="button" onClick={onRetry}>重试</button>}</div>}
           {!loading && !error && !matches.length && <p className="food-link-empty">{query ? "没有匹配的结果" : type!=="place" ? `这家店还没有${noun}菜单` : "还没有店铺"}</p>}
         </div>

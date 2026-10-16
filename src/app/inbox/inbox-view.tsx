@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { showActionToast } from "@/components/action-toast";
@@ -49,7 +50,7 @@ export function InboxView() {
       <div className="segmented" aria-label={english ? "Inbox status filter" : "Inbox 状态筛选"}>{filters.map(([value, label]) => <button className={status === value ? "active" : ""} type="button" aria-pressed={status === value} onClick={() => setStatus(value)} key={value}>{label}</button>)}</div>
       <span className="result-count">{english ? `${items.length} ${items.length === 1 ? "entry" : "entries"}` : `${items.length} 条`}</span>
     </div>
-    {loading && !items.length ? <div className="loading-state">{english ? "Loading Inbox…" : "在翻 Inbox…"}</div> : items.length ? <div className="inbox-list" aria-busy={loading}>{items.map((item) => <article className="inbox-row" key={item.id}>
+    {loading && !items.length ? <PageLoading title="Inbox" englishTitle="Inbox" inline /> : items.length ? <div className="inbox-list" aria-busy={loading}>{items.map((item) => <article className="inbox-row" key={item.id}>
       <p className="user-content">{item.content}</p>
       <div className="inbox-row-footer">
         <div className="inbox-meta"><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString(english ? "en-US" : "zh-CN")}</time><span>{statusLabels[item.status]}</span>{item.convertedType && <span>{english ? "Converted from legacy" : "旧版已转为"} {item.convertedType}</span>}</div>

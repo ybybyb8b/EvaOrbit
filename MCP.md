@@ -62,7 +62,7 @@ Former `record/records` responses become `item/items`. The daily energy summary 
 Food/Drink generic calls:
 
 ```json
-{"name":"eo_create","arguments":{"resource":"food_log","data":{"title":"Lunch","food_place_id":1,"food_dish_ids":[2],"food_library_items":[{"food_library_id":3,"quantity":50,"unit":"g"}],"food_kcal_mode":"auto"}}}
+{"name":"eo_create","arguments":{"resource":"food_log","data":{"title":"Lunch","occurred_at":"2026-10-07T12:00:00+08:00","occurred_has_explicit_time":false,"meal_type":"lunch","food_place_id":1,"food_dish_ids":[2],"food_library_items":[{"food_library_id":3,"quantity":50,"unit":"g"}],"food_kcal_mode":"auto"}}}
 {"name":"eo_search","arguments":{"resource":"food_log","filters":{"date":"2026-10-07","food_dish_id":2}}}
 {"name":"eo_update","arguments":{"resource":"drink_log","id":4,"data":{"notes":"Only change notes"}}}
 {"name":"eo_get","arguments":{"resource":"nutrition_daily","id":"2026-10-07"}}
@@ -70,6 +70,10 @@ Food/Drink generic calls:
 ```
 
 CRUD responses use `item` or search `items`. Drink create/update includes limit results in `item.limits`; nested generic results use snake_case. Food PATCH preserves omitted associations, immutable portion snapshots and date precision; `[]` clears dishes/portions. Food writes use `food_dish_ids` and `food_library_items`; legacy single IDs are read-only projections (the search filter `food_dish_id` still means “contains this dish”). Drink retains its writable single `food_library_id`; `null` clears an association.
+
+Food MCP recording guidance: use the actual event date for backfills. A known date without a known clock time uses the date's local-noon storage anchor with `occurred_has_explicit_time=false` (as in the example); the anchor is not a meal time. Current time is appropriate only for explicit now/just now or user confirmation. The server-time fallback remains for compatibility and must not substitute for an unknown event time. Calendar matching is derived and does not justify inventing a manual time.
+
+Food's optional `description` is extra context, not a duplicate summary. Useful content includes leftovers, preparation changes, nuanced taste observations, weighing method and a brief estimate rationale. Do not repeat dates/times, meal type, scene, source/address, linked dish/product names, amounts, ratings or calories already in structured fields/title. Keep meaningful details not captured elsewhere (including unlinked ingredients/dishes); omit the description when there is nothing extra. These are model-facing recording instructions, not destructive rewriting of supplied or historical descriptions.
 
 `food_library` create retains upsert by name + brand, with create defaults; update by ID is PATCH. Removing an item archives it when referenced, otherwise deletes it, reporting `action` and `deleted`. `nutrition_daily` is read-only and includes effective energy and manual/HealthKit provenance. `daily_energy` get returns manual values; its upsert requires both nullable energy values, replaces both values and notes (omitted notes becomes empty), and returns a calculated summary under `result`. Null clears a manual override, allowing HealthKit fallback; this is separate from native ingestion.
 

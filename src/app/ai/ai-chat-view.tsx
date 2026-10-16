@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { invalidateClientData } from "@/lib/client-data-cache";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
@@ -178,7 +179,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
     if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); }
   }
 
-  if (loading) return <div ref={copyScope} className="page ai-page"><div className="loading-state">{autoSend && initialPrompt.trim() ? "正在接住你刚才的话…" : "在翻本地数据…"}</div></div>;
+  if (loading) return <div ref={copyScope} className="page ai-page"><PageLoading title="对话" englishTitle="conversation" inline /></div>;
 
   return <div ref={copyScope} className="ai-workspace">
     {historyOpen && <button className="drawer-backdrop" onClick={() => setHistoryOpen(false)} aria-label="关闭会话列表" />}
@@ -201,7 +202,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
         <section className="message-scroll">
           {!messages.length ? <div className="chat-welcome"><span className="ai-orb"><Icon name="ai" /></span><span className="eyebrow">EVA</span><h2>记、查、分析生活数据</h2><p>Eva 负责 EvaOrbit 里的结构化记录和查询；日常聊天、提醒与待办继续留给更合适的工具。</p><div className="starter-grid">{starters.map((starter) => <button key={starter} onClick={() => void send(starter)}>{starter}<Icon name="arrow" /></button>)}</div></div>
           : <div className="message-list">{messages.map((message, index) => { const groupStart = index === 0 || messages[index - 1].role !== message.role; const user = message.role === "user"; const showName = user ? settings.showUserName : settings.showAssistantName; const name = user ? settings.userDisplayName : settings.assistantDisplayName; const avatarType = user ? settings.userAvatarType : settings.assistantAvatarType; const avatarValue = user ? settings.userAvatarValue : settings.assistantAvatarValue; return <article className={`chat-message ${message.role} ${groupStart ? "group-start" : "group-continuation"}`} key={message.id}>
-            <div className="message-body">{groupStart && (showName || settings.showAvatars) && <div className="message-identity">{!user && settings.showAvatars && <ConversationAvatar subject="assistant" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}{showName && <span>{name}</span>}{user && settings.showAvatars && <ConversationAvatar subject="user" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}</div>}<div className="message-content">{message.content ? user ? <div className="user-message-text">{message.content}</div> : <MarkdownMessage content={message.content} /> : <span className="typing"><i /><i /><i /></span>}</div>
+            <div className="message-body">{groupStart && (showName || settings.showAvatars) && <div className="message-identity">{!user && settings.showAvatars && <ConversationAvatar subject="assistant" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}{showName && <span>{name}</span>}{user && settings.showAvatars && <ConversationAvatar subject="user" name={name} type={avatarType} value={avatarValue} version={settings.updatedAt} />}</div>}<div className="message-content">{message.content ? user ? <div className="user-message-text">{message.content}</div> : <MarkdownMessage content={message.content} /> : <PageLoading title="回复" englishTitle="reply" compact />}</div>
               {message.content && <div className="message-actions"><button onClick={() => void navigator.clipboard.writeText(message.content)}>复制</button>{message.role === "assistant" && <button onClick={() => { const previous = messages.slice(0, index).reverse().find((item) => item.role === "user"); if (previous) void send(previous.content); }}>再次提问</button>}</div>}
             </div>
           </article>; })}{toolActivity.length > 0 && <div className="tool-activity"><span className="tool-icon"><Icon name="check" /></span><div><strong>刚刚动了这些</strong>{toolActivity.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}</div></div>}<div ref={bottomRef} /></div>}

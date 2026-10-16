@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -220,7 +221,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
     </section>
     <header className="home-selected-date-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!day ? <div className="home-timeline-loading" aria-label={english ? "Loading day" : "正在读取这一天"}><span /><span /><span /></div> : <>
+    {!day ? <PageLoading title="这一天" englishTitle="day" inline /> : <>
       <div className="home-day-grid">
         <article className="home-day-pane home-sleep-pane"><button type="button" className="home-pane-open" onClick={() => setSleepSheetOpen(true)} aria-label={english ? "View sleep records" : "查看睡眠记录"}><header><MoonSleep size={19} weight="Outline" aria-hidden="true" /><h3>{english ? "Sleep" : "睡眠"}</h3><ArrowRight2 size={14} weight="Outline" aria-hidden="true" /></header>{sleepSummary && (sleepSummary.actual || sleepSummary.window) ? <><SleepOverviewPreview summary={sleepSummary} english={english} />{!sleepSummary.actual && <small>{english ? "Timeline estimate" : "时间线估算"} · {timeLabel(sleepSummary.window!.startAt)}–{timeLabel(sleepSummary.window!.endAt)}</small>}</> : <p className="home-pane-empty">{english ? "No sleep record ending this day" : "没有在这一天结束的睡眠记录"}</p>}</button></article>
         <article className="home-day-pane"><header><Checklist size={19} weight="Outline" aria-hidden="true" /><h3><Link href="/tasks">{english ? "Tasks" : "任务"}</Link></h3><small>{day.tasks.filter((task) => task.completed).length}/{day.tasks.length}</small></header>{day.tasks.length ? <ul className="home-pane-list">{day.tasks.slice(0, 4).map((task) => <li key={task.id} data-completed={task.completed}><Link href={`/tasks?taskId=${task.id}`}>{task.completed ? <CheckCircle size={15} weight="Outline" aria-hidden="true" /> : <RecordCircle size={15} weight="Outline" aria-hidden="true" />}<strong>{task.title}</strong>{task.dueTime && <time>{task.dueTime}</time>}</Link></li>)}</ul> : <p className="home-pane-empty">{english ? "No tasks due" : "这一天没有到期任务"}</p>}</article>

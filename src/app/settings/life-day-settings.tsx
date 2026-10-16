@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
@@ -48,7 +49,7 @@ export function LifeDaySettings() {
     <p id="life-day-help">{english ? "Recurring tasks follow your main sleep and wake time. When sleep is unavailable, the day changes at the time below. Changes apply to future completions; recorded history stays unchanged." : "循环任务优先按主睡眠的醒来时间切换生活日；没有睡眠记录时，使用下方时间。修改后用于后续完成计算，已记录的历史保持不变。"}</p>
     <form className="appearance-setting-group" onSubmit={save}>
       <label className="field"><span className={styles.iconLabel}><Clock size={16} weight="Outline" aria-hidden="true" />{english ? "Day changes at (without sleep)" : "无睡眠记录时的切换时间"}</span><input type="time" required step={60} value={time} disabled={!saved || saving} onChange={event => setTime(event.target.value)} aria-describedby="life-day-help" /></label>
-      {!saved && !error && <p role="status">{english ? "Loading…" : "读取中…"}</p>}
+      {!saved && !error && <PageLoading title="设置" englishTitle="settings" compact />}
       {error && <p className="form-error" role="alert">{error}</p>}
       {!saved && error ? <button type="button" className="button" onClick={() => void load()}><Refresh size={16} weight="Outline" aria-hidden="true" />{english ? "Retry" : "重试"}</button> : <button className="button primary" disabled={!saved || !time || saving || time === saved}><Save size={16} weight="Outline" aria-hidden="true" />{saving ? english ? "Saving…" : "保存中…" : english ? "Save" : "保存"}</button>}
     </form>

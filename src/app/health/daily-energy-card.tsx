@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -190,7 +191,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       <p><span>{t("Resting", "静息")} <strong>{formatKcal(summary.restingEnergyKcal, english)}</strong></span><i aria-hidden="true">·</i><span>{t("Active", "活动")} <strong>{formatKcal(summary.activeEnergyKcal, english)}</strong></span></p>
       {sourceLabel && <small>{sourceLabel}</small>}
     </div>
-    {loading && <span className="daily-energy-loading">{t("Loading…", "加载中…")}</span>}
+    {loading && <span className="daily-energy-loading"><PageLoading title="能量" englishTitle="energy" compact /></span>}
     {editing && <form ref={editorRef} className="daily-energy-editor" onSubmit={(event) => void save(event)}>
       <div className="daily-energy-input-grid">
         <label className="field wide"><span>{t("Date", "日期")}</span><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>

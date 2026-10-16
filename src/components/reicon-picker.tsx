@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useEffect, useId, useState } from "react";
 import { useLocale } from "./locale-controller";
@@ -33,7 +34,7 @@ export function ReiconPicker({ value, onChange, disabled = false }: { value: str
     </button>
     {open && <div id={panelId} className="calendar-icon-browser">
       <label className="field" htmlFor={searchId}><span>{english ? "Search Reicon" : "搜索 Reicon"}</span><input id={searchId} type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder={english ? "Phone, book, music…" : "手机、阅读，或英文图标名……"} disabled={disabled} /></label>
-      {!names && !error && <p role="status">{english ? "Loading icons…" : "正在读取图标……"}</p>}
+      {!names && !error && <PageLoading title="图标" englishTitle="icons" inline />}
       {error && <p role="alert">{english ? "Could not load icons." : "图标加载失败。"} <button type="button" className="text-button" disabled={disabled} onClick={() => { setError(false); setRetry(retry + 1); }}>{english ? "Retry" : "重试"}</button></p>}
       {names && <>
         <div className="calendar-icon-grid" role="group" aria-label={english ? "Reicon icons" : "Reicon 图标"}>

@@ -3,7 +3,7 @@ import { catalogServingKcal } from "../food-catalog";
 import { defaultFoodUnit } from "../food-calculation";
 import { validateLibraryLink } from "./food-library-link";
 import { foodCalculatedTotal, snapshotFoodConsumptions } from "../food-calculation";
-import { placeSupports } from "../place-menu";
+import { canonicalPlace, mergePlaceAddress, placeSupports } from "../place-menu";
 import { getRepository } from "../repositories";
 import type { FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, NewFoodDish, NewFoodLibraryItem, NewFoodLog, NewFoodPlace } from "../repositories/types";
 import type { FoodConsumption, FoodLibraryItem, FoodLog, FoodPlaceDetail } from "../types";
@@ -145,12 +145,25 @@ export async function updateFoodLibraryItem(id: number, input: Partial<NewFoodLi
 }
 export async function removeFoodLibraryItem(id: number) { return (await getRepository()).removeFoodLibraryItem(id); }
 
-export async function listFoodPlaces(query="",options?:FoodPlaceSearchOptions){return(await getRepository()).listFoodPlaces(query,options);}
-export async function getFoodPlace(id:number){return(await getRepository()).getFoodPlace(id);}
-export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs,recentDrinkLogs,drinkMenu,packagedFood]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,kind:"food",limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20}),repository.listDrinkLogs({foodPlaceId:id,limit:20}),repository.listFoodDishes("",{foodPlaceId:id,kind:"drink",limit:100}),repository.getPlaceLibraryItems(id)]);return{place,dishes,recentFoodLogs:await withMealTimes(repository,recentFoodLogs),recentDrinkLogs,drinkMenu,packagedFood};}
+export async function listFoodPlaces(query="",options?:FoodPlaceSearchOptions){return(await(await getRepository()).listFoodPlaces(query,options)).map(canonicalPlace);}
+export async function getFoodPlace(id:number){const place=await(await getRepository()).getFoodPlace(id);return place?canonicalPlace(place):null;}
+export async function getFoodPlaceDetail(id:number):Promise<FoodPlaceDetail|null>{const repository=await getRepository();const place=await repository.getFoodPlace(id);if(!place)return null;const[dishes,recentFoodLogs,recentDrinkLogs,drinkMenu,packagedFood]=await Promise.all([repository.listFoodDishes("",{foodPlaceId:id,kind:"food",limit:100}),repository.listFoodLogs({foodPlaceId:id,limit:20}),repository.listDrinkLogs({foodPlaceId:id,limit:20}),repository.listFoodDishes("",{foodPlaceId:id,kind:"drink",limit:100}),repository.getPlaceLibraryItems(id)]);return{place:canonicalPlace(place),dishes,recentFoodLogs:await withMealTimes(repository,recentFoodLogs),recentDrinkLogs,drinkMenu,packagedFood};}
 export async function getPlaceLibraryItems(id:number){return(await getRepository()).getPlaceLibraryItems(id);}
-export async function createFoodPlace(input:NewFoodPlace){return(await getRepository()).createFoodPlace(input);}
-export async function updateFoodPlace(id:number,input:Partial<NewFoodPlace>){const repository=await getRepository();if(input.serviceType&&input.serviceType!=="both"){const incompatible=input.serviceType==="drink"?"food":"drink";if((await repository.listFoodDishes("",{foodPlaceId:id,kind:incompatible,limit:1})).length)throw new ValidationError("请先归档不符合新类型的菜单项，再修改店铺类型");}return repository.updateFoodPlace(id,input);}
+export async function createFoodPlace(input:NewFoodPlace){
+  const address=mergePlaceAddress(input.address,input.location);
+  if(address.length>1000)throw new ValidationError("合并后的地址不能超过 1000 字");
+  return canonicalPlace(await(await getRepository()).createFoodPlace({...input,address,location:""}));
+}
+export async function updateFoodPlace(id:number,input:Partial<NewFoodPlace>){
+  const repository=await getRepository();
+  const existing=await repository.getFoodPlace(id);if(!existing)return null;
+  if(input.serviceType&&input.serviceType!=="both"){const incompatible=input.serviceType==="drink"?"food":"drink";if((await repository.listFoodDishes("",{foodPlaceId:id,kind:incompatible,limit:1})).length)throw new ValidationError("请先归档不符合新类型的菜单项，再修改店铺类型");}
+  // Omitted address preserves legacy area; explicit address (including empty) replaces it.
+  const address=mergePlaceAddress(input.address??existing.address,input.location??(input.address===undefined?existing.location:""));
+  if(address.length>1000)throw new ValidationError("合并后的地址不能超过 1000 字");
+  const saved=await repository.updateFoodPlace(id,{...input,address,location:""});
+  return saved?canonicalPlace(saved):null;
+}
 export async function removeFoodPlace(id:number){return(await getRepository()).removeFoodPlace(id);}
 export async function listFoodDishes(query="",options?:FoodDishSearchOptions){return(await getRepository()).listFoodDishes(query,options);}
 export async function getFoodDish(id:number){return(await getRepository()).getFoodDish(id);}

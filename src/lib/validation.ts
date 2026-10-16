@@ -877,7 +877,7 @@ export function parseFoodPlace(value: unknown) {
   const kind = enumValue(body.kind, "来源类型", ["restaurant", "drink", "retail", "homemade", "other"] as const, body.serviceType === "drink" ? "drink" : "restaurant");
   const scope = enumValue(body.scope, "地点范围", ["brand", "branch", "virtual"] as const, kind === "homemade" ? "virtual" : kind === "drink" || kind === "retail" ? "brand" : "branch");
   return {
-    kind, scope, address: text(body.address ?? "", "地址", 500, false) ?? "",
+    kind, scope, address: text(body.address ?? "", "地址", 1000, false) ?? "",
     serviceType: enumValue(body.serviceType, "饮食能力", ["food", "drink", "both"] as const, kind === "drink" ? "drink" : ["retail","homemade","other"].includes(kind) ? "both" : "food"),
     name: text(body.name, "店铺名称", 200)!,
     branch: text(body.branch ?? "", "分店信息", 160, false) ?? "",

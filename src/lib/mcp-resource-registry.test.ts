@@ -51,6 +51,12 @@ test("production schemas describe every action and distinguish create from PATCH
   assert.ok(registry.schema("memory_fact").search_schema.limitations.some(rule => rule.includes("bounded")));
   assert.ok(registry.schema("memory_fact").required_conditions.length);
   assert.equal(registry.schema("food_log").fields.food_dish_id.legacy, true);
+  const foodSchema=registry.schema("food_log");
+  assert.match(foodSchema.fields.occurred_at.description,/backfills.*occurred_has_explicit_time=false/);
+  assert.match(foodSchema.fields.occurred_has_explicit_time.description,/unknown, including today/);
+  assert.match(foodSchema.fields.description.description,/Do not repeat.*structured fields\/title/);
+  assert.match(foodSchema.usage_guidance.join(" "),/current time only.*explicitly means now\/just now/);
+  assert.match(foodSchema.operation_semantics.lifecycle,/unlinked ingredients\/dishes.*Leave description absent/);
   assert.equal(registry.schema("subscription").fields.amount.write_only, true);
   assert.equal(registry.schema("nutrition_daily").fields.resting_energy_kcal.read_only, true);
   assert.doesNotMatch(registry.schema("nutrition_daily").fields.resting_energy_kcal.description, /clears/);

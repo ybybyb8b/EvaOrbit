@@ -3,6 +3,7 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["地址（可选）", "Address (optional)"], ["商圈、街道、楼层或完整地址", "District, street, floor, or full address"],
   ["浏览方式", "View"], ["概览", "Overview"], ["按模块", "By module"], ["全部条目", "All Items"], ["未完成", "Unfinished"],
   ["模块", "Module"], ["全部模块", "All modules"], ["未分配模块", "No module"], ["仅一级模块", "Module only"],
   ["新增模块", "New module"], ["新增子分类", "New category"], ["新模块名称", "New module name"], ["新子分类名称", "New category name"], ["使用此名称", "Use name"],

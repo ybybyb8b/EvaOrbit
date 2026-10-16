@@ -10,6 +10,19 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # EvaOrbit development rules
 
+## Development navigation
+
+- Start each task with the relevant module in [docs/DEV_INDEX.md](docs/DEV_INDEX.md), then inspect its current implementation.
+- Read only task-relevant detailed documents; do not load all documentation by default.
+- Update the index when architecture, module responsibilities, or important cross-module dependencies change. Ordinary bug fixes and small UI adjustments do not require index updates.
+- Keep the index structural and durable. Track current work in the existing Project system, not in the index.
+
+## New chat titles
+
+- Before the first reply in a new Codex chat ends, use the available title tool to name the current chat `模块｜具体任务`, then verify the returned title. If the tool is unavailable or fails, report that truthfully.
+- Prefer the canonical module names in [docs/DEV_INDEX.md](docs/DEV_INDEX.md); use Core or Architecture for cross-module work. Keep the task concise and specific, e.g. `Home｜日历胶囊预览`, `Food｜Places版式与归属地`, `Memory｜Graph架构升级`.
+- Do not require a date prefix or 开发／设计／审阅 category. If the topic is unclear, retain the current title. Preserve historical chat titles; only rename other or archived chats when explicitly requested.
+
 ## Working principles
 
 - Before editing, inspect the current code, data model, services, APIs, and tests. Do not rely on old discussions, prompts, or assumed structure.

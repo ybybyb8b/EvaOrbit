@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useEffect, useState, type ComponentType } from "react";
 import { Droplet, Dumbbell, Health, Pill, Weight, type IconComponent } from "reicon-react";
@@ -43,7 +44,7 @@ function useRemoteJson<T>(url: string) {
 function LoadSheet({ title, error, onClose, onRetry }: { title: string; error: string; onClose: () => void; onRetry: () => void }) {
   const { english } = useLocale();
   return <FormSheet title={title} onClose={onClose}>
-    {error ? <><p className="form-error" role="alert">{english ? error : "暂时无法打开此表单"}</p><button type="button" className="button secondary" onClick={onRetry}>{english ? "Try again" : "重试"}</button></> : <p className="home-today-empty">{english ? "Loading…" : "正在读取…"}</p>}
+    {error ? <><p className="form-error" role="alert">{english ? error : "暂时无法打开此表单"}</p><button type="button" className="button secondary" onClick={onRetry}>{english ? "Try again" : "重试"}</button></> : <PageLoading title={title} englishTitle={title} inline />}
   </FormSheet>;
 }
 

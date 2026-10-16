@@ -18,8 +18,9 @@ test('shared loading shows only nine decorative dots and keeps localized status 
     if (name.endsWith('.css')) return { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) };
     return require(name);
   }, exports);
-  for (const inline of [false, true]) {
-    const html = renderToStaticMarkup(exports.PageLoading({ title:'任务', englishTitle:'tasks', inline }));
+  for (const variant of [{}, { inline: true }, { compact: true }]) {
+    const html = renderToStaticMarkup(exports.PageLoading({ title:'任务', englishTitle:'tasks', ...variant }));
+    assert.ok(html.startsWith(variant.compact ? '<span' : '<div'));
     assert.match(html, /role="status"/);
     assert.match(html, /class="sr-only">正在读取任务/);
     assert.equal((html.match(/class="dot"/g) ?? []).length, 9);

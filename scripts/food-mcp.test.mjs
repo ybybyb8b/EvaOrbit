@@ -51,14 +51,14 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       assert.equal((await call("eo_schema",{resource:"food_log"})).schema.fields.food_dish_ids.type,"array");
       const {schema}=await call("eo_schema",{resource:"food_place"});
       assert.ok((await call("eo_resources")).resources.find(r=>r.resource==="food_place").capabilities.includes("delete"));
-      for(const field of ["city","location","category"])assert.ok(schema.writable_fields.includes(field));
+      for(const field of ["city","address","category"])assert.ok(schema.writable_fields.includes(field));
       const {item:place}=await call("eo_create",{resource:"food_place",data:{name:"测试饭店",service_type:"both",city:"成都",location:"高新区",category:"川菜"}});
-      assert.equal(place.city,"成都");assert.equal(place.location,"高新区");
-      const {item:updated}=await call("eo_update",{resource:"food_place",id:place.id,data:{location:"天府和悦",category:"快餐"}});assert.equal(updated.location,"天府和悦");
+      assert.equal(place.city,"成都");assert.equal(place.location,"");assert.equal(place.address,"高新区");
+      const {item:updated}=await call("eo_update",{resource:"food_place",id:place.id,data:{location:"天府和悦",category:"快餐"}});assert.equal(updated.location,"");assert.equal(updated.address,"天府和悦 · 高新区");
       const {items:places}=await call("eo_search",{resource:"food_place",query:"天府和悦",filters:{category:"快餐"}});assert.equal(places[0].id,place.id);
       assert.ok((await call("eo_schema",{resource:"drink_log"})).schema.update_fields.includes("food_place_id"));
       const {item:drink}=await call("eo_create",{resource:"drink_log",data:{name:"奶茶",drink_type:"milk_tea",food_place_id:place.id,occurred_at:"2026-10-03T12:00:00+08:00",occurred_has_explicit_time:false}});
-      assert.equal(drink.food_place_city,"成都");assert.equal(drink.food_place_location,"天府和悦");assert.equal("brand" in drink,false);
+      assert.equal(drink.food_place_city,"成都");assert.equal(drink.food_place_location,"天府和悦 · 高新区");assert.equal("brand" in drink,false);
       assert.equal((await call("eo_search",{resource:"drink_log",filters:{food_place_id:place.id}})).items[0].id,drink.id);
       assert.equal((await call("eo_search",{resource:"drink_log",query:"天府和悦",filters:{}})).items[0].id,drink.id);
       const {item:drinkRenamed}=await call("eo_update",{resource:"drink_log",id:drink.id,data:{name:"换名字"}});assert.equal(drinkRenamed.food_place_id,place.id);assert.equal(drinkRenamed.occurred_has_explicit_time,false);
@@ -83,7 +83,7 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       assert.equal(record.food_place_id,place.id);
       assert.deepEqual((await call("eo_search",{resource:"food_log",filters:{food_place_id:place.id,food_dish_id:ids[1]}})).items.find(item=>item.id===record.id),record);
       assert.deepEqual(record.food_dish_ids,ids);assert.deepEqual(record.food_dishes.map(d=>d.name),["鸡腿饭","紫菜汤"]);
-      assert.equal(record.food_place_city,"成都");assert.equal(record.food_place_location,"天府和悦");
+      assert.equal(record.food_place_city,"成都");assert.equal(record.food_place_location,"天府和悦 · 高新区");
       const {item:retimed}=await call("eo_update",{resource:"food_log",id:record.id,data:{occurred_at:"2026-10-02T18:35:00+08:00",occurred_has_explicit_time:true}});
       assert.equal(new Date(retimed.occurred_at).toISOString(),"2026-10-02T10:35:00.000Z");assert.equal(retimed.occurred_has_explicit_time,true);
       assert.equal((await call("eo_search",{resource:"food_log",filters:{date:"2026-10-01"}})).items.length,0);

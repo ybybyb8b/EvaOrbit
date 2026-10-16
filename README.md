@@ -4,6 +4,8 @@ EvaOrbit 是一个私人、单用户的 Web / PWA 生活与思考空间，包含
 
 ## 架构
 
+开发入口见 [docs/DEV_INDEX.md](./docs/DEV_INDEX.md)：先定位相关模块，再按需阅读详细文档与当前代码。开发进度由已有 Project 系统管理。
+
 ```text
 Web UI / future authenticated MCP adapter
                     ↓

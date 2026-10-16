@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -106,7 +107,7 @@ export function TrackerDetailView({ initial, trackerId, openDetailedRecord = fal
     if(archived){setError("");setConfirmation({title:english?"Archive Tracker":"归档 Tracker",message:english?"History is kept. New recording and all reminders stop. You can restore this Tracker later; reminders must be enabled separately.":"历史数据会保留，暂停新增记录并关闭所有提醒。之后可以恢复 Tracker，提醒需按需重新开启。",label:english?"Archive":"确认归档",destructive:false,action:save});}
     else await save();
   }
-  if(loading&&!detail)return <div className="page"><div className="loading-state">{english?"Opening Tracker…":"正在打开 Tracker…"}</div></div>;
+  if(loading&&!detail)return <PageLoading title="观测" englishTitle="Tracker" />;
   if(!detail)return <div className="page"><PageHeader eyebrow="" title={english?"Tracker not found":"找不到 Tracker"} description={error}/><Link className="button secondary" href="/trackers">{english?"Back to Trackers":"返回 Trackers"}</Link></div>;
   const {tracker,stats}=detail;
   const periodEntries=trackerInsightEntries(detail.entries,insightPeriod);

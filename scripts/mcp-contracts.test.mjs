@@ -55,7 +55,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       assert.equal((await call("eo_search",{resource:"food_library",query:"Ref",filters:{brand:"Brand",category:"other"}})).items[0].id,library.id);
       const {item:meal}=await call("eo_create",{resource:"food_log",data:{title:"Rice",scene:"restaurant",rating:"good",occurred_at:"2026-10-05T12:00:00+08:00",occurred_has_explicit_time:false,food_place_id:place.id,food_dish_ids:[dish.id],food_library_items:[{food_library_id:library.id,quantity:50,unit:"g"}],food_kcal_mode:"auto"}});
       assert.equal(meal.estimated_kcal,100);assert.equal(meal.food_library_items[0].nutrition_reference.reference_kcal,200);
-      assert.equal(meal.food_place_city,"成都");assert.equal(meal.food_place_location,"商场");assert.deepEqual(meal.food_dish_ids,[dish.id]);
+      assert.equal(meal.food_place_city,"成都");assert.equal(meal.food_place_location,"商场");assert.equal(place.address,"商场");assert.deepEqual(meal.food_dish_ids,[dish.id]);
       assert.equal((await call("eo_get",{resource:"food_log",id:meal.id})).item.occurred_has_explicit_time,false);
       assert.equal((await call("eo_search",{resource:"food_log",filters:{date:"2026-10-05",meal_type:"snack",food_dish_id:dish.id}})).items[0].id,meal.id);
       assert.equal((await call("eo_get",{resource:"nutrition_daily",id:"2026-10-05"})).item.estimated_intake_kcal,100);

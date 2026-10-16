@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -78,7 +79,7 @@ export function MemoryView() {
       <ChoiceSelect value={category} onChange={(e) => setCategory(e.target.value)} aria-label="按分类筛选"><option value="">全部分类</option>{categories.map((item) => <option key={item} value={item}>{item}</option>)}</ChoiceSelect>
       <span className="result-count">{memories.length} 条</span>
     </div>
-    {loading ? <div className="loading-state">在翻以前记过的…</div> : memories.length ? <div className="memory-grid">{memories.map((memory) => <article className="memory-card" key={memory.id}>
+    {loading ? <PageLoading title="记忆" englishTitle="Memory" inline /> : memories.length ? <div className="memory-grid">{memories.map((memory) => <article className="memory-card" key={memory.id}>
       <div className="memory-card-top"><span className="category-chip">{memory.category}</span><div className="row-actions"><button onClick={() => startEdit(memory)} aria-label="编辑记忆"><Icon name="edit" /></button><button className="danger" onClick={() => remove(memory)} aria-label="删除记忆"><Icon name="trash" /></button></div></div>
       <h2>{memory.title}</h2><p>{memory.content}</p><time>{new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(new Date(`${memory.updatedAt}Z`))} 更新</time>
     </article>)}</div> : <div className="empty-state"><span className="empty-icon memory"><Icon name="memory" /></span><h2>{query || category ? "没有匹配记录" : "暂无记录"}</h2>{!query && !category && <button className="button secondary" onClick={startNew}><Icon name="plus" />新增记录</button>}</div>}

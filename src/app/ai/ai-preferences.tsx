@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -91,7 +92,7 @@ export function AiPreferences() {
     <PageHeader eyebrow="AI" title={english ? "AI Preferences" : "AI 偏好"} description={english ? "Shape conversation identity, voice, and permissions." : "设置对话身份、说话方式与写入权限。"} action={<Link className="settings-back-link" href="/ai">{english ? "Back to Eva" : "返回 Eva"}</Link>} />
 
     <form className="provider-card ai-preferences-card" onSubmit={save}>
-      {loading ? <div className="loading-state" role="status">{english ? "Loading conversation settings…" : "正在读取对话设置…"}</div> : <>
+      {loading ? <PageLoading title="对话设置" englishTitle="conversation settings" inline /> : <>
       <section className="conversation-appearance-settings">
         <div className="persona-heading"><span className="eyebrow">{english ? "CONVERSATION IDENTITY" : "对话身份"}</span><h2>{english ? "Names & avatars" : "名称与头像"}</h2></div>
         <div className="identity-editor-grid">

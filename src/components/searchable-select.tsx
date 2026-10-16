@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useId, useRef, useState } from "react";
 import { useLocale } from "./locale-controller";
@@ -31,7 +32,7 @@ export function SearchableSelect({ value, options, onValueChange, label, require
   </span>;
   function close() { setOpen(false); if (details.current) details.current.open = false; details.current?.querySelector("summary")?.focus({ preventScroll: true }); }
   const results = <span className="eo-select-results" role="group" aria-label={label} aria-busy={loading}>
-    {loading && <small className="eo-select-empty" role="status">{english ? "Loading…" : "加载中…"}</small>}
+    {loading && <small className="eo-select-empty"><PageLoading title={label} englishTitle={label} compact /></small>}
     {error && <span role="alert">{error}{onRetry && <button type="button" onClick={onRetry}>{english ? "Retry" : "重试"}</button>}</span>}
     {matches.map(option => <button key={option.value} data-form-change className={`eo-select-option${searchable && option.value ? " user-content" : ""}`} type="button" aria-pressed={option.value === value} disabled={option.disabled} onClick={() => { onValueChange(option.value); setQuery(""); onSearch?.(""); close(); }}><><span>{searchable&&option.value?option.label:t(option.label)}{option.detail && <small>{option.detail}</small>}</span><span className="eo-select-check" aria-hidden="true">{option.value === value ? <Icon name="check"/> : null}</span></></button>)}
     {!loading && !error && !matches.length && <small className="eo-select-empty">{english ? "No matches" : "没有匹配项"}</small>}

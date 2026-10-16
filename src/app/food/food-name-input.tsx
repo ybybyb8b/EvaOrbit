@@ -1,4 +1,5 @@
 "use client";
+import { PageLoading } from "@/components/page-loading";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -40,7 +41,7 @@ export function FoodNameInput({ kind, value, onValueChange, onSelect, placeId, l
     <span className="input-candidates-toggle" data-expanded={open} aria-hidden="true"><Icon name="chevronDown"/></span>
     {open && <SelectDropdown anchor={anchor} id={id} label={label} onClose={() => setOpen(false)}><div className="eo-select-results" role="listbox" aria-label={label} aria-busy={loading}>
       {items.map(item => <button key={item.key} type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => pick(item)}><span>{item.name}<small>{[item.placeName || t("通用食品"), item.servingKcal !== null ? english?`About ${item.servingKcal} kcal / serving`:`约 ${item.servingKcal} kcal / 份` : ""].filter(Boolean).join(" · ")}</small></span></button>)}
-      {loading && <small className="eo-select-empty" role="status">正在搜索…</small>}
+      {loading && <small className="eo-select-empty"><PageLoading title="搜索结果" englishTitle="search results" compact /></small>}
       {error && <span role="alert">{error}<button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button></span>}
       {!loading && !error && !items.length && <small className="eo-select-empty">{value ? "没有匹配物品，可直接记录名称" : "输入名称搜索食品库和店铺物品"}</small>}
       {!placeId && value.trim() && <button type="button" className="eo-select-option user-content" onClick={() => setOpen(false)}>{english?`Record “${value.trim()}” directly`:`直接记录「${value.trim()}」`}</button>}

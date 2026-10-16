@@ -23,7 +23,6 @@ export function PlaceSuggestionFields({ values, onChange }: {
     return () => controller.abort();
   }, []);
   const cities = buildHistorySuggestions(places, place => place.city, place => place.updatedAt, 6);
-  const locations = buildHistorySuggestions(places.filter(place => !values.city.trim() || place.city.trim().toLocaleLowerCase() === values.city.trim().toLocaleLowerCase()), place => place.location, place => place.updatedAt, 6);
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 
   return <>
@@ -33,9 +32,7 @@ export function PlaceSuggestionFields({ values, onChange }: {
     {(values.scope??"branch") === "branch" && <><label className="field"><span>分店 / 门店</span><input maxLength={160} value={values.branch} onChange={event=>onChange({branch:event.target.value})} placeholder="例如：天府和悦店"/></label><div className="field food-place-location-field"><span><label htmlFor={`${id}-city`}>城市（可选）</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="城市" suggestions={cities} id={`${id}-city`} maxLength={100} value={values.city} onValueChange={nextValue => onChange({ city: nextValue })} placeholder="例如：成都" />
 
     </div>
-    <div className="field food-place-location-field"><span><label htmlFor={`${id}-location`}>区域（可选）</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="区域" suggestions={locations} id={`${id}-location`} maxLength={200} value={values.location} onValueChange={nextValue => onChange({ location: nextValue })} placeholder="商圈或区域" />
-
-    </div><label className="field wide"><span>地址（可选）</span><input maxLength={500} value={values.address??""} onChange={event=>onChange({address:event.target.value})} placeholder="街道、楼层或完整地址"/></label></>}
+    <label className="field wide"><span>地址（可选）</span><input maxLength={1000} value={values.address??""} onChange={event=>onChange({address:event.target.value})} placeholder="商圈、街道、楼层或完整地址"/></label></>}
     <div className="field food-place-location-field"><span><label htmlFor={`${id}-category`}>品类</label></span><SuggestedInput recommendationStyle="chips" suggestionLabel="品类" suggestions={categories} id={`${id}-category`} maxLength={100} value={values.category} onValueChange={nextValue => onChange({ category: nextValue })} placeholder="自由输入" />
 
     </div>

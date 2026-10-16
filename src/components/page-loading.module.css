@@ -6,8 +6,16 @@
 }
 
 .inline { display: grid; place-items: center; min-block-size: 180px; padding-block: 24px; }
+.compact { display: inline-grid; place-items: center; vertical-align: middle; padding: 6px; }
 
-.grid { display: grid; grid-template-columns: repeat(3, 5px); gap: 3px; color: var(--accent-primary); }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 5px);
+  gap: 3px;
+  color: var(--accent-primary);
+  /* Cached reads can resolve during mount; defer feedback without delaying content. */
+  animation: reveal 0s linear 160ms backwards;
+}
 
 .dot {
   inline-size: 5px;
@@ -22,5 +30,7 @@
   0%, 44.444%, 100% { opacity: .18; }
   11.111%, 22.222% { opacity: 1; }
 }
+
+@keyframes reveal { from { visibility: hidden; } to { visibility: visible; } }
 
 @media (prefers-reduced-motion: reduce) { .dot { animation: none; opacity: .65; } }

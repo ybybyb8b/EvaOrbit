@@ -26,6 +26,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "react-dom") return { createPortal: node => node };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false }) };
+      if (name.endsWith("page-loading")) return load("src/components/page-loading.tsx");
       if (name.endsWith("select-dropdown")) return { SelectDropdown: "dropdown" };
       if (name.endsWith("suggested-input")) return { SuggestedInput: "suggested-input" };
       if (name.endsWith(".module.css")) return { default: {} };
@@ -278,6 +279,7 @@ test("place capsules preserve enum values, scope defaults, manual overrides and 
   const h = harness("src/app/food/places/place-location-fields.tsx", "PlaceSuggestionFields", { values, onChange: patch => { values = { ...values, ...patch }; h.setProps({ values }); } });
   const pick = (group, label) => { const node = h.nodes().find(node => node.props?.role === "group" && node.props["aria-label"] === group); const button = h.nodes(node).find(node => node.type === "button" && node.props.children === label); assert.ok(button); button.props.onClick(); h.render(); };
   h.render(); assert.equal(h.nodes().filter(node => node.props?.role === "group").length, 3);
+  assert.equal(h.nodes().some(node => node.props?.suggestionLabel === "区域"), false);
   pick("来源类型", "饮品"); assert.equal(values.kind, "drink"); assert.equal(values.scope, "brand");
   assert.equal(h.nodes().some(node => node.type === "input"), false);
   pick("地点范围", "具体门店"); assert.equal(values.scope, "branch");
