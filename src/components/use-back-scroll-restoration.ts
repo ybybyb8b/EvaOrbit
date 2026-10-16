@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** Native Back can restore too early while an API-owned list is still short. */
 export function useBackScrollRestoration(url: string) {
   const positions = useRef(new Map<string, number>());
   const pending = useRef<{ url: string; top: number } | null>(null);
   const leaving = useRef<string | null>(null);
+  const previousUrl = useRef(url);
+  const historyDestination = useRef<string | null>(null);
   const [request, setRequest] = useState<{ url: string; top: number } | null>(null);
   useEffect(() => {
     const current = () => window.location.pathname + window.location.search;
     const save = () => { if (!pending.current && leaving.current !== current()) positions.current.set(current(), window.scrollY); };
-    const back = () => { const destination = { url: current(), top: positions.current.get(current()) ?? 0 }; pending.current = destination; setRequest(destination); };
+    const back = () => { const destination = { url: current(), top: positions.current.get(current()) ?? 0 }; historyDestination.current = destination.url; pending.current = destination; setRequest(destination); };
     const cancel = () => { pending.current = null; };
     const navigate = (event: MouseEvent) => {
       const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
@@ -33,6 +35,17 @@ export function useBackScrollRestoration(url: string) {
       document.removeEventListener("click", navigate, true);
     };
   }, []);
+  useLayoutEffect(() => {
+    const previous = previousUrl.current;
+    previousUrl.current = url;
+    const fromHistory = historyDestination.current === url;
+    historyDestination.current = null;
+    // A forward route starts at the top, even if its API-owned content is still loading.
+    // Query-only updates, browser Back/Forward and hash targets retain their own position.
+    if (previous.split("?")[0] !== url.split("?")[0] && !fromHistory && !window.location.hash) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [url]);
   useEffect(() => {
     leaving.current = null;
     const destination = request;

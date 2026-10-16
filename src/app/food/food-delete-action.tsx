@@ -4,11 +4,13 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import styles from "./food-delete-action.module.css";
 
-export function FoodDeleteAction({ label, description, onDelete, disabled = false }: {
+export function FoodDeleteAction({ label, description, onDelete, disabled = false, iconOnly = false, className = "" }: {
   label: string;
   description: string;
   onDelete: () => Promise<void>;
   disabled?: boolean;
+  iconOnly?: boolean;
+  className?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
@@ -29,8 +31,8 @@ export function FoodDeleteAction({ label, description, onDelete, disabled = fals
     catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败，请重试"); }
     finally { running.current = false; setPending(false); }
   }
-  return <div className={styles.root}>
-    <button ref={trigger} type="button" className={`${styles.trigger} danger`} disabled={disabled || pending} aria-expanded={confirming} onClick={() => { setError(""); setConfirming(true); }}><Icon name="trash"/>{label}</button>
+  return <div className={`${styles.root} ${className}`}>
+    <button ref={trigger} type="button" className={`${styles.trigger} ${iconOnly ? styles.iconOnly : ""} danger`} disabled={disabled || pending} aria-expanded={confirming} onClick={() => { setError(""); setConfirming(true); }}><Icon name="trash"/><span className={iconOnly ? "sr-only" : undefined}>{label}</span></button>
     {confirming && <div ref={confirmation} className={styles.confirm} role="group" aria-label={label} aria-describedby={descriptionId}>
       <p id={descriptionId}>{description}</p>
       {error && <p role="alert">{error}</p>}

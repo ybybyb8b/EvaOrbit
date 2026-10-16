@@ -29,7 +29,7 @@ async function validateFoodLinks(repository:Awaited<ReturnType<typeof getReposit
 }
 async function prepareFoodCalculation(repository: Awaited<ReturnType<typeof getRepository>>, input: Record<string, unknown>, existing?: FoodLog) {
   let inputs = input.foodLibraryItems as FoodConsumption[] | undefined;
-  if (input.consumedWeightG !== undefined && (input.consumedWeightG !== null || existing?.consumedWeightG != null) && (inputs ?? existing?.foodLibraryItems)?.length === 1) {
+  if (input.consumedWeightG !== undefined && (input.consumedWeightG !== null || existing?.consumedWeightG != null) && (inputs ?? existing?.foodLibraryItems)?.length === 1 && (inputs ?? existing?.foodLibraryItems)?.[0].unit === "g") {
     inputs = (inputs ?? existing!.foodLibraryItems!).map(item => ({ ...item, quantity: input.consumedWeightG as number | null, unit: "g" }));
   }
   const legacyChanged = inputs === undefined && input.foodLibraryId !== undefined && input.foodLibraryId !== existing?.foodLibraryId;

@@ -23,6 +23,7 @@
 .tileTop strong { min-width:0;text-align:right;font:500 40px/1.1 var(--font-ui);letter-spacing:-.025em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
 .tileTop strong small { margin:0 3px;font-size:12px;font-weight:400;letter-spacing:0; }
 .tileTop .sleepValue { font-size:34px; }
+.tileTop .cycleStatus { align-self:center;font-size:18px;line-height:1.4;letter-spacing:0; }
 .tileCopy { min-width:0;margin-top:24px; }
 .tileCopy p { margin-top:6px;color:var(--tile-muted);font-size:12px;line-height:1.5;overflow-wrap:anywhere; }
 .sleepTimes,.sleepOther { margin-top:8px!important;color:var(--tile-muted);font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums; }
@@ -56,6 +57,7 @@
   .tileTop strong { font-size:32px; }
   .tileTop strong small { font-size:11px;margin:0 2px; }
   .tileTop .sleepValue { font-size:23px; }
+  .tileTop .cycleStatus { font-size:16px; }
   .tileCopy { margin-top:20px; }
   .tileCopy p,.sleepTimes,.sleepOther { font-size:11px; }
   .energyValues { gap:12px;margin-top:20px; }

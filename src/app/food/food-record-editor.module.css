@@ -5,6 +5,7 @@
 .energy button { min-height: 44px; }
 .browser { display: grid; gap: 14px; padding-top: 8px; }
 .browser > p { margin: 0; font-weight: 600; color: var(--muted); }
+.dishes button { min-height: 44px; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 
 
 

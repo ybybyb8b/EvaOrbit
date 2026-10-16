@@ -160,11 +160,11 @@
 }
 @media (prefers-reduced-motion: reduce) { .featureCard,.cardContent,.railControls i,.row { transition: none; } .featureCard { transform: none !important; } }
 
-/* Compact Overview layout used by the subscriptions page. */
-.page[data-refined][data-view="home"] .header { margin-bottom: 10px; gap: 6px 12px; }
-.page[data-refined][data-view="home"] .header h1 { font-size: clamp(34px, 9.5vw, 66px); margin: 0; overflow-wrap: normal; }
-.page[data-refined][data-view="home"] .header > button { padding: 8px 10px; min-height: 44px; font-size: 16px; gap: 6px; }
-.page[data-refined][data-view="home"] .header > button svg { width: 16px; height: 16px; }
+/* Shared masthead; compact Overview content follows below. */
+.page[data-refined] .header { margin-bottom: 10px; gap: 6px 12px; }
+.page[data-refined] .header h1 { font-size: clamp(34px, 9.5vw, 66px); margin: 0; overflow-wrap: normal; }
+.page[data-refined] .header > button { padding: 8px 10px; min-height: 44px; font-size: 16px; gap: 6px; }
+.page[data-refined] .header > button svg { width: 16px; height: 16px; }
 .page[data-refined][data-view="home"] .switcher { padding: 2px; gap: 2px; }
 .page[data-refined][data-view="home"] .switcher button { min-height: 44px; padding: 6px 16px; font-size: 16px; }
 .page[data-refined][data-view="home"] .summary {
@@ -229,7 +229,7 @@
 .page[data-refined][data-view="home"] .row { padding: 11px 12px; }
 @media (max-width: 760px) {
   .stackStage { height: calc(clamp(166px,43vw,184px) + 40px); }
-  .page[data-refined][data-view="home"] { padding-top: 10px; }
+  .page[data-refined] { padding-top: 10px; }
   .page[data-refined][data-view="home"] .featureCard { height: clamp(166px,43vw,184px); padding: 13px 15px; }
   .page[data-refined][data-view="home"] .cardContent { font-size: 20px; grid-template-rows: 43px minmax(0,1fr) 32px; gap: 4px; }
   .page[data-refined][data-view="home"] .featureCard h3 { font-size: 20px; }

@@ -3,6 +3,18 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["主食", "Staples"], ["零食", "Snacks"], ["品类", "Category"], ["数据来源", "Data source"], ["估算", "Estimated"], ["正在加载…", "Loading…"], ["重试", "Retry"],
+  ["常用食品与饮品的营养参考。", "Nutrition references for your regular foods and drinks."],
+  ["添加食品", "Add item"], ["编辑食品", "Edit item"], ["食品信息", "Item details"], ["营养参考", "Nutrition reference"],
+  ["食品名称", "Item name"], ["品牌（可选）", "Brand (optional)"], ["归属店铺（通用食品留空）", "Place (leave blank for general items)"],
+  ["热量基准", "Calorie basis"], ["默认份量", "Default portion"], ["基准热量 kcal", "Reference calories kcal"], ["每份热量 kcal", "Calories per serving kcal"],
+  ["每份", "Per serving"], ["每 100 克", "Per 100 g"], ["每 100 毫升", "Per 100 ml"], ["包装营养表", "Nutrition label"], ["官方数据", "Official data"], ["手动填写", "Manual entry"],
+  ["搜索食品名称或品牌", "Search items or brands"], ["当前显示", "Showing"], ["项", "items"], ["食品列表", "Library items"], ["食品操作", "Item actions"], ["未填热量", "Calories not set"],
+  ["清除搜索", "Clear search"], ["食品库加载失败，请重试", "Could not load the library. Please retry"], ["无法保存食品，请重试", "Could not save this item. Please retry"],
+  ["没有匹配的食品", "No matching items"], ["食品库还是空的", "Your library is empty"], ["试试其他名称或品牌。", "Try another name or brand."], ["添加常用食品，记录时就能直接选择。", "Add regular items to select them when logging."],
+  ["食品已更新", "Item updated"], ["食品已添加", "Item added"], ["食品已归档，历史引用保持不变", "Item archived; historical references are preserved"], ["食品已删除", "Item removed"],
+  ["确定移除", "Remove "], ["有关联记录时会归档，历史记录保持不变。", "Items linked to records will be archived; history is preserved."], ["可不填", "Optional"], ["例如：1 杯 / 35 克", "e.g. 1 cup / 35 g"],
+  ["添加食物", "Add food"], ["关联菜品", "Linked dishes"],
   ["地址（可选）", "Address (optional)"], ["商圈、街道、楼层或完整地址", "District, street, floor, or full address"],
   ["浏览方式", "View"], ["概览", "Overview"], ["按模块", "By module"], ["全部条目", "All Items"], ["未完成", "Unfinished"],
   ["模块", "Module"], ["全部模块", "All modules"], ["未分配模块", "No module"], ["仅一级模块", "Module only"],

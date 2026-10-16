@@ -36,6 +36,7 @@ export function HealthOverview({ initialSleep: sleep, initialEnergy: energy, ini
   const knownMinutes = training.reduce((sum, item) => sum + (item.durationMinutes ?? 0), 0);
   const hasDuration = training.some(item => item.durationMinutes !== null);
   const period = [...initialPeriods].filter(item => !item.endedOn && item.startedOn <= today).sort((a, b) => b.startedOn.localeCompare(a.startedOn))[0];
+  const lastEnded = [...initialPeriods].filter(item => item.endedOn && item.endedOn <= today).sort((a, b) => b.endedOn!.localeCompare(a.endedOn!))[0];
   const periodDay = period ? Math.floor((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${period.startedOn}T12:00:00Z`)) / 86_400_000) + 1 : null;
   const reminder = [...initialMedicationReminders].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
   const number = (value: number | null) => value === null ? "—" : value.toLocaleString(english ? "en-US" : "zh-CN", { maximumFractionDigits: 0 });
@@ -62,8 +63,8 @@ export function HealthOverview({ initialSleep: sleep, initialEnergy: energy, ini
         <div className={styles.tileCopy}><h2>{t("Training today", "今日训练")}</h2><p>{training.length ? [...new Set(training.map(item => trainingTypeLabels[item.trainingType][english ? "en" : "zh"]))].join(" · ") : t("No training logged", "尚未记录训练")}</p>{hasDuration && <p>{compactDuration(knownMinutes)} · {t("logged duration", "已记录时长")}</p>}</div>
       </Link>
       <Link href="/health?view=cycle" className={`${styles.tile} ${styles.cycle}`}>
-        <div className={styles.tileTop}><Droplet weight="Filled" aria-hidden="true" /><strong>{periodDay ? <><small>{t("Day", "第")}</small>{periodDay}{!english && <small>天</small>}</> : "—"}</strong></div>
-        <div className={styles.tileCopy}><h2>{t("Period & medication", "经期与用药")}</h2><p>{period ? `${t("Started", "开始于")} ${date(`${period.startedOn}T12:00:00+08:00`)}` : t("No active period", "暂无进行中经期")}</p>{reminder && <p>{t("Next dose reminder", "下次服药提醒")}<br />{date(reminder.scheduledAt, true)}</p>}</div>
+        <div className={styles.tileTop}><Droplet weight="Filled" aria-hidden="true" /><strong className={periodDay ? undefined : styles.cycleStatus}>{periodDay ? <><small>{t("Day", "第")}</small>{periodDay}{!english && <small>天</small>}</> : lastEnded ? t("Ended", "已结束") : t("Not recorded", "待记录")}</strong></div>
+        <div className={styles.tileCopy}><h2>{t("Period & medication", "经期与用药")}</h2><p>{period ? `${t("Started", "开始于")} ${date(`${period.startedOn}T12:00:00+08:00`)}` : lastEnded ? `${t("Last period", "上次")} ${date(`${lastEnded.startedOn}T12:00:00+08:00`)} — ${date(`${lastEnded.endedOn}T12:00:00+08:00`)}` : t("Record your first period", "记录第一次经期")}</p>{reminder && <p>{t("Next dose reminder", "下次服药提醒")}<br />{date(reminder.scheduledAt, true)}</p>}</div>
       </Link>
     </div>
     <Link href="/health?view=energy" className={`${styles.tile} ${styles.energy}`}>
