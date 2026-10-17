@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isCatHealthRecord, latestCatMeasurements, latestCatRecords } from "./cat-presentation.ts";
+import { catAgeLabel, isCatHealthRecord, latestCatMeasurements, latestCatRecords } from "./cat-presentation.ts";
 import type { CatMeasurement, CatTimelineEntry } from "./types.ts";
 
 const event = (id: number, sourceId: number | null, date = "2026-10-17T10:00:00Z"): CatTimelineEntry => ({
   id, kind: "event", petId: 1, occurredAt: date, occurredHasExplicitTime: true,
   eventType: "care", title: "Same title", summary: "", metadata: { sourceType: sourceId ? "cat_routine" : null, sourceId },
+});
+
+test("cat age uses completed calendar months, handles birthdays and leaves unknown or invalid ages empty", () => {
+  assert.equal(catAgeLabel("2020-03-17", false, "2026-10-17"), "6岁7个月");
+  assert.equal(catAgeLabel("2020-10-18", true, "2026-10-17"), "5 years 11 months");
+  assert.equal(catAgeLabel("2020-10-17", true, "2026-10-17"), "6 years");
+  assert.equal(catAgeLabel("2026-09-17", true, "2026-10-17"), "1 month");
+  assert.equal(catAgeLabel("2026-10-01", false, "2026-10-17"), "未满1个月");
+  assert.equal(catAgeLabel("2026-01-31", false, "2026-02-28"), "1个月");
+  assert.equal(catAgeLabel("2024-02-29", false, "2025-02-28"), "1岁");
+  for (const birthday of [null, "2027-01-01", "2026-02-30", "invalid"]) assert.equal(catAgeLabel(birthday, false, "2026-10-17"), null);
 });
 
 test("routine presentation keeps the newest completion by source, without collapsing manual, one-time or other cats' records", () => {

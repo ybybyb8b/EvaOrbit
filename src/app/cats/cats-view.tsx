@@ -15,7 +15,8 @@ import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
-import { latestCatRecords } from "@/lib/cat-presentation";
+import { useLocale } from "@/components/locale-controller";
+import { catAgeLabel, latestCatRecords } from "@/lib/cat-presentation";
 import { CatLogPicker, catRecordTitles } from "./cat-log-picker";
 import { CatRecordEditor } from "./cat-record-editor";
 import { ReminderEditor } from "./reminder-editor";
@@ -51,6 +52,7 @@ export function routineLastDoneLabel(value: string | null | undefined) { return 
 
 export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: Dashboard; foodSummary: { items: number; packages: number; lowStock: number } }) {
   useDataRefresh("/cats", () => load());
+  const { english } = useLocale();
   const [dashboard, setDashboard] = useServerDataState(initialDashboard);
   const [panel, setPanel] = useState<"log" | "record" | "pet" | "care" | "reminder" | "routine" | null>(null);
   const [editingRecord, setEditingRecord] = useState<{ kind: CatTimelineEntry["kind"]; id: number; record: Record<string, unknown> }>();
@@ -84,7 +86,7 @@ export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: 
   return <div className="page cats-page">
     <PageHeader eyebrow="" title="Cats"/>
     <div className="cats-overview">
-      <section className="cats-pets-section cats-pets-primary">{dashboard.pets.length ? <><div className="cat-card-grid">{dashboard.pets.map(({ pet, latest }) => <Link href={`/cats/${pet.id}`} className="cat-card" key={pet.id}><CatAvatar pet={pet}/><div><h2>{pet.name}</h2><p>{latest ? <>Latest · {latest.title} · {relative(latest.occurredAt)}</> : "No recent records"}</p></div></Link>)}</div></> : <button className="cats-inline-empty" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button>}</section>
+      <section className="cats-pets-section cats-pets-primary">{dashboard.pets.length ? <><div className="cat-card-grid">{dashboard.pets.map(({ pet, latest }) => { const ageLabel = catAgeLabel(pet.birthday, english); return <Link href={`/cats/${pet.id}`} className="cat-card" key={pet.id}><CatAvatar pet={pet}/><div><h2>{pet.name}</h2>{ageLabel && <span className="cat-card-age">{ageLabel}</span>}<p>{latest ? <>Latest · {latest.title} · {relative(latest.occurredAt)}</> : "No recent records"}</p></div></Link>; })}</div></> : <button className="cats-inline-empty" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button>}</section>
       <div className="cats-quick-actions" aria-label="Quick actions"><PageLogAction label="Log cat care" onClick={() => setPanel("log")}><Icon name="plus"/>Log</PageLogAction></div>
     </div>
 
