@@ -846,8 +846,10 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .tracker-settings-lifecycle { padding: 20px; border-radius: 16px; background: var(--surface-warm); }
 .tracker-archived-label { padding: 8px 12px; border-radius: 999px; color: var(--muted); background: var(--surface-warm); font-size: 13px; }
 .tracker-archive-filter { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.tracker-sort-toolbar { display:flex;justify-content:flex-end;margin-bottom:12px; }
-.tracker-sort-toolbar button { display:inline-flex;align-items:center;gap:6px;min-height:44px; }
+.tracker-page > .page-header { flex-wrap:nowrap;align-items:center;gap:12px; }
+.tracker-page > .page-header > .page-header-copy { width:auto;min-width:0;flex:1; }
+.tracker-header-actions { display:inline-flex;align-items:center;gap:14px;flex-shrink:0; }
+.tracker-sort-button { display:inline-flex;align-items:center;gap:6px;min-width:44px;min-height:44px;white-space:nowrap; }
 .tracker-sort-form { display:grid;gap:20px; }
 .tracker-sort-help { margin:0;color:var(--text-secondary);font-size:14px;line-height:1.6; }
 .tracker-sort-device { margin:-10px 0 0;color:var(--text-secondary);font-size:12px;line-height:1.5; }

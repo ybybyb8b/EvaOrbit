@@ -16,7 +16,7 @@ import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
 import { orderedTrackerGroups } from "@/lib/tracker-order";
 import { TrackerSortSheet, useTrackerOrder } from "./tracker-sort-sheet";
-import { Sort } from "reicon-react";
+import { Layers } from "reicon-react";
 import { TrackerCaptureToggle } from "./tracker-capture-toggle";
 
 const emptyDraft = { name: "", groupName: "Everyday", quickCaptureEnabled: true };
@@ -127,8 +127,7 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
   const visibleTrackers = trackers.filter(tracker => Boolean(tracker.archivedAt) === showArchived);
   const groups = orderedTrackerGroups(visibleTrackers, order);
   return <div className="page tracker-page">
-    <PageHeader eyebrow="生活" title="Trackers" action={<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction>} />
-    {visibleTrackers.length > 1 && <div className="tracker-sort-toolbar"><button type="button" className="text-button" disabled={!cacheScope} onClick={() => setShowSort(true)}><Sort size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button></div>}
+    <PageHeader eyebrow="生活" title="Trackers" action={<span className="tracker-header-actions">{visibleTrackers.length > 1 && <button type="button" className="text-button tracker-sort-button" disabled={!cacheScope} aria-haspopup="dialog" onClick={() => setShowSort(true)}><Layers size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button>}<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction></span>} />
     {showSort && <TrackerSortSheet trackers={trackers} archived={showArchived} order={order} onSave={saveOrder} onClose={() => setShowSort(false)} />}
     {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
     {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
