@@ -50,7 +50,7 @@
 ## Food
 
 - **职责与入口**：[共同主页](../src/app/food-drink/)、[Food / Places / Library](../src/app/food/)、[Drinks](../src/app/drinks/)；服务入口 [food.ts](../src/lib/services/food.ts)、[drink.ts](../src/lib/services/drink.ts)、[food-catalog.ts](../src/lib/services/food-catalog.ts)、[food-drink-home.ts](../src/lib/services/food-drink-home.ts)。
-- **数据与接口**：`food_logs`、`drink_logs`、`food_places`、`food_dishes`（含饮品菜单）、`food_library`、`drink_limits`；`/api/food/*`、`/api/drinks/*`、`/api/food-drink/home`。MCP：`food_log`、`drink_log`、`food_place`、`food_dish`、`food_library`、`drink_limit`。
+- **数据与接口**：`food_logs`、`drink_logs`、`food_places`、`food_dishes`（含饮品菜单）、`food_library`、`drink_limits`；`/api/food/*`、`/api/drinks/*`、`/api/food-drink/home`。MCP：`food_log`、`drink_log`、`food_place`、`food_dish`、`food_library`、`drink_limit`。一条 Food 代表一顿饭，可关联多个来源；只读 `food_place_ids` 从用餐地点、菜品所属店铺、食品快照来源去重派生，单店每餐计一次。
 - **依赖与决定**：Food / Drink 独立存储，共享来源与候选；共同主页负责 Brief、入口、Insights 和 Limits，能量分析由 Health 负责。食品可显式归属一个 Place，菜单可关联 Library 营养参考；历史消费关联不证明独占归属，不据此猜填。营养快照保留历史基准；未知食用重量/饮用量保持空，包装容量不等于实际摄入。日历推导的用餐时间不覆盖原始时间。
 - **详文**：[信息架构](FOOD_DRINK_INFORMATION_ARCHITECTURE.md)、[食用量与营养快照](FOOD_CALCULATION.md)、[Places kind/scope](FOOD_PLACES_SOURCE_MODEL.md)。后者的早期“商品关系仅由记录派生”不覆盖当前目录归属规则，须同时看 [目录来源迁移](../supabase/migrations/202610100002_food_catalog_sources.sql) 与当前 catalog 服务；旧记录字段的兼容整理见 [精简迁移](../supabase/migrations/202610130003_simplify_consumption_records.sql)。
 

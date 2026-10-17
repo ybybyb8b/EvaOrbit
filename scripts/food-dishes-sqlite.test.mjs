@@ -19,7 +19,7 @@ test("multiple dishes preserve legacy history, per-dish counts, archive referenc
   try {
     run('import "./src/lib/db.ts";');
     const old = new DatabaseSync(databasePath);
-    old.exec(`DROP TRIGGER food_logs_dishes_insert; DROP TRIGGER food_logs_dishes_legacy; DROP TRIGGER food_logs_dishes_primary; DROP TRIGGER food_dishes_remove_links; DROP TRIGGER food_dishes_keep_place;
+    old.exec(`DROP TRIGGER food_meal_sources_insert; DROP TRIGGER food_meal_sources_update; ALTER TABLE food_logs DROP COLUMN food_place_ids; DELETE FROM migrations WHERE version=82; DROP TRIGGER food_logs_dishes_insert; DROP TRIGGER food_logs_dishes_legacy; DROP TRIGGER food_logs_dishes_primary; DROP TRIGGER food_dishes_remove_links; DROP TRIGGER food_dishes_keep_place;
       ALTER TABLE food_logs DROP COLUMN food_dish_ids; DELETE FROM migrations WHERE version=60;
       INSERT INTO food_places(id,name) VALUES(1,'沙县小吃');
       INSERT INTO food_dishes(id,food_place_id,name) VALUES(1,1,'鸡腿饭'),(2,1,'汤');
@@ -39,8 +39,8 @@ test("multiple dishes preserve legacy history, per-dish counts, archive referenc
       await service.updateFoodLog(log.id,parseFoodLogPatch({foodDishIds:[2,1]}));assert.equal(db.getFoodLog(log.id).foodDishId,2);assert.deepEqual(db.getFoodLog(log.id).foodDishIds,[2,1]);
       assert.equal(db.removeFoodDish(1).action,"archived");assert.deepEqual(db.getFoodLog(log.id).foodDishIds,[2,1]);
       const other=db.createFoodPlace({name:"别家",branch:"",city:"",location:"",category:"",rating:null,status:"occasional",notes:""});
-      await assert.rejects(()=>service.updateFoodLog(log.id,parseFoodLogPatch({foodPlaceId:other.id})),/不属于/);
-      assert.equal(db.getFoodLog(log.id).foodPlaceId,1);
+      const mixed=await service.updateFoodLog(log.id,parseFoodLogPatch({foodPlaceId:other.id}));assert.deepEqual(mixed.foodPlaceIds,[1,other.id]);
+      await service.updateFoodLog(log.id,parseFoodLogPatch({foodPlaceId:1}));
       await service.updateFoodLog(log.id,parseFoodLogPatch({foodDishIds:[]}));assert.deepEqual(db.getFoodLog(log.id).foodDishIds,[]);assert.equal(db.getFoodLog(log.id).foodDishId,null);
       await service.updateFoodLog(log.id,parseFoodLogPatch({foodDishId:2}));assert.deepEqual(db.getFoodLog(log.id).foodDishIds,[2]);
     `);

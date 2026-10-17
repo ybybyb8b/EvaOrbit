@@ -10,7 +10,7 @@ import styles from "./food-consumption-fields.module.css";
 
 export function consumptionFromItem(item: FoodLibraryItem): FoodConsumption {
   const nutritionReference = foodNutritionReference(item);
-  return { foodLibraryId: item.id, item: { id: item.id, name: item.name, brand: item.brand }, quantity: null,
+  return { foodLibraryId: item.id, item: { id: item.id, name: item.name, brand: item.brand, foodPlaceId:item.foodPlaceId??null }, quantity: null,
     unit: defaultFoodUnit(nutritionReference), nutritionReference, calculatedKcal: null };
 }
 

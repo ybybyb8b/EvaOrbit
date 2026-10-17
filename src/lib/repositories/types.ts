@@ -65,7 +65,7 @@ export type AiProviderInput = { name: string; providerType: string; baseUrl: str
 export type AiModelConfigInput = { modelId: string; displayName: string; enabled: boolean; isDefault: boolean; capabilities: Record<string, unknown> };
 
 export type NewInboxItem = Pick<InboxItem, "content" | "source">;
-export type NewFoodLog = Omit<FoodLog, "originalOccurredAt" | "originalHasExplicitTime" | "calendarMeal" | "id" | "createdAt" | "updatedAt" | "foodPlaceName" | "foodPlaceBranch" | "foodPlaceCity" | "foodPlaceLocation" | "foodDishName" | "foodDishes">;
+export type NewFoodLog = Omit<FoodLog, "originalOccurredAt" | "originalHasExplicitTime" | "calendarMeal" | "id" | "createdAt" | "updatedAt" | "foodPlaceName" | "foodPlaceBranch" | "foodPlaceCity" | "foodPlaceLocation" | "foodDishName" | "foodDishes" | "foodPlaceIds" | "foodPlaces">;
 export type NewFoodLibraryItem = Omit<FoodLibraryItem, "id" | "archivedAt" | "updatedAt">;
 export type FoodLibrarySearchOptions = { foodPlaceId?: number; name?: string; category?: FoodLibraryItem["category"]; limit?: number };
 export type FoodLibraryRemoval = { id: number; action: "deleted" | "archived" };

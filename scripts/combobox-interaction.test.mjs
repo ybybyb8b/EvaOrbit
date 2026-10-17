@@ -207,27 +207,108 @@ test("food hides calorie bounds but preserves them on edit, with context before 
   assert.equal(payload.occurredHasExplicitTime, false); assert.deepEqual(payload.foodDishIds, [3]);
 });
 
-test("Food appends menu and Library selections, rejects duplicates/foreign sources and removes dishes individually", async () => {
+test("Food search clears after each selection, displays removable chips and saves complete names for multiple items", async () => {
+  for (const menu of [false, true]) {
+    let payload;
+    const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
+    const primary=()=>h.nodes().find(node=>node.type==="food-name-input"&&node.props.label==="吃了什么");
+    h.render();primary().props.onValueChange("黄油");h.render();
+    primary().props.onSelect({key:menu?"menu:2":"library:11",name:"黄油小面包",placeId:menu?2:null,placeName:menu?"面包店":"",menu:menu?{id:2}:null,library:{id:11,name:"黄油小面包",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null},servingKcal:180});h.render();
+    assert.equal(primary().props.value,"");
+    assert.equal(h.nodes().filter(node=>node.props?.["aria-label"]==="已选食物").length,1);
+    assert.ok(h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]===(menu?"移除菜品关联 黄油小面包":"移除食品 黄油小面包")));
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.title,"黄油小面包");assert.equal(payload.foodLibraryItems[0].foodLibraryId,11);
+    assert.deepEqual(payload.foodDishIds,menu?[2]:[]);assert.equal(payload.foodPlaceId,null);
+    primary().props.onValueChange("黄油");h.render();
+    primary().props.onSelect({key:menu?"menu:2":"library:11",name:"黄油小面包",placeId:menu?2:null,placeName:menu?"面包店":"",menu:menu?{id:2}:null,library:{id:11,name:"黄油小面包"},servingKcal:180});h.render();
+    assert.equal(primary().props.value,"","duplicate selection clears the query without duplicating a link");
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.foodLibraryItems.length,1);assert.deepEqual(payload.foodDishIds,menu?[2]:[]);
+    primary().props.onValueChange("牛奶");h.render();
+    primary().props.onSelect({key:"library:12",name:"纯牛奶",placeId:null,placeName:"",library:{id:12,name:"纯牛奶",brand:"",referenceType:"per_serving",referenceKcal:120,referenceEnergyKj:null,servingKcal:120,servingWeight:null},servingKcal:120});h.render();
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.title,"黄油小面包 + 纯牛奶");assert.deepEqual(payload.foodLibraryItems.map(item=>item.foodLibraryId),[11,12]);
+    primary().props.onValueChange("没有选中的搜索词");h.render();
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.title,"黄油小面包 + 纯牛奶","search text must not overwrite the record name");
+    h.nodes().find(node=>node.type==="input"&&node.props.maxLength===200).props.onChange({target:{value:"早餐的小面包"}});h.render();
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.title,"早餐的小面包","a later manual title edit remains authoritative");
+  }
+});
+
+test("Food appends menu and Library selections, rejects duplicates, supports multiple sources and removes dishes individually", async () => {
   let payload;
   const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
   const save=async()=>{await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();};
-  const add=item=>{h.nodes().find(node=>node.type==="food-name-input"&&node.props.label==="添加食物").props.onSelect(item);h.render();};
+  const add=item=>{h.nodes().find(node=>node.type==="food-name-input"&&node.props.label==="吃了什么").props.onSelect(item);h.render();};
   const library={id:11,name:"食品 A",brand:"",referenceType:"per_100g",referenceKcal:100,referenceEnergyKj:null,servingKcal:null,servingWeight:null};
   h.render();
   add({key:"menu:1",name:"菜品 A",placeId:2,placeName:"店铺",menu:{id:1},library,servingKcal:null});
   add({key:"menu:2",name:"菜品 B",placeId:2,placeName:"店铺",menu:{id:2},servingKcal:null});
   add({key:"library:12",name:"食品 B",placeId:null,placeName:"",library:{...library,id:12,name:"食品 B"},servingKcal:null});
-  await save();assert.deepEqual(payload.foodDishIds,[1,2]);assert.deepEqual(payload.foodLibraryItems.map(item=>item.foodLibraryId),[11,12]);assert.equal(payload.foodPlaceId,2);
+  await save();assert.deepEqual(payload.foodDishIds,[1,2]);assert.deepEqual(payload.foodLibraryItems.map(item=>item.foodLibraryId),[11,12]);assert.equal(payload.foodPlaceId,null);
   assert.equal(payload.title,"菜品 A + 菜品 B + 食品 B");
   add({key:"menu:2",name:"菜品 B",placeId:2,placeName:"店铺",menu:{id:2},servingKcal:null});
   await save();assert.deepEqual(payload.foodDishIds,[1,2]);
   add({key:"menu:3",name:"外店菜品",placeId:3,placeName:"外店",menu:{id:3},servingKcal:null});
-  await save();assert.equal(payload.foodPlaceId,2);assert.deepEqual(payload.foodDishIds,[1,2]);assert.equal(payload.foodLibraryItems.length,2);
+  await save();assert.equal(payload.foodPlaceId,null);assert.deepEqual(payload.foodDishIds,[1,2,3]);assert.equal(payload.foodLibraryItems.length,2);
   h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除菜品关联 菜品 A").props.onClick();h.render();
-  await save();assert.deepEqual(payload.foodDishIds,[2]);assert.equal(payload.foodLibraryItems.length,2);
-  h.nodes().find(node=>node.type==="food-name-input"&&node.props.label==="吃了什么").props.onValueChange("我手动维护的标题");h.render();
+  await save();assert.deepEqual(payload.foodDishIds,[2,3]);assert.deepEqual(payload.foodLibraryItems.map(item=>item.foodLibraryId),[12]);
+  h.nodes().find(node=>node.type==="input"&&node.props.maxLength===200).props.onChange({target:{value:"我手动维护的标题"}});h.render();
   add({key:"menu:4",name:"菜品 D",placeId:2,placeName:"店铺",menu:{id:4},servingKcal:null});
-  await save();assert.equal(payload.title,"我手动维护的标题");assert.deepEqual(payload.foodDishIds,[2,4]);assert.equal(payload.foodLibraryItems.length,2);
+  await save();assert.equal(payload.title,"我手动维护的标题");assert.deepEqual(payload.foodDishIds,[2,3,4]);assert.equal(payload.foodLibraryItems.length,1);
+});
+
+test("Food chips rehydrate, remove the final item and preserve free-text recording", async () => {
+  let payload;
+  const reference={referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingWeight:null,servingKcal:180};
+  const record={id:1,title:"黄油小面包",description:"原备注",occurredAt:"2026-10-09T04:00:00Z",occurredHasExplicitTime:false,mealType:"lunch",scene:"other",rating:null,estimatedKcal:180,kcalMin:null,kcalMax:null,confidence:"medium",foodPlaceId:null,foodDishIds:[],foodKcalMode:"auto",foodLibraryItems:[{foodLibraryId:11,item:{id:11,name:"黄油小面包",brand:""},quantity:1,unit:"serving",nutritionReference:reference,calculatedKcal:180}]};
+  const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",record,onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
+  const primary=()=>h.nodes().find(node=>node.type==="food-name-input");
+  const save=async()=>{await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();};
+  h.render();assert.equal(primary().props.value,"");assert.equal(h.nodes().filter(node=>node.type==="food-name-input").length,1);
+  assert.ok(h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除食品 黄油小面包"));
+  primary().props.onValueChange("自制蛋羹");h.render();
+  h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除食品 黄油小面包").props.onClick();h.render();
+  assert.equal(h.nodes().some(node=>node.props?.["aria-label"]==="已选食物"),false);
+  await save();assert.equal(payload.title,"自制蛋羹");assert.deepEqual(payload.foodLibraryItems,[]);assert.equal(payload.foodLibraryId,null);assert.equal(payload.foodKcalMode,"manual");assert.equal(payload.estimatedKcal,null);assert.equal(payload.description,"原备注");
+  primary().props.onRecord("自制蛋羹");h.render();assert.equal(primary().props.value,"");
+  await save();assert.equal(payload.title,"自制蛋羹");assert.deepEqual(payload.foodLibraryItems,[]);
+});
+
+test("removing the last food clears its inferred place but preserves a manually selected place", async () => {
+  for(const manual of [false,true]){
+    let payload;
+    const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
+    h.render();
+    if(manual){h.nodes().find(node=>node.type==="link-picker").props.onChange([2]);h.render();}
+    const library={id:11,name:"面包",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null};
+    h.nodes().find(node=>node.type==="food-name-input").props.onSelect({key:"library:11",name:"面包",placeId:2,placeName:"面包店",library,servingKcal:180});h.render();
+    assert.deepEqual(h.nodes().find(node=>node.type==="link-picker").props.selected,manual?[2]:[]);
+    h.nodes().find(node=>node.props?.["aria-label"]==="移除食品 面包").props.onClick();h.render();
+    assert.deepEqual(h.nodes().find(node=>node.type==="link-picker").props.selected,manual?[2]:[]);
+    h.nodes().find(node=>node.type==="food-name-input").props.onValueChange("手填餐食");h.render();
+    await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
+    assert.equal(payload.foodPlaceId,manual?2:null);assert.deepEqual(payload.foodLibraryItems,[]);
+  }
+});
+
+test("removing a menu chip preserves a shared nutrition reference until its last menu is removed", async () => {
+  let payload;
+  const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
+  const library={id:11,name:"面包营养",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null};
+  h.render();
+  for(const id of [1,2]){h.nodes().find(node=>node.type==="food-name-input").props.onSelect({key:`menu:${id}`,name:`面包 ${id}`,placeId:2,placeName:"面包店",menu:{id},library,servingKcal:180});h.render();}
+  assert.equal(h.nodes().filter(node=>node.props?.["aria-label"]?.startsWith("移除菜品关联 ")).length,2);
+  assert.equal(h.nodes().some(node=>node.props?.["aria-label"]==="移除食品 面包营养"),false);
+  for(const id of [1,2]){
+    h.nodes().find(node=>node.props?.["aria-label"]===`移除菜品关联 面包 ${id}`).props.onClick();h.render();
+    if(id===1){await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();assert.deepEqual(payload.foodDishIds,[2]);assert.equal(payload.foodLibraryItems.length,1);assert.equal(payload.title,"面包 2");}
+  }
+  assert.equal(h.nodes().some(node=>node.type==="consumption-fields"),false);
+  assert.equal(h.nodes().find(node=>node.type==="food-name-input").props.required,true);
 });
 
 test("Food preserves manual calories on weight edits and clears hidden bounds only after calorie changes", async () => {

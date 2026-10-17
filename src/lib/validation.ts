@@ -851,7 +851,7 @@ export function parseNewFoodLog(value: unknown) {
     foodLibraryId: optionalNumber(body.foodLibraryId, "食品库 ID", 1, Number.MAX_SAFE_INTEGER),
     foodLibraryItems: parseFoodConsumptions(body.foodLibraryItems),
     foodKcalMode: body.foodKcalMode === undefined ? undefined : enumValue(body.foodKcalMode, "热量计算方式", ["auto", "manual"] as const, "manual"),
-    foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER),
+    ...(body.foodPlaceId===undefined?{}:{foodPlaceId: optionalNumber(body.foodPlaceId, "店铺 ID", 1, Number.MAX_SAFE_INTEGER)}),
     foodDishId: foodDishIds(body.foodDishIds, body.foodDishId)[0] ?? null,
     foodDishIds: foodDishIds(body.foodDishIds, body.foodDishId),
   };

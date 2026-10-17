@@ -3,6 +3,8 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["用餐地点（可选）", "Meal location (optional)"],
+  ["记录名称", "Record name"], ["已选食物", "Selected foods"], ["移除菜品关联", "Remove dish"],
   ["主食", "Staples"], ["零食", "Snacks"], ["品类", "Category"], ["数据来源", "Data source"], ["估算", "Estimated"], ["正在加载…", "Loading…"], ["重试", "Retry"],
   ["常用食品与饮品的营养参考。", "Nutrition references for your regular foods and drinks."],
   ["添加食品", "Add item"], ["编辑食品", "Edit item"], ["食品信息", "Item details"], ["营养参考", "Nutrition reference"],

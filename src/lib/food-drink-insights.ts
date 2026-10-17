@@ -96,11 +96,12 @@ export function buildFoodDrinkInsights(foods: FoodLog[], drinks: DrinkLog[], dat
     add(`preference-${dimension}`, "preference", changed ? 86 : 57 + Math.min(current.count, 10), title, `${evidence}，${current.count} 杯选了${display(current.name)}。${changed ? `此前 ${pastRows.length} 杯更常选${display(past.name)}。` : ""}`);
   }
 
-  const placeIds = [...new Set([...mf, ...md].map(row => row.foodPlaceId).filter((id): id is number => Boolean(id)))];
+  const foodHasPlace=(row:FoodLog,id:number)=>(row.foodPlaceIds??(row.foodPlaceId?[row.foodPlaceId]:[])).includes(id);
+  const placeIds = [...new Set([...mf.flatMap(row=>row.foodPlaceIds??(row.foodPlaceId?[row.foodPlaceId]:[])), ...md.flatMap(row=>row.foodPlaceId?[row.foodPlaceId]:[])])];
   for (const id of placeIds) {
-    const foodRows = mf.filter(row => row.foodPlaceId === id), drinkRows = md.filter(row => row.foodPlaceId === id);
+    const foodRows = mf.filter(row => foodHasPlace(row,id)), drinkRows = md.filter(row => row.foodPlaceId === id);
     const rows = [...foodRows, ...drinkRows], days = activeDays(rows), count = rows.length;
-    const name = rows.find(row => row.foodPlaceName)?.foodPlaceName;
+    const name = foodRows.flatMap(row=>row.foodPlaces??[]).find(place=>place.id===id)?.name??rows.find(row=>row.foodPlaceId===id&&row.foodPlaceName)?.foodPlaceName;
     if (!name || days < 3 || count < 4) continue;
     if (foodRows.length >= 2 && drinkRows.length >= 2 && count >= 5) {
       add(`place-combo-${id}`, "place", 74 + Math.min(count, 10), `在「${name}」，吃的喝的都选过`, `近 30 天 ${foodRows.length} 条饮食、${drinkRows.length} 杯饮品，分布在 ${days} 天。`, `/food/places/${id}`);

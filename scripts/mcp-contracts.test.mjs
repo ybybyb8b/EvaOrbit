@@ -69,7 +69,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       await reject("eo_search",{resource:"food_library",filters:{keyword:"Reference"}},/does not accept/);
       await reject("eo_search",{resource:"food_log",filters:{date:"2026-02-30"}},/日期/);
       const {item:another}=await call("eo_create",{resource:"food_place",data:{name:"Another"}});
-      await reject("eo_update",{resource:"food_log",id:meal.id,data:{food_place_id:another.id}},/店铺/);
+      const {item:multiSource}=await call("eo_update",{resource:"food_log",id:meal.id,data:{food_place_id:another.id}});assert.deepEqual(multiSource.food_place_ids,[place.id,another.id]);
       await call("eo_update",{resource:"food_log",id:meal.id,data:{occurred_at:"2026-10-06T18:30:00+08:00",occurred_has_explicit_time:true}});
       assert.equal((await call("eo_get",{resource:"nutrition_daily",id:"2026-10-05"})).item.estimated_intake_kcal,0);
       assert.equal((await call("eo_get",{resource:"nutrition_daily",id:"2026-10-06"})).item.estimated_intake_kcal,100);

@@ -18,7 +18,7 @@ test("food portions persist through CRUD, migrations, library updates, summaries
   try {
     run('import "./src/lib/db.ts";');
     const old = new DatabaseSync(databasePath);
-    old.exec(`ALTER TABLE food_logs DROP COLUMN food_library_items; ALTER TABLE food_logs DROP COLUMN food_kcal_mode; DELETE FROM migrations WHERE version=68;
+    old.exec(`DROP TRIGGER food_meal_sources_insert; DROP TRIGGER food_meal_sources_update; ALTER TABLE food_logs DROP COLUMN food_place_ids; DELETE FROM migrations WHERE version=82; ALTER TABLE food_logs DROP COLUMN food_library_items; ALTER TABLE food_logs DROP COLUMN food_kcal_mode; DELETE FROM migrations WHERE version=68;
       INSERT INTO food_logs(id,occurred_at,meal_type,title,estimated_kcal,kcal_min,kcal_max) VALUES(1,'2026-10-05T04:00:00.000Z','lunch','旧记录',300,250,350);`);
     old.close();
     run(`import assert from "node:assert/strict";

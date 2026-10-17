@@ -5,7 +5,16 @@
 .energy button { min-height: 44px; }
 .browser { display: grid; gap: 14px; padding-top: 8px; }
 .browser > p { margin: 0; font-weight: 600; color: var(--muted); }
-.dishes button { min-height: 44px; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.foodSelection { min-width:0; display:grid; gap:12px; }
+.selectedFoods small { color:var(--text-secondary); font-size:12px; }
+.selectedFoods { min-width:0; margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:8px; }
+.selectedFoods li { display:flex; align-items:center; min-width:0; max-width:100%; padding-left:12px; border-radius:999px; color:var(--text-primary); background:rgb(var(--surface-tint-rgb) / .75); font-size:14px; }
+.selectedFoods li > span { min-width:0; padding-block:8px; overflow-wrap:anywhere; line-height:1.5; }
+.selectedFoods button { flex-shrink:0; display:grid; place-items:center; width:44px; min-height:44px; padding:12px; border:0; border-radius:999px; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.selectedFoods button :global(.icon) { width:14px; height:14px; }
+.selectedFoods button:active { color:var(--danger); background:var(--surface-danger); }
+.selectedFoods button:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
+@media(hover:hover) { .selectedFoods button:hover { color:var(--danger); background:var(--surface-danger); } }
 
 
 

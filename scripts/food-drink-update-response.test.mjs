@@ -12,8 +12,9 @@ test("Supabase food and drink creates and updates hydrate committed associations
   const rows={food_logs:{...base,title:"晚餐",meal_type:"dinner",scene:"restaurant",food_dish_ids:[],food_dish_id:null},drink_logs:{...base,name:"茶",brand:"",drink_type:"tea",drink_menu_id:null,sugar_level:"无糖",temperature:"hot",volume_ml:null,caffeine_mg:null,food_library_id:null,notes:""}};
   const requests=[];
   globalThis.fetch=async(input,init)=>{
-   const url=new URL(input),table=url.pathname.split('/').at(-1),method=init?.method??"GET";requests.push({table,method,select:url.searchParams.get("select")});
-   if(table==="food_dishes")return Response.json([{id:11,name:"饭"},{id:12,name:"汤"}]);
+   const url=new URL(input),table=url.pathname.split('/').at(-1),method=init?.method??"GET";requests.push({table,method,select:url.searchParams.get("select"),sourceFilter:url.searchParams.get("food_place_ids")});
+   if(table==="food_places")return Response.json([{id:8,name:"另一店",branch:"",city:"成都"}]);
+   if(table==="food_dishes")return Response.json([{id:11,name:"饭",food_place_id:7},{id:12,name:"汤",food_place_id:8}]);
    const row=rows[table];assert.ok(row);
    if(url.searchParams.get("id")==="eq.999")return Response.json([]);
    if(method==="POST"){
@@ -26,11 +27,12 @@ test("Supabase food and drink creates and updates hydrate committed associations
     // Model a stale relational mutation response; a new SELECT observes the committed row.
     return Response.json([url.searchParams.get("select")==="id"?{id:row.id}:before]);
    }
-   assert.equal(method,"GET");return Response.json([{...row,food_places:row.food_place_id?{name:"新店",city:"成都",branch:"一店",location:"高新区"}:null,food_dishes:row.drink_menu_id?{name:"奶茶"}:null}]);
+   assert.equal(method,"GET");return Response.json([{...row,...(table==="food_logs"?{food_place_ids:[...new Set([row.food_place_id,...row.food_dish_ids.map(id=>id===11?7:8)].filter(Boolean))]}:{}),food_places:row.food_place_id?{name:"新店",city:"成都",branch:"一店",location:"高新区"}:null,food_dishes:row.drink_menu_id?{name:"奶茶"}:null}]);
   };
   const repo=await createMcpSupabaseRepository("test-token","test-owner");
   const createdFood=await repo.createFoodLog({title:"午餐",foodPlaceId:7,foodDishIds:[11,12],foodDishId:11,occurredHasExplicitTime:false});
-  assert.equal(createdFood.foodPlaceId,7);assert.deepEqual(createdFood.foodDishIds,[11,12]);assert.equal(createdFood.foodDishId,11);assert.equal(createdFood.foodPlaceName,"新店");assert.deepEqual(createdFood.foodDishes.map(d=>d.name),["饭","汤"]);assert.deepEqual(createdFood,await repo.getFoodLog(createdFood.id));
+  assert.equal(createdFood.foodPlaceId,7);assert.deepEqual(createdFood.foodDishIds,[11,12]);assert.equal(createdFood.foodDishId,11);assert.equal(createdFood.foodPlaceName,"新店");assert.deepEqual(createdFood.foodDishes.map(d=>d.name),["饭","汤"]);assert.deepEqual(createdFood,await repo.getFoodLog(createdFood.id));assert.deepEqual(createdFood.foodPlaceIds,[7,8]);assert.equal(createdFood.foodPlaces[1].name,"另一店");
+  await repo.listFoodLogs({foodPlaceId:8});assert.ok(requests.some(request=>request.table==="food_logs"&&request.sourceFilter==="cs.{8}"));
   const createdDrink=await repo.createDrinkLog({name:"奶茶",foodPlaceId:7,drinkMenuId:15,occurredHasExplicitTime:false});assert.equal(createdDrink.foodPlaceId,7);assert.equal(createdDrink.drinkMenuId,15);assert.equal(createdDrink.drinkMenuName,"奶茶");assert.deepEqual(createdDrink,await repo.getDrinkLog(createdDrink.id));
   for(const create of [repo.createFoodLog,repo.createDrinkLog])await assert.rejects(()=>create({title:"fail",notes:"fail"}),/test write failure/);
   const food=await repo.updateFoodLog(1,{foodPlaceId:7,foodDishIds:[11,12],foodDishId:11});

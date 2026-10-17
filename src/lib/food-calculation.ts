@@ -52,7 +52,7 @@ export async function snapshotFoodConsumptions(
     const item = await getItem(input.foodLibraryId);
     if (!item || (item.archivedAt && !previous)) throw new ValidationError("食品库项目不存在或已归档");
     const nutritionReference = foodNutritionReference(item);
-    return { foodLibraryId: item.id, item: { id: item.id, name: item.name, brand: item.brand }, quantity: input.quantity, unit: input.unit,
+    return { foodLibraryId: item.id, item: { id: item.id, name: item.name, brand: item.brand, foodPlaceId:item.foodPlaceId??null }, quantity: input.quantity, unit: input.unit,
       nutritionReference, calculatedKcal: calculateFoodKcal(nutritionReference, input.quantity, input.unit) };
   }));
 }

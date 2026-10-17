@@ -458,7 +458,9 @@ export interface FoodLog {
   foodPlaceId?: number | null;
   foodDishId?: number | null;
   foodDishIds?: number[];
-  foodDishes?: { id: number; name: string }[];
+  foodDishes?: { id: number; name: string; foodPlaceId?:number; foodLibraryId?:number|null }[];
+  foodPlaceIds?: number[];
+  foodPlaces?: { id:number; name:string; branch:string; city:string }[];
   foodPlaceName?: string | null;
   foodPlaceBranch?: string | null;
   foodPlaceCity?: string | null;
@@ -532,7 +534,7 @@ export interface FoodConsumption {
   foodLibraryId: number;
   quantity: number | null;
   unit: FoodQuantityUnit;
-  item?: { id: number; name: string; brand: string };
+  item?: { id: number; name: string; brand: string; foodPlaceId?: number|null };
   nutritionReference?: FoodNutritionReference;
   calculatedKcal?: number | null;
 }

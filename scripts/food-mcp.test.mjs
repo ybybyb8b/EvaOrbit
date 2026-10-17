@@ -141,7 +141,7 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
       assert.equal((await call("eo_search",{resource:"drink_log",filters:{drink_menu_id:menu.id}})).items[0].food_place_name,"只卖茶");
       for(const d of drinks)await call("eo_delete",{resource:"drink_log",id:d.id});
       assert.equal((await call("eo_search",{resource:"drink_log",filters:{}})).items.length,before.length);
-      const rejected=await rpc("tools/call",{name:"eo_update",arguments:{resource:"food_log",id:record.id,data:{food_place_id:other.id}}});assert.equal(rejected.isError,true);
+      const {item:mixed}=await call("eo_update",{resource:"food_log",id:record.id,data:{food_place_id:other.id}});assert.ok(mixed.food_place_ids.includes(place.id));assert.ok(mixed.food_place_ids.includes(other.id));await call("eo_update",{resource:"food_log",id:record.id,data:{food_place_id:place.id}});
       const {item:cleared}=await call("eo_update",{resource:"food_log",id:record.id,data:{food_dish_ids:[]}});assert.deepEqual(cleared.food_dish_ids,[]);
       const {item:linkedDish}=await call("eo_update",{resource:"food_log",id:record.id,data:{food_dish_ids:[ids[0]]}});assert.deepEqual(linkedDish.food_dish_ids,[ids[0]]);
       assert.equal((await call("eo_delete",{resource:"food_place",id:place.id})).action,"archived");

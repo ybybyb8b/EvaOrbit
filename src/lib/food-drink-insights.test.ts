@@ -48,6 +48,13 @@ test("two Place records or a single-day batch are not a frequent Place", () => {
   assert.match(buildFoodDrinkInsights(rows, [], today).find(row => row.id === "place-repeat-7")!.title, /常用来源/);
 });
 
+test("multi-source meals contribute once to each Place insight with the correct source name",()=>{
+  const rows=Array.from({length:4},(_,id)=>food(id,{occurredAt:at(id),foodPlaceId:1,foodPlaceName:"A店",foodPlaceIds:[1,2],foodPlaces:[{id:1,name:"A店",branch:"",city:""},{id:2,name:"B店",branch:"",city:""}]}));
+  const insights=buildFoodDrinkInsights(rows,[],today);
+  assert.equal(insights.find(row=>row.id==="place-repeat-2")?.title,"最近又选了「B店」");
+  assert.match(insights.find(row=>row.id==="place-repeat-2")!.body,/4 条/);
+});
+
 test("30-day preferences remain useful without records in the last week; tiny preferences stay hidden", () => {
   const rows = Array.from({ length: 6 }, (_, id) => drink(id, { occurredAt: at(15 + id), drinkType: "coffee", sugarLevel: "无糖" }));
   const result = buildFoodDrinkInsights([], rows, today);

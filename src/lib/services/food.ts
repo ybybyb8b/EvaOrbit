@@ -23,9 +23,8 @@ export async function getFoodLog(id: number) {
 }
 export async function getFoodLibraryItem(id: number) { return (await getRepository()).getFoodLibraryItem(id); }
 async function validateFoodLinks(repository:Awaited<ReturnType<typeof getRepository>>,foodPlaceId:number|null,foodDishIds:number[],preservePlace=false){
-  if(foodDishIds.length&&foodPlaceId===null)throw new ValidationError("选择菜品前需要先选择店铺");
   if(foodPlaceId!==null){const place=await repository.getFoodPlace(foodPlaceId);if(!place)throw new ValidationError("所选店铺不存在");if(!preservePlace&&!placeSupports(place,"food"))throw new ValidationError("该店铺只提供饮品");}
-  for(const foodDishId of foodDishIds){const dish=await repository.getFoodDish(foodDishId);if(!dish||dish.foodPlaceId!==foodPlaceId||(dish.kind??"food")!=="food")throw new ValidationError("所选菜品不属于该店铺");}
+  for(const foodDishId of foodDishIds){const dish=await repository.getFoodDish(foodDishId);if(!dish||(dish.kind??"food")!=="food")throw new ValidationError("所选菜品不存在或不是餐食菜品");}
 }
 async function prepareFoodCalculation(repository: Awaited<ReturnType<typeof getRepository>>, input: Record<string, unknown>, existing?: FoodLog) {
   let inputs = input.foodLibraryItems as FoodConsumption[] | undefined;
@@ -58,8 +57,7 @@ async function applyCatalogFoodLinks(repository:Awaited<ReturnType<typeof getRep
     libraryId=consumptions[0]?.foodLibraryId??null;inferred=true;
   }
   const library=libraryId?await repository.getFoodLibraryItem(libraryId):null;
-  const placeId=existing&&input.foodPlaceId===null?null:input.foodPlaceId??menus[0]?.foodPlaceId??library?.foodPlaceId??existing?.foodPlaceId??null;
-  if(library?.foodPlaceId && library.foodPlaceId!==placeId)throw new ValidationError("所选食品不属于该店铺");
+  const placeId=Object.hasOwn(input,"foodPlaceId")?input.foodPlaceId as number|null:menus[0]?.foodPlaceId??library?.foodPlaceId??existing?.foodPlaceId??null;
   return {...input,foodPlaceId:placeId,...(consumptions?{foodLibraryItems:consumptions,foodLibraryId:libraryId,foodKcalMode:input.foodKcalMode??(!inferred && input.estimatedKcal!=null?"manual":"auto")}:{})};
 }
 export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();input={...input,...await applyCatalogFoodLinks(repository,input)} as NewFoodLog;const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);const calculation=await prepareFoodCalculation(repository,input);const saved=await repository.createFoodLog({...input,...calculation,foodDishIds:ids,foodDishId:ids[0]??null} as NewFoodLog);return (await withMealTimes(repository,[saved]))[0]; }
