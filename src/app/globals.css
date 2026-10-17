@@ -5910,6 +5910,7 @@ html[data-theme="mistviolet"] :is(.relations-page,.relation-detail-page) {
   box-shadow:0 8px 26px rgb(var(--shadow-rgb) / .045);
 }
 .home-day-grid > .home-day-pane::before,
+.cats-page .cats-overview .cat-card::before,
 .cats-food-library-entry::before,
 .cat-food-overview::before,
 .due-section:not(.due-stack)::before,
@@ -6555,3 +6556,147 @@ label:has(> .toggle-switch):not(.meal-reminder-settings label) { display:flex; a
   .tracker-detail-page .tracker-property-insights { padding: 18px 16px; gap: 28px; }
   .tracker-detail-page .tracker-settings { gap: 24px; }
 }
+
+/* Cats: task-led capture, quiet history and a distinct health overview. */
+.cats-page .page-header .eyebrow:empty{display:none}
+.cats-page .cats-food-library-entry{margin-top:32px;min-height:88px;padding:16px 18px;box-shadow:none;background:var(--surface-card)}
+.cats-page .cats-food-library-copy strong{font:600 18px/1.4 var(--font-body)}
+.cats-page .cats-food-library-copy small{display:none}
+.cats-page .cats-food-library-copy p{margin-top:4px;font-size:12px}
+.cats-page .cats-food-library-icon{width:42px;height:42px;border-radius:12px}
+.cats-care-section,.cat-health-section{margin-top:32px}
+.cats-care-section .section-heading,.cat-health-section .section-heading{align-items:center;gap:12px;flex-wrap:wrap}
+.cats-care-section h2,.cat-health-section h2,.cat-health-overview h2{margin:0;font:600 18px/1.4 var(--font-body)}
+.cat-section-copy{margin:8px 0;color:var(--muted);font-size:13px;line-height:1.6}
+.cat-log-choices{display:grid;gap:8px;padding:4px 0 12px}
+.cat-log-choices>button:not(.text-button){min-height:80px;width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:0;border-radius:14px;background:var(--surface-warm);color:var(--ink);text-align:left;cursor:pointer}
+.cat-log-choices>button>span{min-width:0;display:grid;gap:6px}
+.cat-log-choices strong{font-size:16px}
+.cat-log-choices small{color:var(--muted);font-size:13px;line-height:1.5}
+.cat-log-choices .icon{flex-shrink:0;width:18px}
+.cat-log-choices>button:hover{background:var(--surface-tint)}
+.cat-log-choices>button:disabled{opacity:.5;cursor:default}
+.cat-log-choices>button:focus-visible,.cat-health-overview button:focus-visible{outline:2px solid var(--accent-primary);outline-offset:3px}
+.cat-form-context{margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cat-form-context strong{font-size:16px}
+.cat-record-fields,.cat-care-fieldset{min-width:0;margin:0;padding:0;border:0}
+.cat-record-steps{grid-template-columns:1fr}
+.cat-form-disclosure{min-width:0;padding:14px 0}
+.cat-form-disclosure>summary{min-height:44px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer;color:var(--green)}
+.cat-form-disclosure>summary::after{content:"+";margin-left:auto}
+.cat-form-disclosure[open]>summary::after{content:"−"}
+.cat-form-disclosure>.form-grid{padding-top:12px}
+.cat-health-overview{display:grid;gap:32px}
+.cat-health-overview>.cat-health-section{margin:0;padding:0;background:none}
+.cat-health-overview>.button{justify-self:start}
+.cat-health-measurements{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.cat-health-measurements>button{min-width:0;display:grid;gap:8px;padding:16px;border:0;border-radius:14px;background:var(--surface-card);color:var(--ink);text-align:left;cursor:pointer}
+.cat-health-measurements>button>span{font-size:13px}
+.cat-health-measurements strong{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.cat-health-measurements strong small{font-size:14px;font-weight:400}
+.cat-health-overview time{color:var(--muted);font-size:12px}
+.cat-health-list{display:grid;gap:4px}
+.cat-health-list>button{width:100%;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer}
+.cat-health-list>button>span{min-width:0;display:grid;gap:5px}
+.cat-health-list strong{font-size:15px;overflow-wrap:anywhere}
+.cat-health-list small{color:var(--muted);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.cat-health-list time{flex-shrink:0}
+.cat-health-actions{display:flex;gap:12px;flex-wrap:wrap}
+.cat-health-actions .text-button,.cat-health-section .text-button{min-height:44px}
+.cat-timeline-toolbar{margin:0 0 20px;max-width:360px}
+.pet-detail-page .cat-tabs button{min-height:44px;font-size:13px}
+.pet-detail-page .cat-record-details{font-size:13px}
+.pet-detail-page .cat-record-details dd{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:720px){
+ .cat-health-list>button{align-items:flex-start}
+ .cat-health-section .section-heading{align-items:flex-start}
+ .cat-health-actions{gap:16px}
+ .cat-health-measurements{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .cat-health-measurements strong{overflow-wrap:anywhere}
+ .pet-detail-page .routine-card-actions .danger-icon{width:44px;height:44px}
+}
+
+.cat-record-editor .field>span{font-size:13px}
+.cat-record-editor .cat-form-context:empty{display:none}
+.cat-record-editor :is(input,textarea,select){font-size:16px}
+
+
+.cat-care-list,.cat-care-more{display:grid;gap:8px}
+.cat-care-more[hidden]{display:none}
+.cat-care-card{min-width:0;padding:14px 16px;border-radius:14px;background:var(--surface-card)}
+.cat-care-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.cat-care-head>.text-button{flex-shrink:0;min-height:40px;font-size:12px}
+.cat-care-toggle{display:flex;align-items:center;gap:8px;flex:1;min-height:40px;padding:0;border:0;background:none;color:var(--ink);text-align:left;cursor:pointer}
+.cat-care-toggle>strong{font:600 14px/1.4 var(--font-body)}
+.cat-care-count{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.cat-care-toggle-icon{margin-left:auto;color:var(--muted)}
+.cat-care-disclosure.expanded .cat-care-toggle-icon{transform:rotate(180deg)}
+.cat-care-card-body{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px}
+.cat-care-copy{min-width:0;display:grid;gap:4px}
+.cat-care-copy>strong{font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.cat-care-copy>small{font-size:12px;line-height:1.5;color:var(--muted)}
+.cat-care-actions{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.cat-care-actions>button{min-width:48px;min-height:44px;padding:0 9px;border:0;border-radius:9px;background:var(--surface-raised);color:var(--ink);font-size:12px;white-space:nowrap;cursor:pointer}
+.cat-care-actions>.cat-care-done{font-weight:600}
+.cat-care-actions>button:disabled{opacity:.5;cursor:default}
+.cat-care-toggle:focus-visible,.cat-care-actions>button:focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px}
+@media(max-width:430px){.cat-care-card{padding:12px}.cat-care-card-body{gap:8px}.cat-care-actions{gap:4px}.cat-care-actions>button{padding-inline:8px}}
+
+/* Cats surfaces: a recessed identity group, raised work cards, and quiet history. */
+.cats-page,.pet-detail-page{
+ --cats-work-shadow:0 3px 7px rgb(var(--shadow-rgb) / .045),0 12px 28px rgb(var(--shadow-rgb) / .055);
+ --cats-control-shadow:0 2px 5px rgb(var(--shadow-rgb) / .065);
+}
+html .cats-page .cats-overview{background:rgb(var(--surface-card-rgb) / .3);box-shadow:none}
+html .cats-page .cats-overview .cat-card{
+ --frost-grain-opacity:.035;
+ position:relative;
+ background:var(--surface-card);
+ box-shadow:0 2px 4px rgb(var(--shadow-rgb) / .025),0 6px 14px rgb(var(--shadow-rgb) / .04);
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+ html .cats-page .cats-overview .cat-card{background:rgb(var(--surface-raised-rgb) / .52);-webkit-backdrop-filter:blur(16px) saturate(110%);backdrop-filter:blur(16px) saturate(110%)}
+}
+html[data-mode="dark"] .cats-page .cats-overview .cat-card{--frost-grain-opacity:.022;box-shadow:0 2px 4px rgb(var(--shadow-rgb) / .1),0 6px 14px rgb(var(--shadow-rgb) / .12)}
+@media(prefers-reduced-transparency:reduce){
+ html .cats-page .cats-overview .cat-card{background:var(--surface-card);-webkit-backdrop-filter:none;backdrop-filter:none}
+ .cats-page .cats-overview .cat-card::before{opacity:0}
+}
+.cats-page .cat-care-card{background:var(--surface-raised);box-shadow:0 7px 18px rgb(var(--shadow-rgb) / .035)}
+.cat-care-top{position:relative;z-index:2}
+.cats-page .cat-care-actions>button{background:var(--surface-soft);color:var(--text-primary)}
+.cats-page .cat-care-actions>button:hover{background:var(--surface-tint)}
+.cats-page .cats-food-library-entry{background:var(--surface-card);box-shadow:0 3px 12px rgb(var(--shadow-rgb) / .055)}
+.cats-history-disclosure{margin-top:28px;padding:0 4px;color:var(--text-secondary)}
+.cats-history-disclosure>summary{display:flex;align-items:center;gap:10px;min-height:48px;font-size:14px;cursor:pointer;list-style:none}
+.cats-history-disclosure>summary::-webkit-details-marker{display:none}
+.cats-history-disclosure>summary>svg{margin-left:auto;flex-shrink:0}
+.cats-history-disclosure[open]>summary>svg{transform:rotate(180deg)}
+.cats-history-count{font-size:12px;font-variant-numeric:tabular-nums}
+.cat-history-list{margin-top:8px;padding:6px 12px;border-radius:14px;background:var(--surface-card)}
+.cat-history-list>article{display:flex;align-items:center;gap:6px}
+.cat-history-row{min-width:0;min-height:64px;flex:1;display:flex;align-items:center;gap:12px;padding:8px 0;border:0;background:none;color:var(--text-primary);text-align:left;cursor:pointer}
+.cat-history-row>span{min-width:0;flex:1;display:grid;gap:3px}
+.cat-history-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500}
+.cat-history-row small,.cat-history-row time{color:var(--text-secondary);font-size:11px}
+.cat-history-row time{flex-shrink:0}
+.cat-history-row>.icon{width:13px;flex-shrink:0;color:var(--text-secondary)}
+.cat-history-delete{width:44px;min-height:44px;flex-shrink:0;border:0;border-radius:10px;background:none;color:var(--text-secondary);cursor:pointer}
+.cat-history-delete>.icon{width:14px}
+.cat-history-delete:hover{background:var(--surface-danger);color:var(--state-danger)}
+.cats-history-disclosure>summary:focus-visible,.cat-history-list button:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.pet-detail-page .pet-profile-head{margin-top:8px;margin-bottom:22px}
+.pet-detail-page .cat-tabs{padding:5px;background:var(--surface-soft);border:0;border-radius:14px}
+.pet-detail-page .cat-tabs button{border:0;border-radius:10px}
+.pet-detail-page .cat-tabs button.active{background:var(--surface-raised);box-shadow:var(--cats-control-shadow)}
+.pet-detail-page .cat-timeline{padding:6px 16px;border-radius:16px;background:var(--surface-card);box-shadow:var(--cats-work-shadow)}
+.pet-detail-page .cat-health-section{padding:20px;border-radius:16px;background:var(--surface-card);box-shadow:var(--cats-work-shadow)}
+.pet-detail-page .cat-health-measurements>button{background:var(--surface-raised);box-shadow:var(--cats-control-shadow)}
+.pet-detail-page .cat-health-list>button{padding:12px 0}
+.pet-detail-page .pet-routine-list article{border:0;background:var(--surface-raised);box-shadow:var(--cats-work-shadow)}
+.pet-detail-page .pet-profile-view{border:0;background:var(--surface-card);box-shadow:var(--cats-work-shadow)}
+html[data-mode="dark"] :is(.cats-page,.pet-detail-page){--cats-work-shadow:0 4px 9px rgb(var(--shadow-rgb) / .16),0 14px 30px rgb(var(--shadow-rgb) / .12);--cats-control-shadow:0 2px 6px rgb(var(--shadow-rgb) / .16)}
+@media(max-width:720px){.pet-detail-page .cat-health-section{padding:16px}.pet-detail-page .cat-health-measurements{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}.pet-detail-page .cat-health-list>button{flex-wrap:wrap;gap:6px}.pet-detail-page .cat-health-list>button>span{flex:1 1 150px}.cat-history-row{gap:8px}}
+
+.cats-page .cat-care-actions>.cat-care-done{background:var(--accent-primary);color:var(--accent-on)}
+.cats-page .cat-care-actions>.cat-care-done:hover{background:var(--accent-strong);color:var(--accent-on)}

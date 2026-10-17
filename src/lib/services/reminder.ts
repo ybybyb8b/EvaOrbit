@@ -119,6 +119,7 @@ async function advanceTrackerReminder(reminder: Reminder, action: "completed" | 
 
 export async function completeReminder(id: number, actedAt = new Date()) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
+  if (reminder?.scheduleType === "one_time" && reminder.status === "completed" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) return reminder;
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
   const source = reminderSourceDefinition(reminder.sourceType);
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt); return repository.getReminder(id); }
@@ -133,8 +134,9 @@ export async function completeReminder(id: number, actedAt = new Date()) {
   const completionDate = reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour"
     ? await getRecurrenceCompletionDate(actedAt, reminder.nextDueAt ?? reminder.startsAt, reminder.timezone) : undefined;
   const completion = reminderActionPatch(reminder, "complete", actedAt, completionDate);
-  if (reminder.scheduleType === "interval" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) {
-    const event = await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: actedAt.toISOString(), occurredHasExplicitTime: true, title: reminder.title, note: "", sourceType: "reminder", sourceId: reminder.id });
+  if ((reminder.scheduleType === "interval" || reminder.scheduleType === "one_time") && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) {
+    const previous = reminder.scheduleType === "one_time" ? (await repository.listCatEvents(reminder.targetType === "cat" ? reminder.targetId : null)).find(item => item.sourceType === "reminder" && item.sourceId === reminder.id) : undefined;
+    const event = previous ?? await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: actedAt.toISOString(), occurredHasExplicitTime: true, title: reminder.title, note: reminder.note, sourceType: "reminder", sourceId: reminder.id });
     createdEventId = event.id;
   }
   await repository.createReminderOccurrence({ reminderId: id, action: "completed", scheduledFor: reminder.nextDueAt ?? reminder.startsAt, actedAt: actedAt.toISOString(), createdEventId });

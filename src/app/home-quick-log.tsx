@@ -8,7 +8,7 @@ import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { invalidateCachedJson, loadCachedJson, prefetchCachedJson } from "@/lib/client-json-cache";
-import type { ApiError, Pet, Tracker, TrackerField } from "@/lib/types";
+import type { ApiError, CatRecordKind, Pet, Tracker, TrackerField } from "@/lib/types";
 import { CatRecordEditor } from "./cats/cat-record-editor";
 import { DrinkRecordEditor } from "./drinks/drink-ui";
 import { FoodRecordEditor } from "./food/food-record-editor";
@@ -36,6 +36,7 @@ export function HomeQuickLog() {
   const [active, setActive] = useState<QuickKind | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [catKind, setCatKind] = useState<CatRecordKind|null>(null);
   const [pets, setPets] = useState<Pet[]>([]);
   const [trackers, setTrackers] = useState<QuickTracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<QuickTracker>();
@@ -48,7 +49,7 @@ export function HomeQuickLog() {
     const id = window.setTimeout(warm, 800);
     return () => window.clearTimeout(id);
   }, []);
-  const close = () => { setActive(null); setError(""); setSelectedTracker(undefined); };
+  const close = () => { setActive(null); setCatKind(null); setError(""); setSelectedTracker(undefined); };
   async function saved() {
     if (active === "training") invalidateCachedJson(quickLogUrls.training);
     if (active === "weight") invalidateCachedJson("/api/health/weight?limit=1");
@@ -95,7 +96,7 @@ export function HomeQuickLog() {
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
-    {active === "cats" && <FormSheet title={english ? "New cat record" : "新增猫咪记录"} onClose={close} submitLabel={english ? "Save record" : "保存记录"} busy={loading}><CatRecordEditor key={`cats-${selectedDate}`} pets={pets} initialDate={selectedDate} onSavingChange={setLoading} onCancel={close} onSaved={async () => { await saved(); close(); }} /></FormSheet>}
+    {active === "cats" && <FormSheet title={english ? "New cat record" : "新增猫咪记录"} onClose={close} submitLabel={catKind ? (english ? "Save record" : "保存记录") : undefined} busy={loading}><CatRecordEditor key={`cats-${selectedDate}`} pets={pets} initialDate={selectedDate} onKindChange={setCatKind} onSavingChange={setLoading} onCancel={close} onSaved={async () => { await saved(); close(); }} /></FormSheet>}
     {active === "inbox" && <FormSheet title="Inbox" onClose={close} formId="home-inbox-capture" submitLabel={english ? "Save" : "记下"} busy={loading}><InboxCaptureForm formId="home-inbox-capture" sheet onSaved={async () => { await saved(); close(); }} /></FormSheet>}
     {active === "tracker" && !selectedTracker && <FormSheet title={english ? "Choose Tracker" : "选择观测"} onClose={close}><div className="home-quick-tracker-list">{trackers.map((tracker) => <button type="button" key={tracker.id} disabled={loading} aria-label={tracker.quickCaptureEnabled ? `${english ? "Quick record" : "快速记录"} ${tracker.name}` : tracker.name} onClick={() => void chooseTracker(tracker)}><TrackerIcon tracker={tracker} size={38} /><span><strong>{tracker.name}</strong><small>{tracker.groupName}{tracker.quickCaptureEnabled ? ` · ${english ? "Quick" : "快速"}` : ""}</small></span><Icon name={tracker.quickCaptureEnabled ? "plus" : "arrow"} variant="stroke" /></button>)}{!trackers.length && <p className="home-today-empty">{english ? "No Trackers yet" : "还没有观测项目"}</p>}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
     {active === "tracker" && selectedTracker && <TrackerEntryEditor key={`tracker-${selectedTracker.id}-${selectedDate}`} trackerId={selectedTracker.id} fields={selectedTracker.fields} initialDate={selectedDate} onClose={close} onSaved={saved} />}
