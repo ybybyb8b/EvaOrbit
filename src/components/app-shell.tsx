@@ -221,9 +221,8 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
       </main>
       {hasGlobalHeader ? <header ref={globalHeaderRef} className="mobile-global-header">{hasPageBack && <PageBackButton />}{spacesTrigger}</header> : spacesTrigger}
       {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
-      <nav className="mobile-nav" data-active-tab={pathname === "/" ? 0 : pathname.startsWith("/lucius") ? 1 : pathname.startsWith("/settings") ? 2 : undefined} aria-label={english ? "Mobile navigation" : "移动端导航"}>
+      <nav className="mobile-nav" data-active-tab={pathname === "/" ? 0 : pathname.startsWith("/settings") ? 1 : undefined} aria-label={english ? "Mobile navigation" : "移动端导航"}>
         <Link href="/" className={pathname === "/" ? "active" : ""} aria-current={pathname === "/" ? "page" : undefined}><Icon name="home" variant="nav" /><span>{english ? "Home" : "首页"}</span></Link>
-        <Link href="/lucius" className={pathname.startsWith("/lucius") ? "active" : ""} aria-current={pathname.startsWith("/lucius") ? "page" : undefined}><Icon name="lucius" variant="nav" /><span>Lucius</span></Link>
         <Link href="/settings" className={pathname.startsWith("/settings") ? "active" : ""} aria-current={pathname.startsWith("/settings") ? "page" : undefined}><Icon name="settings" variant="nav" /><span>{english ? "Settings" : "设置"}</span></Link>
       </nav>
       <HomeQuickLog key={pathname} />

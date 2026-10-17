@@ -4689,10 +4689,10 @@ html[data-mode="dark"] .health-page .training-recent-list { background:rgb(255 2
   background:linear-gradient(145deg,rgb(var(--surface-raised-rgb) / .72),rgb(var(--surface-card-rgb) / .42));
   box-shadow:inset 0 1px 0 rgb(255 255 255 / .28),0 14px 38px rgb(var(--shadow-rgb) / .045);
 }
-.cats-overview .cat-card-grid { gap:6px; }
+.cats-overview .cat-card-grid { gap:12px; }
 .cats-overview .cat-card {
-  min-height:82px;
-  padding:11px 12px;
+  min-height:124px;
+  padding:18px;
   border-radius:var(--radius-control);
   background:rgb(var(--surface-card-rgb) / .46);
   transition:transform var(--motion-fast) var(--motion-ease),background-color var(--motion-fast) var(--motion-ease);
@@ -4787,16 +4787,16 @@ html[data-mode="dark"] .cats-page .household-care-list article.routine-status-ca
 
 @media (max-width:720px) {
   .cats-overview { padding:11px; }
-  .cats-overview .cat-card { min-height:76px;padding:9px; }
+  .cats-overview .cat-card { min-height:112px;padding:14px 12px; }
   .cats-page .cats-upcoming-section,
   .cats-page .cats-household-section,
   .cats-page .cats-recent-section { margin-top:31px; }
 }
 
 @media (max-width:430px) {
-  .cats-overview .cat-card { align-items:center;flex-direction:row;gap:9px; }
+  .cats-overview .cat-card { align-items:center;flex-direction:row;gap:12px; }
   .cats-overview .cat-card .cat-avatar { width:40px !important;height:40px !important; }
-  .cats-overview .cat-card h2 { font-size:17px; }
+  .cats-overview .cat-card h2 { font-size:18px; }
   .cats-overview .cat-card p { overflow:hidden;white-space:nowrap;text-overflow:ellipsis; }
   .cats-page .household-care-list .routine-card-footer { align-items:flex-start;flex-direction:column;gap:8px; }
   .cats-page .household-care-list .routine-card-actions { align-self:flex-end; }
