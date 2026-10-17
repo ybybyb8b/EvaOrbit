@@ -14,6 +14,10 @@ import { PageLogAction } from "@/components/bottom-log";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
+import { orderedTrackerGroups } from "@/lib/tracker-order";
+import { TrackerSortSheet, useTrackerOrder } from "./tracker-sort-sheet";
+import { Sort } from "reicon-react";
+import { TrackerCaptureToggle } from "./tracker-capture-toggle";
 
 const emptyDraft = { name: "", groupName: "Everyday", quickCaptureEnabled: true };
 const fieldTypes: Array<[TrackerFieldType, string, string]> = [
@@ -39,11 +43,13 @@ function ago(value: string) {
   return `${Math.max(1, Math.floor(milliseconds / 60000))}m ago`;
 }
 
-export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
+export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[]; cacheScope: string | null }) {
   const { english } = useLocale();
   const [trackers, setTrackers] = useServerDataState<TrackerSummary[]>(initial);
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showSort, setShowSort] = useState(false);
+  const [order, saveOrder] = useTrackerOrder(cacheScope);
   const [draft, setDraft] = useState(emptyDraft);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
@@ -109,16 +115,21 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
   }
 
   async function quickCapture(tracker: TrackerSummary) {
+    if (working) return;
     setWorking(true); setError("");
-    const response = await fetch(`/api/trackers/${tracker.id}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ occurredAt: new Date().toISOString(), values: {}, note: "" }) });
-    if (!response.ok) setError(((await response.json()) as ApiError).error); else await load();
-    setWorking(false);
+    try {
+      const response = await fetch(`/api/trackers/${tracker.id}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ occurredAt: new Date().toISOString(), values: {}, note: "" }) });
+      if (!response.ok) setError(((await response.json()) as ApiError).error); else await load();
+    } catch { setError(english ? "Could not save the record. Please try again." : "记录失败，请重试。"); }
+    finally { setWorking(false); }
   }
 
   const visibleTrackers = trackers.filter(tracker => Boolean(tracker.archivedAt) === showArchived);
-  const groups = [...new Set(visibleTrackers.map((tracker) => tracker.groupName))];
+  const groups = orderedTrackerGroups(visibleTrackers, order);
   return <div className="page tracker-page">
     <PageHeader eyebrow="生活" title="Trackers" action={<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction>} />
+    {visibleTrackers.length > 1 && <div className="tracker-sort-toolbar"><button type="button" className="text-button" disabled={!cacheScope} onClick={() => setShowSort(true)}><Sort size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button></div>}
+    {showSort && <TrackerSortSheet trackers={trackers} archived={showArchived} order={order} onSave={saveOrder} onClose={() => setShowSort(false)} />}
     {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
     {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
       <p className="tracker-create-intro">What do you want to notice?</p>
@@ -145,17 +156,13 @@ export function TrackersView({ initial }: { initial: TrackerSummary[] }) {
         </div>}
         {!fieldEditor && <button className="tracker-add-property" type="button" onClick={() => startField("number")}><Icon name="plus" />Add a custom property</button>}
       </section>
-      <fieldset className="tracker-capture-mode">
-        <legend><span className="eyebrow">CARD + ACTION</span><strong>How should the list button record?</strong></legend>
-        <label className={draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: true })} /><span><strong>Quick record</strong><small>Tap + to save the current moment immediately.</small></span></label>
-        <label className={!draft.quickCaptureEnabled ? "selected" : ""}><input type="radio" name="capture-mode" checked={!draft.quickCaptureEnabled} onChange={() => setDraft({ ...draft, quickCaptureEnabled: false })} /><span><strong>Detailed record</strong><small>Tap + to open the full time, properties and note form.</small></span></label>
-      </fieldset>
+      <TrackerCaptureToggle enabled={draft.quickCaptureEnabled} onChange={quickCaptureEnabled => setDraft({ ...draft, quickCaptureEnabled })} />
       {error && <p className="form-error">{error}</p>}
     </form></FormSheet>}
     {error && !showForm && <p className="form-error">{error}</p>}
-    {loading ? <PageLoading title="观测" englishTitle="Trackers" inline /> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group}>
-      <div className="tracker-group-heading"><h2>{group}</h2><span>{visibleTrackers.filter((tracker) => tracker.groupName === group).length}</span></div>
-      <div className="tracker-card-grid">{visibleTrackers.filter((tracker) => tracker.groupName === group).map((tracker) => <article className="tracker-card" key={tracker.id}>
+    {loading ? <PageLoading title="观测" englishTitle="Trackers" inline /> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group.name}>
+      <div className="tracker-group-heading"><h2>{group.name}</h2><span>{group.items.length}</span></div>
+      <div className="tracker-card-grid">{group.items.map((tracker) => <article className="tracker-card" key={tracker.id}>
         <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>
         {tracker.archivedAt ? null : tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
       </article>)}</div>

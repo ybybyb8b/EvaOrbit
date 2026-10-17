@@ -22,6 +22,17 @@ type FormSheetProps = {
 type FormSheetPhase = "opening" | "open" | "closing" | "closed";
 const FORM_SHEET_CLOSE_FALLBACK_MS = 340;
 
+export function scrollFormSheetField(body: HTMLElement | null, target: HTMLElement, alignStart = false) {
+  if (!body || !body.contains(target)) return;
+  const bounds = body.getBoundingClientRect(), field = target.getBoundingClientRect();
+  const padding = getComputedStyle(body);
+  const top = bounds.top + (parseFloat(padding.scrollPaddingTop) || 0);
+  const bottom = bounds.bottom - (parseFloat(padding.scrollPaddingBottom) || 0);
+  const delta = alignStart || field.top < top ? field.top - top : field.bottom > bottom ? field.bottom - bottom : 0;
+  // Keep the fixed overlay and document still while revealing a field.
+  if (delta) body.scrollTop += delta;
+}
+
 export function FormSheet({
   title,
   onClose,
@@ -46,6 +57,7 @@ export function FormSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const entryFocusRef = useRef<(() => void) | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const closeRef = useRef(onClose);
   const busyRef = useRef(busy);
@@ -64,12 +76,15 @@ export function FormSheet({
 
   useEffect(() => {
     if (!mounted || phase !== "opening") return;
+    let nextFrame = 0;
     const frame = window.requestAnimationFrame(() => {
-      if (phaseRef.current !== "opening") return;
-      phaseRef.current = "open";
-      setPhase("open");
+      nextFrame = window.requestAnimationFrame(() => {
+        if (phaseRef.current !== "opening") return;
+        phaseRef.current = "open";
+        setPhase("open");
+      });
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => { window.cancelAnimationFrame(frame); window.cancelAnimationFrame(nextFrame); };
   }, [mounted, phase]);
 
   const finishClose = useCallback(() => {
@@ -150,11 +165,15 @@ export function FormSheet({
     };
     inertSiblings.forEach(({ element }) => { element.inert = true; });
     updateViewport();
-    const focusFrame = window.requestAnimationFrame(() => {
+    entryFocusRef.current = () => {
+      if (phaseRef.current !== "open") return;
+      entryFocusRef.current = null;
+      // Do not steal focus if the user has already started interacting.
+      if (dialog?.contains(document.activeElement)) return;
       const initialFocus = dialog?.querySelector<HTMLElement>("[data-sheet-initial-focus]");
       if (initialFocus) {
         initialFocus.focus({ preventScroll: true });
-        initialFocus.scrollIntoView({ block: "start" });
+        scrollFormSheetField(bodyRef.current, initialFocus, true);
         return;
       }
       if (window.matchMedia("(max-width: 720px)").matches) {
@@ -166,7 +185,9 @@ export function FormSheet({
         .find((element) => element.getClientRects().length > 0);
       const preferred = autoFocus?.getClientRects().length ? autoFocus : firstField ?? getFocusable()[0];
       (preferred ?? dialog)?.focus({ preventScroll: true });
-    });
+    };
+    // Transition events are not guaranteed (including reduced-motion mode).
+    const focusFallback = window.setTimeout(() => entryFocusRef.current?.(), FORM_SHEET_CLOSE_FALLBACK_MS);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", updateViewport);
     window.visualViewport?.addEventListener("resize", updateViewport);
@@ -175,8 +196,9 @@ export function FormSheet({
       body.style.overflow = previousOverflow;
       body.style.paddingRight = previousPaddingRight;
       inertSiblings.forEach(({ element, inert }) => { element.inert = inert; });
-      window.cancelAnimationFrame(focusFrame);
-      previousFocus?.focus();
+      window.clearTimeout(focusFallback);
+      entryFocusRef.current = null;
+      previousFocus?.focus({ preventScroll: true });
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", updateViewport);
       window.visualViewport?.removeEventListener("resize", updateViewport);
@@ -189,6 +211,7 @@ export function FormSheet({
   const finishCloseOnTransition = (event: TransitionEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
     if (event.propertyName !== "transform" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (phaseRef.current === "open") { entryFocusRef.current?.(); return; }
     finishClose();
   };
 
@@ -198,7 +221,7 @@ export function FormSheet({
       <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
         onChangeCapture={event => { if (dirty === undefined && (!(event.target instanceof HTMLInputElement) || event.target.type !== "search")) dirtyRef.current = true; }}
         onClickCapture={event => { if (dirty === undefined && event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
-        onInvalidCapture={event => { if (event.target instanceof HTMLElement) event.target.scrollIntoView({ block: "nearest" }); }}>
+        onInvalidCapture={event => { if (event.target instanceof HTMLElement) scrollFormSheetField(bodyRef.current, event.target); }}>
         <header className="form-sheet-header">
           <h2 id={titleId}>{copy(title)}</h2>
           <button className="text-button" type="button" onClick={requestClose} disabled={busy || discardOpen}>{language === "en" ? "Close" : "关闭"}</button>
@@ -206,11 +229,11 @@ export function FormSheet({
         <div
           className="form-sheet-body"
           ref={bodyRef}
-          inert={discardOpen || busy}
+          inert={phase === "opening" || discardOpen || busy}
           onFocusCapture={(event) => {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "auto" }), 120);
+            window.setTimeout(() => { if (document.activeElement === target) scrollFormSheetField(bodyRef.current, target); }, 120);
           }}
         >
           <SheetSuggestionTarget.Provider value={suggestionTarget}>{children}</SheetSuggestionTarget.Provider>

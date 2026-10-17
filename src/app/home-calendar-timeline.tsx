@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Add, ArrowDown5, ArrowLeft2, ArrowRight2, CheckCircle, Checklist, Edit2, ForkKnife, MoonSleep, Note, RecordCircle, Trash } from "reicon-react";
 import { ReiconSymbol } from "@/components/reicon-symbol";
-import { FormSheet } from "@/components/form-sheet";
+import { FormSheet, scrollFormSheetField } from "@/components/form-sheet";
 import { CalendarRuleSheet } from "@/components/calendar-rule-sheet";
 import { calendarCategoryLabel, matchingCalendarRule, type CalendarRule } from "@/lib/calendar-interpretation";
 import type { HomeDayOverview } from "@/lib/home-day";
@@ -77,11 +77,11 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
   const [loadingDate, setLoadingDate] = useState<string | null>(null), [loadingMonth, setLoadingMonth] = useState(false), [error, setError] = useState("");
   const [journalContent, setJournalContent] = useState(""), [journalMood, setJournalMood] = useState<DailyJournalMood | null>(null), [editingJournalId, setEditingJournalId] = useState<number | null>(null), [savingJournal, setSavingJournal] = useState(false);
   const [journalSheetOpen, setJournalSheetOpen] = useState(false);
-  const [journalHistoryInitiallyOpen, setJournalHistoryInitiallyOpen] = useState(false);
+  const [journalHistoryOpen, setJournalHistoryOpen] = useState(false);
   const [journalEnergy, setJournalEnergy] = useState<DailyJournalEnergy | null>(null);
   const [journalEmotion, setJournalEmotion] = useState<DailyJournalEmotion | null>(null);
   const [journalFullDiary, setJournalFullDiary] = useState(false);
-  const [journalAction, setJournalAction] = useState<{ type: "edit"; entry: DailyJournalEntry | null } | { type: "delete"; id: number } | null>(null);
+  const [journalDeleteId, setJournalDeleteId] = useState<number | null>(null);
   const journalInput = useRef<HTMLTextAreaElement | null>(null);
   const journalConfirm = useRef<HTMLButtonElement | null>(null);
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
@@ -181,30 +181,25 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
     finally { if (monthRequest.current === controller) setLoadingMonth(false); }
   }
   async function saveJournal(event: FormEvent) {
-    event.preventDefault(); if (!journalContent.trim() || journalAction || savingJournal) return; setSavingJournal(true); setError("");
+    event.preventDefault(); if (!journalContent.trim() || journalHistoryOpen || journalDeleteId !== null || savingJournal) return; setSavingJournal(true); setError("");
     try { const response = await fetch(editingJournalId ? `/api/daily-journal/${editingJournalId}` : "/api/daily-journal", { method: editingJournalId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(!editingJournalId && { date: selected }), content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }) }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); }
     catch { setError(english ? "Could not save. Your note is still here; please try again." : "保存失败，内容仍保留在这里，请重试。"); } finally { setSavingJournal(false); }
   }
   async function removeJournal(id: number) {
-    setError(""); setSavingJournal(true); try { const response = await fetch(`/api/daily-journal/${id}`, { method: "DELETE" }); if (!response.ok) throw new Error(); if (editingJournalId === id) applyJournalEdit(null); await refreshSelectedDate(); } catch { setError(english ? "Could not delete. Please try again." : "删除失败，请重试。"); } finally { setSavingJournal(false); }
+    setError(""); setSavingJournal(true); try { const response = await fetch(`/api/daily-journal/${id}`, { method: "DELETE" }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); } catch { setError(english ? "Could not delete. Please try again." : "删除失败，请重试。"); } finally { setSavingJournal(false); }
   }
   function applyJournalEdit(entry: DailyJournalEntry | null) {
+    setJournalHistoryOpen(false);
     setEditingJournalId(entry?.id ?? null); setJournalContent(entry?.content ?? ""); setJournalMood(entry?.moodScore ?? null); setJournalEmotion(entry?.emotion ?? null); setJournalEnergy(entry?.energyLevel ?? null); setJournalFullDiary(entry?.hasFullDiary ?? false); setError("");
-    window.requestAnimationFrame(() => { journalInput.current?.focus({ preventScroll: true }); journalInput.current?.scrollIntoView({ block: "nearest" }); });
+    if (journalSheetOpen) window.requestAnimationFrame(() => { const input = journalInput.current; if (input) { input.focus({ preventScroll: true }); scrollFormSheetField(input.closest(".form-sheet-body"), input); } });
   }
-  function requestJournalAction(action: NonNullable<typeof journalAction>) {
+  function requestJournalDelete(id: number) {
     if (savingJournal) return;
-    if (action.type === "edit" && !journalDirty) { applyJournalEdit(action.entry); return; }
-    setJournalAction(action);
-    window.requestAnimationFrame(() => { journalConfirm.current?.focus(); journalConfirm.current?.scrollIntoView({ block: "nearest" }); });
+    setJournalDeleteId(id);
+    window.requestAnimationFrame(() => { const button = journalConfirm.current; if (button) { button.focus({ preventScroll: true }); scrollFormSheetField(button.closest(".form-sheet-body"), button); } });
   }
-  function confirmJournalAction() {
-    const action = journalAction; setJournalAction(null);
-    if (action?.type === "edit") applyJournalEdit(action.entry);
-    else if (action?.type === "delete") void removeJournal(action.id);
-  }
-  function openJournalSheet(entry: DailyJournalEntry | null = null, showHistory = false) { applyJournalEdit(entry); setJournalAction(null); setJournalHistoryInitiallyOpen(showHistory); setJournalSheetOpen(true); }
-  function closeJournalSheet() { setJournalSheetOpen(false); setJournalHistoryInitiallyOpen(false); setJournalAction(null); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false); }
+  function openJournalSheet(entry: DailyJournalEntry | null = null, showHistory = false) { applyJournalEdit(entry); setJournalDeleteId(null); setJournalHistoryOpen(showHistory); setJournalSheetOpen(true); }
+  function closeJournalSheet() { setJournalSheetOpen(false); setJournalHistoryOpen(false); setJournalDeleteId(null); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false); }
   function selectCalendarDate(date: string) { setMonth(date.slice(0, 7)); playNativeHaptic("selection"); void loadDay(date); }
   function returnToToday() { const todayMonth = today.slice(0, 7); if (month !== todayMonth) void changeMonth(todayMonth); else { playNativeHaptic("selection"); void loadDay(today); } }
   function moveCalendar(offset: number) { if (calendarExpanded) void changeMonth(shiftMonth(month, offset)); else selectCalendarDate(shiftDate(selected, offset * 7)); }
@@ -265,17 +260,24 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
       </div>
     </FormSheet>}
 {ruleEditor && calendarDetail && day && <CalendarRuleSheet settings={day.calendarInterpretation} initialTitle={calendarDetail.title} rule={ruleEditor.rule} records={[calendarDetail, ...day.events.filter(event => event.sourceType === "calendar" && event.sourceId !== calendarDetail.sourceId)].map(event => ({ id: Number(event.sourceId), title: event.title, startAt: String(event.metadata.startAt), endAt: String(event.metadata.endAt), isAllDay: Boolean(event.metadata.isAllDay), notes: String(event.metadata.notes ?? ""), location: String(event.metadata.location ?? ""), timezone: typeof event.metadata.timezone === "string" ? event.metadata.timezone : null, status: event.metadata.status as CalendarEvent["status"], createdAt: "", updatedAt: "" }))} onClose={() => setRuleEditor(null)} onSaved={() => refreshSelectedDate(true)} />}
-    {journalSheetOpen && day && <FormSheet title={english ? "Day notes" : selected === today ? "今日一记" : "日记"} onClose={closeJournalSheet} formId="home-journal-form" submitLabel={editingJournalId ? english ? "Save changes" : "保存修改" : english ? "Add note" : "记下"} busy={savingJournal} dirty={journalDirty} submitDisabled={Boolean(journalAction) || !journalContent.trim()}>
+    {journalSheetOpen && day && <FormSheet title={journalHistoryOpen ? english ? "Saved day notes" : "当天日记" : editingJournalId !== null ? english ? "Edit note" : "编辑短记" : english ? "Add note" : "新增短记"} onClose={closeJournalSheet} formId={journalHistoryOpen ? undefined : "home-journal-form"} submitLabel={journalHistoryOpen ? undefined : editingJournalId !== null ? english ? "Save changes" : "保存修改" : english ? "Add note" : "记下"} busy={savingJournal} dirty={journalDirty} submitDisabled={journalDeleteId !== null || !journalContent.trim() || (editingJournalId !== null && !journalDirty)}>
       <div className="home-journal-sheet">
         <time className="home-journal-date" dateTime={selected}>{selected.slice(0, 4)} · {selectedLabel}</time>
         {error && <p className="form-error" role="alert">{error}</p>}
-        {journalAction && <div className="home-journal-confirm" role="group" aria-label={english ? "Confirm action" : "确认操作"}>
-          <p role="alert">{journalAction.type === "delete" ? english ? "Delete this note? This cannot be undone." : "删除这条记录？删除后无法恢复。" : english ? "Discard your unsaved changes and continue?" : "放弃尚未保存的内容，继续操作？"}{journalAction.type === "delete" && editingJournalId === journalAction.id && journalDirty && (english ? " Unsaved edits will also be lost." : "尚未保存的修改也会丢弃。")}</p>
-          <div><button ref={journalConfirm} className="button secondary" type="button" onClick={() => { setJournalAction(null); window.requestAnimationFrame(() => journalInput.current?.focus()); }}>{english ? "Go back" : "返回"}</button><button className="button secondary" type="button" onClick={confirmJournalAction}>{journalAction.type === "delete" ? english ? "Delete note" : "删除记录" : english ? "Discard and continue" : "放弃并继续"}</button></div>
+        {journalDeleteId !== null && <div className="home-journal-confirm" role="group" aria-label={english ? "Confirm deletion" : "确认删除"}>
+          <p role="alert">{english ? "Delete this note? This cannot be undone." : "删除这条记录？删除后无法恢复。"}{journalDirty && (english ? " Unsaved edits will also be lost." : "尚未保存的修改也会丢弃。")}</p>
+          <div><button ref={journalConfirm} className="button secondary" type="button" onClick={() => { setJournalDeleteId(null); window.requestAnimationFrame(() => journalInput.current?.focus({ preventScroll: true })); }}>{english ? "Keep editing" : "继续编辑"}</button><button className="button secondary" type="button" onClick={() => { setJournalDeleteId(null); void removeJournal(journalDeleteId); }}>{english ? "Delete note" : "删除记录"}</button></div>
         </div>}
-        <form id="home-journal-form" className="home-journal-form" onSubmit={saveJournal} inert={Boolean(journalAction)}>
-          {editingJournalId !== null && <div className="home-journal-edit-context"><span>{english ? "Editing a saved note" : "正在修改已有记录"}</span><button type="button" disabled={savingJournal} onClick={() => requestJournalAction({ type: "edit", entry: null })}>{english ? "Write a new note" : "改写新记录"}</button></div>}
-          <label className="field"><span>{editingJournalId ? english ? "Edit note" : "编辑记录" : english ? "Your note" : "记一点"}</span><textarea ref={journalInput} required autoFocus={!journalHistoryInitiallyOpen} rows={5} value={journalContent} onChange={(event) => setJournalContent(event.target.value)} placeholder={english ? "Write whenever something comes to mind…" : "想到什么，就记一点……"} maxLength={10_000} disabled={savingJournal} /></label>
+        {journalHistoryOpen ? <div className="home-journal-entries">
+          {day.journal.map(entry => <button key={entry.id} type="button" className="home-journal-entry home-journal-preview-entry" aria-label={`${english ? "Edit note" : "编辑短记"}：${entry.content}`} onClick={() => applyJournalEdit(entry)}>
+            <span>
+              <span className="home-journal-preview">{entry.content}</span><JournalState entry={entry} english={english} />{entry.hasFullDiary && <FullDiaryStatus english={english} />}
+            </span>
+            <Edit2 size={18} weight="Outline" aria-hidden="true" />
+          </button>)}
+          {!day.journal.length && <p className="home-pane-empty">{english ? "No notes for this day" : "这一天还没有短记"}</p>}
+        </div> : <form id="home-journal-form" className="home-journal-form" onSubmit={saveJournal} inert={journalDeleteId !== null}>
+          <label className="field"><span>{english ? "Your note" : "内容"}</span><textarea ref={journalInput} required rows={5} value={journalContent} onChange={(event) => setJournalContent(event.target.value)} placeholder={english ? "Write whenever something comes to mind…" : "想到什么，就记一点……"} maxLength={10_000} disabled={savingJournal} /></label>
           <div className="home-journal-optional">
             <details className="home-journal-disclosure"><summary><span>{english ? "Mood" : "心情"}</span><span>{draftMood ? `${draftMood.emoji} ${english ? draftMood.en : draftMood.zh}` : english ? "Optional" : "可选"}</span><ArrowDown5 size={15} weight="Outline" aria-hidden="true" /></summary>
               <fieldset className="home-mood-field" disabled={savingJournal}><legend className="sr-only">{english ? "Mood (optional)" : "心情（可选）"}</legend>{journalMood !== null && !journalEmotion && <p className="home-journal-legacy-mood">{english ? "Previous mood: " : "原心情："}{english ? draftMood?.en : draftMood?.zh}<button type="button" onClick={() => setJournalMood(null)}>{english ? "Clear" : "清除"}</button></p>}<div className="home-mood-picker">{journalEmotions.map((option) => <button type="button" key={option.value} className={journalEmotion === option.value ? "selected" : ""} aria-pressed={journalEmotion === option.value} onClick={() => { setJournalMood(null); setJournalEmotion((current) => current === option.value ? null : option.value); }}><span className="home-mood-emoji" aria-hidden="true">{option.emoji}</span><span>{english ? option.en : option.zh}</span></button>)}</div></fieldset>
@@ -285,8 +287,8 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
             </details>
           </div>
           <label className="home-journal-full-diary-field" title={english ? "Your full diary can be written elsewhere. This does not create a Chronicle." : "完整日记可以写在别处，不会自动生成纪事。"}><input type="checkbox" checked={journalFullDiary} onChange={(event) => setJournalFullDiary(event.target.checked)} disabled={savingJournal} /><span>{english ? "Full diary written for this day" : selected === today ? "今日有完整日记" : "这一天有完整日记"}</span></label>
-        </form>
-        {day.journal.length > 0 && <details open={journalHistoryInitiallyOpen} className="home-journal-history" inert={Boolean(journalAction)}><summary data-sheet-initial-focus={journalHistoryInitiallyOpen || undefined}>{english ? `Saved notes (${day.journal.length})` : `已有记录（${day.journal.length}）`}<ArrowDown5 size={15} weight="Outline" aria-hidden="true" /></summary><div className="home-journal-entries">{day.journal.map((entry) => <article key={entry.id} className="home-journal-entry" data-editing={editingJournalId === entry.id}><div className="home-journal-entry-copy"><p>{entry.content}</p><JournalState entry={entry} english={english} />{entry.hasFullDiary && <FullDiaryStatus english={english} />}</div><div className="home-journal-entry-actions"><button type="button" disabled={savingJournal} aria-label={`${english ? "Edit note" : "编辑记录"}：${entry.content.slice(0, 24)}`} onClick={() => requestJournalAction({ type: "edit", entry })}><Edit2 size={18} weight="Outline" aria-hidden="true" /></button><button type="button" disabled={savingJournal} aria-label={`${english ? "Delete note" : "删除记录"}：${entry.content.slice(0, 24)}`} onClick={() => requestJournalAction({ type: "delete", id: entry.id })}><Trash size={18} weight="Outline" aria-hidden="true" /></button></div></article>)}</div></details>}
+          {editingJournalId !== null && <button className="button secondary" type="button" disabled={savingJournal} onClick={() => requestJournalDelete(editingJournalId)}><Trash size={18} weight="Outline" aria-hidden="true" />{english ? "Delete note" : "删除这条短记"}</button>}
+        </form>}
       </div>
     </FormSheet>}
   </section>;

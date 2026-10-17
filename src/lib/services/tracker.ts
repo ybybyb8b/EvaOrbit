@@ -107,9 +107,9 @@ export async function purgeTrackerField(trackerId: number, id: number) {
   return repository.purgeTrackerField(id);
 }
 
-function validatedValues(fields: TrackerField[], values: Record<string, unknown>) {
+function validatedValues(fields: TrackerField[], values: Record<string, unknown>, quickCaptureEnabled: boolean) {
   const result: Record<string, unknown> = {};
-  const quickCapture = Object.keys(values).length === 0;
+  const quickCapture = quickCaptureEnabled && Object.keys(values).length === 0;
   for (const field of fields.filter((item) => !item.archivedAt)) {
     const value = values[field.key] ?? values[String(field.id)] ?? field.defaultValue;
     if (!quickCapture && field.required && (value === undefined || value === null || value === "" || Array.isArray(value) && !value.length)) throw new ValidationError(`${field.name}不能为空`);
@@ -132,7 +132,7 @@ export async function createTrackerEntry(input: NewTrackerEntry) {
   if (!tracker) throw new ValidationError("Tracker 不存在");
   if (tracker.archivedAt) throw new ValidationError("请先恢复已归档的 Tracker，再新增记录");
   const fields = await repository.listTrackerFields(tracker.id);
-  return repository.createTrackerEntry({ ...input, values: validatedValues(fields, input.values) });
+  return repository.createTrackerEntry({ ...input, values: validatedValues(fields, input.values, tracker.quickCaptureEnabled) });
 }
 export async function updateTrackerEntry(id: number, input: Record<string, unknown>) {
   const repository = await getRepository();

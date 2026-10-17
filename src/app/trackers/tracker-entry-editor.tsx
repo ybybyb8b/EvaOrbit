@@ -24,6 +24,7 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
     for (const field of fields) {
       if (!Object.hasOwn(initial, field.key) && Object.hasOwn(initial, String(field.id))) initial[field.key] = initial[String(field.id)];
       if (field.key !== String(field.id)) delete initial[String(field.id)];
+      if (!field.archivedAt && field.type === "boolean" && initial[field.key] === undefined) initial[field.key] = entry ? false : field.defaultValue ?? false;
     }
     return initial;
   });

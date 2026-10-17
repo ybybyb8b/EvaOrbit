@@ -30,6 +30,11 @@ test("Tracker time range migration preserves old fields, entries and keys; creat
       const detail=await getTrackerDetail(1);assert.equal(detail.insights.numericFields.find(item=>item.fieldKey===range.key).average,150);
       await assert.rejects(createTrackerEntry(parseNewTrackerEntry({values:{[range.key]:{startAt:'2026-10-05T12:00:00Z',endAt:'2026-10-05T11:00:00Z'}}},1)));
       await assert.rejects(updateTrackerEntry(entry.id,{values:{[range.key]:{startAt:'2026-10-05T12:00:00Z'}}}));
+      await createTrackerEntry(parseNewTrackerEntry({values:{}},1));
+      db.updateTracker(1,{quickCaptureEnabled:false});
+      await assert.rejects(createTrackerEntry(parseNewTrackerEntry({values:{}},1)),/Stay不能为空/);
+      await createTrackerEntry(parseNewTrackerEntry({values:{[range.key]:{startAt:'2026-10-05T12:00:00Z',endAt:'2026-10-05T13:00:00Z'}}},1));
+      db.updateTracker(1,{quickCaptureEnabled:true});
       await createTrackerEntry(parseNewTrackerEntry({values:{}},1));`);
     run(`import './src/lib/db.ts';`);
     const migrated=new DatabaseSync(databasePath);
