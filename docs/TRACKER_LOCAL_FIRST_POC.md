@@ -115,6 +115,18 @@ returns to the local entry. The online page retains its existing system bridge.
    concurrent edits, remote deletion, expired auth/re-login; keyboard/safe areas;
    blocked foreign frames/origins; original HealthKit/EventKit/notification flow.
 
+The manual PoC CI runs an additional Ubuntu job only after the macOS build,
+XCTest and IPA checks succeed. Supabase CLI 2.121.0 creates a disposable Docker
+stack with real Auth/PostgREST/PostgreSQL. `scripts/tracker-isolated-sync.mjs`
+rejects non-loopback targets, applies all preceding migrations, seeds synthetic
+users/data, then tests the new migration, real Next API transport, real MCP
+business handler/repository, two-account RLS, response loss, conflicts/deletions,
+logout/re-login and transport rollback while preserving the durable queue.
+The MCP test supplies a genuine local Auth JWT to the normal repository context;
+hosted OAuth consent/audience issuance remains a separate acceptance item.
+Neither CI job receives production credentials or deploys an API. A local stack
+cannot prove compatibility with every difference in the hosted production schema.
+
 The repository's lint, typecheck, full tests, Next production build, local bundle
 build and `git diff --check` remain required. CI/real-device and live Supabase
 results must be reported separately from Windows checks.
