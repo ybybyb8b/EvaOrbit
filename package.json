@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:trackers": "vite --config vite.trackers.config.ts",
+    "build:trackers": "vite build --config vite.trackers.config.ts",
+    "test:trackers:browser": "node scripts/tracker-local-browser.mjs",
     "dev:online": "node --env-file-if-exists=.env.local scripts/dev-online.mjs",
     "build": "next build",
     "start": "next start",
@@ -31,13 +34,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@types/node": "26.3.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@types/web-push": "^3.6.4",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vite": "^7.3.7"
   },
   "engines": {
     "node": ">=24"

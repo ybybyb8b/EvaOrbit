@@ -2,12 +2,23 @@ name: iOS Native Host
 
 on:
   workflow_dispatch:
+    inputs:
+      local_trackers:
+        description: Build the isolated Local-first Tracker PoC
+        type: boolean
+        default: false
   push:
     paths:
       - "ios/EvaOrbitHost/**"
       - "scripts/ios/prepare-assets.sh"
       - "scripts/ios/package-ad-hoc-ipa.sh"
       - ".github/workflows/ios-native-host.yml"
+      - "src/local-trackers/**"
+      - "src/lib/tracker-local-*"
+      - "src/app/trackers/tracker-entry-editor.tsx"
+      - "vite.trackers.config.ts"
+      - "package.json"
+      - "package-lock.json"
 
 permissions:
   contents: read
@@ -20,6 +31,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Build bundled Tracker UI
+        run: |
+          npm ci
+          npm run build:trackers
+          node --test src/lib/tracker-local.test.ts scripts/tracker-sync-postgres.test.mjs
 
       - name: Install XcodeGen
         run: |
@@ -46,6 +68,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Simulator" \
             CODE_SIGNING_ALLOWED=NO \
+            EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
             build-for-testing
 
       - name: Run native unit tests on iPhone 16 Pro Simulator
@@ -58,8 +81,19 @@ jobs:
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Tests" \
+            -resultBundlePath "$RUNNER_TEMP/EvaOrbitHost-TestResults.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
+            EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
             test
+
+      - name: Upload native test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: EvaOrbitHost-tests-${{ inputs.local_trackers && 'TrackersPoC' || 'OnlineHost' }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/EvaOrbitHost-TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Build ad-hoc signed device app
         working-directory: ios/EvaOrbitHost
@@ -77,6 +111,10 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
+            EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
+            PRODUCT_BUNDLE_IDENTIFIER="${{ inputs.local_trackers && 'com.evaorbit.nativehost.trackerspoc' || 'com.evaorbit.nativehost' }}" \
+            EVAORBIT_URL_SCHEME="${{ inputs.local_trackers && 'evaorbit-trackers-poc' || 'evaorbit' }}" \
+            EVAORBIT_DISPLAY_NAME="${{ inputs.local_trackers && 'EvaOrbit Trackers PoC' || 'EvaOrbit' }}" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             build
 
@@ -93,7 +131,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: EvaOrbitHost-ad-hoc-${{ github.run_number }}
+          name: EvaOrbitHost${{ inputs.local_trackers && '-TrackersPoC' || '' }}-ad-hoc-${{ github.run_number }}
           path: ${{ runner.temp }}/EvaOrbitHost-Artifact
           if-no-files-found: error
           retention-days: 14

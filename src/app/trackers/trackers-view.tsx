@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageLogAction } from "@/components/bottom-log";
 import { TrackerIcon } from "@/components/tracker-icon";
+import { TrackerCardContent } from "@/components/tracker-card-content";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
 import { orderedTrackerGroups } from "@/lib/tracker-order";
@@ -32,15 +33,6 @@ const fieldTypes: Array<[TrackerFieldType, string, string]> = [
 type FieldDraft = { clientId: string; name: string; type: TrackerFieldType; options: string; required: boolean; includeInStats: boolean; unit: string; precision: string };
 function newFieldDraft(type: TrackerFieldType = "number"): FieldDraft {
   return { clientId: crypto.randomUUID(), name: "", type, options: "", required: false, includeInStats: type !== "text", unit: "", precision: "0" };
-}
-
-function ago(value: string) {
-  const milliseconds = Date.now() - new Date(value).getTime();
-  const days = Math.floor(milliseconds / 86400000);
-  if (days > 0) return `${days}d ago`;
-  const hours = Math.floor(milliseconds / 3600000);
-  if (hours > 0) return `${hours}h ago`;
-  return `${Math.max(1, Math.floor(milliseconds / 60000))}m ago`;
 }
 
 export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[]; cacheScope: string | null }) {
@@ -162,7 +154,7 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
     {loading ? <PageLoading title="观测" englishTitle="Trackers" inline /> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group.name}>
       <div className="tracker-group-heading"><h2>{group.name}</h2><span>{group.items.length}</span></div>
       <div className="tracker-card-grid">{group.items.map((tracker) => <article className="tracker-card" key={tracker.id}>
-        <Link href={`/trackers/${tracker.id}`}><div className="tracker-card-head"><TrackerIcon tracker={tracker} /><div><h3>{tracker.name}</h3><p>{tracker.stats.lastOccurredAt ? `Last recorded · ${ago(tracker.stats.lastOccurredAt)}` : "No records yet"}</p></div></div></Link>
+        <Link href={`/trackers/${tracker.id}`}><TrackerCardContent name={tracker.name} lastOccurredAt={tracker.stats.lastOccurredAt} picture={<TrackerIcon tracker={tracker} />} /></Link>
         {tracker.archivedAt ? null : tracker.quickCaptureEnabled ? <button className="tracker-quick" disabled={working} onClick={() => void quickCapture(tracker)} aria-label={`Quick record ${tracker.name}`} title="Quick record"><Icon name="plus" /></button> : <Link className="tracker-quick" href={`/trackers/${tracker.id}?capture=detail`} aria-label={`Add a detailed record to ${tracker.name}`} title="Add detailed record"><Icon name="plus" /></Link>}
       </article>)}</div>
     </section>) : showForm ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>{showArchived?(english?"No archived Trackers":"暂无已归档 Tracker"):"暂无观测"}</h2><button className="button primary" onClick={() => setShowForm(true)}>新增观测</button></div>}

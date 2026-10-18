@@ -34,6 +34,9 @@ final class WebViewController: UIViewController {
         )
 
         let webConfiguration = WKWebViewConfiguration()
+        if configuration.localTrackers, let root = Bundle.main.url(forResource: "TrackerWeb", withExtension: nil) {
+            webConfiguration.setURLSchemeHandler(TrackerAssetHandler(root: root), forURLScheme: TrackerAssetHandler.scheme)
+        }
         webConfiguration.websiteDataStore = .default()
         webConfiguration.userContentController = userContentController
         webConfiguration.applicationNameForUserAgent = "EvaOrbitNative/0.1"
@@ -106,7 +109,8 @@ final class WebViewController: UIViewController {
     }
 
     private func loadEvaOrbit() {
-        webView.load(URLRequest(url: launchURL ?? hostConfiguration.baseURL, cachePolicy: .reloadRevalidatingCacheData))
+        let initial = hostConfiguration.localTrackers ? hostConfiguration.trackerDevelopmentURL ?? TrackerAssetHandler.entryURL : hostConfiguration.baseURL
+        webView.load(URLRequest(url: launchURL ?? initial, cachePolicy: .reloadRevalidatingCacheData))
     }
 
     @discardableResult
@@ -176,7 +180,7 @@ extension WebViewController: WKNavigationDelegate {
             return
         }
 
-        if url.absoluteString == "about:blank" || hostConfiguration.allows(url) {
+        if url.absoluteString == "about:blank" || hostConfiguration.allows(url) || hostConfiguration.allowsTrackerUI(url) {
             decisionHandler(.allow)
             return
         }

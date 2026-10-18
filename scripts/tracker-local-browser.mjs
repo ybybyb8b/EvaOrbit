@@ -1,0 +1,87 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createServer, preview } from 'vite';
+const { chromium } = await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE || 'playwright');
+
+await fs.mkdir('tmp',{recursive:true});
+const profile = await fs.mkdtemp(path.resolve('tmp/tracker-browser-'));
+const bundled = process.argv.includes('--bundle');
+const port = bundled ? 4179 : 4178;
+const server = bundled ? await preview({configFile:path.resolve('vite.trackers.config.ts'),preview:{host:'127.0.0.1',port,strictPort:true}}) : await createServer({configFile:path.resolve('vite.trackers.config.ts')});
+let context;
+const errors = [];
+try {
+  if(!bundled) await server.listen();
+  console.log(JSON.stringify({serverPid:process.pid,port,bundled}));
+  const open = async () => {
+    context = await chromium.launchPersistentContext(profile,{channel:process.env.EVAORBIT_BROWSER_CHANNEL || 'chrome',headless:true,viewport:{width:402,height:874},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+    const page = context.pages()[0];
+    page.on('pageerror',error=>errors.push(error.stack??String(error)));
+    await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'networkidle'});
+    return page;
+  };
+  let page=await open();
+  await page.getByRole('button',{name:'本机预览',exact:true}).click();
+  await page.getByRole('button',{name:'新增观测',exact:true}).first().click();
+  await page.locator('.form-sheet-layer[data-state="open"]').waitFor();
+  const create=page.locator('#local-create-tracker');
+  await create.locator('input').nth(0).fill('睡眠观察');
+  await create.locator('input').nth(1).fill('日常');
+  await create.locator('input').nth(2).fill('时长');
+  await page.locator('button[form="local-create-tracker"]').click();
+  await page.getByRole('heading',{name:'睡眠观察',exact:true}).waitFor();
+  await page.getByRole('button',{name:'新增记录',exact:true}).click();
+  await page.locator('.form-sheet-layer[data-state="open"]').waitFor();
+  const record=page.locator('#tracker-entry-form');
+  await record.locator('input[type="number"]').fill('8');
+  await record.locator('textarea').fill('离线创建');
+  await page.locator('button[form="tracker-entry-form"]').click();
+  await page.locator('#tracker-entry-form').waitFor({state:'detached'});
+  await page.getByText('离线创建',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'编辑记录',exact:true}).click();
+  await page.locator('.form-sheet-layer[data-state="open"]').waitFor();
+  await record.locator('textarea').fill('离线编辑后持久保存');
+  await page.locator('button[form="tracker-entry-form"]').click();
+  await page.locator('#tracker-entry-form').waitFor({state:'detached'});
+  await page.getByText('离线编辑后持久保存',{exact:true}).waitFor();
+  await page.evaluate(()=>document.fonts.ready);
+  await page.screenshot({path:'tmp/tracker-local-mobile.png',fullPage:true});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false,'mobile must not overflow');
+  await context.close(); context=null;
+  page=await open();
+  await page.getByRole('button',{name:/睡眠观察/}).click();
+  await page.getByText('离线编辑后持久保存',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'删除记录',exact:true}).click();
+  await page.getByRole('button',{name:'确认删除',exact:true}).click();
+  await page.getByText('暂无记录，记下第一个时刻。',{exact:true}).waitFor();
+  await page.reload({waitUntil:'networkidle'});
+  await page.getByRole('button',{name:/睡眠观察/}).click();
+  assert.equal(await page.getByText('离线编辑后持久保存',{exact:true}).count(),0);
+  await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('button',{name:'返回 Trackers',exact:true}).click();
+  await page.screenshot({path:'tmp/tracker-local-desktop.png',fullPage:true});
+  await page.getByLabel('颜色主题').selectOption('rosewood');
+  await page.emulateMedia({colorScheme:'dark'});
+  await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'rosewood');
+  await page.locator('.tracker-card').evaluate(async element => {
+    void getComputedStyle(element).backgroundColor;
+    await Promise.all(element.getAnimations().map(animation => animation.finished));
+    const reference=document.createElement('span'); reference.style.backgroundColor='var(--surface-card)'; element.append(reference);
+    const matches=getComputedStyle(element).backgroundColor===getComputedStyle(reference).backgroundColor;
+    reference.remove();
+    if(!matches) throw new Error('Tracker cards must use the shared theme surface');
+  });
+  await page.screenshot({path:'tmp/tracker-local-dark.png',fullPage:true});
+  assert.deepEqual(errors,[]);
+  console.log('PASS shared form create/edit/delete, IndexedDB survives browser restart, mobile layout and desktop rendering');
+} catch(error) {
+  if(context) { const page=context.pages()[0]; console.log(JSON.stringify({failureBody:(await page.locator('body').innerText()).slice(0,4500),errors})); await page.screenshot({path:'tmp/tracker-local-failure.png',fullPage:true}); }
+  throw error;
+} finally {
+  if(context)await context.close();
+  if(bundled) await new Promise((resolve,reject)=>server.httpServer.close(error=>error?reject(error):resolve())); else await server.close();
+  assert(profile.startsWith(path.resolve('tmp')+path.sep));
+  await fs.rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
+}

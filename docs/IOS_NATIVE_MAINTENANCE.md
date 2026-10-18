@@ -23,14 +23,14 @@ WKWebView Native Host
 
 必须保持以下边界：
 
-- Web / 服务端负责业务规则、数据模型、提醒时间和通知文案；Swift 不复制业务规则，也不建立第二套业务数据库。
+- Web / 服务端负责业务规则、数据模型、提醒时间和通知文案；Swift 不复制业务规则。经批准的 Tracker Local-first PoC 可在独立运行模式保存账户隔离的 SQLite 业务副本与 outbox，共享 TypeScript 状态机维护本地操作；不建立第二套提醒 source of truth。
 - Swift 只实现必须依赖 iOS 的能力，并通过现有 `NativeBridge` 暴露最小接口。
 - Native Host 从 `Info.plist` 的 `EvaOrbitBaseURL` 加载 `https://eva-orbit.vercel.app`。Bridge 只允许与该 URL 完全相同的 HTTPS scheme、host 和有效端口。
 - `/native` 仅保留为旧版 Host 的在线兼容跳转并立即回到 `/`；不承载 Service Worker 离线 Shell、IndexedDB Inbox 或同步队列。
 - 浏览器和 PWA 必须继续独立工作。HealthKit 仅在 Native Host 中出现；Web Notification / Web Push / Cron 继续作为浏览器路径。
 - 当前没有 APNs、remote push entitlement、Notification Service Extension 或远程后台通知。原生本地通知不需要增加 APNs capability。
 
-独立 SwiftUI 客户端已迁移到单独的 `EvaOrbit-iOS` 仓库。本仓库继续提供 Web、正式 `EvaOrbitHost` 和客户端所需的 Vercel API；在独立客户端完成替换验收前，不得改变上述正式 Host 链路。客户端不得直接访问 Supabase，也不得把服务端业务规则复制到 Swift。
+独立 SwiftUI 客户端已废弃，仅作为参考代码来源。本仓库承载正式 Host 与渐进的本地 React 界面；客户端继续通过 Vercel 业务 API 同步，不直接访问 Supabase。普通构建仍加载线上 Web；`local_trackers=true` 的独立 PoC 构建加载安装包内 `eo-local://app/index.html`，使用不同 Bundle ID，不替换生产安装。实施与验收契约见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。其协议 2 的事务化 RPC 替代旧 Native 同步写入；旧协议写入已停用，不影响 Web/MCP 或 HealthKit/EventKit 的独立接口。
 
 ## 二、事实来源
 
@@ -303,7 +303,7 @@ Swift 新方法需要按现有链路构建新 IPA，兼容 Web 可先部署并�
 
 - bootstrap 在 document start 注入，但 bridge 对象不可改写且被冻结。
 - 只接受 main frame 调用。
-- 只接受 `HostConfiguration` 允许的生产同源 URL。
+- 在线页面只接受 `HostConfiguration` 允许的生产同源 URL。启用 Tracker PoC 时，本地 `eo-local://app` 主框架可调用专用 `trackers.*` 白名单及少量 host/外观/触感方法；本地页面不可配置 HealthKit 凭据。生产网页不可调用 Tracker 本地存储方法。Debug 可单独固定一个 HTTPS 开发源，Release 不采纳开发源；不得泛化为任意网页白名单。
 - 每个请求必须包含匹配的 protocol version、非空 request id、方法名和对象参数。
 - 方法必须同时加入 Swift 白名单并实现显式参数校验。
 - Web 必须先通过 `host.getInfo` 的 `methods`/capabilities 做向后兼容检测，旧 IPA 不应因 Web 更新而报错。

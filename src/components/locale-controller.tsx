@@ -18,7 +18,7 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue>({ language: DEFAULT_UI_LANGUAGE, english: false, setLanguage: () => undefined, chineseFont: DEFAULT_CHINESE_FONT, englishFont: DEFAULT_ENGLISH_FONT, setFonts: () => undefined });
 
-export function LocaleController({ children }: { children: React.ReactNode }) {
+export function LocaleController({ children, localOnly = false }: { children: React.ReactNode; localOnly?: boolean }) {
   const [language, setLanguageState] = useState<UiLanguage>(DEFAULT_UI_LANGUAGE);
   const [fonts, setFontsState] = useState<{ chineseFont: ChineseFont; englishFont: EnglishFont }>({ chineseFont: DEFAULT_CHINESE_FONT, englishFont: DEFAULT_ENGLISH_FONT });
 
@@ -31,14 +31,20 @@ export function LocaleController({ children }: { children: React.ReactNode }) {
       setFontsState({ chineseFont, englishFont });
       applyFonts(chineseFont, englishFont, persist);
     };
-    update(storedUiLanguage(), false);
-    const localFonts = storedFonts();
-    updateFonts(localFonts.chineseFont, localFonts.englishFont, false);
-    fetch("/api/preferences/appearance", { cache: "no-store" })
+    try {
+      update(storedUiLanguage(), false);
+      const localFonts = storedFonts();
+      updateFonts(localFonts.chineseFont, localFonts.englishFont, false);
+    } catch (error) {
+      if (!localOnly) throw error;
+      update(DEFAULT_UI_LANGUAGE, false);
+      updateFonts(DEFAULT_CHINESE_FONT, DEFAULT_ENGLISH_FONT, false);
+    }
+    if (!localOnly) fetch("/api/preferences/appearance", { cache: "no-store" })
       .then(async (response) => response.ok ? response.json() as Promise<UiPreferences> : null)
       .then((preferences) => { if (preferences) { update(preferences.uiLanguage); updateFonts(preferences.chineseFont, preferences.englishFont); } })
       .catch(() => undefined);
-  }, []);
+  }, [localOnly]);
 
   useEffect(() => installUiCopyBridge(language), [language]);
 

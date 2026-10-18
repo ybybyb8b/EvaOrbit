@@ -41,6 +41,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState"]
+    static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
+    private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager: NotificationManager
     private let hapticFeedbackManager = HapticFeedbackManager()
@@ -54,8 +57,11 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         return Array(Set(domains)).sorted()
     }
 
-    init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
+    @MainActor init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
         self.hostConfiguration = hostConfiguration
+        if hostConfiguration.localTrackers, let database = try? TrackerLocalDatabase.live() {
+            trackerController = TrackerLocalController(baseURL: hostConfiguration.baseURL, database: database)
+        } else { trackerController = nil }
         self.healthKitCoordinator = healthKitCoordinator
         self.notificationManager = notificationManager
         self.eventKitSyncEngine = eventKitSyncEngine
@@ -71,7 +77,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             return
         }
 
-        guard let sourceURL = message.frameInfo.request.url, hostConfiguration.allows(sourceURL) else {
+        guard let sourceURL = message.frameInfo.request.url, hostConfiguration.allows(sourceURL) || hostConfiguration.allowsTrackerUI(sourceURL) else {
             replyHandler(failure(id: nil, code: "untrusted_origin", message: "Bridge calls are limited to EvaOrbit."), nil)
             return
         }
@@ -88,15 +94,23 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
 
         let parameters = request["params"] as? [String: Any] ?? [:]
-        guard Self.supportedMethods.contains(method) else {
+        let isLocal = hostConfiguration.allowsTrackerUI(sourceURL)
+        let allowed = isLocal ? Self.localCoreMethods.union(Self.trackerMethods) : Self.supportedMethods
+        guard allowed.contains(method) else {
             replyHandler(failure(id: identifier, code: "unknown_method", message: "Unsupported native method."), nil)
+            return
+        }
+        if Self.trackerMethods.contains(method) {
+            handleTracker(method: method, parameters: parameters, id: identifier, webView: message.webView, replyHandler: replyHandler)
             return
         }
         switch method {
         case "host.ping":
             replyHandler(success(id: identifier, result: ["pong": true]), nil)
         case "host.getInfo":
-            replyHandler(success(id: identifier, result: hostInfo()), nil)
+            var info = hostInfo()
+            info["methods"] = allowed.sorted()
+            replyHandler(success(id: identifier, result: info), nil)
         case "host.notifyDataChanged":
             guard let domains = Self.dataChangeDomains(parameters["domains"]),
                   let source = parameters["source"] as? String, ["eventkit", "healthkit"].contains(source),
@@ -370,6 +384,48 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         let validSync=syncIdentifier?.range(of:#"^evaorbit\.menstrual_flow\.[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#,options:[.regularExpression,.caseInsensitive]) != nil
         guard validSample||validSync else { replyHandler(failure(id:id,code:"invalid_menstrual_flow_delete",message:"Menstrual flow deletion identity is invalid."),nil);return }
         Task { do { try await healthKitCoordinator.deleteMenstrualFlow(sampleID:validSample ? sampleID:nil,syncIdentifier:validSync ? syncIdentifier:nil);replyOnMain(replyHandler,value:success(id:id,result:["deleted":true])) } catch { replyOnMain(replyHandler,value:failure(id:id,code:"healthkit_menstrual_flow_delete_failed",message:HealthDiagnostics.safe(error))) } }
+    }
+
+    private func handleTracker(method: String, parameters: [String: Any], id: String, webView: WKWebView?, replyHandler: @escaping (Any?, String?) -> Void) {
+        Task { @MainActor in
+            do {
+                guard let controller = trackerController else { throw TrackerLocalError.storage }
+                let result: Any
+                switch method {
+                case "trackers.getSession":
+                    if let account = try await controller.database.account() { result = account } else { result = NSNull() }
+                case "trackers.signIn":
+                    guard let email = parameters["email"] as? String, let password = parameters["password"] as? String else { throw TrackerLocalError.invalid }
+                    result = try await controller.signIn(email: email, password: password)
+                case "trackers.signOut": try await controller.signOut(); result = NSNull()
+                case "trackers.readState":
+                    guard let account = parameters["accountId"] as? String else { throw TrackerLocalError.invalid }
+                    result = try await controller.database.read(accountId: account)
+                case "trackers.commitState":
+                    guard let account = parameters["accountId"] as? String, let revision = parameters["expectedRevision"] as? Int, let state = parameters["state"] as? [String: Any] else { throw TrackerLocalError.invalid }
+                    result = try await controller.database.commit(accountId: account, expectedRevision: revision, state: state)
+                case "trackers.sync":
+                    guard let request = parameters["request"] as? [String: Any] else { throw TrackerLocalError.invalid }
+                    result = try await controller.synchronize(request)
+                case "trackers.exportState":
+                    guard let account = try await controller.database.account()?["accountId"], let presenter = webView?.window?.rootViewController else { throw TrackerLocalError.account }
+                    let state = try await controller.database.read(accountId: account)
+                    guard !(state is NSNull) else { throw TrackerLocalError.invalid }
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("evaorbit-trackers-local.json")
+                    try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted]).write(to: url, options: [.atomic, .completeFileProtection])
+                    let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                    share.popoverPresentationController?.sourceView = webView
+                    share.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: url) }
+                    presenter.present(share, animated: true)
+                    result = ["shared": true]
+                default: throw TrackerLocalError.invalid
+                }
+                replyHandler(["ok": true, "id": id, "result": result], nil)
+            } catch {
+                let message = (error as? TrackerLocalError)?.localizedDescription ?? "Tracker 操作失败，本地数据已保留，请稍后重试"
+                replyHandler(failure(id: id, code: "tracker_failed", message: message), nil)
+            }
+        }
     }
 
     private func replyOnMain(_ replyHandler: @escaping (Any?, String?) -> Void, value: [String: Any]) {

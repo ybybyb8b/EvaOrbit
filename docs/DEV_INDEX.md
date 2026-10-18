@@ -106,6 +106,7 @@
 - **职责与入口**：[trackers/](../src/app/trackers/)、[tracker 服务](../src/lib/services/tracker.ts)；`trackers`、`tracker_fields`、`tracker_entries`、`tracker_goals`、`tracker_reminders`；`/api/trackers/*`，MCP `tracker`。
 - **依赖与决定**：属性 stable key/type 保持历史语义；归档保留记录，永久删除才清理数据。旧属性 DELETE 仍为归档，永久删除需显式选择。`time_range` 是自定义属性而非主记录时间，服务端重新计算时长。提醒依赖 Notifications，记录参与 Timeline。
 - **详文**：[生命周期](TRACKER_SETTINGS_LIFECYCLE.md)、[时间段属性](TRACKER_TIME_RANGE.md)、[MCP 子对象操作](../MCP.md)。
+- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。同一 Tracker 记录表单、卡片内容与主题供 Web 和本地入口使用；浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
 
 ## Calendar
 
@@ -170,5 +171,5 @@
 
 - **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[同步契约](../src/lib/native-sync-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。
 - **数据与接口**：`native_devices`、`native_sync_mutations`，以及 HealthKit / EventKit 各自的样本、回执与映射表；`/api/native/*`、`/api/healthkit/energy/ingest`、`/api/eventkit/*`。
-- **依赖与决定**：Web 主体仍部署在 Vercel，Host 用 WKWebView 提供原生能力；设备本地 outbox/幂等与账户数据隔离。HealthKit、EventKit、原生通知分别遵循各自授权及同步契约，网页缓存不能替代设备状态。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
+- **依赖与决定**：Web 主体仍部署在 Vercel；普通 Host 加载线上页面，独立 Tracker PoC 模式加载安装包 React 资源，并经原生 SQLite/受限 bridge 读写本地业务副本。独立 SwiftUI 工程已废弃。`/api/native/sync` 使用协议 2 的 Tracker 事务同步，旧协议写入停用；HealthKit、EventKit、原生通知继续遵循各自契约。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
 - **详文**：涉及本节改动先完整阅读 [维护契约](IOS_NATIVE_MAINTENANCE.md)，再按需看 [Host Runbook](IOS_NATIVE_HOST.md)、[安装简版](IOS_IPA_INSTALL_QUICKSTART.md)、[Sleep](HEALTHKIT_SLEEP.md)、[体重合并](HEALTHKIT_WEIGHT_MERGE.md)、[EventKit 偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)。

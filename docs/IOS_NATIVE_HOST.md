@@ -1,5 +1,11 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+## Tracker Local-first PoC（独立运行模式）
+
+独立 SwiftUI 界面已废弃。现有 Host 可选加载本地打包 React Tracker，流程见 [Tracker PoC 契约](TRACKER_LOCAL_FIRST_POC.md)。Windows 使用 `npm run dev:trackers` 实时预览；构建前执行 `npm run build:trackers`。CI 手动启用 `local_trackers` 会使用独立 Bundle ID 构建 PoC，默认仍构建线上 Host。先应用新的 Tracker 同步迁移并部署 API，再验收设备双向同步；本地自动化不等于迁移已应用或真机已通过。
+
+签名、HealthKit entitlement 和安装工具链沿用本文；回退时保留 PoC 安装及未同步数据库，先同步或导出。不要将卸载重装当作 Local-first 数据迁移方式。
+
 ## Bark 通知打开 Host（需要新版 IPA）
 
 新版注册 `evaorbit://open/<页面路径>`，点击 Bark 通知可打开 Host 的对应页面。先部署兼容 Web 与 `202610130002_bark_host_links.sql`，再按原有 CI/xtool 链路构建并安装新版；安装后到「设置 → 通知 → Bark」点击「改为打开 Host」并发送测试通知。旧版保持打开网页，不能仅靠重签旧 IPA 获得此入口。

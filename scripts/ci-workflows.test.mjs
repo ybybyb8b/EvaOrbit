@@ -5,6 +5,12 @@ import test from "node:test";
 const readWorkflow = (name) =>
   readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8");
 
+test("Tracker PoC development branch cannot trigger a Vercel Git deployment", () => {
+  const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
+  assert.equal(config.git.deploymentEnabled["codex/tracker-local-first-poc"], false);
+  assert.equal(config.git.deploymentEnabled.main, undefined, "Leave production branch deployment policy unchanged");
+});
+
 test("build workflows use Node 24 actions without insecure runtime overrides", () => {
   for (const name of ["ios-native-host", "xtool-patched"]) {
     const workflow = readWorkflow(name);

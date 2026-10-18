@@ -17,6 +17,7 @@ notion-import-work/
 # Generated iOS project and build products
 ios/EvaOrbitHost/EvaOrbitHost.xcodeproj/
 ios/EvaOrbitHost/build/
+ios/EvaOrbitHost/Resources/TrackerWeb/
 ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 ios/EvaOrbitHost/Resources/Assets.xcassets/AppIcon.appiconset/AppIconDark.png
 

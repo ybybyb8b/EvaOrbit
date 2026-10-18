@@ -1,0 +1,34 @@
+import { defineConfig } from "vite";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL(".", import.meta.url));
+const cloud = process.env.EVAORBIT_TRACKER_API_URL ?? "https://eva-orbit.vercel.app";
+if (new URL(cloud).protocol !== "https:") throw new Error("Tracker development proxy requires HTTPS");
+
+export default defineConfig(({ command }) => ({
+  root: `${root}/src/local-trackers`,
+  publicDir: `${root}/public`,
+  resolve: { alias: { "@": `${root}/src` } },
+  define: { "process.env.EVAORBIT_TIME_ZONE": JSON.stringify(process.env.EVAORBIT_TIME_ZONE || "Asia/Shanghai") },
+  esbuild: { jsx: "automatic" },
+  build: { outDir: `${root}/ios/EvaOrbitHost/Resources/TrackerWeb`, emptyOutDir: true, assetsInlineLimit: 0, target: "safari16" },
+  server: {
+    host: "127.0.0.1", port: 4178, strictPort: true,
+    fs: { allow: [root] },
+    proxy: { "/eo-api/": {
+      target: cloud, changeOrigin: true, cookieDomainRewrite: "", cookiePathRewrite: "/",
+      rewrite: path => `/api/native/${path.slice("/eo-api/".length)}`,
+      configure(proxy) {
+        proxy.on("proxyRes", response => {
+          // Development-only loopback cookies; never shipped in the IPA.
+          if (response.headers["set-cookie"]) response.headers["set-cookie"] = response.headers["set-cookie"].map(cookie => cookie.replace(/;\s*Secure/gi, ""));
+        });
+      },
+    } },
+  },
+  plugins: [{ name: "tracker-client-directives", enforce: "pre", transform(code, id) {
+    if (/\.[jt]sx?$/.test(id) && /^["']use client["'];?/.test(code)) return { code: code.replace(/^["']use client["'];?\s*/, ""), map: null };
+  } }, { name: "tracker-local-csp", transformIndexHtml(html) {
+    return command === "build" ? html.replace("<head>", '<head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; font-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'">') : html;
+  } }],
+}));
