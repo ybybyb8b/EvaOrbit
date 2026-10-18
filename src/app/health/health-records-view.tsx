@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -39,7 +40,7 @@ export function HealthRecordsView({ initial }: { initial: HealthRecord[] }) {
   return <div className="page health-page health-records-page">
     <PageHeader eyebrow="健康" title="Records" action={<PageLogAction label="新增健康记录" className="button primary" onClick={openCreate}><Icon name="plus" />新增记录</PageLogAction>} />
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
-    {error && <p className="form-error">{error}</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
     {editorOpen && <FormSheet title={editing ? "Edit health record" : "Add health record"} onClose={closeEditor} formId="health-records-form" submitLabel={editing ? "Save changes" : "Add record"} busy={saving}><HealthRecordEditor formId="health-records-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={(record) => { closeEditor(); setMessage("Health record saved"); setRecords((current) => [record, ...current.filter((item) => item.id !== record.id)]); void load(); }} /></FormSheet>}
     <div className="health-record-filters" aria-label="Filter health records"><button className={!filter ? "active" : ""} onClick={() => selectFilter("")}>All</button><button className={filter === "active" ? "active" : ""} onClick={() => selectFilter("active")}>Active</button><button className={filter === "resolved" ? "active" : ""} onClick={() => selectFilter("resolved")}>Resolved</button></div>
     <section className="health-history-section"><HealthRecordList records={records} /></section>

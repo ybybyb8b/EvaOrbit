@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLogAction } from "@/components/bottom-log";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -54,7 +55,7 @@ export function HealthView({ view = "overview", initialSleep, initial, initialEn
     {quickPicker && <FormSheet title={english ? "Log health" : "记录健康"} onClose={() => setQuickPicker(false)}><div className="health-log-choices">{HEALTH_QUICK_LOGS.map(item => <button type="button" key={item.kind} onClick={() => { setQuickPicker(false); setQuickKind(item.kind); }}><item.icon /><span>{english ? item.en : item.zh}</span><Icon name="arrow" /></button>)}</div></FormSheet>}
     {QuickEditor && <QuickEditor initialDate={today} onClose={() => setQuickKind(null)} onSaved={async () => { router.refresh(); }} />}
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
-    {error && <p className="form-error">{error}</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
     {editorOpen && <FormSheet title={editing ? (english ? "Edit health record" : "编辑健康记录") : (english ? "Add health record" : "新增健康记录")} onClose={closeEditor} formId="health-record-form" submitLabel={english ? "Save" : "保存"} busy={saving}><HealthRecordEditor key={editing ? `edit-${editing.id}` : "new"} formId="health-record-form" editing={editing} onSavingChange={setSaving} onCancel={closeEditor} onSaved={() => { closeEditor(); setMessage(english ? "Health record saved" : "健康记录已保存"); router.refresh(); }} /></FormSheet>}
     {view === "overview" && <HealthOverview initialSleep={initialSleep} initialEnergy={initialEnergy} initialTraining={initialTraining} initialWeights={initialWeights} initialPeriods={initialPeriods} initialMedicationReminders={initialMedicationReminders} today={today}>{attention}</HealthOverview>}
     {view === "records" && attention}

@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ToastNotice } from "@/components/action-toast";
@@ -202,7 +203,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       <div className="daily-energy-editor-actions"><button type="button" className="button secondary" onClick={closeEditor}>{t("Cancel", "取消")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…", "保存中…") : t("Save energy", "保存能量")}</button></div>
     </form>}
     {!editing && summary.notes && <p className="daily-energy-note">{summary.notes}</p>}
-    {error && <p className="form-error">{error}</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     <div className="daily-energy-history-heading"><span>{t("Energy history", "能量历史")}</span><button className="text-button" onClick={() => setHistoryOpen((open) => !open)}>{historyOpen ? t("Hide history", "收起历史") : t("View history", "查看历史")}<Icon name="arrow" /></button></div>
     {historyOpen && (history.length ? <div className="daily-energy-history">{history.slice(0, 7).map((item) => <button key={item.date} className={item.date === selectedDate ? "active" : ""} onClick={() => void loadDate(item.date)}><span>{item.date}</span><strong>{formatKcal(item.totalExpenditureKcal, english)}</strong><small>{t("Balance", "差额")} {formatKcal(item.energyBalance, english)}</small></button>)}</div> : <p className="daily-energy-history-empty">{t("Save resting or active energy to build a history.", "保存静息或活动能量后即可查看历史。")}</p>)}

@@ -1,12 +1,13 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { showActionToast } from "@/components/action-toast";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
-import { ChoiceSelect } from "@/components/choice-select";
-import { FormSheet } from "@/components/form-sheet";
-import { SuggestedInput } from "@/components/suggested-input";
 import { useLocale } from "@/components/locale-controller";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { responseError } from "@/lib/response-error";
+import { TrackerCreateSheet, type TrackerCreateInput } from "./tracker-create-sheet";
+import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
@@ -14,26 +15,10 @@ import { PageLogAction } from "@/components/bottom-log";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { TrackerCardContent } from "@/components/tracker-card-content";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
-import type { ApiError, TrackerFieldType, TrackerSummary } from "@/lib/types";
+import type { ApiError, TrackerSummary } from "@/lib/types";
 import { orderedTrackerGroups } from "@/lib/tracker-order";
 import { TrackerSortSheet, useTrackerOrder } from "./tracker-sort-sheet";
 import { Layers } from "reicon-react";
-import { TrackerCaptureToggle } from "./tracker-capture-toggle";
-
-const emptyDraft = { name: "", groupName: "Everyday", quickCaptureEnabled: true };
-const fieldTypes: Array<[TrackerFieldType, string, string]> = [
-  ["time_range", "Time range", "Start, end and automatic duration"],
-  ["number", "Number", "Amounts, weight, cost"],
-  ["rating", "Rating", "A score from 1 to 5"],
-  ["single_select", "Choice", "Choose one option"],
-  ["multi_select", "Multiple", "Choose several options"],
-  ["boolean", "Yes / No", "A simple toggle"],
-  ["text", "Text", "A short observation"],
-];
-type FieldDraft = { clientId: string; name: string; type: TrackerFieldType; options: string; required: boolean; includeInStats: boolean; unit: string; precision: string };
-function newFieldDraft(type: TrackerFieldType = "number"): FieldDraft {
-  return { clientId: crypto.randomUUID(), name: "", type, options: "", required: false, includeInStats: type !== "text", unit: "", precision: "0" };
-}
 
 export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[]; cacheScope: string | null }) {
   const { english } = useLocale();
@@ -42,47 +27,17 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
   const [showArchived, setShowArchived] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [order, saveOrder] = useTrackerOrder(cacheScope);
-  const [draft, setDraft] = useState(emptyDraft);
-  const [iconFile, setIconFile] = useState<File | null>(null);
-  const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
-  const [fieldEditor, setFieldEditor] = useState<FieldDraft | null>(null);
   const [working, setWorking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const iconPreview = useMemo(() => iconFile ? URL.createObjectURL(iconFile) : "", [iconFile]);
-  useEffect(() => () => { if (iconPreview) URL.revokeObjectURL(iconPreview); }, [iconPreview]);
   const load = useCallback(async () => { setLoading(true); const response = await fetch("/api/trackers", { cache: "no-store" }); if (response.ok) setTrackers(await response.json()); else setError("Trackers are unavailable right now."); setLoading(false); }, [setTrackers]);
   useDataRefresh("/trackers", () => load());
 
 
-  function chooseIcon(file: File | undefined) {
-    setError("");
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) { setError("The image must be smaller than 4 MB."); return; }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setError("Use a JPG, PNG or WebP image."); return; }
-    setIconFile(file);
-  }
-
-  function startField(type: TrackerFieldType) {
-    setError("");
-    setFieldEditor(newFieldDraft(type));
-  }
-
-  function addFieldDraft() {
-    if (!fieldEditor) return;
-    if (!fieldEditor.name.trim()) { setError("Give the property a name."); return; }
-    if (["single_select", "multi_select"].includes(fieldEditor.type) && !fieldEditor.options.split(/[,，]/).some((item) => item.trim())) { setError("Add at least one option for this property."); return; }
-    setFieldDrafts((current) => [...current, { ...fieldEditor, name: fieldEditor.name.trim() }]);
-    setFieldEditor(null);
-    setError("");
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault(); if (working) return; if (fieldEditor) { setError("Add or cancel the property before creating the Tracker."); return; } setWorking(true); setError("");
-    try {
+  async function createTracker({ draft, iconFile, fields }: TrackerCreateInput) {
     const response = await fetch("/api/trackers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
-    if (!response.ok) setError(((await response.json()) as ApiError).error);
-    else {
+    if (!response.ok) throw new Error(await responseError(response, "Could not create the Tracker. Please try again."));
+    {
       const tracker = await response.json() as TrackerSummary;
       const followUpErrors: string[] = [];
       if (iconFile) {
@@ -90,7 +45,7 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
         const upload = await fetch(`/api/trackers/${tracker.id}/icon`, { method: "POST", body });
         if (!upload.ok) followUpErrors.push("its image could not be uploaded");
       }
-      for (const [sortOrder, field] of fieldDrafts.entries()) {
+      for (const [sortOrder, field] of fields.entries()) {
         const fieldResponse = await fetch(`/api/trackers/${tracker.id}/fields`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
             name: field.name, type: field.type, options: field.options.split(/[,，]/).map((item) => item.trim()).filter(Boolean), required: field.required,
@@ -100,10 +55,10 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
         if (!fieldResponse.ok) followUpErrors.push(`the property “${field.name}” could not be added`);
       }
       invalidateCachedJson("/api/trackers/quick-log");
-      setDraft(emptyDraft); setIconFile(null); setFieldDrafts([]); setFieldEditor(null); setShowForm(false); await load();
+      await load();
       if (followUpErrors.length) setError(`Tracker created, but ${followUpErrors.join(" and ")}. You can finish it in Settings.`);
+      else showActionToast(english ? "Tracker created." : "观测已创建。");
     }
-    } catch { setError("Could not create the Tracker. Please try again."); } finally { setWorking(false); }
   }
 
   async function quickCapture(tracker: TrackerSummary) {
@@ -111,7 +66,7 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
     setWorking(true); setError("");
     try {
       const response = await fetch(`/api/trackers/${tracker.id}/entries`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ occurredAt: new Date().toISOString(), values: {}, note: "" }) });
-      if (!response.ok) setError(((await response.json()) as ApiError).error); else await load();
+      if (!response.ok) setError(((await response.json()) as ApiError).error); else { await load(); showActionToast(english ? "Record saved." : "记录已保存。"); }
     } catch { setError(english ? "Could not save the record. Please try again." : "记录失败，请重试。"); }
     finally { setWorking(false); }
   }
@@ -122,35 +77,8 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
     <PageHeader eyebrow="生活" title="Trackers" action={<span className="tracker-header-actions">{visibleTrackers.length > 1 && <button type="button" className="text-button tracker-sort-button" disabled={!cacheScope} aria-haspopup="dialog" onClick={() => setShowSort(true)}><Layers size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button>}<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction></span>} />
     {showSort && <TrackerSortSheet trackers={trackers} archived={showArchived} order={order} onSave={saveOrder} onClose={() => setShowSort(false)} />}
     {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
-    {showForm && <FormSheet title="Create Tracker" onClose={() => setShowForm(false)} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
-      <p className="tracker-create-intro">What do you want to notice?</p>
-      <div className="tracker-create-basics">
-        <label className="tracker-image-picker">
-          <span className="tracker-image-preview" style={iconPreview ? { backgroundImage: `url(${iconPreview})` } : undefined}>{!iconPreview && <Icon name="tracker" />}</span>
-          <span><strong>{iconFile ? "Change image" : "Choose image"}</strong><small>JPG, PNG or WebP · up to 4 MB</small></span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { chooseIcon(event.target.files?.[0]); event.target.value = ""; }} />
-        </label>
-        <div className="tracker-basic-fields">
-          <label className="field wide"><span>Name</span><input required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Poo, Home visit, Headache…" /></label>
-          <div className="field"><span>Group</span><SuggestedInput recommendationStyle="search" suggestionLabel="分组" suggestions={trackers.map(tracker => tracker.groupName)} maxLength={60} value={draft.groupName} onValueChange={nextValue => setDraft({ ...draft, groupName: nextValue })} /></div>
-        </div>
-      </div>
-      <section className="tracker-property-builder">
-        <div className="tracker-builder-heading"><div><span className="eyebrow">RECORD PROPERTIES</span><h3>What should each moment include?</h3><p>Add only what will be useful later. Every record already includes its time and an optional note.</p></div><span className="tracker-property-count">{fieldDrafts.length}</span></div>
-        <div className="tracker-field-type-strip" aria-label="Property types">{fieldTypes.map(([type, label, description]) => <button type="button" key={type} onClick={() => startField(type)}><strong>{label}</strong><span>{description}</span></button>)}</div>
-        {fieldDrafts.length > 0 && <div className="tracker-field-drafts">{fieldDrafts.map((field) => <article key={field.clientId}><div><strong>{field.name}</strong><span>{fieldTypes.find(([type]) => type === field.type)?.[1]}{field.unit ? ` · ${field.unit}` : ""}{field.required ? " · Required" : ""}</span></div><button type="button" data-form-change aria-label={`Remove ${field.name}`} onClick={() => setFieldDrafts((current) => current.filter((item) => item.clientId !== field.clientId))}><Icon name="trash" /></button></article>)}</div>}
-        {fieldEditor && <div className="tracker-property-draft-form">
-            <div className="form-grid"><label className="field"><span>Property name</span><input autoFocus required maxLength={60} value={fieldEditor.name} onChange={(event) => setFieldEditor({ ...fieldEditor, name: event.target.value })} placeholder={fieldEditor.type === "time_range" ? "Stay duration, Visit…" : fieldEditor.type === "number" ? "Amount, Weight, Cost…" : fieldEditor.type === "rating" ? "Comfort, Energy…" : "Type, Context…"} /></label><label className="field"><span>Type</span><ChoiceSelect value={fieldEditor.type} onChange={(event) => { const type = event.target.value as TrackerFieldType; setFieldEditor({ ...fieldEditor, type, includeInStats: type !== "text" }); }}>{fieldTypes.map(([type,label]) => <option value={type} key={type}>{label}</option>)}</ChoiceSelect></label>
-            {["single_select","multi_select"].includes(fieldEditor.type) && <label className="field wide"><span>Options <small>separated by commas</small></span><input required value={fieldEditor.options} onChange={(event) => setFieldEditor({ ...fieldEditor, options: event.target.value })} placeholder="Home, Outside, Work" /></label>}
-            {fieldEditor.type === "number" && <><label className="field"><span>Unit <small>optional</small></span><input maxLength={20} value={fieldEditor.unit} onChange={(event) => setFieldEditor({ ...fieldEditor, unit: event.target.value })} placeholder="ml, kg, ¥…" /></label><label className="field"><span>Decimal places</span><input type="number" min="0" max="6" value={fieldEditor.precision} onChange={(event) => setFieldEditor({ ...fieldEditor, precision: event.target.value })} /></label></>}
-            </div><div className="tracker-property-draft-actions"><div className="tracker-inline-checks"><label><input role="switch" className="toggle-switch" type="checkbox" checked={fieldEditor.required} onChange={(event) => setFieldEditor({ ...fieldEditor, required: event.target.checked })} />Required</label><label><input role="switch" className="toggle-switch" type="checkbox" checked={fieldEditor.includeInStats} onChange={(event) => setFieldEditor({ ...fieldEditor, includeInStats: event.target.checked })} />Include in Insights</label></div><div><button className="text-button" type="button" onClick={() => setFieldEditor(null)}>Cancel</button><button className="button secondary" type="button" data-form-change onClick={addFieldDraft}>Add property</button></div></div>
-        </div>}
-        {!fieldEditor && <button className="tracker-add-property" type="button" onClick={() => startField("number")}><Icon name="plus" />Add a custom property</button>}
-      </section>
-      <TrackerCaptureToggle enabled={draft.quickCaptureEnabled} onChange={quickCaptureEnabled => setDraft({ ...draft, quickCaptureEnabled })} />
-      {error && <p className="form-error">{error}</p>}
-    </form></FormSheet>}
-    {error && !showForm && <p className="form-error">{error}</p>}
+    {showForm && <TrackerCreateSheet groupNames={trackers.map(tracker => tracker.groupName)} onClose={() => setShowForm(false)} onCreate={createTracker} />}
+    {error && !showForm && <ErrorNotice>{error}</ErrorNotice>}
     {loading ? <PageLoading title="观测" englishTitle="Trackers" inline /> : visibleTrackers.length ? groups.map((group) => <section className="tracker-group" key={group.name}>
       <div className="tracker-group-heading"><h2>{group.name}</h2><span>{group.items.length}</span></div>
       <div className="tracker-card-grid">{group.items.map((tracker) => <article className="tracker-card" key={tracker.id}>

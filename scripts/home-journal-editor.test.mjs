@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { journalDraftChanged, journalPreviewEntries } from "../src/lib/journal-draft.ts";
+import { shiftDate } from "../src/lib/time.ts";
 
 function fixture() {
   const hooks = [], requests = [];
@@ -20,10 +21,11 @@ function fixture() {
   const imports = {
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/components/form-sheet": { FormSheet: "sheet" },
+    "@/components/error-notice": { ErrorNotice: "error-notice" },
     "@/lib/journal-draft": { journalDraftChanged, journalPreviewEntries },
     "@/lib/journal-emotions": { journalEmotions: [], journalMoodLabel: () => null },
     "@/lib/timeline": { periodDayForDate: () => null },
-    "@/lib/time": { EVAORBIT_TIME_ZONE: "Asia/Shanghai" },
+    "@/lib/time": { EVAORBIT_TIME_ZONE: "Asia/Shanghai", shiftDate },
     "@/lib/home-day": { homeActivitySentence: () => null },
     "@/lib/home-cache": { readHomeSnapshot: async (_, url) => url.startsWith("/api/home-day") ? day : summary },
   };

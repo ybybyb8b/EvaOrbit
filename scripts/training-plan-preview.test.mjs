@@ -23,6 +23,7 @@ test("Day capsules only preview; switching requires an explicit action and confi
   const loaded = {};
   new Function("require", "exports", "window", "fetch", code)(name => {
     if (name === "react") return react;
+    if (name.endsWith("error-notice")) return { ErrorNotice: "error-notice" };
     if (name.endsWith("use-data-refresh")) return { useServerDataState: react.useState, useDataRefresh: () => {} };
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
     if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: false }) };

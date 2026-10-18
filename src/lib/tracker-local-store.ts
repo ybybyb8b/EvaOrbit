@@ -178,13 +178,13 @@ export class LocalTrackerStore {
     });
     return localId;
   }
-  async createTracker(payload: Record<string, unknown>, field?: Record<string, unknown>) {
+  async createTracker(payload: Record<string, unknown>, field?: Record<string, unknown> | Record<string, unknown>[]) {
     const id = newTrackerLocalId();
     await this.change(next => {
       next.records.push({ id, resourceType: "tracker", payload });
       next.outbox.push({ mutationId: newTrackerLocalId(), localId: id, resourceType: "tracker", operation: "create", payload });
-      if (field) {
-        const fieldId = newTrackerLocalId(), fieldPayload = { ...field, trackerId: undefined, trackerLocalId: id };
+      for (const definition of Array.isArray(field) ? field : field ? [field] : []) {
+        const fieldId = newTrackerLocalId(), fieldPayload = { ...definition, trackerId: undefined, trackerLocalId: id };
         next.records.push({ id: fieldId, resourceType: "tracker_field", payload: fieldPayload });
         next.outbox.push({ mutationId: newTrackerLocalId(), localId: fieldId, resourceType: "tracker_field", operation: "create", payload: fieldPayload });
       }

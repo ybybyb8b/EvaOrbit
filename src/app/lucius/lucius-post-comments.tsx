@@ -1,18 +1,15 @@
 "use client";
+import { responseError } from "@/lib/response-error";
 import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useState } from "react";
-import type { ApiError, LuciusPostComment } from "@/lib/types";
+import type { LuciusPostComment } from "@/lib/types";
 import { playNativeHaptic } from "@/lib/native-haptics";
 
 function commentTime(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
-async function responseError(response: Response, fallback: string) {
-  const result = await response.json().catch(() => null) as ApiError | null;
-  return result?.error || fallback;
-}
 
 export function LuciusPostComments({ postId, initialComments }: { postId: number; initialComments: LuciusPostComment[] }) {
   const [comments, setComments] = useState(initialComments);

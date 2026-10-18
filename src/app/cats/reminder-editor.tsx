@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
@@ -47,6 +48,6 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
       {draft.due.time && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>Remind me daily while overdue</span></label>}
       <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
     </div>
-    {error && <p className="form-error">{error}</p>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
+    {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
   </form>;
 }

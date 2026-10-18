@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -226,7 +227,7 @@ export function TasksView() {
         <div className="field wide"><span>{english ? "Tags" : "标签"} <small>{english ? "Enter to add" : "回车添加"}</small></span><SuggestedInput suggestionLabel="标签" suggestions={tasks.flatMap(task => task.tags)} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></div>
         <label className="field wide"><span>{english ? "Notes" : "备注"}</span><textarea rows={3} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={english ? "Optional context" : "补充上下文（可选）"} /></label>
       </div>}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {editingTask && <button type="button" className="task-delete-button" disabled={saving} onClick={() => void remove(editingTask)}><Icon name="trash" />{english ? "Delete task" : "删除这条任务"}</button>}
     </form></FormSheet>}
 
@@ -247,7 +248,7 @@ export function TasksView() {
       })}</div><p className="task-calendar-caption">{english ? "Tasks appear on their due date." : "按截止日期显示任务"}</p></div>}
       <div className="task-agenda">
         <div className="task-agenda-heading"><div><h2>{activeDate === today ? (english ? "Today’s tasks" : "今天的任务") : dayDate ? dayDate.toLocaleDateString(locale, { month: "long", day: "numeric", weekday: "short" }) : dateScope === "undated" ? (english ? "No date yet" : "还未安排日期") : (english ? "All your tasks" : "所有任务")}</h2><p>{!loading && (english ? `${statusCounts.open} to do · ${statusCounts.done} completed` : `${statusCounts.open} 项待办 · ${statusCounts.done} 项已完成`)}{activeDate === today && groups.overdue.length > 0 && (english ? " · includes overdue tasks" : " · 含逾期任务")}</p></div><div className="segmented task-status-tabs">{(["all", "open", "done"] as Status[]).map(item => <button type="button" key={item} className={status === item ? "active" : ""} aria-pressed={status === item} onClick={() => setStatus(item)}>{labels[item]}</button>)}</div></div>
-        {error && !showForm && <p className="form-error" role="alert">{error}</p>}
+        {error && !showForm && <ErrorNotice role="alert">{error}</ErrorNotice>}
         {loading ? <PageLoading title="任务" englishTitle="tasks" inline /> : visibleTasks.length ? <>
           {(["overdue", "today", "upcoming", "unscheduled"] as const).map(group => groups[group].length > 0 && <section className={`task-group task-group-${group}`} key={group} aria-labelledby={`task-group-${group}`}><header className="task-group-heading"><h3 id={`task-group-${group}`}>{activeDate && group === "upcoming" ? (english ? "Due this day" : "当天到期") : groupLabels[group]}<span>{groups[group].length}</span></h3></header><div className="task-list">{groups[group].map(renderTask)}{group !== "overdue" && <button type="button" className="task-inline-add" onClick={() => startNew(group === "unscheduled" ? "" : activeDate ?? (group === "today" ? today : localDate(1)))}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div></section>)}
           {groups.completed.length > 0 && (status === "done" ? <section className="task-group"><div className="task-list">{groups.completed.map(renderTask)}</div></section> : <details className="task-completed"><summary>{groupLabels.completed}<span>{groups.completed.length}</span><Icon name="chevronDown" /></summary><div className="task-list">{groups.completed.map(renderTask)}</div></details>)}

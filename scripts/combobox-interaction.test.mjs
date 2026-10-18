@@ -39,6 +39,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name.endsWith("native-bridge")) return { reconcileNativeNotifications: async () => {} };
       if (name.endsWith("form-sheet")) return { FormSheet: "sheet" };
       if (name.endsWith("action-toast")) return { showActionToast() {} };
+      if (name.endsWith("error-notice")) return { ErrorNotice: "error-notice" };
       if (name.endsWith("icons")) return { Icon: "icon" };
       if (name.endsWith("client-json-cache")) return { invalidateCachedJson() {} };
       if (name.endsWith("searchable-select")) return { SearchableSelect: "searchable-select" };

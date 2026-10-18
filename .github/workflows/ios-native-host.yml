@@ -15,6 +15,10 @@ on:
       - ".github/workflows/ios-native-host.yml"
       - "src/local-trackers/**"
       - "src/lib/tracker-local-*"
+      - "src/lib/tracker-readonly*"
+      - "src/app/trackers/tracker-*.tsx"
+      - "src/components/**"
+      - "src/app/globals.css"
       - "src/app/trackers/tracker-entry-editor.tsx"
       - "vite.trackers.config.ts"
       - "package.json"
@@ -41,7 +45,7 @@ jobs:
         run: |
           npm ci
           npm run build:trackers
-          node --test src/lib/tracker-local.test.ts scripts/tracker-sync-postgres.test.mjs
+          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs
 
       - name: Install XcodeGen
         run: |

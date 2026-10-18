@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -12,11 +14,10 @@ import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { memoStatusOptions, memoTypeOptions, optionLabel, parseTagInput, plainExcerpt } from "@/lib/long-term-memory";
-import type { ApiError, Memo, MemoStatus, MemoType } from "@/lib/types";
+import type { Memo, MemoStatus, MemoType } from "@/lib/types";
 
 type MemoDraft = { title: string; content: string; type: MemoType; status: MemoStatus; tags: string; eventDate: string; confirmedAt: string };
 const emptyDraft = (): MemoDraft => ({ title: "", content: "", type: "note", status: "active", tags: "", eventDate: "", confirmedAt: "" });
-async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 
 export function MemoView({ initial }: { initial: Memo[] }) {
   const [items, setItems] = useState(initial);
@@ -41,7 +42,6 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     finally { setLoading(false); }
   }, [query, status, tag, type]);
   useDataRefresh("/memo", () => load());
-
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 180); return () => window.clearTimeout(timer); }, [load]);
 
@@ -69,10 +69,10 @@ export function MemoView({ initial }: { initial: Memo[] }) {
         <div className="field wide"><span>Tags <small>Enter to add</small></span><SuggestedInput suggestionLabel="标签" suggestions={knownTags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder="人物, 规则, 长期资料" /></div>
         <label className="field wide"><span>Content</span><textarea required rows={10} maxLength={100000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       <div className="form-actions"><button className="button primary" disabled={saving}>{saving ? "Saving…" : "Save Memo"}</button></div>
     </form></FormSheet>}
-    {!showForm && error && <p className="form-error" role="alert">{error}</p>}
+    {!showForm && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
     <div className="long-term-toolbar" aria-busy={loading}>
       <label className="search-box"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title and content…" aria-label="Search Memo" /></label>
       <ChoiceSelect value={tag} onChange={(event) => setTag(event.target.value)} aria-label="Filter Memo by tag"><option value="">All tags</option>{knownTags.map((item) => <option value={item} key={item}>{item}</option>)}</ChoiceSelect>

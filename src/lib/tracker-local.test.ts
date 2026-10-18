@@ -134,3 +134,24 @@ test("late snapshots cannot erase records already received by another window", (
   assert.equal(state.records[0].payload.name, "Newer");
   assert.equal(state.remoteRevision, 5);
 });
+
+test("shared Tracker creation commits all properties atomically and recovers a failed local commit", async () => {
+  const disk = storage(); let fail = true;
+  const guarded: TrackerStorage = { read: disk.read, commit: (revision,next) => { if(fail) throw new Error("Disk full"); return disk.commit(revision,next); } };
+  const store = new LocalTrackerStore(account, guarded); await store.initialize();
+  const definitions = [{key:"amount",name:"Amount",type:"number"},{key:"context",name:"Context",type:"text"}];
+  await assert.rejects(store.createTracker({name:"Complete"},definitions), /Disk full/);
+  assert.equal(store.getSnapshot().records.length,0);
+  assert.equal(store.getSnapshot().outbox.length,0);
+  assert.equal(await disk.read(),null);
+  fail = false;
+  const id = await store.createTracker({name:"Complete"},definitions);
+  assert.equal(store.getSnapshot().revision,1);
+  assert.equal(store.getSnapshot().records.length,3);
+  assert.equal(store.getSnapshot().outbox.length,3);
+  assert(store.getSnapshot().records.filter(row=>row.resourceType==="tracker_field").every(row=>row.payload.trackerLocalId===id));
+  const restarted = new LocalTrackerStore(account,disk); await restarted.initialize();
+  const remote = cloud(); await restarted.synchronize(remote.transport);
+  assert.equal(remote.records.length,3);
+  assert.equal(restarted.getSnapshot().outbox.length,0);
+});

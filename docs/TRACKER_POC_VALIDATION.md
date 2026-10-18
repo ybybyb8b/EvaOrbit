@@ -1,5 +1,24 @@
 # Tracker PoC CI and isolated validation — 2026-10-18
 
+## Shared React UI iteration — 2026-10-19 (Windows)
+
+- Web/local login share frame and fields. Actual Web vs bundled local checks at
+  402/1440 px matched card width, padding, radius/surface, heading size/line height,
+  input height and submit copy. The browser preview link is local-only.
+- Creation (seven property types), entry timeline/actions, search/time/property
+  filters and activity Insights use shared React components. Basic local settings
+  and quick capture use the existing queue. Multi-property creation commits
+  Tracker, fields and outbox atomically. Failed storage writes keep drafts and
+  persist no partial records; restart and subsequent synchronization were tested.
+- Windows: lint, typecheck, Next/local production builds, browser CRUD/restart/
+  Insights/settings/quick-capture and persistent error/touch/keyboard recovery
+  passed. Full suite: 596 tests, 583 passed, 12 skipped, one pre-existing
+  `long-term-memory.test.ts` navigation-source assertion failed.
+- This iteration is uncommitted and has no new macOS CI/XCTest result. Earlier CI
+  and real Supabase results below describe their recorded commits. iPhone
+  keyboard/safe-area/gesture acceptance is required after packaging. No production
+  migration or API deployment ran.
+
 ## Scope and deployment boundary
 
 - Development branch: `codex/tracker-local-first-poc`; production `main` remains
@@ -74,6 +93,14 @@ Verified against real Auth/PostgREST/PostgreSQL:
 The MCP test uses a genuine local Auth JWT and the ordinary MCP request repository
 context. It does not exercise ChatGPT's hosted OAuth consent, resource audience
 issuance or the external `/api/mcp` bearer-token authentication exchange.
+
+## Real-account read-only acceptance preparation (2026-10-19)
+
+- Completed an owner-scoped repeatable-read, READ ONLY PostgreSQL export of structured Tracker data. SHA-256 and JSON read-back verified: 7 trackers, 11 fields, 27 entries, 1 Tracker reminder and 1 related reminder. The private ignored backup contains no binary image assets. No production migration, API deployment or business write was performed.
+- Windows bundled React read all 27 historical forms and all 7 timelines/insights from this real backup. Inputs/submission/deletion were disabled, cold browser restart preserved the snapshot, and a separate synthetic frozen canary queue remained unchanged. Cached list render measured 80 ms on this Windows run; this is not an iPhone timing or live network measurement.
+- Native now blocks business commit/sync and stores snapshots in a separate account-scoped SQLite table. It automatically backs up SQLite including WAL before reading, verifies quick_check, and reports original pending/frozen queue counts. New macOS XCTest and physical-device results remain pending until the new artifact is built and installed.
+- Windows → audited patched xtool → iPhone ActivationState preflight passed. The user confirmed USB unlock/trust and waived manual export because the old PoC contains no meaningful records. Automatic backup/queue isolation remain enabled; neither app is uninstalled. Device contents and its actual queue counts have not yet been inspected.
+- Acceptance installation must set `EVAORBIT_SKIP_RENEWAL=1` to avoid the default production renewal Task write. Signing, HealthKit entitlements, formal Host and production data boundaries remain unchanged.
 
 ## Remaining risks and release order
 

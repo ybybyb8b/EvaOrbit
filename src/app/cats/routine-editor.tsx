@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -70,6 +71,6 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
       <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={3} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label>
       {editing && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.enabled} onChange={e => setDraft({ ...draft, enabled: e.target.checked })}/><span>Routine enabled</span></label>}
     </div>
-    {error && <p className="form-error">{error}</p>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : "Save routine"}</button>
+    {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : "Save routine"}</button>
   </form>;
 }

@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
@@ -70,7 +71,7 @@ export function MemoryView() {
         <div className="field"><span>分类</span><SuggestedInput suggestionLabel="分类" suggestions={[...suggestedCategories, ...historyValues(categoryHistory, "category"), ...categories]} required maxLength={40} value={draft.category} onValueChange={nextValue => setDraft({ ...draft, category: nextValue })} /></div>
         <label className="field wide"><span>内容</span><textarea required rows={5} maxLength={10000} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} placeholder="写下细节，让未来的你能够理解上下文。" /></label>
       </div>
-      {error && <p className="form-error">{error}</p>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}
       <div className="form-actions"><button className="button primary" type="submit">{editing ? "改好了" : "留下"}</button></div>
     </form></FormSheet>}
 

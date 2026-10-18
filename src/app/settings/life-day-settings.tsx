@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -50,7 +51,7 @@ export function LifeDaySettings() {
     <form className="appearance-setting-group" onSubmit={save}>
       <label className="field"><span className={styles.iconLabel}><Clock size={16} weight="Outline" aria-hidden="true" />{english ? "Day changes at (without sleep)" : "无睡眠记录时的切换时间"}</span><input type="time" required step={60} value={time} disabled={!saved || saving} onChange={event => setTime(event.target.value)} aria-describedby="life-day-help" /></label>
       {!saved && !error && <PageLoading title="设置" englishTitle="settings" compact />}
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {!saved && error ? <button type="button" className="button" onClick={() => void load()}><Refresh size={16} weight="Outline" aria-hidden="true" />{english ? "Retry" : "重试"}</button> : <button className="button primary" disabled={!saved || !time || saving || time === saved}><Save size={16} weight="Outline" aria-hidden="true" />{saving ? english ? "Saving…" : "保存中…" : english ? "Save" : "保存"}</button>}
     </form>
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}

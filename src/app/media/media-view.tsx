@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
@@ -15,7 +17,7 @@ import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
 import { PageHeader } from "@/components/page-header";
 import { getMediaDisplayTitle } from "@/lib/media-display";
-import type { ApiError, MediaDetail, MediaListItem, MediaRating, MediaSeries, MediaStatus, MediaType } from "@/lib/types";
+import type { MediaDetail, MediaListItem, MediaRating, MediaSeries, MediaStatus, MediaType } from "@/lib/types";
 
 export const mediaTypes: Array<{ value: MediaType; label: string }> = [
   { value: "movie", label: "Movies" }, { value: "tv", label: "TV Shows" }, { value: "anime", label: "Anime" },
@@ -30,7 +32,6 @@ type MediaDraft={originalTitle:string;translatedTitle:string;mediaType:MediaType
 function emptyDraft():MediaDraft{return{originalTitle:"",translatedTitle:"",mediaType:"movie",status:"completed",watchedDate:currentLocalDate(),rating:"",isFavorite:false,note:"",seriesChoice:"",newSeries:"",seasonNumber:"",seasonTitle:""};}
 export function typeLabel(value:MediaType){return mediaTypes.find(item=>item.value===value)?.label??"Other";}
 export function statusLabel(value:MediaStatus){return mediaStatuses.find(item=>item.value===value)?.label??value;}
-async function responseError(response:Response,fallback:string){const result=await response.json().catch(()=>null) as ApiError|null;return result?.error||fallback;}
 
 export function MediaPosterCard({item}:{item:MediaListItem}){const copyScope=useUiCopyScope<HTMLAnchorElement>(false);const display=getMediaDisplayTitle(item);const metadata=[display.secondary,item.rating].filter(Boolean).join(" · ")||typeLabel(item.mediaType);return <Link ref={copyScope} className="media-poster-card" href={`/media/${item.id}`}><MediaCover item={item}/><span><strong>{display.primary}</strong><small>{metadata}</small></span>{item.isFavorite&&<span className="media-favorite-mark" aria-label="Favorite">♥</span>}</Link>;}
 function Shelf({title,items}:{title:string;items:MediaListItem[]}){if(!items.length)return null;return <section className="media-shelf"><div className="media-shelf-heading"><h2>{title}</h2><span>{items.length}</span></div><div className="media-shelf-track">{items.map(item=><MediaPosterCard item={item} key={item.id}/>)}</div></section>;}
@@ -45,7 +46,6 @@ export function MediaView({initial,initialSeries}:{initial:MediaListItem[];initi
   const[loading,setLoading]=useState(false),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState<MediaDraft>(emptyDraft);
   const[coverFile,setCoverFile]=useState<File|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false);
   const filtered=Boolean(query.trim()||mediaType||status||rating||favoriteOnly||rewatchedOnly);
-
 
   const load=useCallback(async()=>{setLoading(true);const params=new URLSearchParams({limit:"200"});if(query.trim())params.set("q",query.trim());if(mediaType)params.set("mediaType",mediaType);if(status)params.set("status",status);if(rating)params.set("rating",rating);if(favoriteOnly)params.set("favorite","true");if(rewatchedOnly)params.set("rewatched","true");try{const response=await fetch(`/api/media?${params}`,{cache:"no-store"});if(!response.ok){setError(await responseError(response,"Could not load media."));return;}setItems(await response.json() as MediaListItem[]);}catch{setError("Could not load media.");}finally{setLoading(false);}},[favoriteOnly,mediaType,query,rating,rewatchedOnly,status]);
   useDataRefresh("/media", () => load());
@@ -72,8 +72,8 @@ export function MediaView({initial,initialSeries}:{initial:MediaListItem[];initi
       {["tv","anime"].includes(draft.mediaType)&&<><label className="field"><span>Season number <small>Optional</small></span><input type="number" min="1" max="999" value={draft.seasonNumber} onChange={event=>setDraft({...draft,seasonNumber:event.target.value})}/></label><label className="field"><span>Season title <small>Only for a real subtitle</small></span><input maxLength={120} placeholder="The Final Chapter" value={draft.seasonTitle} onChange={event=>setDraft({...draft,seasonTitle:event.target.value})}/></label></>}
       <label className="media-favorite-toggle wide"><input type="checkbox" checked={draft.isFavorite} onChange={event=>setDraft({...draft,isFavorite:event.target.checked})}/><span><strong>Favorite</strong><small>Keep it on the Favorites shelf.</small></span></label>
       <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={event=>setDraft({...draft,note:event.target.value})}/></label>
-    </div>{error&&<p className="form-error">{error}</p>}</form></FormSheet>}
-    {!showForm&&error&&<p className="form-error">{error}</p>}{notice&&<ToastNotice message={notice} onShown={() => setNotice("")} />}
+    </div>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>}
+    {!showForm&&error&&<ErrorNotice>{error}</ErrorNotice>}{notice&&<ToastNotice message={notice} onShown={() => setNotice("")} />}
     <div className="media-toolbar" aria-busy={loading}><label className="search-box media-search"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search names, series or season…" aria-label="Search Media"/>{query&&<button type="button" onClick={()=>setQuery("")} aria-label="Clear search">×</button>}</label>{filtered&&<button className="text-button" type="button" onClick={clearFilters}>Clear filters</button>}</div>
     <div className="media-filters" role="group" aria-label="Filter Media"><button className={!mediaType&&!status&&!rating&&!favoriteOnly&&!rewatchedOnly?"active":""} onClick={clearFilters}>All</button>{mediaTypes.map(item=><button className={mediaType===item.value?"active":""} onClick={()=>setMediaType(current=>current===item.value?"":item.value)} key={item.value}>{item.label}</button>)}<button className={favoriteOnly?"active":""} onClick={()=>setFavoriteOnly(value=>!value)}>Favorites</button><button className={rewatchedOnly?"active":""} onClick={()=>setRewatchedOnly(value=>!value)}>Rewatched</button><ChoiceSelect aria-label="Filter by status" value={status} onChange={event=>setStatus(event.target.value as ""|MediaStatus)}><option value="">Any status</option>{mediaStatuses.map(item=><option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect><ChoiceSelect aria-label="Filter by rating" value={rating} onChange={event=>setRating(event.target.value as ""|MediaRating)}><option value="">Any rating</option>{mediaRatings.map(value=><option value={value} key={value}>{value}</option>)}</ChoiceSelect></div>
     {filtered?(items.length?<section className="media-results"><div className="media-shelf-heading"><h2>Results</h2><span>{items.length}</span></div><div className="media-poster-grid">{items.map(item=><MediaPosterCard item={item} key={item.id}/>)}</div></section>:<div className="empty-state media-empty"><span className="empty-icon"><Icon name="media"/></span><h2>No matching media</h2><p>Try a different title, series, or filter.</p></div>):items.length?<div className="media-cabinet">{series.length>0&&<section className="media-shelf media-series-shelf"><div className="media-shelf-heading"><h2>Series & Franchises</h2><span>{series.length}</span></div><div className="media-series-track">{series.map(group=><SeriesCard group={group} items={seriesItems.get(group.id)??[]} key={group.id}/>)}</div></section>}<Shelf title="Favorites" items={shelves.favorites}/><Shelf title="Movies" items={shelves.movies}/><Shelf title="TV Shows" items={shelves.tv}/><Shelf title="Anime" items={shelves.anime}/><Shelf title="Rewatched" items={shelves.rewatched}/></div>:<div className="empty-state media-empty"><span className="empty-icon"><Icon name="media"/></span><h2>Your private shelf</h2><p>Add the first work you want to keep close.</p><button className="button secondary" onClick={()=>setShowForm(true)}><Icon name="plus"/>Add Media</button></div>}

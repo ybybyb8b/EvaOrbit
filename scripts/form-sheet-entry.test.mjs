@@ -9,12 +9,13 @@ function fixture(mobile = true) {
   class Element {
     style = { setProperty() {} };
     inert = false;
+    hasAttribute() { return false; }
     contains(node) { return node === this; }
     getClientRects() { return [{}]; }
     focus(options) { assert.equal(options.preventScroll, true); doc.activeElement = this; focusCount++; }
   }
   const outside = new Element(), layer = new Element(), dialog = new Element(), body = new Element(), field = new Element();
-  const doc = { activeElement: outside, body: { style: {}, children: [outside, layer] }, documentElement: { clientWidth: 402 } };
+  const doc = { activeElement: outside, body: { style: {}, children: [outside, layer] }, documentElement: { clientWidth: 402 }, querySelectorAll: () => [] };
   dialog.contains = node => node === dialog || node === field;
   dialog.querySelector = () => null;
   dialog.querySelectorAll = () => [field];

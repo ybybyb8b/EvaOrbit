@@ -4,6 +4,7 @@ import { Cormorant_Garamond } from "next/font/google";
 import localFont from "next/font/local";
 import { AppShell } from "@/components/app-shell";
 import { ActionToastViewport } from "@/components/action-toast";
+import { ErrorFeedbackProvider } from "@/components/error-feedback";
 import { LocaleController } from "@/components/locale-controller";
 import { PwaRegister } from "@/components/pwa-register";
 import { usesSupabase } from "@/lib/config";
@@ -39,5 +40,5 @@ export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width"
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const cacheScope = await getClientCacheScope();
-  return <html lang="zh-CN" className={`${chinese.variable} ${zenSerif.variable} ${lxgw.variable} ${cangerXuanSan.variable} ${augustStories.variable} ${polyamine.variable} ${keSong.variable} ${cormorant.variable}`} suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></LocaleController></body></html>;
+  return <html lang="zh-CN" className={`${chinese.variable} ${zenSerif.variable} ${lxgw.variable} ${cangerXuanSan.variable} ${augustStories.variable} ${polyamine.variable} ${keSong.variable} ${cormorant.variable}`} suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><ErrorFeedbackProvider><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></ErrorFeedbackProvider></LocaleController></body></html>;
 }

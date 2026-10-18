@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useRef, useState } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
 import { FormSheet } from "@/components/form-sheet";
@@ -70,7 +71,7 @@ export function TrainingPlanEditor({ plan, onSaved, onClose }: { plan: TrainingP
     }}>
       <label className="field"><span>{t("Plan name", "计划名称")}</span><input required maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
       <div className="training-plan-list-heading"><strong>{t(`${draft.days.length} training days`, `${draft.days.length} 个训练日`)}</strong><span>{t("In order · No fixed dates", "按顺序循环 · 不限日期")}</span></div>
-      {error && !errorDayId && <p className="form-error" role="alert">{error}</p>}
+      {error && !errorDayId && <ErrorNotice role="alert">{error}</ErrorNotice>}
       <div className="training-plan-days">{draft.days.map((day, index) => <details className="training-plan-day" key={day.id} id={`training-day-${day.id}`} open={expandedDayId === day.id} onToggle={event => {
         const open = event.currentTarget.open;
         setExpandedDayId(current => open ? day.id : current === day.id ? null : current);
@@ -78,7 +79,7 @@ export function TrainingPlanEditor({ plan, onSaved, onClose }: { plan: TrainingP
         <summary><span className="training-plan-day-number">Day {index + 1}</span><span className="training-plan-day-summary"><strong>{day.name || t("Untitled training day", "未命名训练日")}</strong><small>{[trainingTypeLabels[day.trainingType][english ? "en" : "zh"], day.durationMinutes ? `${day.durationMinutes} ${t("min", "分钟")}` : "", day.videoUrls.filter(url => url.trim()).length ? t(`${day.videoUrls.filter(url => url.trim()).length} videos`, `${day.videoUrls.filter(url => url.trim()).length} 个视频`) : ""].filter(Boolean).join(" · ")}</small></span><Icon name="chevronDown" /></summary>
         <fieldset className="training-plan-day-body" disabled={saving}>
           <legend className="sr-only">{t("Edit", "编辑")} Day {index + 1}</legend>
-          {error && errorDayId === day.id && <p className="form-error" role="alert">{error}</p>}
+          {error && errorDayId === day.id && <ErrorNotice role="alert">{error}</ErrorNotice>}
           <div className="training-plan-basics">
             <label className="field"><span>{t("Day name", "训练日名称")}</span><input id={`training-day-${day.id}-name`} required maxLength={120} value={day.name} onChange={event => updateDay(day.id, { name: event.target.value })} /></label>
             <label className="field"><span>{t("Minutes", "预计分钟")} <small>{t("Optional", "可选")}</small></span><input type="number" inputMode="numeric" min={1} max={1440} step={1} placeholder="—" value={day.durationMinutes ?? ""} onChange={event => updateDay(day.id, { durationMinutes: event.target.value ? Number(event.target.value) : null })} /></label>

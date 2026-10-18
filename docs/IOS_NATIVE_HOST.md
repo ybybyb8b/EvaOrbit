@@ -6,6 +6,12 @@
 
 签名、HealthKit entitlement 和安装工具链沿用本文；回退时保留 PoC 安装及未同步数据库，先同步或导出。不要将卸载重装当作 Local-first 数据迁移方式。
 
+### 真实账户只读验收包
+
+当前阶段仅通过已有 session 和 Tracker GET 接口读取真实数据，Native/React 均禁用业务提交与 sync；独立 SQLite 只读缓存不覆盖旧记录或队列。新方法 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus` 要求重新构建 PoC IPA；旧包不能提供此安全边界。首次读取先自动 SQLite backup + quick_check，UI 显示队列数量。先验收列表、表单和离线重启；生产协议 2 迁移及 API 未单独批准前，不开放真实写入。
+
+本次覆盖安装执行 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，避免更新生产续签 Task。不要卸载应用。此标志不改变签名/传输链。`xtool-env.sh` 仅在 WSL usbmuxd 已运行时非交互停止；缺少 sudo 权限立即退出，设备 ActivationState 探测超时退出。保持原有 SHA 校验和 Windows usbmuxd endpoint。
+
 ## Bark 通知打开 Host（需要新版 IPA）
 
 新版注册 `evaorbit://open/<页面路径>`，点击 Bark 通知可打开 Host 的对应页面。先部署兼容 Web 与 `202610130002_bark_host_links.sql`，再按原有 CI/xtool 链路构建并安装新版；安装后到「设置 → 通知 → Bark」点击「改为打开 Host」并发送测试通知。旧版保持打开网页，不能仅靠重签旧 IPA 获得此入口。

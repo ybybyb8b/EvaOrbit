@@ -1,32 +1,31 @@
 @font-face { font-family: "EO Local Chinese"; src: url("../app/fonts/canger-huaxin.ttf") format("truetype"); font-display: swap; }
 @font-face { font-family: "EO Local English"; src: url("../app/fonts/zen-serif-regular.otf") format("opentype"); font-display: swap; }
 :root { --font-canger-huaxin: "EO Local Chinese"; --font-zen-serif: "EO Local English"; }
-.local-trackers { padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: max(32px, env(safe-area-inset-bottom)); }
-.local-tracker-toolbar, .local-sync-status, .local-issue-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.local-tracker-toolbar { margin-bottom: 28px; }
-.local-tracker-toolbar > select { width: 140px; min-height: 36px; margin-left: auto; padding: 6px 12px; border: 0; border-radius: 12px; background: var(--surface-card); color: var(--text-primary); font: inherit; }
-.local-sync-status { margin: 0 0 28px; color: var(--text-secondary); font-size: 14px; }
-.local-sync-status > span { flex: 1 1 220px; }
-.local-tracker-card-open { display: block; width: 100%; padding: 16px; background: transparent; color: inherit; text-align: left; border: 0; border-radius: inherit; cursor: pointer; }
-.local-tracker-card-open > small { display: block; color: var(--text-secondary); margin: 12px 0 0 68px; }
-.local-tracker-card-open .tracker-picture { width: 52px; height: 52px; }
-.local-record-actions { display: flex; align-items: start; gap: 4px; }
-.local-record-actions button { min-width: 44px; min-height: 44px; }
-.local-sync-issues { display: grid; gap: 16px; margin-bottom: 28px; }
-.local-sync-issues article { padding: 20px; border-radius: var(--radius-content); background: var(--accent-soft); }
-.local-sync-issues pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 280px; overflow: auto; }
-.local-sync-issues details { margin-bottom: 16px; }
-.local-trackers .tracker-entry-time { white-space: normal; min-width: 70px; }
-.local-trackers .tracker-entry-list { gap: 8px; }
-.local-trackers .tracker-entry-list article { padding: 14px; border: 0; border-radius: 14px; background: var(--surface-list); grid-template-columns: 90px minmax(0, 1fr) auto; }
-.local-trackers .tracker-entry-time time { font-family: var(--font-ui); color: var(--text-secondary); font-size: 12px; }
-.local-trackers .tracker-entry-content { min-width: 0; }
-.local-trackers .tracker-entry-content > small { color: var(--text-secondary); }
-.local-trackers .tracker-entry-content p { white-space: pre-wrap; overflow-wrap: anywhere; }
-@media (max-width: 600px) {
-  .local-trackers .page-header { align-items: start; gap: 12px; }
-  .local-trackers .page-header h1 { overflow-wrap: anywhere; }
-  .local-trackers .page-header > button { flex-shrink: 0; }
-  .local-trackers .tracker-entry-list > article { grid-template-columns: minmax(0, 1fr) auto; }
-  .local-record-actions { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+.local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
+.local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+.local-login-actions button { min-height:44px; }
+.local-trackers { padding-top:max(24px,env(safe-area-inset-top)); padding-bottom:max(32px,env(safe-area-inset-bottom)); }
+.local-tracker-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
+.local-tracker-toolbar .back-link { margin:0; min-height:44px; }
+.local-brand { display:flex; align-items:center; gap:10px; font-family:var(--font-editorial),var(--font-zh),serif; font-size:22px; }
+.local-brand .brand-mark { width:30px; height:30px; flex:none; }
+.local-account-menu { position:relative; margin-left:auto; }
+.local-account-menu > summary { display:grid; place-items:center; list-style:none; width:44px; height:44px; border-radius:14px; background:var(--surface-card); cursor:pointer; }
+.local-account-menu > summary::-webkit-details-marker { display:none; }
+.local-account-menu > div { position:absolute; right:0; top:52px; z-index:100; width:min(280px,calc(100vw - 40px)); display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:20px; border-radius:18px; background:var(--surface-raised); box-shadow:0 8px 32px rgb(var(--shadow-rgb) / .14); }
+.local-account-menu strong { overflow-wrap:anywhere; font-size:14px; }
+.local-account-menu .text-button { min-height:44px; text-align:left; }
+.local-sync-status { display:flex; align-items:center; gap:12px; margin:-12px 0 24px; color:var(--text-secondary); font-size:12px; }
+.local-sync-status > span { flex:1; min-width:0; }
+.local-sync-status button { min-height:44px; }
+.local-sync-issues { display:grid; gap:16px; margin-bottom:28px; }
+.local-sync-issues article { padding:20px; border-radius:var(--radius-content); background:var(--surface-warm); }
+.local-sync-issues pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; max-height:280px; overflow:auto; }
+.local-sync-issues details { margin-bottom:16px; }
+.local-issue-actions { display:flex; flex-wrap:wrap; gap:12px; }
+.local-entry-status { display:block; color:var(--text-secondary); font-size:11px; margin-top:8px; }
+@media (max-width:600px) {
+  .local-trackers .page-header { align-items:start; gap:12px; }
+  .local-trackers .page-header > button { flex-shrink:0; }
+  .local-trackers .tracker-title > span:last-child { overflow-wrap:anywhere; min-width:0; }
 }

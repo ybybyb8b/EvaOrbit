@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "./searchable-select";
 
@@ -63,7 +64,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
 
   return <FormSheet title={rule ? english ? "Edit interpretation rule" : "编辑解读规则" : english ? "Define interpretation" : "定义解读方式"} onClose={onClose} formId="calendar-rule-form" submitLabel={english ? "Save rule" : "保存规则"} busy={busy}>
     <form id="calendar-rule-form" className="calendar-rule-form" onSubmit={save}>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {conflict && <button className="button secondary" type="button" disabled={busy} onClick={() => void reloadRules()}>{english ? "Reload rules, keep draft" : "刷新规则，保留草稿"}</button>}
       <label className="field"><span>{english ? "Title starts with" : "标题以什么开头"}</span><input required autoFocus maxLength={80} value={prefix} onChange={event => setPrefix(event.target.value)} disabled={busy} placeholder={english ? "Emoji or text prefix" : "emoji 或文字前缀"} /></label>
       <div className="field"><span>{english ? "Meaning in EO" : "在 EO 中代表什么"}</span>{base.categories.length > 10 ? <SearchableSelect label={english?"Meaning in EO":"在 EO 中代表什么"} value={categoryId} disabled={busy} options={[...base.categories.map(item=>({value:item.id,label:calendarCategoryLabel(item,english)})),{value:"new",label:english?"New category…":"新建分类……"}]} onValueChange={setCategoryId}/> : <ChoiceSelect value={categoryId} onChange={event => setCategoryId(event.target.value)} disabled={busy}>{base.categories.map(item => <option key={item.id} value={item.id}>{calendarCategoryLabel(item, english)}</option>)}<option value="new">{english ? "New category…" : "新建分类……"}</option></ChoiceSelect>}</div>
@@ -72,7 +73,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
       <label className="calendar-rule-toggle"><input role="switch" className="toggle-switch" type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={busy} /><span>{english ? "Enable this rule" : "启用这条规则"}</span></label>
       {!isSleep && <label className="field"><span>{english ? "Match Food meal times" : "关联饮食的用餐时间"}</span><ChoiceSelect value={mealType} onChange={event => setMealType(event.target.value as typeof mealType)} disabled={busy}><option value="">{english ? "Not a meal window" : "不是用餐时段"}</option><option value="auto">{english ? "Meal · match automatically" : "用餐 · 自动匹配餐次"}</option><option value="breakfast">{english ? "Breakfast" : "早餐"}</option><option value="lunch">{english ? "Lunch" : "午餐"}</option><option value="dinner">{english ? "Dinner" : "晚餐"}</option><option value="snack">{english ? "Snack" : "加餐"}</option><option value="late_night">{english ? "Late night" : "夜宵"}</option></ChoiceSelect>{mealType && <p className="calendar-rule-hint">{english ? "Matched Food records use this event's interval; Timeline shows one meal. Unmatched records stay visible." : "匹配的饮食记录自动采用此事项时段，Timeline 只显示一顿饭；未匹配记录仍正常显示。"}</p>}</label>}
       {!isSleep ? <label className="calendar-rule-toggle"><input role="switch" className="toggle-switch" type="checkbox" checked={include} onChange={event => setInclude(event.target.checked)} disabled={busy} /><span>{english ? "Include in daily recorded-time summary" : "加入每日用时总结"}</span></label> : <p className="calendar-rule-hint">{english ? "Sleep records contribute to the sleep card, including naps." : "睡眠记录用于睡眠卡片，包含主睡眠和小睡。"}</p>}
-      {collision && <p className="form-error" role="alert">{english ? `Prefix conflicts with “${collision.prefix}”. Edit that rule or use another prefix.` : `前缀与「${collision.prefix}」冲突，请编辑已有规则或换一个前缀。`}</p>}
+      {collision && <ErrorNotice inline role="alert">{english ? `Prefix conflicts with “${collision.prefix}”. Edit that rule or use another prefix.` : `前缀与「${collision.prefix}」冲突，请编辑已有规则或换一个前缀。`}</ErrorNotice>}
       <section className="calendar-rule-preview" aria-label={english ? "Interpretation preview" : "解读预览"}>
         <h3>{english ? "Preview" : "解读预览"}</h3>
         {!isSleep && <div className="calendar-icon-preview">{icon && <ReiconSymbol name={icon} size={24} />}<span>{categoryId === "new" ? newName.trim() || (english ? "New category" : "新分类") : category ? calendarCategoryLabel(category, english) : "…"}</span></div>}

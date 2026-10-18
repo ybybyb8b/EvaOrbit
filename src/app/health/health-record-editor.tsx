@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -88,7 +89,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
       <label className="field wide"><span>Summary <small>(optional)</small></span><textarea rows={3} maxLength={5000} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} placeholder="A short note for later…" /></label>
     </div>
     <details className="health-details-editor" open={editing ? undefined : false}><summary>Details · optional</summary><div className="form-grid health-form-grid">{fields.map((field) => <div className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><SuggestedInput suggestionLabel={field.label} suggestions={suggestedKeys.has(field.key) ? [...historyValues(history, `details.${field.key}`), ...(field.key === "severity" ? ["Mild", "Moderate", "Severe"] : [])] : []} type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onValueChange={value => setDetail(field.key, value, field.inputType)} placeholder={field.placeholder} /></div>)}</div></details>
-    {error && <p className="form-error">{error}</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
     <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
   </form>;
 }

@@ -14,6 +14,11 @@ source "$script_directory/xtool-env.sh" --no-next-steps
 echo "Using Windows usbmuxd through $USBMUXD_SOCKET_ADDRESS"
 xtool install "$ipa_path"
 
+if [[ "${EVAORBIT_SKIP_RENEWAL:-0}" == "1" ]]; then
+  echo "Host installed; production renewal reminders were left unchanged."
+  exit 0
+fi
+
 # Only a successful install resets the reminder. Never let reminder delivery turn an install into a failure.
 installed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 repository_directory="$(cd -- "$script_directory/../.." && pwd)"

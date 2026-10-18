@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -56,7 +57,7 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
     <PageHeader eyebrow="生活" title="Food & Drink" action={<PageLogAction label="Add record" className="button primary" onClick={() => setEditor({ kind: "choose" })}><Icon name="plus" />新增记录</PageLogAction>} />
     <nav className={styles.destinations} aria-label="Food & Drink 核心入口">{destinations.map(destination => <Link href={destination.href} key={destination.href}><Icon name={destination.icon} variant="feature" /><span>{destination.label}</span></Link>)}</nav>
     {loading && !data ? <PageLoading title="饮食" englishTitle="food and drink" inline /> : <><section className={styles.brief} aria-labelledby="brief-title"><h2 id="brief-title">Brief</h2>
-      {error ? <p className="form-error" role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></p> : loading && !data ? <PageLoading title="饮食简报" englishTitle="food and drink brief" inline /> : data && <>
+      {error ? <ErrorNotice role="alert">{error} <button className="text-button" onClick={() => void load()}>重试</button></ErrorNotice> : loading && !data ? <PageLoading title="饮食简报" englishTitle="food and drink brief" inline /> : data && <>
         <p className={styles.briefLead}>今天吃了 {data.brief.foodCount} 次，喝了 {data.brief.drinkCount} 杯。</p>
         {latest ? <p className={styles.latest}>最近一条：{latestDay === data.date ? "今天" : latestDay}{latest.record.occurredHasExplicitTime === false ? "（仅日期）" : ` ${latestTime}`}，{latest.kind === "food" ? "吃了" : "喝了"}「<button className={`${styles.latestLink} user-content`} onClick={() => setEditor(latest.kind === "food" ? { kind: "food", record: latest.record } : { kind: "drink", record: latest.record })} aria-label={`编辑最近记录 ${latestTitle}`}>{latestTitle}</button>」。</p> : <p className={styles.hint}>还没有记录，从第一餐或第一杯开始。</p>}
         {warning ? <button className={styles.briefWarning} onClick={() => setLimitEditor(warning.limit)}><span className="user-content">{warning.limit.name}</span> · {limitStateLabels[warning.state]} <Icon name="arrow" /></button> : <p className={styles.hint}>{data.limitStatuses.length ? "当前限额均在范围内。" : "当前没有启用中的限额。"}</p>}

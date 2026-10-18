@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -45,6 +46,6 @@ export function SleepSection({ initial }: { initial: DailySleepSummary }) {
       </> : <div className={styles.empty}><strong>{english ? "No sleep data for this day" : "这一天暂无睡眠数据"}</strong><p>{english ? "Measured sleep has not synced for this wake date. Check the date or refresh after syncing." : "尚未收到这个醒来日期的实际睡眠，请核对日期或同步后刷新。"}</p></div>}
     </div>
     <details className={styles.details}><summary><span>{english ? "Sleep details & data sources" : "睡眠明细与数据来源"}</span><Icon name="chevronDown" /></summary><div className={styles.detailsBody}><SleepSummary summary={summary} english={english} /></div></details>
-    {error && <p className="form-error" role="status">{english ? "Could not refresh sleep. Try Refresh again." : "睡眠数据刷新失败，请再次点击刷新。"}</p>}
+    {error && <ErrorNotice role="status">{english ? "Could not refresh sleep. Try Refresh again." : "睡眠数据刷新失败，请再次点击刷新。"}</ErrorNotice>}
   </section>;
 }

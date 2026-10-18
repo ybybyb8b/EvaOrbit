@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -172,7 +173,7 @@ export function AiProvidersSettings() {
         </section>}
       </div>
     </div>
-    {error && <p className="form-error">{error}</p>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
+    {error && <ErrorNotice>{error}</ErrorNotice>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
   </section>;
 }
 

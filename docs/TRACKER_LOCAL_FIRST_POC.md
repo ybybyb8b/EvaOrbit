@@ -1,13 +1,22 @@
 # Tracker Local-first PoC
 
+## Real-account read-only acceptance boundary
+
+The acceptance build uses existing production session and Tracker GET endpoints, with no production migration or API deployment. Native and React both reject business commits and every sync call. A separate account-scoped `tracker_readonly_cache` holds validated snapshots; it never seeds the mutation outbox. SQLite backup (including WAL) and quick_check precede inspection; the UI reports original pending/frozen counts. Missing methods on an old Host fail closed. Original editable preview fixtures remain available in Windows only.
+
+`trackers.readOnlySnapshot` and `trackers.acceptanceStatus` are additive bridge methods requiring a rebuilt PoC IPA. Use `EVAORBIT_SKIP_RENEWAL=1` during acceptance installation to avoid the ordinary renewal Task write. Read-only acceptance does not enable or prove real-account bidirectional writes. Production protocol-2 migration and API deployment still require separate approval.
+
 ## Scope and execution paths
 
 The independent SwiftUI client is retired. This PoC lives in the existing
 UIKit/WKWebView Host. The ordinary Host still starts the production website.
 The opt-in Tracker build starts `eo-local://app/index.html` from its signed bundle.
 
-- `src/local-trackers/`: React entry and platform adapter. Reuses the existing
-  Tracker record editor, card content, FormSheet, inputs, icons, CSS and fonts.
+- `src/local-trackers/`: React entry, login, workspace and platform adapter.
+  Web and local share LoginSurface/LoginFields, PageHeading, TrackerCreateSheet,
+  TrackerEntryEditor, card content/pictures, timeline records/filters, activity
+  insights, FormSheet, inputs, icons, CSS and fonts. Next routing/server actions
+  stay in the Web wrappers; local components do not import Next runtime modules.
 - `src/lib/tracker-local-store.ts`: one shared, durable queue/state machine for
   browser and iOS. Local UUIDs are distinct from server IDs. Upload commands are
   frozen and committed before networking; retries reuse the same mutation ID,
@@ -26,11 +35,22 @@ The opt-in Tracker build starts `eo-local://app/index.html` from its signed bund
   Each account's snapshot has a transactionally ordered revision, so a late
   response cannot replace a newer snapshot already applied by another window.
 
-The PoC supports Tracker creation with an optional number/text property, and
-record create/edit/delete. Existing cloud properties are read and rendered by the
-shared editor, including `time_range`. Tracker deletion, archive/property editing,
-images, goals, reminders and Insights management stay in Web. System HealthKit,
-EventKit and notifications continue through the existing online Host path.
+The local client supports Tracker creation with multiple properties of all seven
+existing types, quick/detailed recording, record create/edit/delete, local search
+and time/property filters, chart drill-down, offline Insights and basic name/group/
+recording-mode edits. Tracker and initial properties commit in one local transaction.
+Existing cloud properties, including archived historical values, use the shared
+editor and timeline. Tracker deletion/archive, property management, custom image
+caching/upload, ordering, goals/reminders and the Web deletion undo timer still
+await local migration. Those capabilities remain available in Web. System
+HealthKit, EventKit and notifications continue through the existing online Host path.
+
+The login page now shares the Web visual frame and controls instead of opening
+a simplified sheet. Existing-account startup still reads the local session and
+records without waiting for network authentication. Browser checks compare Web/
+local login dimensions, padding, radii, surface color, heading size/line height and
+input height at 402/1440 px. The shared UI uses the same production bundle in
+browser regression; this does not replace a new iPhone installation and acceptance.
 
 The replica deliberately uses one versioned document per account (64 MiB Host
 write ceiling), complete account snapshots, and foreground synchronization.
@@ -48,7 +68,7 @@ npm run dev:trackers
 
 Open `http://127.0.0.1:4178`. The same React sources run in the Host. Browser edits
 reload through Vite and records persist in IndexedDB. “本机预览” uses an isolated
-preview account and never uploads its data. “连接 EvaOrbit” uses the development
+preview account and never uploads its data. “进入 EvaOrbit” uses the development
 proxy to the existing native session and sync APIs; the proxy does not carry a
 service-role key. Production is the default HTTPS API origin; optionally configure
 `EVAORBIT_TRACKER_API_URL` to another trusted HTTPS deployment before starting Vite.

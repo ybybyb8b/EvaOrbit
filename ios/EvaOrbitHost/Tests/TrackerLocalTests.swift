@@ -16,10 +16,10 @@ final class TrackerLocalTests: XCTestCase {
         var title: String?
         for _ in 0..<100 {
             title = try? await webView.evaluateJavaScript("document.querySelector('h1')?.textContent") as? String
-            if title == "Trackers" { break }
+            if title == "回到 EvaOrbit" { break }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        XCTAssertEqual(title, "Trackers", "Bundled modules/fonts must work through WKURLSchemeHandler")
+        XCTAssertEqual(title, "回到 EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
         XCTAssertEqual(webView.url?.scheme, TrackerAssetHandler.scheme)
         let random = try await webView.evaluateJavaScript("crypto.getRandomValues(new Uint8Array(1)).length") as? Int
         XCTAssertEqual(random, 1)
@@ -52,6 +52,44 @@ final class TrackerLocalTests: XCTestCase {
         try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
         do { _ = try await reopened.read(accountId: account); XCTFail("Another account must not read these records") }
         catch {}
+    }
+
+    @MainActor func testReadOnlyCacheAndBackupNeverReplaceTheExistingQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("trackers.sqlite3").path
+        let account = "10000000-0000-4000-8000-000000000001"
+        let database = try TrackerLocalDatabase(path: path)
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "old-frozen", "wire": ["payload": ["note": "keep"]]]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: database)
+        let receipt = try await controller.acceptanceStatus(accountId: account)
+        XCTAssertEqual(receipt["pending"] as? Int, 1)
+        XCTAssertEqual(receipt["frozen"] as? Int, 1)
+        XCTAssertEqual(receipt["sqliteVerified"] as? Bool, true)
+        let backupName = try XCTUnwrap(receipt["backupFile"] as? String)
+        let backup = try TrackerLocalDatabase(path: directory.appendingPathComponent("AcceptanceBackups").appendingPathComponent(backupName).path)
+        let backedUp = try await backup.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(backedUp, original as NSDictionary)
+        for operation in ["sync", "trackers"] {
+            do { _ = try await controller.request(path: operation, method: "POST", body: ["accountId": account]); XCTFail("Business writes must fail before networking") }
+            catch TrackerLocalError.readOnly { XCTAssertEqual(operation, "sync") }
+            catch TrackerLocalError.invalid { XCTAssertEqual(operation, "trackers") }
+        }
+        do { _ = try await controller.synchronize(["accountId": account, "mutations": []]); XCTFail("Even empty legacy sync calls are disabled") }
+        catch TrackerLocalError.readOnly {}
+        let snapshot: [String: Any] = ["format": "eo-trackers-readonly-v1", "accountId": account, "capturedAt": "2026-10-19T00:00:00Z", "details": []]
+        try await database.saveReadOnlyCache(accountId: account, snapshot: snapshot)
+        let reopened = try TrackerLocalDatabase(path: path)
+        let restoredSnapshot = try await reopened.readOnlyCache(accountId: account) as? NSDictionary
+        let restoredQueue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(restoredSnapshot, snapshot as NSDictionary)
+        XCTAssertEqual(restoredQueue, original as NSDictionary)
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.readOnlyCache(accountId: account); XCTFail("Read-only caches must remain account scoped") } catch {}
     }
 
     func testLocalAssetsAreConfinedToBundleAndProductionDoesNotTrustLocalOrigin() throws {

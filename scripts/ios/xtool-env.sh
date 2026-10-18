@@ -44,7 +44,7 @@ _evaorbit_xtool_env() {
     return 1
   fi
 
-  for command_name in awk bash ideviceinfo ip service sha256sum sudo timeout; do
+  for command_name in awk bash ideviceinfo ip pgrep service sha256sum sudo timeout; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       echo "Required WSL command is missing: $command_name" >&2
       return 1
@@ -68,7 +68,16 @@ _evaorbit_xtool_env() {
 
   # The verified transport uses Apple's Windows usbmuxd through portproxy.
   # A local WSL usbmuxd would compete with that transport.
-  sudo service usbmuxd stop >/dev/null 2>&1 || true
+  if pgrep -x usbmuxd >/dev/null; then
+    if ! sudo -n service usbmuxd stop >/dev/null 2>&1; then
+      echo "Stop the competing WSL usbmuxd service in an interactive WSL terminal, then retry." >&2
+      return 1
+    fi
+    if pgrep -x usbmuxd >/dev/null; then
+      echo "WSL usbmuxd is still running; refusing a competing device transport." >&2
+      return 1
+    fi
+  fi
 
   windows_gateway="$(ip route show default | awk 'NR == 1 { print $3 }')"
   if [[ -z "$windows_gateway" ]]; then
@@ -88,7 +97,7 @@ _evaorbit_xtool_env() {
 
   # Query only the activation state. Do not print device identifiers.
   local activation_state
-  if ! activation_state="$(ideviceinfo -k ActivationState 2>/dev/null)"; then
+  if ! activation_state="$(timeout 10 ideviceinfo -k ActivationState 2>/dev/null)"; then
     echo "TCP is reachable, but ideviceinfo could not read the iPhone." >&2
     echo "Unlock the phone, confirm Trust, and reconnect the cable before retrying." >&2
     return 1

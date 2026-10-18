@@ -41,7 +41,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState"]
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -402,8 +402,13 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     guard let account = parameters["accountId"] as? String else { throw TrackerLocalError.invalid }
                     result = try await controller.database.read(accountId: account)
                 case "trackers.commitState":
-                    guard let account = parameters["accountId"] as? String, let revision = parameters["expectedRevision"] as? Int, let state = parameters["state"] as? [String: Any] else { throw TrackerLocalError.invalid }
-                    result = try await controller.database.commit(accountId: account, expectedRevision: revision, state: state)
+                    throw TrackerLocalError.readOnly
+                case "trackers.acceptanceStatus":
+                    guard let account = parameters["accountId"] as? String else { throw TrackerLocalError.invalid }
+                    result = try await controller.acceptanceStatus(accountId: account)
+                case "trackers.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.readOnlySnapshot(accountId: account, refresh: refresh)
                 case "trackers.sync":
                     guard let request = parameters["request"] as? [String: Any] else { throw TrackerLocalError.invalid }
                     result = try await controller.synchronize(request)

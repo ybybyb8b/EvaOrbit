@@ -1,3 +1,4 @@
+import { ErrorNotice } from "@/components/error-notice";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -40,7 +41,7 @@ export default async function OAuthConsentPage({ searchParams }: { searchParams:
     <h1>Allow {data.client.name || "ChatGPT"}?</h1>
     <p>This lets the app use EvaOrbit’s MCP tools as your signed-in account.</p>
     {scopes.length > 0 && <p><small>Requested access: {scopes.join(", ")}</small></p>}
-    {params.error && <p className="form-error">The authorization could not be completed. Please try again.</p>}
+    {params.error && <ErrorNotice>The authorization could not be completed. Please try again.</ErrorNotice>}
     <div className="form-actions">
       <form action={approveAuthorization}>
         <input type="hidden" name="authorization_id" value={data.authorization_id} />

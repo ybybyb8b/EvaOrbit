@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -12,12 +14,11 @@ import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeader } from "@/components/page-header";
 import { memoStatusOptions, memoTypeOptions, optionLabel, parseTagInput } from "@/lib/long-term-memory";
-import type { ApiError, Memo, MemoStatus, MemoType } from "@/lib/types";
+import type { Memo, MemoStatus, MemoType } from "@/lib/types";
 
 type Draft = { title: string; content: string; type: MemoType; status: MemoStatus; tags: string; eventDate: string; confirmedAt: string; mergedIntoId: string };
 function localDateTime(value: string | null) { if (!value) return ""; const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
 function fromMemo(item: Memo): Draft { return { title: item.title, content: item.content, type: item.type, status: item.status, tags: item.tags.join(", "), eventDate: item.eventDate ?? "", confirmedAt: localDateTime(item.confirmedAt), mergedIntoId: item.mergedIntoId?.toString() ?? "" }; }
-async function responseError(response: Response, fallback: string) { const result = await response.json().catch(() => null) as ApiError | null; return result?.error || fallback; }
 
 export function MemoDetailView({ initial }: { initial: Memo }) {
   const router = useRouter();
@@ -29,7 +30,7 @@ export function MemoDetailView({ initial }: { initial: Memo }) {
   async function remove() { if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); router.push("/memo"); router.refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
 
   return <div className="page memo-page long-term-detail"><PageHeader eyebrow={`${optionLabel(memoTypeOptions, item.type)} · ${optionLabel(memoStatusOptions, item.status)}`} title={item.title} description={item.eventDate ? `Event date · ${item.eventDate}` : "Long-term context"} />
-    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <p className="form-error">{error}</p>}
+    {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <ErrorNotice>{error}</ErrorNotice>}
     {editing ? <FormSheet title="Edit Memo" onClose={() => { setDraft(fromMemo(item)); setEditing(false); }} formId="memo-edit-form" submitLabel="Save changes" busy={busy}><form id="memo-edit-form" className="editor-card long-term-editor" onSubmit={submit}><div className="form-grid">
       <label className="field wide"><span>Title</span><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       <label className="field"><span>Type</span><ChoiceSelect value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as MemoType })}>{memoTypeOptions.map((value) => <option value={value.value} key={value.value}>{value.label}</option>)}</ChoiceSelect></label>

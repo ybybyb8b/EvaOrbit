@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useState, type FormEvent } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -40,7 +41,7 @@ export function LimitEditor({ limit, onClose, onSaved }: { limit?: DrinkLimit; o
       <div className="field"><span>周期</span><SearchableSelect label="周期" searchable={false} value={draft.period} onValueChange={value => setDraft({ ...draft, period: value as LimitPeriod })} options={[{ value: "daily", label: "每天" }, { value: "weekly", label: "每周" }, { value: "monthly", label: "每月" }]} /></div>
       <label className="field"><span>数量上限（杯）</span><input required type="number" min={1} max={1000} step={1} value={draft.limitValue} onChange={event => setDraft({ ...draft, limitValue: event.target.value })} /></label>
       <label className="field checkbox-field"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.enabled} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} /><span>启用限额</span></label>
-    </div><p className="field-hint">沿用现有规则：按饮品类型或品名关键词计杯数。</p>{error && <p className="form-error" role="alert">{error}</p>}
+    </div><p className="field-hint">沿用现有规则：按饮品类型或品名关键词计杯数。</p>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {limit && <FoodDeleteAction label="删除这条限额" description={`确定删除「${limit.name}」？饮品记录不会删除。`} onDelete={remove} disabled={saving} />}
     </form>
   </FormSheet>;

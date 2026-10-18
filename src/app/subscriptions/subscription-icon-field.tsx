@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
 import { detectAvatarImage, MAX_AVATAR_BYTES } from "@/lib/avatar";
@@ -63,6 +64,6 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
         <small>{english ? "JPG, PNG, WebP · up to 4 MB" : "JPG、PNG、WebP · 最大 4 MB"}</small>
       </div>
     </div>
-    {error && <p className="form-error" role="alert">{error}</p>}
+    {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
   </div>;
 }

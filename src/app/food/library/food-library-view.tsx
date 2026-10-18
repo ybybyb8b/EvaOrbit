@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -135,11 +136,11 @@ export function FoodLibraryView() {
         <label className="field"><span>每份热量 kcal</span><input type="number" min={0} step="any" value={draft.servingKcal} onChange={(event) => setDraft({ ...draft, servingKcal: event.target.value })} /></label>
         <div className="field wide"><span>数据来源</span><SearchableSelect label="数据来源" searchable={false} value={draft.dataSource} onValueChange={(value) => setDraft({ ...draft, dataSource: value as FoodDataSource })} options={Object.entries(sourceLabels).map(([value,label])=>({value,label}))}/></div>
       </div></section>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {editingItem&&<FoodDeleteAction label="移除食品" description={`${t("确定移除")}「${draft.name}」？${t("有关联记录时会归档，历史记录保持不变。")}`} disabled={saving} onDelete={()=>remove(editingItem)}/>}
     </form></FormSheet>}
 
-    {!showForm && error && <p className="form-error">{error}</p>}
+    {!showForm && error && <ErrorNotice>{error}</ErrorNotice>}
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     <div className={styles.content}><label className={`search-box ${styles.search}`}><Icon name="search" /><input type="search" aria-label={t("搜索食品名称或品牌")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("搜索食品名称或品牌")} /></label>
     <div className={styles.summary}><span role="status">{loading?t("正在加载…"):`${t("当前显示")} ${items.length} ${t("项")}`}</span>{query&&<button type="button" className="text-button" onClick={()=>setQuery("")}>清除搜索</button>}</div>

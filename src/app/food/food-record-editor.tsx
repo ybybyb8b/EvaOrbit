@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -140,7 +141,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
       const payload = { ...body, ...(caloriesChanged?{kcalMin:null,kcalMax:null}:{}), consumedWeightG: consumedWeight === "" ? null : Number(consumedWeight), foodLibraryId: consumptions[0]?.foodLibraryId ?? null, foodLibraryItems: consumptions.map(({ foodLibraryId, quantity, unit }) => ({ foodLibraryId, quantity, unit })), foodKcalMode: consumptions.length ? kcalMode : "manual", estimatedKcal: estimatedKcal ? Number(estimatedKcal) : null };
       const response = await fetch(record ? `/api/food/logs/${record.id}` : "/api/food/logs", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-      await onSaved(); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose();
+      await onSaved(); showActionToast("饮食记录已保存"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法保存饮食记录"); } finally { setSaving(false); }
   }
   async function remove() {
@@ -151,7 +152,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
     <form id="food-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>
       <div className={styles.foodSelection}>
       <FoodNameInput kind="food" label="吃了什么" required={!hasSelectedFoods&&!draft.title.trim()} value={browseQuery} onSelect={selectItem} onRecord={recordFreeName} onValueChange={value=>{setBrowseQuery(value);if(!hasSelectedFoods){automaticTitle.current=null;setDraft({...draft,title:value});}}}/>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {hasSelectedFoods&&<ul className={styles.selectedFoods} aria-label={t("已选食物")}>
         {draft.foodDishIds.map(id=>{const dish=selectedDishes.find(item=>item.id===id);const name=dish?.name??`菜品 #${id}`;return <li key={`dish:${id}`}><span className="user-content">{name}{dish?.foodPlaceId&&<small> · {sourceName(dish.foodPlaceId)}</small>}</span><button type="button" data-form-change aria-label={`${t("移除菜品关联")} ${name}`} onClick={()=>removeSelectedFood(id,dish?.foodLibraryId)}><Icon name="close"/></button></li>;})}
         {consumptions.filter(item=>!selectedDishes.some(dish=>draft.foodDishIds.includes(dish.id)&&dish.foodLibraryId===item.foodLibraryId)).map(item=>{const name=item.item?.name??`食品 #${item.foodLibraryId}`;return <li key={`library:${item.foodLibraryId}`}><span className="user-content">{name}{item.item?.foodPlaceId&&<small> · {sourceName(item.item.foodPlaceId)}</small>}</span><button type="button" data-form-change aria-label={`${t("移除食品")} ${name}`} onClick={()=>removeSelectedFood(null,item.foodLibraryId)}><Icon name="close"/></button></li>;})}

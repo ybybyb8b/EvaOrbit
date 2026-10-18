@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableMultiSelect } from "@/components/searchable-multi-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -9,13 +10,14 @@ import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import { responseError } from "@/lib/response-error";
 import { translateUiCopy } from "@/lib/ui-copy";
-import type { ApiError, TrackerEntry, TrackerField } from "@/lib/types";
+import type { TrackerEntry, TrackerField } from "@/lib/types";
 
 function localDateTime(initialDate?: string) { const date = new Date(); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return `${initialDate ?? date.toISOString().slice(0, 10)}T${date.toISOString().slice(11, 16)}`; }
 function entryLocalTime(entry: Pick<TrackerEntry, "occurredAt">) { const date = new Date(entry.occurredAt); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0,16); }
 
-export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord }: { trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
+export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false }: { readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
   const { english } = useLocale();
   const [occurredAt, setOccurredAt] = useState(() => entry ? entryLocalTime(entry) : localDateTime(initialDate));
   const [note, setNote] = useState(entry?.note ?? "");
@@ -32,13 +34,13 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
   const [error, setError] = useState("");
   const activeFields = fields.filter((field) => !field.archivedAt);
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (working) return; setWorking(true); setError("");
+    event.preventDefault(); if (working || readOnly) return; setWorking(true); setError("");
     try {
       const input = { occurredAt: entry && occurredAt === entryLocalTime(entry) ? entry.occurredAt : new Date(occurredAt).toISOString(), values, note };
       if (saveRecord) await saveRecord(input);
       else {
         const response = await fetch(`/api/trackers/${trackerId}/entries${entry ? `?entryId=${entry.id}` : ""}`, { method: entry ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
-        if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
+        if (!response.ok) { setError(await responseError(response, english ? "Could not save the record. Please try again." : "保存失败，请重试。")); return; }
         try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ }
       }
       playNativeHaptic("light"); await onSaved(); onClose();
@@ -46,11 +48,14 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
     finally { setWorking(false); }
   }
   function setFieldValue(field: TrackerField, value: unknown) { setValues((current) => ({ ...current, [field.key]: value })); }
-  return <FormSheet title={entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={english?"Save record":"保存记录"} busy={working}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={submit}>
+  const content = <>
     <label className="field"><span>{english?"When":"时间"}</span><input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
     {activeFields.length > 0 && <div className="tracker-values-grid">{activeFields.map((field) => <TrackerFieldInput field={field} value={values[field.key]} onChange={(value) => setFieldValue(field, value)} key={field.key} />)}</div>}
     <label className="field"><span>{english?"Note":"备注"}</span><textarea rows={3} maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>
-    {error && <p className="form-error">{error}</p>}
+    {error && <ErrorNotice>{error}</ErrorNotice>}
+  </>;
+  return <FormSheet title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={submit}>
+{readOnly ? <fieldset disabled style={{border:0,padding:0,margin:0,minWidth:0}}><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
   </form></FormSheet>;
 }
 

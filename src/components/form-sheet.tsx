@@ -119,7 +119,7 @@ export function FormSheet({
     const dialog = dialogRef.current;
     const previousFocus = returnFocusRef.current;
     const inertSiblings = Array.from(body.children)
-      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== panelRef.current)
+      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== panelRef.current && !element.hasAttribute("data-feedback-layer"))
       .map((element) => ({ element, inert: element.inert }));
     const previousOverflow = body.style.overflow;
     const previousPaddingRight = body.style.paddingRight;
@@ -136,9 +136,9 @@ export function FormSheet({
       layer.style.setProperty("--form-sheet-viewport-top", `${viewport?.offsetTop ?? 0}px`);
       layer.style.setProperty("--form-sheet-viewport-left", `${viewport?.offsetLeft ?? 0}px`);
     };
-    const getFocusable = () => dialog ? Array.from((discardRef.current ? dialog.querySelector(".form-sheet-discard-confirm") ?? dialog : dialog).querySelectorAll<HTMLElement>(
+    const getFocusable = () => dialog ? [...Array.from((discardRef.current ? dialog.querySelector(".form-sheet-discard-confirm") ?? dialog : dialog).querySelectorAll<HTMLElement>(
       'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
-    )).filter((element) => !element.hidden && element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true") : [];
+    )), ...Array.from(document.querySelectorAll<HTMLElement>("[data-feedback-layer] button,[data-feedback-layer] a[href]"))].filter((element) => !element.hidden && element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true") : [];
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (discardRef.current) { discardRef.current = false; setDiscardOpen(false); return; }
@@ -152,16 +152,11 @@ export function FormSheet({
         dialog.focus();
         return;
       }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || !dialog.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
+      const index = focusable.indexOf(document.activeElement as HTMLElement);
+      // Feedback can be portaled before or after the sheet in DOM order.
+      event.preventDefault();
+      const next = index < 0 ? (event.shiftKey ? focusable.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
+      focusable[next].focus();
     };
     inertSiblings.forEach(({ element }) => { element.inert = true; });
     updateViewport();
@@ -218,7 +213,7 @@ export function FormSheet({
   return createPortal(
     <div className="form-sheet-layer" data-state={phase} role="presentation" ref={panelRef}>
       <button className="form-sheet-backdrop" type="button" aria-label={`${language === "en" ? "Close" : "关闭"} ${copy(title)}`} onClick={requestClose} />
-      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
+      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-owns="evaorbit-error-banner" tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
         onChangeCapture={event => { if (dirty === undefined && (!(event.target instanceof HTMLInputElement) || event.target.type !== "search")) dirtyRef.current = true; }}
         onClickCapture={event => { if (dirty === undefined && event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
         onInvalidCapture={event => { if (event.target instanceof HTMLElement) scrollFormSheetField(bodyRef.current, event.target); }}>

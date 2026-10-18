@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
 import { ArrowDown2, ArrowUp2, Sort } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
@@ -108,7 +109,7 @@ export function TrackerSortSheet({ trackers, archived, order, onSave, onClose }:
     }}>
       <p id="tracker-sort-help" className="tracker-sort-help">{t("Drag a group or a Tracker by its handle. Trackers stay in their group. You can also use the arrow buttons.", "拖动把手调整分组或组内 Tracker 的顺序，不改变分组归属。也可使用上下按钮调整。")}</p>
       <p className="tracker-sort-device">{t("Saved for this account on this device only.", "仅为当前账户保存在此设备，不跨设备同步。")}</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
       {groups.map(group => <section className="tracker-sort-group" key={group.name} data-sort-key={`g:${group.name}`}>
         <header><h3 className="user-content">{group.name}</h3><span>{group.items.length}</span>{controls(`g:${group.name}`, group.name, null, groups.map(item => `g:${item.name}`))}</header>

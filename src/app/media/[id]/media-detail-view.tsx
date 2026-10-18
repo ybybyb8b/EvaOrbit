@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -13,7 +15,7 @@ import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
 import { PageHeader } from "@/components/page-header";
 import { getMediaDisplayTitle, mediaNameKey } from "@/lib/media-display";
-import type { ApiError, MediaDetail, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing } from "@/lib/types";
+import type { MediaDetail, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing } from "@/lib/types";
 import { mediaRatings, mediaStatuses, mediaTypes, statusLabel, typeLabel } from "../media-view";
 import { playNativeHaptic } from "@/lib/native-haptics";
 
@@ -23,10 +25,6 @@ function draftFromDetail(detail: MediaDetail): MediaDraft {
   return { originalTitle: detail.originalTitle ?? "", translatedTitle: detail.translatedTitle ?? "", mediaType: detail.mediaType, status:detail.status, rating: detail.rating ?? "", isFavorite:detail.isFavorite, note: detail.note ?? "", seriesChoice:detail.seriesId?String(detail.seriesId):"", newSeries:"", seasonNumber:detail.seasonNumber?String(detail.seasonNumber):"", seasonTitle:detail.seasonTitle??"" };
 }
 
-async function responseError(response: Response, fallback: string) {
-  const result = await response.json().catch(() => null) as ApiError | null;
-  return result?.error || fallback;
-}
 
 function viewingLabel(viewing: MediaViewing) {
   return viewing.viewingNumber === 1 ? "First watch" : `Rewatch · ${viewing.viewingNumber - 1}`;
@@ -150,7 +148,7 @@ export function MediaDetailView({ initial, initialSeries }: { initial: MediaDeta
     <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={displayTitle.primary} description={displayTitle.secondary ?? "A single item from your private shelf."} />
 
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
-    {error && <p className="form-error" role="alert">{error}</p>}
+    {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
 
     {editing && <FormSheet title="Edit media" onClose={closeEditor} formId="media-edit-form" submitLabel="Save changes" busy={busy}><form id="media-edit-form" className="editor-card media-editor" onSubmit={submitEdit}>
       <div className="editor-title"><div><span className="eyebrow">EDIT MEDIA</span><h2>Edit media</h2></div><button type="button" className="text-button" onClick={closeEditor}>Cancel</button></div>

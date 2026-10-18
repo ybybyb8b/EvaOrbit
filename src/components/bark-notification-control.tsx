@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useRef, useState } from "react";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import type { BarkStatus } from "@/lib/push/bark";
@@ -53,6 +54,6 @@ export function BarkNotificationControl({ onChange }: { onChange: (enabled: bool
     {status?.configured && <div className="notification-channel-actions"><span className="channel-note">点击通知打开：{status.openInHost?"EO Host":"网页"}</span><button className="button secondary" type="button" disabled={busy||Boolean(url.trim())} onClick={()=>void action("destination")}>{status.openInHost?"改为打开网页":"改为打开 Host"}</button></div>}
     {status?.configured && <p className="channel-note">打开 Host 需要安装支持通知链接的新版 IPA。旧版或未安装时请选择网页。</p>}
     {status?.enabled && <p className="channel-note">网页推送和 Host 本地业务提醒已暂停。Apple 提醒事项已有的首次提醒继续保留；打开一次 Host 可清理旧的本地提醒。</p>}
-    {message && <p className="channel-note" role="status">{message}</p>}{error && <p className="form-error" role="alert">{error}</p>}
+    {message && <p className="channel-note" role="status">{message}</p>}{error && <ErrorNotice role="alert">{error}</ErrorNotice>}
   </section>;
 }

@@ -1,16 +1,11 @@
 import { trackerDurationMinutes } from "./tracker-time-range.ts";
-import { dateInEvaOrbit, EVAORBIT_TIME_ZONE } from "./time.ts";
+import { dateInEvaOrbit, EVAORBIT_TIME_ZONE, shiftDate } from "./time.ts";
 import type { TrackerChoiceInsight, TrackerDistributionItem, TrackerEntry, TrackerField, TrackerHeatmapDay, TrackerInsights, TrackerNumericInsight } from "./types.ts";
 
-function shiftDate(date: string, days: number) {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
 
 export type TrackerInsightPeriod = "month" | "90d" | "year";
 
-export function trackerInsightEntries(entries: TrackerEntry[], period: TrackerInsightPeriod, now = new Date()) {
+export function trackerInsightEntries<T extends Pick<TrackerEntry, "occurredAt">>(entries: T[], period: TrackerInsightPeriod, now = new Date()) {
   const today = dateInEvaOrbit(now);
   const start = period === "month" ? `${today.slice(0, 7)}-01` : shiftDate(today, period === "90d" ? -89 : -364);
   return entries.filter(entry => {
@@ -63,7 +58,7 @@ function distribution(keys: Array<{ key: string; label: string }>, values: strin
   });
 }
 
-function fieldValue(entry: TrackerEntry, field: TrackerField) {
+function fieldValue(entry: Pick<TrackerEntry, "values">, field: TrackerField) {
   return entry.values[field.key] ?? entry.values[String(field.id)];
 }
 
@@ -79,7 +74,7 @@ function dayPart(hour: number) {
   return "night";
 }
 
-export function trackerDistributionEntries(entries: TrackerEntry[], kind: "monthly" | "weekdays" | "dayParts", key: string) {
+export function trackerDistributionEntries<T extends Pick<TrackerEntry, "occurredAt">>(entries: T[], kind: "monthly" | "weekdays" | "dayParts", key: string) {
   return entries.filter(entry => {
     const date = dateInEvaOrbit(new Date(entry.occurredAt));
     const value = kind === "monthly" ? date.slice(0, 7) : kind === "weekdays" ? String(new Date(`${date}T12:00:00Z`).getUTCDay()) : dayPart(localHour(entry.occurredAt));
@@ -87,7 +82,7 @@ export function trackerDistributionEntries(entries: TrackerEntry[], kind: "month
   });
 }
 
-function numericInsights(entries: TrackerEntry[], fields: TrackerField[]): TrackerNumericInsight[] {
+function numericInsights(entries: Pick<TrackerEntry, "values">[], fields: TrackerField[]): TrackerNumericInsight[] {
   return fields.filter((field) => field.includeInStats && (field.type === "number" || field.type === "rating" || field.type === "time_range")).flatMap((field) => {
     const values = entries.map((entry) => field.type === "time_range" ? trackerDurationMinutes(fieldValue(entry, field)) : fieldValue(entry, field)).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     if (!values.length) return [];
@@ -96,7 +91,7 @@ function numericInsights(entries: TrackerEntry[], fields: TrackerField[]): Track
   });
 }
 
-function choiceInsights(entries: TrackerEntry[], fields: TrackerField[]): TrackerChoiceInsight[] {
+function choiceInsights(entries: Pick<TrackerEntry, "values">[], fields: TrackerField[]): TrackerChoiceInsight[] {
   return fields.filter((field) => field.includeInStats && ["single_select", "multi_select", "boolean"].includes(field.type)).flatMap((field) => {
     const values = entries.flatMap((entry) => {
       const value = fieldValue(entry, field);
@@ -110,7 +105,7 @@ function choiceInsights(entries: TrackerEntry[], fields: TrackerField[]): Tracke
   });
 }
 
-export function buildTrackerInsights(entries: TrackerEntry[], fields: TrackerField[], now = new Date(), monthCount = 12): TrackerInsights {
+export function buildTrackerInsights(entries: Pick<TrackerEntry, "occurredAt" | "values">[], fields: TrackerField[], now = new Date(), monthCount = 12): TrackerInsights {
   const today = dateInEvaOrbit(now);
   const dates = Array.from({ length: 365 }, (_, index) => shiftDate(today, index - 364));
   const entryDates = entries.map((entry) => dateInEvaOrbit(new Date(entry.occurredAt)));

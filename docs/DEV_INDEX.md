@@ -37,6 +37,8 @@
 - **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
+- **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，不依赖 Next 或自动重试请求；服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
+- **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。
 - **详文**：[开发规则](../AGENTS.md)、[部署](../DEPLOYMENT.md)、[客户端缓存](CLIENT_PAGE_CACHE.md)、[备份与本地恢复](DATA_BACKUP.md)、[表单体验](FORM_INPUT_EXPERIENCE_REVIEW.md)。
 
@@ -106,7 +108,7 @@
 - **职责与入口**：[trackers/](../src/app/trackers/)、[tracker 服务](../src/lib/services/tracker.ts)；`trackers`、`tracker_fields`、`tracker_entries`、`tracker_goals`、`tracker_reminders`；`/api/trackers/*`，MCP `tracker`。
 - **依赖与决定**：属性 stable key/type 保持历史语义；归档保留记录，永久删除才清理数据。旧属性 DELETE 仍为归档，永久删除需显式选择。`time_range` 是自定义属性而非主记录时间，服务端重新计算时长。提醒依赖 Notifications，记录参与 Timeline。
 - **详文**：[生命周期](TRACKER_SETTINGS_LIFECYCLE.md)、[时间段属性](TRACKER_TIME_RANGE.md)、[MCP 子对象操作](../MCP.md)。
-- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。同一 Tracker 记录表单、卡片内容与主题供 Web 和本地入口使用；浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
+- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选和洞察组件；页面数据适配与认证传输分别保留在 Web 与本地入口。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；图片缓存、排序、属性管理、目标/提醒的本地迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
 
 ## Calendar
 
@@ -168,6 +170,8 @@
 - **详文**：[远程 MCP 配置与契约](../MCP.md)、[服务边界与兼容限制](../src/lib/mcp/README.md)。
 
 ## Native
+
+- **Tracker 只读验收边界**：`tracker-readonly.ts` 验证生产 GET 快照，`local-trackers/platform.ts` 和 Native bridge 双层禁止业务 commit/sync；原生 SQLite 的独立 `tracker_readonly_cache` 不替换旧 state/outbox。`trackers.acceptanceStatus` 执行含 WAL 的自动 SQLite backup 与 quick_check。正式双向写入仍以单独批准的协议 2 部署为前提，参见 [验收记录](TRACKER_POC_VALIDATION.md)。
 
 - **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[同步契约](../src/lib/native-sync-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。
 - **数据与接口**：`native_devices`、`native_sync_mutations`，以及 HealthKit / EventKit 各自的样本、回执与映射表；`/api/native/*`、`/api/healthkit/energy/ingest`、`/api/eventkit/*`。

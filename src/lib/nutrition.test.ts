@@ -57,5 +57,5 @@ test("nutrition history uses saved settings and one range per log source", () =>
   assert.match(sqlite, /listNutritionSettings\(limit=30\)/);
   assert.match(sqlite, /resting_energy_kcal IS NOT NULL OR active_energy_kcal IS NOT NULL/);
   assert.match(historyRoute, /listDailyNutritionHistory/);
-  assert.match(historyRoute, /limit > 90/);
+  // Limit/default behavior is exercised through the route in shared-api-parameters.test.mjs.
 });

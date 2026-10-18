@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState } from "@/components/use-data-refresh";
 
@@ -39,7 +40,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
       <label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="试着问：姐姐喜欢什么，项目由谁维护…" aria-label="检索 Memory Graph"/></label>
       <button className="button primary" disabled={searching}>{searching?"正在召回":"召回"}</button>
     </form>
-    {error&&<p className="form-error" role="alert">{error}</p>}
+    {error&&<ErrorNotice role="alert">{error}</ErrorNotice>}
     {hits.length>0&&<section className="memory-recall-results" aria-label="召回结果"><header><strong>召回路径</strong><button type="button" onClick={()=>setHits([])}>收起</button></header>{hits.map(hit=><button type="button" key={hit.fact.id} onClick={()=>selectFact(hit.fact)}><span><strong>{hit.subject.canonicalName} · {hit.fact.predicate}</strong><small>{hit.objectEntity?.canonicalName??literal(hit.fact.objectValue)}</small></span><span className="memory-channel-line">{hit.channels.map(channel=><em key={channel}>{channelLabels[channel]}</em>)}</span></button>)}</section>}
 
     <section className="memory-entity-rail" aria-label="实体筛选">

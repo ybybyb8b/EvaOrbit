@@ -2,12 +2,13 @@ import Foundation
 import SQLite3
 
 enum TrackerLocalError: LocalizedError {
-    case storage, account, invalid, network(String)
+    case storage, account, invalid, readOnly, network(String)
     var errorDescription: String? {
         switch self {
         case .storage: return "本地数据库读写失败，原有数据已保留，请检查设备存储空间"
         case .account: return "本地账户与同步账户不同，请重新连接账户"
         case .invalid: return "Tracker 请求或数据版本不正确，原有数据已保留"
+        case .readOnly: return "当前为真实数据只读验收，写入和旧队列上传已停用"
         case .network(let message): return message
         }
     }
@@ -43,6 +44,7 @@ actor TrackerLocalDatabase {
         BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS tracker_account(singleton INTEGER PRIMARY KEY CHECK(singleton=1),account_id TEXT NOT NULL,email TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS tracker_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         PRAGMA user_version=1;
         COMMIT;
         """
@@ -111,5 +113,47 @@ actor TrackerLocalDatabase {
             guard bound == SQLITE_OK, sqlite3_step(write) == SQLITE_DONE else { throw TrackerLocalError.storage }
             try execute("COMMIT"); return true
         } catch { try? execute("ROLLBACK"); throw error }
+    }
+
+    func readOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM tracker_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let result = sqlite3_step(query)
+        if result == SQLITE_DONE { return NSNull() }
+        guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+
+    func saveReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-trackers-readonly-v1", snapshot["details"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 64 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO tracker_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
+    // SQLite's online backup includes WAL contents. Never copy only the .sqlite3 file.
+    func acceptanceBackup(accountId: String) throws -> [String: Any] {
+        try requireAccount(accountId)
+        guard let filename = sqlite3_db_filename(database, "main") else { throw TrackerLocalError.storage }
+        let directory = URL(fileURLWithPath: String(cString: filename)).deletingLastPathComponent().appendingPathComponent("AcceptanceBackups", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        let target = directory.appendingPathComponent(UUID().uuidString + ".sqlite3")
+        var destination: OpaquePointer?
+        guard sqlite3_open_v2(target.path, &destination, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let destination else { if let destination { sqlite3_close(destination) }; throw TrackerLocalError.storage }
+        defer { sqlite3_close(destination) }
+        guard let backup = sqlite3_backup_init(destination, "main", database, "main") else { throw TrackerLocalError.storage }
+        let copied = sqlite3_backup_step(backup, -1), finished = sqlite3_backup_finish(backup)
+        guard copied == SQLITE_DONE, finished == SQLITE_OK else { throw TrackerLocalError.storage }
+        var check: OpaquePointer?
+        guard sqlite3_prepare_v2(destination, "PRAGMA quick_check", -1, &check, nil) == SQLITE_OK else { throw TrackerLocalError.storage }
+        defer { sqlite3_finalize(check) }
+        guard sqlite3_step(check) == SQLITE_ROW, let result = sqlite3_column_text(check, 0), String(cString: result) == "ok" else { throw TrackerLocalError.storage }
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: target.path)
+        let original = try read(accountId: accountId) as? [String: Any]
+        let outbox = original?["outbox"] as? [[String: Any]] ?? []
+        return ["readOnly": true, "backupFile": target.lastPathComponent, "sqliteVerified": true, "pending": outbox.count, "frozen": outbox.filter { $0["wire"] != nil }.count, "revision": original?["revision"] as? Int ?? 0]
     }
 }

@@ -17,7 +17,7 @@ export default defineConfig(({ command }) => ({
     fs: { allow: [root] },
     proxy: { "/eo-api/": {
       target: cloud, changeOrigin: true, cookieDomainRewrite: "", cookiePathRewrite: "/",
-      rewrite: path => `/api/native/${path.slice("/eo-api/".length)}`,
+      rewrite: path => /^\/eo-api\/trackers(?:\/[1-9][0-9]*)?$/.test(path) ? `/api/${path.slice("/eo-api/".length)}` : `/api/native/${path.slice("/eo-api/".length)}`,
       configure(proxy) {
         proxy.on("proxyRes", response => {
           // Development-only loopback cookies; never shipped in the IPA.
@@ -26,7 +26,14 @@ export default defineConfig(({ command }) => ({
       },
     } },
   },
-  plugins: [{ name: "tracker-client-directives", enforce: "pre", transform(code, id) {
+  plugins: [{ name: "tracker-acceptance-readonly", configureServer(server) {
+    server.middlewares.use((request, response, next) => {
+      if (!request.url?.startsWith("/eo-api/")) { next(); return; }
+      const allowed = request.url === "/eo-api/session" && ["GET", "POST", "DELETE"].includes(request.method ?? "") || /^\/eo-api\/trackers(?:\/[1-9][0-9]*)?$/.test(request.url) && request.method === "GET";
+      if (allowed) { next(); return; }
+      response.statusCode = 403; response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ error: "只读验收模式禁止业务写入" }));
+    });
+  } }, { name: "tracker-client-directives", enforce: "pre", transform(code, id) {
     if (/\.[jt]sx?$/.test(id) && /^["']use client["'];?/.test(code)) return { code: code.replace(/^["']use client["'];?\s*/, ""), map: null };
   } }, { name: "tracker-local-csp", transformIndexHtml(html) {
     return command === "build" ? html.replace("<head>", '<head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; font-src \'self\'; connect-src \'none\'; object-src \'none\'; base-uri \'none\'; form-action \'none\'">') : html;

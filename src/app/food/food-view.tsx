@@ -1,4 +1,5 @@
 "use client";
+import { shiftDate } from "@/lib/time";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -12,7 +13,6 @@ import type { FoodLog } from "@/lib/types";
 import { subscribeDataChanged } from "@/lib/data-changed";
 import { FoodRecordEditor, meals, scenes, tasteLabels } from "./food-record-editor";
 
-function shiftDate(date:string,days:number){const value=new Date(`${date}T12:00:00Z`);value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
 
 export function FoodView({initialDate,initialMealType}:{initialDate?:string;initialMealType?:string}={}){
 

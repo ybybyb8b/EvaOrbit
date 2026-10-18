@@ -1,0 +1,19 @@
+"use client";
+import { MoreH, Trash } from "reicon-react";
+import { Icon } from "@/components/icons";
+import { useLocale } from "@/components/locale-controller";
+import { groupTrackerTimeline, orderedTrackerValues } from "@/lib/tracker-timeline";
+import { formatTrackerTimeRange } from "@/lib/tracker-time-range";
+import type { TrackerField } from "@/lib/types";
+export type TrackerTimelineEntry = { id: number | string; occurredAt: string; values: Record<string, unknown>; note: string };
+function shownValue(value:unknown){return Array.isArray(value)?value.join(", "):typeof value==="boolean"?value?"Yes":"No":String(value??"");}
+export function TrackerTimelineRecords<T extends TrackerTimelineEntry>({ entries, fields, onEdit, onDelete, working=false, deleteDisabled=false, disabled, status, readOnly=false }: { entries: T[]; fields: TrackerField[]; onEdit:(entry:T)=>void; onDelete:(entry:T)=>void; working?:boolean; deleteDisabled?:boolean; disabled?:(entry:T)=>boolean; status?:(entry:T)=>string; readOnly?:boolean }) {
+const { english }=useLocale(); const timelineGroups=groupTrackerTimeline(entries);
+return <div className="tracker-timeline-groups">{timelineGroups.map(group=><section className="tracker-timeline-day" key={group.date} aria-label={group.date}>
+          <header><h3><time dateTime={group.date}>{new Date(group.date+'T12:00:00+08:00').toLocaleDateString(english?'en-US':'zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'short',day:'numeric',weekday:'short'})}</time></h3><span>{english?`${group.entries.length} record${group.entries.length===1?"":"s"}`:`${group.entries.length} 条记录`}</span></header>
+          <div className="tracker-entry-list">{group.entries.map(entry=>{const values=orderedTrackerValues(entry.values,fields);return <article key={entry.id}>
+            <div className="tracker-entry-time"><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleTimeString(english?'en-US':'zh-CN',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hourCycle:'h23'})}</time></div>
+            <div className="tracker-entry-content">{values.length>0&&<div className="tracker-entry-values">{values.map(([key,value])=>{const field=fields.find(item=>item.key===key||String(item.id)===key);const displayValue=field?.type==="time_range"?formatTrackerTimeRange(value,english):typeof value==="boolean"?(value?(english?"Yes":"是"):(english?"No":"否")):shownValue(value);const wide=field?.type==="text"||field?.type==="time_range"||displayValue.length>22||(field?.name.length??0)>12;return <span data-wide={wide} key={key}><small className="user-content">{field?.name??(english?"Archived property":"已归档属性")}{field?.archivedAt?(english?" · Archived":" · 已归档"):""}</small><strong className="user-content">{displayValue}{field?.type==='number'&&field.unit?` ${field.unit}`:''}</strong></span>;})}</div>}{entry.note&&<p className="user-content">{entry.note}</p>}{status && <small className="local-entry-status">{status(entry)}</small>}{!values.length&&!entry.note&&<p className="tracker-quick-record">{english?'Moment recorded':'已记录此刻'}</p>}</div>
+            <details className="tracker-entry-actions"><summary aria-label={english?'Record actions':'记录操作'}><MoreH className="icon" weight="Filled" aria-hidden="true"/></summary><div><button type="button" disabled={working || disabled?.(entry)} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');onEdit(entry);}}><Icon name="edit"/>{readOnly ? (english?"View form":"查看表单") : english?"Edit":"编辑"}</button>{!readOnly && <button type="button" disabled={working||deleteDisabled||disabled?.(entry)} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');onDelete(entry);}}><Trash className="icon" weight="Outline" aria-hidden="true"/>{english?'Delete':'删除'}</button>}</div></details>
+          </article>;})}</div></section>)}</div>;
+}

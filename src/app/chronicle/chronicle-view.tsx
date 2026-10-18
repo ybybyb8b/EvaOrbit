@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -13,7 +15,7 @@ import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { useLocale } from "@/components/locale-controller";
 import { chronicleExcerpt } from "@/lib/chronicle";
-import type { ApiError, ChronicleEntry, ChronicleSource } from "@/lib/types";
+import type { ChronicleEntry, ChronicleSource } from "@/lib/types";
 
 type ChronicleDraft = { date: string; title: string; contentMd: string; source: ChronicleSource };
 
@@ -29,10 +31,6 @@ function dateLabel(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${value}T12:00:00`));
 }
 
-async function responseError(response: Response, fallback: string) {
-  const result = await response.json().catch(() => null) as ApiError | null;
-  return result?.error || fallback;
-}
 
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const { english } = useLocale();
@@ -100,11 +98,11 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
         <label className="field wide"><span>Title</span><input required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label className="field wide"><span>Markdown</span><textarea required rows={12} maxLength={100000} value={draft.contentMd} onChange={(event) => setDraft({ ...draft, contentMd: event.target.value })} placeholder="Write in Markdown…" /></label>
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       <div className="form-actions"><button className="button primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save entry"}</button></div>
     </form></FormSheet>}
 
-    {!showForm && error && <p className="form-error" role="alert">{error}</p>}
+    {!showForm && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
     <div className="chronicle-toolbar" aria-busy={loading}>
       <label className="search-box chronicle-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles and entries…" aria-label="Search Chronicle titles and content" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
       <span className="result-count">{items.length} {items.length === 1 ? "entry" : "entries"}</span>

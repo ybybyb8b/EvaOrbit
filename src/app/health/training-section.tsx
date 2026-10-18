@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
 
@@ -99,7 +100,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
         {displayedDay.videoUrls.length > 0 && <ul className="training-plan-videos">{displayedDay.videoUrls.map((url, index) => <li key={`${index}:${url}`}><a href={url} target="_blank" rel="noopener noreferrer">{english ? `Video ${index + 1}` : `视频 ${index + 1}`} · {new URL(url).hostname}<Icon name="arrow" /></a></li>)}</ul>}
         <div className="training-plan-footer"><p>{previewing ? english ? `Preview · Up next: Day ${plan!.days.indexOf(currentDay!) + 1}` : `预览中 · 待练仍为 Day ${plan!.days.indexOf(currentDay!) + 1}` : english ? "Up next · Rest days keep your place" : "Up next · 休息日不影响进度"}</p>{previewing ? <button type="button" className="button secondary" disabled={switching} onClick={() => void switchDay(displayedDay.id)}>{english ? "Set as up next" : "设为待练"}</button> : <button type="button" className="button primary" disabled={switching} onClick={() => { setEditing(undefined); setPlanCompletion({ plan: plan!, requestKey: crypto.randomUUID() }); setOpen(true); }}>{english ? "Complete & log" : "完成并记录"}</button>}</div>
       </> : <p className="training-plan-hint">{plan ? english ? "No training days. Edit your plan to add one." : "暂无训练日，编辑计划即可添加。" : english ? "Start with the four-day template and make it yours." : "从四日模板开始，可自由修改训练日和顺序。"}</p>}
-      {planError && <p className="form-error" role="alert">{planError}</p>}
+      {planError && <ErrorNotice role="alert">{planError}</ErrorNotice>}
     </article>
     <div className="section-heading"><div><h2>{english ? "Today's training" : "今日训练"}</h2></div><div className="training-heading-actions"><PageLogAction label={english ? "Log training" : "记录训练"} className="text-button training-add" onClick={openCreate}><Icon name="plus" />{english ? "Log training" : "记录训练"}</PageLogAction></div></div>
     {logs.length ? <div className="training-log-list">{logs.map((log) => <article className="training-log-row" key={log.id}><button className="training-log-main" onClick={() => openEdit(log)}><span><strong>{typeLabel(log.trainingType)}</strong><small>{log.bodyParts.map(bodyPartLabel).join(" · ")}</small></span><span className="training-log-meta">{trainingMeta(log, english)}</span></button><button className="icon-button subtle" aria-label={`${english ? "Edit" : "编辑"} ${typeLabel(log.trainingType)}`} onClick={() => openEdit(log)}><Icon name="edit" /></button></article>)}</div> : <p className="health-inline-empty">{english ? "No training logged today." : "今日还没有训练记录。"}</p>}

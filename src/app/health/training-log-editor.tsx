@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { showActionToast } from "@/components/action-toast";
@@ -60,7 +61,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
       <div className="form-grid training-form-grid"><div className="field"><span>{english ? "Teacher" : "老师"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel="老师" suggestions={suggestions.teachers} maxLength={120} value={draft.teacher} onValueChange={nextValue => setDraft({ ...draft, teacher: nextValue })} /></div><div className="field"><span>{english ? "Course" : "课程"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel="课程" suggestions={suggestions.courses} maxLength={160} value={draft.course} onValueChange={nextValue => setDraft({ ...draft, course: nextValue })} /></div><label className="field"><span>{english ? "Duration (min)" : "时长（分钟）"} <small>{english ? "Optional" : "可选"}</small></span><input type="number" min="1" max="1440" step="1" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: event.target.value })} /></label><label className="field wide"><span>{english ? "Notes" : "备注"} <small>{english ? "Optional" : "可选"}</small></span><textarea rows={3} maxLength={5000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label></div>
 
 
-      {error && <p className="form-error">{error}</p>}{record && onDeleted && <button className="danger-text training-delete" type="button" onClick={() => void remove()}>{english ? "Delete training log" : "删除训练记录"}</button>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}{record && onDeleted && <button className="danger-text training-delete" type="button" onClick={() => void remove()}>{english ? "Delete training log" : "删除训练记录"}</button>}
     </form>
   </FormSheet>;
 }

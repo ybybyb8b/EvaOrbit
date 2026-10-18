@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { apiErrorMessage } from "@/lib/response-error";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice } from "@/components/action-toast";
 
@@ -13,9 +15,6 @@ function formatTime(value: string | null) {
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : "Not yet";
 }
 
-function responseError(value: unknown, fallback: string) {
-  return value && typeof value === "object" && "error" in value && typeof value.error === "string" ? value.error : fallback;
-}
 
 export function AppleHealthSection() {
  const copyScope=useUiCopyScope<HTMLElement>();
@@ -54,7 +53,7 @@ export function AppleHealthSection() {
       });
       const registration = await registrationResponse.json().catch(() => null) as { credential?: string; syncMetrics?: string[] } | { error?: string } | null;
       if (!registrationResponse.ok || !registration || !("credential" in registration) || typeof registration.credential !== "string") {
-        throw new Error(responseError(registration, "Could not register this iPhone"));
+        throw new Error(apiErrorMessage(registration, "Could not register this iPhone"));
       }
       await nativeCall("healthkit.configureCredential", {
         credential: registration.credential,
@@ -94,7 +93,7 @@ export function AppleHealthSection() {
         body: JSON.stringify({ installationId: status.installationId }),
       });
       const result = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(responseError(result, "Could not revoke this iPhone"));
+      if (!response.ok) throw new Error(apiErrorMessage(result, "Could not revoke this iPhone"));
       await nativeCall("healthkit.clearCredential");
       setMessage("Native upload credential revoked");
       await refresh();
@@ -120,7 +119,7 @@ export function AppleHealthSection() {
       </div>
       <div className="apple-health-metrics">{status.metrics.map((metric) => <div key={metric.metric}><strong>{metric.name}</strong><span>{status.backgroundDelivery[metric.metric] === "sync_disabled" ? "Read capability ready · Sync disabled" : `Background delivery: ${status.backgroundDelivery[metric.metric]?.replaceAll("_", " ") ?? "not requested"}`}</span></div>)}</div>
       {status.lastError && <p className="apple-health-error">Last error: {status.lastError}</p>}
-      {error && <p className="form-error">{error}</p>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}
       {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
       <div className="apple-health-actions">
         {status.available && (!status.authorizationRequested || !status.credentialConfigured) && <button className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? "Connecting…" : status.credentialConfigured ? "Update Health Access" : "Connect / Request Access"}</button>}

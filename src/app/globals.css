@@ -625,6 +625,13 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .api-key-control { display: flex; align-items: center; gap: 8px; }.api-key-control input { min-width: 0; flex: 1; }.api-key-control .text-button { flex: 0 0 auto; white-space: nowrap; }
 .form-actions { margin-top: 17px; display: flex; justify-content: flex-end; }.form-error { margin: 13px 0 0; color: var(--danger); font-size: 10px; }.form-success { margin: 13px 0 0; color: var(--state-success); font-size: 10px; }
 
+.error-banner { position:fixed; z-index:1000; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); right:max(12px,env(safe-area-inset-right)); max-width:600px; margin-inline:auto; display:flex; align-items:flex-start; gap:12px; padding:14px 12px 14px 16px; border-radius:18px; color:var(--text-primary); background:var(--surface-raised); box-shadow:0 8px 32px rgb(var(--shadow-rgb) / .18); touch-action:pan-x; }
+.error-banner-symbol { flex:none; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--surface-danger); color:var(--state-danger); font-weight:700; }
+.error-banner .error-banner-content { flex:1; min-width:0; margin:0; font-size:14px; line-height:1.6; color:var(--text-primary); overflow-wrap:anywhere; max-height:40dvh; overflow-y:auto; }
+.error-banner-close { flex:none; display:grid; place-items:center; width:44px; height:44px; margin-block:-10px; border:0; border-radius:10px; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.error-banner-close:focus-visible { outline:2px solid var(--accent-primary); outline-offset:2px; }
+.error-banner-close svg { width:18px; height:18px; }
+
 /* Shared create/edit surface: centered modal on desktop, bottom sheet on mobile. */
 .form-sheet-layer { --form-sheet-duration: 220ms; position: fixed; z-index: 120; top: var(--form-sheet-viewport-top,0); left: var(--form-sheet-viewport-left,0); width: var(--form-sheet-viewport-width,100vw); height: var(--form-sheet-viewport-height,100dvh); padding: 24px; display: grid; place-items: center; overflow: hidden; }
 .form-sheet-backdrop { position: absolute; inset: 0; border: 0; background: rgb(var(--backdrop-rgb) / .28); backdrop-filter: blur(3px); cursor: default; opacity: 1; transition: opacity var(--form-sheet-duration) var(--motion-ease-out); }

@@ -32,6 +32,14 @@ WKWebView Native Host
 
 独立 SwiftUI 客户端已废弃，仅作为参考代码来源。本仓库承载正式 Host 与渐进的本地 React 界面；客户端继续通过 Vercel 业务 API 同步，不直接访问 Supabase。普通构建仍加载线上 Web；`local_trackers=true` 的独立 PoC 构建加载安装包内 `eo-local://app/index.html`，使用不同 Bundle ID，不替换生产安装。实施与验收契约见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。其协议 2 的事务化 RPC 替代旧 Native 同步写入；旧协议写入已停用，不影响 Web/MCP 或 HealthKit/EventKit 的独立接口。
 
+### Tracker 真实账户只读验收模式
+
+当前待验收版本通过既有生产 `GET /api/trackers`、`GET /api/trackers/:id` 与 session 接口读取，不要求部署新的生产 API 或 migration。Native 和 React 双层拒绝 Tracker commit 与 sync（包括空 mutations），只读缓存独立存放于 `tracker_readonly_cache`，不会替换旧 state/outbox。首次访问时先以 SQLite backup API 备份（包含 WAL），运行 quick_check，并展示旧队列数量。刷新前后校验账户、完整性和历史时间格式，失败保留旧缓存；旧 IPA 缺少新增方法时明确要求升级，不回退到旧同步。
+
+新增 bridge 方法为 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus`；不改变 bridge 主版本、权限、framework、entitlement 或正式 Host 的默认加载方式。需要重新构建并覆盖安装独立 PoC IPA。只读通过不代表真实写入或系统能力已经真机验收。
+
+验收安装使用 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，跳过安装后的生产续签 Task 写入。默认安装行为保持原样。环境脚本只在发现 WSL usbmuxd 运行时以 `sudo -n` 停止，权限不足立即报错；ActivationState 探测有超时。固定 xtool SHA 与 Windows USB transport 不变。
+
 ## 二、事实来源
 
 | 领域 | 首要文件 |

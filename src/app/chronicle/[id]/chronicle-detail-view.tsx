@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
@@ -10,7 +12,7 @@ import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { MarkdownMessage } from "@/components/markdown-message";
 import { PageHeader } from "@/components/page-header";
-import type { ApiError, ChronicleEntry, ChronicleSource } from "@/lib/types";
+import type { ChronicleEntry, ChronicleSource } from "@/lib/types";
 
 type ChronicleDraft = Pick<ChronicleEntry, "date" | "title" | "contentMd" | "source">;
 
@@ -22,10 +24,6 @@ function sourceLabel(source: ChronicleSource) {
   return source === "chatgpt" ? "ChatGPT" : "Manual";
 }
 
-async function responseError(response: Response, fallback: string) {
-  const result = await response.json().catch(() => null) as ApiError | null;
-  return result?.error || fallback;
-}
 
 export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
   const router = useRouter();
@@ -73,7 +71,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
     <Link className="back-link" href="/chronicle">← Chronicle</Link>
     <PageHeader eyebrow={`${entry.date} · ${sourceLabel(entry.source)}`} title={entry.title} description="Full Markdown entry." />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
-    {error && <p className="form-error" role="alert">{error}</p>}
+    {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
 
     {editing ? <FormSheet title="Edit Chronicle" onClose={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }} formId="chronicle-edit-form" submitLabel="Save changes" busy={busy}><form id="chronicle-edit-form" className="editor-card chronicle-editor" onSubmit={submit}>
       <div className="editor-title"><div><span className="eyebrow">EDIT ENTRY</span><h2>Edit Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }}>Cancel</button></div>

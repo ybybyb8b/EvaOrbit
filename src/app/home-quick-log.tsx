@@ -1,9 +1,11 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, Cat, Cup, ForkKnife, Inbox, type IconComponent } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
+import { showActionToast } from "@/components/action-toast";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { playNativeHaptic } from "@/lib/native-haptics";
@@ -56,6 +58,7 @@ export function HomeQuickLog() {
     if (active === "period" || active === "medication-dose") invalidateCachedJson("/api/health/periods?limit=30");
     if (active === "medication-dose") invalidateCachedJson("/api/health/medications?limit=100");
     await action?.onSaved?.(); router.refresh();
+    if (active === "tracker") showActionToast(english ? "Record saved." : "记录已保存。");
   }
   async function choose(kind: QuickEntryKind) {
     playNativeHaptic("selection"); setError("");
@@ -92,13 +95,13 @@ export function HomeQuickLog() {
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
     <button type="button" className="home-quick-log-trigger" aria-label={action?.label ?? (english ? "Quick Log" : "快速记录")} title={action?.label ?? (english ? "Quick Log" : "快速记录")} aria-haspopup="dialog" disabled={action?.disabled || loading} onClick={() => { playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}><Icon name="plus" variant="stroke" /></button>
-    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close}><div className="home-quick-log-grid">{visibleOptions.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
+    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close}><div className="home-quick-log-grid">{visibleOptions.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {active === "cats" && <FormSheet title={english ? "New cat record" : "新增猫咪记录"} onClose={close} submitLabel={catKind ? (english ? "Save record" : "保存记录") : undefined} busy={loading}><CatRecordEditor key={`cats-${selectedDate}`} pets={pets} initialDate={selectedDate} onKindChange={setCatKind} onSavingChange={setLoading} onCancel={close} onSaved={async () => { await saved(); close(); }} /></FormSheet>}
     {active === "inbox" && <FormSheet title="Inbox" onClose={close} formId="home-inbox-capture" submitLabel={english ? "Save" : "记下"} busy={loading}><InboxCaptureForm formId="home-inbox-capture" sheet onSaved={async () => { await saved(); close(); }} /></FormSheet>}
-    {active === "tracker" && !selectedTracker && <FormSheet title={english ? "Choose Tracker" : "选择观测"} onClose={close}><div className="home-quick-tracker-list">{trackers.map((tracker) => <button type="button" key={tracker.id} disabled={loading} aria-label={tracker.quickCaptureEnabled ? `${english ? "Quick record" : "快速记录"} ${tracker.name}` : tracker.name} onClick={() => void chooseTracker(tracker)}><TrackerIcon tracker={tracker} size={38} /><span><strong>{tracker.name}</strong><small>{tracker.groupName}{tracker.quickCaptureEnabled ? ` · ${english ? "Quick" : "快速"}` : ""}</small></span><Icon name={tracker.quickCaptureEnabled ? "plus" : "arrow"} variant="stroke" /></button>)}{!trackers.length && <p className="home-today-empty">{english ? "No Trackers yet" : "还没有观测项目"}</p>}</div>{error && <p className="form-error" role="alert">{error}</p>}</FormSheet>}
+    {active === "tracker" && !selectedTracker && <FormSheet title={english ? "Choose Tracker" : "选择观测"} onClose={close}><div className="home-quick-tracker-list">{trackers.map((tracker) => <button type="button" key={tracker.id} disabled={loading} aria-label={tracker.quickCaptureEnabled ? `${english ? "Quick record" : "快速记录"} ${tracker.name}` : tracker.name} onClick={() => void chooseTracker(tracker)}><TrackerIcon tracker={tracker} size={38} /><span><strong>{tracker.name}</strong><small>{tracker.groupName}{tracker.quickCaptureEnabled ? ` · ${english ? "Quick" : "快速"}` : ""}</small></span><Icon name={tracker.quickCaptureEnabled ? "plus" : "arrow"} variant="stroke" /></button>)}{!trackers.length && <p className="home-today-empty">{english ? "No Trackers yet" : "还没有观测项目"}</p>}</div>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
     {active === "tracker" && selectedTracker && <TrackerEntryEditor key={`tracker-${selectedTracker.id}-${selectedDate}`} trackerId={selectedTracker.id} fields={selectedTracker.fields} initialDate={selectedDate} onClose={close} onSaved={saved} />}
   </>;
 }

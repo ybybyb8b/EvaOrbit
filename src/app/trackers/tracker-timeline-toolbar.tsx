@@ -1,0 +1,21 @@
+"use client";
+import { Icon } from "@/components/icons";
+import { SearchableSelect } from "@/components/searchable-select";
+import { useLocale } from "@/components/locale-controller";
+import { translateUiCopy } from "@/lib/ui-copy";
+import type { TrackerField } from "@/lib/types";
+import type { TimelinePeriod } from "@/lib/tracker-timeline";
+export function TrackerTimelineToolbar({query, setQuery, fields, periodFilter, setPeriodFilter, fieldFilter, setFieldFilter, fieldValueFilter, setFieldValueFilter, filtersActive, onClear}:{query:string;setQuery:(value:string)=>void;fields:TrackerField[];periodFilter:TimelinePeriod;setPeriodFilter:(value:TimelinePeriod)=>void;fieldFilter:string;setFieldFilter:(value:string)=>void;fieldValueFilter:string;setFieldValueFilter:(value:string)=>void;filtersActive:boolean;onClear:()=>void}){
+const {english}=useLocale();const selectedFilterField=fields.find(field=>field.key===fieldFilter);
+return <div className="tracker-timeline-toolbar"><div className="tracker-search"><Icon name="search"/><input type="search" aria-label={english?"Search records":"搜索记录"} value={query} onChange={event=>setQuery(event.target.value)} placeholder={english?"Search notes or property values":"搜索备注或属性值"}/></div>
+          <div className="tracker-filters"><label><span>{english?"Time":"时间"}</span><SearchableSelect label={english?"Time range":"时间范围"} presentation="dropdown" searchable={false} value={periodFilter} onValueChange={value=>setPeriodFilter(value as TimelinePeriod)} options={[{value:"all",label:english?"Any time":"全部时间"},{value:"7d",label:english?"Last 7 days":"最近 7 天"},{value:"30d",label:english?"Last 30 days":"最近 30 天"},{value:"year",label:english?"This year":"今年"}]} /></label>{fields.length>0&&<label><span>{english?"Property":"属性"}</span><SearchableSelect label={english?"Filter property":"筛选属性"} presentation="dropdown" value={fieldFilter} onValueChange={value=>{setFieldFilter(value);setFieldValueFilter("");}} options={[{value:"",label:english?"Any property":"全部属性"},...fields.map(field=>({value:field.key,label:field.name+(field.archivedAt?(english?" · Archived":" · 已归档"):"")}))]} /></label>}{selectedFilterField&&<div className="tracker-field-value"><FieldFilter field={selectedFilterField} value={fieldValueFilter} onChange={setFieldValueFilter}/></div>}{filtersActive&&<button className="tracker-clear-filters" type="button" onClick={onClear}>{english?"Clear filters":"清除筛选"}</button>}</div>
+        </div>;
+}
+function FieldFilter({field,value,onChange}:{field:TrackerField;value:string;onChange:(value:string)=>void}){
+  const {english,language}=useLocale();
+  if(field.type==="time_range")return <label><span>{english?"Duration (min)":"时长（分钟）"}</span><input type="number" min="0" step="any" value={value} onChange={event=>onChange(event.target.value)} /></label>;
+  if(field.type==="single_select"||field.type==="multi_select")return <label><span>{english?"Value":"值"}</span><SearchableSelect label={english?"Property value":"属性值"} presentation="dropdown" value={value} onValueChange={onChange} options={[{value:"",label:english?"Any value":"全部值"},...field.options.map(option=>({value:option,label:translateUiCopy(option,language)}))]} /></label>;
+  if(field.type==="boolean")return <label><span>{english?"Value":"值"}</span><SearchableSelect label={english?"Property value":"属性值"} presentation="dropdown" searchable={false} value={value} onValueChange={onChange} options={[{value:"",label:english?"Any value":"全部值"},{value:"true",label:english?"Yes":"是"},{value:"false",label:english?"No":"否"}]} /></label>;
+  if(field.type==="rating")return <label><span>{english?"Rating":"评分"}</span><SearchableSelect label={english?"Rating":"评分"} presentation="dropdown" searchable={false} value={value} onValueChange={onChange} options={[{value:"",label:english?"Any rating":"全部评分"},...[1,2,3,4,5].map(score=>({value:String(score),label:english?`${score} stars`:`${score} 星`}))]} /></label>;
+  return <label><span>{field.type==="number"?(english?"Exact value":"精确值"):(english?"Contains":"包含")}</span><input type={field.type==="number"?"number":"search"} value={value} onChange={event=>onChange(event.target.value)} placeholder={field.type==="number"?field.unit||(english?"Value":"数值"):(english?"Text":"文本")}/></label>;
+}
