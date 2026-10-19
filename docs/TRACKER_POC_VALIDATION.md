@@ -1,6 +1,6 @@
 # Tracker PoC CI and isolated validation — updated 2026-10-19
 
-This is a staged validation log. The latest combined Tracker/Home delivery is recorded in “Shared Tracker settings, image cache and read-only Home” below; earlier sections describe their original stage, not the current delivery status.
+This is a staged validation log. The latest server release is recorded in “Production Home read-only API release”; the combined IPA is recorded in “Shared Tracker settings, image cache and read-only Home”. Earlier sections describe their original stage, not the current delivery status.
 
 ## Shared React UI iteration — 2026-10-19 (Windows)
 
@@ -28,7 +28,7 @@ This is a staged validation log. The latest combined Tracker/Home delivery is re
 - `vercel.json` disables Git deployments for this exact development branch.
   The guard was committed before the first push; GitHub reported no deployments
   for the implementation and integration-test commits.
-- No production Supabase migration, API deployment or merge. Earlier read-only device installation is recorded separately below; the latest combination has not been installed.
+- No production Supabase migration, sync-v2 API release or main merge. The separately approved Home read-only API release is recorded below. Earlier read-only device installation is recorded separately; the latest combination has not been installed.
 - The initial unrelated Home changes and test were preserved, then included when Home became explicitly authorized scope. The pre-existing `next-env.d.ts` change remains excluded and unchanged.
 
 ## macOS and native regression
@@ -137,7 +137,17 @@ issuance or the external `/api/mcp` bearer-token authentication exchange.
 - Source **`95cba265a41e77de7886baf7f11f477716552138`**: [combined PoC CI](https://github.com/ybybyb8b/EvaOrbit/actions/runs/39200197072) passed **44 XCTest cases** and isolated Supabase integration; [online Host regression](https://github.com/ybybyb8b/EvaOrbit/actions/runs/39200195812) also passed **44 XCTest cases**. WKWebView verified actual August loading and persistent language/font reload. Native tests verified Home SQLite cache persistence, account isolation, rejection of unsafe/invalid request paths and unchanged legacy outbox.
 - The disposable Supabase run verified authenticated day/month/due reads, unauthenticated 401 and invalid-date 400. An overdue automatic subscription retained its renewal date and generated zero payments through these reads. Existing real API/MCP/RPC migration, idempotency, concurrent edits, remote deletion, RLS, re-login and rollback/queue recovery regressions also passed. No hosted Supabase target was used.
 - Artifact **`EvaOrbitHost-TrackersPoC-ad-hoc-47`**, Xcode 16.4 / 16F6, SHA-256 **`cfaf4b8db5e838354fd0bc7e151a626f2dfe73d5bae13ad0552bcc94e04fb0ba`**. Downloaded IPA audit confirmed independent `com.evaorbit.nativehost.trackerspoc` and URL scheme, local Home bridge code, offline CSP, exact August font bytes and both HealthKit entitlements. Artifact run number is 47; the existing plist CFBundleVersion remains 1. No new entitlement was introduced.
-- **Not installed or deployed**: the combined IPA is ready, but real-account Home download and combined iPhone visual/offline acceptance await separately approved Home read-only API release. A seven-file API-only patch against unchanged main is prepared; it excludes UI changes, sync-v2 deployment and all migrations. Keep real Tracker writes disabled and preserve the original device queue.
+- **Combined device acceptance pending**: the IPA is ready; its initial Home API release gate was subsequently approved and completed in the next section. The seven-file API-only patch excludes UI changes, sync-v2 deployment and all migrations. Keep real Tracker writes disabled and preserve the original device queue.
+
+## Production Home read-only API release — 2026-10-19
+
+- User explicitly approved this API-only production release after confirming that IPA #47 needs no rebuild. A separate managed checkout/branch `codex/home-readonly-api-release` was based on the verified production/main commit `f29a89355b2eb3b087d35f9e46c4d4d2d8f24c10`. Release source **`7848320`** changes exactly seven API/service/tracing files: 81 insertions, 11 deletions. No UI, native, sync-v2 route or migration change was included.
+- Standalone release checks: production Next build, typecheck and lint passed; the temporary test fixture's two unused-import warnings were removed and it was linted again. Full baseline suite: **572 tests, 559 passed, 12 skipped, one existing Lucius navigation source assertion failed**. Both read-only boundary tests passed, including SQLite triggers rejecting every business-table write while an overdue automatic subscription is present. The broader isolated Supabase evidence above covers the identical Home read-only implementation.
+- Vercel candidate **`dpl_Ev1DPq5eyYAdEW3fZDuTTjZkwLFd`**, `https://eva-orbit-m2itv9qao-echopad.vercel.app`, built successfully with the existing production environment and `npm run build`. The build contains `/api/native/home-readonly/[kind]/[key]`. Candidate checks passed before the primary production domain was promoted. The CLI-created temporary deployment-protection bypass was revoked after verification; EO account authentication was never bypassed.
+- Promoted and verified **`https://eva-orbit.vercel.app`** points to this READY deployment. Live checks: login 200, unauthenticated native session 200, unauthenticated Home day/month/due all 401 JSON. These are live availability/auth checks, **not authenticated real-account Home acceptance**. No record content was requested by those live checks.
+- No production migration, business write, main merge, IPA rebuild or new device installation was performed. The existing #47 IPA can now use the new Home endpoint. Real-account download, images, device appearance, offline restart and actual Native Bridge/Home integration remain device acceptance work.
+- Previous production deployment is retained: **`dpl_2SuJ7sAL3pLw5DMkjeebEbkZWrDA`**, `https://eva-orbit-cpi2nk1wh-echopad.vercel.app`. Rollback can promote that deployment again, without touching Supabase or any device database/queue. The PoC must preserve cached data and fail closed if the endpoint is rolled back.
+- **Release follow-up:** main remains unchanged by request. Before the next main-based production deployment, incorporate this seven-file API patch so that deployment does not remove Home read-only support. The separate release checkout/commit is retained for review/reuse. No release-branch push or new Actions run was required. Future Actions monitoring belongs to the user unless explicitly requested otherwise.
 
 ## Remaining risks and release order
 

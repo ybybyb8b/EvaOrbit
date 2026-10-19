@@ -46,7 +46,7 @@
 ## Home
 
 - **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 禁止写入及未迁移模块导航，通过平台接口访问账户隔离快照。
-- **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。新端点需单独批准生产发布后才能接真实账户 Home；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
+- **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。只读接口独立于 Tracker 同步协议及迁移；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
 - **职责与入口**：[page.tsx](../src/app/page.tsx)、[home-calendar-timeline.tsx](../src/app/home-calendar-timeline.tsx)、[home-day 服务](../src/lib/services/home-day.ts)、[timeline 服务](../src/lib/services/timeline.ts)。
 - **数据与接口**：`/api/home-day`、`/api/timeline`；读取 Calendar、Tasks、Food/Drink、Trackers、Health、Cats、Relations、Subscriptions 等原始记录。今日一记使用 `daily_journal_entries` 与 `/api/daily-journal`，服务为 [daily-journal.ts](../src/lib/services/daily-journal.ts)。
 - **依赖与决定**：日/月摘要和时间线由原模块聚合，Home 不另存一套业务记录；编辑仍走所属模块。睡眠摘要复用 Health，日历餐次解析复用 Calendar；Home 快照与全局缓存共享账户隔离存储。

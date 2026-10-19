@@ -91,6 +91,8 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 
 ### 3.2 CI 的关键约束
 
+按用户明确的协作偏好：后续 push 后的 GitHub Actions 由用户查看结果；代理提供分支、提交、Actions 入口和本地验证情况，不默认启动 `gh run watch` 或反复轮询。用户带回失败信息或明确要求代查后再排障。未运行、未核实的 XCTest 仍须标为待验收，不能视为通过。
+
 2026-10-05 起，workflow 配置使用标准 `macos-15-intel` runner，避开 GitHub 提示的 macOS arm64 容量排队；不使用付费 large runner，也不保证其他队列没有等待。`actions/checkout@v5` 和 `actions/upload-artifact@v6` 使用 Node.js 24 action runtime。此配置更新不改变设备目标、ad-hoc signing、entitlement 校验或 patched xtool；Intel runner 下的 Simulator 单测及完整 IPA 构建仍需下一次 macOS CI 实际验证，不能将此前的成功产物作为新 runner 已通过的证据。
 
 `.github/workflows/ios-native-host.yml` 当前会：
