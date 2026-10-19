@@ -1,4 +1,6 @@
-# Tracker PoC CI and isolated validation — 2026-10-18
+# Tracker PoC CI and isolated validation — updated 2026-10-19
+
+This is a staged validation log. The latest combined Tracker/Home delivery is recorded in “Shared Tracker settings, image cache and read-only Home” below; earlier sections describe their original stage, not the current delivery status.
 
 ## Shared React UI iteration — 2026-10-19 (Windows)
 
@@ -14,7 +16,7 @@
   Insights/settings/quick-capture and persistent error/touch/keyboard recovery
   passed. Full suite: 596 tests, 583 passed, 12 skipped, one pre-existing
   `long-term-memory.test.ts` navigation-source assertion failed.
-- This iteration is uncommitted and has no new macOS CI/XCTest result. Earlier CI
+- At this initial substage the iteration was uncommitted with no new macOS CI/XCTest result. Earlier CI
   and real Supabase results below describe their recorded commits. iPhone
   keyboard/safe-area/gesture acceptance is required after packaging. No production
   migration or API deployment ran.
@@ -26,9 +28,8 @@
 - `vercel.json` disables Git deployments for this exact development branch.
   The guard was committed before the first push; GitHub reported no deployments
   for the implementation and integration-test commits.
-- No production Supabase migration, API deployment, merge or device installation.
-- Existing unrelated Home changes, its untracked test and `next-env.d.ts` were
-  excluded from the commits and remain in the original working tree.
+- No production Supabase migration, API deployment or merge. Earlier read-only device installation is recorded separately below; the latest combination has not been installed.
+- The initial unrelated Home changes and test were preserved, then included when Home became explicitly authorized scope. The pre-existing `next-env.d.ts` change remains excluded and unchanged.
 
 ## macOS and native regression
 
@@ -115,14 +116,14 @@ issuance or the external `/api/mcp` bearer-token authentication exchange.
 - Next visual substage: authenticated read-only image retrieval with account/version-scoped durable cache, shared image rendering for cards/detail/settings and offline fallback; then extract/reuse Web settings presentation with read-only controls and preserved business semantics. Verify account switching, image refresh/removal/failure, offline process restart and Web/local visual regression before a new device build. Do not relax business-write guards to restore visual parity.
 - Real-account CRUD/Web/MCP write acceptance remains disabled pending separately approved production protocol-2 migration/API deployment. Original queue operations remain isolated; the user's report does not authorize draining or clearing them.
 
-## Shared appearance layer (working tree, Windows validation)
+## Shared appearance layer (Windows substage)
 
 - Web/local use the same font registrations, preference controller, system appearance handling and `AppearanceSettings` controls. Local first-use defaults are English/August; existing explicit settings and the persisted `ibm` key are preserved. Web defaults and its preference PATCH contract are unchanged. Local saves use device storage and never invoke the production preference API or Tracker outbox.
 - Actual Chrome platform-font inspection confirms August renders on both builds. Original font bytes and login heading text/font size/weight/line-height/dimensions match at 402px and 1440px. Four English and four Chinese selections, light/dark/system switching, language switching and a fresh persistent-browser context passed. This is Windows coverage, not a newly installed iPhone build.
 - Shared login copy now participates in localization. The exact public `/theme-init.js` path bypasses authentication so anonymous first paint receives JavaScript rather than a login redirect; business/API authentication stays in place.
 - Tracker bundled preview CRUD/persistence/insights and error-banner touch/keyboard regressions passed. Real-backup read-only regression again checked all 27 historical forms, restart and unchanged synthetic canary queue; it performed no cloud business writes. Full tests: **602 total, 589 passed, 12 skipped, 1 known Lucius-navigation literal assertion failure**. Lint, typecheck, Next production build, bundled UI build and diff checks passed.
-- WKWebView XCTest has been updated to check the actual August asset and language/font persistence on reload. **New macOS XCTest/IPA installation/real-device appearance acceptance have not run.** No Swift production implementation, bridge method, framework, permission or entitlement changed. Fonts and React assets require a rebuilt IPA; the iPhone still has the preceding accepted read-only build.
-- These changes remain uncommitted. Complete Tracker settings layout, uploaded-image cache and real-account write acceptance are outside this appearance substage and remain unfinished.
+- WKWebView XCTest was updated to check the actual August asset and language/font persistence on reload; its macOS result is recorded in the combined delivery below. This appearance substage changed no Swift production implementation, bridge method, framework, permission or entitlement. The iPhone still has the preceding read-only build.
+- These appearance changes were committed with the subsequent shared settings/Home delivery. Real-account write acceptance remains disabled.
 
 ## Shared Tracker settings, image cache and read-only Home — implementation stage
 
@@ -132,7 +133,11 @@ issuance or the external `/api/mcp` bearer-token authentication exchange.
 - Existing Home GET services can catch up automatic subscription payments and reconcile medication reminders. A new authenticated `GET /api/native/home-readonly/[kind]/[key]` invokes read-only service options inside an audited repository allowlist. No fallback to old Home endpoints is allowed. No production migration is required for this endpoint; **production API deployment is not authorized or performed**.
 - Windows bundled-browser tests passed: Home cached startup/restart, forced note submission blocked, shared settings controls disabled, uploaded-image persistence, unchanged old canary queue, zero business writes and no overflow at 402/1440 px. Core Tracker browser create/edit/delete/quick capture/settings/insights/restart regression passed. Synthetic UI tests are not real-device acceptance.
 - Read-only aggregation tests run against a disposable SQLite database containing an overdue automatic subscription, with triggers rejecting all INSERT/UPDATE/DELETE operations. Day/month/due reads pass; repository write attempts fail closed. Icon unit tests cover version reuse, refresh failure, missing/default images and cross-account cache rejection.
-- Local full suite: **607 tests, 594 passed, 12 skipped, one pre-existing Lucius navigation source-literal failure**. Lint/typecheck and bundled/Next builds passed. Added native cache/account/queue tests and real Supabase read-only Home integration assertions await CI. New combined IPA and real Home account acceptance remain pending.
+- Local full suite: **607 tests, 594 passed, 12 skipped, one pre-existing Lucius navigation source-literal failure**. Lint/typecheck, bundled/Next builds and diff checks passed. Additional browser checks confirm an older offline date is not labeled Today and all Due actions are disabled. Real-backup regression read all 27 historical forms; its isolated canary queue stayed unchanged, with zero cloud business writes.
+- Source **`95cba265a41e77de7886baf7f11f477716552138`**: [combined PoC CI](https://github.com/ybybyb8b/EvaOrbit/actions/runs/39200197072) passed **44 XCTest cases** and isolated Supabase integration; [online Host regression](https://github.com/ybybyb8b/EvaOrbit/actions/runs/39200195812) also passed **44 XCTest cases**. WKWebView verified actual August loading and persistent language/font reload. Native tests verified Home SQLite cache persistence, account isolation, rejection of unsafe/invalid request paths and unchanged legacy outbox.
+- The disposable Supabase run verified authenticated day/month/due reads, unauthenticated 401 and invalid-date 400. An overdue automatic subscription retained its renewal date and generated zero payments through these reads. Existing real API/MCP/RPC migration, idempotency, concurrent edits, remote deletion, RLS, re-login and rollback/queue recovery regressions also passed. No hosted Supabase target was used.
+- Artifact **`EvaOrbitHost-TrackersPoC-ad-hoc-47`**, Xcode 16.4 / 16F6, SHA-256 **`cfaf4b8db5e838354fd0bc7e151a626f2dfe73d5bae13ad0552bcc94e04fb0ba`**. Downloaded IPA audit confirmed independent `com.evaorbit.nativehost.trackerspoc` and URL scheme, local Home bridge code, offline CSP, exact August font bytes and both HealthKit entitlements. Artifact run number is 47; the existing plist CFBundleVersion remains 1. No new entitlement was introduced.
+- **Not installed or deployed**: the combined IPA is ready, but real-account Home download and combined iPhone visual/offline acceptance await separately approved Home read-only API release. A seven-file API-only patch against unchanged main is prepared; it excludes UI changes, sync-v2 deployment and all migrations. Keep real Tracker writes disabled and preserve the original device queue.
 
 ## Remaining risks and release order
 

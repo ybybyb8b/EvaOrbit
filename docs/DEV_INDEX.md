@@ -111,7 +111,7 @@
 - **职责与入口**：[trackers/](../src/app/trackers/)、[tracker 服务](../src/lib/services/tracker.ts)；`trackers`、`tracker_fields`、`tracker_entries`、`tracker_goals`、`tracker_reminders`；`/api/trackers/*`，MCP `tracker`。
 - **依赖与决定**：属性 stable key/type 保持历史语义；归档保留记录，永久删除才清理数据。旧属性 DELETE 仍为归档，永久删除需显式选择。`time_range` 是自定义属性而非主记录时间，服务端重新计算时长。提醒依赖 Notifications，记录参与 Timeline。
 - **详文**：[生命周期](TRACKER_SETTINGS_LIFECYCLE.md)、[时间段属性](TRACKER_TIME_RANGE.md)、[MCP 子对象操作](../MCP.md)。
-- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选和洞察组件；页面数据适配与认证传输分别保留在 Web 与本地入口。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；图片缓存、排序、属性管理、目标/提醒的本地迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
+- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选、洞察及 [完整设置展示](../src/app/trackers/tracker-settings-view.tsx)；页面数据适配与认证传输分别保留在 Web 与本地入口。设置编辑器由 Web 注入原表单；本地真实账户禁用写入，目标/提醒与认证图片保存在账户隔离的只读快照中。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；排序、属性管理、目标/提醒的本地写入迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
 
 ## Calendar
 
