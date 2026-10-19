@@ -22,7 +22,9 @@ async function open(){
 }
 try {
  let page=await open();
- const resources=[day(today),day(shiftDate(today,-1)),resource("month",today.slice(0,7),{month:today.slice(0,7),days:{},periods:[]}),resource("due","current",[])];
+ const previous=shiftDate(today,-1);
+ const resources=[day(today),day(previous),...new Set([today.slice(0,7),previous.slice(0,7)])].map(value=>typeof value==="string"?resource("month",value,{month:value,days:{},periods:[]}):value);
+ resources.push(resource("due","current",[{id:8,title:"Read-only reminder",subjectLabel:"Canary",targetType:"task",overdueMs:0}]));
  await page.evaluate(async({account,snapshot,oldState,resources})=>{
   const db=await new Promise((resolve,reject)=>{const r=indexedDB.open("eo-tracker-local-v1",1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
   await new Promise((resolve,reject)=>{const tx=db.transaction(["states","session"],"readwrite"),store=tx.objectStore("states");store.put(snapshot,"readonly:"+account);store.put(oldState,account);tx.objectStore("session").put({accountId:account,email:"offline@example.invalid"},"current");for(const value of resources)store.put(value,`home:${account}:${value.kind}:${value.key}`);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();
@@ -43,6 +45,8 @@ try {
  await page.locator(".home-page").waitFor();
  if(await page.locator(".error-banner").count())await page.getByRole("button",{name:"Dismiss error",exact:true}).click();
  await page.getByText("Offline canary day note",{exact:true}).waitFor();
+ assert.equal(await page.locator(".due-actions button").count(),3);
+ for(const button of await page.locator(".due-actions button").all())assert(await button.isDisabled());
  assert.equal(await page.locator("html").getAttribute("data-english-font"),"ibm");
  await page.locator(".home-journal-preview-list button").first().click();
  await page.getByRole("heading",{name:"View day note",exact:true}).waitFor();
@@ -62,5 +66,13 @@ try {
  await page.getByText("Offline canary day note",{exact:true}).waitFor();
  const preserved=await page.evaluate(async account=>{const r=indexedDB.open("eo-tracker-local-v1",1);const db=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});const tx=db.transaction("states"),read=tx.objectStore("states").get(account);const result=await new Promise(resolve=>{tx.oncomplete=()=>resolve(read.result);});db.close();return result;},account);
  assert.deepEqual(preserved,oldState);assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
- console.log(JSON.stringify({homeOfflineRestart:true,trackerIconPersistence:true,sharedSettingsReadOnly:true,noteSubmissionBlocked:true,queuePreserved:true,businessWrites:0,widths:[402,1440],deviceVerified:false}));
+ // Simulate an offline launch after midnight: only the previous day is downloaded.
+ await page.evaluate(async({account,today})=>{const r=indexedDB.open("eo-tracker-local-v1",1),db=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});await new Promise(resolve=>{const tx=db.transaction("states","readwrite");tx.objectStore("states").delete(`home:${account}:day:${today}`);tx.oncomplete=resolve;});db.close();},{account,today});
+ await page.reload({waitUntil:"networkidle"});
+ if(await page.locator(".error-banner").count())await page.getByRole("button",{name:"Dismiss error",exact:true}).click();
+ await page.getByRole("navigation",{name:"Modules"}).getByRole("button",{name:"Home",exact:true}).click();
+ await page.getByText("Offline canary day note",{exact:true}).waitFor();
+ await page.locator(".home-calendar-today").waitFor();
+ assert.equal(await page.locator(".home-calendar-grid button.selected").getAttribute("data-today"),"false");
+ console.log(JSON.stringify({homeOfflineRestart:true,previousDayNotToday:true,dueActionsDisabled:true,trackerIconPersistence:true,sharedSettingsReadOnly:true,noteSubmissionBlocked:true,queuePreserved:true,businessWrites:0,widths:[402,1440],deviceVerified:false}));
 } finally {await context?.close();await new Promise(resolve=>server.httpServer.close(resolve));}

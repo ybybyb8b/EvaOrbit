@@ -20,8 +20,15 @@ final class TrackerLocalTests: XCTestCase {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         XCTAssertEqual(title, "Welcome back to EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
-        let font = try await webView.callAsyncJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", arguments: [:], in: nil, in: .page) as? Bool
-        XCTAssertEqual(font, true, "The actual August asset must load offline, without falling back")
+        let fontResult: Any? = try await withCheckedThrowingContinuation { continuation in
+            webView.callAsyncJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", arguments: [:], in: nil, in: .page, completionHandler: { result in
+                switch result {
+                case .success(let value): continuation.resume(returning: value)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            })
+        }
+        XCTAssertEqual(fontResult as? Bool, true, "The actual August asset must load offline, without falling back")
         _ = try await webView.evaluateJavaScript("localStorage.setItem('evaorbit.englishFont','polyamine'); localStorage.setItem('evaorbit.uiLanguage','zh-CN'); true")
         webView.reload()
         for _ in 0..<100 {
