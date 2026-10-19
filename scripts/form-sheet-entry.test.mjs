@@ -7,6 +7,7 @@ function fixture(mobile = true) {
   const hooks = [], effects = [], frames = new Map(), timers = new Map();
   let cursor = 0, nextId = 0, tree, focusCount = 0;
   class Element {
+    dataset = {};
     style = { setProperty() {} };
     inert = false;
     contains(node) { return node === this; }
@@ -51,7 +52,7 @@ function fixture(mobile = true) {
     effects.splice(0).forEach(effect => effect());
   }
   function frame() { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(callback => callback()); render(); }
-  return { render, frame, nodes, dialog, body, field, doc, loaded, frames, timers, focusCount: () => focusCount,
+  return { render, frame, nodes, dialog, body, field, doc, win, layer, loaded, frames, timers, focusCount: () => focusCount,
     transition() { const panel = nodes().find(node => node.props.className === "form-sheet-panel"); panel.props.onTransitionEnd({ target: dialog, currentTarget: dialog, propertyName: "transform" }); },
     unmount() { hooks.forEach(hook => hook?.cleanup?.()); },
   };
@@ -102,4 +103,20 @@ test("field visibility changes only the form body scroll position", () => {
   assert.equal(f.body.scrollTop, 170, "already visible fields remain still");
   f.loaded.scrollFormSheetField(f.body, f.field, true);
   assert.equal(f.body.scrollTop, 190);
+});
+
+test("keyboard viewport changes recheck the focused field after sheet layout", () => {
+  const f = fixture();
+  f.render(); f.frame(); f.frame(); f.frame();
+  f.doc.activeElement = f.field;
+  f.win.visualViewport = { height: 380, width: 402, offsetTop: 0, offsetLeft: 0 };
+  f.win.dispatchEvent(new Event("resize"));
+  assert.equal(f.layer.dataset.keyboardOpen, "true");
+  assert.equal(f.body.scrollTop, 100, "wait for the resized sheet layout");
+  f.frame();
+  assert.equal(f.body.scrollTop, 170, "the focused field is scrolled inside the visible form body");
+  f.win.visualViewport = undefined;
+  f.win.dispatchEvent(new Event("resize"));
+  assert.equal(f.layer.dataset.keyboardOpen, "false");
+  f.unmount();
 });

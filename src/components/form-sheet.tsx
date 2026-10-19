@@ -127,6 +127,7 @@ export function FormSheet({
     body.style.overflow = "hidden";
     if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
 
+    let viewportFrame = 0;
     const updateViewport = () => {
       const viewport = window.visualViewport;
       const layer = panelRef.current;
@@ -135,6 +136,12 @@ export function FormSheet({
       layer.style.setProperty("--form-sheet-viewport-width", `${viewport?.width ?? window.innerWidth}px`);
       layer.style.setProperty("--form-sheet-viewport-top", `${viewport?.offsetTop ?? 0}px`);
       layer.style.setProperty("--form-sheet-viewport-left", `${viewport?.offsetLeft ?? 0}px`);
+      layer.dataset.keyboardOpen = String(window.innerHeight - (viewport?.height ?? window.innerHeight) > 150);
+      window.cancelAnimationFrame(viewportFrame);
+      viewportFrame = window.requestAnimationFrame(() => {
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && bodyRef.current?.contains(focused)) scrollFormSheetField(bodyRef.current, focused);
+      });
     };
     const getFocusable = () => dialog ? Array.from((discardRef.current ? dialog.querySelector(".form-sheet-discard-confirm") ?? dialog : dialog).querySelectorAll<HTMLElement>(
       'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
@@ -197,6 +204,7 @@ export function FormSheet({
       body.style.paddingRight = previousPaddingRight;
       inertSiblings.forEach(({ element, inert }) => { element.inert = inert; });
       window.clearTimeout(focusFallback);
+      window.cancelAnimationFrame(viewportFrame);
       entryFocusRef.current = null;
       previousFocus?.focus({ preventScroll: true });
       window.removeEventListener("keydown", onKeyDown);

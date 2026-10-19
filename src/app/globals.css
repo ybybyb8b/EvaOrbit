@@ -6311,6 +6311,7 @@ html[data-theme="mistviolet"] :is(.module-intro-icon,.module-preview-card>span,.
 /* Searchable fields and their top-layer dropdown share EO surfaces. */
 .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row { position:relative; gap:0; border-radius:12px; background:rgb(var(--surface-raised-rgb) / .72); }
 .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row > input { background:transparent; padding-right:80px; }
+.suggested-input[data-searchable="false"] .suggested-input-row > input { padding-right:14px; }
 .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row:focus-within { outline:2px solid var(--green); outline-offset:2px; }
 .suggested-input:not([data-recommendation-style="chips"]) .suggested-input-row > input:focus { outline:none; box-shadow:none; }
 .suggested-input .input-candidates-toggle,.suggested-input .input-value-clear { position:absolute; right:0; top:0; bottom:0; width:40px; min-height:44px; padding:0; border:0; border-radius:0; background:transparent; color:var(--text-secondary); font:inherit; cursor:pointer; outline:none; }
@@ -6586,6 +6587,18 @@ label:has(> .toggle-switch):not(.meal-reminder-settings label) { display:flex; a
 .cat-form-disclosure>summary::after{content:"+";margin-left:auto}
 .cat-form-disclosure[open]>summary::after{content:"−"}
 .cat-form-disclosure>.form-grid{padding-top:12px}
+.cat-form-help{margin:0;color:var(--text-secondary);font-size:13px;line-height:1.65}
+.cat-form-disclosure>.cat-form-help{margin:8px 0 14px}
+.cat-dose-fields{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:end;gap:12px;min-width:0}
+.cat-record-editor .field>label{color:var(--text-label);font-size:13px;font-weight:750;line-height:1.4}
+.cat-record-editor .field>label small{color:var(--text-secondary);font-size:inherit;font-weight:400}
+@media(max-width:720px){
+ .form-sheet-layer[data-keyboard-open="true"] .form-sheet-panel{max-height:calc(var(--form-sheet-viewport-height) - 12px)}
+ .form-sheet-layer[data-keyboard-open="true"] .form-sheet-header{min-height:54px;padding:8px 17px}
+ .form-sheet-layer[data-keyboard-open="true"] .form-sheet-header h2{font-size:21px}
+ .form-sheet-layer[data-keyboard-open="true"] .form-sheet-footer{min-height:60px;padding:8px 17px}
+ .form-sheet-layer[data-keyboard-open="true"] .form-sheet-body{scroll-padding:16px 0;padding-block:14px}
+}
 .cat-health-overview{display:grid;gap:32px}
 .cat-health-overview>.cat-health-section{margin:0;padding:0;background:none}
 .cat-health-overview>.button{justify-self:start}

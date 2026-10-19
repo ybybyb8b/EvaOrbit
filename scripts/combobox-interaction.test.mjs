@@ -29,6 +29,9 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name.endsWith("page-loading")) return load("src/components/page-loading.tsx");
       if (name.endsWith("select-dropdown")) return { SelectDropdown: "dropdown" };
       if (name.endsWith("suggested-input")) return { SuggestedInput: "suggested-input" };
+      if (name.endsWith("use-form-history")) return { useFormHistory: () => [], historyValues: () => [] };
+      if (name.endsWith("choice-select")) return { ChoiceSelect: "choice-select" };
+      if (name.endsWith("cat-log-picker")) return { CatLogPicker: "cat-log-picker", catRecordTitles: { event: "Record care", medication: "Medication" } };
       if (name.endsWith(".module.css")) return { default: {} };
       if (name === "next/link") return { default: "link" };
       if (name.endsWith("food-name-input")) return { FoodNameInput: "food-name-input" };
@@ -87,6 +90,46 @@ test("shared creatable input opens, filters, selects, closes, reopens and preser
   h.input().props.onChange({ target: { value: "Unconfirmed value" } }); h.render();
   h.nodes()[0].props.onBlur({ relatedTarget: null }); h.render();
   assert.equal(value, "Unconfirmed value");
+});
+
+test("free text without history never opens an empty suggestion popup", () => {
+  let value = "";
+  const h = harness("src/components/suggested-input.tsx", "SuggestedInput", { value, suggestions: [], suggestionLabel: "Reason", onValueChange: next => { value = next; h.setProps({ value }); } });
+  const input = () => h.nodes().find(node => node.type === "input");
+  h.render(); input().props.onFocus({}); h.render();
+  input().props.onChange({ target: { value: "Annual checkup" } }); h.render();
+  assert.equal(value, "Annual checkup");
+  assert.equal(input().props.role, undefined);
+  assert.equal(h.nodes().some(node => node.type === "dropdown"), false);
+});
+
+test("medication keeps end date optional and saves a date-only course without a reminder", async () => {
+  let payload;
+  const h = harness("src/app/cats/cat-record-editor.tsx", "CatRecordEditor", { pets: [{ id: 1, name: "Luna" }], initialPetId: 1, initialKind: "medication", initialDate: "2026-10-19", onSaved() {} }, { english: true, fetch: async (url, options) => {
+    assert.equal(url, "/api/cats/records"); payload = JSON.parse(options.body); return { ok: true, json: async () => ({ ...payload, id: 9 }) };
+  } });
+  h.render();
+  const field = label => h.nodes().find(node => node.props?.label === label);
+  field("Medication name").props.onChange("Recorded medicine"); h.render();
+  assert.equal(field("End date · Optional").props.optional, true);
+  assert.equal(field("Amount per dose").props.optional, true);
+  await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(payload.name, "Recorded medicine");
+  assert.equal(payload.startedHasExplicitTime, false);
+  assert.equal(payload.endedAt, null);
+  assert.equal(payload.active, true);
+  assert.equal(payload.createMedicationReminder, false);
+});
+
+test("care keeps a specific project name separate from its optional category", async () => {
+  let payload;
+  const h = harness("src/app/cats/cat-record-editor.tsx", "CatRecordEditor", { pets: [{ id: 1, name: "Luna" }], initialPetId: 1, initialKind: "event", initialDate: "2026-10-19", onSaved() {} }, { english: true, fetch: async (_, options) => { payload = JSON.parse(options.body); return { ok: true, json: async () => ({ ...payload, id: 8 }) }; } });
+  h.render();
+  h.nodes().find(node => node.props?.label === "What was done?").props.onChange("Nail trim"); h.render();
+  await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(payload.title, "Nail trim");
+  assert.equal(payload.eventType, "care");
+  assert.equal(payload.occurredHasExplicitTime, false);
 });
 
 test("inline date and time keep unknown time empty and allow clearing an explicit time", () => {
