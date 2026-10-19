@@ -105,7 +105,7 @@ final class TrackerLocalTests: XCTestCase {
         do { _ = try await reopened.readOnlyCache(accountId: account); XCTFail("Read-only caches must remain account scoped") } catch {}
     }
 
-    func testHomeCachePersistsAcrossReopenWithoutChangingTheLegacyQueue() async throws {
+    @MainActor func testHomeCachePersistsAcrossReopenWithoutChangingTheLegacyQueue() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
