@@ -18,6 +18,22 @@ on:
       - "src/lib/tracker-readonly*"
       - "src/lib/home-readonly.ts"
       - "src/lib/home-preview.ts"
+      - "src/lib/food-*.ts"
+      - "src/lib/drink-*.ts"
+      - "src/app/food/**"
+      - "src/app/drinks/**"
+      - "src/app/food-drink/**"
+      - "src/app/cats/**"
+      - "src/app/chronicle/**"
+      - "src/lib/chronicle*"
+      - "scripts/chronicle-*.mjs"
+      - "src/app/subscriptions/**"
+      - "src/lib/subscriptions-readonly.ts"
+      - "src/lib/services/subscriptions-readonly.ts"
+      - "scripts/subscriptions-*.mjs"
+      - "src/lib/cats-readonly.ts"
+      - "src/lib/services/cats-readonly.ts"
+      - "scripts/cats-*.mjs"
       - "src/app/trackers/tracker-*.tsx"
       - "src/components/**"
       - "src/app/globals.css"
@@ -55,7 +71,7 @@ jobs:
         run: |
           npm ci
           npm run build:trackers
-          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs scripts/appearance-preferences.test.mjs scripts/appearance-settings.test.mjs scripts/home-readonly.test.mjs scripts/home-journal-editor.test.mjs scripts/home-refresh.test.mjs scripts/home-timeline-loading.test.mjs
+          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs scripts/appearance-preferences.test.mjs scripts/appearance-settings.test.mjs scripts/home-readonly.test.mjs scripts/home-journal-editor.test.mjs scripts/home-refresh.test.mjs scripts/home-timeline-loading.test.mjs scripts/chronicle-readonly.test.mjs src/lib/chronicle.test.ts scripts/subscriptions-readonly.test.mjs scripts/cats-readonly.test.mjs scripts/food-readonly.test.mjs scripts/food-readonly-resource.test.mjs scripts/bottom-log-interaction.test.mjs scripts/navigation-shared.test.mjs scripts/food-drink-home.test.mjs scripts/combobox-interaction.test.mjs
 
       - name: Install XcodeGen
         run: |

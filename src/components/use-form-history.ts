@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { uniqueInputValues } from "@/lib/form-input";
 
 // Optional, bounded history from existing APIs. Failure never blocks manual entry.
-export function useFormHistory(url: string | null, recordPath?: string) {
+export function useFormHistory(url: string | null, recordPath?: string, read: (url: string, init?: RequestInit) => Promise<Response> = fetch) {
   const [history, setHistory] = useState<{ url: string; records: Record<string, unknown>[] }>({ url: "", records: [] });
   useEffect(() => {
     if (!url) return;
     const controller = new AbortController();
-    void fetch(url, { signal: controller.signal, cache: "no-store" }).then(async response => {
+    void read(url, { signal: controller.signal, cache: "no-store" }).then(async response => {
       if (!response.ok) return;
       const body: unknown = await response.json();
       const data = recordPath && body && typeof body === "object" ? (body as Record<string, unknown>)[recordPath] : body;
       if (Array.isArray(data)) setHistory({ url, records: data.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) });
     }).catch(() => { /* Keep free input available. */ });
     return () => controller.abort();
-  }, [url, recordPath]);
+  }, [url, recordPath, read]);
   return url === history.url ? history.records : [];
 }
 

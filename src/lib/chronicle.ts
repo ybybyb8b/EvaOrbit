@@ -32,3 +32,8 @@ export async function updateChronicleWithRepository(repository: EvaOrbitReposito
 export async function deleteChronicleWithRepository(repository: EvaOrbitRepository, id: number) {
   return repository.deleteChronicleEntry(id);
 }
+
+/** Format a date-only record without crossing a timezone boundary. */
+export function chronicleDateLabel(value: string, english = true) {
+  return new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", {month:"short",day:"numeric",year:"numeric"}).format(new Date(`${value}T12:00:00`));
+}

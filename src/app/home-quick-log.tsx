@@ -1,5 +1,6 @@
 "use client";
 
+import {QuickLogPicker,QuickLogTrigger} from "@/components/quick-log-picker";
 import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -94,8 +95,8 @@ export function HomeQuickLog() {
   const healthQuickLog = getHealthQuickLog(active);
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
-    <button type="button" className="home-quick-log-trigger" aria-label={action?.label ?? (english ? "Quick Log" : "快速记录")} title={action?.label ?? (english ? "Quick Log" : "快速记录")} aria-haspopup="dialog" disabled={action?.disabled || loading} onClick={() => { playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}><Icon name="plus" variant="stroke" /></button>
-    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close}><div className="home-quick-log-grid">{visibleOptions.map(({ kind, icon: LogIcon, en, zh }) => <button type="button" key={kind} disabled={loading} onClick={() => void choose(kind)}><LogIcon className="home-quick-log-icon" size={20} weight="Outline" strokeWidth={1.5} /><strong>{english ? en : zh}</strong></button>)}</div>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
+    <QuickLogTrigger label={action?.label} disabled={action?.disabled||loading} onClick={()=>{ playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}/>
+    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close}><QuickLogPicker options={visibleOptions} disabled={loading} onChoose={kind=>void choose(kind)}/>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}

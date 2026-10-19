@@ -42,6 +42,12 @@ WKWebView Native Host
 
 Home 只读离线扩展新增 `home.readOnlyResource`，仅在本地 PoC 主文档的既有安全边界内可用。通过同源、限定 GET 的 `/api/native/home-readonly/...` 获取日/月/提醒聚合；禁止转发旧 Home GET（有订阅补账与药物提醒校准副作用）。`home_readonly_cache` 为可丢弃的账户隔离 SQLite 快照表，不修改原 state/outbox；单条 4 MiB、每账户 128 条 / 64 MiB，缓存最近七天与访问过的日期。新 API 发布仍需独立确认，不存在时显示未下载并保留缓存。上传图标经受限认证 GET 读取、验证类型与大小后保存在 Tracker 只读快照，不加载远程图片 URL。以上不增加 entitlement、权限或独立 SwiftUI 界面；回退旧 PoC 时保留安装及 SQLite，新缓存表可以继续留存。
 
+Food & Drink 只读阶段新增 `food.readOnlySnapshot` 和 `food.readOnlyResource`，沿用上述仅限本地 PoC 的 origin / main-frame 校验；只允许 GET `/api/native/food-readonly` 及白名单 `catalog/current`、`place/:id`、`item/:id` 子资源，刷新前后验证账户与 generation。`food_readonly_cache` 每账户单条记录快照、上限 8 MiB；`food_resource_cache` 保留目录（最多 8 MiB）及最近 63 个详情/参考（每个最多 512 KiB），不修改 Tracker state/outbox。Web 与本地共享原版总览、记录列表、Places/地点详情、Library、卡片和表单；预览只读已下载候选，保存/删除/快速捕获不得执行。新接口需单独批准发布，新 React 包和 Swift 方法需重建 IPA；新增 XCTest 仍须实际 CI 验证。范围与回退见 [Food 本地只读阶段](FOOD_LOCAL_READONLY_POC.md)。
+
+Cats 只读阶段新增 `cats.readOnlySnapshot`，沿用本地 PoC main-frame / origin 白名单，仅 GET `/api/native/cats-readonly`，刷新前后检查账户与 generation。独立 `cats_readonly_cache` 每账户 8 MiB，包含在用猫咪原版页面、历史原始表单数据、猫粮库存/购买及认证头像字节；不修改 state/outbox。原版表单可预览临时草稿，完成护理、提醒、上传/删除照片、扣减库存和所有业务写入禁用。API 需单独批准发布、IPA 需重建；不增加权限、framework 或 entitlement，新增 XCTest 尚待 macOS CI。详见 [Cats 只读阶段](CATS_LOCAL_READONLY_POC.md)。
+
+Subscriptions 新增本地 PoC 专用 `subscriptions.readOnlySnapshot` 与 GET `/api/native/subscriptions-readonly`，账户/generation/备份校验沿用既有实现。`subscriptions_readonly_cache` 每账户最多 8 MiB，保存账簿、付款/价格历史与上传图标字节；不触碰 Tracker state/outbox。普通订阅 GET 会自动补账，因此必须保持与新只读接口隔离，不能用作回退。新接口只经 Repository 白名单读取，预览表单、暂停/结束、付款及图片上传/删除均禁止写入。需要单独确认 API 发布及重建 PoC IPA；权限、framework、entitlement 和签名链不变，新增 XCTest 待 macOS CI。见 [订阅阶段说明](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
+
 验收安装使用 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，跳过安装后的生产续签 Task 写入。默认安装行为保持原样。环境脚本只在发现 WSL usbmuxd 运行时以 `sudo -n` 停止，权限不足立即报错；ActivationState 探测有超时。固定 xtool SHA 与 Windows USB transport 不变。
 
 ## 二、事实来源
@@ -400,3 +406,7 @@ Bark 的 `open_in_host` 默认 false；安装新版后才能在通知设置切�
 - 尚未覆盖的场景，以及哪些验证必须由 macOS CI 或真机完成。
 
 具体的 Windows 管理员命令、WSL 初装、xtool 登录、AppTokens 503、续签和升级步骤继续以 [`docs/IOS_NATIVE_HOST.md`](./IOS_NATIVE_HOST.md) 为准；本文负责维护架构和不变量，避免后续开发会话破坏已经验证的实现方式。
+
+### Chronicle 只读缓存补充
+
+本地包复用 Web Chronicle 列表/详情/表单；bridge v1 增加 `chronicle.readOnlySnapshot`，底层只放行精确 `GET /api/chronicle`，包装最近 100 篇到 8 MiB 账户缓存。SQLite 仅新增 `chronicle_readonly_cache`，保留既有记录/outbox/备份及身份检查；旧 Host 通过能力检测提示升级。未增加系统权限、framework 或 entitlement，安装签名链不变。此模块无需新增生产 API/migration；Web 视觉更新仍需单独授权部署，Host 需重建 IPA。Windows 浏览器验证不替代 macOS XCTest/iPhone 验收。详见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。

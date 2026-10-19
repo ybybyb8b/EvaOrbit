@@ -1,0 +1,5 @@
+.details { margin:8px 0 16px; color:var(--text-secondary); font-size:12px; line-height:1.6; }
+.details > summary { width:fit-content; min-height:32px; padding:6px 0; cursor:pointer; }
+.content { padding:4px 0 8px; }
+.content > p:first-child { margin-top:0; }
+.content > p:last-child { margin-bottom:0; }

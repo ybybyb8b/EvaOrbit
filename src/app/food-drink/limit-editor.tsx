@@ -9,8 +9,7 @@ import { FoodDeleteAction } from "../food/food-delete-action";
 import { drinkTypes } from "../drinks/drink-ui";
 import type { DrinkLimit, LimitPeriod } from "@/lib/types";
 
-export const limitStateLabels = { within_limit: "范围内", near_limit: "接近上限", reached_limit: "已到上限", exceeded_limit: "已超过" };
-export const limitPeriodLabels = { daily: "今天", weekly: "本周", monthly: "本月" };
+export {limitStateLabels,limitPeriodLabels} from "@/lib/drink-limit-labels";
 
 export function LimitEditor({ limit, onClose, onSaved }: { limit?: DrinkLimit; onClose: () => void; onSaved: () => Promise<void> }) {
   const [draft, setDraft] = useState({ name: limit?.name ?? "", targetType: limit?.targetType ?? "coffee", period: limit?.period ?? "weekly", limitValue: String(limit?.limitValue ?? ""), enabled: limit?.enabled ?? true });

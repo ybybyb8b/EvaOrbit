@@ -40,6 +40,8 @@
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，不依赖 Next 或自动重试请求；服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
 - **共享外观**：[fonts.css](../src/app/fonts.css) 统一 Web／本地的字体文件与注册；[appearance-preferences.ts](../src/lib/appearance-preferences.ts)、`LocaleController` 统一偏好读取、应用和持久化，`ThemeController` 统一系统外观及既有 Native loading 适配。两端使用同一 [AppearanceSettings](../src/components/appearance-settings.tsx)；Web 沿用偏好 API，本地只写设备持久存储，不进入业务 outbox。首次本地预览以英语／August 为基准，保留已有显式选择；Web 默认值不变。旧字体键 `ibm` 继续对应 August。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
+- **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器和选择器。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
+- **共享导航**：[app-navigation.tsx](../src/components/app-navigation.tsx) 统一 Web 与本地 React 的侧栏菜单、图标、选中状态及手机抽屉（焦点约束、Escape、遮罩关闭和关闭后焦点恢复）。Web 保留全部入口、认证退出和系统协调器，本地仅注入已迁移模块链接；Home/Settings 继续复用底栏，本地不再维护顶部模块按钮。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。
 - **详文**：[开发规则](../AGENTS.md)、[部署](../DEPLOYMENT.md)、[客户端缓存](CLIENT_PAGE_CACHE.md)、[备份与本地恢复](DATA_BACKUP.md)、[表单体验](FORM_INPUT_EXPERIENCE_REVIEW.md)。
 
@@ -53,6 +55,8 @@
 - **详文**：[客户端缓存](CLIENT_PAGE_CACHE.md)、[睡眠与 Calendar 窗口](HEALTHKIT_SLEEP.md)。
 
 ## Food
+
+- **本地只读阶段**：[FoodWorkspace](../src/local-trackers/food-workspace.tsx) 复用总览、记录列表，以及原版 Places / 地点详情 / Library 组件和表单。[FoodDataProvider](../src/components/food-data-context.tsx) 注入只读数据与导航；[本地读取适配](../src/lib/food-local-reader.ts) 将账户快照投影成既有页面读取契约。SQLite / IndexedDB 缓存近 30 天记录、最多 200 个地点和 100 个库条目，以及按访问下载的有界详情/参考；不等于全量历史离线。`/api/native/food-readonly` 及其目录/详情子路由通过 Repository 白名单读取，生产发布与真机验收另行完成。共享 Log 核心、表单预览、缓存限制与回退见 [阶段说明](FOOD_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[共同主页](../src/app/food-drink/)、[Food / Places / Library](../src/app/food/)、[Drinks](../src/app/drinks/)；服务入口 [food.ts](../src/lib/services/food.ts)、[drink.ts](../src/lib/services/drink.ts)、[food-catalog.ts](../src/lib/services/food-catalog.ts)、[food-drink-home.ts](../src/lib/services/food-drink-home.ts)。
 - **数据与接口**：`food_logs`、`drink_logs`、`food_places`、`food_dishes`（含饮品菜单）、`food_library`、`drink_limits`；`/api/food/*`、`/api/drinks/*`、`/api/food-drink/home`。MCP：`food_log`、`drink_log`、`food_place`、`food_dish`、`food_library`、`drink_limit`。一条 Food 代表一顿饭，可关联多个来源；只读 `food_place_ids` 从用餐地点、菜品所属店铺、食品快照来源去重派生，单店每餐计一次。
@@ -129,6 +133,8 @@
 
 ## Cats
 
+- **本地只读阶段**：[CatsWorkspace](../src/local-trackers/cats-workspace.tsx) 直接复用原版总览、猫咪时间线/健康/护理/档案、猫粮列表和详情；[CatsDataProvider](../src/components/cats-data-context.tsx) 注入账户快照的 GET 与导航，表单临时草稿及读取历史共享，保存/删除/护理完成/库存/头像写入均拦截。`/api/native/cats-readonly` 通过 Repository 白名单聚合，头像字节随快照缓存，原生 SQLite 与浏览器 IndexedDB 不触碰旧 outbox。边界、验收与发布/回退见 [Cats 只读阶段](CATS_LOCAL_READONLY_POC.md)。
+
 - **职责与入口**：[cats/](../src/app/cats/)、[cats 服务](../src/lib/services/cats.ts)、[cat-routine.ts](../src/lib/services/cat-routine.ts)、[cat-food.ts](../src/lib/services/cat-food.ts)。
 - **数据与接口**：`pets`、`cat_events`、`cat_symptoms`、`vet_visits`、`cat_medications`、`cat_measurements`、`cat_routines`、`cat_food_items`、`cat_food_purchases`；`/api/cats/*`；MCP `cat_pet`、`cat_record`、`cat_routine`。
 - **依赖与决定**：Routine 通过 Reminder 周期执行，归档与永久删除不同；保留已生成护理记录与投递快照。猫咪删除兼容入口实际为归档。猫食品库存独立于人的 Food Library，不能合并；护理/健康事件进入 Timeline。
@@ -149,6 +155,8 @@
 
 ## Subscriptions
 
+- **本地只读阶段**：[SubscriptionsWorkspace](../src/local-trackers/subscriptions-workspace.tsx) 复用原版总览/轮播、列表、分币种趋势、详情和全部现有表单。`SubscriptionsDataProvider` 注入快照 GET、导航与认证图片字节；新 `/api/native/subscriptions-readonly` 仅经 Repository 白名单读取，跳过普通订阅服务的自动续费补账和提醒写入。账户隔离 SQLite/IndexedDB 不触碰原 outbox；容量、测试及发布/回退见 [Subscriptions 只读阶段](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
+
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
@@ -164,6 +172,8 @@
 - **职责与入口**：[chronicle/](../src/app/chronicle/)、[chronicle 服务](../src/lib/services/chronicle.ts)；`chronicle_entries`；`/api/chronicle`，MCP `chronicle`。
 - **依赖与决定**：纪事保存 date、标题、Markdown 正文和来源；与 Home 今日一记、Lucius 日记、Memo 各有数据表及服务，修改时不要按“都是日记”互相替换。
 - **契约**：[MCP](../MCP.md)；字段与校验以 [chronicle.ts](../src/lib/chronicle.ts) 为准。
+
+- **共享/本地只读**：[ChronicleWorkspace](../src/local-trackers/chronicle-workspace.tsx) 通过 [ChronicleDataProvider](../src/components/chronicle-data-context.tsx) 复用原版列表、详情与 [ChronicleEditor](../src/app/chronicle/chronicle-editor.tsx)。既有纯 GET 下载最近 100 篇至账户隔离缓存；表单只预览、不写入 outbox。排版、阅读宽度及预览改进同时作用于 Web 和 Host。范围、媒体限制与回退见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。
 
 ## MCP
 

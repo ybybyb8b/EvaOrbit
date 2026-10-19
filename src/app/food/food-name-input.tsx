@@ -1,4 +1,6 @@
 "use client";
+import {useFoodData} from "@/components/food-data-context";
+import {useFormPreview} from "@/components/form-preview";
 import { PageLoading } from "@/components/page-loading";
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -13,24 +15,26 @@ export function FoodNameInput({ kind, value, onValueChange, onSelect, onRecord, 
   onSelect: (item: FoodCatalogItem) => void; placeId?: string; label: string; required?: boolean;
   onRecord?: (name: string) => void;
 }) {
+  const {read,local}=useFoodData();
+  const previewOnly=useFormPreview();
   const {english}=useLocale();
   const t=(value:string)=>translateUiCopy(value,english?"en":"zh-CN");
   const id = useId(), anchor = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false), [items, setItems] = useState<FoodCatalogItem[]>([]);
   const [loading, setLoading] = useState(false), [error, setError] = useState(""), [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!open) return;
+    if (!open || previewOnly&&!local) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setLoading(true); setError("");
-      void fetch(`/api/food/catalog?kind=${kind}&q=${encodeURIComponent(value)}${placeId ? `&placeId=${placeId}` : ""}`, { signal: controller.signal })
+      void read(`/api/food/catalog?kind=${kind}&q=${encodeURIComponent(value)}${placeId ? `&placeId=${placeId}` : ""}`, { signal: controller.signal })
         .then(async response => { if (!response.ok) throw new Error("物品加载失败，请重试"); return response.json() as Promise<FoodCatalogItem[]>; })
         .then(result => { if (!controller.signal.aborted) setItems(result); })
         .catch(reason => { if (!controller.signal.aborted) setError(reason.message); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [kind, value, placeId, open, attempt]);
+  }, [kind, value, placeId, open, attempt,previewOnly,read,local]);
   function pick(item: FoodCatalogItem) { onSelect(item); anchor.current?.querySelector<HTMLInputElement>("input")?.focus({preventScroll:true}); setOpen(false); }
   function recordName(){if(value.trim())onRecord?.(value.trim());setOpen(false);}
   return <div className="field"><span>{label}</span><span ref={anchor} className="input-with-candidates">
@@ -45,7 +49,7 @@ export function FoodNameInput({ kind, value, onValueChange, onSelect, onRecord, 
       {items.map(item => <button key={item.key} type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => pick(item)}><span>{item.name}<small>{[item.placeName || t("通用食品"), item.servingKcal !== null ? english?`About ${item.servingKcal} kcal / serving`:`约 ${item.servingKcal} kcal / 份` : ""].filter(Boolean).join(" · ")}</small></span></button>)}
       {loading && <small className="eo-select-empty"><PageLoading title="搜索结果" englishTitle="search results" compact /></small>}
       {error && <span role="alert">{error}<button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button></span>}
-      {!loading && !error && !items.length && <small className="eo-select-empty">{value ? "没有匹配物品，可直接记录名称" : "输入名称搜索食品库和店铺物品"}</small>}
+      {previewOnly&&!local&&<small className="eo-select-empty">Cloud suggestions are unavailable in form preview. Enter a name directly.</small>}{(!previewOnly||local) && !loading && !error && !items.length && <small className="eo-select-empty">{value ? "没有匹配物品，可直接记录名称" : "输入名称搜索食品库和店铺物品"}</small>}
       {!placeId && value.trim() && <button type="button" className="eo-select-option user-content" onClick={recordName}>{english?`Record “${value.trim()}” directly`:`直接记录「${value.trim()}」`}</button>}
     </div></SelectDropdown>}
   </span></div>;

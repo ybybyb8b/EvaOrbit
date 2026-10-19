@@ -3,21 +3,21 @@ import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
-import { PageLogAction } from "@/components/bottom-log";
-import { ChoiceSelect } from "@/components/choice-select";
+import { PageLogAction } from "@/components/bottom-log-core";
+import {ChronicleEditor,type ChronicleDraft} from "./chronicle-editor";
+import {useFormPreview} from "@/components/form-preview";
+import {ChronicleLink as Link,useChronicleData} from "@/components/chronicle-data-context";
 import { ToastNotice } from "@/components/action-toast";
 
-import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
-import { PageHeader } from "@/components/page-header";
+import { PageHeading as PageHeader } from "@/components/page-heading";
 import { useLocale } from "@/components/locale-controller";
-import { chronicleExcerpt } from "@/lib/chronicle";
+import { chronicleDateLabel,chronicleExcerpt } from "@/lib/chronicle";
 import type { ChronicleEntry, ChronicleSource } from "@/lib/types";
 
-type ChronicleDraft = { date: string; title: string; contentMd: string; source: ChronicleSource };
 
 function emptyDraft(): ChronicleDraft {
   return { date: currentLocalDate(), title: "", contentMd: "", source: "manual" };
@@ -27,13 +27,9 @@ function sourceLabel(source: ChronicleSource) {
   return source === "chatgpt" ? "ChatGPT" : "Manual";
 }
 
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${value}T12:00:00`));
-}
-
-
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const { english } = useLocale();
+  const readonly=useFormPreview(),{read,local,complete}=useChronicleData();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useRememberedState("ChronicleView:query", "");
   const [draft, setDraft] = useState<ChronicleDraft>(emptyDraft);
@@ -46,7 +42,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const load = useCallback(async (signal?: AbortSignal) => {
       setLoading(true); setError("");
       try {
-        const response = await fetch(`/api/chronicle?q=${encodeURIComponent(query)}&limit=100`, { cache: "no-store", signal });
+        const response = await read(`/api/chronicle?q=${encodeURIComponent(query)}&limit=100`, { cache: "no-store", signal });
         if (!response.ok) throw new Error(await responseError(response, "Could not load Chronicle."));
         const next = await response.json() as ChronicleEntry[];
         if (!signal?.aborted) setItems(next);
@@ -55,7 +51,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
       } finally {
         if (!signal?.aborted) setLoading(false);
       }
-  }, [query]);
+  }, [query,read]);
   useDataRefresh("/chronicle", () => load());
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +64,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setSaving(true); setError("");
+    event.preventDefault(); if(readonly)return; setSaving(true); setError("");
     try {
       const response = await fetch("/api/chronicle", {
         method: "POST",
@@ -87,31 +83,27 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   }
 
   return <div className="page chronicle-page">
-    <PageHeader eyebrow={english ? "ARCHIVE" : "归档"} title="Chronicle" action={<PageLogAction label="新增记录" className="button primary" onClick={openCreate}><Icon name="plus" />{english ? "Add entry" : "新增记录"}</PageLogAction>} />
+    <PageHeader eyebrow={english ? "ARCHIVE" : "归档"} title="Chronicle" action={<PageLogAction label={english?"Add entry":"新增记录"} className="button primary" onClick={openCreate}><Icon name="plus" />{english ? "Add entry" : "新增记录"}</PageLogAction>} />
 
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
-    {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>
-      <div className="editor-title"><div><span className="eyebrow">NEW ENTRY</span><h2>Add to Chronicle</h2></div><button type="button" className="text-button" onClick={() => { setShowForm(false); setError(""); }}>Cancel</button></div>
-      <div className="form-grid">
-        <label className="field"><span>Date</span><input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
-        <label className="field"><span>Source</span><ChoiceSelect value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value as ChronicleSource })}><option value="manual">Manual</option><option value="chatgpt">ChatGPT</option></ChoiceSelect></label>
-        <label className="field wide"><span>Title</span><input required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-        <label className="field wide"><span>Markdown</span><textarea required rows={12} maxLength={100000} value={draft.contentMd} onChange={(event) => setDraft({ ...draft, contentMd: event.target.value })} placeholder="Write in Markdown…" /></label>
-      </div>
+    {showForm && <FormSheet title="Add to Chronicle" onClose={() => { setShowForm(false); setError(""); }} formId="chronicle-create-form" submitLabel="Save entry" busy={saving} submitDisabled={readonly}><form id="chronicle-create-form" className="editor-card chronicle-editor" onSubmit={submit}>
+      <ChronicleEditor draft={draft} onChange={setDraft}/>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
-      <div className="form-actions"><button className="button primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save entry"}</button></div>
+
     </form></FormSheet>}
 
     {!showForm && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
     <div className="chronicle-toolbar" aria-busy={loading}>
-      <label className="search-box chronicle-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles and entries…" aria-label="Search Chronicle titles and content" />{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">×</button>}</label>
-      <span className="result-count">{items.length} {items.length === 1 ? "entry" : "entries"}</span>
+      <label className="search-box chronicle-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={english?"Search titles and entries…":"搜索标题和正文…"} aria-label={english?"Search Chronicle titles and content":"搜索 Chronicle 标题和正文"} />{query && <button type="button" onClick={() => setQuery("")} aria-label={english?"Clear search":"清除搜索"}><Icon name="close"/></button>}</label>
+      <span className="result-count" role="status">{loading?(english?"Searching…":"正在搜索…"):`${items.length}${items.length===100?"+":""} ${english?(items.length===1?"entry":"entries"):"篇"}`}</span>
     </div>
 
+    {local&&<p className="chronicle-scope">{english?`Searching downloaded entries${complete?"":" · latest 100 only"}`:`搜索已下载的纪事${complete?"":" · 仅最近 100 篇"}`}</p>}
+    {!local&&items.length===100&&<p className="chronicle-scope">{english?"Showing the latest 100 matches. Refine your search to find earlier entries.":"显示最近 100 条结果，可搜索更早的纪事。"}</p>}
     {items.length ? <div className="chronicle-list" aria-busy={loading}>{items.map((entry) => <Link className="chronicle-row" href={`/chronicle/${entry.id}`} key={entry.id}>
-      <time className="chronicle-row-date" dateTime={entry.date}>{dateLabel(entry.date)}</time>
-      <span className="chronicle-row-copy"><span className="chronicle-row-heading"><strong>{entry.title}</strong><small>{sourceLabel(entry.source)}</small></span><span className="chronicle-row-excerpt">{chronicleExcerpt(entry.contentMd)}</span></span>
+      <time className="chronicle-row-date" dateTime={entry.date}>{chronicleDateLabel(entry.date,english)}</time>
+      <span className="chronicle-row-copy"><span className="chronicle-row-heading"><strong>{entry.title}</strong><small>{entry.source==="manual"&&!english?"手动":sourceLabel(entry.source)}</small></span><span className="chronicle-row-excerpt">{chronicleExcerpt(entry.contentMd)}</span></span>
       <Icon name="arrow" />
-    </Link>)}</div> : <div className="empty-state chronicle-empty"><span className="empty-icon"><Icon name="chronicle" /></span><h2>{query ? "No matching entries" : "Chronicle is empty"}</h2><p>{query ? "Try a different title or phrase." : "Add a dated Markdown entry to begin."}</p>{!query && <button className="button secondary" onClick={openCreate}><Icon name="plus" />New entry</button>}</div>}
+    </Link>)}</div> : loading ? <p role="status">{english?"Loading entries…":"正在加载纪事…"}</p> : error ? <button className="button secondary" onClick={()=>void load()}>{english?"Try again":"重试"}</button> : <div className="empty-state chronicle-empty"><span className="empty-icon"><Icon name="chronicle" /></span><h2>{query ? "No matching entries" : "Chronicle is empty"}</h2><p>{query ? "Try a different title or phrase." : "Add a dated Markdown entry to begin."}</p>{!query && <button className="button secondary" onClick={openCreate}><Icon name="plus" />New entry</button>}</div>}
   </div>;
 }

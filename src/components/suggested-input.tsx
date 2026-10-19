@@ -38,7 +38,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
   const matches = matchInputValues(suggestions, expanded ? searchQuery : tags ? query : value).filter(option => !tags || !committed.some(tag => tag.toLocaleLowerCase() === option.toLocaleLowerCase()));
   const effectiveStyle = recommendationStyle === "chips" && suggestions.length > 5 ? "search" : recommendationStyle;
   const chipsOnly = effectiveStyle === "chips";
-  const searchable = !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
+  const searchable = suggestions.length > 0 && !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
   const searchOnly = effectiveStyle === "search" && searchable;
   const candidates = tags ? matches : matchInputValues(suggestions, chipsOnly ? value : "");
   const newValue = searchQuery.trim();
@@ -61,7 +61,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
       {undo !== null && <button type="button" data-form-change onPointerDown={event => event.preventDefault()} onClick={() => { onValueChange(undo); setUndo(null); setQuery(""); input.current?.focus({ preventScroll: true }); }}>{english ? "Undo" : "撤销"}</button>}
     </div>
   </div>;
-  return <span className="suggested-input" data-recommendation-style={effectiveStyle} ref={container} onBlur={event => {
+  return <span className="suggested-input" data-recommendation-style={effectiveStyle} data-searchable={searchable} ref={container} onBlur={event => {
     if (container.current?.contains(event.relatedTarget as Node) || (!searchOnly && target?.contains(event.relatedTarget as Node))) return;
     skipFocusOpen.current = false;
     setFocused(false); setExpanded(false);

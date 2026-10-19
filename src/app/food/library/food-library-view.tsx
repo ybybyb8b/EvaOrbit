@@ -1,4 +1,6 @@
 "use client";
+import {useFoodData,FoodPreviewAction} from "@/components/food-data-context";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
@@ -17,11 +19,11 @@ import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
 import styles from "./food-library.module.css";
 
-import Link from "next/link";
+import {FoodWebLink as Link} from "@/components/food-web-link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
-import { PageHeader } from "@/components/page-header";
+import { PageHeading as PageHeader } from "@/components/page-heading";
 import type { ApiError, FoodCategory, FoodDataSource, FoodLibraryItem, FoodReferenceType } from "@/lib/types";
 
 const empty = { foodPlaceId:"", name: "", brand: "", category: "other" as FoodCategory, drinkType: "" as Exclude<DrinkType,"water"> | "", defaultPortion: "", referenceType: "per_serving" as FoodReferenceType, referenceEnergyKj: "", referenceKcal: "", servingWeight: "", servingKcal: "", dataSource: "manual" as FoodDataSource, notes: "" };
@@ -48,11 +50,12 @@ function draftFromItem(item: FoodLibraryItem): Draft {
   };
 }
 
-export function FoodLibraryView() {
+export function FoodLibraryView(){
+  const {read,local}=useFoodData();const previewOnly=useFormPreview();const PageAction=local?FoodPreviewAction:PageLogAction;
   const {english}=useLocale();
   const t=(value:string)=>translateUiCopy(value,english?"en":"zh-CN");
   const [places,setPlaces]=useState<FoodPlace[]>([]),[placeQuery,setPlaceQuery]=useState("");
-  useEffect(()=>{const controller=new AbortController();void fetch(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(async response=>{if(response.ok)setPlaces(await response.json());}).catch(()=>undefined);return()=>controller.abort();},[placeQuery]);
+  useEffect(()=>{const controller=new AbortController();void read(`/api/food/places?limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(async response=>{if(response.ok)setPlaces(await response.json());}).catch(()=>undefined);return()=>controller.abort();},[placeQuery,read]);
   const [items, setItems] = useState<FoodLibraryItem[]>([]);
   const [query, setQuery] = useRememberedState("FoodLibraryView:query", "");
   const [showForm, setShowForm] = useState(false);
@@ -69,13 +72,13 @@ export function FoodLibraryView() {
   const load = useCallback(async (signal?:AbortSignal) => {
     setLoading(true);setLoadError("");
     try{
-      const response = await fetch(`/api/food/library?q=${encodeURIComponent(query)}`,{signal});
+      const response = await read(`/api/food/library?q=${encodeURIComponent(query)}`,{signal});
       if(!response.ok)throw new Error("食品库加载失败，请重试");
       const next=await response.json() as FoodLibraryItem[];
       if(!signal?.aborted)setItems(next);
     }catch(reason){if(!signal?.aborted)setLoadError(reason instanceof Error?reason.message:"食品库加载失败，请重试");}
     finally{if(!signal?.aborted)setLoading(false);}
-  }, [query]);
+  }, [query,read]);
   useDataRefresh("/food/library", () => load());
 
   useEffect(() => { const controller=new AbortController();const timer = setTimeout(() => void load(controller.signal), 120); return () => {clearTimeout(timer);controller.abort();}; }, [load]);
@@ -93,7 +96,7 @@ export function FoodLibraryView() {
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (saving) return; setError(""); setNotice(""); setSaving(true);
+    event.preventDefault(); if (previewOnly || saving) return; setError(""); setNotice(""); setSaving(true);
     const optionalNumber = (value: string) => value ? Number(value) : null;
     const body = { ...draft, foodPlaceId:draft.foodPlaceId?Number(draft.foodPlaceId):null, drinkType: draft.category === "drink" ? draft.drinkType || null : null, referenceEnergyKj: optionalNumber(draft.referenceEnergyKj), referenceKcal: optionalNumber(draft.referenceKcal), servingWeight: optionalNumber(draft.servingWeight), servingKcal: optionalNumber(draft.servingKcal) };
     const editing = editingId;
@@ -106,7 +109,7 @@ export function FoodLibraryView() {
   }
 
   async function remove(item: FoodLibraryItem) {
-    if(saving)return;
+    if(previewOnly||saving)return;
     setSaving(true);setError("");setNotice("");
     try{
     const response = await fetch(`/api/food/library/${item.id}`, { method: "DELETE" });
@@ -119,9 +122,9 @@ export function FoodLibraryView() {
   }
 
   return <div className="page food-library-page">
-    <PageHeader eyebrow="Food & Drink" title="Food Library" description="常用食品与饮品的营养参考。" action={<PageLogAction label="添加食品" onClick={openCreate}><Icon name="plus" />添加食品</PageLogAction>} />
+    <PageHeader eyebrow="Food & Drink" title="Food Library" description="常用食品与饮品的营养参考。" action={<PageAction label="添加食品" onClick={openCreate}><Icon name="plus" />添加食品</PageAction>} />
 
-    {showForm && <FormSheet title={editingId ? "编辑食品" : "添加食品"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "保存修改" : "添加食品"} busy={saving}><form id="food-library-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>
+    {showForm && <FormSheet title={editingId ? "编辑食品" : "添加食品"} onClose={closeEditor} formId="food-library-form" submitLabel={editingId ? "保存修改" : "添加食品"} busy={saving} submitDisabled={previewOnly}><form id="food-library-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
       <section className={styles.formSection} aria-labelledby="library-identity"><h3 id="library-identity">食品信息</h3><div className="form-grid">
         <label className="field wide"><span>食品名称</span><input required maxLength={200} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
         <div className="field"><span>品牌（可选）</span><SuggestedInput recommendationStyle="search" suggestionLabel="品牌" suggestions={items.map(item => item.brand)} value={draft.brand} onValueChange={nextValue => setDraft({ ...draft, brand: nextValue })} placeholder="可不填" /></div>
@@ -137,7 +140,7 @@ export function FoodLibraryView() {
         <div className="field wide"><span>数据来源</span><SearchableSelect label="数据来源" searchable={false} value={draft.dataSource} onValueChange={(value) => setDraft({ ...draft, dataSource: value as FoodDataSource })} options={Object.entries(sourceLabels).map(([value,label])=>({value,label}))}/></div>
       </div></section>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
-      {editingItem&&<FoodDeleteAction label="移除食品" description={`${t("确定移除")}「${draft.name}」？${t("有关联记录时会归档，历史记录保持不变。")}`} disabled={saving} onDelete={()=>remove(editingItem)}/>}
+      {!previewOnly&&editingItem&&<FoodDeleteAction label="移除食品" description={`${t("确定移除")}「${draft.name}」？${t("有关联记录时会归档，历史记录保持不变。")}`} disabled={saving} onDelete={()=>remove(editingItem)}/>}
     </form></FormSheet>}
 
     {!showForm && error && <ErrorNotice>{error}</ErrorNotice>}
@@ -156,7 +159,7 @@ export function FoodLibraryView() {
           <span className={styles.energy}>{kcal!==null?<><strong>{Number(kcal.toFixed(1))}<span> kcal</span></strong><small>{t(basis)}</small></>:<small>{t("未填热量")}</small>}{item.dataSource==="estimated"&&<small className={styles.estimate}>{t("估算")}</small>}</span>
         </button>
         <button type="button" className={styles.editButton} disabled={saving} aria-label={`${t("编辑食品")} ${item.name}`} onClick={() => openEdit(item)}><Icon name="edit" /></button>
-        <FoodDeleteAction iconOnly className={styles.rowDelete} label={`${t("移除食品")} ${item.name}`} description={`${t("确定移除")}「${item.name}」？${t("有关联记录时会归档，历史记录保持不变。")}`} disabled={saving} onDelete={()=>remove(item)}/>
+        {!previewOnly&&<FoodDeleteAction iconOnly className={styles.rowDelete} label={`${t("移除食品")} ${item.name}`} description={`${t("确定移除")}「${item.name}」？${t("有关联记录时会归档，历史记录保持不变。")}`} disabled={saving} onDelete={()=>remove(item)}/>}
       </li>;
     })}</ul> : !loadError&&<div className={`empty-state compact-empty ${styles.empty}`}><Icon name="foodLibrary"/><h2>{query ? "没有匹配的食品" : "食品库还是空的"}</h2><p>{query?"试试其他名称或品牌。":"添加常用食品，记录时就能直接选择。"}</p><button type="button" className="button secondary" onClick={query?()=>setQuery(""):openCreate}>{query?"清除搜索":"添加食品"}</button></div>}</div>
     <Link className={`section-link ${styles.back}`} href="/food-drink">返回 Food & Drink <Icon name="arrow" /></Link>

@@ -1,9 +1,9 @@
 "use client";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
-import { PageLogAction } from "@/components/bottom-log";
+import { PageLogAction } from "@/components/bottom-log-core";
 
-import Link from "next/link";
+import {SubscriptionLink as Link,useSubscriptionsData} from "@/components/subscriptions-data-context";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -21,6 +21,7 @@ const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-second
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
 export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+  const {local}=useSubscriptionsData();
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
   const [view, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
@@ -34,9 +35,9 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   // Sample uploaded images only. Built-in SVGs are monochrome masks, coloured by
   // mark() with their published brand palette; their raw pixels are always black.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
-    const source = iconSources?.[item.id] ?? subscriptionIconSource(item);
+    const source = iconSources?.[item.id] ?? (local?null:subscriptionIconSource(item));
     return source ? [[item.id, source]] : [];
-  })), [items, iconSources]);
+  })), [items, iconSources, local]);
   const { colors, transparent, palette, neutralFilter } = useIconColors(sources);
   const stats = useMemo(() => subscriptionPreviewStats(items, payments, today), [items, payments, today]);
   const selectedCurrency = currency || stats.currencies[0] || "CNY";
@@ -113,7 +114,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const spend = (item: Subscription) => Object.entries(item.spendByCurrency).map(([key, value]) => money(value, key, english)).join(" / ") || t("Not recorded", "尚未记录");
   function mark(item: Subscription) {
     const brand = subscriptionBrand(item.name);
-    const uploaded = iconSources?.[item.id] ?? subscriptionIconSource(item);
+    const uploaded = iconSources?.[item.id] ?? (local?null:subscriptionIconSource(item));
     if (uploaded) return <span key={uploaded} className={`${styles.brandIcon} ${styles.uploadedIcon}`} data-transparent={transparent[item.id]} aria-hidden="true">
       <b hidden>{item.name.slice(0, 1).toUpperCase()}</b>
       {/* Tiny unoptimized source is also the input to the canvas sampler. */}
@@ -155,7 +156,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const cardLabel = (item: Subscription) => `${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`;
   function featuredCard(item: Subscription, decorative = false) {
     const brand = subscriptionBrand(item.name);
-    const accent = colors[item.id] ?? (iconSources?.[item.id] || subscriptionIconSource(item) ? null : brand?.color ?? null);
+    const accent = colors[item.id] ?? (iconSources?.[item.id] || (!local && subscriptionIconSource(item)) ? null : brand?.color ?? null);
     return <Link href={`/subscriptions/${item.id}`} className={styles.featureCard} tabIndex={decorative ? -1 : undefined} style={{ "--preview-tone": accent ?? "var(--accent-primary)", ...palette(accent) } as CSSProperties} aria-label={cardLabel(item)}>
       <div className={styles.cardContent}>
         <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>

@@ -1,4 +1,5 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -16,14 +17,14 @@ function tomorrow(): DateTimeDraft {
   return { date: local, time: "" };
 }
 
-export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel, onSavingChange }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void; onSavingChange?: (saving: boolean) => void }) {
+export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel, onSavingChange }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void; onSavingChange?: (saving: boolean) => void }) { const previewOnly=useFormPreview();
   const [draft, setDraft] = useState(() => ({ target: editing ? editing.targetType === "cat" ? String(editing.targetId) : "household" : initialPetId === null ? "household" : initialPetId ? String(initialPetId) : pets[0] ? String(pets[0].id) : "household", title: editing?.title ?? "", due: editing?.nextDueAt ? dateTimeDraft(editing.nextDueAt, editing.dueHasExplicitTime) : tomorrow(), leadTimeMinutes: editing?.leadTimeMinutes ?? 0, repeatWhileOverdue: editing?.repeatWhileOverdue ?? false, note: editing?.note ?? "" }));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   useEffect(() => onSavingChange?.(saving), [onSavingChange, saving]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (saving) return; setError(""); setSaving(true);
+    event.preventDefault(); if (previewOnly || saving) return; setError(""); setSaving(true);
     const household = draft.target === "household";
     const due = dateTimePayload(draft.due);
     const response = await fetch(editing ? `/api/reminders/${editing.id}` : "/api/reminders", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
@@ -38,7 +39,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
     onSaved();
   }
 
-  return <form className="editor-card reminder-editor" onSubmit={submit}>
+  return <form className="editor-card reminder-editor" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
     <div className="editor-title"><div><span className="eyebrow">ONE-TIME</span><h2>{editing ? "Edit one-time task" : "Do once"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
     <div className="form-grid">
       <label className="field"><span>Subject</span><ChoiceSelect value={draft.target} onChange={(event) => setDraft({ ...draft, target: event.target.value })}>{pets.map((pet) => <option value={pet.id} key={pet.id}>{pet.name}</option>)}<option value="household">Household</option></ChoiceSelect></label>
@@ -48,6 +49,6 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
       {draft.due.time && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>Remind me daily while overdue</span></label>}
       <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
     </div>
-    {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
+    {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={previewOnly || saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
   </form>;
 }

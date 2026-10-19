@@ -2,13 +2,12 @@
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 
-import { SearchableSelect } from "@/components/searchable-select";
+import Link from "next/link";
+import {DrinkRecordsView} from "@/components/drink-records-view";
 import { useCallback, useEffect, useState } from "react";
-import { Icon } from "@/components/icons";
-import { PageHeader } from "@/components/page-header";
 import { BottomLogScope } from "@/components/bottom-log";
 import type { DrinkLog, DrinkType } from "@/lib/types";
-import { DrinkRecordCard, DrinkRecordEditor, drinkTypes } from "../drink-ui";
+import { DrinkRecordEditor } from "../drink-ui";
 
 export function DrinkHistoryView(){
 
@@ -17,11 +16,5 @@ export function DrinkHistoryView(){
   useDataRefresh("/drinks/history", () => load());
 
   useEffect(()=>{const timer=setTimeout(()=>void load(),query?150:0);return()=>clearTimeout(timer);},[load,query]);
-  return <div className="page drinks-page drink-history-page">
-    <BottomLogScope label="记录饮品" picker="drink" onSaved={load} />
-    <PageHeader eyebrow="Food & Drink" title="Drink records"/>
-    <div className="drink-history-toolbar"><label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="找饮品、品牌、店铺或地点…"/></label><SearchableSelect label="饮品类型" searchable={false} value={type} onValueChange={value=>setType(value as DrinkType|"")} options={[{value:"",label:"全部类型"},...drinkTypes.map(([value,label])=>({value,label}))]}/></div>
-    {logs.length?<div className="drink-record-list">{logs.map(log=><DrinkRecordCard log={log} onEdit={setEditing} showDate key={log.id}/>)}</div>:<div className="empty-state"><h2>没有匹配的饮品记录</h2><p>换一个饮品、品牌、店铺或类型试试。</p></div>}
-    {editing&&<DrinkRecordEditor record={editing} onClose={()=>setEditing(undefined)} onSaved={load} onDeleted={load}/>}
-  </div>;
+  return <DrinkRecordsView logs={logs} query={query} setQuery={setQuery} type={type} setType={setType} onOpen={setEditing} LinkComponent={Link} logScope={<BottomLogScope label="记录饮品" picker="drink" onSaved={load}/>} editor={editing&&<DrinkRecordEditor record={editing} onClose={()=>setEditing(undefined)} onSaved={load} onDeleted={load}/>}/>;
 }

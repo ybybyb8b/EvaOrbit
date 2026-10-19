@@ -1,4 +1,6 @@
 "use client";
+import {useFoodData} from "@/components/food-data-context";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
@@ -22,9 +24,7 @@ import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { usualMeal } from "@/lib/meal-calendar";
 import styles from "./food-record-editor.module.css";
 
-const meals: { value: MealType; label: string }[] = [{ value: "breakfast", label: "早餐" }, { value: "lunch", label: "午餐" }, { value: "dinner", label: "晚餐" }, { value: "snack", label: "加餐" }, { value: "late_night", label: "夜宵" }];
-const scenes: { value: FoodScene; label: string }[] = [{ value: "home", label: "自制" }, { value: "delivery", label: "外卖" }, { value: "restaurant", label: "外食" }, { value: "packaged_food", label: "包装食品" }, { value: "other", label: "其他" }];
-const tasteLabels: Record<TasteRating, string> = { love: "好吃", good: "还行", neutral: "一般", dislike: "难吃" };
+import {meals,scenes,tasteLabels} from "@/lib/food-record-labels";
 type SelectedDish = { id: number; name: string; foodLibraryId?: number | null; foodPlaceId?:number };
 type Draft = { foodLibraryId:string; occurredAt: string; title: string; description: string; mealType: MealType; scene: FoodScene; rating: TasteRating | ""; estimatedKcal: string; kcalMin: string; kcalMax: string; confidence: EstimateConfidence; foodPlaceId: string; foodDishIds: number[] };
 const empty: Draft = { foodLibraryId:"",occurredAt: "", title: "", description: "", mealType: "lunch", scene: "other", rating: "", estimatedKcal: "", kcalMin: "", kcalMax: "", confidence: "medium", foodPlaceId: "", foodDishIds: [] };
@@ -37,6 +37,8 @@ function selectionTitle(ids:number[],items:FoodConsumption[],dishes:SelectedDish
 function draftFromRecord(item?: FoodLog, date = ""): Draft { return item ? { foodLibraryId:item.foodLibraryId?.toString()??"",occurredAt: compactDateTimeValue(item.occurredAt, item.occurredHasExplicitTime ?? true), title: item.title, description: item.description, mealType: item.mealType, scene: item.scene, rating: item.rating ?? "", estimatedKcal: item.estimatedKcal?.toString() ?? "", kcalMin: item.kcalMin?.toString() ?? "", kcalMax: item.kcalMax?.toString() ?? "", confidence: item.confidence, foodPlaceId: item.foodPlaceId?.toString() ?? "", foodDishIds: item.foodDishIds ?? (item.foodDishId ? [item.foodDishId] : []) } : { ...empty, occurredAt: date }; }
 
 export function FoodRecordEditor({ date, record, initialMealType, onClose, onSaved, onDeleted }: { date: string; record?: FoodLog; initialMealType?: MealType; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+  const {read,local}=useFoodData();
+  const previewOnly=useFormPreview();
   const { english } = useLocale();
   const t = (value: string) => translateUiCopy(value, english ? "en" : "zh-CN");
   const [suggestedMeal] = useState(() => usualMeal(new Date().getHours()));
@@ -92,11 +94,11 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
   const [placeLoading, setPlaceLoading] = useState(false); const [placeError, setPlaceError] = useState(""); const [placeAttempt, setPlaceAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
+  useEffect(() => {if(previewOnly&&!local)return;
     const controller = new AbortController();
-    const timer = setTimeout(() => { setPlaceLoading(true); setPlaceError(""); void fetch(`/api/food/places?purpose=food&limit=200&q=${encodeURIComponent(placeQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodPlace[]>; }).then(items => setPlaces(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setPlaceError("店铺加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setPlaceLoading(false); }); }, 150);
+    const timer = setTimeout(() => { setPlaceLoading(true); setPlaceError(""); void read(`/api/food/places?purpose=food&limit=200&q=${encodeURIComponent(placeQuery)}`, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error(); return response.json() as Promise<FoodPlace[]>; }).then(items => setPlaces(current => [...new Map([...current, ...items].map(item => [item.id, item])).values()])).catch(error => { if (error.name !== "AbortError") setPlaceError("店铺加载失败，请重试"); }).finally(() => { if (!controller.signal.aborted) setPlaceLoading(false); }); }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [placeQuery, placeAttempt]);
+  }, [placeQuery, placeAttempt,previewOnly,read,local]);
   const placeOptions = [...new Map([...(record?.foodPlaceId && record.foodPlaceName ? [{ id: record.foodPlaceId, name: record.foodPlaceName }] : []),...sourceOptions, ...(chosen?.placeId?[{id:chosen.placeId,name:chosen.placeName}]:[]), ...places.map(place=>({id:place.id,name:place.name,detail:[place.city,place.branch].filter(Boolean).join(" · ")}))].map(place=>[place.id,place])).values()];
   const selectedPlaceName=placeOptions.find(place=>String(place.id)===draft.foodPlaceId)?.name;
   const sourceName=(id?:number|null)=>id?(placeOptions.find(place=>place.id===id)?.name??`Place #${id}`):"";
@@ -133,7 +135,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (saving) return; setSaving(true); setError("");
+    event.preventDefault(); if (previewOnly || saving) return; setSaving(true); setError("");
     try {
       const occurred = compactDateTimePayload(draft.occurredAt);
       const unchangedTime = record && draft.occurredAt === compactDateTimeValue(record.occurredAt, record.occurredHasExplicitTime ?? true);
@@ -145,11 +147,11 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法保存饮食记录"); } finally { setSaving(false); }
   }
   async function remove() {
-    if (!record || !onDeleted || saving) return; setSaving(true); setError("");
+    if (previewOnly || !record || !onDeleted || saving) return; setSaving(true); setError("");
     try { const response = await fetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) throw new Error("无法删除这条饮食记录，请重试"); await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
   }
-  return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}>
-    <form id="food-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>
+  return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} submitDisabled={previewOnly} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}>
+    <form id="food-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
       <div className={styles.foodSelection}>
       <FoodNameInput kind="food" label="吃了什么" required={!hasSelectedFoods&&!draft.title.trim()} value={browseQuery} onSelect={selectItem} onRecord={recordFreeName} onValueChange={value=>{setBrowseQuery(value);if(!hasSelectedFoods){automaticTitle.current=null;setDraft({...draft,title:value});}}}/>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
@@ -180,7 +182,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
       <div className={styles.browser}><FoodLinkPicker label="用餐地点（可选）" options={placeOptions} selected={draft.foodPlaceId?[Number(draft.foodPlaceId)]:[]} loading={placeLoading} error={placeError} onRetry={()=>setPlaceAttempt(value=>value+1)} onSearch={setPlaceQuery} onChange={ids=>{setBrowseQuery("");setDraft({...draft,foodPlaceId:ids[0]?.toString()??""});}}/>
       </div>
       <label className="field"><span>明细 / 备注</span><textarea rows={3} maxLength={8000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
-      {record && onDeleted && <FoodDeleteAction label="删除这条饮食记录" description={`确定删除「${record.title}」？删除后无法恢复。`} onDelete={remove} disabled={saving} />}
+      {!previewOnly && record && onDeleted && <FoodDeleteAction label="删除这条饮食记录" description={`确定删除「${record.title}」？删除后无法恢复。`} onDelete={remove} disabled={saving} />}
     </form>
   </FormSheet>;
 }

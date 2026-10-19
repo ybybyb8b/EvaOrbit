@@ -16,6 +16,10 @@
 
 本次覆盖安装执行 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，避免更新生产续签 Task。不要卸载应用。此标志不改变签名/传输链。`xtool-env.sh` 仅在 WSL usbmuxd 已运行时非交互停止；缺少 sudo 权限立即退出，设备 ActivationState 探测超时退出。保持原有 SHA 校验和 Windows usbmuxd endpoint。
 
+Cats 同批验收新增 `cats.readOnlySnapshot` 与 `/api/native/cats-readonly`，复用原版猫咪总览、时间线/健康/护理/档案、猫粮库存与购买表单。头像随账户隔离快照持久化，业务写入、护理完成、库存扣减和头像修改均禁用；旧队列保留。新增只读 API 尚未发布，需要单独批准发布并构建新独立 IPA；原生 XCTest 与真机验收待运行，详见 [Cats 只读阶段](CATS_LOCAL_READONLY_POC.md)。
+
+Subscriptions 同批增加原版总览/轮播、趋势、详情及表单预览，使用 `subscriptions.readOnlySnapshot` 与独立账户缓存。只读接口 `/api/native/subscriptions-readonly` 不调用普通 GET 的自动补账逻辑，付款/续费日期/提醒和旧队列不被修改；上传图标随快照离线保存。API 发布仍须单独确认、新 IPA 仍需重建，XCTest 和真机验证待执行。见 [Subscriptions 本地只读阶段](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
+
 ## Bark 通知打开 Host（需要新版 IPA）
 
 新版注册 `evaorbit://open/<页面路径>`，点击 Bark 通知可打开 Host 的对应页面。先部署兼容 Web 与 `202610130002_bark_host_links.sql`，再按原有 CI/xtool 链路构建并安装新版；安装后到「设置 → 通知 → Bark」点击「改为打开 Host」并发送测试通知。旧版保持打开网页，不能仅靠重签旧 IPA 获得此入口。
@@ -422,6 +426,8 @@ Sleep / 只读指标扩展见 [`HEALTHKIT_SLEEP.md`](./HEALTHKIT_SLEEP.md)：新
 
 ## 持久配置与会话配置
 
+Food & Drink 本地扩展使用 `food.readOnlySnapshot` / `food.readOnlyResource` 和独立账户 SQLite 快照，覆盖食品、饮品、Places、地点详情和 Library；共享底栏、上下文 Log 与原表单可预览，不能提交。生产只读 API 未发布时保留缓存并提示，不回退业务写接口。此阶段需要新 PoC IPA，不能以 #47 验收；发布、测试和回退边界见 [Food 本地只读阶段](FOOD_LOCAL_READONLY_POC.md)。
+
 | 项目 | 是否持久 | 何时需要重做 |
 | --- | --- | --- |
 | Windows Apple Mobile Device Service | 持久安装 | 服务缺失或损坏时修复 |
@@ -436,3 +442,7 @@ Sleep / 只读指标扩展见 [`HEALTHKIT_SLEEP.md`](./HEALTHKIT_SLEEP.md)：新
 | WSL 本地 usbmuxd 停止状态 | 不应假设持久 | 每次由辅助脚本停止 |
 
 需要人工保留的只有非敏感审计信息：使用的 EvaOrbit Git SHA、GitHub Actions run/artifact、IPA 的 `SHA256SUMS`、Xcode 版本、固定 xtool upstream commit 和已审计 AppImage SHA。Apple ID、密码、2FA、token、cookie、UDID、IMEI、手机号和设备序列号都不得记录。
+
+### Chronicle 只读缓存补充
+
+本地包复用 Web Chronicle 列表/详情/表单；bridge v1 增加 `chronicle.readOnlySnapshot`，底层只放行精确 `GET /api/chronicle`，包装最近 100 篇到 8 MiB 账户缓存。SQLite 仅新增 `chronicle_readonly_cache`，保留既有记录/outbox/备份及身份检查；旧 Host 通过能力检测提示升级。未增加系统权限、framework 或 entitlement，安装签名链不变。此模块无需新增生产 API/migration；Web 视觉更新仍需单独授权部署，Host 需重建 IPA。Windows 浏览器验证不替代 macOS XCTest/iPhone 验收。详见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。

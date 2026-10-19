@@ -1,4 +1,5 @@
 "use client";
+import {useFormPreview} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
@@ -24,7 +25,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
   name: string; source?: string | null; file: File | null; remove?: boolean; disabled?: boolean;
   onChange: (file: File | null, remove: boolean) => void;
 }) {
-  const { english } = useLocale();
+  const { english } = useLocale();const previewOnly=useFormPreview();
   const preview = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
   const [error, setError] = useState("");
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -33,6 +34,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
   const { colors, transparent, neutralFilter } = useIconColors(sources);
   const brand = subscriptionBrand(name);
   async function choose(event: ChangeEvent<HTMLInputElement>) {
+    if(disabled||previewOnly)return;
     const selected = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!selected) return;
@@ -57,9 +59,9 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
         <div className={styles.actions}>
           <label className={`button secondary ${styles.upload}`}>
             {english ? (image ? "Replace icon" : "Upload icon") : (image ? "更换图标" : "上传图标")}
-            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={english ? "Choose subscription icon" : "选择订阅图标"} disabled={disabled} onChange={event => void choose(event)} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={english ? "Choose subscription icon" : "选择订阅图标"} disabled={disabled||previewOnly} onChange={event => void choose(event)} />
           </label>
-          {(file || (source && !remove)) && <button className="text-button" type="button" disabled={disabled} onClick={() => { onChange(null, Boolean(source)); setError(""); }}>{english ? "Use default" : "恢复默认"}</button>}
+          {(file || (source && !remove)) && <button className="text-button" type="button" disabled={disabled||previewOnly} onClick={() => { onChange(null, Boolean(source)); setError(""); }}>{english ? "Use default" : "恢复默认"}</button>}
         </div>
         <small>{english ? "JPG, PNG, WebP · up to 4 MB" : "JPG、PNG、WebP · 最大 4 MB"}</small>
       </div>

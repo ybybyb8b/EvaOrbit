@@ -1,4 +1,5 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableMultiSelect } from "@/components/searchable-multi-select";
@@ -18,6 +19,7 @@ function localDateTime(initialDate?: string) { const date = new Date(); date.set
 function entryLocalTime(entry: Pick<TrackerEntry, "occurredAt">) { const date = new Date(entry.occurredAt); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0,16); }
 
 export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false }: { readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
+  const previewOnly=useFormPreview();
   const { english } = useLocale();
   const [occurredAt, setOccurredAt] = useState(() => entry ? entryLocalTime(entry) : localDateTime(initialDate));
   const [note, setNote] = useState(entry?.note ?? "");
@@ -34,7 +36,7 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
   const [error, setError] = useState("");
   const activeFields = fields.filter((field) => !field.archivedAt);
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (working || readOnly) return; setWorking(true); setError("");
+    event.preventDefault(); if (working || readOnly || previewOnly) return; setWorking(true); setError("");
     try {
       const input = { occurredAt: entry && occurredAt === entryLocalTime(entry) ? entry.occurredAt : new Date(occurredAt).toISOString(), values, note };
       if (saveRecord) await saveRecord(input);
@@ -54,7 +56,7 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
     <label className="field"><span>{english?"Note":"备注"}</span><textarea rows={3} maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>
     {error && <ErrorNotice>{error}</ErrorNotice>}
   </>;
-  return <FormSheet title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={submit}>
+  return <FormSheet title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
 {readOnly ? <fieldset disabled style={{border:0,padding:0,margin:0,minWidth:0}}><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
   </form></FormSheet>;
 }

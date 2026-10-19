@@ -31,6 +31,9 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         let (data, http) = try await performRequest(path: path, method: method, body: body)
         guard (200..<300).contains(http.statusCode) else {
             if path.hasPrefix("home-readonly/") && http.statusCode == 404 { throw TrackerLocalError.network("The Home read-only API is not deployed. Existing cached data is preserved.") }
+            if (path == "food-readonly" || path.hasPrefix("food-readonly/")) && http.statusCode == 404 { throw TrackerLocalError.network("The Food & Drink read-only API is not deployed. Existing cached data is preserved.") }
+            if path == "cats-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Cats read-only API is not deployed. Existing cached data is preserved.") }
+            if path == "subscriptions-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Subscriptions read-only API is not deployed. Existing cached data is preserved.") }
             let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             throw TrackerLocalError.network(message?["error"] as? String ?? "同步暂时失败，本地记录已保留")
         }
@@ -40,8 +43,9 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         if path == "sync" { throw TrackerLocalError.readOnly }
         let trackerPath = path == "trackers" || path.range(of: "^trackers/[1-9][0-9]*(/icon)?$", options: .regularExpression) != nil
         let homePath = path.range(of: "^home-readonly/(day/[0-9]{4}-[0-9]{2}-[0-9]{2}|month/[0-9]{4}-[0-9]{2}|due/current)$", options: .regularExpression) != nil
-        guard path == "session" && ["GET", "POST", "DELETE"].contains(method) || (trackerPath || homePath) && method == "GET" else { throw TrackerLocalError.invalid }
-        var request = URLRequest(url: baseURL.appendingPathComponent(trackerPath ? "api/\(path)" : "api/native/\(path)"))
+        let foodPath = path.range(of: "^food-readonly/(catalog/current|place/[1-9][0-9]*|item/[1-9][0-9]*)$", options: .regularExpression) != nil
+        guard path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "chronicle" || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
+        var request = URLRequest(url: baseURL.appendingPathComponent((trackerPath || path == "chronicle") ? "api/\(path)" : "api/native/\(path)"))
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
@@ -162,6 +166,84 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         try await database.saveHomeReadOnlyCache(accountId: accountId, resource: "\(kind)/\(key)", snapshot: snapshot)
         return snapshot
     }
+    func subscriptionsReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.subscriptionsReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "subscriptions-readonly", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), snapshot["items"] is [[String: Any]], snapshot["iconSources"] is [String: String] else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveSubscriptionsReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func chronicleReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.chronicleReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let items = try await request(path: "chronicle", method: "GET") as? [[String: Any]], items.count <= 100 else { throw TrackerLocalError.invalid }
+        let snapshot: [String: Any] = ["format": "eo-chronicle-readonly-v1", "accountId": accountId, "capturedAt": ISO8601DateFormatter().string(from: Date()), "items": items, "complete": items.count < 100]
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveChronicleReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func catsReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.catsReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "cats-readonly", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), let dashboard = snapshot["dashboard"] as? [String: Any], ["pets", "household", "routines", "oneTimeTasks", "timeline"].allSatisfy({ dashboard[$0] is [[String: Any]] }) else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveCatsReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func foodReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.foodReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "food-readonly", method: "GET") as? [String: Any], snapshot["format"] as? String == "eo-food-readonly-v1", snapshot["accountId"] as? String == accountId, let capturedAt = snapshot["capturedAt"] as? String, Self.validTimestamp(capturedAt), let home = snapshot["home"] as? [String: Any], let window = snapshot["window"] as? [String: Any], window["to"] as? String == home["date"] as? String else { throw TrackerLocalError.invalid }
+        for name in ["foods", "drinks"] {
+            guard let rows = snapshot[name] as? [[String: Any]], rows.count <= 500 else { throw TrackerLocalError.invalid }
+            var ids = Set<Int>()
+            for row in rows {
+                guard let id = row["id"] as? Int, id > 0, ids.insert(id).inserted, let occurred = row["occurredAt"] as? String, Self.validTimestamp(occurred) else { throw TrackerLocalError.invalid }
+            }
+        }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveFoodReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func foodReadOnlyResource(accountId: String, kind: String, key: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        guard kind == "catalog" && key == "current" || ["place", "item"].contains(kind) && key.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil && Int(key).map({ $0 <= 9_007_199_254_740_991 }) == true else { throw TrackerLocalError.invalid }
+        let resource = "\(kind)/\(key)"
+        if !refresh { return try await database.foodResourceCache(accountId: accountId, resource: resource) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "food-readonly/\(resource)", method: "GET") as? [String: Any], snapshot["format"] as? String == "eo-food-resource-v1", snapshot["accountId"] as? String == accountId, snapshot["kind"] as? String == kind, snapshot["key"] as? String == key, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured) else { throw TrackerLocalError.invalid }
+        if kind == "catalog" {
+            guard let data = snapshot["data"] as? [String: Any], let places = data["places"] as? [[String: Any]], places.count <= 200, let library = data["library"] as? [[String: Any]], library.count <= 100, data["placesComplete"] is Bool, data["libraryComplete"] is Bool else { throw TrackerLocalError.invalid }
+        } else if !(snapshot["data"] is NSNull) {
+            guard let data = snapshot["data"] as? [String: Any] else { throw TrackerLocalError.invalid }
+            if kind == "place" {
+                guard let place = data["place"] as? [String: Any], place["id"] as? Int == Int(key), ["dishes", "drinkMenu", "recentFoodLogs", "recentDrinkLogs", "packagedFood"].allSatisfy({ data[$0] is [[String: Any]] }) else { throw TrackerLocalError.invalid }
+            } else { guard data["id"] as? Int == Int(key), data["name"] is String, data["referenceType"] is String else { throw TrackerLocalError.invalid } }
+        }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveFoodResourceCache(accountId: accountId, resource: resource, snapshot: snapshot)
+        return snapshot
+    }
+
     private static func imageMime(_ data: Data) -> String? {
         let bytes = Array(data.prefix(12))
         if bytes.starts(with: [137,80,78,71,13,10,26,10]) { return "image/png" }

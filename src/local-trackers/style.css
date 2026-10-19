@@ -1,9 +1,11 @@
+.local-shell:not(.local-signed-in) > .main-content { margin-left:0; }
 .local-appearance-trigger { display:block; margin: max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 0 auto; min-height:44px; }
-.local-module-nav { display:flex; gap:20px; padding:0 24px; }
-.local-module-nav button { min-height:44px; }
-.local-module-nav [aria-current="page"] { color:var(--text-primary); font-weight:700; }
-.local-home { padding:24px max(20px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); }
+.local-food-status.page { padding-top:24px; padding-bottom:0; }
+.local-food-back.page { padding-top:24px; padding-bottom:0; }
+.local-home { padding:24px env(safe-area-inset-right) max(32px,env(safe-area-inset-bottom)) env(safe-area-inset-left); }
 .local-home .home-page { padding:0; }
+.local-home > .local-home-status { padding:0; }
+.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
 .local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
 .local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .local-login-actions button { min-height:44px; }
@@ -20,6 +22,7 @@
 .local-account-menu .text-button { min-height:44px; text-align:left; }
 .local-sync-status { display:flex; align-items:center; gap:12px; margin:-12px 0 24px; color:var(--text-secondary); font-size:12px; }
 .local-sync-status > span { flex:1; min-width:0; }
+.local-home-status .local-sync-status,.local-trackers details .local-sync-status { margin:0 0 8px; }
 .local-sync-status button { min-height:44px; }
 .local-sync-issues { display:grid; gap:16px; margin-bottom:28px; }
 .local-sync-issues article { padding:20px; border-radius:var(--radius-content); background:var(--surface-warm); }

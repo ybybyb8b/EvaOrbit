@@ -5,6 +5,7 @@ import { DueRemindersView } from "@/components/due-reminders-view";
 import { ReiconAssetContext } from "@/components/reicon-symbol";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
+import {DevelopmentDetails} from "@/components/development-details";
 import { useLocale } from "@/components/locale-controller";
 import type { HomeDayOverview } from "@/lib/home-day";
 import type { TimelineMonthSummary, DueReminder } from "@/lib/types";
@@ -69,9 +70,13 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
     return()=>{alive=false;window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
   },[resources,english]);
   return <div className="local-home" data-no-translate="true">
+    <div className="page local-home-status">
+    <DevelopmentDetails>
     <div className="local-sync-status" role="status"><span>{isPreviewAccount(account)&&!platform.native?(english?"Home · Synthetic local preview":"Home · 本机示例预览"):(english?"Home · Read-only offline snapshots":"Home · 只读离线快照")}{initial?" · "+new Date(initial.day.capturedAt).toLocaleString(language):""}</span>{loading&&<span>{english?"Refreshing…":"正在刷新…"}</span>}</div>
     <p className="tracker-settings-help">{english?"Recent and previously opened dates are available offline. Other modules and all write actions are disabled.":"最近及已打开的日期下载后可离线查看。其他模块入口及所有写入操作已禁用。"}</p>
+    </DevelopmentDetails>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
+    </div>
     {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language} due={initial.due?<DueRemindersView readOnly compact LinkComponent={ReadOnlyHomeLink} items={initial.due.data as DueReminder[]}/>:<p>{english?"Reminder snapshot has not been downloaded.":"尚未下载提醒快照。"}</p>}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly LinkComponent={ReadOnlyHomeLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<PageLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect after the read-only API is available. No empty account data has been inferred.":"只读接口可用后联网下载；当前状态不表示账户没有记录。"}</p></div>}
   </div>;
 }

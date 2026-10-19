@@ -19,10 +19,14 @@ export function SelectDropdown({ anchor, onClose, children, id, label, className
       const rect = field.getBoundingClientRect();
       const viewport = window.visualViewport;
       const left = viewport?.offsetLeft ?? 0;
-      const top = viewport?.offsetTop ?? 0;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const sheetBody = field.closest(".form-sheet-body")?.getBoundingClientRect();
+      const top = Math.max(viewportTop, sheetBody?.top ?? viewportTop);
+      const bottom = Math.min(viewportTop + (viewport?.height ?? window.innerHeight), sheetBody?.bottom ?? Infinity);
       const width = viewport?.width ?? window.innerWidth;
       const desiredWidth = Math.max(rect.width, minWidth ?? 0);
-      const layout = selectDropdownLayout({ left: rect.right - desiredWidth, top: rect.top, bottom: rect.bottom, width: desiredWidth }, { left, top, width, height: viewport?.height ?? window.innerHeight }, element.scrollHeight);
+      const layout = selectDropdownLayout({ left: rect.right - desiredWidth, top: rect.top, bottom: rect.bottom, width: desiredWidth }, { left, top, width, height: Math.max(0, bottom - top) }, element.scrollHeight);
+      element.style.visibility = rect.bottom > bottom || rect.top < top || layout.maxHeight < 44 ? "hidden" : "visible";
       element.style.width = `${layout.width}px`;
       element.style.left = `${layout.left}px`;
       element.style.maxHeight = `${layout.maxHeight}px`;

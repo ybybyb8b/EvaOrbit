@@ -40,7 +40,7 @@ function Link({ href = "", children, ...props }: ComponentPropsWithoutRef<"a">) 
   return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined}>{children}</a>;
 }
 
-export function MarkdownMessage({ content }: { content: string }) {
+export function MarkdownMessage({ content, offlineMedia = false }: { content: string; offlineMedia?: boolean }) {
   const renderedContent = useDeferredValue(content);
   return <div className="markdown-content">
     <ReactMarkdown
@@ -48,7 +48,8 @@ export function MarkdownMessage({ content }: { content: string }) {
       skipHtml
       urlTransform={safeMarkdownUrl}
       components={{
-        a: Link,
+        a: offlineMedia ? ({children}) => <span>{children}</span> : Link,
+        ...(offlineMedia ? {img: ({alt}: {alt?:string}) => <span className="chronicle-offline-image">{alt || "Image"} · Image unavailable offline</span>} : {}),
         table: Table,
         pre: ({ children }) => <>{children}</>,
         code: ({ className, children, ...props }) => {

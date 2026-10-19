@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ErrorNotice } from "@/components/error-notice";
+import {DevelopmentDetails} from "@/components/development-details";
 import { useLocale } from "@/components/locale-controller";
 import { showActionToast } from "@/components/action-toast";
 import { PageHeading } from "@/components/page-heading";
@@ -23,10 +24,10 @@ import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField } from "@/l
 import type { Tracker, TrackerField } from "@/lib/types";
 import { nativeCall } from "@/lib/native-bridge";
 import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
-function asField(row: LocalTrackerRecord): TrackerField {
+export function asField(row: LocalTrackerRecord): TrackerField {
   return { id: row.serverId ?? 0, trackerId: Number(row.payload.trackerId ?? 0), key: String(row.payload.key), name: String(row.payload.name), type: row.payload.type as TrackerField["type"], required: Boolean(row.payload.required), defaultValue: row.payload.defaultValue ?? null, options: row.payload.options as string[] ?? [], showAfterQuickCapture: Boolean(row.payload.showAfterQuickCapture), includeInStats: Boolean(row.payload.includeInStats), sortOrder: Number(row.payload.sortOrder ?? 0), unit: String(row.payload.unit ?? ""), precision: Number(row.payload.precision ?? 0), config: {}, archivedAt: row.payload.archivedAt as string | null ?? null, createdAt: String(row.payload.createdAt ?? ""), updatedAt: String(row.payload.updatedAt ?? "") };
 }
-function belongs(row: LocalTrackerRecord, tracker: LocalTrackerRecord) { return row.payload.trackerLocalId === tracker.id || tracker.serverId !== undefined && row.payload.trackerId === tracker.serverId; }
+export function belongs(row: LocalTrackerRecord, tracker: LocalTrackerRecord) { return row.payload.trackerLocalId === tracker.id || tracker.serverId !== undefined && row.payload.trackerId === tracker.serverId; }
 
 export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
   const {english}=useLocale();
@@ -109,8 +110,10 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
       </div></details>
     </div>
     <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={readOnly ? <span className="tracker-archived-label">只读验收</span> : selected?.payload.archivedAt ? <span className="tracker-archived-label">已归档</span> : action} />
+    <DevelopmentDetails>
     <div className="local-sync-status" role="status"><span>{readOnly ? (syncing ? "正在读取云端数据 · 上传已停用" : "只读快照 · 原有数据与队列已隔离") : isPreviewAccount(account) ? "本机预览 · 数据不会上传" : syncing ? "正在同步" : state.outbox.length ? state.outbox.length+" 项待同步 · 已保存在本机" : syncedAt ? "已同步 · 本机可离线使用" : "本机记录"}</span><button className="text-button" disabled={syncing || !ready || isPreviewAccount(account) && !readOnly} onClick={() => void sync()}>{readOnly ? "刷新只读数据" : "同步"}</button></div>
     {readOnly && inspection && <p className="tracker-settings-help" role="status">{english ? `Original queue: ${inspection.pending} pending, including ${inspection.frozen} frozen; nothing uploaded. ${inspection.backupFile ? "SQLite backup verified." : "Original queue unchanged."}` : `原队列 ${inspection.pending} 项，其中 ${inspection.frozen} 项已冻结；未上传。${inspection.backupFile ? "SQLite 备份已校验。" : "原有队列保持不变。"}`}</p>}
+    </DevelopmentDetails>
     {error && <ErrorNotice>{error}</ErrorNotice>}
     {issues.length > 0 && <section className="local-sync-issues" aria-label="同步问题">{issues.map(row => <article key={row.id}>
       <strong>{String(row.payload.name ?? row.payload.note ?? "记录") || "记录"}</strong><p>{row.error}</p>

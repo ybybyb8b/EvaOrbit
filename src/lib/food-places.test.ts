@@ -16,7 +16,7 @@ test("food places migration keeps Food Records optional and history-safe",()=>{
 });
 
 test("store library stays inside Food & Drink without a new primary destination",()=>{
-  const food=readFileSync(new URL("../app/food-drink/food-drink-home.tsx",import.meta.url),"utf8");
+  const food=readFileSync(new URL("../components/food-drink-home-view.tsx",import.meta.url),"utf8");
   const shell=readFileSync(new URL("../components/app-shell.tsx",import.meta.url),"utf8");
   assert.match(food,/href: "\/food\/places"/);
   assert.doesNotMatch(shell,/\/food\/places/);

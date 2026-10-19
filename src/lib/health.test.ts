@@ -62,5 +62,7 @@ test("Health API and navigation expose the requested record surfaces", () => {
   assert.match(detailRoute, /export async function DELETE/);
   assert.match(detailRoute, /parseHealthRecordPatch/);
   assert.match(homeModules, /"health"/);
-  assert.match(shell, /href: "\/health"/);
+  assert.match(shell, /<AppSidebar/);
+  const navigation = readFileSync(new URL("../components/app-navigation.tsx", import.meta.url), "utf8");
+  assert.match(navigation, /href: "\/health"/);
 });

@@ -1,4 +1,6 @@
 "use client";
+import {useFoodData} from "@/components/food-data-context";
+import {useFormPreview} from "@/components/form-preview";
 import { SuggestedInput } from "@/components/suggested-input";
 
 import { useEffect, useId, useState } from "react";
@@ -12,16 +14,18 @@ export function PlaceSuggestionFields({ values, onChange }: {
   values: SuggestionValues;
   onChange: (patch: Partial<SuggestionValues>) => void;
 }) {
+  const {read,local}=useFoodData();const previewOnly=useFormPreview();
   const id = useId();
   const [places, setPlaces] = useState<FoodPlace[]>([]);
   useEffect(() => {
+    if(previewOnly&&!local)return;
     const controller = new AbortController();
     // ponytail: reuse the existing 200-place list; add a dedicated query if the library outgrows it.
-    void fetch("/api/food/places?limit=200", { signal: controller.signal })
+    void read("/api/food/places?limit=200", { signal: controller.signal })
       .then(async response => { if (response.ok) setPlaces(await response.json()); })
       .catch(() => { /* Suggestions are optional; free input remains available. */ });
     return () => controller.abort();
-  }, []);
+  }, [read,local,previewOnly]);
   const cities = buildHistorySuggestions(places, place => place.city, place => place.updatedAt, 6);
   const categories = [...new Set([...buildHistorySuggestions(places, place => place.category, place => place.updatedAt, 6), "米线", "川菜", "咖啡", "甜品", "快餐"])].slice(0, 6);
 

@@ -27,7 +27,7 @@ test("bottom Log scopes follow the route, use the latest page action and release
     },
   };
   const loaded = { exports: {} };
-  const code = ts.transpileModule(readFileSync("src/components/bottom-log.tsx", "utf8"), {
+  const code = ts.transpileModule(readFileSync("src/components/bottom-log-core.tsx", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   new Function("require", "module", "exports", code)(name => {
@@ -41,7 +41,7 @@ test("bottom Log scopes follow the route, use the latest page action and release
   const api = loaded.exports;
   function renderProvider() {
     cursor = 0;
-    context.value = api.BottomLogProvider({ children: null }).props.value;
+    context.value = api.BottomLogProvider({ children: null,pathname }).props.value;
   }
   renderProvider();
   assert.equal(api.useBottomLog(), null); // Settings and other unregistered pages use universal capture.
@@ -49,9 +49,9 @@ test("bottom Log scopes follow the route, use the latest page action and release
   const releaseFirst = context.value.register(first);
   renderProvider();
   assert.equal(api.useBottomLog(), first);
-  pathname = "/settings";
+  pathname = "/settings";renderProvider();
   assert.equal(api.useBottomLog(), null); // Never invoke the previous page during navigation.
-  pathname = "/food";
+  pathname = "/food";renderProvider();
   let clicked = "", saved = "";
   const register = context.value.register;
   function renderPage(date) {
@@ -72,10 +72,10 @@ test("bottom Log scopes follow the route, use the latest page action and release
   await oldAction.onSaved();
   assert.equal(clicked, "2026-10-11");
   assert.equal(saved, "2026-10-11");
-  pathname = "/settings";
+  pathname = "/settings";renderProvider();
   assert.equal(api.useBottomLog(), null);
   slots[2].cleanup();
   renderProvider();
-  pathname = "/food";
+  pathname = "/food";renderProvider();
   assert.equal(api.useBottomLog(), null);
 });

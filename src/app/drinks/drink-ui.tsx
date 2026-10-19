@@ -1,25 +1,23 @@
 "use client";
+import {useFoodData} from "@/components/food-data-context";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
-import { useLocale } from "@/components/locale-controller";
-import { translateUiCopy } from "@/lib/ui-copy";
 import { SearchableSelect } from "@/components/searchable-select";
 import { FoodNameInput } from "../food/food-name-input";
 import type { FoodCatalogItem } from "@/lib/food-catalog";
 import { showActionToast } from "@/components/action-toast";
 
 import { calculateFoodKcal, foodNutritionReference } from "@/lib/food-calculation";
-import { placeRecordLabel } from "@/lib/place-menu";
 import { drinkRecordName } from "@/lib/drink-display";
 import Link from "next/link";
 import { FoodLinkPicker } from "../food/food-link-picker";
 import { FoodDeleteAction } from "../food/food-delete-action";
-import styles from "./drink-place.module.css";
+import {DrinkRecordCard as SharedDrinkRecordCard} from "@/components/drink-record-card";
 import formStyles from "../food/food-record-editor.module.css";
 import editorStyles from "./drink-record-editor.module.css";
 import { useEffect, useState } from "react";
 import { compactDateTimePayload, compactDateTimeValue, currentLocalDate, DateTimeField } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
-import { Icon } from "@/components/icons";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import { DRINK_TEMPERATURES, SUGAR_LEVELS, TASTE_RATINGS } from "@/lib/types";
 import type { FoodPlace, ApiError, DrinkLog, FoodNutritionReference, DrinkTemperature, DrinkType, EstimateConfidence, SugarLevel, TasteRating } from "@/lib/types";
@@ -27,8 +25,8 @@ import type { FoodPlace, ApiError, DrinkLog, FoodNutritionReference, DrinkTemper
 export { DRINK_TYPE_OPTIONS as drinkTypes } from "@/lib/drink-types";
 import { DRINK_TYPE_OPTIONS as drinkTypes } from "@/lib/drink-types";
 import { drinkTypeLabels } from "@/lib/drink-display";
-export const temperatureLabels: Record<DrinkTemperature,string> = { normal_ice:"正常冰",less_ice:"少冰",no_ice:"去冰",room_temperature:"常温",hot:"热" };
-export const tasteLabels: Record<TasteRating,string> = { love:"好喝",good:"还行",neutral:"一般",dislike:"难喝" };
+import {temperatureLabels,tasteLabels} from "@/lib/drink-record-labels";
+export {temperatureLabels,tasteLabels} from "@/lib/drink-record-labels";
 
 type Draft = { foodLibraryId:string;drinkMenuId:string;foodPlaceId:string;occurredAt:string;name:string;drinkType:DrinkType;consumedVolumeMl:string;sugarLevel:SugarLevel;temperature:DrinkTemperature|"";rating:TasteRating|"";estimatedKcal:string;kcalMin:string;kcalMax:string;confidence:EstimateConfidence;notes:string };
 function editableSugarLevel(value:string):SugarLevel { if(value==="五分糖")return "半糖";return value===""||SUGAR_LEVELS.some(level=>level===value)?value as SugarLevel:""; }
@@ -36,27 +34,29 @@ function emptyDraft(initialDate?:string):Draft{return{foodLibraryId:"",drinkMenu
 function draftFromRecord(record?:DrinkLog,initialDate?:string):Draft{return record?{foodLibraryId:record.foodLibraryId?.toString()??"",drinkMenuId:record.drinkMenuId?.toString()??"",foodPlaceId:record.foodPlaceId?.toString()??"",occurredAt:compactDateTimeValue(record.occurredAt,record.occurredHasExplicitTime),name:record.name,drinkType:record.drinkType,consumedVolumeMl:record.consumedVolumeMl?.toFixed(2)??"",sugarLevel:editableSugarLevel(record.sugarLevel),temperature:record.temperature??"",rating:record.rating??"",estimatedKcal:record.estimatedKcal?.toString()??"",kcalMin:record.kcalMin?.toString()??"",kcalMax:record.kcalMax?.toString()??"",confidence:record.confidence,notes:record.notes}:emptyDraft(initialDate);}
 
 export function DrinkRecordEditor({record,initialDate,onClose,onSaved,onDeleted}:{record?:DrinkLog;initialDate?:string;onClose:()=>void;onSaved:()=>Promise<void>|void;onDeleted?:()=>Promise<void>|void}){
+  const {read,local}=useFoodData();
+  const previewOnly=useFormPreview();
   const[draft,setDraft]=useState<Draft>(()=>draftFromRecord(record,initialDate));const[saving,setSaving]=useState(false);const[error,setError]=useState("");
   const [nutritionReference,setNutritionReference]=useState<FoodNutritionReference|null>(record?.nutritionReference??null);
   const [amountChanged,setAmountChanged]=useState(false);
-  useEffect(()=>{
+  useEffect(()=>{if(previewOnly&&!local)return;
     if(!draft.foodLibraryId || nutritionReference)return;
     const controller=new AbortController();
-    void fetch(`/api/food/library/${draft.foodLibraryId}`,{signal:controller.signal}).then(async response=>{if(response.ok){const item=await response.json();if(!controller.signal.aborted)setNutritionReference(foodNutritionReference(item));}}).catch(()=>{});
+    void read(`/api/food/library/${draft.foodLibraryId}`,{signal:controller.signal}).then(async response=>{if(response.ok){const item=await response.json();if(!controller.signal.aborted)setNutritionReference(foodNutritionReference(item));}}).catch(()=>{});
     return()=>controller.abort();
-  },[draft.foodLibraryId,nutritionReference]);
+  },[draft.foodLibraryId,nutritionReference,previewOnly,read,local]);
   function changeVolume(value:string){setAmountChanged(true);const amount=value===""?null:Number(value);const kcal=nutritionReference?calculateFoodKcal(nutritionReference,amount,"ml"):null;setDraft({...draft,consumedVolumeMl:value,estimatedKcal:kcal?.toFixed(2)??""});}
   const [chosen,setChosen]=useState<FoodCatalogItem>();
   const [browseQuery,setBrowseQuery]=useState("");
   const [places,setPlaces]=useState<FoodPlace[]>([]),[placeQuery,setPlaceQuery]=useState("");
   const [placeLoading,setPlaceLoading]=useState(false),[placeError,setPlaceError]=useState(""),[placeAttempt,setPlaceAttempt]=useState(0);
-  useEffect(()=>{const controller=new AbortController();const timer=setTimeout(()=>{setPlaceLoading(true);setPlaceError("");void fetch(`/api/food/places?purpose=drink&limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error("店铺加载失败，请重试");return response.json() as Promise<FoodPlace[]>;}).then(items=>setPlaces(current=>[...new Map([...current,...items].map(item=>[item.id,item])).values()])).catch(reason=>{if(reason.name!=="AbortError")setPlaceError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setPlaceLoading(false);});},150);return()=>{clearTimeout(timer);controller.abort();};},[placeQuery,placeAttempt]);
+  useEffect(()=>{if(previewOnly&&!local)return;const controller=new AbortController();const timer=setTimeout(()=>{setPlaceLoading(true);setPlaceError("");void read(`/api/food/places?purpose=drink&limit=200&q=${encodeURIComponent(placeQuery)}`,{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error("店铺加载失败，请重试");return response.json() as Promise<FoodPlace[]>;}).then(items=>setPlaces(current=>[...new Map([...current,...items].map(item=>[item.id,item])).values()])).catch(reason=>{if(reason.name!=="AbortError")setPlaceError(reason.message);}).finally(()=>{if(!controller.signal.aborted)setPlaceLoading(false);});},150);return()=>{clearTimeout(timer);controller.abort();};},[placeQuery,placeAttempt,previewOnly,read,local]);
   const placeOptions=[...new Map([...(record?.foodPlaceId&&record.foodPlaceName?[{id:record.foodPlaceId,name:record.foodPlaceName}]:[]),...(chosen?.placeId?[{id:chosen.placeId,name:chosen.placeName}]:[]),...places.map(place=>({id:place.id,name:place.name,detail:[place.city,place.branch].filter(Boolean).join(" · ")}))].map(place=>[place.id,place])).values()];
   function selectItem(item:FoodCatalogItem){setChosen(item);setBrowseQuery("");setNutritionReference(item.library?foodNutritionReference(item.library):null);setDraft({...draft,name:item.name,foodPlaceId:item.placeId?.toString()??"",drinkMenuId:item.menu?.id.toString()??"",foodLibraryId:item.library?.id.toString()??"",drinkType:item.menu?.drinkType??item.library?.drinkType??"other",estimatedKcal:(draft.consumedVolumeMl!=="" && item.library?calculateFoodKcal(foodNutritionReference(item.library),Number(draft.consumedVolumeMl),"ml"):draft.consumedVolumeMl===""?item.servingKcal:null)?.toFixed(2)??"",kcalMin:"",kcalMax:""});}
   function manualName(name:string){setChosen(undefined);setNutritionReference(null);setDraft({...draft,name,foodLibraryId:"",drinkMenuId:"",foodPlaceId:"",...(chosen?{estimatedKcal:"",kcalMin:"",kcalMax:""}:{})});}
-  async function submit(event:React.FormEvent){event.preventDefault();if(saving)return;setSaving(true);setError("");try{const occurred=compactDateTimePayload(draft.occurredAt);const body={...draft,consumedVolumeMl:draft.consumedVolumeMl!==""?Number(draft.consumedVolumeMl):null,drinkMenuId:draft.drinkMenuId?Number(draft.drinkMenuId):null,foodPlaceId:draft.foodPlaceId?Number(draft.foodPlaceId):null,occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,temperature:draft.temperature||null,rating:draft.rating||null,estimatedKcal:draft.estimatedKcal?Number(draft.estimatedKcal):amountChanged?undefined:null,kcalMin:draft.kcalMin?Number(draft.kcalMin):null,kcalMax:draft.kcalMax?Number(draft.kcalMax):null,foodLibraryId:draft.foodLibraryId?Number(draft.foodLibraryId):null};const response=await fetch(record?`/api/drinks/logs/${record.id}`:"/api/drinks/logs",{method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!response.ok){const result=await response.json().catch(()=>null) as ApiError|null;setError(result?.error||`无法保存饮品记录（${response.status}）`);return;}invalidateCachedJson("/api/drinks/suggestions");await onSaved();showActionToast("饮品记录已保存");onClose();}catch(reason){setError(reason instanceof Error?reason.message:"无法保存饮品记录");}finally{setSaving(false);}}
-  async function remove(){if(!record||!onDeleted||saving)return;setSaving(true);setError("");try{const response=await fetch(`/api/drinks/logs/${record.id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除饮品记录，请重试");invalidateCachedJson("/api/drinks/suggestions");await onDeleted();showActionToast("饮品记录已删除","deleted");onClose();}finally{setSaving(false);}}
-  return <FormSheet title={record?"改饮品记录":"补一杯"} onClose={onClose} formId="drink-record-form" submitLabel={record?"改好了":"记下"} busy={saving} busyLabel={record?"正在修改…":"正在保存…"}><form id="drink-record-form" className={`editor-card compact-editor ${formStyles.editor}`} onSubmit={submit}>
+  async function submit(event:React.FormEvent){event.preventDefault();if(previewOnly||saving)return;setSaving(true);setError("");try{const occurred=compactDateTimePayload(draft.occurredAt);const body={...draft,consumedVolumeMl:draft.consumedVolumeMl!==""?Number(draft.consumedVolumeMl):null,drinkMenuId:draft.drinkMenuId?Number(draft.drinkMenuId):null,foodPlaceId:draft.foodPlaceId?Number(draft.foodPlaceId):null,occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,temperature:draft.temperature||null,rating:draft.rating||null,estimatedKcal:draft.estimatedKcal?Number(draft.estimatedKcal):amountChanged?undefined:null,kcalMin:draft.kcalMin?Number(draft.kcalMin):null,kcalMax:draft.kcalMax?Number(draft.kcalMax):null,foodLibraryId:draft.foodLibraryId?Number(draft.foodLibraryId):null};const response=await fetch(record?`/api/drinks/logs/${record.id}`:"/api/drinks/logs",{method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!response.ok){const result=await response.json().catch(()=>null) as ApiError|null;setError(result?.error||`无法保存饮品记录（${response.status}）`);return;}invalidateCachedJson("/api/drinks/suggestions");await onSaved();showActionToast("饮品记录已保存");onClose();}catch(reason){setError(reason instanceof Error?reason.message:"无法保存饮品记录");}finally{setSaving(false);}}
+  async function remove(){if(previewOnly||!record||!onDeleted||saving)return;setSaving(true);setError("");try{const response=await fetch(`/api/drinks/logs/${record.id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除饮品记录，请重试");invalidateCachedJson("/api/drinks/suggestions");await onDeleted();showActionToast("饮品记录已删除","deleted");onClose();}finally{setSaving(false);}}
+  return <FormSheet title={record?"改饮品记录":"补一杯"} onClose={onClose} formId="drink-record-form" submitLabel={record?"改好了":"记下"} submitDisabled={previewOnly} busy={saving} busyLabel={record?"正在修改…":"正在保存…"}><form id="drink-record-form" className={`editor-card compact-editor ${formStyles.editor}`} onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
     <FoodNameInput kind="drink" label="喝了什么" value={draft.name} onValueChange={manualName} onSelect={selectItem}/>
     {(chosen?.placeName||record?.foodPlaceName)&&draft.foodPlaceId&&<p className="muted user-content">{chosen?.placeName??record?.foodPlaceName}</p>}
     <DateTimeField inline label="日期" value={{date:draft.occurredAt.slice(0,10),time:draft.occurredAt.length>10?draft.occurredAt.slice(11,16):""}} onChange={value=>setDraft({...draft,occurredAt:value.date+(value.time?`T${value.time}`:"")})}/>
@@ -78,9 +78,8 @@ export function DrinkRecordEditor({record,initialDate,onClose,onSaved,onDeleted}
 
     <label className="field"><span>备注（可选）</span><textarea rows={2} maxLength={4000} value={draft.notes} onChange={event=>setDraft({...draft,notes:event.target.value})}/></label>
 
-    {error&&<ErrorNotice role="alert">{error}</ErrorNotice>}{record&&onDeleted&&<FoodDeleteAction label="删除这条饮品记录" description={`确定删除「${drinkRecordName(record)}」？删除后无法恢复。`} onDelete={remove} disabled={saving}/>}
+    {error&&<ErrorNotice role="alert">{error}</ErrorNotice>}{!previewOnly&&record&&onDeleted&&<FoodDeleteAction label="删除这条饮品记录" description={`确定删除「${drinkRecordName(record)}」？删除后无法恢复。`} onDelete={remove} disabled={saving}/>}
   </form></FormSheet>;
 }
 
-function momentLabel(log:DrinkLog,showDate:boolean,dateOnlyLabel:string){const compact=compactDateTimeValue(log.occurredAt,log.occurredHasExplicitTime);const date=compact.slice(0,10);const time=compact.length>10?compact.slice(11,16):dateOnlyLabel;return showDate?`${date} · ${time}`:time;}
-export function DrinkRecordCard({log,onEdit,showDate=false}:{log:DrinkLog;onEdit:(log:DrinkLog)=>void;showDate?:boolean}){const {english}=useLocale();const t=(value:string)=>translateUiCopy(value,english?"en":"zh-CN");const specifications=[log.consumedVolumeMl!=null?`${log.consumedVolumeMl.toFixed(2)} ml`:"",t(log.sugarLevel),log.temperature?t(temperatureLabels[log.temperature]):""].filter(Boolean).join(" · ");const assessment=[log.rating?t(tasteLabels[log.rating]):"",log.kcalMin!==null&&log.kcalMax!==null?`${log.kcalMin}–${log.kcalMax} kcal`:log.estimatedKcal!==null?`${english?"About":"约"} ${log.estimatedKcal} kcal`:t("未估算热量")].filter(Boolean).join(" · ");return <article className="drink-record-card"><button className="drink-record-main" onClick={()=>onEdit(log)}><div className="drink-record-copy"><span>{t(drinkTypeLabels[log.drinkType])} · {momentLabel(log,showDate,t("日期记录"))}</span><h2 className="user-content">{log.drinkMenuName?.trim()||log.name.trim()?drinkRecordName(log):t(drinkRecordName(log))}</h2><small className="drink-record-specifications">{specifications}</small><small className="drink-record-assessment">{assessment}</small></div></button><button className="drink-record-edit" aria-label={`编辑 ${drinkRecordName(log)}`} onClick={()=>onEdit(log)}><Icon name="edit"/></button>{log.foodPlaceId&&log.foodPlaceName&&<Link className={`${styles.link} user-content`} href={`/food/places/${log.foodPlaceId}`}>{placeRecordLabel(log)}</Link>}</article>;}
+export function DrinkRecordCard(props:{log:DrinkLog;onEdit:(log:DrinkLog)=>void;showDate?:boolean}){return <SharedDrinkRecordCard {...props} LinkComponent={Link}/>;}

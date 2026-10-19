@@ -48,6 +48,43 @@ export async function withHomeReadOnlyRepository<T>(action: () => Promise<T>): P
   return repositoryContext.run(guarded, action);
 }
 
+// Food aggregation has a smaller, independently audited read surface than Home.
+export async function withFoodReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+  const repository=await getRepository();
+  const allowed=new Set(["listFoodLogs","listDrinkLogs","listDrinkLimits","getCalendarInterpretation","listCalendarEvents","listFoodPlaces","searchFoodLibrary","getFoodPlace","listFoodDishes","getPlaceLibraryItems","getFoodLibraryItem"]);
+  return repositoryContext.run(new Proxy(repository,{get(target,key){
+    if(key==="then")return undefined;
+    if(typeof key!=="string"||!allowed.has(key))throw new Error("Food read-only aggregation refused a repository operation");
+    return Reflect.get(target,key).bind(target);
+  }}),action);
+}
+
+// Cats GETs must never complete care, project reminders, or consume inventory.
+export async function withCatsReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+  const repository=await getRepository();
+  const allowed=new Set(["listPets","getPet","listCatEvents","listCatSymptoms","listCatVetVisits","listCatMedications","listCatMeasurements","listCatRoutines","listReminders","getCatEvent","getCatSymptom","getCatVetVisit","getCatMedication","getCatMeasurement","listCatFoodItems","listCatFoodPurchases"]);
+  return repositoryContext.run(new Proxy(repository,{get(target,key){
+    if(key==="then")return undefined;
+    if(typeof key!=="string"||!allowed.has(key))throw new Error("Cats read-only aggregation refused a repository operation");
+    return async(...args:unknown[])=>{
+      const result=await Reflect.get(target,key).apply(target,args);
+      // Existing Supabase lists use its default row ceiling; don't label a capped list complete.
+      if(Array.isArray(result)&&result.length>=1000)throw new Error("Cats list reached the 1,000-row acceptance boundary; cache preserved. Full pagination is required.");
+      return result;
+    };
+  }}),action);
+}
+
+// Subscriptions' ordinary GET services can create payments and advance reminders.
+export async function withSubscriptionsReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+  const repository=await getRepository(),allowed=new Set(["listSubscriptions","getSubscription","listSubscriptionPayments","listSubscriptionPriceChanges"]);
+  return repositoryContext.run(new Proxy(repository,{get(target,key){
+    if(key==="then")return undefined;
+    if(typeof key!=="string"||!allowed.has(key))throw new Error("Subscriptions read-only aggregation refused a repository operation");
+    return Reflect.get(target,key).bind(target);
+  }}),action);
+}
+
 export async function withMcpRequestRepository<T>(identity: McpOAuthIdentity, action: () => Promise<T>): Promise<T> {
   const repository = usesSupabase()
     ? await import("./supabase").then(({ createMcpSupabaseRepository }) => createMcpSupabaseRepository(identity.accessToken, identity.userId))

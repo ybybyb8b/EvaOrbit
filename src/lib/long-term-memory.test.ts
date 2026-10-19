@@ -88,9 +88,12 @@ test("navigation and route surfaces expose Memo plus the Lucius container", () =
   const commentsRoute = readFileSync(new URL("../app/api/lucius/posts/[id]/comments/route.ts", import.meta.url), "utf8");
   const commentsUi = readFileSync(new URL("../app/lucius/lucius-post-comments.tsx", import.meta.url), "utf8");
   const luciusPage = readFileSync(new URL("../app/lucius/page.tsx", import.meta.url), "utf8");
-  assert.match(shell, /href: "\/memo"/);
-  assert.match(shell, /href: "\/lucius"/);
-  assert.match(shell, /<Link href="\/lucius"[\s\S]*?<span>Lucius<\/span><\/Link>/);
+  const navigation = readFileSync(new URL("../components/app-navigation.tsx", import.meta.url), "utf8");
+  assert.match(shell, /<AppSidebar/);
+  assert.match(shell, /<SpacesNavigation/);
+  assert.match(navigation, /href: "\/memo"/);
+  assert.match(navigation, /href: "\/lucius"/);
+  assert.match(navigation, /href: "\/lucius", label: "Lucius"/);
   for (const route of [memoRoute, diaryRoute, casesRoute, postsRoute]) { assert.match(route, /export async function GET/); assert.match(route, /export async function POST/); }
   assert.match(commentsRoute, /export async function GET/);
   assert.match(commentsRoute, /export async function POST/);
