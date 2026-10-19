@@ -16,10 +16,23 @@ final class TrackerLocalTests: XCTestCase {
         var title: String?
         for _ in 0..<100 {
             title = try? await webView.evaluateJavaScript("document.querySelector('h1')?.textContent") as? String
+            if title == "Welcome back to EvaOrbit" { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        XCTAssertEqual(title, "Welcome back to EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
+        let font = try await webView.callAsyncJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", arguments: [:], in: nil, in: .page) as? Bool
+        XCTAssertEqual(font, true, "The actual August asset must load offline, without falling back")
+        _ = try await webView.evaluateJavaScript("localStorage.setItem('evaorbit.englishFont','polyamine'); localStorage.setItem('evaorbit.uiLanguage','zh-CN'); true")
+        webView.reload()
+        for _ in 0..<100 {
+            title = try? await webView.evaluateJavaScript("document.querySelector('h1')?.textContent") as? String
             if title == "回到 EvaOrbit" { break }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-        XCTAssertEqual(title, "回到 EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
+        XCTAssertEqual(title, "回到 EvaOrbit", "Explicit language must survive a local document reload")
+        let persistedFont = try await webView.evaluateJavaScript("document.documentElement.dataset.englishFont") as? String
+        XCTAssertEqual(persistedFont, "polyamine")
+        _ = try await webView.evaluateJavaScript("localStorage.removeItem('evaorbit.englishFont'); localStorage.removeItem('evaorbit.uiLanguage'); true")
         XCTAssertEqual(webView.url?.scheme, TrackerAssetHandler.scheme)
         let random = try await webView.evaluateJavaScript("crypto.getRandomValues(new Uint8Array(1)).length") as? Int
         XCTAssertEqual(random, 1)
@@ -90,6 +103,35 @@ final class TrackerLocalTests: XCTestCase {
         XCTAssertEqual(restoredQueue, original as NSDictionary)
         try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
         do { _ = try await reopened.readOnlyCache(accountId: account); XCTFail("Read-only caches must remain account scoped") } catch {}
+    }
+
+    func testHomeCachePersistsAcrossReopenWithoutChangingTheLegacyQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("trackers.sqlite3").path
+        let account = "10000000-0000-4000-8000-000000000001"
+        let database = try TrackerLocalDatabase(path: path)
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "keep-frozen", "wire": ["payload": ["note": "keep"]]]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let snapshot: [String: Any] = ["format": "eo-home-readonly-v1", "accountId": account, "kind": "due", "key": "current", "capturedAt": "2026-10-19T00:00:00Z", "data": []]
+        try await database.saveHomeReadOnlyCache(accountId: account, resource: "due/current", snapshot: snapshot)
+        let reopened = try TrackerLocalDatabase(path: path)
+        let cached = try await reopened.homeReadOnlyCache(accountId: account, resource: "due/current") as? NSDictionary
+        let queue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(cached, snapshot as NSDictionary)
+        XCTAssertEqual(queue, original as NSDictionary)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
+        for resource in ["home-day", "timeline", "reminders/due"] {
+            do { _ = try await controller.request(path: resource, method: "GET"); XCTFail("Unsafe or invalid resource must be refused") }
+            catch TrackerLocalError.invalid {}
+        }
+        do { _ = try await controller.homeReadOnlyResource(accountId: account, kind: "day", key: "2026-02-30", refresh: true); XCTFail("Invalid dates must fail before networking") }
+        catch TrackerLocalError.invalid {}
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.homeReadOnlyCache(accountId: account, resource: "due/current"); XCTFail("Cache must remain account scoped") } catch {}
     }
 
     func testLocalAssetsAreConfinedToBundleAndProductionDoesNotTrustLocalOrigin() throws {

@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "/*": ["./SELF_PERSONA.md"],
     "/api/reicon{,/*}": ["./node_modules/reicon-react/icons/*.js"],
     "/api/calendar-interpretation": ["./node_modules/reicon-react/icons/*.js"],
+    "/api/native/home-readonly/**": ["./node_modules/reicon-react/icons/*.js"],
   },
 };
 

@@ -16,9 +16,19 @@ on:
       - "src/local-trackers/**"
       - "src/lib/tracker-local-*"
       - "src/lib/tracker-readonly*"
+      - "src/lib/home-readonly.ts"
+      - "src/lib/home-preview.ts"
       - "src/app/trackers/tracker-*.tsx"
       - "src/components/**"
       - "src/app/globals.css"
+      - "src/app/fonts.css"
+      - "src/app/fonts/**"
+      - "public/theme-init.js"
+      - "src/lib/appearance-preferences.ts"
+      - "src/lib/theme*.ts"
+      - "src/lib/font*.ts"
+      - "src/lib/locale*.ts"
+      - "src/lib/ui-copy.ts"
       - "src/app/trackers/tracker-entry-editor.tsx"
       - "vite.trackers.config.ts"
       - "package.json"
@@ -45,7 +55,7 @@ jobs:
         run: |
           npm ci
           npm run build:trackers
-          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs
+          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs scripts/appearance-preferences.test.mjs scripts/appearance-settings.test.mjs scripts/home-readonly.test.mjs scripts/home-journal-editor.test.mjs scripts/home-refresh.test.mjs scripts/home-timeline-loading.test.mjs
 
       - name: Install XcodeGen
         run: |

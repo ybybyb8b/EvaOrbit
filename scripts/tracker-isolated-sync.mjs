@@ -76,6 +76,17 @@ if (process.argv.includes('--mcp')) {
     server.stdout.on('data',chunk=>serverLog+=chunk);server.stderr.on('data',chunk=>serverLog+=chunk);
     for(let attempt=0;attempt<90;attempt++){try{if((await api('/api/native/session')).ok)break;}catch{}if(server.exitCode!==null)throw new Error('Isolated Next server exited');await new Promise(resolve=>setTimeout(resolve,1000));}
     const login=await json('/api/native/session','POST',{email,password});assert.equal(login.accountId,account);
+    // Home uses the same real Auth/RLS services, with no catch-up writes.
+    const subscription=await sql`insert into public.subscriptions(user_id,name,current_amount_minor,currency,billing_interval_value,billing_interval_unit,started_on,next_renewal_on,auto_renew,reminder_enabled,reminder_days_before,notes) values(${account},'Read-only overdue canary',1200,'CNY',1,'month','2026-10-01','2026-10-01',true,false,3,'Do not catch up') returning id`;
+    const beforeHome=await sql`select next_renewal_on from public.subscriptions where id=${subscription[0].id}`;
+    for(const resource of ['day/2026-10-19','month/2026-10','due/current']) {
+      const home=await json('/api/native/home-readonly/'+resource);
+      assert.equal(home.accountId,account);assert.equal(home.format,'eo-home-readonly-v1');
+      assert.equal((await api('/api/native/home-readonly/'+resource,'GET',undefined,new Map())).status,401);
+    }
+    assert.deepEqual(await sql`select next_renewal_on from public.subscriptions where id=${subscription[0].id}`,beforeHome);
+    assert.equal((await sql`select count(*)::int n from public.subscription_payments where subscription_id=${subscription[0].id}`)[0].n,0,'Read-only Home must not catch up automatic payments');
+    assert.equal((await api('/api/native/home-readonly/day/2026-02-30')).status,400);
     let replica=new LocalTrackerStore(account,storage);await replica.initialize();
     const localTracker=await replica.createTracker({name:'Local parent',groupName:'PoC',quickCaptureEnabled:false},{key:crypto.randomUUID(),name:'Count',type:'number'});
     const localEntry=await replica.save('tracker_entry',undefined,{trackerLocalId:localTracker,occurredAt:'2026-10-18T06:00:00Z',values:{},note:'retained offline'});

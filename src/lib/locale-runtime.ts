@@ -25,7 +25,7 @@ function canTranslate(element: Element) {
   if (element.matches(PERSONAL_CONTENT) || element.closest(PERSONAL_CONTENT)) return false;
   // Layout effects may run while an App Router page is still dehydrated.
   if (element.closest(".main-content")) return Boolean(element.closest('[data-ui-copy-ready="true"]'));
-  return Boolean(element.closest(".app-shell,.form-sheet-layer,.space-drawer-layer,.action-toast-viewport"));
+  return Boolean(element.closest(".app-shell,.login-page,.form-sheet-layer,.space-drawer-layer,.action-toast-viewport,.local-tracker-app[data-ui-copy-ready='true']"));
 }
 
 function translateTextNode(node: Text, language: UiLanguage) {

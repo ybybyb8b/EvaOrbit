@@ -1,25 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Cormorant_Garamond } from "next/font/google";
-import localFont from "next/font/local";
 import { AppShell } from "@/components/app-shell";
 import { ActionToastViewport } from "@/components/action-toast";
 import { ErrorFeedbackProvider } from "@/components/error-feedback";
 import { LocaleController } from "@/components/locale-controller";
+import { ThemeController } from "@/components/theme-controller";
 import { PwaRegister } from "@/components/pwa-register";
 import { usesSupabase } from "@/lib/config";
 import { getClientCacheScope } from "@/lib/services/home-cache-scope";
 import "./globals.css";
-
-const chinese = localFont({ src: "./fonts/canger-huaxin.ttf", weight: "400", style: "normal", variable: "--font-canger-huaxin", display: "swap" });
-// Keep English system fallbacks from taking Chinese glyphs before the selected Chinese font.
-const zenSerif = localFont({ src: "./fonts/zen-serif-regular.otf", weight: "400", style: "normal", variable: "--font-zen-serif", display: "swap", adjustFontFallback: false });
-const lxgw = localFont({ src: "./fonts/lxgw-wenkai-regular.ttf", weight: "400", style: "normal", variable: "--font-lxgw", display: "swap", preload: false });
-const cangerXuanSan = localFont({ src: "./fonts/canger-xuansan-m-w04.ttf", weight: "400", style: "normal", variable: "--font-canger-xuansan", display: "swap", preload: false });
-const augustStories = localFont({ src: "./fonts/august-stories-serif.ttf", weight: "400", style: "normal", variable: "--font-august-stories", display: "swap", preload: false, adjustFontFallback: false });
-const polyamine = localFont({ src: "./fonts/polyamine.ttf", weight: "400", style: "normal", variable: "--font-polyamine", display: "swap", preload: false, adjustFontFallback: false });
-const keSong = localFont({ src: "./fonts/mf-ke-song-noncommercial-regular.otf", weight: "400", style: "normal", variable: "--font-ke-song", display: "swap", preload: false });
-const cormorant = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-cormorant", display: "swap", preload: false, adjustFontFallback: false });
+import "./fonts.css";
 
 export const metadata: Metadata = {
   title: { default: "EvaOrbit", template: "%s · EvaOrbit" },
@@ -40,5 +30,5 @@ export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width"
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const cacheScope = await getClientCacheScope();
-  return <html lang="zh-CN" className={`${chinese.variable} ${zenSerif.variable} ${lxgw.variable} ${cangerXuanSan.variable} ${augustStories.variable} ${polyamine.variable} ${keSong.variable} ${cormorant.variable}`} suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><ErrorFeedbackProvider><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></ErrorFeedbackProvider></LocaleController></body></html>;
+  return <html lang="zh-CN" suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><ThemeController /><ErrorFeedbackProvider><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></ErrorFeedbackProvider></LocaleController></body></html>;
 }

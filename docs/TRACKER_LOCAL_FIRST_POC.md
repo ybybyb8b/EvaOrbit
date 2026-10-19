@@ -8,6 +8,14 @@ The acceptance build uses existing production session and Tracker GET endpoints,
 
 ## Scope and execution paths
 
+### Visual comparison baseline
+
+Use **English UI + August Stories** as the primary Web/local comparison baseline, as requested by the user. Match color theme, light/dark mode, data and viewport on both sides. Keep Chinese regression coverage, but do not use a Chinese/default-font local preview as evidence of parity with the user's English Web setup. Verify the actual font asset loaded and computed font family; a fallback font is not an acceptable substitute.
+
+Web and local now import one `src/app/fonts.css` registration and use `LocaleController` for language/fonts/appearance initialization, plus `ThemeController` for system/native appearance. `AppearanceSettings` is the same control component in Web Settings and the local language/appearance sheet; local mode saves only device preferences and never calls the cloud preference API. Local first-use defaults are English + August, with explicit existing choices preserved; Web defaults remain unchanged. The existing persisted English-font value `ibm` still maps to August. `public/theme-init.js` is shared for first paint. Device preferences use persistent WebView/browser storage, separate from business SQLite/outbox; cloud account preference synchronization is not enabled in the read-only PoC. Native storage/relaunch still requires device validation of the rebuilt IPA.
+
+Cormorant WOFF2 subsets are the same files emitted by the preceding Next/font build, now checked in so both builds use the same local resources without a Google Fonts build-time request. Their OFL license is retained in `src/app/fonts/cormorant-OFL.txt`. Other font binaries remain the existing project files. UI-copy localization now also covers the shared login surface and local shell, preserving `.user-content` exclusions. Complete Tracker-specific localization/settings/image parity remains separate work.
+
 The independent SwiftUI client is retired. This PoC lives in the existing
 UIKit/WKWebView Host. The ordinary Host still starts the production website.
 The opt-in Tracker build starts `eo-local://app/index.html` from its signed bundle.
@@ -15,7 +23,8 @@ The opt-in Tracker build starts `eo-local://app/index.html` from its signed bund
 - `src/local-trackers/`: React entry, login, workspace and platform adapter.
   Web and local share LoginSurface/LoginFields, PageHeading, TrackerCreateSheet,
   TrackerEntryEditor, card content/pictures, timeline records/filters, activity
-  insights, FormSheet, inputs, icons, CSS and fonts. Next routing/server actions
+  insights, FormSheet, inputs, icons, global CSS, font registration and appearance
+  controls/lifecycle. Next routing/server actions
   stay in the Web wrappers; local components do not import Next runtime modules.
 - `src/lib/tracker-local-store.ts`: one shared, durable queue/state machine for
   browser and iOS. Local UUIDs are distinct from server IDs. Upload commands are

@@ -8,6 +8,8 @@
 
 ### 真实账户只读验收包
 
+共享外观更新：本地与 Web 共用字体资源、偏好生命周期和外观设置组件，本地无历史偏好时使用英语／August，已有选择保留。设备外观设置不调用云端偏好 API，也不进入业务 outbox。更新打包字体/React 后必须重建 IPA；没有新增 bridge、系统权限、framework 或 entitlement，签名链保持不变。浏览器验证不等于 WKWebView 存储和真机字体验证。
+
 当前阶段仅通过已有 session 和 Tracker GET 接口读取真实数据，Native/React 均禁用业务提交与 sync；独立 SQLite 只读缓存不覆盖旧记录或队列。新方法 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus` 要求重新构建 PoC IPA；旧包不能提供此安全边界。首次读取先自动 SQLite backup + quick_check，UI 显示队列数量。先验收列表、表单和离线重启；生产协议 2 迁移及 API 未单独批准前，不开放真实写入。
 
 本次覆盖安装执行 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，避免更新生产续签 Task。不要卸载应用。此标志不改变签名/传输链。`xtool-env.sh` 仅在 WSL usbmuxd 已运行时非交互停止；缺少 sudo 权限立即退出，设备 ActivationState 探测超时退出。保持原有 SHA 校验和 Windows usbmuxd endpoint。

@@ -10,7 +10,7 @@ export type TrackerOutboxItem = {
   operation: TrackerMutation["operation"]; payload: Record<string, unknown>;
   wire?: TrackerMutation;
 };
-export type TrackerLocalState = { schemaVersion: 1; accountId: string; revision: number; remoteRevision?: number; records: LocalTrackerRecord[]; outbox: TrackerOutboxItem[] };
+export type TrackerLocalState = { schemaVersion: 1; accountId: string; revision: number; remoteRevision?: number; records: LocalTrackerRecord[]; outbox: TrackerOutboxItem[]; readOnly?: { images: Record<string, { version: string; dataUrl: string }>; settings: Record<string, { goals: import("./types").TrackerGoal[]; reminders: import("./types").TrackerReminder[] }> } };
 export type TrackerStorage = {
   read(): Promise<TrackerLocalState | null>;
   commit(expectedRevision: number, next: TrackerLocalState): Promise<boolean>;

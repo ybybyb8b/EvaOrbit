@@ -28,6 +28,7 @@ try {
   const open = async () => {
     context = await chromium.launchPersistentContext(profile, { channel: "chrome", headless: true, viewport: { width: 402, height: 874 }, isMobile: true, hasTouch: true });
     const page = context.pages()[0];
+    await context.addInitScript(() => { localStorage.setItem("evaorbit.uiLanguage","zh-CN"); localStorage.setItem("evaorbit.englishFont","zen"); });
     page.on("pageerror", error=>errors.push(error.name));
     page.on("request", request=>{ if(!["GET","HEAD"].includes(request.method())) writes.push({method:request.method()}); });
     return page;

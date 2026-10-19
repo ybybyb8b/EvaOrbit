@@ -9,10 +9,10 @@ import { buildDailySleepSummary } from "../sleep";
 
 const priorities: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
-export async function getHomeDayOverview(date = dateInEvaOrbit()): Promise<HomeDayOverview> {
+export async function getHomeDayOverview(date = dateInEvaOrbit(), options: { readOnly?: boolean } = {}): Promise<HomeDayOverview> {
   const repository = await getRepository();
   const [timeline, tasks, journal, sleepSamples] = await Promise.all([
-    getDailyTimelineOverview(date),
+    getDailyTimelineOverview(date, options),
     repository.listTasks("all", date),
     repository.listDailyJournalEntries({ date, limit: 100 }),
     getHealthKitSleepSamples(date),

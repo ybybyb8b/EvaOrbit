@@ -1,6 +1,9 @@
-@font-face { font-family: "EO Local Chinese"; src: url("../app/fonts/canger-huaxin.ttf") format("truetype"); font-display: swap; }
-@font-face { font-family: "EO Local English"; src: url("../app/fonts/zen-serif-regular.otf") format("opentype"); font-display: swap; }
-:root { --font-canger-huaxin: "EO Local Chinese"; --font-zen-serif: "EO Local English"; }
+.local-appearance-trigger { display:block; margin: max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 0 auto; min-height:44px; }
+.local-module-nav { display:flex; gap:20px; padding:0 24px; }
+.local-module-nav button { min-height:44px; }
+.local-module-nav [aria-current="page"] { color:var(--text-primary); font-weight:700; }
+.local-home { padding:24px max(20px,env(safe-area-inset-right)) max(32px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); }
+.local-home .home-page { padding:0; }
 .local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
 .local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .local-login-actions button { min-height:44px; }

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ErrorNotice } from "@/components/error-notice";
+import { useLocale } from "@/components/locale-controller";
 import { showActionToast } from "@/components/action-toast";
 import { PageHeading } from "@/components/page-heading";
 import { FormSheet } from "@/components/form-sheet";
 import { SuggestedInput } from "@/components/suggested-input";
 import { Icon } from "@/components/icons";
-import { TrackerPicture } from "@/components/tracker-picture";
+import { LocalTrackerPicture } from "./tracker-picture";
+import { TrackerSettingsView } from "@/app/trackers/tracker-settings-view";
 import { TrackerCardContent } from "@/components/tracker-card-content";
 import { TrackerEntryEditor } from "@/app/trackers/tracker-entry-editor";
 import { TrackerCreateSheet } from "@/app/trackers/tracker-create-sheet";
@@ -18,18 +20,16 @@ import { TrackerTimelineToolbar } from "@/app/trackers/tracker-timeline-toolbar"
 import { trackerDistributionEntries, trackerInsightEntries, type TrackerInsightPeriod } from "@/lib/tracker-insights";
 import { validatedTrackerValues } from "@/lib/tracker-values";
 import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField } from "@/lib/validation";
-import type { TrackerField } from "@/lib/types";
+import type { Tracker, TrackerField } from "@/lib/types";
 import { nativeCall } from "@/lib/native-bridge";
-import { applyAppearance, storedAppearance, COLOR_THEME_STORAGE_KEY } from "@/lib/theme-runtime";
-import { normalizeColorTheme } from "@/lib/theme";
 import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
-function localAppearance() { try { return storedAppearance(); } catch { return { appearanceMode: "system" as const, colorTheme: "editorial" as const }; } }
 function asField(row: LocalTrackerRecord): TrackerField {
   return { id: row.serverId ?? 0, trackerId: Number(row.payload.trackerId ?? 0), key: String(row.payload.key), name: String(row.payload.name), type: row.payload.type as TrackerField["type"], required: Boolean(row.payload.required), defaultValue: row.payload.defaultValue ?? null, options: row.payload.options as string[] ?? [], showAfterQuickCapture: Boolean(row.payload.showAfterQuickCapture), includeInStats: Boolean(row.payload.includeInStats), sortOrder: Number(row.payload.sortOrder ?? 0), unit: String(row.payload.unit ?? ""), precision: Number(row.payload.precision ?? 0), config: {}, archivedAt: row.payload.archivedAt as string | null ?? null, createdAt: String(row.payload.createdAt ?? ""), updatedAt: String(row.payload.updatedAt ?? "") };
 }
 function belongs(row: LocalTrackerRecord, tracker: LocalTrackerRecord) { return row.payload.trackerLocalId === tracker.id || tracker.serverId !== undefined && row.payload.trackerId === tracker.serverId; }
 
 export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
+  const {english}=useLocale();
   const readOnly = platform.readOnly(account);
   const [inspection, setInspection] = useState<{pending:number;frozen:number;backupFile?:string}|null>(null);
   const refreshing = useRef<Promise<void>|null>(null);
@@ -39,7 +39,7 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
   const [selectedId, setSelectedId] = useState<string | null>(null), [create, setCreate] = useState(false), [capture, setCapture] = useState(false);
   const [editing, setEditing] = useState<LocalTrackerRecord | undefined>(), [deleting, setDeleting] = useState<LocalTrackerRecord | null>(null);
   const [discarding, setDiscarding] = useState<LocalTrackerRecord | null>(null);
-  const [query, setQuery] = useState(""), [theme, setTheme] = useState(() => localAppearance().colorTheme);
+  const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"timeline" | "insights" | "settings">("timeline");
   const [periodFilter, setPeriodFilter] = useState<TimelinePeriod>("all"), [fieldFilter, setFieldFilter] = useState(""), [fieldValueFilter, setFieldValueFilter] = useState("");
   const [insightPeriod, setInsightPeriod] = useState<TrackerInsightPeriod>("month");
@@ -55,7 +55,7 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
         if (readOnly) { setInspection(await platform.inspection(account)); await platform.refreshReadonly(account); await store.initialize(); }
         else await store.synchronize(platform.sync);
         setError(""); setSyncedAt(new Date().toISOString());
-      } catch (reason) { setError(reason instanceof TypeError ? "离线或暂时无法读取云端，只读快照已保留。" : reason instanceof Error ? reason.message : "暂时无法读取云端记录，上次只读快照已保留"); }
+      } catch (reason) { setError(reason instanceof TypeError ? english ? "Offline or unable to reach the cloud. Your read-only snapshot is preserved." : "离线或暂时无法读取云端，只读快照已保留。" : reason instanceof Error ? reason.message : english ? "Could not refresh records. Your read-only snapshot is preserved." : "暂时无法读取云端记录，上次只读快照已保留"); }
       finally { setSyncing(false); }
     })();
     refreshing.current = job;
@@ -71,13 +71,6 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
     // The store and account are the lifecycle; edits do not restart the scheduler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
-  useEffect(() => {
-    const apply = () => applyAppearance(localAppearance().appearanceMode, theme, false);
-    apply();
-    try { localStorage.setItem(COLOR_THEME_STORAGE_KEY, theme); } catch { /* Native records remain in SQLite. */ }
-    const media = matchMedia("(prefers-color-scheme: dark)"); media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [theme]);
   const selected = state.records.find(row => row.id === selectedId && row.resourceType === "tracker");
   const trackers = state.records.filter(row => row.resourceType === "tracker" && !row.payload.archivedAt);
   const hidden = new Set(state.outbox.filter(item => item.operation === "delete").map(item => item.localId));
@@ -112,13 +105,12 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
     <div className="local-tracker-toolbar">{selectedId ? <button className="back-link text-button" onClick={() => { setSelectedId(null); setQuery(""); setChartFilter(null); }}>返回 Trackers</button> : <span className="local-brand"><span className="brand-mark" aria-hidden="true"><span /></span>EvaOrbit</span>}
       <details className="local-account-menu"><summary aria-label="账户与同步"><Icon name="settings" /></summary><div>
         <strong className="user-content">{account.email}</strong>
-        <label className="field"><span>颜色主题</span><select aria-label="颜色主题" value={theme} onChange={event => setTheme(normalizeColorTheme(event.target.value))}>{["editorial", "rosewood", "powderblue", "mistviolet"].map(value => <option key={value}>{value}</option>)}</select></label>
         <button className="text-button" onClick={onSignIn}>连接账户</button><button className="text-button" onClick={exportLocal}>导出本地记录</button><a className="text-button" href="https://eva-orbit.vercel.app/trackers" target="_blank" rel="noreferrer">打开网页版</a><button className="text-button" onClick={() => void signOut()}>退出账户</button>
       </div></details>
     </div>
-    <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><TrackerPicture icon={String(selected.payload.icon ?? "")} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={readOnly ? <span className="tracker-archived-label">只读验收</span> : selected?.payload.archivedAt ? <span className="tracker-archived-label">已归档</span> : action} />
+    <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={readOnly ? <span className="tracker-archived-label">只读验收</span> : selected?.payload.archivedAt ? <span className="tracker-archived-label">已归档</span> : action} />
     <div className="local-sync-status" role="status"><span>{readOnly ? (syncing ? "正在读取云端数据 · 上传已停用" : "只读快照 · 原有数据与队列已隔离") : isPreviewAccount(account) ? "本机预览 · 数据不会上传" : syncing ? "正在同步" : state.outbox.length ? state.outbox.length+" 项待同步 · 已保存在本机" : syncedAt ? "已同步 · 本机可离线使用" : "本机记录"}</span><button className="text-button" disabled={syncing || !ready || isPreviewAccount(account) && !readOnly} onClick={() => void sync()}>{readOnly ? "刷新只读数据" : "同步"}</button></div>
-    {readOnly && inspection && <p className="tracker-settings-help" role="status">原队列 {inspection.pending} 项，其中 {inspection.frozen} 项已冻结；未上传。{inspection.backupFile ? "SQLite 备份已校验。" : "原有队列保持不变。"}</p>}
+    {readOnly && inspection && <p className="tracker-settings-help" role="status">{english ? `Original queue: ${inspection.pending} pending, including ${inspection.frozen} frozen; nothing uploaded. ${inspection.backupFile ? "SQLite backup verified." : "Original queue unchanged."}` : `原队列 ${inspection.pending} 项，其中 ${inspection.frozen} 项已冻结；未上传。${inspection.backupFile ? "SQLite 备份已校验。" : "原有队列保持不变。"}`}</p>}
     {error && <ErrorNotice>{error}</ErrorNotice>}
     {issues.length > 0 && <section className="local-sync-issues" aria-label="同步问题">{issues.map(row => <article key={row.id}>
       <strong>{String(row.payload.name ?? row.payload.note ?? "记录") || "记录"}</strong><p>{row.error}</p>
@@ -143,14 +135,11 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
           {filtered.length ? <TrackerTimelineRecords readOnly={readOnly} entries={filtered} fields={fields} working={working} disabled={entry=>Boolean(entry.row.status)} status={entry=>status(entry.row)} onEdit={entry=>{setEditing(entry.row);setCapture(true);}} onDelete={entry=>setDeleting(entry.row)} /> : <div className="empty-state compact-empty"><h2>{filtersActive ? "没有匹配的记录" : "暂无记录"}</h2><p>{filtersActive ? "尝试扩大时间范围或清除部分筛选条件。" : "发生时立即记录即可。"}</p></div>}
         </section>}
         {tab==="insights" && <TrackerActivityInsights entries={timelineEntries} fields={fields} lastOccurredAt={timelineEntries[0]?.occurredAt ?? null} archived={readOnly || Boolean(selected.payload.archivedAt)} working={working} insightPeriod={insightPeriod} onPeriodChange={setInsightPeriod} onCapture={()=>void recordNow(selected)} onSelectChart={(kind,key,label)=>{setQuery("");setPeriodFilter("all");setFieldFilter("");setFieldValueFilter("");setChartFilter({kind,key,label});setTab("timeline");}} />}
-        {tab==="settings" && <div className="tracker-settings"><p className="tracker-settings-overview">{fields.filter(field=>!field.archivedAt).length} 个属性</p><section className="tracker-settings-section">
-          <div className="section-heading"><h2>基本信息</h2><button className="text-button" disabled={readOnly || working || Boolean(selected.status)} onClick={()=>setShowBasics(true)}>编辑</button></div>
-          <dl className="tracker-settings-summary"><div><dt>名称</dt><dd className="user-content">{String(selected.payload.name)}</dd></div><div><dt>分组</dt><dd className="user-content">{String(selected.payload.groupName)}</dd></div><div><dt>默认记录方式</dt><dd>{selected.payload.quickCaptureEnabled?"立即记录":"打开详细表单"}</dd></div></dl>
-        </section><details className="tracker-settings-section tracker-settings-disclosure"><summary>记录属性<span>查看</span><Icon name="arrow" /></summary><div className="tracker-setting-list">{fields.map(field=><article key={field.key}><div><strong className="user-content">{field.name}</strong><small>{({time_range:"时间段",number:"数字",single_select:"单选",multi_select:"多选",text:"文本",boolean:"是 / 否",rating:"评价"})[field.type]}{field.unit?" · "+field.unit:""}{field.required?" · 必填":""}{field.archivedAt?" · 已归档":""}</small></div></article>)}</div></details><section className="tracker-settings-section"><h2>更多设置</h2><p className="tracker-settings-help">图片、属性管理、目标和提醒可在网页版设置。</p><a className="text-button" href="https://eva-orbit.vercel.app/trackers" target="_blank" rel="noreferrer">打开网页版</a></section></div>}
+        {tab==="settings" && <TrackerSettingsView detail={{tracker: selected.payload as unknown as Tracker, fields, goals: state.readOnly?.settings[String(selected.serverId)]?.goals ?? [], reminders: state.readOnly?.settings[String(selected.serverId)]?.reminders ?? []}} total={entries.length} picture={<LocalTrackerPicture row={selected} state={state} size={64}/>} readOnly={readOnly} busy={working} actions={{editBasics:()=>setShowBasics(true)}} />}
       </div>
     </> : trackers.length ? [...new Set(trackers.map(row => String(row.payload.groupName)))].map(group => <section className="tracker-group" key={group}><div className="tracker-group-heading"><h2>{group}</h2><span>{trackers.filter(row=>row.payload.groupName===group).length}</span></div><div className="tracker-card-grid">{trackers.filter(row=>row.payload.groupName===group).map(row => {
       const last=state.records.filter(entry=>entry.resourceType==="tracker_entry" && belongs(entry,row) && !hidden.has(entry.id)).map(entry=>String(entry.payload.occurredAt)).sort().at(-1) ?? null;
-      return <article className="tracker-card" key={row.id}><a href={"#tracker-"+row.id} onClick={event=>{event.preventDefault();openTracker(row);}}><TrackerCardContent name={String(row.payload.name)} lastOccurredAt={last} picture={<TrackerPicture icon={String(row.payload.icon??"")} />} /></a>{!readOnly && !row.payload.archivedAt && <button className="tracker-quick" disabled={working || !ready || Boolean(row.status)} onClick={()=>void recordNow(row)} aria-label={"为 "+row.payload.name+" 新增记录"}><Icon name="plus" /></button>}</article>;
+      return <article className="tracker-card" key={row.id}><a href={"#tracker-"+row.id} onClick={event=>{event.preventDefault();openTracker(row);}}><TrackerCardContent name={String(row.payload.name)} lastOccurredAt={last} picture={<LocalTrackerPicture row={row} state={state} />} /></a>{!readOnly && !row.payload.archivedAt && <button className="tracker-quick" disabled={working || !ready || Boolean(row.status)} onClick={()=>void recordNow(row)} aria-label={"为 "+row.payload.name+" 新增记录"}><Icon name="plus" /></button>}</article>;
     })}</div></section>) : create ? null : <div className="empty-state"><span className="empty-icon"><Icon name="tracker" /></span><h2>暂无观测</h2>{!readOnly && <button className="button primary" onClick={()=>setCreate(true)}>新增观测</button>}</div>}
     {!readOnly && create && <TrackerCreateSheet groupNames={trackers.map(row=>String(row.payload.groupName))} allowImages={false} onClose={()=>setCreate(false)} onCreate={async ({draft,fields:definitions})=>{
       const input=parseNewTracker(draft);

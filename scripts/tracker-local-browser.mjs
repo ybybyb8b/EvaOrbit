@@ -17,6 +17,7 @@ try {
   const open = async () => {
     context = await chromium.launchPersistentContext(profile,{channel:process.env.EVAORBIT_BROWSER_CHANNEL || 'chrome',headless:true,viewport:{width:402,height:874},deviceScaleFactor:1,isMobile:true,hasTouch:true});
     const page = context.pages()[0];
+    await context.addInitScript(() => { localStorage.setItem('evaorbit.uiLanguage','zh-CN'); localStorage.setItem('evaorbit.englishFont','zen'); });
     page.on('pageerror',error=>errors.push(error.stack??String(error)));
     await page.goto(`http://127.0.0.1:${port}/`,{waitUntil:'networkidle'});
     return page;
@@ -92,8 +93,10 @@ try {
   await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('button',{name:'返回 Trackers',exact:true}).click();
   await page.screenshot({path:'tmp/tracker-local-desktop.png',fullPage:true});
-  await page.getByLabel('账户与同步',{exact:true}).click();
-  await page.getByLabel('颜色主题').selectOption('rosewood');
+  await page.getByRole('button',{name:'语言与外观',exact:true}).click();
+  await page.getByRole('button',{name:/粉棕/}).click();
+  await page.getByRole('button',{name:'跟随系统',exact:false}).click();
+  await page.getByRole('button',{name:'关闭',exact:true}).click();
   await page.emulateMedia({colorScheme:'dark'});
   await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');
   assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'rosewood');

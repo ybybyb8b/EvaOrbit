@@ -1,44 +1,22 @@
 "use client";
 
 import { useEffect } from "react";
-import type { UiPreferences } from "@/lib/types";
-import { applyAppearance, storedAppearance, syncAppearanceToNative } from "@/lib/theme-runtime";
+import { useLocale } from "./locale-controller";
+import { applyAppearance, syncAppearanceToNative } from "@/lib/theme-runtime";
 
+/** Both shells use the same system appearance and native loading integration. */
 export function ThemeController() {
+  const { appearanceMode, colorTheme } = useLocale();
   useEffect(() => {
-    let current = storedAppearance();
-    const applyCurrent = () => {
-      applyAppearance(current.appearanceMode, current.colorTheme);
-      syncAppearanceToNative(current.appearanceMode);
+    const apply = () => {
+      applyAppearance(appearanceMode, colorTheme, false);
+      syncAppearanceToNative(appearanceMode);
     };
-    const onAppearanceChange = (event: Event) => {
-      const detail = (event as CustomEvent<typeof current>).detail;
-      if (!detail) return;
-      current = detail;
-      applyCurrent();
-    };
-    const onSystemChange = () => { if (current.appearanceMode === "system") applyCurrent(); };
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    applyCurrent();
-    media.addEventListener("change", onSystemChange);
-    window.addEventListener("evaorbit:appearance-change", onAppearanceChange);
-    window.addEventListener("evaorbit:native-ready", applyCurrent);
-
-    fetch("/api/preferences/appearance", { cache: "no-store" })
-      .then(async (response) => response.ok ? response.json() as Promise<UiPreferences> : null)
-      .then((preferences) => {
-        if (!preferences) return;
-        current = { appearanceMode: preferences.appearanceMode, colorTheme: preferences.colorTheme };
-        applyCurrent();
-      })
-      .catch(() => undefined);
-
-    return () => {
-      media.removeEventListener("change", onSystemChange);
-      window.removeEventListener("evaorbit:appearance-change", onAppearanceChange);
-      window.removeEventListener("evaorbit:native-ready", applyCurrent);
-    };
-  }, []);
-
+    apply();
+    media.addEventListener("change", apply);
+    window.addEventListener("evaorbit:native-ready", apply);
+    return () => { media.removeEventListener("change", apply); window.removeEventListener("evaorbit:native-ready", apply); };
+  }, [appearanceMode, colorTheme]);
   return null;
 }

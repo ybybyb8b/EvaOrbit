@@ -41,7 +41,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus"]
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -409,6 +409,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case "trackers.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.readOnlySnapshot(accountId: account, refresh: refresh)
+                case "home.readOnlyResource":
+                    guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, let key = parameters["key"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.homeReadOnlyResource(accountId: account, kind: kind, key: key, refresh: refresh)
                 case "trackers.sync":
                     guard let request = parameters["request"] as? [String: Any] else { throw TrackerLocalError.invalid }
                     result = try await controller.synchronize(request)

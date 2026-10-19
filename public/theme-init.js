@@ -9,7 +9,8 @@
     const preferredEnglishFont = localStorage.getItem("evaorbit.englishFont");
     const appearance = modes.has(preferredMode) ? preferredMode : "system";
     const theme = themes.has(preferredTheme) ? preferredTheme : "editorial";
-    const language = preferredLanguage === "en" ? "en" : "zh-CN";
+    const localBaseline = document.documentElement.dataset.localAppearance === "true";
+    const language = preferredLanguage === "en" || preferredLanguage === null && localBaseline ? "en" : "zh-CN";
     const mode = appearance === "system" ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" : appearance;
     const root = document.documentElement;
     root.dataset.appearance = appearance;
@@ -18,7 +19,7 @@
     root.dataset.locale = language;
     root.lang = language;
     root.dataset.chineseFont = ["canger", "lxgw", "alimama", "ibm"].includes(preferredChineseFont) ? preferredChineseFont : "canger";
-    root.dataset.englishFont = ["zen", "ibm", "polyamine", "cormorant"].includes(preferredEnglishFont) ? preferredEnglishFont : "zen";
+    root.dataset.englishFont = ["zen", "ibm", "polyamine", "cormorant"].includes(preferredEnglishFont) ? preferredEnglishFont : preferredEnglishFont === null && localBaseline ? "ibm" : "zen";
     root.style.colorScheme = mode;
   } catch {}
 })();

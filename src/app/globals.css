@@ -1,4 +1,5 @@
 .relation-open-advances{margin-top:9px;padding:16px 18px;border-radius:16px;background:var(--surface-warm)}.relation-open-advances article{min-height:44px;border-bottom:1px solid rgba(73,84,75,.1);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}.relation-open-advances article:last-child{border:0}.relation-archive{margin-top:32px;color:var(--danger)}
+.home-journal-readonly-fields { display:contents; border:0; padding:0; margin:0; min-width:0; }
 :root {
   --surface-canvas: #f5f2e9;
   --surface-card: #fbfaf5;

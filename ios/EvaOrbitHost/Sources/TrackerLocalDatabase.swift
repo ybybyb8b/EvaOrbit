@@ -45,6 +45,7 @@ actor TrackerLocalDatabase {
         CREATE TABLE IF NOT EXISTS tracker_account(singleton INTEGER PRIMARY KEY CHECK(singleton=1),account_id TEXT NOT NULL,email TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS home_readonly_cache(account_id TEXT NOT NULL,resource_key TEXT NOT NULL,snapshot_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,resource_key));
         PRAGMA user_version=1;
         COMMIT;
         """
@@ -132,6 +133,39 @@ actor TrackerLocalDatabase {
         let query = try statement("INSERT INTO tracker_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
         let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
         guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
+    func homeReadOnlyCache(accountId: String, resource: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement(resource == "day/latest" ? "SELECT snapshot_json FROM home_readonly_cache WHERE account_id=? AND resource_key LIKE 'day/%' ORDER BY resource_key DESC LIMIT 1" : "SELECT snapshot_json FROM home_readonly_cache WHERE account_id=? AND resource_key=?", resource == "day/latest" ? [accountId] : [accountId, resource])
+        defer { sqlite3_finalize(query) }
+        let result = sqlite3_step(query)
+        if result == SQLITE_DONE { return NSNull() }
+        guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveHomeReadOnlyCache(accountId: String, resource: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-home-readonly-v1" else { throw TrackerLocalError.invalid }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 4 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            let query = try statement("INSERT INTO home_readonly_cache(account_id,resource_key,snapshot_json,saved_at) VALUES(?,?,?,?) ON CONFLICT(account_id,resource_key) DO UPDATE SET snapshot_json=excluded.snapshot_json,saved_at=excluded.saved_at", [accountId, resource])
+            defer { sqlite3_finalize(query) }
+            let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 3, $0.baseAddress, Int32(data.count), transient) }
+            guard bound == SQLITE_OK, sqlite3_bind_int64(query, 4, Int64(Date().timeIntervalSince1970 * 1000)) == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+            // Only disposable Home snapshots are bounded; never touch records or outbox.
+            try execute("DELETE FROM home_readonly_cache WHERE account_id=? AND rowid IN (SELECT rowid FROM home_readonly_cache WHERE account_id=? ORDER BY saved_at DESC,rowid DESC LIMIT -1 OFFSET 128)", [accountId, accountId])
+            while true {
+                let size = try statement("SELECT COALESCE(SUM(length(snapshot_json)),0) FROM home_readonly_cache WHERE account_id=?", [accountId])
+                guard sqlite3_step(size) == SQLITE_ROW else { sqlite3_finalize(size); throw TrackerLocalError.storage }
+                let bytes = sqlite3_column_int64(size, 0); sqlite3_finalize(size)
+                if bytes <= 64 * 1024 * 1024 { break }
+                try execute("DELETE FROM home_readonly_cache WHERE rowid=(SELECT rowid FROM home_readonly_cache WHERE account_id=? AND resource_key<>? ORDER BY saved_at,rowid LIMIT 1)", [accountId, resource])
+            }
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
     }
 
     // SQLite's online backup includes WAL contents. Never copy only the .sqlite3 file.

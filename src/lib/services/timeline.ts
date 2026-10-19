@@ -34,8 +34,8 @@ async function subscriptionSources(repository: Awaited<ReturnType<typeof getRepo
   return { subscriptions, subscriptionPayments };
 }
 
-async function loadSources(range: { from: string; to: string }) {
-  await catchUpAutomaticSubscriptionPayments();
+async function loadSources(range: { from: string; to: string }, readOnly = false) {
+  if (!readOnly) await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const [foods, drinks, trackerEntries, trackers, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, calendarEvents, subscriptionData, settings] = await Promise.all([
     repository.listFoodLogs(range),
@@ -85,8 +85,8 @@ export async function listTimeline(input: { date?: string; limit?: number } = {}
   return mergeTimelineSources(sources, cats, range).slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)));
 }
 
-export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
-  await catchUpAutomaticSubscriptionPayments();
+export async function getDailyTimelineOverview(date = dateInEvaOrbit(), options: { readOnly?: boolean } = {}) {
+  if (!options.readOnly) await catchUpAutomaticSubscriptionPayments();
   const repository = await getRepository();
   const range = dateRange(date);
   const [foods, drinks, trackerEntries, trackers, nutritionSettings, cats, healthRecords, relationEvents, relationPeople, trainingLogs, weightRecords, menstrualFlows, medicationDoses, subscriptionData, calendarEvents, settings] = await Promise.all([
@@ -122,7 +122,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit()) {
   };
 }
 
-export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 7)): Promise<TimelineMonthSummary> {
+export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 7), options: { readOnly?: boolean } = {}): Promise<TimelineMonthSummary> {
   const range = monthDateRange(month);
   const repository = await getRepository();
   const periodData = repository.listMenstrualPeriods({ limit: 500 }).then(async menstrualPeriods => {
@@ -130,7 +130,7 @@ export async function getTimelineMonthSummary(month = dateInEvaOrbit().slice(0, 
     const calendarFlows = openPeriod ? await repository.listMenstrualFlowRecords({ periodId: openPeriod.id, limit: 500 }) : [];
     return { menstrualPeriods, calendarFlows };
   });
-  const [sources, cats, { menstrualPeriods, calendarFlows }] = await Promise.all([loadSources(range), requestCatTimeline(), periodData]);
+  const [sources, cats, { menstrualPeriods, calendarFlows }] = await Promise.all([loadSources(range, options.readOnly), requestCatTimeline(), periodData]);
   const first = `${month}-01`;
   const next = new Date(`${first}T12:00:00Z`);
   next.setUTCMonth(next.getUTCMonth() + 1);

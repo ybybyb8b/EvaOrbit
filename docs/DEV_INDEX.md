@@ -38,12 +38,15 @@
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，不依赖 Next 或自动重试请求；服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
+- **共享外观**：[fonts.css](../src/app/fonts.css) 统一 Web／本地的字体文件与注册；[appearance-preferences.ts](../src/lib/appearance-preferences.ts)、`LocaleController` 统一偏好读取、应用和持久化，`ThemeController` 统一系统外观及既有 Native loading 适配。两端使用同一 [AppearanceSettings](../src/components/appearance-settings.tsx)；Web 沿用偏好 API，本地只写设备持久存储，不进入业务 outbox。首次本地预览以英语／August 为基准，保留已有显式选择；Web 默认值不变。旧字体键 `ibm` 继续对应 August。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。
 - **详文**：[开发规则](../AGENTS.md)、[部署](../DEPLOYMENT.md)、[客户端缓存](CLIENT_PAGE_CACHE.md)、[备份与本地恢复](DATA_BACKUP.md)、[表单体验](FORM_INPUT_EXPERIENCE_REVIEW.md)。
 
 ## Home
 
+- **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 禁止写入及未迁移模块导航，通过平台接口访问账户隔离快照。
+- **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。新端点需单独批准生产发布后才能接真实账户 Home；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
 - **职责与入口**：[page.tsx](../src/app/page.tsx)、[home-calendar-timeline.tsx](../src/app/home-calendar-timeline.tsx)、[home-day 服务](../src/lib/services/home-day.ts)、[timeline 服务](../src/lib/services/timeline.ts)。
 - **数据与接口**：`/api/home-day`、`/api/timeline`；读取 Calendar、Tasks、Food/Drink、Trackers、Health、Cats、Relations、Subscriptions 等原始记录。今日一记使用 `daily_journal_entries` 与 `/api/daily-journal`，服务为 [daily-journal.ts](../src/lib/services/daily-journal.ts)。
 - **依赖与决定**：日/月摘要和时间线由原模块聚合，Home 不另存一套业务记录；编辑仍走所属模块。睡眠摘要复用 Health，日历餐次解析复用 Calendar；Home 快照与全局缓存共享账户隔离存储。

@@ -3,11 +3,13 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { readonlyTrackerState, fetchReadonlyTrackers } from "../src/lib/tracker-readonly.ts";
+import { homeResourceKey, validateHomeResource } from "../src/lib/home-readonly.ts";
 
 function fixture(native, methods=[]) {
   const calls=[], snapshot={format:"eo-trackers-readonly-v1",accountId:"10000000-0000-4000-8000-000000000001",capturedAt:"2026-10-19T00:00:00Z",details:[]};
   const imports={"../lib/native-bridge":{nativeCall:async(method,parameters)=>{calls.push({method,parameters});return method==="host.getInfo"?{methods}:method==="trackers.acceptanceStatus"?{pending:1,frozen:1}:snapshot;}},"../lib/response-error":{responseError:async()=>"error"},"../lib/tracker-readonly":{readonlyTrackerState,fetchReadonlyTrackers}};
   const code=ts.transpileModule(readFileSync("src/local-trackers/platform.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+  imports["../lib/home-readonly"]={homeResourceKey,validateHomeResource};imports["../lib/home-preview"]={previewHomeResource:()=>{throw Error("Preview not used in this fixture");}};
   const loaded={};new Function("require","exports","window",code)(name=>{if(!(name in imports))throw Error(name);return imports[name];},loaded,{EvaOrbitNative:native?{}:undefined});
   return {platform:loaded.trackerPlatform(),calls,account:{accountId:snapshot.accountId,email:"test@example.invalid"}};
 }

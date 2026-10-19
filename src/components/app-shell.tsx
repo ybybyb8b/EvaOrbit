@@ -12,7 +12,6 @@ import { NativeNotificationReconciler } from "./native-notification-reconciler";
 import { EventKitReconciler } from "./eventkit-reconciler";
 import { DataChangeReconciler } from "./data-change-reconciler";
 import { NativeHapticController } from "./native-haptic-controller";
-import { ThemeController } from "./theme-controller";
 import { useLocale } from "./locale-controller";
 import { PullToRefresh } from "./pull-to-refresh";
 import { PageBackButton } from "./page-back-button";
@@ -191,7 +190,6 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
   const spacesTrigger = <button ref={spacesTriggerRef} type="button" className={`spaces-drawer-trigger ${spacesDrawerMounted ? "active" : ""}`} aria-label={english ? "Open spaces" : "打开空间导航"} aria-haspopup="dialog" aria-expanded={spacesDrawerMounted} onClick={openSpacesDrawer}><Menu4 className="spaces-drawer-icon" size={20} weight="Outline" strokeWidth={1.25} aria-hidden="true" /></button>;
   return (
     <div className={`app-shell ${bottomNav.shell}`}>
-      <ThemeController />
       <NativeHapticController />
       <NativeNotificationReconciler />
       <EventKitReconciler />

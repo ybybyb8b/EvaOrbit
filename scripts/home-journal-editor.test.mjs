@@ -5,7 +5,7 @@ import ts from "typescript";
 import { journalDraftChanged, journalPreviewEntries } from "../src/lib/journal-draft.ts";
 import { shiftDate } from "../src/lib/time.ts";
 
-function fixture() {
+function fixture(readOnly = false) {
   const hooks = [], requests = [];
   let cursor = 0, tree, fail = false;
   const date = "2026-10-17";
@@ -30,11 +30,11 @@ function fixture() {
     "@/lib/home-cache": { readHomeSnapshot: async (_, url) => url.startsWith("/api/home-day") ? day : summary },
   };
   const loaded = {};
-  const code = ts.transpileModule(readFileSync("src/app/home-calendar-timeline.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const code = ts.transpileModule(readFileSync("src/components/home-calendar-timeline.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   new Function("require", "exports", "window", "fetch", code)(name => imports[name] ?? {}, loaded, { requestAnimationFrame: fn => fn() }, async (url, options) => {
     requests.push({ url, ...options }); return { ok: !fail };
   });
-  function render() { cursor = 0; tree = loaded.HomeCalendarTimeline({ initialDay: day, initialSummary: summary, language: "zh-CN", cacheScope: "test" }); }
+  function render() { cursor = 0; tree = loaded.HomeCalendarTimeline({ initialDay: day, initialSummary: summary, language: "zh-CN", cacheScope: "test", readOnly }); }
   function nodes(node = tree) { return !node || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(child => nodes(child ?? null)) : [node, ...nodes(node.props?.children ?? null)]; }
   function find(predicate) { return nodes().find(predicate); }
   const byClass = value => find(node => node.props.className === value);
@@ -43,6 +43,16 @@ function fixture() {
   render();
   return { render, nodes, find, byClass, byText, sheet, requests, entries, setFail: value => { fail = value; } };
 }
+
+test("read-only Home retains historical notes and refuses forced form submission", async () => {
+  const f = fixture(true);
+  f.byClass("home-journal-preview-list").props.children[1].props.onClick(); f.render();
+  assert.equal(f.sheet().props.title, "查看短记");
+  assert.equal(f.sheet().props.submitLabel, undefined);
+  assert.equal(f.find(node => node.type === "textarea").props.disabled, true);
+  await f.byClass("home-journal-form").props.onSubmit({ preventDefault() {} });
+  assert.deepEqual(f.requests, []);
+});
 
 test("existing notes edit in isolation, preserve failed drafts and PATCH the selected ID", async () => {
   const f = fixture();

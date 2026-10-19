@@ -10,6 +10,7 @@ try {
   for (const mobile of [true, false]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 402, height: 874 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile });
     const page = await context.newPage(), errors = [];
+    await context.addInitScript(() => { localStorage.setItem('evaorbit.uiLanguage','zh-CN'); localStorage.setItem('evaorbit.englishFont','zen'); });
     page.on("pageerror", error => errors.push(String(error)));
     // The shipped bundle intentionally blocks browser networking via CSP.
     // This exercises a real connection failure without contacting production.

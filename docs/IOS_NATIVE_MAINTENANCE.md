@@ -34,6 +34,8 @@ WKWebView Native Host
 
 ### Tracker 真实账户只读验收模式
 
+共享外观层由 Web 和本地 React 使用相同的 `fonts.css`、偏好控制器及设置组件。新版本地首用为英语／August；已有显式选择保留。字体随 IPA 打包，偏好保存在 WKWebView 持久存储，与 Tracker SQLite/outbox 分开。本次不增加权限、framework、entitlement 或 bridge 方法；原生 loading 继续走既有 `appearance.setPreference`。字体和 React 包更新要求重建 IPA。WKWebView 字体实际加载、语言/字体重载持久化已纳入 XCTest，未运行新 CI 前不能声称 iOS 已验证。
+
 当前待验收版本通过既有生产 `GET /api/trackers`、`GET /api/trackers/:id` 与 session 接口读取，不要求部署新的生产 API 或 migration。Native 和 React 双层拒绝 Tracker commit 与 sync（包括空 mutations），只读缓存独立存放于 `tracker_readonly_cache`，不会替换旧 state/outbox。首次访问时先以 SQLite backup API 备份（包含 WAL），运行 quick_check，并展示旧队列数量。刷新前后校验账户、完整性和历史时间格式，失败保留旧缓存；旧 IPA 缺少新增方法时明确要求升级，不回退到旧同步。
 
 新增 bridge 方法为 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus`；不改变 bridge 主版本、权限、framework、entitlement 或正式 Host 的默认加载方式。需要重新构建并覆盖安装独立 PoC IPA。只读通过不代表真实写入或系统能力已经真机验收。

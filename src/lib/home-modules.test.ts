@@ -18,7 +18,7 @@ test("drops the legacy Settings entry from saved Home orders", () => {
 
 test("Home keeps quick capture in the universal Log without favorite shortcuts", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
-  const calendar = readFileSync(new URL("../app/home-calendar-timeline.tsx", import.meta.url), "utf8");
+  const calendar = readFileSync(new URL("../components/home-calendar-timeline.tsx", import.meta.url), "utf8");
   const quickLog = readFileSync(new URL("../app/home-quick-log.tsx", import.meta.url), "utf8");
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
@@ -49,7 +49,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
 test("Home keeps the compact Due reminder stack", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(page, /getDueReminders\(\)/);
-  assert.match(page, /<DueReminders items=\{due\} compact \/>/);
+  assert.match(page, /<DueReminders items=\{due\} compact\s*\/>/);
 });
 
 test("Global mobile chrome excludes Login and Lucius from the scroll-aware header", () => {
