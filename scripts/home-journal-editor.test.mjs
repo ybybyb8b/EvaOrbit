@@ -25,7 +25,7 @@ function fixture(readOnly = false) {
     "@/lib/journal-draft": { journalDraftChanged, journalPreviewEntries },
     "@/lib/journal-emotions": { journalEmotions: [], journalMoodLabel: () => null },
     "@/lib/timeline": { periodDayForDate: () => null },
-    "@/lib/time": { EVAORBIT_TIME_ZONE: "Asia/Shanghai", shiftDate },
+    "@/lib/time": { EVAORBIT_TIME_ZONE: "Asia/Shanghai", shiftDate, dateInEvaOrbit: () => "2026-10-19" },
     "@/lib/home-day": { homeActivitySentence: () => null },
     "@/lib/home-cache": { readHomeSnapshot: async (_, url) => url.startsWith("/api/home-day") ? day : summary },
   };
@@ -46,6 +46,7 @@ function fixture(readOnly = false) {
 
 test("read-only Home retains historical notes and refuses forced form submission", async () => {
   const f = fixture(true);
+  assert(f.byClass("home-calendar-today"), "An older offline snapshot must not be labeled as today");
   f.byClass("home-journal-preview-list").props.children[1].props.onClick(); f.render();
   assert.equal(f.sheet().props.title, "查看短记");
   assert.equal(f.sheet().props.submitLabel, undefined);

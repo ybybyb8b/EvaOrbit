@@ -40,6 +40,8 @@ WKWebView Native Host
 
 新增 bridge 方法为 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus`；不改变 bridge 主版本、权限、framework、entitlement 或正式 Host 的默认加载方式。需要重新构建并覆盖安装独立 PoC IPA。只读通过不代表真实写入或系统能力已经真机验收。
 
+Home 只读离线扩展新增 `home.readOnlyResource`，仅在本地 PoC 主文档的既有安全边界内可用。通过同源、限定 GET 的 `/api/native/home-readonly/...` 获取日/月/提醒聚合；禁止转发旧 Home GET（有订阅补账与药物提醒校准副作用）。`home_readonly_cache` 为可丢弃的账户隔离 SQLite 快照表，不修改原 state/outbox；单条 4 MiB、每账户 128 条 / 64 MiB，缓存最近七天与访问过的日期。新 API 发布仍需独立确认，不存在时显示未下载并保留缓存。上传图标经受限认证 GET 读取、验证类型与大小后保存在 Tracker 只读快照，不加载远程图片 URL。以上不增加 entitlement、权限或独立 SwiftUI 界面；回退旧 PoC 时保留安装及 SQLite，新缓存表可以继续留存。
+
 验收安装使用 `EVAORBIT_SKIP_RENEWAL=1 bash scripts/ios/xtool-install.sh <IPA>`，跳过安装后的生产续签 Task 写入。默认安装行为保持原样。环境脚本只在发现 WSL usbmuxd 运行时以 `sudo -n` 停止，权限不足立即报错；ActivationState 探测有超时。固定 xtool SHA 与 Windows USB transport 不变。
 
 ## 二、事实来源

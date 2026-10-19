@@ -13,7 +13,7 @@ import type { HomeDayOverview } from "@/lib/home-day";
 import { homeActivityLabel, homeActivitySentence, homeDurationLabel as durationLabel } from "@/lib/home-day";
 import type { UiLanguage } from "@/lib/locale";
 import { playNativeHaptic } from "@/lib/native-haptics";
-import { EVAORBIT_TIME_ZONE, shiftDate } from "@/lib/time";
+import { EVAORBIT_TIME_ZONE, dateInEvaOrbit, shiftDate } from "@/lib/time";
 import { periodDayForDate } from "@/lib/timeline";
 import { calendarTimelineRangeLabel, timelineDurationLabel } from "@/lib/calendar-timeline";
 import { journalEmotions, journalMoodLabel } from "@/lib/journal-emotions";
@@ -77,10 +77,10 @@ export type HomeTimelineProps = { initialDay:HomeDayOverview;initialSummary:Time
 export function HomeCalendarTimeline({ initialDay, initialSummary, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource }:HomeTimelineProps) {
   const Link=LinkComponent, CalendarRuleSheet=RuleEditor ?? EmptySlot, BottomLogScope=LogScope ?? EmptySlot;
   const readHomeSnapshot=dataSource?.read ?? cachedRead,saveHomeSnapshot=dataSource?.save ?? cachedSave;
-  const english = language === "en", today = initialDay.date;
+  const english = language === "en", today = readOnly ? dateInEvaOrbit() : initialDay.date;
   const [month, setMonth] = useState(initialSummary.month), [summaries, setSummaries] = useState<Record<string, TimelineMonthSummary>>({ [initialSummary.month]: initialSummary });
-  const [selected, setSelected] = useState(today), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
-  const [days, setDays] = useState<Record<string, HomeDayOverview>>({ [today]: initialDay });
+  const [selected, setSelected] = useState(initialDay.date), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
+  const [days, setDays] = useState<Record<string, HomeDayOverview>>({ [initialDay.date]: initialDay });
   const [loadingDate, setLoadingDate] = useState<string | null>(null), [loadingMonth, setLoadingMonth] = useState(false), [error, setError] = useState("");
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [journalContent, setJournalContent] = useState(""), [journalMood, setJournalMood] = useState<DailyJournalMood | null>(null), [editingJournalId, setEditingJournalId] = useState<number | null>(null), [savingJournal, setSavingJournal] = useState(false);

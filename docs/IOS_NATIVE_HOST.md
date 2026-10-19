@@ -8,6 +8,8 @@
 
 ### 真实账户只读验收包
 
+组合包增加 Home 只读离线界面：直接共享 Web 的首页、日历时间线和提醒组件，使用 `home.readOnlyResource` 与独立 `home_readonly_cache`，不触碰旧 outbox。只读 API `/api/native/home-readonly/...` 必须单独获批上线；不存在时明确提示未下载，不回退至有补账副作用的旧 Home GET。最近七天及访问过的日期下载后离线可读，未迁移模块导航和所有编辑行为禁用。Tracker 设置展示共用 Web 组件，上传图标通过认证 GET 缓存为验证过的本地图片。
+
 共享外观更新：本地与 Web 共用字体资源、偏好生命周期和外观设置组件，本地无历史偏好时使用英语／August，已有选择保留。设备外观设置不调用云端偏好 API，也不进入业务 outbox。更新打包字体/React 后必须重建 IPA；没有新增 bridge、系统权限、framework 或 entitlement，签名链保持不变。浏览器验证不等于 WKWebView 存储和真机字体验证。
 
 当前阶段仅通过已有 session 和 Tracker GET 接口读取真实数据，Native/React 均禁用业务提交与 sync；独立 SQLite 只读缓存不覆盖旧记录或队列。新方法 `trackers.readOnlySnapshot`、`trackers.acceptanceStatus` 要求重新构建 PoC IPA；旧包不能提供此安全边界。首次读取先自动 SQLite backup + quick_check，UI 显示队列数量。先验收列表、表单和离线重启；生产协议 2 迁移及 API 未单独批准前，不开放真实写入。
