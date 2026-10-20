@@ -8,7 +8,7 @@ import { archiveInbox, createInbox, deleteInbox, getInbox, markInboxProcessed, r
 import { createLuciusCase, createLuciusDiaryEntry, createLuciusPost, createLuciusPostComment, deleteLuciusCase, deleteLuciusDiaryEntry, deleteLuciusPost, deleteLuciusPostComment, getLuciusCase, getLuciusDiaryEntry, getLuciusPost, getLuciusPostComment, getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry, updateLuciusPost, updateLuciusPostComment, updateLuciusState } from "../services/lucius";
 import { createHealthRecord, deleteHealthRecord, getHealthRecord, listHealthRecords, updateHealthRecord } from "../services/health";
 import { createTrainingLog, deleteTrainingLog, getTrainingLog, listTrainingLogs, updateTrainingLog } from "../services/training";
-import { addMediaRewatch, createMedia, createMediaSeries, deleteMedia, deleteMediaViewing, getMediaDetail, getMediaSeries, listMedia, listMediaSeries, updateMedia, updateMediaViewing } from "../services/media";
+import { addMediaRewatch, createMedia, createMediaSeries, updateMediaSeries, deleteMedia, deleteMediaViewing, getMediaDetail, getMediaSeries, listMedia, listMediaSeries, updateMedia, updateMediaViewing } from "../services/media";
 import { createDrinkLimit, deleteDrinkLimit, getDrinkLimits, updateDrinkLimit } from "../services/drink";
 import { createTracker, createTrackerEntry, createTrackerField, createTrackerGoal, createTrackerReminder, deleteTracker, deleteTrackerEntry, deleteTrackerField, deleteTrackerGoal, deleteTrackerReminder, getTrackerDetail, listTrackerSummaries, updateTracker, updateTrackerEntry } from "../services/tracker";
 import { archivePet, catTimeline, createCatRecord, createPet, deleteCatRecord, getCatRecord, getPetDetail, listPets, updateCatRecord, updatePet } from "../services/cats";
@@ -46,7 +46,7 @@ export const resourceRegistry = createResourceRegistry({
   healthRecord: { search: listHealthRecords, get: getHealthRecord, create: createHealthRecord, update: updateHealthRecord, delete: deleteHealthRecord },
   trainingLog: { search: listTrainingLogs, get: getTrainingLog, create: createTrainingLog, update: updateTrainingLog, delete: deleteTrainingLog },
   media: { search: listMedia, get: getMediaDetail, create: createMedia, update: updateMedia, delete: deleteMedia, addViewing: addMediaRewatch, updateViewing: updateMediaViewing, deleteViewing: deleteMediaViewing },
-  mediaSeries: { search: listMediaSeries, get: getMediaSeries, create: createMediaSeries },
+  mediaSeries: { search: listMediaSeries, get: getMediaSeries, create: createMediaSeries, update: updateMediaSeries },
   drinkLimit: { search: getDrinkLimits, create: createDrinkLimit, update: updateDrinkLimit, delete: deleteDrinkLimit },
   tracker: { search: listTrackerSummaries, get: getTrackerDetail, create: createTracker, update: updateTracker, delete: deleteTracker, createField: createTrackerField, deleteField: deleteTrackerField, createEntry: createTrackerEntry, updateEntry: updateTrackerEntry, deleteEntry: deleteTrackerEntry, createGoal: createTrackerGoal, deleteGoal: deleteTrackerGoal, createReminder: createTrackerReminder, deleteReminder: deleteTrackerReminder },
   catPet: { search: listPets, get: getPetDetail, create: createPet, update: updatePet, archive: archivePet },

@@ -85,9 +85,45 @@ export async function withSubscriptionsReadOnlyRepository<T>(action:()=>Promise<
   }}),action);
 }
 
+// Health snapshots may read existing reminders but must never reconcile or write them.
+export async function withHealthReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+  const repository=await getRepository(),allowed=new Set(["listHealthRecords","listSleepSamples","listCalendarEvents","getCalendarInterpretation","listFoodLogs","listDrinkLogs","getNutritionSettings","listNutritionSettings","listTrainingLogs","getTrainingPlan","listWeightRecords","getWeightSettings","listMenstrualPeriods","listMenstrualFlowRecords","listMedicationPresets","listMedicationDoseEvents","listReminders","getTaskReminder","getTrackerReminder","listTrackerEntries","getPet","getCatFoodItem","getTracker","getSubscription"]);
+  return repositoryContext.run(new Proxy(repository,{get(target,key){
+    if(key==="then")return undefined;
+    if(typeof key!=="string"||!allowed.has(key))throw new Error("Health read-only aggregation refused a repository operation");
+    return Reflect.get(target,key).bind(target);
+  }}),action);
+}
+
+// Refuse capped ledgers: incomplete event history must not appear to be a full balance.
+export async function withRelationsReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+  const repository=await getRepository(),allowed=new Set(["listRelationPeople","getRelationPerson","listRelationEvents","listPersonMemoryNotes"]);
+  return repositoryContext.run(new Proxy(repository,{get(target,key){
+    if(key==="then")return undefined;
+    if(typeof key!=="string"||!allowed.has(key))throw new Error("Relations read-only aggregation refused a repository operation");
+    return async(...args:unknown[])=>{
+      const result=await Reflect.get(target,key).apply(target,args);
+      if(Array.isArray(result)&&result.length>=(key==="listRelationEvents"?500:1000))throw new Error("Relations reached a read limit; previous cache preserved. Complete pagination is required before displaying balances.");
+      return result;
+    };
+  }}),action);
+}
+
 export async function withMcpRequestRepository<T>(identity: McpOAuthIdentity, action: () => Promise<T>): Promise<T> {
   const repository = usesSupabase()
     ? await import("./supabase").then(({ createMcpSupabaseRepository }) => createMcpSupabaseRepository(identity.accessToken, identity.userId))
     : await import("./sqlite").then(({ sqliteRepository }) => sqliteRepository);
   return repositoryContext.run(repository, action);
+}
+
+// Media caching has no command or upload capability. Refuse capped history.
+export async function withMediaReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+ const repository=await getRepository(),allowed=new Set(["listMediaItems","getMediaItem","listMediaSeries","getMediaSeries","listMediaViewings"]);
+ return repositoryContext.run(new Proxy(repository,{get(target,key){if(key==="then")return undefined;if(typeof key!=="string"||!allowed.has(key))throw new Error("Media read-only aggregation refused a repository operation");return async(...args:unknown[])=>{const result=await Reflect.get(target,key).apply(target,args);if(Array.isArray(result)&&key!=="listMediaItems"&&result.length>=1000)throw new Error("Media history reached a read boundary; previous cache preserved");return result;};}}),action);
+}
+
+// Bounded downloads for the remaining spaces never execute business commands.
+export async function withWorkspaceReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
+ const repository=await getRepository(),allowed=new Set(["listTasks","listTaskReminders","listProjects","listProjectItems","getLuciusState","listLuciusPosts","listLuciusPostComments","listLuciusDiaryEntries","listLuciusCases"]);
+ return repositoryContext.run(new Proxy(repository,{get(target,key){if(key==="then")return undefined;if(typeof key!=="string"||!allowed.has(key))throw new Error("Workspace read-only aggregation refused a repository operation");return Reflect.get(target,key).bind(target);}}),action);
 }

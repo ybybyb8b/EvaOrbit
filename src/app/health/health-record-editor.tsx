@@ -1,4 +1,6 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 
 import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -34,8 +36,12 @@ function draftFromRecord(record: HealthRecord): Draft {
 }
 
 export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, formId, onSavingChange }: { editing?: HealthRecord; initialDate?: string; onCancel: () => void; onSaved: (record: HealthRecord) => void | Promise<void>; formId?: string; onSavingChange?: (saving: boolean) => void }) {
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const [draft, setDraft] = useState<Draft>(() => editing ? draftFromRecord(editing) : emptyDraft(initialDate));
-  const history = useFormHistory(`/api/health/records?type=${draft.type}&limit=100`);
+  const history = useFormHistory(`/api/health/records?type=${draft.type}&limit=100`,undefined,read);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -54,7 +60,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(""); setSaving(true); onSavingChange?.(true);
+    event.preventDefault(); if(preview)return; setError(""); setSaving(true); onSavingChange?.(true);
     const details = Object.fromEntries(Object.entries(draft.details).filter(([, value]) => value !== "" && value !== undefined));
     const occurred=compactDateTimePayload(draft.occurredAt);const started=draft.startedAt?compactDateTimePayload(draft.startedAt):null;const ended=draft.endedAt?compactDateTimePayload(draft.endedAt):null;
     const body = {
@@ -65,7 +71,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
       details,
     };
     try {
-      const response = await fetch(editing ? `/api/health/records/${editing.id}` : "/api/health/records", {
+      const response = await read(editing ? `/api/health/records/${editing.id}` : "/api/health/records", {
         method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const result = await response.json().catch(() => null) as HealthRecord | { error?: string } | null;
@@ -77,7 +83,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
 
   const fields = detailFields[draft.type];
   const suggestedKeys = new Set(["severity", "body_area", "provider", "frequency", "unit", "source"]);
-  return <form id={formId} className="editor-card health-editor" onSubmit={(event) => void submit(event)}>
+  return <form id={formId} className="editor-card health-editor" onSubmit={(event) => void submit(event)}>{preview&&<FormPreviewNotice/>}
     <div className="editor-title"><div><span className="eyebrow">{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h2>{editing ? "Edit health record" : "Add health record"}</h2></div><button type="button" className="text-button" onClick={onCancel}>Cancel</button></div>
     <div className="health-type-picker"><span className="field-caption">Record type</span><div className="health-type-grid">{healthRecordTypes.map((item) => <button type="button" key={item.value} className={draft.type === item.value ? "active" : ""} data-form-change onClick={() => selectType(item.value)}><span>{item.label}</span></button>)}</div></div>
     <div className="form-grid health-form-grid">
@@ -90,7 +96,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
     </div>
     <details className="health-details-editor" open={editing ? undefined : false}><summary>Details · optional</summary><div className="form-grid health-form-grid">{fields.map((field) => <div className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><SuggestedInput suggestionLabel={field.label} suggestions={suggestedKeys.has(field.key) ? [...historyValues(history, `details.${field.key}`), ...(field.key === "severity" ? ["Mild", "Moderate", "Severe"] : [])] : []} type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onValueChange={value => setDetail(field.key, value, field.inputType)} placeholder={field.placeholder} /></div>)}</div></details>
     {error && <ErrorNotice>{error}</ErrorNotice>}
-    <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
+    <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving||preview}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
   </form>;
 }
 

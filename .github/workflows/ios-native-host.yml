@@ -16,6 +16,8 @@ on:
       - "src/local-trackers/**"
       - "src/lib/tracker-local-*"
       - "src/lib/tracker-readonly*"
+      - "src/lib/tracker-replica*"
+      - "scripts/tracker-replica-*.mjs"
       - "src/lib/home-readonly.ts"
       - "src/lib/home-preview.ts"
       - "src/lib/food-*.ts"
@@ -23,6 +25,30 @@ on:
       - "src/app/food/**"
       - "src/app/drinks/**"
       - "src/app/food-drink/**"
+      - "src/app/tasks/**"
+      - "src/app/projects/**"
+      - "src/app/lucius/**"
+      - "src/app/settings/ai-providers-settings.tsx"
+      - "src/app/settings/settings-directory.tsx"
+      - "src/app/api/native/session/route.ts"
+      - "src/lib/ai-configuration-request.ts"
+      - "src/lib/supabase/proxy.ts"
+      - "src/lib/workspace-readonly.ts"
+      - "src/lib/services/workspace-readonly.ts"
+      - "scripts/workspace-*.mjs"
+      - "scripts/ai-configuration-*.mjs"
+      - "src/app/media/**"
+      - "src/lib/media*.ts"
+      - "src/lib/services/media*.ts"
+      - "scripts/media-*.mjs"
+      - "src/app/relations/**"
+      - "src/lib/relations-readonly.ts"
+      - "src/lib/services/relations-readonly.ts"
+      - "scripts/relations-*.mjs"
+      - "src/app/health/**"
+      - "src/lib/health-readonly.ts"
+      - "src/lib/services/health-readonly.ts"
+      - "scripts/health-*.mjs"
       - "src/app/cats/**"
       - "src/app/inbox/**"
       - "src/lib/inbox-readonly.ts"
@@ -77,7 +103,7 @@ jobs:
         run: |
           npm ci
           npm run build:trackers
-          node --test src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs scripts/appearance-preferences.test.mjs scripts/appearance-settings.test.mjs scripts/home-readonly.test.mjs scripts/home-journal-editor.test.mjs scripts/home-refresh.test.mjs scripts/home-timeline-loading.test.mjs scripts/inbox-readonly.test.mjs scripts/memo-readonly.test.mjs scripts/chronicle-readonly.test.mjs src/lib/chronicle.test.ts scripts/subscriptions-readonly.test.mjs scripts/cats-readonly.test.mjs scripts/food-readonly.test.mjs scripts/food-readonly-resource.test.mjs scripts/bottom-log-interaction.test.mjs scripts/navigation-shared.test.mjs scripts/food-drink-home.test.mjs scripts/combobox-interaction.test.mjs
+          node --test src/lib/tracker-replica.test.ts src/lib/tracker-local.test.ts src/lib/tracker-readonly.test.ts scripts/tracker-platform-readonly.test.mjs scripts/tracker-shared-ui.test.mjs scripts/tracker-sync-postgres.test.mjs scripts/appearance-preferences.test.mjs scripts/appearance-settings.test.mjs scripts/home-readonly.test.mjs scripts/home-journal-editor.test.mjs scripts/home-refresh.test.mjs scripts/home-timeline-loading.test.mjs scripts/inbox-readonly.test.mjs scripts/memo-readonly.test.mjs scripts/chronicle-readonly.test.mjs src/lib/chronicle.test.ts scripts/subscriptions-readonly.test.mjs scripts/cats-readonly.test.mjs scripts/health-readonly.test.mjs scripts/relations-readonly.test.mjs scripts/relations-regression.test.mjs src/lib/media.test.ts scripts/media-readonly.test.mjs scripts/media-completion-postgres.test.mjs scripts/workspace-readonly.test.mjs scripts/ai-configuration-account.test.mjs scripts/food-readonly.test.mjs scripts/food-readonly-resource.test.mjs scripts/bottom-log-interaction.test.mjs scripts/navigation-shared.test.mjs scripts/food-drink-home.test.mjs scripts/combobox-interaction.test.mjs
 
       - name: Install XcodeGen
         run: |

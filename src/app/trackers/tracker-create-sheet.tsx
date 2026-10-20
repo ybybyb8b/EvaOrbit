@@ -25,7 +25,7 @@ function newFieldDraft(type: TrackerFieldType = "number"): FieldDraft {
 
 
 export type TrackerCreateInput = { draft: typeof emptyDraft; iconFile: File | null; fields: FieldDraft[] };
-export function TrackerCreateSheet({ groupNames, onCreate, onClose, allowImages = true }: { groupNames: string[]; onCreate: (input: TrackerCreateInput) => Promise<void>; onClose: () => void; allowImages?: boolean }) {
+export function TrackerCreateSheet({ groupNames, onCreate, onClose, allowImages = true,allowedFieldTypes }: { groupNames: string[]; onCreate: (input: TrackerCreateInput) => Promise<void>; onClose: () => void; allowImages?: boolean;allowedFieldTypes?:readonly TrackerFieldType[] }) {
   const [draft, setDraft] = useState(emptyDraft);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
@@ -79,7 +79,7 @@ export function TrackerCreateSheet({ groupNames, onCreate, onClose, allowImages 
       </div>
       <section className="tracker-property-builder">
         <div className="tracker-builder-heading"><div><span className="eyebrow">RECORD PROPERTIES</span><h3>What should each moment include?</h3><p>Add only what will be useful later. Every record already includes its time and an optional note.</p></div><span className="tracker-property-count">{fieldDrafts.length}</span></div>
-        <div className="tracker-field-type-strip" aria-label="Property types">{fieldTypes.map(([type, label, description]) => <button type="button" key={type} onClick={() => startField(type)}><strong>{label}</strong><span>{description}</span></button>)}</div>
+        <div className="tracker-field-type-strip" aria-label="Property types">{fieldTypes.filter(([type])=>!allowedFieldTypes||allowedFieldTypes.includes(type)).map(([type, label, description]) => <button type="button" key={type} onClick={() => startField(type)}><strong>{label}</strong><span>{description}</span></button>)}</div>
         {fieldDrafts.length > 0 && <div className="tracker-field-drafts">{fieldDrafts.map((field) => <article key={field.clientId}><div><strong>{field.name}</strong><span>{fieldTypes.find(([type]) => type === field.type)?.[1]}{field.unit ? ` · ${field.unit}` : ""}{field.required ? " · Required" : ""}</span></div><button type="button" data-form-change aria-label={`Remove ${field.name}`} onClick={() => setFieldDrafts((current) => current.filter((item) => item.clientId !== field.clientId))}><Icon name="trash" /></button></article>)}</div>}
         {fieldEditor && <div className="tracker-property-draft-form">
             <div className="form-grid"><label className="field"><span>Property name</span><input autoFocus required maxLength={60} value={fieldEditor.name} onChange={(event) => setFieldEditor({ ...fieldEditor, name: event.target.value })} placeholder={fieldEditor.type === "time_range" ? "Stay duration, Visit…" : fieldEditor.type === "number" ? "Amount, Weight, Cost…" : fieldEditor.type === "rating" ? "Comfort, Energy…" : "Type, Context…"} /></label><label className="field"><span>Type</span><ChoiceSelect value={fieldEditor.type} onChange={(event) => { const type = event.target.value as TrackerFieldType; setFieldEditor({ ...fieldEditor, type, includeInStats: type !== "text" }); }}>{fieldTypes.map(([type,label]) => <option value={type} key={type}>{label}</option>)}</ChoiceSelect></label>

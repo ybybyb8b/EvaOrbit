@@ -1,4 +1,6 @@
 "use client";
+import {useFormPreview} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 
 import { ErrorNotice } from "@/components/error-notice";
 import { useRef, useState } from "react";
@@ -11,6 +13,10 @@ import { parseTrainingPlanWrite, retainedTrainingDay, trainingTemplate } from "@
 import { trainingBodyPartLabels, trainingTypeLabels } from "./training-log-editor";
 
 export function TrainingPlanEditor({ plan, onSaved, onClose }: { plan: TrainingPlan | null; onSaved: (plan: TrainingPlan) => void; onClose: () => void }) {
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const { english } = useLocale();
   const t = (en: string, zh: string) => english ? en : zh;
   const [draft, setDraft] = useState(() => plan ?? { ...trainingTemplate(), version: 0, updatedAt: "" });
@@ -35,7 +41,7 @@ export function TrainingPlanEditor({ plan, onSaved, onClose }: { plan: TrainingP
     replaceDays(days);
   }
   async function submit(event: React.FormEvent) {
-    event.preventDefault();
+    event.preventDefault(); if(preview)return;
     if (lock.current) return;
     setError(""); setErrorDayId(null);
     try {
@@ -50,14 +56,14 @@ export function TrainingPlanEditor({ plan, onSaved, onClose }: { plan: TrainingP
       });
       const payload = parseTrainingPlanWrite({ ...draft, days, expectedVersion: draft.version });
       lock.current = true; setSaving(true);
-      const response = await fetch("/api/health/training/plan", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const response = await read("/api/health/training/plan", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
       if (!response.ok) { setError(result.error ?? t("Could not save plan", "未能保存计划")); return; }
       onSaved(result); onClose();
     } catch (error) { setError(error instanceof Error ? error.message : t("Could not save plan", "未能保存计划")); }
     finally { lock.current = false; setSaving(false); }
   }
-  return <FormSheet title={t("Edit training plan", "编辑训练计划")} onClose={onClose} formId="training-plan-form" submitLabel={t("Save plan", "保存计划")} busy={saving}>
+  return <FormSheet title={t("Edit training plan", "编辑训练计划")} onClose={onClose} formId="training-plan-form" submitLabel={t("Save plan", "保存计划")} busy={saving} submitDisabled={preview}>
     <form id="training-plan-form" className="training-form training-plan-form" onSubmit={event => void submit(event)} onInvalidCapture={event => {
       const field = event.target;
       if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;

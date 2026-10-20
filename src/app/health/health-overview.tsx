@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import {HealthLink as Link} from "@/components/health-data-context";
 import type { ReactNode } from "react";
 import { ClipboardHeart, Droplet, Dumbbell, Flame, MoonSleep, Weight } from "reicon-react";
 import { useLocale } from "@/components/locale-controller";

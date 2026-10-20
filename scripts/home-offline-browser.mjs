@@ -2,11 +2,13 @@ import {navigateLocal} from "./local-navigation-browser.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { preview } from "vite";
+import { createServer, preview } from "vite";
 import { dateInEvaOrbit, shiftDate } from "../src/lib/time.ts";
 const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||"playwright");
 const profile=await fs.mkdtemp(path.resolve("tmp/home-offline-browser-"));
-const server=await preview({configFile:path.resolve("vite.trackers.config.ts"),preview:{host:"127.0.0.1",port:0,strictPort:true}});
+const api404=process.argv.includes("--api-404");
+const server=api404?await createServer({configFile:path.resolve("vite.trackers.config.ts"),server:{host:"127.0.0.1",port:0,strictPort:true}}):await preview({configFile:path.resolve("vite.trackers.config.ts"),preview:{host:"127.0.0.1",port:0,strictPort:true}});
+if(api404)await server.listen();
 const account="10000000-0000-4000-8000-000000000001",today=dateInEvaOrbit(),capturedAt=new Date().toISOString(),errors=[],writes=[];
 const resource=(kind,key,data)=>({format:"eo-home-readonly-v1",accountId:account,kind,key,capturedAt,data});
 const day=key=>resource("day",key,{date:key,events:[],tasks:[],meals:[],journal:[{id:1,date:key,content:"Offline canary day note",emotion:"neutral",energyLevel:2,hasFullDiary:false}],sleep:null,activities:[],activityRecords:[],calendarInterpretation:{categories:[],rules:[]}});
@@ -17,7 +19,9 @@ const oldState={schemaVersion:1,accountId:account,revision:1,records:[],outbox:[
 let context;
 async function open(){
  context=await chromium.launchPersistentContext(profile,{channel:"chrome",headless:true,viewport:{width:402,height:874},isMobile:true,hasTouch:true});
- await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
+ await context.addInitScript(()=>localStorage.setItem("evaorbit.trackerMode","readonly"));
+await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
+ if(api404)await context.route("**/eo-api/**",route=>{const pathname=new URL(route.request().url()).pathname;return pathname==="/eo-api/session"?route.fulfill({contentType:"application/json",body:JSON.stringify({authenticated:true,accountId:account,email:"offline@example.invalid"})}):route.fulfill({status:404,contentType:"application/json",body:'{"error":"Not found"}'});});
  const page=context.pages()[0];page.on("pageerror",error=>errors.push(String(error)));page.on("request",request=>{if(!["GET","HEAD"].includes(request.method()))writes.push(request.url());});
  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`,{waitUntil:"networkidle"});return page;
 }
@@ -31,6 +35,10 @@ try {
   await new Promise((resolve,reject)=>{const tx=db.transaction(["states","session"],"readwrite"),store=tx.objectStore("states");store.put(snapshot,"readonly:"+account);store.put(oldState,account);tx.objectStore("session").put({accountId:account,email:"offline@example.invalid"},"current");for(const value of resources)store.put(value,`home:${account}:${value.kind}:${value.key}`);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();
  },{account,snapshot,oldState,resources});
  await page.reload({waitUntil:"networkidle"});
+ await page.locator(".home-page").waitFor();
+ if(api404)await page.locator(".error-banner").filter({hasText:"Home read-only API is unavailable (HTTP 404)"}).waitFor();
+ assert.equal(await page.getByText(/API is not deployed/).count(),0);
+ await navigateLocal(page,"Trackers");
  await page.locator(".tracker-card").waitFor();
  await page.locator(".tracker-card img").waitFor();
  assert.equal(await page.locator(".tracker-card img").evaluate(img=>img.complete&&img.naturalWidth>0),true);
@@ -67,7 +75,7 @@ try {
  }
  await context.close();context=null;page=await open();
  if(await page.locator(".error-banner").count())await page.getByRole("button",{name:"Dismiss error",exact:true}).click();
- await navigateLocal(page,"Home");
+ await page.locator(".home-page").waitFor();
  await page.getByText("Offline canary day note",{exact:true}).waitFor();
  const preserved=await page.evaluate(async account=>{const r=indexedDB.open("eo-tracker-local-v1",1);const db=await new Promise(resolve=>{r.onsuccess=()=>resolve(r.result);});const tx=db.transaction("states"),read=tx.objectStore("states").get(account);const result=await new Promise(resolve=>{tx.oncomplete=()=>resolve(read.result);});db.close();return result;},account);
  assert.deepEqual(preserved,oldState);assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
@@ -80,4 +88,4 @@ try {
  await page.locator(".home-calendar-today").waitFor();
  assert.equal(await page.locator(".home-calendar-grid button.selected").getAttribute("data-today"),"false");
  console.log(JSON.stringify({homeOfflineRestart:true,previousDayNotToday:true,dueActionsDisabled:true,trackerIconPersistence:true,sharedSettingsReadOnly:true,noteSubmissionBlocked:true,queuePreserved:true,businessWrites:0,widths:[402,1440],deviceVerified:false}));
-} finally {await context?.close();await new Promise(resolve=>server.httpServer.close(resolve));}
+} finally {await context?.close();if(api404)await server.close();else await new Promise(resolve=>server.httpServer.close(resolve));}

@@ -1,3 +1,4 @@
+import {navigateLocal} from "./local-navigation-browser.mjs";
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -26,6 +27,7 @@ try {
   await page.getByRole('heading',{name:'回到 EvaOrbit',exact:true}).waitFor();
   await page.screenshot({path:'tmp/tracker-login-mobile.png',fullPage:true});
   await page.getByRole('button',{name:'本机预览',exact:true}).click();
+  await navigateLocal(page,'观测');
   await page.getByRole('button',{name:'新增观测',exact:true}).first().click();
   await page.locator('.form-sheet-layer[data-state="open"]').waitFor();
   const create=page.locator('#tracker-create-form');
@@ -80,6 +82,7 @@ try {
   await page.getByText('已记录此刻',{exact:true}).waitFor({state:'detached'});
   await context.close(); context=null;
   page=await open();
+  await navigateLocal(page,"观测");
   await page.getByRole('link',{name:/睡眠观察/}).click();
   await page.getByText('离线编辑后持久保存',{exact:true}).waitFor();
   await page.getByLabel('记录操作',{exact:true}).click();
@@ -88,6 +91,7 @@ try {
   await page.getByRole('heading',{name:'暂无记录',exact:true}).waitFor();
   await page.locator('.action-toast').getByText('已从本机删除',{exact:true}).waitFor();
   await page.reload({waitUntil:'networkidle'});
+  await navigateLocal(page,'观测');
   await page.getByRole('link',{name:/睡眠观察/}).click();
   assert.equal(await page.getByText('离线编辑后持久保存',{exact:true}).count(),0);
   await page.setViewportSize({width:1440,height:1000});

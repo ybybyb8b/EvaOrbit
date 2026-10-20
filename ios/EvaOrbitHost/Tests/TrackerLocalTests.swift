@@ -279,6 +279,83 @@ final class TrackerLocalTests: XCTestCase {
         do { _ = try await reopened.subscriptionsReadOnlyCache(accountId: account); XCTFail("Cache must remain account scoped") } catch {}
     }
 
+    @MainActor func testRelationsCachePersistsAndCannotTouchLedgerOrFrozenQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("trackers.sqlite3").path
+        let account = "10000000-0000-4000-8000-000000000001"
+        let database = try TrackerLocalDatabase(path: path)
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "keep-relations-frozen"]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let snapshot: [String: Any] = ["format": "eo-relations-readonly-v1", "accountId": account, "capturedAt": "2026-10-20T00:00:00Z", "people": [], "details": []]
+        try await database.saveRelationsReadOnlyCache(accountId: account, snapshot: snapshot)
+        var invalid = snapshot
+        invalid["accountId"] = "wrong"
+        do { try await database.saveRelationsReadOnlyCache(accountId: account, snapshot: invalid); XCTFail("Wrong account must not replace the cache") } catch TrackerLocalError.invalid {}
+        invalid = snapshot
+        invalid["extra"] = String(repeating: "x", count: 8 * 1024 * 1024)
+        do { try await database.saveRelationsReadOnlyCache(accountId: account, snapshot: invalid); XCTFail("Oversized snapshot must not replace the cache") } catch TrackerLocalError.storage {}
+        let reopened = try TrackerLocalDatabase(path: path)
+        let cached = try await reopened.relationsReadOnlyCache(accountId: account) as? NSDictionary
+        let queue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(cached, snapshot as NSDictionary)
+        XCTAssertEqual(queue, original as NSDictionary)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
+        for method in ["POST", "PATCH", "PUT", "DELETE"] {
+            do { _ = try await controller.request(path: "relations-readonly", method: method); XCTFail("Relations writes must fail before networking") }
+            catch TrackerLocalError.invalid {}
+        }
+        for path in ["relations/people", "relations/events/1", "relations/flows/1/settle", "relations-readonly/../session", "relations-readonly?account=other"] {
+            do { _ = try await controller.request(path: path, method: "GET"); XCTFail("Ordinary subscription services must never be a read-only fallback") }
+            catch TrackerLocalError.invalid {}
+        }
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.relationsReadOnlyCache(accountId: account); XCTFail("Cache must remain account scoped") } catch {}
+    }
+
+    @MainActor func testHealthCachePersistsAndCannotTouchRecordsOrFrozenQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("trackers.sqlite3").path
+        let account = "10000000-0000-4000-8000-000000000001"
+        let database = try TrackerLocalDatabase(path: path)
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "keep-health-frozen"]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let snapshot: [String: Any] = ["format": "eo-health-readonly-v1", "accountId": account, "capturedAt": "2026-10-20T00:00:00Z", "today": "2026-10-20", "sleep": ["date": "2026-10-20"], "energy": [String: Any](), "weightSettings": [String: Any](), "suggestions": [String: Any](), "plan": NSNull(), "records": [], "training": [], "recentTraining": [], "weights": [], "periods": [], "flows": [], "presets": [], "doses": [], "reminders": [], "energyHistory": []]
+        try await database.saveHealthReadOnlyCache(accountId: account, snapshot: snapshot)
+        var invalid = snapshot
+        invalid["accountId"] = "wrong"
+        do { try await database.saveHealthReadOnlyCache(accountId: account, snapshot: invalid); XCTFail("Wrong account must not replace the cache") } catch TrackerLocalError.invalid {}
+        invalid = snapshot
+        invalid["capturedAt"] = "invalid"
+        do { try await database.saveHealthReadOnlyCache(accountId: account, snapshot: invalid); XCTFail("Invalid timestamps must not replace the cache") } catch TrackerLocalError.invalid {}
+        invalid = snapshot
+        invalid["extra"] = String(repeating: "x", count: 8 * 1024 * 1024)
+        do { try await database.saveHealthReadOnlyCache(accountId: account, snapshot: invalid); XCTFail("Oversized snapshot must not replace the cache") } catch TrackerLocalError.storage {}
+        let reopened = try TrackerLocalDatabase(path: path)
+        let cached = try await reopened.healthReadOnlyCache(accountId: account) as? NSDictionary
+        let queue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(cached, snapshot as NSDictionary)
+        XCTAssertEqual(queue, original as NSDictionary)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
+        for method in ["POST", "PATCH", "PUT", "DELETE"] {
+            do { _ = try await controller.request(path: "health-readonly", method: method); XCTFail("Health writes must fail before networking") }
+            catch TrackerLocalError.invalid {}
+        }
+        for path in ["health", "health/weight", "health/training/plan/complete", "health-readonly/../session", "health-readonly?account=other"] {
+            do { _ = try await controller.request(path: path, method: "GET"); XCTFail("Ordinary subscription services must never be a read-only fallback") }
+            catch TrackerLocalError.invalid {}
+        }
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.healthReadOnlyCache(accountId: account); XCTFail("Cache must remain account scoped") } catch {}
+    }
+
     @MainActor func testChronicleCachePersistsWithoutTouchingFrozenQueue() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -397,6 +474,132 @@ final class TrackerLocalTests: XCTestCase {
         }
         try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
         do { _ = try await reopened.inboxReadOnlyCache(accountId: account); XCTFail("Cache must remain account scoped") } catch {}
+    }
+
+    @MainActor func testMediaCacheKeepsSeasonsHistoryAndFrozenQueueAcrossRestart() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("trackers.sqlite3").path
+        let account = "10000000-0000-4000-8000-000000000001", stamp = "2026-10-20T00:00:00Z"
+        let database = try TrackerLocalDatabase(path: path)
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "keep-media-frozen"]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let item: [String: Any] = ["id": 1, "title": "Reacher · S1", "originalTitle": NSNull(), "translatedTitle": NSNull(), "mediaType": "tv", "status": "completed", "rating": NSNull(), "isFavorite": false, "note": NSNull(), "coverUrl": NSNull(), "seriesId": 2, "seriesName": "Reacher", "seasonNumber": 1, "seasonTitle": NSNull(), "createdAt": stamp, "updatedAt": stamp, "viewings": [["id": 3, "mediaId": 1, "viewingNumber": 1, "watchedDate": "2026-10-19", "createdAt": stamp]]]
+        let snapshot: [String: Any] = ["format": "eo-media-readonly-v1", "accountId": account, "capturedAt": stamp, "items": [item], "series": [["id": 2, "name": "Reacher", "itemCount": 1, "createdAt": stamp, "updatedAt": stamp]]]
+        try await database.saveMediaReadOnlyCache(accountId: account, snapshot: snapshot)
+        var bad = snapshot
+        bad["accountId"] = "wrong"
+        do { try await database.saveMediaReadOnlyCache(accountId: account, snapshot: bad); XCTFail("Wrong account") } catch TrackerLocalError.invalid {}
+        bad = snapshot
+        var badItem = item; badItem["coverUrl"] = "https://example.invalid/private.png"; bad["items"] = [badItem]
+        do { try await database.saveMediaReadOnlyCache(accountId: account, snapshot: bad); XCTFail("Remote images must be downloaded") } catch TrackerLocalError.invalid {}
+        bad = snapshot; bad["series"] = []
+        do { try await database.saveMediaReadOnlyCache(accountId: account, snapshot: bad); XCTFail("Missing parent") } catch TrackerLocalError.invalid {}
+        bad = snapshot; bad["extra"] = String(repeating: "x", count: 8 * 1024 * 1024)
+        do { try await database.saveMediaReadOnlyCache(accountId: account, snapshot: bad); XCTFail("Oversized snapshot") } catch TrackerLocalError.storage {}
+        let reopened = try TrackerLocalDatabase(path: path)
+        let cached = try await reopened.mediaReadOnlyCache(accountId: account) as? NSDictionary
+        let queue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(cached, snapshot as NSDictionary); XCTAssertEqual(queue, original as NSDictionary)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
+        for method in ["POST", "PATCH", "PUT", "DELETE"] {
+            do { _ = try await controller.request(path: "media-readonly", method: method); XCTFail("Writes must fail before networking") } catch TrackerLocalError.invalid {}
+        }
+        for path in ["media", "media/1", "media-readonly/1", "media-readonly?q=x", "media-readonly/../session"] {
+            do { _ = try await controller.request(path: path, method: "GET"); XCTFail("Unlisted path") } catch TrackerLocalError.invalid {}
+        }
+        XCTAssertTrue(NativeBridge.trackerMethods.contains("media.readOnlySnapshot"))
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.mediaReadOnlyCache(accountId: account); XCTFail("Account isolation") } catch {}
+    }
+
+    @MainActor func testWorkspaceCachesAreDurableAccountScopedAndNeverReplaceTheQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("workspaces.sqlite3").path
+        let database = try TrackerLocalDatabase(path: path)
+        let account = "10000000-0000-4000-8000-000000000001", stamp = "2026-10-20T00:00:00Z"
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let original: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "keep-workspace-frozen"]]]
+        let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
+        XCTAssertTrue(committed)
+        let task: [String: Any] = ["id": 1, "title": "Date only", "notes": "", "completed": false, "tags": [], "priority": "medium", "dueDate": "2026-10-20", "dueTime": NSNull(), "completedAt": NSNull(), "reminders": [], "createdAt": stamp, "updatedAt": stamp]
+        let data: [String: [String: Any]] = ["tasks": ["tasks": [task], "complete": true], "projects": ["projects": [], "items": [], "complete": true], "lucius": ["state": ["status": "Quiet", "mood": "composed", "updatedAt": stamp], "posts": [], "comments": [], "diary": [], "cases": [], "complete": true]]
+        let reopened = try TrackerLocalDatabase(path: path)
+        for kind in ["tasks", "projects", "lucius"] {
+            let snapshot: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": kind, "capturedAt": stamp, "data": data[kind]!]
+            try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: kind, snapshot: snapshot)
+            var bad = snapshot; bad["accountId"] = "wrong"
+            do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: kind, snapshot: bad); XCTFail("Wrong account") } catch TrackerLocalError.invalid {}
+            bad = snapshot; bad["kind"] = "ai"
+            do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: kind, snapshot: bad); XCTFail("Wrong kind") } catch TrackerLocalError.invalid {}
+            bad = snapshot; bad["extra"] = String(repeating: "x", count: 8 * 1024 * 1024)
+            do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: kind, snapshot: bad); XCTFail("Oversized snapshot") } catch TrackerLocalError.storage {}
+            let cached = try await reopened.workspaceReadOnlyCache(accountId: account, kind: kind) as? NSDictionary
+            XCTAssertEqual(cached, snapshot as NSDictionary)
+        }
+        var invalidTask = task; invalidTask["dueDate"] = "2026-02-30"
+        let bad: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": "tasks", "capturedAt": stamp, "data": ["complete": true, "tasks": [invalidTask]]]
+        do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: "tasks", snapshot: bad); XCTFail("Invalid date") } catch TrackerLocalError.invalid {}
+        let queue = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(queue, original as NSDictionary)
+        let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
+        for kind in ["tasks", "projects", "lucius"] {
+            for method in ["POST", "PATCH", "PUT", "DELETE"] {
+                do { _ = try await controller.request(path: "workspace-readonly/\(kind)", method: method); XCTFail("Business writes") } catch TrackerLocalError.invalid {}
+            }
+        }
+        for path in ["workspace-readonly/ai", "workspace-readonly/tasks?q=x", "workspace-readonly/tasks/../projects", "ai/providers"] {
+            do { _ = try await controller.request(path: path, method: "GET"); XCTFail("Unlisted path") } catch TrackerLocalError.invalid {}
+        }
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        for kind in ["tasks", "projects", "lucius"] {
+            do { _ = try await reopened.workspaceReadOnlyCache(accountId: account, kind: kind); XCTFail("Account isolation") } catch {}
+        }
+        XCTAssertTrue(NativeBridge.trackerMethods.contains("workspaces.readOnlySnapshot"))
+    }
+
+    @MainActor func testTrackerReplicaNeverUploadsLegacyQueueAndPersistsIndependently() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let path = directory.appendingPathComponent("replica.sqlite3").path
+        let database = try TrackerLocalDatabase(path: path), account = "10000000-0000-4000-8000-000000000001"
+        try await database.setAccount(id: account, email: "test@example.invalid")
+        let legacy: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "legacy-frozen", "wire": ["mutationId": "legacy-frozen"]]]]
+        let oldSaved = try await database.commit(accountId: account, expectedRevision: 0, state: legacy)
+        XCTAssertTrue(oldSaved)
+        do { try await database.requireReplicaMutations(accountId: account, mutations: [["mutationId": "legacy-frozen"]]); XCTFail("Legacy queue must not be admitted") } catch TrackerLocalError.invalid {}
+        let wire: [String: Any] = ["mutationId": "new-replica", "operation": "create", "payload": ["name": "Test"]]
+        let replica: [String: Any] = ["schemaVersion": 1, "accountId": account, "revision": 1, "records": [], "outbox": [["mutationId": "new-replica", "wire": wire]]]
+        let saved = try await database.commit(accountId: account, expectedRevision: 0, state: replica, replica: true)
+        XCTAssertTrue(saved)
+        let stale = try await database.commit(accountId: account, expectedRevision: 0, state: replica, replica: true)
+        XCTAssertFalse(stale)
+        let reopened = try TrackerLocalDatabase(path: path)
+        let restored = try await reopened.read(accountId: account, replica: true) as? NSDictionary
+        let original = try await reopened.read(accountId: account) as? NSDictionary
+        XCTAssertEqual(restored, replica as NSDictionary); XCTAssertEqual(original, legacy as NSDictionary)
+        try await reopened.requireReplicaMutations(accountId: account, mutations: [wire])
+        var changed = wire; changed["payload"] = ["name": "tampered"]
+        do { try await reopened.requireReplicaMutations(accountId: account, mutations: [changed]); XCTFail("Frozen command must match") } catch TrackerLocalError.invalid {}
+        try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
+        do { _ = try await reopened.read(accountId: account, replica: true); XCTFail("Account isolation") } catch {}
+    }
+
+    @MainActor func testAIConfigurationIsAnExplicitSettingsException() {
+        let rules: [(String, Set<String>)] = [("/api/ai/providers", ["GET", "POST"]), ("/api/ai/providers/test", ["POST"]), ("/api/ai/providers/1", ["PATCH", "DELETE"]), ("/api/ai/providers/1/models", ["POST"]), ("/api/ai/model-configs/2", ["PATCH", "DELETE"])]
+        for (path, methods) in rules {
+            for method in ["GET", "POST", "PUT", "PATCH", "DELETE"] { XCTAssertEqual(TrackerLocalController.allowsAIConfiguration(path: path, method: method), methods.contains(method)) }
+        }
+        for path in ["https://evil.invalid/api/ai/providers", "/api/ai/chat", "/api/ai/sessions", "/api/ai/settings", "/api/ai/providers/0", "/api/ai/providers/1?x=1", "/api/ai/providers/1/../test"] {
+            for method in ["GET", "POST", "PATCH", "DELETE"] { XCTAssertFalse(TrackerLocalController.allowsAIConfiguration(path: path, method: method)) }
+        }
+        XCTAssertTrue(NativeBridge.trackerMethods.contains("settings.aiConfiguration"))
     }
 
     func testLocalAssetsAreConfinedToBundleAndProductionDoesNotTrustLocalOrigin() throws {

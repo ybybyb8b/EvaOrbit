@@ -454,3 +454,15 @@ Food & Drink 本地扩展使用 `food.readOnlySnapshot` / `food.readOnlyResource
 ### Inbox 只读缓存补充
 
 沿用桥接 v1 增加本地 PoC 专用 `inbox.readOnlySnapshot`。仅符号路径 `inbox` 的 GET 固定映射既有 `/api/inbox?status=all`；不开放外部查询、详情、convert 或写方法。最多缓存500条/每账户8 MiB，独立 `inbox_readonly_cache`，身份/generation/备份校验和旧 Host capability 检测沿用现有契约。React 列表与捕获表单共享，行内/Log 只预览，处理/归档/恢复/删除禁止。不需生产 API/migration，但需要新 PoC IPA；无新权限、framework、entitlement 或签名链变化。Windows 不能替代 macOS XCTest/真机。见 [Inbox 只读阶段](INBOX_LOCAL_READONLY_POC.md)。
+
+本地开发版默认启动页已调整为 Home；HTTP 404 仅提示只读接口不可用并保留缓存，不等同于确定未部署。需要重建 PoC IPA，API 发布仍独立审批。接口清单见 [只读 API 发布清单](LOCAL_READONLY_API_RELEASE.md)。
+
+Health 本地只读扩展增加 `health.readOnlySnapshot` 和账户隔离 `health_readonly_cache`（8 MiB）。仅精确 GET `/api/native/health-readonly`，保持身份/generation/备份验收与旧队列不变；复用原 Web 各分区和表单，禁止 Apple Health、业务和提醒写入。不增加权限、framework、entitlement 或改变签名链。新 API 需单独批准发布，PoC IPA 需重建，macOS XCTest/真机验收待完成。见 [Health 阶段](HEALTH_LOCAL_READONLY_POC.md)。
+
+Relations 本地只读扩展增加 `relations.readOnlySnapshot` 和账户隔离 `relations_readonly_cache`（8 MiB，最多100人物）；仅精确 GET `/api/native/relations-readonly`，保持备份、身份/generation和旧队列保护。照片字节随快照缓存，业务写入/照片上传/还款禁用。无新权限、framework、entitlement或签名链变化。API发布需单独批准，PoC IPA需重建，macOS XCTest及真机待验收。见 [Relations 阶段](RELATIONS_LOCAL_READONLY_POC.md)。
+
+Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_readonly_cache`（8 MiB）。只放行精确 GET `/api/native/media-readonly`，复用原备份/账户/generation校验并保留旧 state/outbox。共享原版 React 收藏/母作品/详情/表单，封面字节随快照缓存；全部业务写入和上传禁用。不增加权限、framework、entitlement或改变签名链。新 API、Web completion 迁移和 IPA 发布均需分别确认；新增 XCTest 待 macOS CI/iPhone 验证。详见 [Media 阶段](MEDIA_LOCAL_READONLY_POC.md)。
+
+## Tasks、Projects、Lucius 与 AI 设置
+
+本地 React 通过 `workspaces.readOnlySnapshot` 请求三种账户隔离快照，Native SQLite `workspace_readonly_cache` 与旧业务队列分离。`settings.aiConfiguration` 是仅限在线 Provider/模型管理的独立能力：固定路径/方法白名单、服务端协议与账户绑定、临时无缓存 HTTP 请求，无离线密钥或请求重放。原 Web Host 不公开这些本地专用方法；原权限、签名、HealthKit/EventKit/通知链不变。验收与回退见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。

@@ -5,7 +5,7 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice } from "@/components/action-toast";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { AiModelConfig, AiProvider, ApiError } from "@/lib/types";
 
 type ProviderDraft = {
@@ -26,7 +26,14 @@ const blankProvider: ProviderDraft = {
   clearApiKey: false,
 };
 
-export function AiProvidersSettings() {
+const webRequest = (path: string, init?: RequestInit) => fetch(path, init);
+
+export function AiProvidersSettings({request = webRequest, onlineOnly = false}: {request?: typeof webRequest; onlineOnly?: boolean}) {
+  const [online,setOnline]=useState(typeof navigator === "undefined" || navigator.onLine);
+  const send=useCallback((path: string, init?: RequestInit)=>{
+    if(onlineOnly && !navigator.onLine) return Promise.reject(new Error("Connect to the internet to manage AI settings. Keys are not saved offline."));
+    return request(path,init);
+  },[request,onlineOnly]);
  const copyScope=useUiCopyScope<HTMLElement>();
   const [providers, setProviders] = useState<AiProvider[]>([]);
   const [selectedId, setSelectedId] = useState<number | "new">("new");
@@ -42,7 +49,7 @@ export function AiProvidersSettings() {
   const selected = useMemo(() => providers.find((provider) => provider.id === selectedId) ?? null, [providers, selectedId]);
 
   async function load(preferredId?: number) {
-    const response = await fetch("/api/ai/providers", { cache: "no-store" });
+    const response = await send("/api/ai/providers", { cache: "no-store" });
     const result = await response.json() as AiProvider[] & ApiError;
     if (!response.ok) throw new Error(result.error);
     setProviders(result);
@@ -63,7 +70,7 @@ export function AiProvidersSettings() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/ai/providers", { cache: "no-store" }).then(async (response) => {
+    send("/api/ai/providers", { cache: "no-store" }).then(async (response) => {
       const result = await response.json() as AiProvider[] & ApiError;
       if (!response.ok) throw new Error(result.error);
       if (cancelled) return;
@@ -76,7 +83,15 @@ export function AiProvidersSettings() {
       }
     }).catch((reason: Error) => { if (!cancelled) setError(reason.message); });
     return () => { cancelled = true; };
-  }, []);
+  }, [send]);
+
+  useEffect(()=>{
+    if(!onlineOnly)return;
+    const offline=()=>{setOnline(false);setDraft(value=>({...value,apiKey:"",clearApiKey:false}));setError("Connect to the internet to manage AI settings. Keys are not saved offline.");};
+    const connected=()=>setOnline(true);
+    window.addEventListener("offline",offline);window.addEventListener("online",connected);
+    return()=>{window.removeEventListener("offline",offline);window.removeEventListener("online",connected);};
+  },[onlineOnly]);
 
   function providerBody() {
     const base = { name: draft.name, providerType: draft.providerType, baseUrl: draft.baseUrl, enabled: draft.enabled };
@@ -85,23 +100,24 @@ export function AiProvidersSettings() {
   }
 
   async function saveProvider(event: FormEvent) {
-    event.preventDefault(); setWorking(true); setError(""); setNotice("");
+    event.preventDefault(); if(working)return; setWorking(true); setError(""); setNotice("");
     try {
       const creating = selectedId === "new";
-      const response = await fetch(creating ? "/api/ai/providers" : `/api/ai/providers/${selectedId}`, {
+      const response = await send(creating ? "/api/ai/providers" : `/api/ai/providers/${selectedId}`, {
         method: creating ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(providerBody()),
       });
       const result = await response.json() as AiProvider & ApiError;
       if (!response.ok) throw new Error(result.error);
       await load(result.id); setNotice(creating ? "Provider 已添加。现在可以给它添加模型。" : "Provider 连接信息已保存。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存 Provider 失败"); }
-    finally { setWorking(false); }
+    finally { if(onlineOnly)setDraft(value=>({...value,apiKey:""})); setWorking(false); }
   }
 
   async function testConnection() {
+    if(working)return;
     setWorking(true); setError(""); setNotice("");
     try {
-      const response = await fetch("/api/ai/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...providerBody(), providerId: selected?.id }) });
+      const response = await send("/api/ai/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...providerBody(), providerId: selected?.id }) });
       const result = await response.json() as { models?: string[] } & ApiError;
       if (!response.ok) throw new Error(result.error);
       setDiscovered(result.models ?? []);
@@ -112,45 +128,55 @@ export function AiProvidersSettings() {
 
   async function addModel(event: FormEvent) {
     event.preventDefault();
+    if(working)return;
     if (!selected) { setError("请先保存 Provider，再添加模型"); return; }
     setWorking(true); setError(""); setNotice("");
     try {
-      const response = await fetch(`/api/ai/providers/${selected.id}/models`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId, displayName: displayName || modelId, enabled: true, isDefault: providers.every((provider) => provider.models.every((model) => !model.isDefault)), capabilities: {} }) });
+      const response = await send(`/api/ai/providers/${selected.id}/models`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId, displayName: displayName || modelId, enabled: true, isDefault: providers.every((provider) => provider.models.every((model) => !model.isDefault)), capabilities: {} }) });
       const result = await response.json() as AiModelConfig & ApiError;
       if (!response.ok) throw new Error(result.error);
       setModelId(""); setDisplayName(""); await load(selected.id); setNotice("模型已添加。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "添加模型失败"); }
-    finally { setWorking(false); }
+    finally { if(onlineOnly)setDraft(value=>({...value,apiKey:""})); setWorking(false); }
   }
 
   async function updateModel(model: AiModelConfig, values: Partial<AiModelConfig>) {
+    if(working)return;
     setWorking(true); setError("");
     try {
-      const response = await fetch(`/api/ai/model-configs/${model.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId: values.modelId ?? model.modelId, displayName: values.displayName ?? model.displayName, enabled: values.enabled ?? model.enabled, isDefault: values.isDefault ?? model.isDefault, capabilities: model.capabilities }) });
+      const response = await send(`/api/ai/model-configs/${model.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId: values.modelId ?? model.modelId, displayName: values.displayName ?? model.displayName, enabled: values.enabled ?? model.enabled, isDefault: values.isDefault ?? model.isDefault, capabilities: model.capabilities }) });
       const result = await response.json() as AiModelConfig & ApiError;
       if (!response.ok) throw new Error(result.error);
       await load(selected?.id); setNotice(values.isDefault ? "全局默认模型已更新。新对话会使用它。" : "模型设置已更新。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "更新模型失败"); }
-    finally { setWorking(false); }
+    finally { if(onlineOnly)setDraft(value=>({...value,apiKey:""})); setWorking(false); }
   }
 
   async function removeModel(model: AiModelConfig) {
-    if (!window.confirm(`删除模型“${model.displayName}”？正在使用它的对话不会允许删除。`)) return;
-    const response = await fetch(`/api/ai/model-configs/${model.id}`, { method: "DELETE" });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-    await load(selected?.id); setNotice("模型已删除。");
+    if (working || !window.confirm(`删除模型“${model.displayName}”？正在使用它的对话不会允许删除。`)) return;
+    setWorking(true);setError("");
+    try {
+      const response = await send(`/api/ai/model-configs/${model.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
+      await load(selected?.id); setNotice("模型已删除。");
+    } catch(reason) {setError(reason instanceof Error?reason.message:"删除模型失败");}
+    finally {setWorking(false);}
   }
 
   async function removeProvider() {
-    if (!selected || !window.confirm(`删除 Provider“${selected.name}”及其模型？正在使用的配置不会允许删除。`)) return;
-    const response = await fetch(`/api/ai/providers/${selected.id}`, { method: "DELETE" });
-    if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
-    await load(); setNotice("Provider 已删除。");
+    if (working || !selected || !window.confirm(`删除 Provider“${selected.name}”及其模型？正在使用的配置不会允许删除。`)) return;
+    setWorking(true);setError("");
+    try {
+      const response = await send(`/api/ai/providers/${selected.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
+      await load(); setNotice("Provider 已删除。");
+    } catch(reason) {setError(reason instanceof Error?reason.message:"删除 Provider 失败");}
+    finally {setWorking(false);}
   }
 
   return <section ref={copyScope} className="ai-providers-panel">
     <div className="provider-heading"><div><span className="eyebrow">AI PROVIDERS</span><h2>模型连接</h2><p>一套 Provider 保存一枚加密 Key，再为它添加多个模型。</p></div><button className="button secondary" type="button" onClick={() => selectProvider("new")}>新增 Provider</button></div>
-    <div className="provider-manager">
+    <fieldset className="provider-manager" disabled={onlineOnly&&!online} style={{border:0,padding:0,margin:0,minWidth:0}}>
       <nav className="provider-list" aria-label="AI Provider 列表">
         {providers.map((provider) => <button type="button" key={provider.id} className={selectedId === provider.id ? "active" : ""} onClick={() => selectProvider(provider.id)}><span><strong>{provider.name}</strong><small>{provider.models.length} 个模型 · {provider.enabled ? "已启用" : "已停用"}</small></span>{provider.models.some((model) => model.isDefault) && <em>默认</em>}</button>)}
         {!providers.length && <p>还没有 Provider。</p>}
@@ -172,7 +198,7 @@ export function AiProvidersSettings() {
           <div className="provider-model-list">{selected.models.map((model) => <ModelRow key={model.id} model={model} working={working} onUpdate={updateModel} onDelete={removeModel} />)}{!selected.models.length && <p>还没有模型。可以手动填写，或先测试连接读取列表。</p>}</div>
         </section>}
       </div>
-    </div>
+    </fieldset>
     {error && <ErrorNotice>{error}</ErrorNotice>}{notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
   </section>;
 }

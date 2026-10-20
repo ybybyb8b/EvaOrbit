@@ -1,4 +1,5 @@
 "use client";
+import {useFormPreview} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 
@@ -7,6 +8,7 @@ import { Droplet, Dumbbell, Health, Pill, Weight, type IconComponent } from "rei
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { loadCachedJson } from "@/lib/client-json-cache";
+import {useHealthData} from "@/components/health-data-context";
 import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, WeightRecord } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
 import { TrainingLogEditor } from "./training-log-editor";
@@ -28,17 +30,18 @@ type HealthQuickLogDefinition = {
 };
 
 function useRemoteJson<T>(url: string) {
+  const {read,local}=useHealthData();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ data: T | null; error: string }>({ data: null, error: "" });
   useEffect(() => {
     let mounted = true;
-    void loadCachedJson<T>(url)
+    void (local?read(url).then(async response=>{if(!response.ok)throw new Error("Not downloaded");return await response.json() as T;}):loadCachedJson<T>(url))
       .then((data) => { if (mounted) setState({ data, error: "" }); })
       .catch(() => {
         if (mounted) setState({ data: null, error: "Could not open this form" });
       });
     return () => { mounted = false; };
-  }, [attempt, url]);
+  }, [attempt, url,local,read]);
   return { ...state, retry: () => { setState({ data: null, error: "" }); setAttempt((value) => value + 1); } };
 }
 
@@ -62,9 +65,11 @@ function WeightQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorP
 }
 
 function HealthRecordQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {
+  const preview=useFormPreview();
+
   const { english } = useLocale();
   const [saving, setSaving] = useState(false);
-  return <FormSheet title={english ? "Add health record" : "新增健康记录"} onClose={onClose} formId="home-health-record-form" submitLabel={english ? "Add record" : "新增记录"} busy={saving}>
+  return <FormSheet title={english ? "Add health record" : "新增健康记录"} onClose={onClose} formId="home-health-record-form" submitLabel={english ? "Add record" : "新增记录"} busy={saving} submitDisabled={preview}>
     <HealthRecordEditor initialDate={initialDate} formId="home-health-record-form" onSavingChange={setSaving} onCancel={onClose} onSaved={async () => { await onSaved(); onClose(); }} />
   </FormSheet>;
 }

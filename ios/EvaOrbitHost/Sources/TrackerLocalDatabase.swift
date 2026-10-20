@@ -44,11 +44,16 @@ actor TrackerLocalDatabase {
         BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS tracker_account(singleton INTEGER PRIMARY KEY CHECK(singleton=1),account_id TEXT NOT NULL,email TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS tracker_replica_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS home_readonly_cache(account_id TEXT NOT NULL,resource_key TEXT NOT NULL,snapshot_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,resource_key));
         CREATE TABLE IF NOT EXISTS inbox_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS memo_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS chronicle_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS workspace_readonly_cache(account_id TEXT NOT NULL,kind TEXT NOT NULL,snapshot_json BLOB NOT NULL,PRIMARY KEY(account_id,kind));
+        CREATE TABLE IF NOT EXISTS media_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS relations_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS health_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS subscriptions_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS cats_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS food_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
@@ -88,16 +93,18 @@ actor TrackerLocalDatabase {
     func requireAccount(_ id: String) throws {
         guard try account()?["accountId"] == id else { throw TrackerLocalError.account }
     }
-    func read(accountId: String) throws -> Any {
+    func read(accountId: String, replica: Bool = false) throws -> Any {
+        let table = replica ? "tracker_replica_state" : "tracker_state"
         try requireAccount(accountId)
-        let query = try statement("SELECT state_json FROM tracker_state WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let query = try statement("SELECT state_json FROM \(table) WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
         let result = sqlite3_step(query)
         if result == SQLITE_DONE { return NSNull() }
         guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
         let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0)))
         return try JSONSerialization.jsonObject(with: data)
     }
-    func commit(accountId: String, expectedRevision: Int, state: [String: Any]) throws -> Bool {
+    func commit(accountId: String, expectedRevision: Int, state: [String: Any], replica: Bool = false) throws -> Bool {
+        let table = replica ? "tracker_replica_state" : "tracker_state"
         try requireAccount(accountId)
         guard expectedRevision >= 0, state["accountId"] as? String == accountId,
               state["schemaVersion"] as? Int == 1, state["revision"] as? Int == expectedRevision + 1,
@@ -109,13 +116,13 @@ actor TrackerLocalDatabase {
         guard data.count <= 64 * 1024 * 1024 else { throw TrackerLocalError.storage }
         try execute("BEGIN IMMEDIATE")
         do {
-            let query = try statement("SELECT revision FROM tracker_state WHERE account_id=?", [accountId])
+            let query = try statement("SELECT revision FROM \(table) WHERE account_id=?", [accountId])
             let step = sqlite3_step(query)
             let revision = step == SQLITE_ROW ? Int(sqlite3_column_int64(query, 0)) : 0
             sqlite3_finalize(query)
             guard step == SQLITE_ROW || step == SQLITE_DONE else { throw TrackerLocalError.storage }
             guard revision == expectedRevision else { try execute("ROLLBACK"); return false }
-            let write = try statement("INSERT INTO tracker_state(account_id,revision,state_json) VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET revision=excluded.revision,state_json=excluded.state_json", [accountId, String(expectedRevision + 1)])
+            let write = try statement("INSERT INTO \(table)(account_id,revision,state_json) VALUES(?,?,?) ON CONFLICT(account_id) DO UPDATE SET revision=excluded.revision,state_json=excluded.state_json", [accountId, String(expectedRevision + 1)])
             defer { sqlite3_finalize(write) }
             let bound = data.withUnsafeBytes { sqlite3_bind_blob(write, 3, $0.baseAddress, Int32(data.count), transient) }
             guard bound == SQLITE_OK, sqlite3_step(write) == SQLITE_DONE else { throw TrackerLocalError.storage }
@@ -130,6 +137,17 @@ actor TrackerLocalDatabase {
         if result == SQLITE_DONE { return NSNull() }
         guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
         return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+
+    func requireReplicaMutations(accountId: String, mutations: [[String: Any]]) throws {
+        try requireAccount(accountId)
+        if mutations.isEmpty { return }
+        guard let state = try read(accountId: accountId, replica: true) as? [String: Any], let outbox = state["outbox"] as? [[String: Any]] else { throw TrackerLocalError.invalid }
+        for mutation in mutations {
+            guard let id = mutation["mutationId"] as? String, outbox.contains(where: { item in
+                item["mutationId"] as? String == id && (item["wire"] as? NSDictionary)?.isEqual(to: mutation) == true
+            }) else { throw TrackerLocalError.invalid }
+        }
     }
 
     func saveReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
@@ -273,6 +291,193 @@ actor TrackerLocalDatabase {
         let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
         guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
     }
+    func healthReadOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM health_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveHealthReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-health-readonly-v1", let today = snapshot["today"] as? String, today.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil, let captured = snapshot["capturedAt"] as? String, !captured.isEmpty, let sleep = snapshot["sleep"] as? [String: Any], sleep["date"] as? String == today, snapshot["energy"] is [String: Any], snapshot["weightSettings"] is [String: Any], snapshot["suggestions"] is [String: Any], snapshot["plan"] is NSNull || snapshot["plan"] is [String: Any] else { throw TrackerLocalError.invalid }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        guard formatter.date(from: captured) != nil || plain.date(from: captured) != nil else { throw TrackerLocalError.invalid }
+        let limits = ["records": 100, "training": 100, "recentTraining": 100, "weights": 1000, "periods": 31, "flows": 60, "presets": 100, "doses": 60, "reminders": 1000]
+        for (key, limit) in limits {
+            guard let rows = snapshot[key] as? [[String: Any]], rows.count <= limit else { throw TrackerLocalError.invalid }
+            var ids = Set<Int>()
+            for row in rows {
+                guard let id = row["id"] as? Int, id > 0, id <= 9007199254740991, ids.insert(id).inserted else { throw TrackerLocalError.invalid }
+                if ["records", "training", "recentTraining", "weights", "flows"].contains(key) {
+                    guard row["occurredAt"] is String, row["occurredHasExplicitTime"] is Bool else { throw TrackerLocalError.invalid }
+                }
+            }
+        }
+        guard let history = snapshot["energyHistory"] as? [[String: Any]], history.count <= 7 else { throw TrackerLocalError.invalid }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO health_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
+    func workspaceReadOnlyCache(accountId: String, kind: String) throws -> Any {
+        try requireAccount(accountId)
+        guard ["tasks", "projects", "lucius"].contains(kind) else { throw TrackerLocalError.invalid }
+        let query = try statement("SELECT snapshot_json FROM workspace_readonly_cache WHERE account_id=? AND kind=?", [accountId, kind]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveWorkspaceReadOnlyCache(accountId: String, kind: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard ["tasks", "projects", "lucius"].contains(kind), snapshot["format"] as? String == "eo-workspace-readonly-v1", snapshot["accountId"] as? String == accountId, snapshot["kind"] as? String == kind, let data = snapshot["data"] as? [String: Any], data["complete"] is Bool else { throw TrackerLocalError.invalid }
+        let iso = ISO8601DateFormatter(), fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func timestamp(_ value: Any?) -> Bool { guard let raw = value as? String else { return false }; return iso.date(from: raw) != nil || fractional.date(from: raw) != nil }
+        let date = DateFormatter(); date.dateFormat = "yyyy-MM-dd"; date.locale = Locale(identifier: "en_US_POSIX"); date.timeZone = TimeZone(secondsFromGMT: 0); date.isLenient = false
+        func day(_ value: Any?) -> Bool { guard let raw = value as? String, raw.count == 10, let parsed = date.date(from: raw) else { return false }; return date.string(from: parsed) == raw }
+        func time(_ value: Any?) -> Bool { guard let raw = value as? String else { return false }; return raw.range(of: "^([01][0-9]|2[0-3]):[0-5][0-9]$", options: .regularExpression) != nil }
+        func rows(_ key: String, _ maximum: Int) throws -> [[String: Any]] {
+            guard let values = data[key] as? [[String: Any]], values.count <= maximum else { throw TrackerLocalError.invalid }
+            var ids = Set<Int>()
+            for row in values { guard let id = row["id"] as? Int, id > 0, id <= 9007199254740991, ids.insert(id).inserted, timestamp(row["createdAt"]), timestamp(row["updatedAt"]) else { throw TrackerLocalError.invalid } }
+            return values
+        }
+        guard timestamp(snapshot["capturedAt"]) else { throw TrackerLocalError.invalid }
+        if kind == "tasks" {
+            var ruleIds = Set<Int>()
+            for task in try rows("tasks", 1000) {
+                guard let id = task["id"] as? Int, task["title"] is String, task["notes"] is String, task["completed"] is Bool, task["tags"] is [String], let priority = task["priority"] as? String, ["low", "medium", "high"].contains(priority), task["dueDate"] is NSNull || day(task["dueDate"]), task["dueTime"] is NSNull || (day(task["dueDate"]) && time(task["dueTime"])), task["completedAt"] is NSNull || timestamp(task["completedAt"]), let rules = task["reminders"] as? [[String: Any]] else { throw TrackerLocalError.invalid }
+                for rule in rules {
+                    guard let key = rule["id"] as? Int, key > 0, ruleIds.insert(key).inserted, rule["taskId"] as? Int == id, let trigger = rule["triggerType"] as? String, ["absolute", "relative"].contains(trigger), rule["repeatWhileOverdue"] is Bool, rule["timezone"] is String, let channel = rule["deliveryChannel"] as? String, ["pwa", "apple_reminders"].contains(channel), timestamp(rule["createdAt"]), timestamp(rule["updatedAt"]), rule["absoluteDate"] is NSNull || day(rule["absoluteDate"]), rule["absoluteTime"] is NSNull || time(rule["absoluteTime"]) else { throw TrackerLocalError.invalid }
+                }
+            }
+        } else if kind == "projects" {
+            let projects = try rows("projects", 200), items = try rows("items", 5000), parentIds = Set(projects.compactMap { $0["id"] as? Int })
+            for item in items {
+                guard let project = item["projectId"] as? Int, parentIds.contains(project), item["title"] is String, let type = item["type"] as? String, ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"].contains(type), let status = item["status"] as? String, ["to_solve", "doing", "blocked", "done", "verified", "dropped"].contains(status) else { throw TrackerLocalError.invalid }
+                for key in ["description", "module", "priority", "nextStep", "resolution"] { guard item[key] is NSNull || item[key] is String else { throw TrackerLocalError.invalid } }
+                for key in ["startedAt", "completedAt", "verifiedAt"] { guard item[key] is NSNull || timestamp(item[key]) else { throw TrackerLocalError.invalid } }
+            }
+            for project in projects {
+                guard project["name"] is String, project["description"] is NSNull || project["description"] is String, let status = project["status"] as? String, ["active", "paused", "archived"].contains(status), let doing = project["doingCount"] as? Int, doing >= 0, let open = project["toSolveCount"] as? Int, open >= 0 else { throw TrackerLocalError.invalid }
+                if data["complete"] as? Bool == true {
+                    let own = items.filter { $0["projectId"] as? Int == project["id"] as? Int }
+                    guard own.filter({ $0["status"] as? String == "doing" }).count == doing, own.filter({ $0["status"] as? String == "to_solve" }).count == open else { throw TrackerLocalError.invalid }
+                }
+            }
+        } else {
+            guard let state = data["state"] as? [String: Any], state["status"] is String, state["mood"] is String, state["updatedAt"] is NSNull || timestamp(state["updatedAt"]) else { throw TrackerLocalError.invalid }
+            let posts = try rows("posts", 50), postIds = Set(posts.compactMap { $0["id"] as? Int })
+            for post in posts { guard post["content"] is String, timestamp(post["publishedAt"]) else { throw TrackerLocalError.invalid } }
+            for comment in try rows("comments", 500) { guard let post = comment["postId"] as? Int, postIds.contains(post), comment["content"] is String, let author = comment["author"] as? String, ["user", "lucius"].contains(author) else { throw TrackerLocalError.invalid } }
+            for entry in try rows("diary", 100) { guard entry["content"] is String, entry["tags"] is [String], day(entry["date"]) else { throw TrackerLocalError.invalid } }
+            for entry in try rows("cases", 100) {
+                guard let type = entry["errorType"] as? String, ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"].contains(type), let severity = entry["severity"] as? String, ["minor", "moderate", "serious", "habitual"].contains(severity), let status = entry["status"] as? String, ["serving", "probation", "temporary_release", "permanent_record"].contains(status), entry["triggerScenes"] is [String], day(entry["firstOccurredDate"]), day(entry["latestOccurredDate"]), let first = entry["firstOccurredDate"] as? String, let latest = entry["latestOccurredDate"] as? String, first <= latest, let count = entry["occurrenceCount"] as? Int, count >= 1, let correct = entry["consecutiveCorrectCount"] as? Int, correct >= 0, let threshold = entry["resetThreshold"] as? Int, threshold >= 1, entry["isRecurrence"] is Bool else { throw TrackerLocalError.invalid }
+                for key in ["title", "errorQuote", "cause", "correctBehavior", "mandatoryRule", "punishment"] { guard entry[key] is String else { throw TrackerLocalError.invalid } }
+                guard entry["nextCheck"] is NSNull || day(entry["nextCheck"]), entry["recurrenceIntervalDays"] is NSNull || (entry["recurrenceIntervalDays"] as? Int ?? -1) > 0 else { throw TrackerLocalError.invalid }
+            }
+        }
+        let bytes = try JSONSerialization.data(withJSONObject: snapshot)
+        guard bytes.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO workspace_readonly_cache(account_id,kind,snapshot_json) VALUES(?,?,?) ON CONFLICT(account_id,kind) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId, kind]); defer { sqlite3_finalize(query) }
+        let bound = bytes.withUnsafeBytes { sqlite3_bind_blob(query, 3, $0.baseAddress, Int32(bytes.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
+    func mediaReadOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM media_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveMediaReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-media-readonly-v1", let captured = snapshot["capturedAt"] as? String, let items = snapshot["items"] as? [[String: Any]], items.count <= 1000, let series = snapshot["series"] as? [[String: Any]], series.count <= 1000 else { throw TrackerLocalError.invalid }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard formatter.date(from: captured) != nil || ISO8601DateFormatter().date(from: captured) != nil else { throw TrackerLocalError.invalid }
+        let dayFormatter = DateFormatter(); dayFormatter.dateFormat = "yyyy-MM-dd"; dayFormatter.locale = Locale(identifier: "en_US_POSIX"); dayFormatter.timeZone = TimeZone(secondsFromGMT: 0); dayFormatter.isLenient = false
+        func validTimestamp(_ value: Any?) -> Bool {
+            guard let raw = value as? String else { return false }
+            return formatter.date(from: raw) != nil || ISO8601DateFormatter().date(from: raw) != nil
+        }
+        var ids = Set<Int>(), groupIds = Set<Int>(), viewingIds = Set<Int>()
+        for group in series {
+            guard let id = group["id"] as? Int, id > 0, id <= 9007199254740991, groupIds.insert(id).inserted, group["name"] is String, validTimestamp(group["createdAt"]), validTimestamp(group["updatedAt"]), let count = group["itemCount"] as? Int, count >= 0 else { throw TrackerLocalError.invalid }
+        }
+        for item in items {
+            guard let id = item["id"] as? Int, id > 0, id <= 9007199254740991, ids.insert(id).inserted, item["title"] is String, item["isFavorite"] is Bool, validTimestamp(item["createdAt"]), validTimestamp(item["updatedAt"]), let type = item["mediaType"] as? String, ["movie", "tv", "anime", "documentary", "other"].contains(type), let status = item["status"] as? String, ["planned", "watching", "completed", "paused", "dropped"].contains(status), let history = item["viewings"] as? [[String: Any]], history.count < 1000 else { throw TrackerLocalError.invalid }
+            for key in ["originalTitle", "translatedTitle", "seasonTitle", "note"] { guard item[key] is NSNull || item[key] is String else { throw TrackerLocalError.invalid } }
+            if let group = item["seriesId"] as? Int { guard groupIds.contains(group), series.first(where: { $0["id"] as? Int == group })?["name"] as? String == item["seriesName"] as? String else { throw TrackerLocalError.invalid } }
+            else { guard item["seriesId"] is NSNull, item["seriesName"] is NSNull else { throw TrackerLocalError.invalid } }
+            if let season = item["seasonNumber"] as? Int { guard (1...999).contains(season), ["tv", "anime"].contains(type) else { throw TrackerLocalError.invalid } }
+            else { guard item["seasonNumber"] is NSNull else { throw TrackerLocalError.invalid } }
+            if !["tv", "anime"].contains(type) { guard item["seasonTitle"] is NSNull else { throw TrackerLocalError.invalid } }
+            if let rating = item["rating"] as? String { guard rating.range(of: "^(goat|dope|mid|nope|shit)[+-]?$", options: .regularExpression) != nil else { throw TrackerLocalError.invalid } }
+            else { guard item["rating"] is NSNull else { throw TrackerLocalError.invalid } }
+            guard item["coverUrl"] is NSNull || item["coverUrl"] is String else { throw TrackerLocalError.invalid }
+            if let image = item["coverUrl"] as? String { guard image.range(of: "^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$", options: .regularExpression) != nil else { throw TrackerLocalError.invalid } }
+            for (index, viewing) in history.enumerated() {
+                guard let key = viewing["id"] as? Int, key > 0, key <= 9007199254740991, viewingIds.insert(key).inserted, viewing["mediaId"] as? Int == id, validTimestamp(viewing["createdAt"]), viewing["viewingNumber"] as? Int == index + 1, let day = viewing["watchedDate"] as? String, day.count == 10, let parsedDay = dayFormatter.date(from: day), dayFormatter.string(from: parsedDay) == day else { throw TrackerLocalError.invalid }
+            }
+        }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        for group in series {
+            guard let id = group["id"] as? Int, group["itemCount"] as? Int == items.filter({ $0["seriesId"] as? Int == id }).count else { throw TrackerLocalError.invalid }
+        }
+        let query = try statement("INSERT INTO media_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
+    func relationsReadOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM relations_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveRelationsReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-relations-readonly-v1", let captured = snapshot["capturedAt"] as? String, let people = snapshot["people"] as? [[String: Any]], people.count <= 100, let details = snapshot["details"] as? [[String: Any]], details.count == people.count else { throw TrackerLocalError.invalid }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        guard formatter.date(from: captured) != nil || plain.date(from: captured) != nil else { throw TrackerLocalError.invalid }
+        var ids = Set<Int>(), detailIds = Set<Int>()
+        for person in people {
+            guard let id = person["id"] as? Int, id > 0, id <= 9007199254740991, ids.insert(id).inserted, person["name"] is String, let status = person["relationshipStatus"] as? String, ["active", "ended"].contains(status), let balance = person["balance"] as? [String: Any], balance["socialMinor"] is Int, balance["settlementMinor"] is Int else { throw TrackerLocalError.invalid }
+            if let photo = person["photoPath"] as? String {
+                guard photo.range(of: "^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$", options: .regularExpression) != nil else { throw TrackerLocalError.invalid }
+            }
+        }
+        for detail in details {
+            guard let person = detail["person"] as? [String: Any], let id = person["id"] as? Int, ids.contains(id), detailIds.insert(id).inserted, let events = detail["events"] as? [[String: Any]], events.count < 500, let notes = detail["memoryNotes"] as? [[String: Any]], notes.count < 1000, let balance = detail["balance"] as? [String: Any], balance["socialMinor"] is Int, balance["settlementMinor"] is Int else { throw TrackerLocalError.invalid }
+            var eventIds = Set<Int>(), noteIds = Set<Int>()
+            for event in events {
+                guard let key = event["id"] as? Int, key > 0, key <= 9007199254740991, eventIds.insert(key).inserted, event["occurredAt"] is String, event["occurredHasExplicitTime"] is Bool, event["parties"] is [[String: Any]], event["items"] is [[String: Any]], event["flows"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+            }
+            for note in notes {
+                guard note["personId"] as? Int == id, let key = note["id"] as? Int, key > 0, noteIds.insert(key).inserted, note["content"] is String else { throw TrackerLocalError.invalid }
+            }
+        }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO relations_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+
     func subscriptionsReadOnlyCache(accountId: String) throws -> Any {
         try requireAccount(accountId)
         let query = try statement("SELECT snapshot_json FROM subscriptions_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }

@@ -143,10 +143,13 @@ export class LocalTrackerStore {
   constructor(accountId: string, storage: TrackerStorage) { this.accountId = accountId; this.storage = storage; this.state = emptyTrackerState(accountId); }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  async initialize() {
-    const saved = await this.storage.read();
-    if (saved) { validateTrackerState(saved, this.accountId); this.state = saved; }
-    this.listeners.forEach(listener => listener());
+  initialize():Promise<void> {
+    const task=this.work.then(async()=>{
+      const saved=await this.storage.read();
+      if(saved){validateTrackerState(saved,this.accountId);this.state=saved;}
+      this.listeners.forEach(listener=>listener());
+    });
+    this.work=task.catch(()=>undefined);return task;
   }
   private change<T>(action: (next: TrackerLocalState) => T): Promise<T> {
     const task = this.work.then(async () => {
@@ -170,6 +173,8 @@ export class LocalTrackerStore {
     const localId = id ?? newTrackerLocalId();
     await this.change(next => {
       const row = next.records.find(row => row.id === localId);
+      if (row?.serverId && !row.version) throw new Error("请先联网取得 Tracker 同步版本，再编辑已有记录");
+      if(resourceType!=="tracker"){const parent=parentFor(next,payload);if(parent?.serverId&&!parent.version)throw new Error("请先联网取得 Tracker 同步版本，再记录");}
       if (row?.status) throw new Error("请先处理这条记录的同步问题");
       if (next.outbox.some(item => item.localId === localId && item.operation === "delete")) throw new Error("记录正在删除");
       if (row) row.payload = { ...row.payload, ...payload };
@@ -194,6 +199,7 @@ export class LocalTrackerStore {
   async remove(id: string) {
     await this.change(next => {
       const row = next.records.find(row => row.id === id);
+      if(row?.serverId&&!row.version)throw new Error("请先联网取得 Tracker 同步版本，再删除已有记录");
       if (!row || row.resourceType !== "tracker_entry" || row.status) throw new Error("请先处理记录的同步问题");
       if (next.outbox.some(item => item.localId === id && item.operation === "delete")) return;
       if (!row.serverId && !next.outbox.some(item => item.localId === id && item.wire)) {

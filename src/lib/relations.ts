@@ -72,6 +72,22 @@ export function derivePersonBalance(events: RelationEvent[], personId: number): 
   return { settlementMinor, socialMinor };
 }
 
+export function personOpenAdvances(events: RelationEvent[], personId: number) {
+  const repayments = new Map<number, number>();
+  for (const event of events) for (const flow of event.flows) {
+    if (flow.flowType === "repayment" && flow.settlesFlowId !== null) repayments.set(flow.settlesFlowId, (repayments.get(flow.settlesFlowId) ?? 0) + flow.amountMinor);
+  }
+  return events.flatMap(event => {
+    const self = event.parties.find(party => party.partyType === "self");
+    const person = event.parties.find(party => party.partyType === "person" && party.personId === personId);
+    if (!self || !person) return [];
+    return event.flows.filter(flow => flow.flowType === "advance" && (
+      (flow.fromPartyId === self.id && flow.toPartyId === person.id) ||
+      (flow.fromPartyId === person.id && flow.toPartyId === self.id)
+    )).map(flow => ({flow, outstanding: flow.amountMinor - (repayments.get(flow.id) ?? 0)})).filter(item => item.outstanding > 0);
+  });
+}
+
 export function derivePersonRecency(events: RelationEvent[]) {
   const latestEvent = events[0] ?? null;
   const lastMet = events.find((event) => event.isInPerson === true) ?? null;

@@ -1,3 +1,4 @@
+import {navigateLocal} from "./local-navigation-browser.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -28,7 +29,8 @@ try {
   const open = async () => {
     context = await chromium.launchPersistentContext(profile, { channel: "chrome", headless: true, viewport: { width: 402, height: 874 }, isMobile: true, hasTouch: true });
     const page = context.pages()[0];
-    await context.addInitScript(() => { localStorage.setItem("evaorbit.uiLanguage","zh-CN"); localStorage.setItem("evaorbit.englishFont","zen"); });
+    await context.addInitScript(()=>localStorage.setItem("evaorbit.trackerMode","readonly"));
+await context.addInitScript(() => { localStorage.setItem("evaorbit.uiLanguage","zh-CN"); localStorage.setItem("evaorbit.englishFont","zen"); });
     page.on("pageerror", error=>errors.push(error.name));
     page.on("request", request=>{ if(!["GET","HEAD"].includes(request.method())) writes.push({method:request.method()}); });
     return page;
@@ -43,6 +45,7 @@ try {
   const active = snapshot.details.filter(detail=>!detail.tracker.archivedAt);
   phase="real data render";
   const started=Date.now(); await page.reload({waitUntil:"domcontentloaded"});
+  await navigateLocal(page,"观测");
   await page.locator(".tracker-card").first().waitFor();
   assert.equal(await page.locator(".tracker-card").count(),active.length);
   report.cachedListLoadMs=Date.now()-started;
@@ -77,6 +80,7 @@ try {
   }
   phase="restart"; await context.close(); context=null; page=await open();
   await page.goto("http://127.0.0.1:4188",{waitUntil:"networkidle"});
+  await navigateLocal(page,"观测");
   assert.equal(await page.locator(".tracker-card").count(),active.length);
   const preserved=await page.evaluate(async accountId=>{const request=indexedDB.open("eo-tracker-local-v1",1);const db=await new Promise(resolve=>{request.onsuccess=()=>resolve(request.result);});const tx=db.transaction("states","readonly"),read=tx.objectStore("states").get(accountId);const value=await new Promise(resolve=>{tx.oncomplete=()=>resolve(read.result);});db.close();return value;},backup.accountId);
   assert.equal(digest(preserved),originalDigest,"old frozen queue must remain byte-equivalent as JSON");

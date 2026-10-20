@@ -60,7 +60,7 @@ test("Training migrations define independent owner-scoped storage for Supabase a
 
 test("Health overview links to daily energy and training while retaining CRUD", () => {
   const page = readFileSync(new URL("../app/health/page.tsx", import.meta.url), "utf8");
-  const view = readFileSync(new URL("../app/health/health-view.tsx", import.meta.url), "utf8");
+  const view = readFileSync(new URL("../app/health/health-view-content.tsx", import.meta.url), "utf8");
   const overview = readFileSync(new URL("../app/health/health-overview.tsx", import.meta.url), "utf8");
   const energy = readFileSync(new URL("../app/health/daily-energy-card.tsx", import.meta.url), "utf8");
   const collection = readFileSync(new URL("../app/api/health/training/route.ts", import.meta.url), "utf8");

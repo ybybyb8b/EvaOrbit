@@ -14,7 +14,7 @@ const noStoreHeaders = { "Cache-Control": "no-store" };
 
 function sessionResponse(authenticated: boolean, account?: { id: string; email: string }) {
   return NextResponse.json(
-    { authenticated, ...(account ? { accountId: account.id, email: account.email } : {}) },
+    { authenticated, ...(account ? { accountId: account.id, email: account.email, aiConfigurationProtocol: 1 } : {}) },
     { headers: noStoreHeaders },
   );
 }

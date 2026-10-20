@@ -20,6 +20,8 @@ function optionalId(value:string|null){if(!value)return undefined;const id=Numbe
 function optionalBoolean(value:string|null){if(value===null||value==="")return undefined;if(value==="true")return true;if(value==="false")return false;throw new ValidationError("筛选格式不正确");}
 function optionalRating(value:string|null){if(!value)return undefined;if(!/^(goat|dope|mid|nope|shit)[+-]?$/.test(value))throw new ValidationError("评分格式不正确");return value as MediaRating;}
 
+function optionalOffset(value:string|null){const offset=Number(value);if(!Number.isSafeInteger(offset)||offset<0)throw new ValidationError("Offset is invalid");return offset;}
+
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
       seriesId: optionalId(params.get("seriesId")),
       favorite: optionalBoolean(params.get("favorite")),
       rewatched: optionalBoolean(params.get("rewatched")),
+      offset: params.has("offset") ? optionalOffset(params.get("offset")) : undefined,
       limit: optionalLimit(params.get("limit"), { trimEmpty: true }),
     }));
   } catch (error) {

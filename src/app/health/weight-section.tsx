@@ -1,8 +1,10 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { apiErrorMessage } from "@/lib/response-error";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
-import { PageLogAction } from "@/components/bottom-log";
+import { PageLogAction } from "@/components/bottom-log-core";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +22,8 @@ const ranges: Array<{ value: WeightRange; label: string }> = [{ value:"7d",label
 const MIN_WEIGHT=20,MAX_WEIGHT=300,TICK_STEP_KG=.1,TICK_PX=10,SNAP_PX=TICK_PX*WEIGHT_STEP_KG/TICK_STEP_KG;
 
 export function WeightSection({ initialRecords, initialSettings, initialFocused }: { initialRecords:WeightRecord[];initialSettings:WeightSettings;initialFocused?:WeightRecord }) {
+  const {read}=useHealthData();
+
   useDataRefresh("/health", () => reload());
   const { english }=useLocale();
   const [records,setRecords]=useState(initialRecords),[settings,setSettings]=useServerDataState(initialSettings),[range,setRange]=useState<WeightRange>("30d");
@@ -31,7 +35,7 @@ export function WeightSection({ initialRecords, initialSettings, initialFocused 
   const trend=useMemo(()=>weightTrend(visible),[visible]);
   const latest=records[0],previous=records[1],change=latest&&previous?normalizeWeightKg(latest.weightKg-previous.weightKg):null;
   function close(){setEditorOpen(false);setEditing(undefined);const url=new URL(window.location.href);if(url.searchParams.has("weight")){url.searchParams.delete("weight");url.searchParams.set("view","weight");window.history.replaceState(window.history.state,"",`${url.pathname}${url.search}${url.hash}`);}}
-  async function reload(){const response=await fetch("/api/health/weight?limit=1000",{cache:"no-store"});if(response.ok)setRecords(await response.json());}
+  async function reload(){const response=await read("/api/health/weight?limit=1000",{cache:"no-store"});if(response.ok)setRecords(await response.json());}
   return <section className="weight-section health-section" aria-labelledby="weight-title">
     {editorOpen&&<WeightEditor record={editing} initialWeight={latest?.weightKg??65} onClose={close} onSaved={async(syncMessage)=>{await reload();close();setMessage(syncMessage);}}/>}
     {settingsOpen&&<WeightSettingsSheet settings={settings} onClose={()=>setSettingsOpen(false)} onSaved={(next)=>{setSettings(next);setSettingsOpen(false);setMessage(english?"Weight settings saved":"体重设置已保存");}}/>}
@@ -47,6 +51,7 @@ export function WeightSection({ initialRecords, initialSettings, initialFocused 
 }
 
 function WeightChart({points,english}:{points:Array<{date:string;weightKg:number;movingAverageKg:number}>;english:boolean}){
+
   const [selected,setSelected]=useState<number|null>(null);
   const width=640,height=190,left=50,right=18,padY=22;const values=points.flatMap(point=>[point.weightKg,point.movingAverageKg]);const dataMin=Math.min(...values),dataMax=Math.max(...values),min=Math.floor(dataMin),max=Math.max(min+1,Math.ceil(dataMax)),span=max-min;
   const tickStep=Math.max(1,Math.ceil(span/4)),ticks=Array.from({length:Math.floor(span/tickStep)+1},(_,index)=>min+index*tickStep).filter(value=>value<=max);if(ticks.at(-1)!==max)ticks.push(max);
@@ -63,12 +68,17 @@ function WeightChart({points,english}:{points:Array<{date:string;weightKg:number
 }
 
 export function WeightEditor({record,initialWeight,initialDate,onClose,onSaved}:{record?:WeightRecord;initialWeight:number;initialDate?:string;onClose:()=>void;onSaved:(message:string)=>void|Promise<void>}){
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const {english}=useLocale();const [weight,setWeight]=useState(normalizeWeightKg(record?.weightKg??initialWeight)),[occurredAt,setOccurredAt]=useState(record?compactDateTimeValue(record.occurredAt,record.occurredHasExplicitTime):initialDate??`${currentLocalDate()}T${new Date().toTimeString().slice(0,5)}`),[saving,setSaving]=useState(false),[error,setError]=useState("");
-  async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);setError("");try{const occurred=compactDateTimePayload(occurredAt);const response=await fetch(record?`/api/health/weight/${record.id}`:"/api/health/weight",{method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,weightKg:weight})});const result=await response.json().catch(()=>null) as WeightRecord|{error?:string}|null;if(!response.ok)throw new Error(apiErrorMessage(result,english?"Could not save weight":"保存体重失败"));const saved=result as WeightRecord;let note=english?"Weight saved":"体重已保存";const info=await getNativeHostInfo();if(saved.healthKitSyncIdentifier&&hostSupports(info,"healthkit.saveBodyMass")){try{await nativeCall("healthkit.saveBodyMass",{weightKg:saved.weightKg,occurredAt:saved.occurredAt,syncIdentifier:saved.healthKitSyncIdentifier,syncVersion:saved.healthKitSyncVersion});note=english?"Weight saved and queued for Apple Health":"体重已保存并写入 Apple Health";}catch{note=english?"Weight saved; Apple Health write needs retry":"体重已保存，Apple Health 写入需重试";}}try{await reconcileNativeNotifications();}catch{/* Web Push still checks the saved record at delivery time. */}playNativeHaptic("success");await onSaved(note);}catch(reason){playNativeHaptic("error");setError(reason instanceof Error?reason.message:String(reason));}finally{setSaving(false);}}
-  return <FormSheet title={record?(english?"Edit weight":"编辑体重"):(english?"Log weight":"记录体重")} onClose={onClose} formId="weight-entry-form" submitLabel={record?(english?"Save changes":"保存修改"):(english?"Save weight":"保存体重")} busy={saving}><form id="weight-entry-form" className="weight-entry-form" onSubmit={submit}><div className="weight-entry-value"><strong>{formatWeightKg(weight)}</strong><span>kg</span></div><WeightRuler value={weight} onChange={setWeight}/><DateTimeField label={english?"Date and time":"日期与时间"} value={{date:occurredAt.slice(0,10),time:occurredAt.length>10?occurredAt.slice(11,16):""}} onChange={value=>setOccurredAt(value.date+(value.time?`T${value.time}`:""))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
+  async function submit(event:React.FormEvent){event.preventDefault(); if(preview)return;setSaving(true);setError("");try{const occurred=compactDateTimePayload(occurredAt);const response=await read(record?`/api/health/weight/${record.id}`:"/api/health/weight",{method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,weightKg:weight})});const result=await response.json().catch(()=>null) as WeightRecord|{error?:string}|null;if(!response.ok)throw new Error(apiErrorMessage(result,english?"Could not save weight":"保存体重失败"));const saved=result as WeightRecord;let note=english?"Weight saved":"体重已保存";const info=await getNativeHostInfo();if(saved.healthKitSyncIdentifier&&hostSupports(info,"healthkit.saveBodyMass")){try{await nativeCall("healthkit.saveBodyMass",{weightKg:saved.weightKg,occurredAt:saved.occurredAt,syncIdentifier:saved.healthKitSyncIdentifier,syncVersion:saved.healthKitSyncVersion});note=english?"Weight saved and queued for Apple Health":"体重已保存并写入 Apple Health";}catch{note=english?"Weight saved; Apple Health write needs retry":"体重已保存，Apple Health 写入需重试";}}try{await reconcileNativeNotifications();}catch{/* Web Push still checks the saved record at delivery time. */}playNativeHaptic("success");await onSaved(note);}catch(reason){playNativeHaptic("error");setError(reason instanceof Error?reason.message:String(reason));}finally{setSaving(false);}}
+  return <FormSheet title={record?(english?"Edit weight":"编辑体重"):(english?"Log weight":"记录体重")} onClose={onClose} formId="weight-entry-form" submitLabel={record?(english?"Save changes":"保存修改"):(english?"Save weight":"保存体重")} busy={saving} submitDisabled={preview}><form id="weight-entry-form" className="weight-entry-form" onSubmit={submit}>{preview&&<FormPreviewNotice/>}<div className="weight-entry-value"><strong>{formatWeightKg(weight)}</strong><span>kg</span></div><WeightRuler value={weight} onChange={setWeight}/><DateTimeField label={english?"Date and time":"日期与时间"} value={{date:occurredAt.slice(0,10),time:occurredAt.length>10?occurredAt.slice(11,16):""}} onChange={value=>setOccurredAt(value.date+(value.time?`T${value.time}`:""))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
 }
 
 function WeightRuler({value,onChange}:{value:number;onChange:(value:number)=>void}){
+
   const ref=useRef<HTMLDivElement>(null),timer=useRef<number|undefined>(undefined),last=useRef(value);
   const initialValue=useRef(value);
   useEffect(()=>{const element=ref.current;if(element)element.scrollLeft=(initialValue.current-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX;},[]);
@@ -79,7 +89,11 @@ function WeightRuler({value,onChange}:{value:number;onChange:(value:number)=>voi
 }
 
 function WeightSettingsSheet({settings,onClose,onSaved}:{settings:WeightSettings;onClose:()=>void;onSaved:(value:WeightSettings)=>void}){
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const {english}=useLocale();const [target,setTarget]=useState(settings.targetWeightKg===null?"":String(settings.targetWeightKg)),[enabled,setEnabled]=useState(settings.reminderEnabled),[time,setTime]=useState(settings.reminderTime),[saving,setSaving]=useState(false),[error,setError]=useState("");
-  async function submit(event:React.FormEvent){event.preventDefault();setSaving(true);setError("");try{const response=await fetch("/api/preferences/weight",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetWeightKg:target?Number(target):null,reminderEnabled:enabled,reminderTime:time})});const result=await response.json() as WeightSettings&{error?:string};if(!response.ok)throw new Error(result.error);onSaved(result);try{await reconcileNativeNotifications();}catch{/* Browser delivery remains available. */}}catch(reason){setError(reason instanceof Error?reason.message:"Could not save settings");}finally{setSaving(false);}}
-  return <FormSheet title={english?"Weight settings":"体重设置"} onClose={onClose} formId="weight-settings-form" submitLabel={english?"Save settings":"保存设置"} busy={saving}><form id="weight-settings-form" className="weight-settings-form" onSubmit={submit}><label className="field"><span>{english?"Goal weight (kg)":"目标体重（kg）"}</span><input type="number" min="20" max="500" step="0.05" value={target} onChange={event=>setTarget(event.target.value)}/></label><label className="weight-reminder-toggle"><span><strong>{english?"Daily reminder":"每日记录提醒"}</strong><small>{english?"Skipped automatically after a weight is logged that day.":"当天已有体重记录时自动跳过。"}</small></span><input role="switch" className="toggle-switch" type="checkbox" checked={enabled} onChange={event=>setEnabled(event.target.checked)}/></label>{enabled&&<label className="field"><span>{english?"Reminder time":"提醒时间"}</span><input required type="time" value={time} onChange={event=>setTime(event.target.value)}/></label>}{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
+  async function submit(event:React.FormEvent){event.preventDefault(); if(preview)return;setSaving(true);setError("");try{const response=await read("/api/preferences/weight",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetWeightKg:target?Number(target):null,reminderEnabled:enabled,reminderTime:time})});const result=await response.json() as WeightSettings&{error?:string};if(!response.ok)throw new Error(result.error);onSaved(result);try{await reconcileNativeNotifications();}catch{/* Browser delivery remains available. */}}catch(reason){setError(reason instanceof Error?reason.message:"Could not save settings");}finally{setSaving(false);}}
+  return <FormSheet title={english?"Weight settings":"体重设置"} onClose={onClose} formId="weight-settings-form" submitLabel={english?"Save settings":"保存设置"} busy={saving} submitDisabled={preview}><form id="weight-settings-form" className="weight-settings-form" onSubmit={submit}>{preview&&<FormPreviewNotice/>}<label className="field"><span>{english?"Goal weight (kg)":"目标体重（kg）"}</span><input type="number" min="20" max="500" step="0.05" value={target} onChange={event=>setTarget(event.target.value)}/></label><label className="weight-reminder-toggle"><span><strong>{english?"Daily reminder":"每日记录提醒"}</strong><small>{english?"Skipped automatically after a weight is logged that day.":"当天已有体重记录时自动跳过。"}</small></span><input role="switch" className="toggle-switch" type="checkbox" checked={enabled} onChange={event=>setEnabled(event.target.checked)}/></label>{enabled&&<label className="field"><span>{english?"Reminder time":"提醒时间"}</span><input required type="time" value={time} onChange={event=>setTime(event.target.value)}/></label>}{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
 }

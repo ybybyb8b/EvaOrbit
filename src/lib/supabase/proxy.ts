@@ -38,6 +38,13 @@ export async function updateSession(request: NextRequest) {
   const isLogin = request.nextUrl.pathname === "/login";
 
   if (!authorized && !isLogin) return unauthorized(request);
+  // The local Host binds online AI settings to the account that opened the form.
+  // Reject a cookie/account switch before any Provider or model mutation runs.
+  const configurationAccount = request.headers.get("X-EvaOrbit-Account");
+  if (request.nextUrl.pathname.startsWith("/api/ai/") && configurationAccount) {
+    if (configurationAccount !== claims?.sub) return NextResponse.json({ error: "AI configuration account changed" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    response.headers.set("Cache-Control", "no-store");
+  }
   if (authorized && isLogin) return NextResponse.redirect(new URL("/", request.url));
   return response;
 }

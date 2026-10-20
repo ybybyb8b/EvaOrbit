@@ -66,6 +66,8 @@
 
 ## Health
 
+- **本地只读阶段**：[HealthWorkspace](../src/local-trackers/health-workspace.tsx) 复用原 Health 内容、各分区及表单；[HealthDataProvider](../src/components/health-data-context.tsx) 注入快照读取与导航。新增 `/api/native/health-readonly` 经 Repository 白名单跳过补账/提醒校准；独立 SQLite/IndexedDB 缓存8 MiB，不修改旧队列。范围、验收和发布边界见 [Health 本地阶段](HEALTH_LOCAL_READONLY_POC.md)。
+
 - **职责与入口**：[health/](../src/app/health/)、[health-dashboard.ts](../src/lib/health-dashboard.ts)；服务为 [health.ts](../src/lib/services/health.ts)、[sleep.ts](../src/lib/services/sleep.ts)、[weight.ts](../src/lib/services/weight.ts)、[nutrition.ts](../src/lib/services/nutrition.ts)、[period-medication.ts](../src/lib/services/period-medication.ts)。
 - **数据与接口**：`health_records`、`weight_records`、`weight_settings`、`menstrual_periods`、`menstrual_flow_records`、`medication_presets`、`medication_dose_events`、`daily_nutrition_summaries`、`healthkit_daily_energy`、`healthkit_read_samples`；`/api/health/*`、`/api/nutrition/daily` 及其 history。MCP：`health_record`、`nutrition_daily`、`daily_energy`；不据页面功能推定其他资源已开放。
 - **依赖与决定**：摄入实时汇总 Food + Drink，手工能量可覆盖 HealthKit，清空覆盖后回退；无消耗数据时能量差未知。Calendar 只提供 Sleep Window，不能冒充实际睡眠。训练使用下节独立服务；周期用药提醒投影到统一 Reminder。
@@ -79,6 +81,8 @@
 - **依据**：无单独专题文档；查 [计划迁移及事务](../supabase/migrations/202610150001_training_plans.sql)、[计划单测](../src/lib/training-plan.test.ts)、[SQLite 集成测试](../scripts/training-plan-sqlite.test.mjs)。
 
 ## Lucius
+
+- **本地只读阶段**：[LuciusProfile](../src/app/lucius/lucius-profile.tsx) 与原日记/案底组件在 Web、Host 共享；缓存状态、动态/评论、日记和案底，图片从 bundle 加载，全部业务写入及通知停用。Eva 聊天仍不接入；见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[lucius/](../src/app/lucius/)、[lucius 服务](../src/lib/services/lucius.ts)。
 - **数据与接口**：`lucius_state`、`lucius_posts`、`lucius_post_comments`、`lucius_diary_entries`、`lucius_cases`；`/api/lucius/*`；MCP `lucius_state`、`lucius_post`、`lucius_post_comment`、`lucius_diary`、`lucius_case`。
@@ -96,6 +100,8 @@
 
 ## AI
 
+- **开发版 AI 配置**：开发版设置直接复用 [AiProvidersSettings](../src/app/settings/ai-providers-settings.tsx)，通过 `settings.aiConfiguration` 在线管理 Provider 和模型；不包含 Eva 聊天。白名单、账户绑定与服务端协议检查由 [AI 请求契约](../src/lib/ai-configuration-request.ts)、Native Controller、认证 proxy 共同执行。密钥仅临时驻留表单，请求不缓存、不进入业务 outbox；断网清除未提交密钥。旧服务端缺少账户安全协议时拒绝操作。
+
 - **职责与入口**：[ai/](../src/app/ai/)、[chat API](../src/app/api/ai/chat/route.ts)、[persona.ts](../src/lib/persona.ts)、[ai-tools.ts](../src/lib/ai-tools.ts)、[Provider 设置](../src/app/settings/ai-providers-settings.tsx)。
 - **数据与接口**：`chat_sessions`、`chat_messages`、`ai_settings`、`ai_providers`、`ai_model_configs`；`/api/ai/*`。
 - **依赖与决定**：Persona 从 SELF_PERSONA、偏好、时间与动态上下文组装；业务 Tool Calling 复用服务，Graph 负责事实召回。界面昵称/头像不改变消息 role 或 Persona；Key 归 Provider，Model 引用 Provider，密钥不发送给客户端。内置聊天工具与远程 MCP 是不同入口，勿混用旧工具名。
@@ -111,6 +117,8 @@
 
 ## Tasks
 
+- **本地只读阶段**：[TasksContent](../src/app/tasks/tasks-content.tsx) 由 Web 路由与本地 Host 共同使用；日期、提醒和完成状态直接读取原业务投影，预览表单不完成任务、不协调提醒、不触发 EventKit。与 Projects/Lucius 共用 [WorkspaceDataProvider](../src/components/workspace-data-context.tsx) 和账户隔离快照；容量与验收见 [本地阶段](WORKSPACES_LOCAL_READONLY_POC.md)。
+
 - **职责与入口**：[tasks/](../src/app/tasks/)、[task 服务](../src/lib/services/task.ts)；`tasks`、`task_reminders`；`/api/tasks`，MCP `task`。
 - **依赖与决定**：到期日期、明确到期时间和提醒规则分别处理；模块拥有的 Reminder 由 Task 服务协调，完成/重开走业务操作。Apple Reminders 同步通过 EventKit，不能把 MCP 本地写入等同于设备同步完成；Home 聚合任务列表。
 - **详文**：[MCP Task 与 Reminder 边界](../src/lib/mcp/README.md)、[EventKit 偏好恢复](EVENTKIT_ACCOUNT_PREFERENCES.md)。
@@ -120,7 +128,7 @@
 - **职责与入口**：[trackers/](../src/app/trackers/)、[tracker 服务](../src/lib/services/tracker.ts)；`trackers`、`tracker_fields`、`tracker_entries`、`tracker_goals`、`tracker_reminders`；`/api/trackers/*`，MCP `tracker`。
 - **依赖与决定**：属性 stable key/type 保持历史语义；归档保留记录，永久删除才清理数据。旧属性 DELETE 仍为归档，永久删除需显式选择。`time_range` 是自定义属性而非主记录时间，服务端重新计算时长。提醒依赖 Notifications，记录参与 Timeline。
 - **详文**：[生命周期](TRACKER_SETTINGS_LIFECYCLE.md)、[时间段属性](TRACKER_TIME_RANGE.md)、[MCP 子对象操作](../MCP.md)。
-- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选、洞察及 [完整设置展示](../src/app/trackers/tracker-settings-view.tsx)；页面数据适配与认证传输分别保留在 Web 与本地入口。设置编辑器由 Web 注入原表单；本地真实账户禁用写入，目标/提醒与认证图片保存在账户隔离的只读快照中。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；排序、属性管理、目标/提醒的本地写入迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
+- **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选、洞察及 [完整设置展示](../src/app/trackers/tracker-settings-view.tsx)；页面数据适配与认证传输分别保留在 Web 与本地入口。设置编辑器由 Web 注入原表单；本地真实账户现已接入独立 Tracker 编辑副本：新建 Tracker、数值/文本属性、记录增删改与基础信息修改；已有云端记录须先完成协议2版本握手再编辑。目标/提醒与认证图片仍来自独立只读快照。本轮编辑使用 `tracker_replica_state` / `replica-v1:`，旧记录和冻结 outbox 始终隔离；可在设置暂停编辑且保留本机草稿。同一IPA在服务端就绪后自动恢复同步，详见 [Tracker 编辑阶段](TRACKER_EDITABLE_REPLICA.md)。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除；排序、属性管理、目标/提醒的本地写入迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
 
 ## Calendar
 
@@ -147,12 +155,16 @@
 
 ## Relations
 
+- **本地只读阶段**：[RelationsWorkspace](../src/local-trackers/relations-workspace.tsx) 复用原人物列表、详情和表单；[RelationsDataProvider](../src/components/relations-data-context.tsx) 注入账户快照和导航。新增 `/api/native/relations-readonly`，含认证照片、笔记、完整有界往来/余额校验，触及500行上限拒绝刷新；SQLite/IndexedDB独立缓存不触碰旧队列。边界与验证见 [Relations 本地阶段](RELATIONS_LOCAL_READONLY_POC.md)。
+
 - **职责与入口**：[relations/](../src/app/relations/)、[relations 服务](../src/lib/services/relations.ts)；`/people` 重定向至 `/relations`。
 - **数据与接口**：`relation_people`、`relation_events`、`relation_event_parties`、`relation_event_items`、`relation_event_flows`、`person_memory_notes`；`/api/relations/*`；MCP `relation_person`、`relation_event`、`person_note`。
 - **依赖与决定**：人物笔记与 Graph Entity 是独立模型，不能仅凭名称合并。交往事件参与 Timeline；代垫结清以 flow ID 执行业务操作，不使用 event ID。事件 update 现有契约要求完整输入，不能当普通 PATCH。
 - **详文**：[MCP 操作与限制](../src/lib/mcp/README.md)。
 
 ## Media
+
+- **共享与本地只读**：[MediaWorkspace](../src/local-trackers/media-workspace.tsx) 复用 Web 收藏、母作品、详情和 MediaFields；Provider 仅适配读取与导航。母作品改名保留 ID，首次完成要求日期并依赖待批准的 completion RPC 迁移。账户缓存含封面和有界完整观看历史，不改旧 outbox；限制、发布和回退见 [Media 阶段](MEDIA_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[media/](../src/app/media/)、[media 服务](../src/lib/services/media.ts)；`media_items`、`media_series`、`media_viewings`；`/api/media/*`，MCP `media`、`media_series`。
 - **依赖与决定**：收藏条目、系列和多次观看历史分别保存；封面由 [media-cover 服务](../src/lib/services/media-cover.ts) 管理，不把资源文件内嵌进备份 JSON。
@@ -167,6 +179,8 @@
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
 ## Projects
+
+- **本地只读阶段**：原项目列表、详情、事项详情和表单由 [ReadOnlyWorkspace](../src/local-trackers/read-only-workspace.tsx) 注入读取与导航，保留 Done/Verified 和生命周期差异；不创建或修改事项。与 Tasks/Lucius 共用 `/api/native/workspace-readonly/:kind` 与独立缓存，见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[projects/](../src/app/projects/)、[project 服务](../src/lib/services/project.ts)；`projects`、`project_items`；`/api/projects`、`/api/project-items`，MCP `project`、`project_item`。
 - **依赖与决定**：这里管理当前开发事项、模块、状态、结果和下一步；索引不替代进度系统。`done` 与 `verified` 分开，生命周期时间由服务端维护；写回须保留不相关内容并复用既有事项。
@@ -189,7 +203,7 @@
 
 ## Native
 
-- **Tracker 只读验收边界**：`tracker-readonly.ts` 验证生产 GET 快照，`local-trackers/platform.ts` 和 Native bridge 双层禁止业务 commit/sync；原生 SQLite 的独立 `tracker_readonly_cache` 不替换旧 state/outbox。`trackers.acceptanceStatus` 执行含 WAL 的自动 SQLite backup 与 quick_check。正式双向写入仍以单独批准的协议 2 部署为前提，参见 [验收记录](TRACKER_POC_VALIDATION.md)。
+- **Tracker 只读验收边界**：`tracker-readonly.ts` 验证生产 GET 快照，`local-trackers/platform.ts` 和 Native bridge 的旧 commit/sync 通道继续关闭；独立编辑副本只放行新冻结队列，见 [编辑阶段](TRACKER_EDITABLE_REPLICA.md)；原生 SQLite 的独立 `tracker_readonly_cache` 不替换旧 state/outbox。`trackers.acceptanceStatus` 执行含 WAL 的自动 SQLite backup 与 quick_check。正式双向写入仍以单独批准的协议 2 部署为前提，参见 [验收记录](TRACKER_POC_VALIDATION.md)。
 
 - **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[同步契约](../src/lib/native-sync-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。
 - **数据与接口**：`native_devices`、`native_sync_mutations`，以及 HealthKit / EventKit 各自的样本、回执与映射表；`/api/native/*`、`/api/healthkit/energy/ingest`、`/api/eventkit/*`。

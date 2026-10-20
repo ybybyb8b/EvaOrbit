@@ -1,7 +1,9 @@
 "use client";
+import {useFormPreview} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
-import { PageLogAction } from "@/components/bottom-log";
+import { PageLogAction } from "@/components/bottom-log-core";
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -16,6 +18,10 @@ import { TrainingPlanEditor } from "./training-plan-editor";
 function trainingMeta(log: TrainingLog, english: boolean) { return [log.occurredHasExplicitTime ? compactDateTimeValue(log.occurredAt, true).slice(11) : "", log.course, log.teacher, log.durationMinutes ? english ? `${log.durationMinutes} min` : `${log.durationMinutes} 分钟` : ""].filter(Boolean).join(" · "); }
 
 export function TrainingSection({ initial, initialRecent, initialSuggestions, initialFocused, initialPlan, today }: { initial: TrainingLog[]; initialRecent: TrainingLog[]; initialSuggestions: TrainingInputSuggestions; initialFocused?: TrainingLog; initialPlan: TrainingPlan | null; today: string }) {
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   useDataRefresh("/health", () => reload());
   const { english } = useLocale();
   const [logs, setLogs] = useServerDataState(initial);
@@ -38,7 +44,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
     let active = true;
     async function refresh() {
       try {
-        const response = await fetch("/api/health/training/plan");
+        const response = await read("/api/health/training/plan");
         if (!response.ok) return;
         const next: TrainingPlan | null = await response.json();
         if (active && next) setPlan(current => !current || next.version >= current.version ? next : current);
@@ -47,14 +53,15 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
     const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", visible); document.addEventListener("visibilitychange", visible);
     return () => { active = false; window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible); };
-  }, [setPlan]);
+  }, [setPlan,read]);
   async function switchDay(dayId: string) {
+    if(preview)return;
     if (!plan || plan.currentDayId === dayId || switchLock.current) return;
     const dayIndex = plan.days.findIndex(day => day.id === dayId);
     if (dayIndex < 0 || !window.confirm(english ? `Set Day ${dayIndex + 1} as up next? This changes your plan progress without logging a workout.` : `将 Day ${dayIndex + 1} 设为待练？这会更改计划进度，不会新增训练记录。`)) return;
     switchLock.current = true; setSwitching(true); setPlanError("");
     try {
-      const response = await fetch("/api/health/training/plan", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...plan, currentDayId: dayId, expectedVersion: plan.version }) });
+      const response = await read("/api/health/training/plan", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...plan, currentDayId: dayId, expectedVersion: plan.version }) });
       const result = await response.json();
       if (!response.ok) { setPlanError(result.error); return; }
       acceptPlan(result);
@@ -80,7 +87,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   async function reload(completedPlan?: TrainingPlan) {
     if (completedPlan) acceptPlan(completedPlan);
     try {
-    const [logsResponse, recentResponse, suggestionsResponse] = await Promise.all([fetch(`/api/health/training?date=${encodeURIComponent(today)}`), fetch(`/api/health/training?from=${shiftDate(today,-6)}&to=${shiftDate(today,1)}`), fetch("/api/health/training/suggestions")]);
+    const [logsResponse, recentResponse, suggestionsResponse] = await Promise.all([read(`/api/health/training?date=${encodeURIComponent(today)}`), read(`/api/health/training?from=${shiftDate(today,-6)}&to=${shiftDate(today,1)}`), read("/api/health/training/suggestions")]);
     if (logsResponse.ok) setLogs(await logsResponse.json());
     if (recentResponse.ok) setRecent(await recentResponse.json());
     if (suggestionsResponse.ok) setSuggestions(await suggestionsResponse.json());
@@ -98,7 +105,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
         <p className="training-plan-meta">{[typeLabel(displayedDay.trainingType), displayedDay.bodyParts.map(bodyPartLabel).join(" · "), displayedDay.durationMinutes ? english ? `About ${displayedDay.durationMinutes} min` : `预计 ${displayedDay.durationMinutes} 分钟` : ""].filter(Boolean).join(" · ")}</p>
         {displayedDay.content && <p className="training-plan-content">{displayedDay.content}</p>}
         {displayedDay.videoUrls.length > 0 && <ul className="training-plan-videos">{displayedDay.videoUrls.map((url, index) => <li key={`${index}:${url}`}><a href={url} target="_blank" rel="noopener noreferrer">{english ? `Video ${index + 1}` : `视频 ${index + 1}`} · {new URL(url).hostname}<Icon name="arrow" /></a></li>)}</ul>}
-        <div className="training-plan-footer"><p>{previewing ? english ? `Preview · Up next: Day ${plan!.days.indexOf(currentDay!) + 1}` : `预览中 · 待练仍为 Day ${plan!.days.indexOf(currentDay!) + 1}` : english ? "Up next · Rest days keep your place" : "Up next · 休息日不影响进度"}</p>{previewing ? <button type="button" className="button secondary" disabled={switching} onClick={() => void switchDay(displayedDay.id)}>{english ? "Set as up next" : "设为待练"}</button> : <button type="button" className="button primary" disabled={switching} onClick={() => { setEditing(undefined); setPlanCompletion({ plan: plan!, requestKey: crypto.randomUUID() }); setOpen(true); }}>{english ? "Complete & log" : "完成并记录"}</button>}</div>
+        <div className="training-plan-footer"><p>{previewing ? english ? `Preview · Up next: Day ${plan!.days.indexOf(currentDay!) + 1}` : `预览中 · 待练仍为 Day ${plan!.days.indexOf(currentDay!) + 1}` : english ? "Up next · Rest days keep your place" : "Up next · 休息日不影响进度"}</p>{previewing ? <button type="button" className="button secondary" disabled={switching||preview} onClick={() => void switchDay(displayedDay.id)}>{english ? "Set as up next" : "设为待练"}</button> : <button type="button" className="button primary" disabled={switching} onClick={() => { setEditing(undefined); setPlanCompletion({ plan: plan!, requestKey: crypto.randomUUID() }); setOpen(true); }}>{english ? "Complete & log" : "完成并记录"}</button>}</div>
       </> : <p className="training-plan-hint">{plan ? english ? "No training days. Edit your plan to add one." : "暂无训练日，编辑计划即可添加。" : english ? "Start with the four-day template and make it yours." : "从四日模板开始，可自由修改训练日和顺序。"}</p>}
       {planError && <ErrorNotice role="alert">{planError}</ErrorNotice>}
     </article>

@@ -1,3 +1,9 @@
+import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../lib/tracker-replica";
+import {allowsAiConfiguration} from "../lib/ai-configuration-request";
+import {workspaceKinds,validateWorkspaceSnapshot,type WorkspaceKind,type WorkspaceReadonlySnapshot} from "../lib/workspace-readonly";
+import {validateMediaSnapshot,type MediaReadonlySnapshot} from "../lib/media-readonly";
+import {validateRelationsSnapshot,type RelationsReadonlySnapshot} from "../lib/relations-readonly";
+import {validateHealthSnapshot,type HealthReadonlySnapshot} from "../lib/health-readonly";
 import {buildInboxSnapshot,validateInboxSnapshot,type InboxReadonlySnapshot} from "../lib/inbox-readonly";
 import {buildMemoSnapshot,validateMemoSnapshot,type MemoReadonlySnapshot} from "../lib/memo-readonly";
 import {buildChronicleSnapshot,validateChronicleSnapshot,type ChronicleReadonlySnapshot} from "../lib/chronicle-readonly";
@@ -16,6 +22,11 @@ import {foodResourceKey,validateFoodResource,type FoodReadonlyResource,type Food
 
 export type LocalAccount = { accountId: string; email: string };
 export type TrackerPlatform = {
+  aiConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
+  workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,refresh?:boolean):Promise<WorkspaceReadonlySnapshot|null>;
+  mediaSnapshot(account:LocalAccount,refresh?:boolean):Promise<MediaReadonlySnapshot|null>;
+  relationsSnapshot(account:LocalAccount,refresh?:boolean):Promise<RelationsReadonlySnapshot|null>;
+  healthSnapshot(account:LocalAccount,refresh?:boolean):Promise<HealthReadonlySnapshot|null>;
   inboxSnapshot(account:LocalAccount,refresh?:boolean):Promise<InboxReadonlySnapshot|null>;
   memoSnapshot(account:LocalAccount,refresh?:boolean):Promise<MemoReadonlySnapshot|null>;
   chronicleSnapshot(account:LocalAccount,refresh?:boolean):Promise<ChronicleReadonlySnapshot|null>;
@@ -95,7 +106,7 @@ async function homeResource(account: LocalAccount, native: boolean, kind: HomeRe
       const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
       if (!identity.authenticated||identity.accountId!==account.accountId) throw new Error("Home account changed");
       const response=await fetch(`/eo-api/home-readonly/${kind}/${key}`,{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-      if(response.status===404)throw new Error("The Home read-only API is not deployed. Cached data is preserved.");
+      if(response.status===404)throw new Error("The Home read-only API is unavailable (HTTP 404). Cached data is preserved.");
       if(!response.ok)throw new Error(await responseError(response,"Could not load Home. Cached data is preserved."));
       value=validateHomeResource(await response.json(),account.accountId,kind,key);
       const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -134,7 +145,7 @@ async function foodSnapshot(account:LocalAccount,native:boolean,refresh:boolean)
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Food & Drink account changed");
   const response=await fetch("/eo-api/food-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Food & Drink read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Food & Drink read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Food & Drink. Cached data is preserved."));
   const snapshot=validateFoodSnapshot(await response.json(),account.accountId);
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -162,7 +173,7 @@ async function catsSnapshot(account:LocalAccount,native:boolean,refresh:boolean)
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Cats account changed");
   const response=await fetch("/eo-api/cats-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Cats read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Cats read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Cats. Cached data is preserved."));
   const snapshot=validateCatsSnapshot(await response.json(),account.accountId);
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -190,7 +201,7 @@ async function subscriptionsSnapshot(account:LocalAccount,native:boolean,refresh
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Subscriptions account changed");
   const response=await fetch("/eo-api/subscriptions-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Subscriptions read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Subscriptions read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Subscriptions. Cached data is preserved."));
   const snapshot=validateSubscriptionsSnapshot(await response.json(),account.accountId);
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -200,6 +211,62 @@ async function subscriptionsSnapshot(account:LocalAccount,native:boolean,refresh
     const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
     request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
     tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Subscriptions snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
+
+async function healthSnapshot(account:LocalAccount,native:boolean,refresh:boolean):Promise<HealthReadonlySnapshot|null>{
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("health.readOnlySnapshot"))throw new Error("Install the updated development Host to open Health. Existing data is preserved.");
+    const value=await nativeCall<HealthReadonlySnapshot|null>("health.readOnlySnapshot",{accountId:account.accountId,refresh});
+    return value?validateHealthSnapshot(value,account.accountId):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Health account changed");
+  const key="health-readonly:"+account.accountId;
+  if(!refresh)return read<HealthReadonlySnapshot>("states",key).then(value=>value?validateHealthSnapshot(value,account.accountId):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Health account changed");
+  const response=await fetch("/eo-api/health-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Health read-only API is unavailable (HTTP 404). Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Health. Cached data is preserved."));
+  const snapshot=validateHealthSnapshot(await response.json(),account.accountId);
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Health account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Health snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
+
+async function relationsSnapshot(account:LocalAccount,native:boolean,refresh:boolean):Promise<RelationsReadonlySnapshot|null>{
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("relations.readOnlySnapshot"))throw new Error("Install the updated development Host to open Relations. Existing data is preserved.");
+    const value=await nativeCall<RelationsReadonlySnapshot|null>("relations.readOnlySnapshot",{accountId:account.accountId,refresh});
+    return value?validateRelationsSnapshot(value,account.accountId):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Relations account changed");
+  const key="relations-readonly:"+account.accountId;
+  if(!refresh)return read<RelationsReadonlySnapshot>("states",key).then(value=>value?validateRelationsSnapshot(value,account.accountId):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Relations account changed");
+  const response=await fetch("/eo-api/relations-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Relations read-only API is unavailable (HTTP 404). Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Relations. Cached data is preserved."));
+  const snapshot=validateRelationsSnapshot(await response.json(),account.accountId);
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Relations account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Relations snapshot was not saved. Existing data is preserved."));
   });
   return snapshot;
 }
@@ -218,7 +285,7 @@ async function chronicleSnapshot(account:LocalAccount,native:boolean,refresh:boo
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Chronicle account changed");
   const response=await fetch("/eo-api/chronicle",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Chronicle read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Chronicle read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Chronicle. Cached data is preserved."));
   const snapshot=buildChronicleSnapshot(account.accountId,await response.json());
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -245,7 +312,7 @@ async function memoSnapshot(account:LocalAccount,native:boolean,refresh:boolean)
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Memo account changed");
   const response=await fetch("/eo-api/memos",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Memo read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Memo read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Memo. Cached data is preserved."));
   const snapshot=buildMemoSnapshot(account.accountId,await response.json());
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -272,7 +339,7 @@ async function inboxSnapshot(account:LocalAccount,native:boolean,refresh:boolean
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Inbox account changed");
   const response=await fetch("/eo-api/inbox",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Inbox read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Inbox read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not refresh Inbox. Cached data is preserved."));
   const snapshot=buildInboxSnapshot(account.accountId,await response.json());
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -301,7 +368,7 @@ async function foodResource(account:LocalAccount,native:boolean,kind:FoodResourc
   const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
   if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Food account changed");
   const response=await fetch(`/eo-api/food-readonly/${kind}/${key}`,{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
-  if(response.status===404)throw new Error("The Places and Library read-only API is not deployed. Cached data is preserved.");
+  if(response.status===404)throw new Error("The Places and Library read-only API is unavailable (HTTP 404). Cached data is preserved.");
   if(!response.ok)throw new Error(await responseError(response,"Could not download Food resources. Cached data is preserved."));
   const value=validateFoodResource(await response.json(),account.accountId,kind,key);
   const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
@@ -341,42 +408,51 @@ export function browserTrackerStorage(accountId: string): TrackerStorage {
 async function api<T>(path: "session" | "sync", method: string, body?: unknown): Promise<T> {
   // Session auth uses the existing API; Tracker GETs have a separate allowlist.
   // No cloud credentials or service-role key are bundled into the React app.
-  const response = await fetch(`/eo-api/${path}`, { method, credentials: "same-origin", headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`/eo-api/${path}`, { method, cache:"no-store", redirect:"error", credentials: "same-origin", headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new Error(await responseError(response, "同步失败，本地记录已保留"));
   return response.status === 204 ? undefined as T : response.json();
 }
 
-export function trackerPlatform(): TrackerPlatform {
+export function trackerPlatform({editableTrackers=false,editingPaused=false}:{editableTrackers?:boolean;editingPaused?:boolean}={}): TrackerPlatform {
   const native = Boolean(window.EvaOrbitNative);
+  let editable=editableTrackers&&!native;
   if (native) return {
     native,
-    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
+    aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
     inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
     memoSnapshot:(account,refresh=false)=>memoSnapshot(account,native,refresh),
     chronicleSnapshot:(account,refresh=false)=>chronicleSnapshot(account,native,refresh),
+    relationsSnapshot:(account,refresh=false)=>relationsSnapshot(account,native,refresh),
+    mediaSnapshot:(account,refresh=false)=>mediaSnapshot(account,native,refresh),
+    workspaceSnapshot:(account,kind,refresh=false)=>workspaceSnapshot(account,kind,native,refresh),
+    healthSnapshot:(account,refresh=false)=>healthSnapshot(account,native,refresh),
     subscriptionsSnapshot:(account,refresh=false)=>subscriptionsSnapshot(account,native,refresh),
     foodResource:(account,kind,key,refresh)=>foodResource(account,native,kind,key,refresh),
     homeResource: (account,kind,key,refresh) => homeResource(account,true,kind,key,refresh),
-    account: () => nativeCall<LocalAccount | null>("trackers.getSession"),
+    async account(){const info=await nativeCall<{methods?:string[]}>("host.getInfo");editable=editableTrackers&&["trackers.readReplica","trackers.commitReplica","trackers.syncReplica"].every(method=>info.methods?.includes(method));return nativeCall<LocalAccount|null>("trackers.getSession");},
     signIn: (email, password) => nativeCall<LocalAccount>("trackers.signIn", { email, password }),
     signOut: () => nativeCall<void>("trackers.signOut"),
-    storage: account => ({
+    storage: account => editable?replicaStorage(account,true):({
       async read() { await requireReadonlyHost(); const snapshot = await nativeCall<TrackerReadonlySnapshot | null>("trackers.readOnlySnapshot", { accountId: account.accountId, refresh: false }); return snapshot ? readonlyTrackerState(snapshot, account.accountId) : null; },
       commit: async () => denyWrite(),
     }),
-    sync: async () => denyWrite(),
-    readOnly: () => true,
+    sync: request => editable&&!editingPaused?syncReplica(request,native):Promise.reject(new Error("当前为只读验收，Tracker 写入和旧队列上传已停用")),
+    readOnly: () => editingPaused||!editable,
     async refreshReadonly(account) { await requireReadonlyHost(); const snapshot = await nativeCall<TrackerReadonlySnapshot>("trackers.readOnlySnapshot", { accountId: account.accountId, refresh: true }); readonlyTrackerState(snapshot, account.accountId); },
     async inspection(account) { await requireReadonlyHost(); return nativeCall("trackers.acceptanceStatus", { accountId: account.accountId }); },
   };
   return {
     native,
-    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
+    aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
     inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
     memoSnapshot:(account,refresh=false)=>memoSnapshot(account,native,refresh),
     chronicleSnapshot:(account,refresh=false)=>chronicleSnapshot(account,native,refresh),
+    relationsSnapshot:(account,refresh=false)=>relationsSnapshot(account,native,refresh),
+    mediaSnapshot:(account,refresh=false)=>mediaSnapshot(account,native,refresh),
+    workspaceSnapshot:(account,kind,refresh=false)=>workspaceSnapshot(account,kind,native,refresh),
+    healthSnapshot:(account,refresh=false)=>healthSnapshot(account,native,refresh),
     subscriptionsSnapshot:(account,refresh=false)=>subscriptionsSnapshot(account,native,refresh),
     foodResource:(account,kind,key,refresh)=>foodResource(account,native,kind,key,refresh),
     homeResource: (account,kind,key,refresh) => homeResource(account,false,kind,key,refresh),
@@ -388,12 +464,12 @@ export function trackerPlatform(): TrackerPlatform {
       await saveAccount(account); return account;
     },
     async signOut() { await saveAccount(null); await api("session", "DELETE").catch(() => undefined); },
-    storage: account => isPreviewAccount(account) ? browserTrackerStorage(account.accountId) : ({
+    storage: account => isPreviewAccount(account) ? browserTrackerStorage(account.accountId) : editable?replicaStorage(account,false):({
       async read() { const snapshot = await read<TrackerReadonlySnapshot>("states", "readonly:" + account.accountId); return snapshot ? readonlyTrackerState(snapshot, account.accountId) : null; },
       commit: async () => denyWrite(),
     }),
-    sync: async () => denyWrite(),
-    readOnly: account => !isPreviewAccount(account),
+    sync: request => editable&&!editingPaused?syncReplica(request,native):Promise.reject(new Error("当前为只读验收，Tracker 写入和旧队列上传已停用")),
+    readOnly: account => editingPaused||!isPreviewAccount(account)&&!editable,
     async refreshReadonly(account) {
       if (isPreviewAccount(account)) return;
       const snapshot = await fetchReadonlyTrackers(account.accountId, async path => {
@@ -421,3 +497,126 @@ export async function startBrowserPreview(): Promise<LocalAccount> {
   await saveAccount(account); return account;
 }
 export const isPreviewAccount = (account: LocalAccount) => account.accountId === "00000000-0000-4000-8000-000000000001";
+
+async function mediaSnapshot(account:LocalAccount,native:boolean,refresh:boolean):Promise<MediaReadonlySnapshot|null>{
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("media.readOnlySnapshot"))throw new Error("Install the updated development Host to open Media. Existing data is preserved.");
+    const value=await nativeCall<MediaReadonlySnapshot|null>("media.readOnlySnapshot",{accountId:account.accountId,refresh});
+    return value?validateMediaSnapshot(value,account.accountId):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Media account changed");
+  const key="media-readonly:"+account.accountId;
+  if(!refresh)return read<MediaReadonlySnapshot>("states",key).then(value=>value?validateMediaSnapshot(value,account.accountId):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Media account changed");
+  const response=await fetch("/eo-api/media-readonly",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Media read-only API is unavailable (HTTP 404). Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Media. Cached data is preserved."));
+  const snapshot=validateMediaSnapshot(await response.json(),account.accountId);
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Media account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Media snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
+
+async function workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,native:boolean,refresh:boolean):Promise<WorkspaceReadonlySnapshot|null>{
+  if(!workspaceKinds.includes(kind))throw new Error("Unknown read-only workspace");
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("workspaces.readOnlySnapshot"))throw new Error("Install the updated development Host to open Workspace. Existing data is preserved.");
+    const value=await nativeCall<WorkspaceReadonlySnapshot|null>("workspaces.readOnlySnapshot",{accountId:account.accountId,kind,refresh});
+    return value?validateWorkspaceSnapshot(value,account.accountId,kind):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Workspace account changed");
+  const key=kind+"-readonly:"+account.accountId;
+  if(!refresh)return read<WorkspaceReadonlySnapshot>("states",key).then(value=>value?validateWorkspaceSnapshot(value,account.accountId,kind):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Workspace account changed");
+  const response=await fetch(`/eo-api/workspace-readonly/${kind}`,{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Workspace read-only API is unavailable (HTTP 404). Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Workspace. Cached data is preserved."));
+  const snapshot=validateWorkspaceSnapshot(await response.json(),account.accountId,kind);
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Workspace account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Workspace snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
+
+// Online only. No cache, durable draft, outbox, retry, or background request.
+async function aiConfiguration(account:LocalAccount,path:string,native:boolean,init:RequestInit={}):Promise<Response>{
+  const method=(init.method??"GET").toUpperCase();
+  if(!allowsAiConfiguration(path,method))throw new Error("Unsupported AI configuration request");
+  if(!navigator.onLine)throw new Error("AI settings require an internet connection. Nothing was queued.");
+  const body=init.body;
+  if(body!==undefined&&(typeof body!=="string"||new TextEncoder().encode(body).length>32768))throw new Error("Invalid AI configuration body");
+  if((method==="GET"||method==="DELETE")&&body!==undefined)throw new Error("Unexpected AI configuration body");
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("settings.aiConfiguration"))throw new Error("Install the new development Host to manage AI settings.");
+    const result=await nativeCall<{status:number;body:unknown}>("settings.aiConfiguration",{accountId:account.accountId,path,method,...(body===undefined?{}:{body:JSON.parse(body as string)})});
+    return new Response(result.status===204?null:JSON.stringify(result.body),{status:result.status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+  }
+  if(isPreviewAccount(account)||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Connect a real account to manage AI settings");
+  const identity=await api<{authenticated:boolean;accountId:string;aiConfigurationProtocol?:number}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("AI configuration account changed");
+  if(identity.aiConfigurationProtocol!==1)throw new Error("The account-safe AI settings API must be deployed before saving configuration.");
+  const response=await fetch(`/eo-api/ai-config/${path.slice("/api/ai/".length)}`,{method,body,credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","X-EvaOrbit-Account":account.accountId},signal:AbortSignal.timeout(20000),redirect:"error"});
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("AI configuration account changed; check the cloud state before retrying");
+  return response;
+}
+
+function replicaStorage(account:LocalAccount,native:boolean):TrackerStorage{
+ const key="replica-v1:"+account.accountId;
+ return {
+  async read(){
+   if(native){const saved=await nativeCall<TrackerLocalState|null>("trackers.readReplica",{accountId:account.accountId});const snapshot=await nativeCall<TrackerReadonlySnapshot|null>("trackers.readOnlySnapshot",{accountId:account.accountId,refresh:false});return trackerReplicaState(account.accountId,saved,snapshot);}
+   if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Tracker replica account changed");
+   return trackerReplicaState(account.accountId,await read<TrackerLocalState>("states",key),await read<TrackerReadonlySnapshot>("states","readonly:"+account.accountId));
+  },
+  async commit(expectedRevision,next){
+   if(native)return nativeCall<boolean>("trackers.commitReplica",{accountId:account.accountId,expectedRevision,state:next});
+   const db=await localDatabase();return new Promise<boolean>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),session=tx.objectStore("session").get("current"),current=tx.objectStore("states").get(key);let saved=false;
+    current.onsuccess=()=>{if(session.result?.accountId!==account.accountId||next.accountId!==account.accountId||next.revision!==expectedRevision+1){tx.abort();return;}if((current.result?.revision??0)!==expectedRevision)return;tx.objectStore("states").put(next,key);saved=true;};
+    tx.oncomplete=()=>resolve(saved);tx.onabort=tx.onerror=()=>reject(new Error("Tracker replica account or storage changed; records preserved"));
+   });
+  }
+ };
+}
+async function syncReplica(request:TrackerSyncRequest,native:boolean):Promise<TrackerSyncResponse>{
+ if(!navigator.onLine)throw new Error("Offline. Tracker changes are saved locally and will sync when connected.");
+ const account={accountId:request.accountId,email:""};
+ const send=async(body:TrackerSyncRequest):Promise<TrackerSyncResponse>=>{
+  if(native)return nativeCall<TrackerSyncResponse>("trackers.syncReplica",{request:body});
+  if((await read<LocalAccount>("session","current"))?.accountId!==body.accountId)throw new Error("Tracker replica account changed");
+  requireReplicaMutations(await read<TrackerLocalState>("states","replica-v1:"+body.accountId),body);
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==body.accountId||(await read<LocalAccount>("session","current"))?.accountId!==body.accountId)throw new Error("Tracker replica account changed");
+  requireReplicaMutations(await read<TrackerLocalState>("states","replica-v1:"+body.accountId),body);
+  const result=await api<TrackerSyncResponse>("sync","POST",body);
+  if((await read<LocalAccount>("session","current"))?.accountId!==body.accountId)throw new Error("Tracker replica account changed; local queue preserved");
+  return result;
+ };
+ const baseline=validateReplicaHandshake(account.accountId,await send({...request,mutations:[]}));
+ return request.mutations.length?send(request):baseline;
+}
+
+export async function browserTrackerExport(account:LocalAccount){
+ if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Tracker export account changed");
+ const legacy=await read<TrackerLocalState>("states",account.accountId),replica=await read<TrackerLocalState>("states","replica-v1:"+account.accountId);
+ if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Tracker export account changed");
+ return {format:"eo-trackers-export-v2",accountId:account.accountId,legacy,replica};
+}

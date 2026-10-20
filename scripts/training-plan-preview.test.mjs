@@ -21,13 +21,16 @@ test("Day capsules only preview; switching requires an explicit action and confi
   };
   const code = ts.transpileModule(readFileSync("src/app/health/training-section.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = {};
+  const request=async(url, options)=>{requests.push({url,...options});const payload=JSON.parse(options.body);return {ok:true,json:async()=>({...plan,currentDayId:payload.currentDayId,version:2})};};
   new Function("require", "exports", "window", "fetch", code)(name => {
     if (name === "react") return react;
+    if(name.endsWith("form-preview"))return {useFormPreview:()=>false};
+    if(name.endsWith("health-data-context"))return {useHealthData:()=>({read:request})};
     if (name.endsWith("error-notice")) return { ErrorNotice: "error-notice" };
     if (name.endsWith("use-data-refresh")) return { useServerDataState: react.useState, useDataRefresh: () => {} };
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
     if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: false }) };
-    if (name.endsWith("bottom-log")) return { PageLogAction: "log-action" };
+    if (name.endsWith("bottom-log-core")) return { PageLogAction: "log-action" };
     if (name.endsWith("icons")) return { Icon: "icon" };
     if (name.endsWith("date-time-field")) return { compactDateTimeValue: () => "" };
     if (name.endsWith("time")) return { dateInEvaOrbit: () => "2026-10-15", shiftDate: value => value };

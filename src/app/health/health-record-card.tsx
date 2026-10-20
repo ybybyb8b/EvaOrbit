@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import {HealthLink as Link} from "@/components/health-data-context";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
 import { Icon } from "@/components/icons";

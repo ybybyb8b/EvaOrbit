@@ -7,6 +7,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     private let cookies: HTTPCookieStorage
     private var activeSession: URLSession?
     private var generation = 0
+    private var replicaSessions: [String: Int] = [:]
     private var acceptanceReceipts: [String: [String: Any]] = [:]
     private var session: URLSession {
         if let activeSession { return activeSession }
@@ -30,21 +31,26 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     func request(path: String, method: String, body: Any? = nil) async throws -> Any {
         let (data, http) = try await performRequest(path: path, method: method, body: body)
         guard (200..<300).contains(http.statusCode) else {
-            if path.hasPrefix("home-readonly/") && http.statusCode == 404 { throw TrackerLocalError.network("The Home read-only API is not deployed. Existing cached data is preserved.") }
-            if (path == "food-readonly" || path.hasPrefix("food-readonly/")) && http.statusCode == 404 { throw TrackerLocalError.network("The Food & Drink read-only API is not deployed. Existing cached data is preserved.") }
-            if path == "cats-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Cats read-only API is not deployed. Existing cached data is preserved.") }
-            if path == "subscriptions-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Subscriptions read-only API is not deployed. Existing cached data is preserved.") }
+            if path.hasPrefix("home-readonly/") && http.statusCode == 404 { throw TrackerLocalError.network("The Home read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if (path == "food-readonly" || path.hasPrefix("food-readonly/")) && http.statusCode == 404 { throw TrackerLocalError.network("The Food & Drink read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path == "cats-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Cats read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path.hasPrefix("workspace-readonly/") && http.statusCode == 404 { throw TrackerLocalError.network("The workspace read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path == "media-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Media read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path == "relations-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Relations read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path == "health-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Health read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
+            if path == "subscriptions-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Subscriptions read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
             let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             throw TrackerLocalError.network(message?["error"] as? String ?? "同步暂时失败，本地记录已保留")
         }
         return http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)
     }
-    private func performRequest(path: String, method: String, body: Any? = nil) async throws -> (Data, HTTPURLResponse) {
-        if path == "sync" { throw TrackerLocalError.readOnly }
+    private func performRequest(path: String, method: String, body: Any? = nil, replica: Bool = false) async throws -> (Data, HTTPURLResponse) {
+        if path == "sync" && !replica { throw TrackerLocalError.readOnly }
         let trackerPath = path == "trackers" || path.range(of: "^trackers/[1-9][0-9]*(/icon)?$", options: .regularExpression) != nil
         let homePath = path.range(of: "^home-readonly/(day/[0-9]{4}-[0-9]{2}-[0-9]{2}|month/[0-9]{4}-[0-9]{2}|due/current)$", options: .regularExpression) != nil
+        let workspacePath = path.range(of: "^workspace-readonly/(tasks|projects|lucius)$", options: .regularExpression) != nil
         let foodPath = path.range(of: "^food-readonly/(catalog/current|place/[1-9][0-9]*|item/[1-9][0-9]*)$", options: .regularExpression) != nil
-        guard path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "inbox" || path == "memos" || path == "chronicle" || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
+        guard replica && path == "sync" && method == "POST" || path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "inbox" || path == "memos" || path == "chronicle" || workspacePath || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly" || path == "health-readonly" || path == "relations-readonly" || path == "media-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
         var endpoint = baseURL.appendingPathComponent((trackerPath || path == "chronicle" || path == "memos" || path == "inbox") ? "api/\(path)" : "api/native/\(path)")
         if path == "inbox" {
             guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else { throw TrackerLocalError.invalid }
@@ -54,6 +60,10 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         }
         var request = URLRequest(url: endpoint)
         request.httpMethod = method
+        if replica {
+            request.httpShouldHandleCookies = false
+            request.setValue(HTTPCookie.requestHeaderFields(with: cookies.cookies(for: baseURL) ?? [])["Cookie"], forHTTPHeaderField: "Cookie")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, response) = try await session.data(for: request)
@@ -84,6 +94,67 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
     func synchronize(_ body: [String: Any]) async throws -> Any {
         throw TrackerLocalError.readOnly
+    }
+    func synchronizeReplica(_ body: [String: Any]) async throws -> Any {
+        guard body["protocolVersion"] as? Int == 2, let account = body["accountId"] as? String, let mutations = body["mutations"] as? [[String: Any]], mutations.count <= 50 else { throw TrackerLocalError.invalid }
+        _ = try await acceptanceStatus(accountId: account)
+        let expectedGeneration = generation
+        try await database.requireReplicaMutations(accountId: account, mutations: mutations)
+        guard mutations.isEmpty || replicaSessions[account] == expectedGeneration else { throw TrackerLocalError.invalid }
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == account else { throw TrackerLocalError.account }
+        try await database.requireReplicaMutations(accountId: account, mutations: mutations)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        let (data, response) = try await performRequest(path: "sync", method: "POST", body: body, replica: true)
+        guard (200..<300).contains(response.statusCode) else { throw TrackerLocalError.network("Tracker sync is unavailable (HTTP \(response.statusCode)). Local changes and the original queue are preserved.") }
+        guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any], result["protocolVersion"] as? Int == 2, result["accountId"] as? String == account, let snapshot = result["snapshot"] as? [String: Any], snapshot["complete"] as? Bool == true, snapshot["records"] is [[String: Any]], let revision = snapshot["revision"] as? Int, revision > 0, result["results"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        try await database.requireAccount(account)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        if mutations.isEmpty { replicaSessions[account] = expectedGeneration }
+        return result
+    }
+    static func allowsAIConfiguration(path: String, method: String) -> Bool {
+        if path == "/api/ai/providers" { return ["GET", "POST"].contains(method) }
+        if path == "/api/ai/providers/test" { return method == "POST" }
+        if path.range(of: "^/api/ai/providers/[1-9][0-9]*$", options: .regularExpression) != nil { return ["PATCH", "DELETE"].contains(method) }
+        if path.range(of: "^/api/ai/providers/[1-9][0-9]*/models$", options: .regularExpression) != nil { return method == "POST" }
+        return path.range(of: "^/api/ai/model-configs/[1-9][0-9]*$", options: .regularExpression) != nil && ["PATCH", "DELETE"].contains(method)
+    }
+    // Explicit online settings only; never persists a key or enqueues a request.
+    func aiConfiguration(accountId: String, path: String, method: String, body: Any?) async throws -> Any {
+        guard Self.allowsAIConfiguration(path: path, method: method), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
+        try await database.requireAccount(accountId)
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard identity["aiConfigurationProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe AI settings API must be deployed before saving configuration.") }
+        try await database.requireAccount(accountId)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        var outgoing = URLRequest(url: baseURL.appendingPathComponent(String(path.dropFirst())))
+        outgoing.httpMethod = method
+        outgoing.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        outgoing.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        outgoing.setValue(accountId, forHTTPHeaderField: "X-EvaOrbit-Account")
+        // Freeze the authenticated cookie snapshot; a later login cannot retarget this write.
+        outgoing.httpShouldHandleCookies = false
+        let header = HTTPCookie.requestHeaderFields(with: cookies.cookies(for: baseURL) ?? [])
+        outgoing.setValue(header["Cookie"], forHTTPHeaderField: "Cookie")
+        if let body {
+            guard ["POST", "PATCH"].contains(method), body is [String: Any] else { throw TrackerLocalError.invalid }
+            let encoded = try JSONSerialization.data(withJSONObject: body)
+            guard encoded.count <= 32768 else { throw TrackerLocalError.invalid }
+            outgoing.httpBody = encoded
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = 20
+        let connection = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
+        defer { connection.invalidateAndCancel() }
+        let (data, response) = try await connection.data(for: outgoing)
+        guard let http = response as? HTTPURLResponse, !(300..<400).contains(http.statusCode), data.count <= 1048576 else { throw TrackerLocalError.invalid }
+        try await database.requireAccount(accountId)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        return ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)] as [String: Any]
     }
     func acceptanceStatus(accountId: String) async throws -> [String: Any] {
         try await database.requireAccount(accountId)
@@ -182,6 +253,55 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         try await database.saveSubscriptionsReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func healthReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.healthReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "health-readonly", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), snapshot["sleep"] is [String: Any], snapshot["records"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveHealthReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func workspaceReadOnlySnapshot(accountId: String, kind: String, refresh: Bool) async throws -> Any {
+        guard ["tasks", "projects", "lucius"].contains(kind) else { throw TrackerLocalError.invalid }
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.workspaceReadOnlyCache(accountId: accountId, kind: kind) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "workspace-readonly/\(kind)", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), snapshot["kind"] as? String == kind, snapshot["data"] is [String: Any] else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveWorkspaceReadOnlyCache(accountId: accountId, kind: kind, snapshot: snapshot)
+        return snapshot
+    }
+
+    func mediaReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.mediaReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "media-readonly", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), snapshot["items"] is [[String: Any]], snapshot["series"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveMediaReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func relationsReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.relationsReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let snapshot = try await request(path: "relations-readonly", method: "GET") as? [String: Any], snapshot["accountId"] as? String == accountId, let captured = snapshot["capturedAt"] as? String, Self.validTimestamp(captured), snapshot["people"] is [[String: Any]], snapshot["details"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveRelationsReadOnlyCache(accountId: accountId, snapshot: snapshot)
         return snapshot
     }
 

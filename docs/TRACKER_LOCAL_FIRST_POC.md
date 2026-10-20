@@ -177,3 +177,7 @@ installation/database until queued data is synced or exported. Do not uninstall
 the app as a routine upgrade or rollback: unsynced local data belongs to its sandbox.
 Keep the additive version/receipt migration when rolling back UI/API; dropping
 receipts would remove retry protection. Do not re-enable legacy sync writes.
+
+## 独立编辑副本阶段
+
+Tracker 的记录增删改和基础信息编辑已接入独立副本，旧冻结队列不重新启用。新建 Tracker 只开放当前协议支持的数值/文本属性；已有其他类型的属性可在取得云端版本后用于记录。既有云端记录在版本握手前保持只读；服务端部署仍需另行授权。缓存、握手、暂停/导出与验收边界见 [编辑阶段](TRACKER_EDITABLE_REPLICA.md)。

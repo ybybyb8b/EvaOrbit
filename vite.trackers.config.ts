@@ -1,3 +1,4 @@
+import {allowsAiConfiguration} from "./src/lib/ai-configuration-request";
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
 
@@ -17,7 +18,7 @@ export default defineConfig(({ command }) => ({
     fs: { allow: [root] },
     proxy: { "/eo-api/": {
       target: cloud, changeOrigin: true, cookieDomainRewrite: "", cookiePathRewrite: "/",
-      rewrite: path => path === "/eo-api/inbox" ? "/api/inbox?status=all" : ["/eo-api/chronicle","/eo-api/memos"].includes(path) || /^\/eo-api\/trackers(?:\/[1-9][0-9]*(?:\/icon)?)?$/.test(path) ? `/api/${path.slice("/eo-api/".length)}` : `/api/native/${path.slice("/eo-api/".length)}`,
+      rewrite: path => path.startsWith("/eo-api/ai-config/") ? `/api/ai/${path.slice("/eo-api/ai-config/".length)}` : path === "/eo-api/inbox" ? "/api/inbox?status=all" : ["/eo-api/chronicle","/eo-api/memos"].includes(path) || /^\/eo-api\/trackers(?:\/[1-9][0-9]*(?:\/icon)?)?$/.test(path) ? `/api/${path.slice("/eo-api/".length)}` : `/api/native/${path.slice("/eo-api/".length)}`,
       configure(proxy) {
         proxy.on("proxyRes", response => {
           // Development-only loopback cookies; never shipped in the IPA.
@@ -29,7 +30,7 @@ export default defineConfig(({ command }) => ({
   plugins: [{ name: "tracker-acceptance-readonly", configureServer(server) {
     server.middlewares.use((request, response, next) => {
       if (!request.url?.startsWith("/eo-api/")) { next(); return; }
-      const allowed = request.url === "/eo-api/inbox" && request.method === "GET" || request.url === "/eo-api/memos" && request.method === "GET" || request.url === "/eo-api/chronicle" && request.method === "GET" || request.url === "/eo-api/subscriptions-readonly" && request.method === "GET" || request.url === "/eo-api/cats-readonly" && request.method === "GET" || /^\/eo-api\/food-readonly\/(?:catalog\/current|place\/[1-9][0-9]*|item\/[1-9][0-9]*)$/.test(request.url ?? "") && request.method === "GET" || request.url === "/eo-api/food-readonly" && request.method === "GET" || request.url === "/eo-api/session" && ["GET", "POST", "DELETE"].includes(request.method ?? "") || /^\/eo-api\/trackers(?:\/[1-9][0-9]*(?:\/icon)?)?$/.test(request.url) && request.method === "GET" || /^\/eo-api\/home-readonly\/(?:day\/\d{4}-\d{2}-\d{2}|month\/\d{4}-\d{2}|due\/current)$/.test(request.url) && request.method === "GET";
+      const allowed = request.url === "/eo-api/sync" && request.method === "POST" || request.url.startsWith("/eo-api/ai-config/") && allowsAiConfiguration(`/api/ai/${request.url.slice("/eo-api/ai-config/".length)}`,request.method??"") || /^\/eo-api\/workspace-readonly\/(tasks|projects|lucius)$/.test(request.url??"") && request.method === "GET" || request.url === "/eo-api/media-readonly" && request.method === "GET" || request.url === "/eo-api/inbox" && request.method === "GET" || request.url === "/eo-api/memos" && request.method === "GET" || request.url === "/eo-api/chronicle" && request.method === "GET" || request.url === "/eo-api/relations-readonly" && request.method === "GET" || request.url === "/eo-api/health-readonly" && request.method === "GET" || request.url === "/eo-api/subscriptions-readonly" && request.method === "GET" || request.url === "/eo-api/cats-readonly" && request.method === "GET" || /^\/eo-api\/food-readonly\/(?:catalog\/current|place\/[1-9][0-9]*|item\/[1-9][0-9]*)$/.test(request.url ?? "") && request.method === "GET" || request.url === "/eo-api/food-readonly" && request.method === "GET" || request.url === "/eo-api/session" && ["GET", "POST", "DELETE"].includes(request.method ?? "") || /^\/eo-api\/trackers(?:\/[1-9][0-9]*(?:\/icon)?)?$/.test(request.url) && request.method === "GET" || /^\/eo-api\/home-readonly\/(?:day\/\d{4}-\d{2}-\d{2}|month\/\d{4}-\d{2}|due\/current)$/.test(request.url) && request.method === "GET";
       if (allowed) { next(); return; }
       response.statusCode = 403; response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify({ error: "只读验收模式禁止业务写入" }));
     });

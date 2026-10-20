@@ -46,10 +46,9 @@ export function SettingsDirectory() {
   </div>;
 }
 
-function DirectoryItem({ href, icon: ItemIcon, title, meta }: { href: string; icon: IconComponent; title: string; meta: string }) {
-  return <Link href={href} className="settings-directory-item">
-    <span className="settings-directory-icon"><ItemIcon size={21} weight="Outline" /></span>
+export function DirectoryItem({ href, icon: ItemIcon, title, meta, onClick }: { href: string; icon: IconComponent; title: string; meta: string; onClick?:()=>void }) {
+  const content=<><span className="settings-directory-icon"><ItemIcon size={21} weight="Outline" /></span>
     <span className="settings-directory-copy"><strong>{title}</strong><span>{meta}</span></span>
-    <ChevronRight className="settings-directory-chevron" size={16} weight="Outline" />
-  </Link>;
+    <ChevronRight className="settings-directory-chevron" size={16} weight="Outline" /></>;
+  return onClick ? <button type="button" onClick={onClick} className="settings-directory-item">{content}</button> : <Link href={href} className="settings-directory-item">{content}</Link>;
 }

@@ -1,4 +1,6 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -21,6 +23,10 @@ function draftFromLog(log: TrainingLog): Draft { return { occurredAt: compactDat
 function getError(result: unknown, fallback: string) { return result && typeof result === "object" && "error" in result && typeof result.error === "string" ? result.error : fallback; }
 
 export function TrainingLogEditor({ record, initialDate, suggestions, planCompletion, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const { english } = useLocale();
   const [draft, setDraft] = useState<Draft>(() => {
     if (record) return draftFromLog(record);
@@ -38,20 +44,20 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
   const [presetUndo, setPresetUndo] = useState<Draft | null>(null);
   function applyPreset(preset: TrainingInputSuggestions["presets"][number]) { if ((draft.teacher || draft.course || draft.durationMinutes || draft.bodyParts.length) && !window.confirm(english ? "Replace training fields with this preset? Date and notes stay unchanged." : "使用预设替换训练字段？日期和备注会保留。")) return; setPresetUndo(draft); setDraft((current) => ({ ...current, trainingType: preset.trainingType, bodyParts: preset.bodyParts, teacher: preset.teacher, course: preset.course, durationMinutes: preset.durationMinutes === null ? "" : String(preset.durationMinutes) })); }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); if (savingRef.current) return; setError("");
+    event.preventDefault(); if(preview)return; if (savingRef.current) return; setError("");
     if (!draft.bodyParts.length) { setError(english ? "Choose at least one training area" : "请至少选择一个训练部位"); return; }
     const occurred = compactDateTimePayload(draft.occurredAt); savingRef.current = true; setSaving(true);
     try {
       const log = { occurredAt: occurred.value, occurredHasExplicitTime: occurred.hasExplicitTime, trainingType: draft.trainingType, bodyParts: draft.bodyParts, teacher: draft.teacher, course: draft.course, durationMinutes: draft.durationMinutes ? Number(draft.durationMinutes) : null, notes: draft.notes };
       const payload = planCompletion ? { expectedVersion: planCompletion.plan.version, dayId: planCompletion.plan.currentDayId, requestKey: planCompletion.requestKey, log } : log;
-      const response = await fetch(record ? `/api/health/training/${record.id}` : planCompletion ? "/api/health/training/plan/complete" : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const response = await read(record ? `/api/health/training/${record.id}` : planCompletion ? "/api/health/training/plan/complete" : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json().catch(() => null); if (!response.ok) { setError(getError(result, "Could not save training")); return; }
       invalidateCachedJson("/api/health/training/suggestions"); await onSaved(planCompletion ? result.plan : undefined); onClose();
     } catch { setError("Could not save training"); } finally { savingRef.current = false; setSaving(false); }
   }
-  async function remove() { if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await fetch(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); showActionToast(english ? "Training log deleted" : "训练记录已删除", "deleted"); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
-  return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving}>
-    <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>
+  async function remove() { if(preview)return; if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await read(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); showActionToast(english ? "Training log deleted" : "训练记录已删除", "deleted"); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
+  return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving} submitDisabled={preview}>
+    <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>{preview&&<FormPreviewNotice/>}
       {planCompletion && <p className="training-plan-hint">{english ? "Your plan advances only after this record is saved. Cancel to keep your place." : "保存这条记录后才进入下一个训练日；取消不会改变进度。"}</p>}
       {!record && suggestions.presets.length > 0 && <section className="training-presets"><div><span>{english ? "RECENT & COMMON" : "近期与常用"}</span><small>{english ? "Date and notes stay unchanged" : "日期和当次备注不会被覆盖"}</small></div><div>{suggestions.presets.map((preset) => <button type="button" key={JSON.stringify([preset.teacher,preset.course,preset.trainingType,preset.bodyParts,preset.durationMinutes])} data-form-change onClick={() => applyPreset(preset)}><strong>{preset.course || typeLabel(preset.trainingType)}</strong><span>{[preset.teacher,preset.bodyParts.map(bodyPartLabel).join(" · "),preset.durationMinutes ? `${preset.durationMinutes} min` : ""].filter(Boolean).join(" · ")}</span><small>{preset.useCount > 1 ? `${preset.useCount}×` : english ? "Recent" : "最近"}</small></button>)}</div></section>}
       {presetUndo && <button type="button" data-form-change className="text-button" onClick={() => { setDraft(current => ({ ...presetUndo, occurredAt: current.occurredAt, notes: current.notes })); setPresetUndo(null); }}>{english ? "Undo preset" : "撤销预设"}</button>}
@@ -61,7 +67,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
       <div className="form-grid training-form-grid"><div className="field"><span>{english ? "Teacher" : "老师"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel="老师" suggestions={suggestions.teachers} maxLength={120} value={draft.teacher} onValueChange={nextValue => setDraft({ ...draft, teacher: nextValue })} /></div><div className="field"><span>{english ? "Course" : "课程"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel="课程" suggestions={suggestions.courses} maxLength={160} value={draft.course} onValueChange={nextValue => setDraft({ ...draft, course: nextValue })} /></div><label className="field"><span>{english ? "Duration (min)" : "时长（分钟）"} <small>{english ? "Optional" : "可选"}</small></span><input type="number" min="1" max="1440" step="1" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: event.target.value })} /></label><label className="field wide"><span>{english ? "Notes" : "备注"} <small>{english ? "Optional" : "可选"}</small></span><textarea rows={3} maxLength={5000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label></div>
 
 
-      {error && <ErrorNotice>{error}</ErrorNotice>}{record && onDeleted && <button className="danger-text training-delete" type="button" onClick={() => void remove()}>{english ? "Delete training log" : "删除训练记录"}</button>}
+      {error && <ErrorNotice>{error}</ErrorNotice>}{record && onDeleted && <button className="danger-text training-delete" type="button" disabled={preview} onClick={() => void remove()}>{english ? "Delete training log" : "删除训练记录"}</button>}
     </form>
   </FormSheet>;
 }

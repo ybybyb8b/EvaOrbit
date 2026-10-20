@@ -1,11 +1,13 @@
 "use client";
+import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
+import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useRef, useState } from "react";
-import { useBottomLogAction } from "@/components/bottom-log";
+import { useBottomLogAction } from "@/components/bottom-log-core";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
@@ -71,6 +73,10 @@ function getError(result: unknown, fallback: string, english: boolean) {
 }
 
 export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNutritionSummary; initialHistory: DailyNutritionSummary[] }) {
+  const preview=useFormPreview();
+
+  const {read}=useHealthData();
+
   const { english } = useLocale();
   const t = (en: string, zh: string) => english ? en : zh;
   const [selectedDate, setSelectedDate] = useState(initial.date);
@@ -99,7 +105,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     }
     setLoading(true);
     try {
-      const response = await fetch(`/api/nutrition/daily?date=${encodeURIComponent(date)}`);
+      const response = await read(`/api/nutrition/daily?date=${encodeURIComponent(date)}`);
       const result = await response.json().catch(() => null) as DailyNutritionSummary | { error?: string } | null;
       if (!response.ok) {
         setError(getError(result, t("Could not load daily energy", "能量数据加载失败，请重试。"), english));
@@ -129,7 +135,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
   }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+    event.preventDefault(); if(preview)return;
     setError("");
     setMessage("");
     const restingEnergyKcal = parseEnergy(draft.restingEnergyKcal);
@@ -144,7 +150,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
     }
     setSaving(true);
     try {
-      const response = await fetch("/api/nutrition/daily", {
+      const response = await read("/api/nutrition/daily", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: draft.date, restingEnergyKcal, activeEnergyKcal, notes: draft.notes }),
@@ -193,14 +199,14 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
       {sourceLabel && <small>{sourceLabel}</small>}
     </div>
     {loading && <span className="daily-energy-loading"><PageLoading title="能量" englishTitle="energy" compact /></span>}
-    {editing && <form ref={editorRef} className="daily-energy-editor" onSubmit={(event) => void save(event)}>
+    {editing && <form ref={editorRef} className="daily-energy-editor" onSubmit={(event) => void save(event)}>{preview&&<FormPreviewNotice/>}
       <div className="daily-energy-input-grid">
         <label className="field wide"><span>{t("Date", "日期")}</span><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
         <label className="field"><span>{t("Resting kcal", "静息能量（kcal）")} <small>{t("(optional)", "（选填）")}</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder={t("e.g. 1500", "例如 1500")} /></label>
         <label className="field"><span>{t("Active kcal", "活动能量（kcal）")} <small>{t("(optional)", "（选填）")}</small></span><input type="number" min="0" max="20000" step="1" value={draft.activeEnergyKcal} onChange={(event) => setDraft({ ...draft, activeEnergyKcal: event.target.value })} placeholder={t("e.g. 300", "例如 300")} /></label>
         <label className="field wide"><span>{t("Note", "备注")} <small>{t("(optional)", "（选填）")}</small></span><textarea rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={t("What informed this estimate?", "记录估算依据")} /></label>
       </div>
-      <div className="daily-energy-editor-actions"><button type="button" className="button secondary" onClick={closeEditor}>{t("Cancel", "取消")}</button><button className="button primary" disabled={saving}>{saving ? t("Saving…", "保存中…") : t("Save energy", "保存能量")}</button></div>
+      <div className="daily-energy-editor-actions"><button type="button" className="button secondary" onClick={closeEditor}>{t("Cancel", "取消")}</button><button className="button primary" disabled={saving||preview}>{saving ? t("Saving…", "保存中…") : t("Save energy", "保存能量")}</button></div>
     </form>}
     {!editing && summary.notes && <p className="daily-energy-note">{summary.notes}</p>}
     {error && <ErrorNotice>{error}</ErrorNotice>}

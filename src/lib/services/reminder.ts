@@ -64,9 +64,11 @@ export async function cancelReminder(id: number) {
 }
 export const deleteReminder = cancelReminder;
 
-export async function listScheduledNotifications(now = new Date()): Promise<ScheduledNotification[]> {
-  await catchUpAutomaticSubscriptionPayments(now);
-  await reconcilePeriodMedicationReminders(now);
+export async function listScheduledNotifications(now = new Date(), options: {readOnly?:boolean} = {}): Promise<ScheduledNotification[]> {
+  if (!options.readOnly) {
+    await catchUpAutomaticSubscriptionPayments(now);
+    await reconcilePeriodMedicationReminders(now);
+  }
   const repository = await getRepository();
   const source = (await repository.listReminders({ activeOnly: true })).filter((reminder) => reminder.nextDueAt && (["scheduled", "failed"].includes(reminder.status) || (reminder.status === "sent" && reminder.repeatWhileOverdue)));
   const reminders = (await Promise.all(source.map(async (reminder) => {

@@ -1,3 +1,4 @@
+import {navigateLocal} from "./local-navigation-browser.mjs";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { preview } from "vite";
@@ -52,6 +53,7 @@ try {
     await page.getByRole("button", { name: "收起错误提示" }).click();
     await banner.waitFor({ state: "detached" });
     await page.getByRole("button", { name: "本机预览", exact: true }).click();
+    await navigateLocal(page,"观测");
     await page.getByRole("button", { name: "新增观测", exact: true }).first().click();
     await page.locator('.form-sheet-layer[data-state="open"]').waitFor();
     await page.locator('.tracker-basic-fields input').first().fill("保留失败草稿");

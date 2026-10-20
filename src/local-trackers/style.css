@@ -5,7 +5,7 @@
 .local-home { padding:24px env(safe-area-inset-right) max(32px,env(safe-area-inset-bottom)) env(safe-area-inset-left); }
 .local-home .home-page { padding:0; }
 .local-home > .local-home-status { padding:0; }
-.page.local-inbox-status,.page.local-memo-status,.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
+.page.local-workspace-status,.page.local-media-status,.page.local-relations-status,.page.local-health-status,.page.local-inbox-status,.page.local-memo-status,.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
 .local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
 .local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .local-login-actions button { min-height:44px; }

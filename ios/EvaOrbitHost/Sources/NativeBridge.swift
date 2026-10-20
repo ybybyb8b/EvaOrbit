@@ -41,7 +41,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -398,6 +398,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     guard let email = parameters["email"] as? String, let password = parameters["password"] as? String else { throw TrackerLocalError.invalid }
                     result = try await controller.signIn(email: email, password: password)
                 case "trackers.signOut": try await controller.signOut(); result = NSNull()
+                case "trackers.readReplica":
+                    guard let account = parameters["accountId"] as? String else { throw TrackerLocalError.invalid }
+                    _ = try await controller.acceptanceStatus(accountId: account)
+                    result = try await controller.database.read(accountId: account, replica: true)
+                case "trackers.commitReplica":
+                    guard let account = parameters["accountId"] as? String, let revision = parameters["expectedRevision"] as? Int, let state = parameters["state"] as? [String: Any] else { throw TrackerLocalError.invalid }
+                    _ = try await controller.acceptanceStatus(accountId: account)
+                    result = try await controller.database.commit(accountId: account, expectedRevision: revision, state: state, replica: true)
+                case "trackers.syncReplica":
+                    guard let request = parameters["request"] as? [String: Any] else { throw TrackerLocalError.invalid }
+                    result = try await controller.synchronizeReplica(request)
                 case "trackers.readState":
                     guard let account = parameters["accountId"] as? String else { throw TrackerLocalError.invalid }
                     result = try await controller.database.read(accountId: account)
@@ -412,6 +423,21 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case "food.readOnlyResource":
                     guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, let key = parameters["key"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.foodReadOnlyResource(accountId: account, kind: kind, key: key, refresh: refresh)
+                case "settings.aiConfiguration":
+                    guard let account = parameters["accountId"] as? String, let path = parameters["path"] as? String, let method = parameters["method"] as? String else { throw TrackerLocalError.invalid }
+                    result = try await controller.aiConfiguration(accountId: account, path: path, method: method, body: parameters["body"])
+                case "workspaces.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, ["tasks", "projects", "lucius"].contains(kind), let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.workspaceReadOnlySnapshot(accountId: account, kind: kind, refresh: refresh)
+                case "media.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.mediaReadOnlySnapshot(accountId: account, refresh: refresh)
+                case "relations.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.relationsReadOnlySnapshot(accountId: account, refresh: refresh)
+                case "health.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.healthReadOnlySnapshot(accountId: account, refresh: refresh)
                 case "subscriptions.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.subscriptionsReadOnlySnapshot(accountId: account, refresh: refresh)
@@ -438,8 +464,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     result = try await controller.synchronize(request)
                 case "trackers.exportState":
                     guard let account = try await controller.database.account()?["accountId"], let presenter = webView?.window?.rootViewController else { throw TrackerLocalError.account }
-                    let state = try await controller.database.read(accountId: account)
-                    guard !(state is NSNull) else { throw TrackerLocalError.invalid }
+                    let legacy = try await controller.database.read(accountId: account)
+                    let replica = try await controller.database.read(accountId: account, replica: true)
+                    let state: [String: Any] = ["format": "eo-trackers-export-v2", "accountId": account, "legacy": legacy, "replica": replica]
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("evaorbit-trackers-local.json")
                     try JSONSerialization.data(withJSONObject: state, options: [.prettyPrinted]).write(to: url, options: [.atomic, .completeFileProtection])
                     let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)

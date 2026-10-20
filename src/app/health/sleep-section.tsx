@@ -1,9 +1,10 @@
 "use client";
+import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState } from "@/components/use-data-refresh";
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { BottomLogScope } from "@/components/bottom-log";
+import {HealthLink as Link} from "@/components/health-data-context";
+import { BottomLogScope } from "@/components/bottom-log-core";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { SleepSummary } from "@/components/sleep-summary";
@@ -16,18 +17,20 @@ import { subscribeDataChanged } from "@/lib/data-changed";
 import type { DailySleepSummary } from "@/lib/sleep";
 
 export function SleepSection({ initial }: { initial: DailySleepSummary }) {
+  const {read}=useHealthData();
+
   const { english } = useLocale();
   const [summary, setSummary] = useServerDataState(initial);
   const [error, setError] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`/api/health/sleep?date=${encodeURIComponent(summary.date)}`, { cache: "no-store" });
+      const response = await read(`/api/health/sleep?date=${encodeURIComponent(summary.date)}`, { cache: "no-store" });
       if (!response.ok) throw new Error();
       setSummary(await response.json() as DailySleepSummary);
       setError(false);
     } catch { setError(true); }
-  }, [setSummary, summary.date]);
+  }, [setSummary, summary.date,read]);
   useEffect(() => subscribeDataChanged(["health", "calendar"], () => { void refresh(); }), [refresh]);
   const display = sleepDisplay(summary);
   const zone = display && "timeZone" in display ? display.timeZone : EVAORBIT_TIME_ZONE;

@@ -2601,7 +2601,7 @@ html[data-mode="dark"] .training-delete { background:color-mix(in srgb,var(--sur
 .media-detail-hero > .media-cover { width: 170px; }
 .media-detail-hero dl { min-width: 0; margin: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-content: start; gap: 15px 20px; }
 .media-detail-hero dl div { min-width: 0; }
-.media-detail-hero dt { margin-bottom: 4px; color: var(--soft-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; }
+.media-detail-hero dt { margin-bottom: 4px; color: var(--text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
 .media-detail-hero dd { margin: 0; overflow-wrap: anywhere; color: var(--ink); font-size: 12px; }.media-detail-hero dd a { color: var(--green); }
 .media-legacy-title { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .media-detail-card + .media-note-section { margin-top: 20px; }
@@ -6755,3 +6755,17 @@ html[data-mode="dark"] :is(.cats-page,.pet-detail-page){--cats-work-shadow:0 4px
   .chronicle-page .chronicle-toolbar { flex-wrap: wrap; }
   .chronicle-page .chronicle-search { width: 100%; }
 }
+
+/* Shared Media controls: categories and independent filters remain distinct. */
+.media-secondary-filters {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 20px;}
+.media-secondary-filters > button {min-height:44px;padding:8px 12px;border:0;border-radius:var(--radius-control,12px);background:var(--surface-tint);color:var(--text-secondary);cursor:pointer;}
+.media-secondary-filters > button[aria-pressed="true"] {background:var(--surface-accent-soft);color:var(--text-action);}
+.media-secondary-filters .choice-capsules {flex-wrap:wrap;}
+.media-filters {flex-wrap:wrap;overflow:visible;}
+.media-filters button {min-height:44px;font-size:12px;}
+.media-poster-card > span > small {display:flex;gap:6px;color:var(--text-secondary);}
+.media-season-mark {flex:none;color:var(--text-primary);font-weight:600;}
+.media-detail-actions {margin-bottom:20px;}
+.media-rename-action {margin-bottom:16px;}
+.media-more {margin-top:24px;}
+.media-series-copy small,.media-cover-fallback small {color:var(--text-secondary);}

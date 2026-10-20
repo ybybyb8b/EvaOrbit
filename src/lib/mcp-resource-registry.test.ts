@@ -36,7 +36,7 @@ test("production schemas describe every action and distinguish create from PATCH
   assert.deepEqual(registry.schema("lucius_post_comment").update_fields, ["content"]);
   assert.deepEqual(registry.schema("person_note").update_fields, ["content"]);
   assert.ok(!registry.schema("media").update_fields.includes("title"));
-  assert.ok(!registry.schema("media").update_fields.includes("watched_date"));
+  assert.ok(registry.schema("media").update_fields.includes("watched_date"));
   assert.ok(!registry.schema("memory_fact").update_fields.includes("predicate"));
   assert.ok(!registry.schema("memory_source").update_fields.includes("fact_id"));
   assert.deepEqual(registry.schema("lucius_state").create_fields, []);
