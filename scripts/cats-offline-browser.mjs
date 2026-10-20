@@ -46,9 +46,9 @@ try{
   const trigger=page.getByRole("button",{name:"Open spaces",exact:true});
   await trigger.click();let drawer=page.getByRole("dialog",{name:"All spaces",exact:true});
   await drawer.waitFor();await page.waitForFunction(()=>document.activeElement?.closest('[role="dialog"]'));
-  assert.deepEqual(await drawer.locator("a").evaluateAll(rows=>rows.map(row=>row.getAttribute("href"))),["/trackers","/food-drink","/subscriptions","/cats","/chronicle"]);
+  assert.deepEqual(await drawer.locator("a").evaluateAll(rows=>rows.map(row=>row.getAttribute("href"))),["/trackers","/food-drink","/subscriptions","/cats","/chronicle","/memo","/inbox"]);
   assert(await page.locator(".main-content").evaluate(node=>node.inert));
-  await page.keyboard.press("Shift+Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("href")),"/chronicle");
+  await page.keyboard.press("Shift+Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("href")),"/inbox");
   await page.keyboard.press("Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("aria-label")),"Close spaces");
   await page.waitForFunction(()=>document.querySelector(".space-drawer")?.getBoundingClientRect().right<=innerWidth+0.5);
   await page.screenshot({path:"tmp/shared-navigation-mobile.png"});

@@ -46,6 +46,8 @@ actor TrackerLocalDatabase {
         CREATE TABLE IF NOT EXISTS tracker_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS home_readonly_cache(account_id TEXT NOT NULL,resource_key TEXT NOT NULL,snapshot_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,resource_key));
+        CREATE TABLE IF NOT EXISTS inbox_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS memo_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS chronicle_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS subscriptions_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS cats_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
@@ -211,6 +213,63 @@ actor TrackerLocalDatabase {
         let data = try JSONSerialization.data(withJSONObject: snapshot)
         guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
         let query = try statement("INSERT INTO chronicle_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+    func memoReadOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM memo_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveMemoReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-memo-readonly-v1", let items = snapshot["items"] as? [[String: Any]], items.count <= 100, snapshot["complete"] as? Bool == (items.count < 100), let captured = snapshot["capturedAt"] as? String, ISO8601DateFormatter().date(from: captured) != nil else { throw TrackerLocalError.invalid }
+        var ids = Set<Int>()
+        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd"; formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.isLenient = false
+        let timestamp = ISO8601DateFormatter(), fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        for item in items {
+            guard let id = item["id"] as? Int, id > 0, ids.insert(id).inserted, let title = item["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.utf16.count <= 300, let body = item["content"] as? String, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, body.utf16.count <= 100000, let type = item["type"] as? String, ["basic", "supplement", "event", "note"].contains(type), let status = item["status"] as? String, ["active", "merged", "archived", "historical"].contains(status), item["tags"] is [String], let created = item["createdAt"] as? String, let updated = item["updatedAt"] as? String, timestamp.date(from: created) != nil || fractional.date(from: created) != nil, timestamp.date(from: updated) != nil || fractional.date(from: updated) != nil else { throw TrackerLocalError.invalid }
+            if let date = item["eventDate"] as? String { guard date.count == 10, formatter.date(from: date).map({ formatter.string(from: $0) == date }) == true else { throw TrackerLocalError.invalid } }
+            else { guard item["eventDate"] is NSNull else { throw TrackerLocalError.invalid } }
+            if let confirmed = item["confirmedAt"] as? String { guard timestamp.date(from: confirmed) != nil || fractional.date(from: confirmed) != nil else { throw TrackerLocalError.invalid } }
+            else { guard item["confirmedAt"] is NSNull else { throw TrackerLocalError.invalid } }
+            if let merged = item["mergedIntoId"] as? Int { guard merged > 0 else { throw TrackerLocalError.invalid } }
+            else { guard item["mergedIntoId"] is NSNull else { throw TrackerLocalError.invalid } }
+
+        }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO memo_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
+        let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
+        guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+    }
+    func inboxReadOnlyCache(accountId: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT snapshot_json FROM inbox_readonly_cache WHERE account_id=?", [accountId]); defer { sqlite3_finalize(query) }
+        let step = sqlite3_step(query)
+        if step == SQLITE_DONE { return NSNull() }
+        guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveInboxReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
+        try requireAccount(accountId)
+        guard snapshot["accountId"] as? String == accountId, snapshot["format"] as? String == "eo-inbox-readonly-v1", let items = snapshot["items"] as? [[String: Any]], items.count <= 500, let captured = snapshot["capturedAt"] as? String, ISO8601DateFormatter().date(from: captured) != nil else { throw TrackerLocalError.invalid }
+        var ids = Set<Int>()
+        let timestamp = ISO8601DateFormatter(), fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        for item in items {
+            guard let id = item["id"] as? Int, id > 0, id <= 9_007_199_254_740_991, ids.insert(id).inserted, let content = item["content"] as? String, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, content.utf16.count <= 10000, item["source"] is String, let status = item["status"] as? String, ["inbox", "processed", "archived"].contains(status), let created = item["createdAt"] as? String, let updated = item["updatedAt"] as? String, timestamp.date(from: created) != nil || fractional.date(from: created) != nil, timestamp.date(from: updated) != nil || fractional.date(from: updated) != nil else { throw TrackerLocalError.invalid }
+            if let processed = item["processedAt"] as? String { guard timestamp.date(from: processed) != nil || fractional.date(from: processed) != nil else { throw TrackerLocalError.invalid } }
+            else { guard item["processedAt"] is NSNull else { throw TrackerLocalError.invalid } }
+            guard item["convertedType"] is String || item["convertedType"] is NSNull else { throw TrackerLocalError.invalid }
+            if let converted = item["convertedId"] as? Int { guard converted > 0, converted <= 9_007_199_254_740_991 else { throw TrackerLocalError.invalid } }
+            else { guard item["convertedId"] is NSNull else { throw TrackerLocalError.invalid } }
+        }
+        let data = try JSONSerialization.data(withJSONObject: snapshot)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        let query = try statement("INSERT INTO inbox_readonly_cache(account_id,snapshot_json) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET snapshot_json=excluded.snapshot_json", [accountId]); defer { sqlite3_finalize(query) }
         let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 2, $0.baseAddress, Int32(data.count), transient) }
         guard bound == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
     }

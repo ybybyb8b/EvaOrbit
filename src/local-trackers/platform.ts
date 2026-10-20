@@ -1,3 +1,5 @@
+import {buildInboxSnapshot,validateInboxSnapshot,type InboxReadonlySnapshot} from "../lib/inbox-readonly";
+import {buildMemoSnapshot,validateMemoSnapshot,type MemoReadonlySnapshot} from "../lib/memo-readonly";
 import {buildChronicleSnapshot,validateChronicleSnapshot,type ChronicleReadonlySnapshot} from "../lib/chronicle-readonly";
 import {validateSubscriptionsSnapshot,type SubscriptionsReadonlySnapshot} from "../lib/subscriptions-readonly";
 import {validateCatsSnapshot,type CatsReadonlySnapshot} from "../lib/cats-readonly";
@@ -14,6 +16,8 @@ import {foodResourceKey,validateFoodResource,type FoodReadonlyResource,type Food
 
 export type LocalAccount = { accountId: string; email: string };
 export type TrackerPlatform = {
+  inboxSnapshot(account:LocalAccount,refresh?:boolean):Promise<InboxReadonlySnapshot|null>;
+  memoSnapshot(account:LocalAccount,refresh?:boolean):Promise<MemoReadonlySnapshot|null>;
   chronicleSnapshot(account:LocalAccount,refresh?:boolean):Promise<ChronicleReadonlySnapshot|null>;
   subscriptionsSnapshot(account:LocalAccount,refresh?:boolean):Promise<SubscriptionsReadonlySnapshot|null>;
   catsSnapshot(account:LocalAccount,refresh?:boolean):Promise<CatsReadonlySnapshot|null>;
@@ -227,6 +231,60 @@ async function chronicleSnapshot(account:LocalAccount,native:boolean,refresh:boo
   });
   return snapshot;
 }
+async function memoSnapshot(account:LocalAccount,native:boolean,refresh:boolean):Promise<MemoReadonlySnapshot|null>{
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("memo.readOnlySnapshot"))throw new Error("Install the updated development Host to open Memo. Existing data is preserved.");
+    const value=await nativeCall<MemoReadonlySnapshot|null>("memo.readOnlySnapshot",{accountId:account.accountId,refresh});
+    return value?validateMemoSnapshot(value,account.accountId):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Memo account changed");
+  const key="memo-readonly:"+account.accountId;
+  if(!refresh)return read<MemoReadonlySnapshot>("states",key).then(value=>value?validateMemoSnapshot(value,account.accountId):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Memo account changed");
+  const response=await fetch("/eo-api/memos",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Memo read-only API is not deployed. Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Memo. Cached data is preserved."));
+  const snapshot=buildMemoSnapshot(account.accountId,await response.json());
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Memo account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Memo snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
+async function inboxSnapshot(account:LocalAccount,native:boolean,refresh:boolean):Promise<InboxReadonlySnapshot|null>{
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("inbox.readOnlySnapshot"))throw new Error("Install the updated development Host to open Inbox. Existing data is preserved.");
+    const value=await nativeCall<InboxReadonlySnapshot|null>("inbox.readOnlySnapshot",{accountId:account.accountId,refresh});
+    return value?validateInboxSnapshot(value,account.accountId):null;
+  }
+  if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Inbox account changed");
+  const key="inbox-readonly:"+account.accountId;
+  if(!refresh)return read<InboxReadonlySnapshot>("states",key).then(value=>value?validateInboxSnapshot(value,account.accountId):null);
+  if(isPreviewAccount(account))return null;
+  const identity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Inbox account changed");
+  const response=await fetch("/eo-api/inbox",{method:"GET",credentials:"same-origin",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  if(response.status===404)throw new Error("The Inbox read-only API is not deployed. Cached data is preserved.");
+  if(!response.ok)throw new Error(await responseError(response,"Could not refresh Inbox. Cached data is preserved."));
+  const snapshot=buildInboxSnapshot(account.accountId,await response.json());
+  const finalIdentity=await api<{authenticated:boolean;accountId:string}>("session","GET");
+  if(!finalIdentity.authenticated||finalIdentity.accountId!==account.accountId)throw new Error("Inbox account changed during refresh");
+  const db=await localDatabase();
+  await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction(["session","states"],"readwrite"),request=tx.objectStore("session").get("current");
+    request.onsuccess=()=>{if(request.result?.accountId!==account.accountId){tx.abort();return;}tx.objectStore("states").put(snapshot,key);};
+    tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Inbox snapshot was not saved. Existing data is preserved."));
+  });
+  return snapshot;
+}
 
 async function foodResource(account:LocalAccount,native:boolean,kind:FoodResourceKind,key:string,refresh=false):Promise<FoodReadonlyResource|null>{
   foodResourceKey(kind,key);
@@ -294,6 +352,8 @@ export function trackerPlatform(): TrackerPlatform {
     native,
     foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
+    inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
+    memoSnapshot:(account,refresh=false)=>memoSnapshot(account,native,refresh),
     chronicleSnapshot:(account,refresh=false)=>chronicleSnapshot(account,native,refresh),
     subscriptionsSnapshot:(account,refresh=false)=>subscriptionsSnapshot(account,native,refresh),
     foodResource:(account,kind,key,refresh)=>foodResource(account,native,kind,key,refresh),
@@ -314,6 +374,8 @@ export function trackerPlatform(): TrackerPlatform {
     native,
     foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
+    inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
+    memoSnapshot:(account,refresh=false)=>memoSnapshot(account,native,refresh),
     chronicleSnapshot:(account,refresh=false)=>chronicleSnapshot(account,native,refresh),
     subscriptionsSnapshot:(account,refresh=false)=>subscriptionsSnapshot(account,native,refresh),
     foodResource:(account,kind,key,refresh)=>foodResource(account,native,kind,key,refresh),

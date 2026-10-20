@@ -91,12 +91,12 @@ try {
   await page.getByRole('link',{name:/睡眠观察/}).click();
   assert.equal(await page.getByText('离线编辑后持久保存',{exact:true}).count(),0);
   await page.setViewportSize({width:1440,height:1000});
-  await page.getByRole('button',{name:'返回 Trackers',exact:true}).click();
+  await page.getByRole('button',{name:'返回上一页',exact:true}).click();
   await page.screenshot({path:'tmp/tracker-local-desktop.png',fullPage:true});
-  await page.getByRole('button',{name:'语言与外观',exact:true}).click();
+  await page.locator('.sidebar').getByRole('link',{name:'设置',exact:true}).click();
   await page.getByRole('button',{name:/粉棕/}).click();
   await page.getByRole('button',{name:'跟随系统',exact:false}).click();
-  await page.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.locator('.sidebar').getByRole('link',{name:'观测',exact:true}).click();
   await page.emulateMedia({colorScheme:'dark'});
   await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');
   assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'rosewood');

@@ -1,3 +1,5 @@
+import {buildInboxSnapshot,validateInboxSnapshot} from "../src/lib/inbox-readonly.ts";
+import {buildMemoSnapshot,validateMemoSnapshot} from "../src/lib/memo-readonly.ts";
 import {buildChronicleSnapshot,validateChronicleSnapshot} from "../src/lib/chronicle-readonly.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,6 +19,8 @@ function fixture(native, methods=[]) {
   imports["../lib/home-readonly"]={homeResourceKey,validateHomeResource};imports["../lib/home-preview"]={previewHomeResource:()=>{throw Error("Preview not used in this fixture");}};
   imports["../lib/food-readonly"]={validateFoodSnapshot};
   imports["../lib/cats-readonly"]={validateCatsSnapshot};
+  imports["../lib/inbox-readonly"]={buildInboxSnapshot,validateInboxSnapshot};
+  imports["../lib/memo-readonly"]={buildMemoSnapshot,validateMemoSnapshot};
   imports["../lib/chronicle-readonly"]={buildChronicleSnapshot,validateChronicleSnapshot};
   imports["../lib/subscriptions-readonly"]={validateSubscriptionsSnapshot};
   imports["../lib/food-readonly-resource"]={foodResourceKey,validateFoodResource};
@@ -65,3 +69,7 @@ test("old Host cannot fall back to Chronicle network or queue writes",async()=>{
  await assert.rejects(platform.chronicleSnapshot(account,true),/updated development Host/);
  assert.deepEqual(calls.map(call=>call.method),["host.getInfo"]);
 });
+
+test("old Host cannot fall back to Memo network writes",async()=>{const {platform,account,calls}=fixture(true);await assert.rejects(platform.memoSnapshot(account,true),/updated development Host/);assert.deepEqual(calls.map(c=>c.method),["host.getInfo"]);});
+
+test("old Host cannot fall back to Inbox network writes",async()=>{const {platform,account,calls}=fixture(true);await assert.rejects(platform.inboxSnapshot(account,true),/updated development Host/);assert.deepEqual(calls.map(c=>c.method),["host.getInfo"]);});

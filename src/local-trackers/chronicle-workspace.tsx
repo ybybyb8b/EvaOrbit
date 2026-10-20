@@ -1,3 +1,4 @@
+import {LocalBackAction} from "./navigation-header";
 import {createContext,useContext,useCallback,useEffect,useState,type ComponentProps} from "react";
 import {ChronicleView} from "@/app/chronicle/chronicle-view";
 import {ChronicleDetailContent} from "@/app/chronicle/[id]/chronicle-detail-view";
@@ -24,7 +25,7 @@ export function ChronicleWorkspace({account,platform}:{account:LocalAccount;plat
   const read=useCallback<ChronicleRead>(async(path,init)=>{if(!snapshot)throw new Error("Chronicle is not downloaded");return readChronicleSnapshot(snapshot,path,init);},[snapshot]);
   function navigate(path:string){const match=/^\/chronicle(?:\/([1-9][0-9]*))?$/.exec(path);if(!match){setError("This page is not available in the offline preview");return;}setId(match[1]?Number(match[1]):null);window.scrollTo(0,0);}
   const item=snapshot?.items.find(item=>item.id===id);
-  return <><div className="page local-chronicle-status"><DevelopmentDetails><p>Read-only Chronicle · {snapshot?new Date(snapshot.capturedAt).toLocaleString():"Not downloaded"}. Latest 100 entries; 8 MiB per account. Search covers downloaded entries. External Markdown images and links are unavailable in this offline preview. Drafts are temporary.</p><button className="text-button" disabled={busy} onClick={()=>window.dispatchEvent(new Event("eo:chronicle-refresh"))}>{busy?"Refreshing…":"Refresh downloaded Chronicle"}</button></DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
+  return <><LocalBackAction onBack={id!==null?()=>navigate("/chronicle"):undefined}/><div className="page local-chronicle-status"><DevelopmentDetails><p>Read-only Chronicle · {snapshot?new Date(snapshot.capturedAt).toLocaleString():"Not downloaded"}. Latest 100 entries; 8 MiB per account. Search covers downloaded entries. External Markdown images and links are unavailable in this offline preview. Drafts are temporary.</p><button className="text-button" disabled={busy} onClick={()=>window.dispatchEvent(new Event("eo:chronicle-refresh"))}>{busy?"Refreshing…":"Refresh downloaded Chronicle"}</button></DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
     {!snapshot?busy?<PageLoading title="纪事" englishTitle="Chronicle"/>:<div className="page"><p>Chronicle has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><ChronicleDataProvider read={read} Link={LocalChronicleLink} complete={snapshot.complete}><FormPreview>
 
       {id===null?<ChronicleView initial={snapshot.items}/>:item?<ChronicleDetailContent key={item.id} initial={item} onDeleted={()=>navigate("/chronicle")}/>:<div className="page"><p>This entry is not in the downloaded snapshot.</p></div>}

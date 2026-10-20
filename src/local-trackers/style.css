@@ -5,21 +5,11 @@
 .local-home { padding:24px env(safe-area-inset-right) max(32px,env(safe-area-inset-bottom)) env(safe-area-inset-left); }
 .local-home .home-page { padding:0; }
 .local-home > .local-home-status { padding:0; }
-.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
+.page.local-inbox-status,.page.local-memo-status,.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
 .local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
 .local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .local-login-actions button { min-height:44px; }
 .local-trackers { padding-top:max(24px,env(safe-area-inset-top)); padding-bottom:max(32px,env(safe-area-inset-bottom)); }
-.local-tracker-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
-.local-tracker-toolbar .back-link { margin:0; min-height:44px; }
-.local-brand { display:flex; align-items:center; gap:10px; font-family:var(--font-editorial),var(--font-zh),serif; font-size:22px; }
-.local-brand .brand-mark { width:30px; height:30px; flex:none; }
-.local-account-menu { position:relative; margin-left:auto; }
-.local-account-menu > summary { display:grid; place-items:center; list-style:none; width:44px; height:44px; border-radius:14px; background:var(--surface-card); cursor:pointer; }
-.local-account-menu > summary::-webkit-details-marker { display:none; }
-.local-account-menu > div { position:absolute; right:0; top:52px; z-index:100; width:min(280px,calc(100vw - 40px)); display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:20px; border-radius:18px; background:var(--surface-raised); box-shadow:0 8px 32px rgb(var(--shadow-rgb) / .14); }
-.local-account-menu strong { overflow-wrap:anywhere; font-size:14px; }
-.local-account-menu .text-button { min-height:44px; text-align:left; }
 .local-sync-status { display:flex; align-items:center; gap:12px; margin:-12px 0 24px; color:var(--text-secondary); font-size:12px; }
 .local-sync-status > span { flex:1; min-width:0; }
 .local-home-status .local-sync-status,.local-trackers details .local-sync-status { margin:0 0 8px; }
@@ -35,3 +25,5 @@
   .local-trackers .page-header > button { flex-shrink:0; }
   .local-trackers .tracker-title > span:last-child { overflow-wrap:anywhere; min-width:0; }
 }
+
+@media(max-width:720px){.local-signed-in .main-content{padding-top:calc(max(14px,env(safe-area-inset-top)) + 54px);}}

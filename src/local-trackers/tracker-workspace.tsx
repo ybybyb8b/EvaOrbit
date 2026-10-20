@@ -1,3 +1,4 @@
+import {LocalBackAction} from "./navigation-header";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ErrorNotice } from "@/components/error-notice";
 import {DevelopmentDetails} from "@/components/development-details";
@@ -22,14 +23,13 @@ import { trackerDistributionEntries, trackerInsightEntries, type TrackerInsightP
 import { validatedTrackerValues } from "@/lib/tracker-values";
 import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField } from "@/lib/validation";
 import type { Tracker, TrackerField } from "@/lib/types";
-import { nativeCall } from "@/lib/native-bridge";
 import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
 export function asField(row: LocalTrackerRecord): TrackerField {
   return { id: row.serverId ?? 0, trackerId: Number(row.payload.trackerId ?? 0), key: String(row.payload.key), name: String(row.payload.name), type: row.payload.type as TrackerField["type"], required: Boolean(row.payload.required), defaultValue: row.payload.defaultValue ?? null, options: row.payload.options as string[] ?? [], showAfterQuickCapture: Boolean(row.payload.showAfterQuickCapture), includeInStats: Boolean(row.payload.includeInStats), sortOrder: Number(row.payload.sortOrder ?? 0), unit: String(row.payload.unit ?? ""), precision: Number(row.payload.precision ?? 0), config: {}, archivedAt: row.payload.archivedAt as string | null ?? null, createdAt: String(row.payload.createdAt ?? ""), updatedAt: String(row.payload.updatedAt ?? "") };
 }
 export function belongs(row: LocalTrackerRecord, tracker: LocalTrackerRecord) { return row.payload.trackerLocalId === tracker.id || tracker.serverId !== undefined && row.payload.trackerId === tracker.serverId; }
 
-export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
+export function TrackerWorkspace({ account, platform }: { account: LocalAccount; platform: TrackerPlatform }) {
   const {english}=useLocale();
   const readOnly = platform.readOnly(account);
   const [inspection, setInspection] = useState<{pending:number;frozen:number;backupFile?:string}|null>(null);
@@ -83,14 +83,7 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
   const filtered = timelineEntries.filter(entry => matchesTrackerSearch(entry, query) && (!chartRows || chartRows.has(entry.id)) && entryMatchesPeriod(entry, periodFilter) && entryMatchesField(entry, fields.find(field=>field.key===fieldFilter), fieldValueFilter));
   const issues = state.records.filter(row => row.status);
   async function perform(action: () => Promise<unknown>) { if (working) return; setWorking(true); try { if(readOnly)throw new Error("只读验收模式禁止修改记录"); await action(); setError(""); void sync(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败，请重试"); } finally { setWorking(false); } }
-  async function signOut() { try { await platform.signOut(); onSignOut(); } catch (reason) { setError(String(reason)); } }
   function status(row: LocalTrackerRecord) { if(readOnly)return "只读快照"; return row.status ? "需要处理" : state.outbox.some(item => item.localId === row.id) ? "待同步" : "已保存"; }
-  function exportLocal() {
-    if (platform.native) { void nativeCall("trackers.exportState").catch(reason => setError(String(reason))); return; }
-    const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a"); link.href = url; link.download = "evaorbit-trackers-local.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   function openTracker(row: LocalTrackerRecord, detailed=false) { setSelectedId(row.id); setQuery(""); setPeriodFilter("all"); setFieldFilter(""); setFieldValueFilter(""); setChartFilter(null); setTab("timeline"); if (detailed) { setEditing(undefined); setCapture(true); } }
   async function recordNow(row: LocalTrackerRecord) {
     if (readOnly || row.status || row.payload.archivedAt || !ready) return;
@@ -103,12 +96,7 @@ export function TrackerWorkspace({ account, platform, onSignIn, onSignOut }: { a
   }
   const action = <button className="button primary" disabled={!ready || working || Boolean(selected?.status) || Boolean(selected?.payload.archivedAt)} onClick={() => selected ? void recordNow(selected) : setCreate(true)}><Icon name="plus" />{selected ? selected.payload.quickCaptureEnabled ? "立即记录" : "新增记录" : "新增观测"}</button>;
   return <main className={selected ? "page tracker-detail-page local-trackers" : "page tracker-page local-trackers"}>
-    <div className="local-tracker-toolbar">{selectedId ? <button className="back-link text-button" onClick={() => { setSelectedId(null); setQuery(""); setChartFilter(null); }}>返回 Trackers</button> : <span className="local-brand"><span className="brand-mark" aria-hidden="true"><span /></span>EvaOrbit</span>}
-      <details className="local-account-menu"><summary aria-label="账户与同步"><Icon name="settings" /></summary><div>
-        <strong className="user-content">{account.email}</strong>
-        <button className="text-button" onClick={onSignIn}>连接账户</button><button className="text-button" onClick={exportLocal}>导出本地记录</button><a className="text-button" href="https://eva-orbit.vercel.app/trackers" target="_blank" rel="noreferrer">打开网页版</a><button className="text-button" onClick={() => void signOut()}>退出账户</button>
-      </div></details>
-    </div>
+    <LocalBackAction onBack={selectedId?()=>{setSelectedId(null);setQuery("");setChartFilter(null);}:undefined}/>
     <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={readOnly ? <span className="tracker-archived-label">只读验收</span> : selected?.payload.archivedAt ? <span className="tracker-archived-label">已归档</span> : action} />
     <DevelopmentDetails>
     <div className="local-sync-status" role="status"><span>{readOnly ? (syncing ? "正在读取云端数据 · 上传已停用" : "只读快照 · 原有数据与队列已隔离") : isPreviewAccount(account) ? "本机预览 · 数据不会上传" : syncing ? "正在同步" : state.outbox.length ? state.outbox.length+" 项待同步 · 已保存在本机" : syncedAt ? "已同步 · 本机可离线使用" : "本机记录"}</span><button className="text-button" disabled={syncing || !ready || isPreviewAccount(account) && !readOnly} onClick={() => void sync()}>{readOnly ? "刷新只读数据" : "同步"}</button></div>

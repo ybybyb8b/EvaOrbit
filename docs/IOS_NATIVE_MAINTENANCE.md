@@ -410,3 +410,11 @@ Bark 的 `open_in_host` 默认 false；安装新版后才能在通知设置切�
 ### Chronicle 只读缓存补充
 
 本地包复用 Web Chronicle 列表/详情/表单；bridge v1 增加 `chronicle.readOnlySnapshot`，底层只放行精确 `GET /api/chronicle`，包装最近 100 篇到 8 MiB 账户缓存。SQLite 仅新增 `chronicle_readonly_cache`，保留既有记录/outbox/备份及身份检查；旧 Host 通过能力检测提示升级。未增加系统权限、framework 或 entitlement，安装签名链不变。此模块无需新增生产 API/migration；Web 视觉更新仍需单独授权部署，Host 需重建 IPA。Windows 浏览器验证不替代 macOS XCTest/iPhone 验收。详见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。
+
+### Memo 只读缓存补充
+
+本地复用原 Memo React 页面与表单；bridge v1 增加 `memo.readOnlySnapshot`，仅精确 GET `/api/memos`，最近更新 100 条/每账户8 MiB，新增 `memo_readonly_cache` 而不改旧 state/outbox/备份。身份/generation 校验与旧 Host 能力检测沿用现有契约；保存、归档、删除和通知触发禁用，Memory Graph 未接入。本模块不需新生产 API/migration，需要新 PoC IPA；不增加权限/framework/entitlement。Windows 不替代 macOS XCTest/iPhone 验收。见 [Memo 只读阶段](MEMO_LOCAL_READONLY_POC.md)。
+
+### Inbox 只读缓存补充
+
+沿用桥接 v1 增加本地 PoC 专用 `inbox.readOnlySnapshot`。仅符号路径 `inbox` 的 GET 固定映射既有 `/api/inbox?status=all`；不开放外部查询、详情、convert 或写方法。最多缓存500条/每账户8 MiB，独立 `inbox_readonly_cache`，身份/generation/备份校验和旧 Host capability 检测沿用现有契约。React 列表与捕获表单共享，行内/Log 只预览，处理/归档/恢复/删除禁止。不需生产 API/migration，但需要新 PoC IPA；无新权限、framework、entitlement 或签名链变化。Windows 不能替代 macOS XCTest/真机。见 [Inbox 只读阶段](INBOX_LOCAL_READONLY_POC.md)。

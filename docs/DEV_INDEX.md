@@ -42,6 +42,7 @@
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器和选择器。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
 - **共享导航**：[app-navigation.tsx](../src/components/app-navigation.tsx) 统一 Web 与本地 React 的侧栏菜单、图标、选中状态及手机抽屉（焦点约束、Escape、遮罩关闭和关闭后焦点恢复）。Web 保留全部入口、认证退出和系统协调器，本地仅注入已迁移模块链接；Home/Settings 继续复用底栏，本地不再维护顶部模块按钮。
+- **Header 与返回契约**：两端复用 [NavigationBackControl](../src/components/navigation-back-control.tsx)，Web 保留 `PageBackButton` 的历史/fallback 语义；本地壳层管理返回，详情仅注册动作，账户操作归 Settings。新模块不再自画返回按钮，现有模块的批量迁移边界见 [统一 Header](SHARED_NAVIGATION_HEADER.md)。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。
 - **详文**：[开发规则](../AGENTS.md)、[部署](../DEPLOYMENT.md)、[客户端缓存](CLIENT_PAGE_CACHE.md)、[备份与本地恢复](DATA_BACKUP.md)、[表单体验](FORM_INPUT_EXPERIENCE_REVIEW.md)。
 
@@ -91,6 +92,8 @@
 - **依赖与决定**：Graph 为 owner-scoped Entity → Fact → Source；不把 Persona、政策或 Memo 正文迁进去。自动候选经人工提升后才参与召回；正式 v0.2 Fact/Source 与替代链事务写入。Entity 合并保留重定向，Fact 撤销与现实有效期不同。AI 接收有来源的不可信召回上下文，召回失败不阻断回答；候选审核路径不等于通用 MCP 已开放该能力。特定近况 Memo 的内容更新会触发 Lucius 通知。
 - **详文**：[Memory Graph](MEMORY_GRAPH.md)、[MCP 兼容与生命周期](../src/lib/mcp/README.md)、[Memo 通知条件](../src/lib/push/README.md)。
 
+- **Memo 本地只读**：[MemoWorkspace](../src/local-trackers/memo-workspace.tsx) 复用 Web 列表、详情和 [MemoEditor](../src/app/memo/memo-editor.tsx)，通过 [MemoDataProvider](../src/components/memo-data-context.tsx) 注入账户快照 GET/导航。既有纯 GET 下载最近更新 100 条，保存/归档/删除禁用，图谱不在本阶段。范围、缓存和回退见 [Memo 只读阶段](MEMO_LOCAL_READONLY_POC.md)。
+
 ## AI
 
 - **职责与入口**：[ai/](../src/app/ai/)、[chat API](../src/app/api/ai/chat/route.ts)、[persona.ts](../src/lib/persona.ts)、[ai-tools.ts](../src/lib/ai-tools.ts)、[Provider 设置](../src/app/settings/ai-providers-settings.tsx)。
@@ -103,6 +106,8 @@
 - **职责与入口**：[inbox/](../src/app/inbox/)、[inbox 服务](../src/lib/services/inbox.ts)；表 `inbox_items`，API `/api/inbox` 及 convert，MCP `inbox`。
 - **依赖与决定**：待整理捕获与长期内容分开；现有 convert 目标是 Task 或旧 Memory（`memories`），不会直接生成 Memo/Graph；转换后保留原项及处理状态、目标引用。
 - **契约**：[MCP 边界](../src/lib/mcp/README.md)；转换行为以服务为准。
+
+- **本地只读**：[InboxWorkspace](../src/local-trackers/inbox-workspace.tsx) 复用 Web 列表/筛选和捕获表单，经 [InboxDataProvider](../src/components/inbox-data-context.tsx) 读取账户快照。既有纯 GET 下载最多500条，行内/Log 表单只预览，处理/归档/恢复/删除禁用；不保证完整历史。边界与回退见 [Inbox 只读阶段](INBOX_LOCAL_READONLY_POC.md)。
 
 ## Tasks
 

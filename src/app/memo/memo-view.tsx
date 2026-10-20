@@ -3,23 +3,25 @@ import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
-import { PageLogAction } from "@/components/bottom-log";
+import { PageLogAction } from "@/components/bottom-log-core";
 import { ChoiceSelect } from "@/components/choice-select";
-import { SuggestedInput } from "@/components/suggested-input";
+import {MemoEditor,type MemoDraft} from "./memo-editor";
+import {useFormPreview} from "@/components/form-preview";
+import {MemoLink as Link,useMemoData} from "@/components/memo-data-context";
+import {useLocale} from "@/components/locale-controller";
 import { ToastNotice } from "@/components/action-toast";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
-import { PageHeader } from "@/components/page-header";
+import { PageHeading as PageHeader } from "@/components/page-heading";
 import { memoStatusOptions, memoTypeOptions, optionLabel, parseTagInput, plainExcerpt } from "@/lib/long-term-memory";
 import type { Memo, MemoStatus, MemoType } from "@/lib/types";
 
-type MemoDraft = { title: string; content: string; type: MemoType; status: MemoStatus; tags: string; eventDate: string; confirmedAt: string };
-const emptyDraft = (): MemoDraft => ({ title: "", content: "", type: "note", status: "active", tags: "", eventDate: "", confirmedAt: "" });
+const emptyDraft = (): MemoDraft => ({ title: "", content: "", type: "note", status: "active", tags: "", eventDate: "", confirmedAt: "", mergedIntoId:"" });
 
 export function MemoView({ initial }: { initial: Memo[] }) {
+  const {read,local,complete}=useMemoData(),readonly=useFormPreview(),{english}=useLocale();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useRememberedState("MemoView:query", "");
   const [tag, setTag] = useRememberedState("MemoView:tag", "");
@@ -33,22 +35,22 @@ export function MemoView({ initial }: { initial: Memo[] }) {
   const [notice, setNotice] = useState("");
   const knownTags = useMemo(() => [...new Set(items.flatMap((item) => item.tags))].sort(), [items]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?:AbortSignal) => {
     setLoading(true); setError("");
     const params = new URLSearchParams({ limit: "100" });
     if (query.trim()) params.set("q", query.trim()); if (tag) params.set("tag", tag); if (type) params.set("type", type); if (status) params.set("status", status);
-    try { const response = await fetch(`/api/memos?${params}`, { cache: "no-store" }); if (!response.ok) throw new Error(await responseError(response, "Could not load Memo.")); setItems(await response.json() as Memo[]); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not load Memo."); }
-    finally { setLoading(false); }
-  }, [query, status, tag, type]);
+    try { const response = await read(`/api/memos?${params}`, { cache: "no-store",signal }); if (!response.ok) throw new Error(await responseError(response, "Could not load Memo.")); const next=await response.json() as Memo[]; if(!signal?.aborted)setItems(next); }
+    catch (reason) { if(!signal?.aborted)setError(reason instanceof Error ? reason.message : "Could not load Memo."); }
+    finally { if(!signal?.aborted)setLoading(false); }
+  }, [query, status, tag, type,read]);
   useDataRefresh("/memo", () => load());
 
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 180); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>void load(controller.signal),180);return()=>{clearTimeout(timer);controller.abort();};},[load]);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setSaving(true); setError("");
+    event.preventDefault(); if(readonly)return; setSaving(true); setError("");
     try {
-      const response = await fetch("/api/memos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null }) });
+      const response = await fetch("/api/memos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, mergedIntoId:null,tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null }) });
       if (!response.ok) throw new Error(await responseError(response, "Could not create Memo."));
       await response.json() as Memo; setShowForm(false); setDraft(emptyDraft()); setNotice("Memo saved."); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create Memo."); }
@@ -56,21 +58,12 @@ export function MemoView({ initial }: { initial: Memo[] }) {
   }
 
   return <div className="page memo-page">
-    <PageHeader eyebrow="长期记忆" title="Memo" action={<span className="memo-header-actions"><Link className="button secondary" href="/memo/graph"><Icon name="memory" />Memory Graph</Link><PageLogAction label="新增碎片" className="button primary" onClick={() => { setDraft(emptyDraft()); setShowForm(true); }}><Icon name="plus" />新增碎片</PageLogAction></span>} />
+    <PageHeader eyebrow="长期记忆" title="Memo" action={<span className="memo-header-actions">{!local&&<Link className="button secondary" href="/memo/graph"><Icon name="memory" />Memory Graph</Link>}<PageLogAction label="新增碎片" className="button primary" onClick={() => { setDraft(emptyDraft()); setShowForm(true); }}><Icon name="plus" />新增碎片</PageLogAction></span>} />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
-    {showForm && <FormSheet title="Keep something important" onClose={() => setShowForm(false)} formId="memo-create-form" submitLabel="Save Memo" busy={saving}><form id="memo-create-form" className="editor-card long-term-editor" onSubmit={submit}>
-      <div className="editor-title"><div><span className="eyebrow">NEW MEMO</span><h2>Keep something important</h2></div><button className="text-button" type="button" onClick={() => setShowForm(false)}>Cancel</button></div>
-      <div className="form-grid">
-        <label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-        <label className="field"><span>Type</span><ChoiceSelect value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as MemoType })}>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
-        <label className="field"><span>Status</span><ChoiceSelect value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as MemoStatus })}>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect></label>
-        <label className="field"><span>Event date <small>Optional</small></span><input type="date" value={draft.eventDate} onChange={(event) => setDraft({ ...draft, eventDate: event.target.value })} /></label>
-        <label className="field"><span>Confirmed at <small>Optional</small></span><input type="datetime-local" value={draft.confirmedAt} onChange={(event) => setDraft({ ...draft, confirmedAt: event.target.value })} /></label>
-        <div className="field wide"><span>Tags <small>Enter to add</small></span><SuggestedInput suggestionLabel="标签" suggestions={knownTags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder="人物, 规则, 长期资料" /></div>
-        <label className="field wide"><span>Content</span><textarea required rows={10} maxLength={100000} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} /></label>
-      </div>
+    {showForm && <FormSheet title="Keep something important" onClose={() => setShowForm(false)} formId="memo-create-form" submitLabel="Save Memo" busy={saving} submitDisabled={readonly}><form id="memo-create-form" className="editor-card long-term-editor" onSubmit={submit}>
+      <MemoEditor draft={draft} onChange={setDraft} knownTags={knownTags}/>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
-      <div className="form-actions"><button className="button primary" disabled={saving}>{saving ? "Saving…" : "Save Memo"}</button></div>
+
     </form></FormSheet>}
     {!showForm && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
     <div className="long-term-toolbar" aria-busy={loading}>
@@ -78,8 +71,9 @@ export function MemoView({ initial }: { initial: Memo[] }) {
       <ChoiceSelect value={tag} onChange={(event) => setTag(event.target.value)} aria-label="Filter Memo by tag"><option value="">All tags</option>{knownTags.map((item) => <option value={item} key={item}>{item}</option>)}</ChoiceSelect>
       <ChoiceSelect value={type} onChange={(event) => setType(event.target.value as "" | MemoType)} aria-label="Filter Memo by type"><option value="">All types</option>{memoTypeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect>
       <ChoiceSelect value={status} onChange={(event) => setStatus(event.target.value as "" | MemoStatus)} aria-label="Filter Memo by status"><option value="">All statuses</option>{memoStatusOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</ChoiceSelect>
-      <span className="result-count">{items.length}</span>
+      <span className="result-count" role="status">{loading?(english?"Searching…":"正在搜索…"):items.length}</span>
     </div>
+    {local&&<p className="chronicle-scope">{english?`Searching downloaded Memo${complete?"":" · latest 100 only"}`:`搜索已下载碎片${complete?"":" · 仅最近100条"}`}</p>}
     {items.length ? <div className="memo-list" aria-busy={loading}>{items.map((item) => <Link className="memo-row" href={`/memo/${item.id}`} key={item.id}>
       <span className="memo-row-copy"><span><strong>{item.title}</strong><small>{optionLabel(memoTypeOptions, item.type)} · {optionLabel(memoStatusOptions, item.status)}</small></span><span>{plainExcerpt(item.content)}</span>{item.tags.length > 0 && <span className="tag-line">{item.tags.map((value) => <em key={value}>{value}</em>)}</span>}</span>
       <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleDateString()}</time><Icon name="arrow" />

@@ -41,7 +41,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot"]
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -418,6 +418,12 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case "chronicle.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.chronicleReadOnlySnapshot(accountId: account, refresh: refresh)
+                case "memo.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.memoReadOnlySnapshot(accountId: account, refresh: refresh)
+                case "inbox.readOnlySnapshot":
+                    guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    result = try await controller.inboxReadOnlySnapshot(accountId: account, refresh: refresh)
                 case "cats.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.catsReadOnlySnapshot(accountId: account, refresh: refresh)

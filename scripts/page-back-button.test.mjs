@@ -20,6 +20,7 @@ test("Back reuses the destination; direct entry uses client replacement without 
       if (name === "react") return { useRef: value => ({ current: value }), useEffect: effect => effect(), useTransition: () => [false, action => action()] };
       if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
       if (name === "next/navigation") return { usePathname: () => "/food", useRouter: () => ({ back: () => calls.push("back"), replace: path => calls.push(`replace:${path}`) }) };
+      if (name === "./navigation-back-control") return {NavigationBackControl:"button"};
       if (name === "reicon-react") return { ArrowLeft2: "icon" };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: true }) };
       if (name.endsWith("page-navigation")) return { pageBackFallback: () => "/food-drink" };

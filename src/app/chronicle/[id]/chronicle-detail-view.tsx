@@ -4,7 +4,7 @@ import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
 import {ChronicleEditor,type ChronicleDraft} from "../chronicle-editor";
 import {useFormPreview} from "@/components/form-preview";
-import {ChronicleLink as Link,useChronicleData} from "@/components/chronicle-data-context";
+import {useChronicleData} from "@/components/chronicle-data-context";
 import {useLocale} from "@/components/locale-controller";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
@@ -75,7 +75,6 @@ export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEnt
   }
 
   return <div className="page chronicle-page chronicle-detail-page">
-    <Link className="back-link" href="/chronicle">← Chronicle</Link>
     <PageHeader eyebrow={`${chronicleDateLabel(entry.date,english)} · ${entry.source==="manual"&&!english?"手动":sourceLabel(entry.source)}`} title={entry.title} action={<button className="button secondary" onClick={startEdit} disabled={editing||busy}><Icon name="edit"/>{english?"Edit":"编辑"}</button>} />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     {error && <ErrorNotice role="alert">{error}</ErrorNotice>}

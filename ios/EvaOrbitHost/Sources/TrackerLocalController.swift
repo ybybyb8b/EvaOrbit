@@ -44,8 +44,15 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         let trackerPath = path == "trackers" || path.range(of: "^trackers/[1-9][0-9]*(/icon)?$", options: .regularExpression) != nil
         let homePath = path.range(of: "^home-readonly/(day/[0-9]{4}-[0-9]{2}-[0-9]{2}|month/[0-9]{4}-[0-9]{2}|due/current)$", options: .regularExpression) != nil
         let foodPath = path.range(of: "^food-readonly/(catalog/current|place/[1-9][0-9]*|item/[1-9][0-9]*)$", options: .regularExpression) != nil
-        guard path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "chronicle" || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
-        var request = URLRequest(url: baseURL.appendingPathComponent((trackerPath || path == "chronicle") ? "api/\(path)" : "api/native/\(path)"))
+        guard path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "inbox" || path == "memos" || path == "chronicle" || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
+        var endpoint = baseURL.appendingPathComponent((trackerPath || path == "chronicle" || path == "memos" || path == "inbox") ? "api/\(path)" : "api/native/\(path)")
+        if path == "inbox" {
+            guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else { throw TrackerLocalError.invalid }
+            components.queryItems = [URLQueryItem(name: "status", value: "all")]
+            guard let address = components.url else { throw TrackerLocalError.invalid }
+            endpoint = address
+        }
+        var request = URLRequest(url: endpoint)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
@@ -188,6 +195,32 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         try await database.saveChronicleReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func memoReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.memoReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let items = try await request(path: "memos", method: "GET") as? [[String: Any]], items.count <= 100 else { throw TrackerLocalError.invalid }
+        let snapshot: [String: Any] = ["format": "eo-memo-readonly-v1", "accountId": accountId, "capturedAt": ISO8601DateFormatter().string(from: Date()), "items": items, "complete": items.count < 100]
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveMemoReadOnlyCache(accountId: accountId, snapshot: snapshot)
+        return snapshot
+    }
+
+    func inboxReadOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
+        _ = try await acceptanceStatus(accountId: accountId)
+        if !refresh { return try await database.inboxReadOnlyCache(accountId: accountId) }
+        let expectedGeneration = generation
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let items = try await request(path: "inbox", method: "GET") as? [[String: Any]] else { throw TrackerLocalError.invalid }
+        let snapshot: [String: Any] = ["format": "eo-inbox-readonly-v1", "accountId": accountId, "capturedAt": ISO8601DateFormatter().string(from: Date()), "items": Array(items.prefix(500))]
+        guard expectedGeneration == generation, let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        try await database.saveInboxReadOnlyCache(accountId: accountId, snapshot: snapshot)
         return snapshot
     }
 

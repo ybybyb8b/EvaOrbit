@@ -43,6 +43,7 @@ function fixture(initial = '/health', responseOk = true) {
     '@/lib/client-json-cache': { clearClientJsonCache: () => {} },
     '@/lib/client-data-cache': { cachedClientFetch: (input, init, network) => network(input, init), configureClientCache: () => {}, invalidateClientData: domains => { const event = new Event('cache-change'); event.detail = { domains, reason: 'invalidate' }; win.dispatchEvent(event); }, clientDataChanged: 'cache-change', isClientDataStorageKey: () => false, clientChangeAffects: () => false },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+    './navigation-back-control': {NavigationBackControl:'button'},
     './locale-controller': { useLocale: () => ({ english: false }) }, 'reicon-react': { ArrowLeft2: () => null } })[name];
   const { DataChangeReconciler } = load('../src/components/data-change-reconciler.tsx', require, win);
   const { PageBackButton } = load('../src/components/page-back-button.tsx', require, win);

@@ -1,3 +1,5 @@
+import {createServer as probeServer} from "node:net";
+export const freeLocalPort=()=>new Promise((resolve,reject)=>{const probe=probeServer();probe.once("error",reject);probe.listen(0,"127.0.0.1",()=>{const port=probe.address().port;probe.close(error=>error?reject(error):resolve(port));});});
 // Drive the same sidebar / mobile drawer used by Web, rather than a test-only module bar.
 export async function navigateLocal(page,label){
   const sidebar=page.getByRole("navigation",{name:"Main navigation",exact:true});
