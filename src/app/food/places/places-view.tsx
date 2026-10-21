@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFoodData,FoodPreviewAction} from "@/components/food-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
@@ -29,6 +30,7 @@ const filterLabels={kind:"来源类型",scope:"地点范围",serviceType:"店铺
 type FilterKind=keyof typeof filterLabels|"";
 
 export function FoodPlacesView(){
+  const businessFetch=useBusinessRequest();
   const {read,local}=useFoodData();const previewOnly=useFormPreview();const PageAction=local?FoodPreviewAction:PageLogAction;
   const[editingId,setEditingId]=useState<number|null>(null);
   function closeEditor(){setShowForm(false);setEditingId(null);setDraft(empty);setError("");}
@@ -47,12 +49,12 @@ export function FoodPlacesView(){
   const filtered=Boolean(query.trim()||filterKind&&filterValue);
   async function submit(event:FormEvent){
     event.preventDefault();if(previewOnly||saving)return;setSaving(true);setError("");
-    try{const response=await fetch(editingId?`/api/food/places/${editingId}`:"/api/food/places",{method:editingId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...draft,rating:draft.rating||null})});if(!response.ok){setError(((await response.json())as ApiError).error);return;}closeEditor();await Promise.all([load(),loadCandidates()]);}
+    try{const response=await businessFetch(editingId?`/api/food/places/${editingId}`:"/api/food/places",{method:editingId?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...draft,rating:draft.rating||null})});if(!response.ok){setError(((await response.json())as ApiError).error);return;}closeEditor();await Promise.all([load(),loadCandidates()]);}
     catch(reason){setError(reason instanceof Error?reason.message:"无法保存店铺，请重试");}finally{setSaving(false);}
   }
   async function removePlace(place:FoodPlace){if(previewOnly)return;
     if(saving)return;setSaving(true);
-    try{const response=await fetch(`/api/food/places/${place.id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除店铺，请重试");const result=await response.json() as {action:"deleted"|"archived"};showActionToast(result.action==="archived"?"店铺已归档并标记为已关闭，历史记录保持不变":"店铺已删除",result.action==="archived"?"success":"deleted");await Promise.all([load(),loadCandidates()]);}finally{setSaving(false);}
+    try{const response=await businessFetch(`/api/food/places/${place.id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除店铺，请重试");const result=await response.json() as {action:"deleted"|"archived"};showActionToast(result.action==="archived"?"店铺已归档并标记为已关闭，历史记录保持不变":"店铺已删除",result.action==="archived"?"success":"deleted");await Promise.all([load(),loadCandidates()]);}finally{setSaving(false);}
   }
   return <div className="page food-places-page"><PageHeader eyebrow="Food & Drink" title="店铺库" description="餐饮、饮品、零售与自制，共用一个来源库。" action={<PageAction label="新增店铺" onClick={openCreate}><Icon name="plus"/>新增店铺</PageAction>}/>
     <div className={styles.toolbar}><label className="search-box food-place-search"><Icon name="search"/><input aria-label="搜索店铺" value={query} onChange={event=>setQuery(event.target.value)} placeholder="搜索店名、城市、地点或品类…"/></label><PlacesCascader groups={groups} kind={filterKind} value={filterValue} onChange={(kind,value)=>{setFilterKind(kind as FilterKind);setFilterValue(value);}}/></div><div className={styles.summary}>{filterKind&&filterValue&&<span className={styles.selection}>{filterLabels[filterKind]} → {groups.find(group=>group.value===filterKind)?.children.find(child=>child.value===filterValue)?.label??filterValue}</span>}<span role="status">{loading && !items.length ? "" : `显示 ${items.length} 家`}</span>{(filterKind||query)&&<button className="text-button" onClick={()=>{setFilterKind("");setFilterValue("");setQuery("");}}>清除筛选</button>}</div>

@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
@@ -18,6 +19,7 @@ const draft = () => ({ name: "", amount: "", currency: "CNY", billingIntervalVal
 export function SubscriptionsView(props:React.ComponentProps<typeof SubscriptionsContent>){const router=useRouter();return <SubscriptionsContent {...props} onSaved={()=>router.refresh()}/>;}
 
 export function SubscriptionsContent({ initial, payments, today: currentDate,onSaved }: { onSaved?:()=>void; initial: Subscription[]; payments: SubscriptionPayment[]; today: string }) {
+  const businessFetch=useBusinessRequest();
   const {english}=useLocale();
   const previewOnly=useFormPreview();const {iconSources}=useSubscriptionsData();
   const [show, setShow] = useState(false), [saving, setSaving] = useState(false), [error, setError] = useState(""), [form, setForm] = useState(draft);
@@ -27,11 +29,11 @@ export function SubscriptionsContent({ initial, payments, today: currentDate,onS
   async function submit(event: FormEvent) {
     event.preventDefault(); if (previewOnly || saving) return; setSaving(true); setError("");
     try {
-      const response = await fetch("/api/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, billingIntervalValue: Number(form.billingIntervalValue), reminderDaysBefore: Number(form.reminderDaysBefore) }) });
+      const response = await businessFetch("/api/subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, billingIntervalValue: Number(form.billingIntervalValue), reminderDaysBefore: Number(form.reminderDaysBefore) }) });
       const result = await response.json() as Subscription | ApiError;
       if (!response.ok) { setError((result as ApiError).error); return; }
       let iconError = "";
-      try { await saveIconSelection((result as Subscription).id, iconFile); }
+      try { await saveIconSelection((result as Subscription).id, iconFile, false, businessFetch); }
       catch { iconError = english ? "Subscription created, but its icon could not be uploaded. You can retry in Edit." : "订阅已创建，但图标上传失败，可在编辑订阅中重试。"; }
       closeCreate();
       if (iconError) setError(iconError);

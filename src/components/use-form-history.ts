@@ -1,10 +1,11 @@
 "use client";
+import {businessFetch} from "@/lib/business-request";
 
 import { useEffect, useState } from "react";
 import { uniqueInputValues } from "@/lib/form-input";
 
 // Optional, bounded history from existing APIs. Failure never blocks manual entry.
-export function useFormHistory(url: string | null, recordPath?: string, read: (url: string, init?: RequestInit) => Promise<Response> = fetch) {
+export function useFormHistory(url: string | null, recordPath?: string, read: (url: string, init?: RequestInit) => Promise<Response> = businessFetch) {
   const [history, setHistory] = useState<{ url: string; records: Record<string, unknown>[] }>({ url: "", records: [] });
   useEffect(() => {
     if (!url) return;

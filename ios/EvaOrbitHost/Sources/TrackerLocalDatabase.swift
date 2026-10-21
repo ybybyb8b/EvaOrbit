@@ -46,6 +46,7 @@ actor TrackerLocalDatabase {
         CREATE TABLE IF NOT EXISTS tracker_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_replica_state(account_id TEXT PRIMARY KEY,revision INTEGER NOT NULL CHECK(revision>0),state_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS tracker_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS online_business_cache(account_id TEXT NOT NULL,path TEXT NOT NULL,response_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,path));
         CREATE TABLE IF NOT EXISTS home_readonly_cache(account_id TEXT NOT NULL,resource_key TEXT NOT NULL,snapshot_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,resource_key));
         CREATE TABLE IF NOT EXISTS inbox_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS memo_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
@@ -582,6 +583,33 @@ actor TrackerLocalDatabase {
             try execute("DELETE FROM food_resource_cache WHERE account_id=? AND resource_key<>'catalog/current' AND rowid IN (SELECT rowid FROM food_resource_cache WHERE account_id=? AND resource_key<>'catalog/current' ORDER BY saved_at DESC,rowid DESC LIMIT -1 OFFSET 63)", [accountId, accountId])
             try execute("COMMIT")
         } catch { try? execute("ROLLBACK"); throw error }
+    }
+
+    func onlineCache(accountId: String, path: String) throws -> Any {
+        try requireAccount(accountId)
+        let query = try statement("SELECT response_json FROM online_business_cache WHERE account_id=? AND path=?", [accountId, path]); defer { sqlite3_finalize(query) }
+        if sqlite3_step(query) == SQLITE_DONE { return NSNull() }
+        guard let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
+        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+    }
+    func saveOnlineCache(accountId: String, path: String, response: [String: Any]) throws {
+        try requireAccount(accountId)
+        let data = try JSONSerialization.data(withJSONObject: response)
+        guard data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            let query = try statement("INSERT INTO online_business_cache(account_id,path,response_json,saved_at) VALUES(?,?,?,?) ON CONFLICT(account_id,path) DO UPDATE SET response_json=excluded.response_json,saved_at=excluded.saved_at", [accountId, path]); defer { sqlite3_finalize(query) }
+            let bound = data.withUnsafeBytes { sqlite3_bind_blob(query, 3, $0.baseAddress, Int32(data.count), transient) }
+            guard bound == SQLITE_OK, sqlite3_bind_int64(query, 4, Int64(Date().timeIntervalSince1970 * 1000)) == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw TrackerLocalError.storage }
+            try execute("DELETE FROM online_business_cache WHERE account_id=? AND rowid IN (SELECT rowid FROM (SELECT rowid,ROW_NUMBER() OVER (ORDER BY saved_at DESC,rowid DESC) AS position,SUM(length(response_json)) OVER (ORDER BY saved_at DESC,rowid DESC) AS bytes FROM online_business_cache WHERE account_id=?) WHERE position>128 OR bytes>67108864)", [accountId, accountId])
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+    func invalidateOnlineCache(accountId: String, module: String) throws {
+        try requireAccount(accountId)
+        for domain in (module == "food" || module == "drinks" ? ["food", "drinks", "food-drink"] : module == "projects" || module == "project-items" ? ["projects", "project-items"] : [module]) {
+            try execute("DELETE FROM online_business_cache WHERE account_id=? AND (path=? OR path LIKE ? OR path LIKE ?)", [accountId, "/api/\(domain)", "/api/\(domain)/%", "/api/\(domain)?%"])
+        }
     }
 
     // SQLite's online backup includes WAL contents. Never copy only the .sqlite3 file.

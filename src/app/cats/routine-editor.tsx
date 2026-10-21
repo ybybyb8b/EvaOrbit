@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
@@ -27,7 +28,8 @@ function localInput(value?: string) {
   return date.toISOString().slice(0, 10);
 }
 
-export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCancel, onSaved, onSavingChange }: Props) { const previewOnly=useFormPreview();
+export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCancel, onSaved, onSavingChange }: Props) {
+  const businessFetch=useBusinessRequest(); const previewOnly=useFormPreview();
   const { english } = useLocale();
   const initial = useMemo<RoutineDraft>(() => ({
     scope: editing?.scope ?? initialScope ?? (initialPetId ? "cat" : "household") as CatRoutine["scope"],
@@ -52,7 +54,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
   const suggestions = draft.scope === "cat" ? ["Deworming", "Nail trim"] : ["Filter change", "Deep clean"];
   async function submit(event: FormEvent) {
     event.preventDefault(); if(previewOnly || saving)return; setSaving(true); setError("");
-    const response = await fetch(editing ? `/api/cats/routines/${editing.id}` : "/api/cats/routines", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, petId: draft.scope === "cat" ? draft.petId : null, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
+    const response = await businessFetch(editing ? `/api/cats/routines/${editing.id}` : "/api/cats/routines", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, petId: draft.scope === "cat" ? draft.petId : null, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) });
     setSaving(false);
     if (!response.ok) { playNativeHaptic("error"); setError((await response.json()).error ?? "Could not save routine"); return; }
     try { await reconcileNativeNotifications(); } catch { /* The browser push path remains active. */ }

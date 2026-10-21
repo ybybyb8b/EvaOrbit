@@ -18,6 +18,7 @@ function fixture() {
   const jsx = (type, props) => ({ type, props });
   const imports = {
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
+    "@/components/business-request-context": {useBusinessRequest:()=>async()=>{throw new TypeError("Form write failed");}},
     "@/components/form-sheet": { FormSheet: "sheet" },
     "@/components/error-notice": { ErrorNotice: "error-notice" },
     "@/lib/journal-draft": { journalDraftChanged, journalPreviewEntries },

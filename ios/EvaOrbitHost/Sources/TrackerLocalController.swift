@@ -123,6 +123,75 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         if path == "/api/preferences/life-day" { return ["GET", "PATCH"].contains(method) }
         return path == "/api/calendar-interpretation" && ["GET", "PUT"].contains(method)
     }
+    // The bundle and TypeScript use the very same explicit route/method manifest.
+    static func allowsBusinessRequest(path: String, method: String) -> Bool {
+        let pathname = String(path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)[0])
+        guard path.utf8.count <= 4096, pathname.hasPrefix("/api/"), !path.contains("#"),
+              !pathname.contains("%"), !pathname.contains("\\"), !pathname.contains("//"),
+              !pathname.unicodeScalars.contains(where: { $0.value <= 32 }),
+              !pathname.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }),
+              let file = Bundle.main.url(forResource: "business-routes", withExtension: "json", subdirectory: "TrackerWeb"),
+              let data = try? Data(contentsOf: file), let routes = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return false }
+        return routes.contains { route in
+            guard let pattern = route["pattern"] as? String, let methods = route["methods"] as? [String] else { return false }
+            return methods.contains(method) && pathname.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
+    func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool) async throws -> Any {
+        guard Self.allowsBusinessRequest(path: path, method: method), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
+        try await database.requireAccount(accountId)
+        let expectedGeneration = generation
+        if offline {
+            guard method == "GET" else { throw TrackerLocalError.network("Connect to save. Nothing was uploaded or queued.") }
+            let cached = try await database.onlineCache(accountId: accountId, path: path)
+            guard expectedGeneration == generation else { throw TrackerLocalError.account }
+            return cached
+        }
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard identity["onlineBusinessProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe online API must be published before saving. Downloaded data is preserved.") }
+        guard identity["onlineBusinessTestAccount"] as? Bool == true else { throw TrackerLocalError.network("Online business testing is enabled only for configured test accounts. Tracker sync is unchanged.") }
+        try await database.requireAccount(accountId)
+        guard expectedGeneration == generation, let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL, endpoint.host == baseURL.host, endpoint.scheme == baseURL.scheme, endpoint.port == baseURL.port else { throw TrackerLocalError.account }
+        var outgoing = URLRequest(url: endpoint)
+        outgoing.httpMethod = method
+        outgoing.httpShouldHandleCookies = false
+        outgoing.setValue(HTTPCookie.requestHeaderFields(with: cookies.cookies(for: baseURL) ?? [])["Cookie"], forHTTPHeaderField: "Cookie")
+        outgoing.setValue(accountId, forHTTPHeaderField: "X-EvaOrbit-Account")
+        outgoing.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        if let bodyBase64 {
+            guard ["POST", "PATCH", "PUT"].contains(method), bodyBase64.utf8.count <= 12 * 1024 * 1024,
+                  let body = Data(base64Encoded: bodyBase64), body.count <= 8 * 1024 * 1024,
+                  contentType == "application/json" || contentType.hasPrefix("multipart/form-data; boundary="),
+                  contentType.utf8.count <= 200, !contentType.contains("\r"), !contentType.contains("\n") else { throw TrackerLocalError.invalid }
+            if contentType == "application/json" { _ = try JSONSerialization.jsonObject(with: body) }
+            outgoing.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            outgoing.httpBody = body
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = 20
+        let connection = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
+        defer { connection.invalidateAndCancel() }
+        let networkResult: (Data, URLResponse)
+        do { networkResult = try await connection.data(for: outgoing) }
+        catch {
+            if method != "GET" { throw TrackerLocalError.network("The save result is unknown. Reconnect and refresh before submitting again; nothing retries automatically.") }
+            throw error
+        }
+        let (data, response) = networkResult
+        guard let http = response as? HTTPURLResponse, !(300..<400).contains(http.statusCode), data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.invalid }
+        try await database.requireAccount(accountId)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        let result: [String: Any] = ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)]
+        if method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
+        // A cache failure cannot turn an acknowledged cloud write into a failed save.
+        if method != "GET", (200..<300).contains(http.statusCode) { try? await database.invalidateOnlineCache(accountId: accountId, module: String(path.split(separator: "?")[0].split(separator: "/")[1])) }
+        try await database.requireAccount(accountId)
+        guard expectedGeneration == generation else { throw TrackerLocalError.account }
+        return result
+    }
     // Explicit online settings only; never persists a key or enqueues a request.
     func aiConfiguration(accountId: String, path: String, method: String, body: Any?, settings: Bool = false) async throws -> Any {
         guard (settings ? Self.allowsSettingsConfiguration(path: path, method: method) : Self.allowsAIConfiguration(path: path, method: method)), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }

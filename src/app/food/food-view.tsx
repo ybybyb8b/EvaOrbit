@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log";
@@ -13,9 +14,10 @@ import { FoodRecordEditor, meals } from "./food-record-editor";
 
 
 export function FoodView({initialDate,initialMealType}:{initialDate?:string;initialMealType?:string}={}){
+  const businessFetch=useBusinessRequest();
 
   const today=new Date().toLocaleDateString("en-CA");const[date,setDate]=useRememberedState("FoodView:date", initialDate??today);const[mealFilter,setMealFilter]=useRememberedState("FoodView:mealFilter", meals.some(meal=>meal.value===initialMealType)?initialMealType!:"");const[query,setQuery]=useRememberedState("FoodView:query", "");const[logs,setLogs]=useState<FoodLog[]>([]);const[editing,setEditing]=useState<FoodLog>();const[showForm,setShowForm]=useState(false);
-  const load=useCallback(async()=>{const params=new URLSearchParams({date});if(mealFilter)params.set("mealType",mealFilter);if(query)params.set("q",query);const recordsResponse=await fetch(`/api/food/logs?${params}`);if(recordsResponse.ok)setLogs(await recordsResponse.json());},[date,mealFilter,query]);
+  const load=useCallback(async()=>{const params=new URLSearchParams({date});if(mealFilter)params.set("mealType",mealFilter);if(query)params.set("q",query);const recordsResponse=await businessFetch(`/api/food/logs?${params}`);if(recordsResponse.ok)setLogs(await recordsResponse.json());},[date,mealFilter,query,businessFetch]);
   useDataRefresh("/food", () => load());
 
   useEffect(()=>{const timer=setTimeout(()=>void load(),query?120:0);return()=>clearTimeout(timer);},[load,query]);

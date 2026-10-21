@@ -12,7 +12,7 @@ import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
-import { PageHeading as PageHeader } from "@/components/page-heading";
+import { MediaPageHeader as PageHeader } from "@/components/media-data-context";
 import { getMediaDisplayTitle, mediaNameKey } from "@/lib/media-display";
 import type { MediaDetail, MediaSeries, MediaViewing } from "@/lib/types";
 import { playNativeHaptic } from "@/lib/native-haptics";

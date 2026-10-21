@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { PageLoading } from "@/components/page-loading";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
@@ -17,6 +18,7 @@ import type { InboxItem, InboxStatus } from "@/lib/types";
 import { InboxCaptureForm } from "./inbox-capture-form";
 
 export function InboxView() {
+  const businessFetch=useBusinessRequest();
   const { english } = useLocale();
   const {read,local}=useInboxData(),readonly=useFormPreview();
   const [error,setError]=useState("");
@@ -39,13 +41,13 @@ export function InboxView() {
 
   async function patch(id:number,body:object){
     if(readonly)return;
-    try{const response=await fetch(`/api/inbox/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!response.ok)throw new Error(await responseError(response,"Could not update Inbox item."));await load();}
+    try{const response=await businessFetch(`/api/inbox/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!response.ok)throw new Error(await responseError(response,"Could not update Inbox item."));await load();}
     catch(reason){setError(reason instanceof Error?reason.message:"Could not update Inbox item.");}
   }
   async function remove(id:number){
     if(readonly)return;
     if(!confirm(english?"Delete this temporary record?":"删掉这条临时记录？"))return;
-    try{const response=await fetch(`/api/inbox/${id}`,{method:"DELETE"});if(!response.ok)throw new Error(await responseError(response,"Could not delete Inbox item."));await load();showActionToast(english?"Inbox item deleted":"Inbox 记录已删除","deleted");}
+    try{const response=await businessFetch(`/api/inbox/${id}`,{method:"DELETE"});if(!response.ok)throw new Error(await responseError(response,"Could not delete Inbox item."));await load();showActionToast(english?"Inbox item deleted":"Inbox 记录已删除","deleted");}
     catch(reason){setError(reason instanceof Error?reason.message:"Could not delete Inbox item.");}
   }
 

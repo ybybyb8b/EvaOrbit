@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFoodData} from "@/components/food-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
@@ -34,6 +35,7 @@ const emptyDish={foodLibraryId:"",drinkType:"" as Exclude<DrinkType,"water">|"",
 export function FoodPlaceDetailView({id}:{id:number}){const router=useRouter();return <FoodPlaceDetailContent id={id} onRemoved={()=>router.push("/food/places")}/>;}
 
 export function FoodPlaceDetailContent({id,onRemoved}:{id:number;onRemoved:()=>void}){
+  const businessFetch=useBusinessRequest();
 
 
   const {read}=useFoodData();const previewOnly=useFormPreview();
@@ -44,16 +46,16 @@ export function FoodPlaceDetailContent({id,onRemoved}:{id:number;onRemoved:()=>v
   const load=useCallback(async(preserveDraft=false)=>{try{const response=await read(`/api/food/places/${id}`);if(response.status===404){setNotFound(true);return;}if(!response.ok)throw new Error("Could not load this place. Cached data is preserved.");setNotFound(false);setError("");if(response.ok){const next=await response.json() as FoodPlaceDetail;setData(next);if(!preserveDraft)setPlaceDraft({kind:next.place.kind??"restaurant",scope:next.place.scope??"branch",address:next.place.address??"",serviceType:next.place.serviceType??"food",name:next.place.name,branch:next.place.branch,city:next.place.city??"",location:next.place.location??"",category:next.place.category,rating:next.place.rating??"",status:next.place.status==="frequent"?"occasional":next.place.status,notes:next.place.notes});}}catch(reason){setError(reason instanceof Error?reason.message:"Could not load this place. Cached data is preserved.");}},[id,read]);
   useDataRefresh("/food/places", () => load(panel === "place"));
   useEffect(()=>{const timer=setTimeout(()=>void load(),0);return()=>clearTimeout(timer);},[load]);
-  async function savePlace(event:FormEvent){event.preventDefault();if(previewOnly)return;setSaving(true);setError("");const response=await fetch(`/api/food/places/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...placeDraft,rating:placeDraft.rating||null})});setSaving(false);if(!response.ok){setError(((await response.json())as ApiError).error);return;}setPanel(null);setNotice("店铺信息已更新");await load();}
+  async function savePlace(event:FormEvent){event.preventDefault();if(previewOnly)return;setSaving(true);setError("");const response=await businessFetch(`/api/food/places/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...placeDraft,rating:placeDraft.rating||null})});setSaving(false);if(!response.ok){setError(((await response.json())as ApiError).error);return;}setPanel(null);setNotice("店铺信息已更新");await load();}
   function openDish(item?:FoodDish,kind:"food"|"drink"="food"){setEditingDish(item??null);setDishDraft(item?{kind:item.kind??"food",foodLibraryId:item.foodLibraryId?.toString()??"",drinkType:item.drinkType??"",name:item.name,category:item.category,rating:item.rating??"",recommended:item.recommended,notes:item.notes}:{...emptyDish,kind});setError("");setPanel("dish");}
-  async function saveDish(event:FormEvent){event.preventDefault();if(previewOnly)return;setSaving(true);setError("");const response=await fetch(editingDish?`/api/food/dishes/${editingDish.id}`:`/api/food/places/${id}/dishes`,{method:editingDish?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...dishDraft,foodLibraryId:dishDraft.foodLibraryId?Number(dishDraft.foodLibraryId):null,drinkType:dishDraft.kind==="drink"?dishDraft.drinkType||null:null,rating:dishDraft.rating||null})});setSaving(false);if(!response.ok){setError(((await response.json())as ApiError).error);return;}setPanel(null);setEditingDish(null);setNotice(`${dishDraft.kind==="drink"?"饮品":"菜品"}${editingDish?"已更新":"已添加"}`);await load();}
+  async function saveDish(event:FormEvent){event.preventDefault();if(previewOnly)return;setSaving(true);setError("");const response=await businessFetch(editingDish?`/api/food/dishes/${editingDish.id}`:`/api/food/places/${id}/dishes`,{method:editingDish?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...dishDraft,foodLibraryId:dishDraft.foodLibraryId?Number(dishDraft.foodLibraryId):null,drinkType:dishDraft.kind==="drink"?dishDraft.drinkType||null:null,rating:dishDraft.rating||null})});setSaving(false);if(!response.ok){setError(((await response.json())as ApiError).error);return;}setPanel(null);setEditingDish(null);setNotice(`${dishDraft.kind==="drink"?"饮品":"菜品"}${editingDish?"已更新":"已添加"}`);await load();}
   async function removeDish(item:FoodDish){
     if(previewOnly||saving)return;setSaving(true);
-    try{const response=await fetch(`/api/food/dishes/${item.id}`,{method:"DELETE"});if(!response.ok)throw new Error(`无法删除${item.kind==="drink"?"饮品":"菜品"}，请重试`);const result=await response.json() as{action:"deleted"|"archived"};setPanel(null);setEditingDish(null);setNotice(`${item.kind==="drink"?"饮品":"菜品"}${result.action==="archived"?"已归档，历史记录保持不变":"已删除"}`);await load();}finally{setSaving(false);}
+    try{const response=await businessFetch(`/api/food/dishes/${item.id}`,{method:"DELETE"});if(!response.ok)throw new Error(`无法删除${item.kind==="drink"?"饮品":"菜品"}，请重试`);const result=await response.json() as{action:"deleted"|"archived"};setPanel(null);setEditingDish(null);setNotice(`${item.kind==="drink"?"饮品":"菜品"}${result.action==="archived"?"已归档，历史记录保持不变":"已删除"}`);await load();}finally{setSaving(false);}
   }
   async function removePlace(){
     if(previewOnly||!data||saving)return;setSaving(true);
-    try{const response=await fetch(`/api/food/places/${id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除店铺，请重试");const result=await response.json() as{action:"deleted"|"archived"};setPanel(null);if(result.action==="deleted"){showActionToast("店铺已删除","deleted");onRemoved();}else{setNotice("店铺已归档并标记为已关闭，历史记录保持不变");await load();}}finally{setSaving(false);}
+    try{const response=await businessFetch(`/api/food/places/${id}`,{method:"DELETE"});if(!response.ok)throw new Error("无法删除店铺，请重试");const result=await response.json() as{action:"deleted"|"archived"};setPanel(null);if(result.action==="deleted"){showActionToast("店铺已删除","deleted");onRemoved();}else{setNotice("店铺已归档并标记为已关闭，历史记录保持不变");await load();}}finally{setSaving(false);}
   }
   if(notFound)return <div className="page"><div className="empty-state"><h2>店铺不存在</h2><Link className="button secondary" href="/food/places">返回店铺库</Link></div></div>;
   if(!data)return error?<div className="page"><ErrorNotice>{error}</ErrorNotice><button className="text-button" onClick={()=>void load()}>Retry</button><Link className="section-link" href="/food/places">Back to Places</Link></div>:<PageLoading title="店铺" englishTitle="place" />;

@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFoodData,FoodPreviewAction} from "@/components/food-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
@@ -51,6 +52,7 @@ function draftFromItem(item: FoodLibraryItem): Draft {
 }
 
 export function FoodLibraryView(){
+  const businessFetch=useBusinessRequest();
   const {read,local}=useFoodData();const previewOnly=useFormPreview();const PageAction=local?FoodPreviewAction:PageLogAction;
   const {english}=useLocale();
   const t=(value:string)=>translateUiCopy(value,english?"en":"zh-CN");
@@ -101,7 +103,7 @@ export function FoodLibraryView(){
     const body = { ...draft, foodPlaceId:draft.foodPlaceId?Number(draft.foodPlaceId):null, drinkType: draft.category === "drink" ? draft.drinkType || null : null, referenceEnergyKj: optionalNumber(draft.referenceEnergyKj), referenceKcal: optionalNumber(draft.referenceKcal), servingWeight: optionalNumber(draft.servingWeight), servingKcal: optionalNumber(draft.servingKcal) };
     const editing = editingId;
     try{
-      const response = await fetch(editing ? `/api/food/library/${editing}` : "/api/food/library", { method: editing ? "PATCH" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await businessFetch(editing ? `/api/food/library/${editing}` : "/api/food/library", { method: editing ? "PATCH" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!response.ok) { setError(((await response.json()) as ApiError).error); return; }
       closeEditor();setNotice(editing ? "食品已更新" : "食品已添加");await load();
     }catch(reason){setError(reason instanceof Error?reason.message:"无法保存食品，请重试");}
@@ -112,7 +114,7 @@ export function FoodLibraryView(){
     if(previewOnly||saving)return;
     setSaving(true);setError("");setNotice("");
     try{
-    const response = await fetch(`/api/food/library/${item.id}`, { method: "DELETE" });
+    const response = await businessFetch(`/api/food/library/${item.id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
     const result = await response.json() as { action: "deleted" | "archived" };
     if(editingId===item.id)closeEditor();

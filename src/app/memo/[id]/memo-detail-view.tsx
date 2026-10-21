@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
@@ -26,13 +27,14 @@ export function MemoDetailView({ initial }: { initial: Memo }) {
   return <MemoDetailContent initial={initial} onDeleted={()=>{router.push("/memo");router.refresh();}}/>;
 }
 export function MemoDetailContent({initial,onDeleted}:{initial:Memo;onDeleted:()=>void}){
+  const businessFetch=useBusinessRequest();
   const readonly=useFormPreview(),{read}=useMemoData();
   const [mergeQuery,setMergeQuery] = useState("");
   const mergeHistory = useFormHistory(`/api/memos?limit=200&q=${encodeURIComponent(mergeQuery)}`,undefined,read);
   const tagHistory = useFormHistory("/api/memos?limit=200",undefined,read); const [item, setItem] = useServerDataState(initial); const [draft, setDraft] = useState(() => fromMemo(initial)); const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
-  async function patch(body: Record<string, unknown>, success: string) { if(readonly)return; setBusy(true); setError(""); try { const response = await fetch(`/api/memos/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(await responseError(response, "Could not update Memo.")); const updated = await response.json() as Memo; setItem(updated); setDraft(fromMemo(updated)); setEditing(false); setNotice(success); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Memo."); } finally { setBusy(false); } }
+  async function patch(body: Record<string, unknown>, success: string) { if(readonly)return; setBusy(true); setError(""); try { const response = await businessFetch(`/api/memos/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!response.ok) throw new Error(await responseError(response, "Could not update Memo.")); const updated = await response.json() as Memo; setItem(updated); setDraft(fromMemo(updated)); setEditing(false); setNotice(success); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Memo."); } finally { setBusy(false); } }
   async function submit(event: FormEvent) { event.preventDefault(); await patch({ ...draft, tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null, mergedIntoId: draft.mergedIntoId ? Number(draft.mergedIntoId) : null }, "Memo updated."); }
-  async function remove() { if(readonly)return; if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await fetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); onDeleted(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
+  async function remove() { if(readonly)return; if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return; setBusy(true); try { const response = await businessFetch(`/api/memos/${item.id}`, { method: "DELETE" }); if (!response.ok) throw new Error(await responseError(response, "Could not delete Memo.")); showActionToast("Memo deleted", "deleted"); onDeleted(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Memo."); } finally { setBusy(false); } }
 
   return <div className="page memo-page long-term-detail"><PageHeader eyebrow={`${optionLabel(memoTypeOptions, item.type)} · ${optionLabel(memoStatusOptions, item.status)}`} title={item.title} description={item.eventDate ? `Event date · ${item.eventDate}` : "Long-term context"} />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <ErrorNotice>{error}</ErrorNotice>}

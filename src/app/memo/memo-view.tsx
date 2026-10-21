@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
@@ -21,6 +22,7 @@ import type { Memo, MemoStatus, MemoType } from "@/lib/types";
 const emptyDraft = (): MemoDraft => ({ title: "", content: "", type: "note", status: "active", tags: "", eventDate: "", confirmedAt: "", mergedIntoId:"" });
 
 export function MemoView({ initial }: { initial: Memo[] }) {
+  const businessFetch=useBusinessRequest();
   const {read,local,complete}=useMemoData(),readonly=useFormPreview(),{english}=useLocale();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useRememberedState("MemoView:query", "");
@@ -50,7 +52,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
   async function submit(event: FormEvent) {
     event.preventDefault(); if(readonly)return; setSaving(true); setError("");
     try {
-      const response = await fetch("/api/memos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, mergedIntoId:null,tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null }) });
+      const response = await businessFetch("/api/memos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, mergedIntoId:null,tags: parseTagInput(draft.tags), eventDate: draft.eventDate || null, confirmedAt: draft.confirmedAt || null }) });
       if (!response.ok) throw new Error(await responseError(response, "Could not create Memo."));
       await response.json() as Memo; setShowForm(false); setDraft(emptyDraft()); setNotice("Memo saved."); await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create Memo."); }

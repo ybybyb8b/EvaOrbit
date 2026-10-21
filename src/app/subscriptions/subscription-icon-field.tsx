@@ -1,4 +1,5 @@
 "use client";
+import type {BusinessRequest} from "@/lib/business-request";
 import {useFormPreview} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
@@ -10,11 +11,11 @@ import type { ApiError } from "@/lib/types";
 import { useIconColors } from "./preview/use-icon-colors";
 import styles from "./subscription-icon-field.module.css";
 
-export async function saveIconSelection(id: number, file: File | null, remove = false) {
+export async function saveIconSelection(id: number, file: File | null, remove = false, request:BusinessRequest=fetch) {
   if (!file && !remove) return;
   const body = new FormData();
   if (file) body.set("file", file);
-  const response = await fetch(`/api/subscriptions/${id}/icon`, { method: file ? "POST" : "DELETE", ...(file ? { body } : {}) });
+  const response = await request(`/api/subscriptions/${id}/icon`, { method: file ? "POST" : "DELETE", ...(file ? { body } : {}) });
   if (!response.ok) {
     const error = await response.json().catch(() => null) as ApiError | null;
     throw new Error(error?.error ?? "Icon could not be saved.");

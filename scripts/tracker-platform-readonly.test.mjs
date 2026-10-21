@@ -1,3 +1,4 @@
+import {allowsBusinessRequest} from "../src/lib/business-request-policy.ts";
 import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../src/lib/tracker-replica.ts";
 import {allowsAiConfiguration} from "../src/lib/ai-configuration-request.ts";
 import {allowsSettingsConfiguration} from "../src/lib/settings-configuration-request.ts";
@@ -21,7 +22,7 @@ import { homeResourceKey, validateHomeResource } from "../src/lib/home-readonly.
 
 function fixture(native, methods=[]) {
   const calls=[], snapshot={format:"eo-trackers-readonly-v1",accountId:"10000000-0000-4000-8000-000000000001",capturedAt:"2026-10-19T00:00:00Z",details:[]};
-  const imports={"../lib/tracker-replica":{trackerReplicaState,requireReplicaMutations,validateReplicaHandshake},"../lib/ai-configuration-request":{allowsAiConfiguration},"../lib/workspace-readonly":{workspaceKinds,validateWorkspaceSnapshot},"../lib/media-readonly":{validateMediaSnapshot},"../lib/native-bridge":{nativeCall:async(method,parameters)=>{calls.push({method,parameters});return method==="host.getInfo"?{methods}:method==="trackers.acceptanceStatus"?{pending:1,frozen:1}:snapshot;}},"../lib/response-error":{responseError:async()=>"error"},"../lib/tracker-readonly":{readonlyTrackerState,fetchReadonlyTrackers}};
+  const imports={"../lib/business-request-policy":{allowsBusinessRequest},"../lib/tracker-replica":{trackerReplicaState,requireReplicaMutations,validateReplicaHandshake},"../lib/ai-configuration-request":{allowsAiConfiguration},"../lib/workspace-readonly":{workspaceKinds,validateWorkspaceSnapshot},"../lib/media-readonly":{validateMediaSnapshot},"../lib/native-bridge":{nativeCall:async(method,parameters)=>{calls.push({method,parameters});return method==="host.getInfo"?{methods}:method==="trackers.acceptanceStatus"?{pending:1,frozen:1}:snapshot;}},"../lib/response-error":{responseError:async()=>"error"},"../lib/tracker-readonly":{readonlyTrackerState,fetchReadonlyTrackers}};
   const code=ts.transpileModule(readFileSync("src/local-trackers/platform.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
   imports["../lib/home-readonly"]={homeResourceKey,validateHomeResource};imports["../lib/home-preview"]={previewHomeResource:()=>{throw Error("Preview not used in this fixture");}};
   imports["../lib/food-readonly"]={validateFoodSnapshot};

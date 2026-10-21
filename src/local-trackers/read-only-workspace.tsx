@@ -9,7 +9,7 @@ import {DiaryDetailContent} from "@/app/lucius/diary/[id]/diary-detail-content";
 import {CasesView} from "@/app/lucius/cases/cases-view";
 import {CaseDetailContent} from "@/app/lucius/cases/[id]/case-detail-content";
 import {WorkspaceDataProvider,type WorkspaceRead} from "@/components/workspace-data-context";
-import {FormPreview} from "@/components/form-preview";
+import {OnlineForms as FormPreview,useOnlineReader,onlineBusinessChanged} from "./online-business";
 import {DevelopmentDetails} from "@/components/development-details";
 import {ErrorNotice} from "@/components/error-notice";
 import {PageLoading} from "@/components/page-loading";
@@ -38,15 +38,15 @@ export function ReadOnlyWorkspace({kind,account,platform}:{kind:WorkspaceKind;ac
  useEffect(()=>{let alive=true,running=false;
   async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const next=await platform.workspaceSnapshot(account,kind,true);if(alive&&next){setSnapshot(next);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Download failed; previous data preserved");}finally{running=false;if(alive)setBusy(false);}}
   void platform.workspaceSnapshot(account,kind).then(value=>{if(alive)setSnapshot(value);}).catch(e=>{if(alive)setError(String(e));}).finally(()=>{if(alive)void refresh();});
-  const active=()=>{if(alive&&navigator.onLine)void refresh();};window.addEventListener("online",active);window.addEventListener("evaorbit:native-active",active);return()=>{alive=false;window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);};
+  const active=()=>{if(alive&&navigator.onLine)void refresh();};window.addEventListener(onlineBusinessChanged,active);window.addEventListener("online",active);window.addEventListener("evaorbit:native-active",active);return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);};
  },[account,platform,kind,attempt]);
- const read=useCallback<WorkspaceRead>(async(url,init)=>{if(!snapshot)throw new Error("Workspace not downloaded");return readWorkspaceSnapshot(snapshot,url,init);},[snapshot]);
+ const read=useOnlineReader(useCallback<WorkspaceRead>(async(url,init)=>{if(!snapshot)throw new Error("Workspace not downloaded");return readWorkspaceSnapshot(snapshot,url,init);},[snapshot]));
  function navigate(next:string){const u=new URL(next,"https://offline.invalid"),valid=kind==="tasks"?u.pathname==="/tasks":kind==="projects"?/^\/projects(?:\/[1-9][0-9]*(?:\/items\/[1-9][0-9]*)?)?$/.test(u.pathname):/^\/lucius(?:\/(?:diary|cases)(?:\/[1-9][0-9]*)?)?$/.test(u.pathname);if(!valid||u.origin!=="https://offline.invalid"){setError("This page is not downloaded");return;}setPath(u.pathname+u.search);window.scrollTo(0,0);}
  const pathname=path.split("?")[0];
  const back=pathname===`/${kind}`?undefined:kind==="projects"?()=>navigate(pathname.includes("/items/")?pathname.split("/items/")[0]:"/projects"):()=>navigate(pathname.split("/").length>3?pathname.split("/").slice(0,3).join("/"):`/lucius?tab=${pathname.endsWith("diary")?"diary":"cases"}`);
  const title=kind[0].toUpperCase()+kind.slice(1);
  return <><LocalBackAction onBack={back}/>{error&&<ErrorNotice>{error}</ErrorNotice>}
   {!snapshot?busy?<PageLoading title={title} englishTitle={title}/>:<div className="page"><p>{title} has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><WorkspaceDataProvider read={read} Link={LocalLink}><FormPreview><Screen snapshot={snapshot} path={path} navigate={navigate}/></FormPreview></WorkspaceDataProvider></Navigate.Provider>}
-  <div className="page local-workspace-status"><DevelopmentDetails title={snapshot&&!snapshot.data.complete?"Development info · partial download":undefined}><p>Read-only {title}. {snapshot?.capturedAt}. Tasks: up to 1,000; Projects: 200 projects / 200 items per project, 5,000 total; Lucius: 50 posts, 100 diary entries, 100 cases and 500 comments. Search covers downloaded records. At a limit, older records may remain online. 8 MiB per account and workspace. Forms are temporary; no saving, deletion, completion, recurrence, notification or queue upload.</p><button className="text-button" disabled={busy} onClick={()=>setAttempt(n=>n+1)}>{busy?"Refreshing…":`Refresh downloaded ${title}`}</button></DevelopmentDetails></div>
+  <div className="page local-workspace-status"><DevelopmentDetails title={snapshot&&!snapshot.data.complete?"Development info · partial download":undefined}><p>Downloaded {title}. {snapshot?.capturedAt}. Tasks: up to 1,000; Projects: 200 projects / 200 items per project, 5,000 total; Lucius: 50 posts, 100 diary entries, 100 cases and 500 comments. Search covers downloaded records. At a limit, older records may remain online. 8 MiB per account and workspace. Changes save online; no offline writes or queue upload.</p><button className="text-button" disabled={busy} onClick={()=>setAttempt(n=>n+1)}>{busy?"Refreshing…":`Refresh downloaded ${title}`}</button></DevelopmentDetails></div>
  </>;
 }

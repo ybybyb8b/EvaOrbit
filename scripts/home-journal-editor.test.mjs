@@ -20,6 +20,7 @@ function fixture(readOnly = false) {
   const jsx = (type, props) => ({ type, props });
   const imports = {
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
+    "@/components/business-request-context": {useBusinessRequest:()=>async(url,options)=>{requests.push({url,...options});return {ok:!fail};}},
     "@/components/form-sheet": { FormSheet: "sheet" },
     "@/components/error-notice": { ErrorNotice: "error-notice" },
     "@/lib/journal-draft": { journalDraftChanged, journalPreviewEntries },

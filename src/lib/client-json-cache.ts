@@ -1,3 +1,4 @@
+import {businessFetch} from "./business-request.ts";
 type CacheEntry = {
   data?: unknown;
   expiresAt: number;
@@ -8,7 +9,7 @@ const entries = new Map<string, CacheEntry>();
 
 function refresh<T>(url: string, ttl: number, entry: CacheEntry) {
   if (entry.promise) return entry.promise as Promise<T>;
-  entry.promise = fetch(url, { cache: "no-store" }).then(async (response) => {
+  entry.promise = businessFetch(url, { cache: "no-store" }).then(async (response) => {
     if (!response.ok) throw new Error(`Could not load ${url}`);
     const data = await response.json() as T;
     entry.data = data;

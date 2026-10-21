@@ -1,4 +1,6 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
+import {useFormPreview} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
 import { useState, type FormEvent } from "react";
@@ -12,27 +14,29 @@ import type { DrinkLimit, LimitPeriod } from "@/lib/types";
 export {limitStateLabels,limitPeriodLabels} from "@/lib/drink-limit-labels";
 
 export function LimitEditor({ limit, onClose, onSaved }: { limit?: DrinkLimit; onClose: () => void; onSaved: () => Promise<void> }) {
+  const businessFetch=useBusinessRequest();
+  const preview=useFormPreview();
   const [draft, setDraft] = useState({ name: limit?.name ?? "", targetType: limit?.targetType ?? "coffee", period: limit?.period ?? "weekly", limitValue: String(limit?.limitValue ?? ""), enabled: limit?.enabled ?? true });
   const [custom, setCustom] = useState(Boolean(limit && !drinkTypes.some(([type]) => type === limit.targetType)));
   const [saving, setSaving] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
-    event.preventDefault(); if (saving) return; setSaving(true); setError("");
+    event.preventDefault(); if (preview||saving) return; setSaving(true); setError("");
     try {
-      const response = await fetch(limit ? `/api/drinks/limits/${limit.id}` : "/api/drinks/limits", { method: limit ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, limitValue: Number(draft.limitValue) }) });
+      const response = await businessFetch(limit ? `/api/drinks/limits/${limit.id}` : "/api/drinks/limits", { method: limit ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...draft, limitValue: Number(draft.limitValue) }) });
       if (!response.ok) throw new Error((await response.json()).error ?? "无法保存限额，请重试");
       await onSaved(); onClose(); showActionToast("饮品限额已保存", "success");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "无法保存限额，请重试"); }
     finally { setSaving(false); }
   }
   async function remove() {
-    if (!limit || saving) return; setSaving(true);
+    if (preview || !limit || saving) return; setSaving(true);
     try {
-      const response = await fetch(`/api/drinks/limits/${limit.id}`, { method: "DELETE" });
+      const response = await businessFetch(`/api/drinks/limits/${limit.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("无法删除限额，请重试");
       await onSaved(); onClose(); showActionToast("饮品限额已删除", "deleted");
     } finally { setSaving(false); }
   }
-  return <FormSheet title={limit ? "编辑饮品限额" : "设置饮品限额"} onClose={onClose} formId="drink-limit-form" submitLabel="保存" busy={saving}>
+  return <FormSheet title={limit ? "编辑饮品限额" : "设置饮品限额"} onClose={onClose} formId="drink-limit-form" submitLabel="保存" busy={saving} submitDisabled={preview}>
     <form id="drink-limit-form" className="editor-card compact-editor" onSubmit={submit}><div className="form-grid">
       <label className="field"><span>限额名称</span><input required maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} placeholder="例如：奶茶 KPI" /></label>
       <div className="field"><span>限制对象</span><SearchableSelect label="限制对象" searchable={false} value={custom ? "__custom__" : draft.targetType} onValueChange={value => { setCustom(value === "__custom__"); setDraft({ ...draft, targetType: value === "__custom__" ? "" : value }); }} options={[...drinkTypes.map(([value, label]) => ({ value, label })), { value: "__custom__", label: "自定义品名关键词" }]} /></div>

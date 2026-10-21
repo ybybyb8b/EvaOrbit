@@ -23,6 +23,7 @@ function harness(file, exportName, initialProps, environment = {}) {
     const code = ts.transpileModule(readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const require = name => {
       if (name === "react") return react;
+      if (name.endsWith("business-request-context")) return {useBusinessRequest:()=>environment.fetch??globalThis.fetch};
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "react-dom") return { createPortal: node => node };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false }) };

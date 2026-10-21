@@ -1,4 +1,5 @@
 import {allowsSettingsConfiguration} from "../lib/settings-configuration-request";
+import {allowsBusinessRequest} from "../lib/business-request-policy";
 import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../lib/tracker-replica";
 import {allowsAiConfiguration} from "../lib/ai-configuration-request";
 import {workspaceKinds,validateWorkspaceSnapshot,type WorkspaceKind,type WorkspaceReadonlySnapshot} from "../lib/workspace-readonly";
@@ -23,6 +24,7 @@ import {foodResourceKey,validateFoodResource,type FoodReadonlyResource,type Food
 
 export type LocalAccount = { accountId: string; email: string };
 export type TrackerPlatform = {
+  businessRequest(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   settingsConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   aiConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,refresh?:boolean):Promise<WorkspaceReadonlySnapshot|null>;
@@ -420,6 +422,7 @@ export function trackerPlatform({editableTrackers=false,editingPaused=false}:{ed
   let editable=editableTrackers&&!native;
   if (native) return {
     native,
+    businessRequest:(account,path,init)=>businessRequest(account,path,native,init),
     settingsConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init,true),
     aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
@@ -447,6 +450,7 @@ export function trackerPlatform({editableTrackers=false,editingPaused=false}:{ed
   };
   return {
     native,
+    businessRequest:(account,path,init)=>businessRequest(account,path,native,init),
     settingsConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init,true),
     aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
@@ -557,6 +561,60 @@ async function workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,native:
     tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Workspace snapshot was not saved. Existing data is preserved."));
   });
   return snapshot;
+}
+
+// Interactive business writes only. No durable drafts, replay, or automatic retry.
+async function businessRequest(account:LocalAccount,path:string,native:boolean,init:RequestInit={}):Promise<Response>{
+  const method=(init.method??"GET").toUpperCase();
+  if(!allowsBusinessRequest(path,method))throw new Error("This request is not available in the local app.");
+  init.signal?.throwIfAborted();
+  if(!navigator.onLine&&method!=="GET")throw new Error("Connect to the internet to save. Nothing was uploaded or queued.");
+  let bodyBase64:string|undefined,contentType="application/json";
+  if(init.body!=null){
+    if(!["POST","PATCH","PUT"].includes(method))throw new Error("Unexpected request body");
+    if(typeof init.body!=="string"&&!(init.body instanceof FormData))throw new Error("Unsupported request body");
+    const encoded=new Response(init.body),bytes=new Uint8Array(await encoded.arrayBuffer());
+    if(bytes.length>8*1024*1024)throw new Error("Upload is too large (8 MiB maximum).");
+    contentType=encoded.headers.get("Content-Type")??"application/json";
+    if(typeof init.body==="string"){JSON.parse(init.body);contentType="application/json";}
+    let binary="";for(let offset=0;offset<bytes.length;offset+=8192)binary+=String.fromCharCode(...bytes.subarray(offset,offset+8192));
+    bodyBase64=btoa(binary);
+  }
+  if(native){
+    const info=await nativeCall<{methods?:string[]}>("host.getInfo");
+    if(!info.methods?.includes("business.request"))throw new Error("Install the updated development Host to save online.");
+    const result=await nativeCall<{status:number;body:unknown}>("business.request",{accountId:account.accountId,path,method,contentType,...(bodyBase64===undefined?{}:{bodyBase64}),offline:!navigator.onLine});
+    init.signal?.throwIfAborted();
+    if(!result)throw new Error("This content has not been downloaded. Connect to load it.");
+    return new Response(result.status===204?null:JSON.stringify(result.body),{status:result.status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+  }
+  const current=async()=>{if(isPreviewAccount(account)||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Account changed. Reopen the form.");};
+  await current();
+  const cacheKey=`business:${account.accountId}:${path}`;
+  if(!navigator.onLine){
+    const cached=await read<{status:number;body:unknown}>("states",cacheKey);await current();
+    if(!cached)throw new Error("This content has not been downloaded. Connect to load it.");
+    return Response.json(cached.body,{status:cached.status});
+  }
+  const identity=await api<{authenticated:boolean;accountId:string;onlineBusinessProtocol?:number;onlineBusinessTestAccount?:boolean}>("session","GET");
+  await current();
+  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Account changed. Reopen the form.");
+  if(identity.onlineBusinessProtocol!==1)throw new Error("The account-safe online API must be published before saving. Downloaded data is preserved.");
+  if(identity.onlineBusinessTestAccount!==true)throw new Error("Online business testing is enabled only for configured test accounts. Tracker sync is unchanged.");
+  const response=await fetch(`/eo-api/business/${path.slice(5)}`,{method,body:init.body,headers:{...(typeof init.body==="string"?{"Content-Type":"application/json"}:{}),"X-EvaOrbit-Account":account.accountId},credentials:"same-origin",cache:"no-store",redirect:"error",signal:init.signal??AbortSignal.timeout(20000)}).catch(error=>{if(method!=="GET")throw new Error("The save result is unknown. Reconnect and refresh before submitting again; nothing will retry automatically.");throw error;});
+  await current();
+  if(method==="GET"&&response.ok){
+    const value=await response.clone().json();await current();
+    if(new TextEncoder().encode(JSON.stringify(value)).length>8*1024*1024)throw new Error("Downloaded response exceeds the offline cache limit; previous data is preserved.");
+    const db=await localDatabase();
+    await new Promise<void>((resolve,reject)=>{const tx=db.transaction(["states","session"],"readwrite"),store=tx.objectStore("states"),session=tx.objectStore("session").get("current");session.onsuccess=()=>{if(session.result?.accountId!==account.accountId){tx.abort();return;}store.put({status:response.status,body:value,savedAt:Date.now()},cacheKey);const entries:Array<{key:IDBValidKey;time:number}>=[],cursor=store.openCursor();cursor.onsuccess=()=>{const row=cursor.result;if(row){if(String(row.key).startsWith(`business:${account.accountId}:`))entries.push({key:row.key,time:row.value.savedAt??0});row.continue();}else entries.sort((a,b)=>b.time-a.time).slice(128).forEach(row=>store.delete(row.key));};};tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(new Error("Could not save downloaded data. Cloud data is preserved."));});
+  }
+  if(method!=="GET"&&response.ok){
+    const db=await localDatabase(),domain=path.split("/")[2].split("?")[0];
+    const affected=domain==="food"||domain==="drinks"?["food","drinks","food-drink"]:domain==="projects"||domain==="project-items"?["projects","project-items"]:[domain];
+    await new Promise<void>((resolve,reject)=>{const tx=db.transaction("states","readwrite"),cursor=tx.objectStore("states").openCursor();cursor.onsuccess=()=>{const row=cursor.result;if(row){if(affected.some(name=>new RegExp(`^business:${account.accountId}:/api/${name}(?:/|\\?|$)`).test(String(row.key))))row.delete();row.continue();}};tx.oncomplete=()=>resolve();tx.onabort=tx.onerror=()=>reject(tx.error);}).catch(()=>{/* A cache failure must not turn an acknowledged write into a failed save. */});
+  }
+  return response;
 }
 
 // Online only. No cache, durable draft, outbox, retry, or background request.

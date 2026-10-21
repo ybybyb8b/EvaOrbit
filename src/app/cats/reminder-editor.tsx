@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
@@ -17,7 +18,8 @@ function tomorrow(): DateTimeDraft {
   return { date: local, time: "" };
 }
 
-export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel, onSavingChange }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void; onSavingChange?: (saving: boolean) => void }) { const previewOnly=useFormPreview();
+export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel, onSavingChange }: { pets: Pet[]; initialPetId?: number | null; editing?: Reminder; onSaved: () => void; onCancel: () => void; onSavingChange?: (saving: boolean) => void }) {
+  const businessFetch=useBusinessRequest(); const previewOnly=useFormPreview();
   const [draft, setDraft] = useState(() => ({ target: editing ? editing.targetType === "cat" ? String(editing.targetId) : "household" : initialPetId === null ? "household" : initialPetId ? String(initialPetId) : pets[0] ? String(pets[0].id) : "household", title: editing?.title ?? "", due: editing?.nextDueAt ? dateTimeDraft(editing.nextDueAt, editing.dueHasExplicitTime) : tomorrow(), leadTimeMinutes: editing?.leadTimeMinutes ?? 0, repeatWhileOverdue: editing?.repeatWhileOverdue ?? false, note: editing?.note ?? "" }));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,7 +29,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
     event.preventDefault(); if (previewOnly || saving) return; setError(""); setSaving(true);
     const household = draft.target === "household";
     const due = dateTimePayload(draft.due);
-    const response = await fetch(editing ? `/api/reminders/${editing.id}` : "/api/reminders", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+    const response = await businessFetch(editing ? `/api/reminders/${editing.id}` : "/api/reminders", { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       title: draft.title, targetType: household ? "cat_household" : "cat", targetId: household ? null : Number(draft.target), sourceType: null, sourceId: null,
       scheduleType: "one_time", startsAt: due.value, nextDueAt: due.value, dueHasExplicitTime: due.hasExplicitTime,
       intervalValue: null, intervalUnit: null, timesOfDay: [], endsAt: null, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

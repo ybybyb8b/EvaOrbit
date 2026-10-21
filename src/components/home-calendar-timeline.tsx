@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 
@@ -75,6 +76,7 @@ const PlainLink = (props:HomeLinkProps) => <a {...props}/>;
 const EmptySlot = () => null;
 export type HomeTimelineProps = { initialDay:HomeDayOverview;initialSummary:TimelineMonthSummary;language:UiLanguage;cacheScope:string;readOnly?:boolean;LinkComponent?:ComponentType<HomeLinkProps>;RuleEditor?:typeof import("./calendar-rule-sheet").CalendarRuleSheet;LogScope?:typeof import("./bottom-log").BottomLogScope;dataSource?:{read:typeof cachedRead;save:typeof cachedSave} };
 export function HomeCalendarTimeline({ initialDay, initialSummary, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource }:HomeTimelineProps) {
+  const businessFetch=useBusinessRequest();
   const Link=LinkComponent, CalendarRuleSheet=RuleEditor ?? EmptySlot, BottomLogScope=LogScope ?? EmptySlot;
   const readHomeSnapshot=dataSource?.read ?? cachedRead,saveHomeSnapshot=dataSource?.save ?? cachedSave;
   const english = language === "en", today = readOnly ? dateInEvaOrbit() : initialDay.date;
@@ -195,12 +197,12 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
   }
   async function saveJournal(event: FormEvent) {
     event.preventDefault(); if (readOnly || !journalContent.trim() || journalHistoryOpen || journalDeleteId !== null || savingJournal) return; setSavingJournal(true); setError("");
-    try { const response = await fetch(editingJournalId ? `/api/daily-journal/${editingJournalId}` : "/api/daily-journal", { method: editingJournalId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(!editingJournalId && { date: selected }), content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }) }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); }
+    try { const response = await businessFetch(editingJournalId ? `/api/daily-journal/${editingJournalId}` : "/api/daily-journal", { method: editingJournalId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(!editingJournalId && { date: selected }), content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }) }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); }
     catch { setError(english ? "Could not save. Your note is still here; please try again." : "保存失败，内容仍保留在这里，请重试。"); } finally { setSavingJournal(false); }
   }
   async function removeJournal(id: number) {
     if (readOnly) return;
-    setError(""); setSavingJournal(true); try { const response = await fetch(`/api/daily-journal/${id}`, { method: "DELETE" }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); } catch { setError(english ? "Could not delete. Please try again." : "删除失败，请重试。"); } finally { setSavingJournal(false); }
+    setError(""); setSavingJournal(true); try { const response = await businessFetch(`/api/daily-journal/${id}`, { method: "DELETE" }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); } catch { setError(english ? "Could not delete. Please try again." : "删除失败，请重试。"); } finally { setSavingJournal(false); }
   }
   function applyJournalEdit(entry: DailyJournalEntry | null) {
     setJournalHistoryOpen(false);

@@ -4,6 +4,12 @@
 
 模块名也是新聊天标题的统一用名，格式为 `模块｜具体任务`。Food 指 Food & Drink，Memory 包含 Memory Graph；Training 虽位于 Health 页面，仍可独立命名。跨模块工作可用 Core 或 Architecture，后者只是标题归类。
 
+## 本地业务在线读写
+
+本地 React 当前在 Tracker 离线同步之外接入统一的 [在线业务请求层](LOCAL_ONLINE_BUSINESS.md)：原版表单通过账户绑定的 `BusinessRequestContext`、平台 `businessRequest` 与 Native `business.request` 使用既有 API；其余模块只在联网时保存，下载快照和访问缓存用于离线查看，不建立新的写入队列。Web 默认 fetch 和业务服务保持原职责。服务器须发布 `onlineBusinessProtocol:1` 并明确配置测试账号，不能仅靠 UI 解除只读；发布契约、已授权的 Media 迁移与独立 API 发布/回退记录见该文。
+
+下方各模块的“只读阶段”说明保留其 GET 快照、缓存容量与原始迁移边界；当前真实账户的交互写入以本节为准。Home 部分跨模块导航、系统权限、Eva/Graph 和 Tracker 高级设置仍未因此开放。
+
 ## 模块速查
 
 | 统一名称 | 职责与页面入口 |
@@ -41,7 +47,7 @@
 - **共享外观**：[fonts.css](../src/app/fonts.css) 统一 Web／本地的字体文件与注册；[appearance-preferences.ts](../src/lib/appearance-preferences.ts)、`LocaleController` 统一偏好读取、应用和持久化，`ThemeController` 统一系统外观及既有 Native loading 适配。两端使用同一 [AppearanceSettings](../src/components/appearance-settings.tsx)；Web 沿用偏好 API，本地只写设备持久存储，不进入业务 outbox。首次本地预览以英语／August 为基准，保留已有显式选择；Web 默认值不变。旧字体键 `ibm` 继续对应 August。
 - **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一八个设置入口；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
-- **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器、选择器及 [菜单定义](../src/components/quick-log-options.ts)。本地 [Universal Log](../src/local-trackers/quick-log.tsx) 与 Tracker 页面经 [tracker-session.ts](../src/local-trackers/tracker-session.ts) 共用会话 Store、字段校验和独立同步队列；首页向表单传递所选日期，一键快速记录沿用当前时间语义。Health/Cats 使用已有账户快照及只读适配，其余模块仍为表单预览。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
+- **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器、选择器及 [菜单定义](../src/components/quick-log-options.ts)。本地 [Universal Log](../src/local-trackers/quick-log.tsx) 与 Tracker 页面经 [tracker-session.ts](../src/local-trackers/tracker-session.ts) 共用会话 Store、字段校验和独立同步队列；首页向表单传递所选日期，一键快速记录沿用当前时间语义。其他模块复用原表单，明确授权的测试账户通过统一在线请求层保存，离线只读适配仍作为读取后备。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
 - **共享导航**：[app-navigation.tsx](../src/components/app-navigation.tsx) 统一 Web 与本地 React 的侧栏菜单、图标、选中状态及手机抽屉（焦点约束、Escape、遮罩关闭和关闭后焦点恢复）。Web 保留全部入口、认证退出和系统协调器，本地仅注入已迁移模块链接；Home/Settings 继续复用底栏，本地不再维护顶部模块按钮。
 - **Header 与返回契约**：两端复用 [NavigationBackControl](../src/components/navigation-back-control.tsx)，Web 保留 `PageBackButton` 的历史/fallback 语义；本地壳层管理返回，详情仅注册动作，账户操作归 Settings。新模块不再自画返回按钮，现有模块的批量迁移边界见 [统一 Header](SHARED_NAVIGATION_HEADER.md)。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。

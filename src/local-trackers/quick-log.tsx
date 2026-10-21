@@ -1,3 +1,4 @@
+import {OnlineForms,useOnlineReader,useOnlineBusiness} from "./online-business";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore,type ComponentProps} from "react";
 import {InboxCaptureForm} from "@/app/inbox/inbox-capture-form";
 import {CatRecordEditor} from "@/app/cats/cat-record-editor";
@@ -26,8 +27,9 @@ import {FoodPreviewEditor} from "./food-workspace";
 import {isPreviewAccount,type LocalAccount,type TrackerPlatform} from "./platform";
 
 function PreviewLink({children,...props}:ComponentProps<"a">&{href:string}){return <a {...props} aria-disabled onClick={event=>event.preventDefault()}>{children}</a>;}
-const blocked=async()=>{throw new Error("Form preview cannot save");};
+
 export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:TrackerPlatform}){
+  const onlineBusiness=useOnlineBusiness();
   const action=useBottomLog(),{english}=useLocale();
   const store=useMemo(()=>trackerSession(account,platform),[account,platform]);
   const state=useSyncExternalStore(store.subscribe,store.getSnapshot);
@@ -76,8 +78,8 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   const selected=state.records.find(row=>row.resourceType==="tracker"&&row.id===selectedId);
   const hidden=new Set(state.outbox.filter(item=>item.operation==="delete").map(item=>item.localId));
   const trackers=state.records.filter(row=>row.resourceType==="tracker"&&!row.payload.archivedAt&&!hidden.has(row.id));
-  const readHealth=useCallback<HealthRead>(async(path,init)=>{if(!health)throw new Error("Health is not downloaded");return readHealthSnapshot(health,path,init);},[health]);
-  const readCats=useCallback<CatsRead>(async(path,init)=>{if(!cats)throw new Error("Cats is not downloaded");return readCatsSnapshot(cats,path,init);},[cats]);
+  const readHealth=useOnlineReader(useCallback<HealthRead>(async(path,init)=>{if(!health)throw new Error("Health is not downloaded");return readHealthSnapshot(health,path,init);},[health]));
+  const readCats=useOnlineReader(useCallback<CatsRead>(async(path,init)=>{if(!cats)throw new Error("Cats is not downloaded");return readCatsSnapshot(cats,path,init);},[cats]));
   const healthDefinition=getHealthQuickLog(active),HealthEditor=healthDefinition?.Editor;
   async function selectTracker(id:string){
     const row=trackers.find(item=>item.id===id);if(!row||saving.current)return;
@@ -98,11 +100,11 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
       setDate(action?.selectedDate??dateInEvaOrbit());setError("");setActive("picker");if(action?.picker)void choose(action.picker);
     }}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
-    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}<DevelopmentDetails><p>{english?"Tracker records save on this device and sync when available. Other forms are previews and cannot save.":"Tracker 记录保存到本机，联网后同步。其他表单仅预览，不会保存。"}</p></DevelopmentDetails></FormSheet>}
-    {active==="inbox"&&<FormPreview><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" submitLabel={english?"Save":"记下"} submitDisabled><InboxCaptureForm sheet formId="local-inbox-capture" onSaved={blocked}/></FormSheet></FormPreview>}
+    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}<DevelopmentDetails><p>{english?"Tracker records save on this device and sync when available. Other forms save online; offline changes are not queued.":"Tracker 记录保存到本机，联网后同步。其他表单联网保存，离线不排队上传。"}</p></DevelopmentDetails></FormSheet>}
+    {active==="inbox"&&<OnlineForms><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" submitLabel={english?"Save":"记下"} submitDisabled={!onlineBusiness}><InboxCaptureForm sheet formId="local-inbox-capture" onSaved={close}/></FormSheet></OnlineForms>}
     {(active==="food"||active==="drink")&&<FoodPreviewEditor date={date} editor={{kind:active}} onClose={close}/>}
-    {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><FormPreview><HealthEditor initialDate={date} onClose={close} onSaved={blocked}/></FormPreview></HealthDataProvider>}
-    {active==="cats"&&cats&&<CatsDataProvider read={readCats} Link={PreviewLink}><FormPreview><FormSheet title={english?"New cat record":"新增猫咪记录"} onClose={close} submitLabel={english?"Save record":"保存记录"} submitDisabled><CatRecordEditor pets={cats.dashboard.pets.map(item=>item.pet)} initialDate={date} onCancel={close} onSaved={blocked}/></FormSheet></FormPreview></CatsDataProvider>}
+    {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={async()=>close()}/></OnlineForms></HealthDataProvider>}
+    {active==="cats"&&cats&&<CatsDataProvider read={readCats} Link={PreviewLink}><OnlineForms><FormSheet title={english?"New cat record":"新增猫咪记录"} onClose={close} submitLabel={english?"Save record":"保存记录"} submitDisabled={!onlineBusiness}><CatRecordEditor pets={cats.dashboard.pets.map(item=>item.pet)} initialDate={date} onCancel={close} onSaved={close}/></FormSheet></OnlineForms></CatsDataProvider>}
     {active==="tracker"&&!selected&&<FormSheet title={english?"Choose Tracker":"选择观测"} onClose={close} busy={loading}><div className="home-quick-tracker-list">{trackers.map(row=><button type="button" key={row.id} aria-label={row.payload.quickCaptureEnabled?(english?"Quick record ":"快速记录 ")+String(row.payload.name):String(row.payload.name)} disabled={loading} onClick={()=>void selectTracker(row.id)}><LocalTrackerPicture row={row} state={state} size={38}/><span><strong>{String(row.payload.name)}</strong><small>{String(row.payload.groupName??"")}{row.payload.quickCaptureEnabled?(english?" · Quick":" · 快速"):""}</small></span><Icon name={row.payload.quickCaptureEnabled?"plus":"arrow"} variant="stroke"/></button>)}</div>{!trackers.length&&<p>{english?"No downloaded Trackers.":"暂无已下载的观测。"}</p>}</FormSheet>}
     {active==="tracker"&&selected&&(readOnly||!canEditTrackerRecord(selected)?<FormPreview>{trackerEditor}</FormPreview>:trackerEditor)}
   </>;

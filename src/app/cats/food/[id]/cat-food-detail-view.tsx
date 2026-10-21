@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
@@ -21,16 +22,17 @@ const amount = (value: number) => Number.isInteger(value) ? String(value) : valu
 
 export function CatFoodDetailView({initialItem}:{initialItem:CatFoodSummary}){const router=useRouter();return <CatFoodDetailContent initialItem={initialItem} onArchived={()=>router.push("/cats/food")}/>;}
 
-export function CatFoodDetailContent({initialItem,onArchived}:{initialItem:CatFoodSummary;onArchived:()=>void}){const previewOnly=useFormPreview();const {read}=useCatsData();
+export function CatFoodDetailContent({initialItem,onArchived}:{initialItem:CatFoodSummary;onArchived:()=>void}){
+  const businessFetch=useBusinessRequest();const previewOnly=useFormPreview();const {read}=useCatsData();
   useDataRefresh("/cats/food", () => load());
   const [item, setItem] = useServerDataState(initialItem), [panel, setPanel] = useState<"item" | "purchase" | "restock" | null>(null), [editingPurchase, setEditingPurchase] = useState<CatFoodPurchase>(), [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [error, setError] = useState("");
   const suggestion = item.cadenceSuggestion, activeReminder = Boolean(item.restockReminderId);
   const [restock, setRestock] = useState({ enabled: activeReminder, intervalDays: String(item.restockIntervalDays ?? suggestion?.intervalDays ?? 30), leadDays: String(item.restockLeadDays ?? 5), reminderTime: item.restockReminderTime ?? "10:00" });
   async function load() { const response = await read(`/api/cats/food/${item.id}`); if (response.ok) setItem(await response.json()); }
-  async function consume() { if(previewOnly)return; setBusy(true); setError(""); const response = await fetch(`/api/cats/food/${item.id}/consume`, { method: "POST" }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error); return; } setItem(body); setNotice("已用完 1 包，库存已更新"); }
-  async function removePurchase(purchase: CatFoodPurchase) { if(previewOnly)return; if (!confirm(`删除 ${purchase.purchasedOn} 的购买记录？`)) return; const response = await fetch(`/api/cats/food/purchases/${purchase.id}`, { method: "DELETE" }); if (response.ok) { await load(); setNotice("购买记录已删除"); } }
-  async function saveRestock(event: React.FormEvent) { event.preventDefault(); if(previewOnly)return; setBusy(true); setError(""); const response = await fetch(`/api/cats/food/${item.id}/restock`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(restock) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error); return; } setItem(body); setPanel(null); setNotice(restock.enabled ? "补货提醒已开启" : "补货提醒已关闭"); }
-  async function archive() { if(previewOnly)return; if (!confirm(`从食品库移除“${item.name}”？购买记录会保留。`)) return; const response = await fetch(`/api/cats/food/${item.id}`, { method: "DELETE" }); if (response.ok) { showActionToast("食品已从食品库移除", "deleted"); onArchived(); } }
+  async function consume() { if(previewOnly)return; setBusy(true); setError(""); const response = await businessFetch(`/api/cats/food/${item.id}/consume`, { method: "POST" }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error); return; } setItem(body); setNotice("已用完 1 包，库存已更新"); }
+  async function removePurchase(purchase: CatFoodPurchase) { if(previewOnly)return; if (!confirm(`删除 ${purchase.purchasedOn} 的购买记录？`)) return; const response = await businessFetch(`/api/cats/food/purchases/${purchase.id}`, { method: "DELETE" }); if (response.ok) { await load(); setNotice("购买记录已删除"); } }
+  async function saveRestock(event: React.FormEvent) { event.preventDefault(); if(previewOnly)return; setBusy(true); setError(""); const response = await businessFetch(`/api/cats/food/${item.id}/restock`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(restock) }); const body = await response.json(); setBusy(false); if (!response.ok) { setError(body.error); return; } setItem(body); setPanel(null); setNotice(restock.enabled ? "补货提醒已开启" : "补货提醒已关闭"); }
+  async function archive() { if(previewOnly)return; if (!confirm(`从食品库移除“${item.name}”？购买记录会保留。`)) return; const response = await businessFetch(`/api/cats/food/${item.id}`, { method: "DELETE" }); if (response.ok) { showActionToast("食品已从食品库移除", "deleted"); onArchived(); } }
   function editPurchase(value?: CatFoodPurchase) { setEditingPurchase(value); setPanel("purchase"); }
   return <div className="page cat-food-detail-page"><Link className="back-link" href="/cats/food">← 食品库</Link><PageHeader eyebrow={`CATS · ${categoryLabels[item.category]}`} title={item.name} description={[item.brand, item.flavor].filter(Boolean).join(" · ") || "猫咪食品"} action={<span className="cat-food-header-actions"><button className="button secondary" aria-label="编辑食品" onClick={() => setPanel("item")}><Icon name="edit"/><span>编辑</span></button><PageLogAction label="记录购买" className="button primary" onClick={() => editPurchase()}><Icon name="plus"/><span>记录购买</span></PageLogAction></span>}/>
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}{error && <ErrorNotice role="alert">{error}</ErrorNotice>}

@@ -6,7 +6,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { maskApiKey } from "../ai-provider";
 import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
-import { allowedEmail, supabaseConfig } from "../config";
+import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
 import { ConflictError, HttpError } from "../errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation } from "../calendar-interpretation";
 import { normalizeAppearanceMode, normalizeColorTheme } from "../theme";
@@ -222,7 +222,7 @@ async function identity(client: SupabaseClient) {
   const email = typeof data?.claims?.email === "string" ? data.claims.email.toLocaleLowerCase() : "";
   const expected = allowedEmail();
   if (!expected) throw new Error("EVAORBIT_ALLOWED_EMAIL 未配置；已拒绝访问私人数据");
-  if (!userId || email !== expected) throw new Error("当前账户无权访问 EvaOrbit");
+  if (!userId || !isAllowedAccountEmail(email)) throw new Error("当前账户无权访问 EvaOrbit");
   return userId;
 }
 

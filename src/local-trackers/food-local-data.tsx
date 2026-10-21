@@ -1,3 +1,4 @@
+import {useOnlineReader,onlineBusinessChanged} from "./online-business";
 import {useCallback,useEffect,useRef,type ReactNode,type ComponentType} from "react";
 import {FoodDataProvider,type FoodLinkProps,type FoodRead} from "@/components/food-data-context";
 import {createFoodLocalReader} from "@/lib/food-local-reader";
@@ -21,12 +22,12 @@ export function FoodLocalData({account,platform,Link,onIssue,children}:{account:
     if(cached){if(!refreshed.current.has(kind+"/"+key))void refresh(kind,key).catch(reason=>{if(alive.current)onIssue(reason instanceof Error?reason.message:"Could not refresh downloaded Food data.");});return cached;}
     return refresh(kind,key);
   },[account,platform,refresh,onIssue]);
-  const read=useCallback<FoodRead>((path,init)=>createFoodLocalReader(resource)(path,init),[resource]);
+  const read=useOnlineReader(useCallback<FoodRead>((path,init)=>createFoodLocalReader(resource)(path,{signal:init?.signal??undefined}),[resource]));
   useEffect(()=>{
     alive.current=true;
     const online=()=>{const recent=[...refreshed.current].slice(-2);for(const token of new Set(["catalog/current",...recent])){const [kind,key]=token.split("/");void refresh(kind as FoodResourceKind,key).catch(reason=>{if(alive.current)onIssue(String(reason instanceof Error?reason.message:"Could not refresh Food data."));});}};
-    window.addEventListener("online",online);window.addEventListener("evaorbit:native-active",online);
-    return()=>{alive.current=false;window.removeEventListener("online",online);window.removeEventListener("evaorbit:native-active",online);};
+    window.addEventListener(onlineBusinessChanged,online);window.addEventListener("online",online);window.addEventListener("evaorbit:native-active",online);
+    return()=>{alive.current=false;window.removeEventListener(onlineBusinessChanged,online);window.removeEventListener("online",online);window.removeEventListener("evaorbit:native-active",online);};
   },[refresh,onIssue]);
   return <FoodDataProvider read={read} Link={Link}>{children}</FoodDataProvider>;
 }

@@ -1,3 +1,4 @@
+import {OnlineBusinessProvider} from "./online-business";
 import {ReadOnlyWorkspace} from "./read-only-workspace";
 import {MediaWorkspace} from "./media-workspace";
 import {RelationsWorkspace} from "./relations-workspace";
@@ -63,7 +64,7 @@ function App() {
   const pathname=module==="home"?"/":module==="food"?"/food-drink":"/"+module;
   function navigate(href:string){const routes:Record<string,LocalModule>={"/tasks":"tasks","/projects":"projects","/lucius":"lucius","/media":"media","/relations":"relations","/health":"health","/":"home","/trackers":"trackers","/food-drink":"food","/cats":"cats","/subscriptions":"subscriptions","/chronicle":"chronicle","/memo":"memo","/inbox":"inbox","/settings":"settings"};if(routes[href]){setModule(routes[href]);window.scrollTo(0,0);}}
   useEffect(() => { platform.account().then(setAccount).catch(() => setError("暂时无法打开本机账户，请重试。")).finally(() => setReady(true)); }, []);
-  return <LocaleController localOnly defaults={LOCAL_APPEARANCE_BASELINE}><ThemeController /><ErrorFeedbackProvider><Navigate.Provider value={navigate}><BottomLogProvider pathname={pathname}><LocalNavigationProvider key={module} fallback={account&&!signingIn&&["tasks","projects","lucius","media","relations","health","trackers","chronicle","memo","inbox","settings"].includes(module)?()=>navigate("/"):undefined}><div className={`local-tracker-app local-shell app-shell ${account&&!signingIn?"local-signed-in":""} ${bottomNav.shell}`} data-ui-copy-ready="true">
+  return <LocaleController localOnly defaults={LOCAL_APPEARANCE_BASELINE}><ThemeController /><ErrorFeedbackProvider><OnlineBusinessProvider account={account&&!signingIn?account:null} platform={platform}><Navigate.Provider value={navigate}><BottomLogProvider pathname={pathname}><LocalNavigationProvider key={module} fallback={account&&!signingIn&&["tasks","projects","lucius","media","relations","health","trackers","chronicle","memo","inbox","settings"].includes(module)?()=>navigate("/"):undefined}><div className={`local-tracker-app local-shell app-shell ${account&&!signingIn?"local-signed-in":""} ${bottomNav.shell}`} data-ui-copy-ready="true">
     {account&&!signingIn?<AppSidebar pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} brandImage={<LocalBrandImage/>}/>:<LocalAppearance/>}
     <main className={`main-content${["tasks","projects","media"].includes(module)?" has-page-back":""}`}><LocalDesktopBack/>
     {!ready ? <LoginSurface><p role="status">正在打开本机记录…</p></LoginSurface> : account && !signingIn
@@ -71,6 +72,6 @@ function App() {
       : <LocalLogin platform={platform} initialError={error} onSignedIn={next => { setAccount(next); setSigningIn(false); setError(""); }} onCancel={account ? () => setSigningIn(false) : undefined} onPreview={!platform.native && !account ? async () => { setAccount(await startBrowserPreview()); setError(""); } : undefined} />}
     </main>
     {account&&!signingIn&&<><SpacesNavigation pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} renderTrigger={spaces=><LocalNavigationHeader spaces={spaces}/>}/><MobileBottomNavigation pathname={pathname} LinkComponent={LocalNavLink}/><LocalQuickLog key={account.accountId+":"+module} account={account} platform={platform}/></>}
-  </div><ActionToastViewport /></LocalNavigationProvider></BottomLogProvider></Navigate.Provider></ErrorFeedbackProvider></LocaleController>;
+  </div><ActionToastViewport /></LocalNavigationProvider></BottomLogProvider></Navigate.Provider></OnlineBusinessProvider></ErrorFeedbackProvider></LocaleController>;
 }
 createRoot(document.getElementById("root")!).render(<App />);

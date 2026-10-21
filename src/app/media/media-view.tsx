@@ -15,7 +15,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState, useRef } from "re
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
-import { PageHeading as PageHeader } from "@/components/page-heading";
+import { MediaPageHeader as PageHeader } from "@/components/media-data-context";
 import { getMediaDisplayTitle } from "@/lib/media-display";
 import type { MediaDetail, MediaListItem, MediaRating, MediaSeries, MediaStatus, MediaType } from "@/lib/types";
 

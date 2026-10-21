@@ -1,0 +1,743 @@
+[
+  {
+    "pattern": "^/api/cats/food/[1-9][0-9]*/consume$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/food/[1-9][0-9]*/purchases$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/food/[1-9][0-9]*/restock$",
+    "methods": [
+      "PUT"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/food/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/food/purchases/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/food$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/pets/[1-9][0-9]*/avatar$",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/pets/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/pets$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/records/(?:event|symptom|vet_visit|medication|measurement)/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/records$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/records/suggestions$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/cats$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/routines/[1-9][0-9]*/complete$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/routines/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/routines/[1-9][0-9]*/skip$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/cats/routines$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/chronicle/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/chronicle$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/daily-journal/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/daily-journal$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/limits/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/limits$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/logs/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/logs$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/preferences$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/drinks/suggestions$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/food/catalog$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/food/dishes/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/food/dishes$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/food/library/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/food/library$",
+    "methods": [
+      "GET",
+      "PUT"
+    ]
+  },
+  {
+    "pattern": "^/api/food/logs/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/food/logs$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/food/places/[1-9][0-9]*/dishes$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/food/places/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/food/places$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/food-drink/home$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/health/medication-doses/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/medication-doses$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/medications/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/medications$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/menstrual-flow/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/menstrual-flow$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/periods/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/periods$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/records/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/records$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/sleep$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/health/training/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/training/plan/complete$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/training/plan$",
+    "methods": [
+      "GET",
+      "PUT"
+    ]
+  },
+  {
+    "pattern": "^/api/health/training$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/health/training/suggestions$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/health/weight/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/health/weight$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/inbox/[1-9][0-9]*/convert$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/inbox/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/inbox$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/cases/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/cases$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/diary/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/diary$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/posts/[1-9][0-9]*/comments/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/posts/[1-9][0-9]*/comments$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/posts/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/posts$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/lucius/state$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/media/[1-9][0-9]*/cover$",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/media/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/media/[1-9][0-9]*/viewings/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/media/[1-9][0-9]*/viewings$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/media$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/media/series/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/media/series$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/memos/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/memos$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/nutrition/daily/history$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/nutrition/daily$",
+    "methods": [
+      "GET",
+      "PUT"
+    ]
+  },
+  {
+    "pattern": "^/api/project-items/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/project-items$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/projects/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/projects$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/events/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PUT",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/events$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/flows/[1-9][0-9]*/settle$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/notes/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/people/[1-9][0-9]*/notes$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/people/[1-9][0-9]*/photo$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/people/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/relations/people$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders/[1-9][0-9]*/complete$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders/[1-9][0-9]*$",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders/[1-9][0-9]*/skip$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders/[1-9][0-9]*/snooze$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders/due$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/reminders$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/subscriptions/[1-9][0-9]*/icon$",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/subscriptions/[1-9][0-9]*/payments$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/subscriptions/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/subscriptions/[1-9][0-9]*/status$",
+    "methods": [
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/subscriptions$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/tasks/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/tasks$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/preferences/weight$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  },
+  {
+    "pattern": "^/api/preferences/meal-reminders$",
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
+  }
+]

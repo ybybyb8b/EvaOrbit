@@ -448,3 +448,9 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 本地 Host 使用同一个 `LoadingOverlayView` 的 `.local` 播放方式：完整既有轨道/核心与字标以 0.28 秒淡入和轻微缩放显现，页面就绪后 0.16 秒淡出，快速冷启动约 0.44 秒；减少动态效果时只做 0.10 + 0.10 秒淡入淡出。`LoadingExperienceCoordinator` 仅本地冷启动等待这段短入场结束；不等待账户网络请求或云端同步，页面未就绪时仍保留静态加载层。重试不重播冷启动动画，前台恢复/模块切换不新建动画层。在线 Web Host 保留原播放方式和快速就绪即退出语义。
 
 复用 `OrbitArtworkView`、`LoadingCore` 浅深资源与既有布局，不添加 React 开屏或新资源。无 Bridge、权限、framework、entitlement、数据库或签名链变化；需重建开发版 IPA。新增 XCTest 覆盖快/慢就绪、重复 ready、失败重试和时长预算；Windows 无 Xcode/可用 Swift 工具链，尚未运行 XCTest 或真机动画验收。
+
+## 本地包在线业务请求
+
+本地 PoC bridge v1 新增 `business.request`，仅在既有本地主框架白名单内可用。与 TypeScript/Vite 共用安装包 `TrackerWeb/business-routes.json` 的显式路径/方法清单，不允许任意 URL、Tracker 同步、凭据、MCP 或系统同步接口。请求校验当前 SQLite 账号、会话 `onlineBusinessProtocol:1`、generation 和 `X-EvaOrbit-Account`，冻结 Cookie、使用 ephemeral URLSession、拒绝重定向；JSON/multipart 正文最多 8 MiB，不重试或入队。其他模块离线仍只读，Tracker 独立同步不变。
+
+附加 SQLite `online_business_cache` 保存账户隔离的访问结果（128 项/64 MiB，单项 8 MiB），不改旧数据/队列。Settings 分派保留 bridge method 与 HTTP verb 的区别。无权限、framework、entitlement、签名或安装链变化。必须先核验并获准发布配套业务 API、测试账户配置和必要 migration，再安装集中验收 IPA；未运行新 macOS CI/XCTest 或真实账户验收前不得声称已完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。

@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
@@ -32,6 +33,7 @@ export function ChronicleDetailView({ initial }: { initial: ChronicleEntry }) {
   return <ChronicleDetailContent initial={initial} onDeleted={()=>{router.push("/chronicle");router.refresh();}}/>;
 }
 export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEntry;onDeleted:()=>void}){
+  const businessFetch=useBusinessRequest();
   const readonly=useFormPreview(),{local}=useChronicleData(),{english}=useLocale();
   const [entry, setEntry] = useServerDataState(initial);
   const [draft, setDraft] = useState<ChronicleDraft>(() => draftFromEntry(initial));
@@ -47,7 +49,7 @@ export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEnt
   async function submit(event: FormEvent) {
     event.preventDefault(); if(readonly)return; setBusy(true); setError(""); setNotice("");
     try {
-      const response = await fetch(`/api/chronicle/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      const response = await businessFetch(`/api/chronicle/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       if (!response.ok) { setError(await responseError(response, "Could not update Chronicle entry.")); return; }
       const updated = await response.json() as ChronicleEntry;
       setEntry(updated); setDraft(draftFromEntry(updated)); setEditing(false); setNotice("Chronicle entry updated.");
@@ -63,7 +65,7 @@ export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEnt
     if (!window.confirm(`Delete “${entry.title}”? This cannot be undone.`)) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/chronicle/${entry.id}`, { method: "DELETE" });
+      const response = await businessFetch(`/api/chronicle/${entry.id}`, { method: "DELETE" });
       if (!response.ok) { setError(await responseError(response, "Could not delete Chronicle entry.")); return; }
       showActionToast("Chronicle entry deleted", "deleted");
       onDeleted();

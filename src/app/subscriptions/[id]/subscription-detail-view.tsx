@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useSubscriptionsData} from "@/components/subscriptions-data-context";
 import { ErrorNotice } from "@/components/error-notice";
@@ -22,6 +23,7 @@ const spend=(item:SubscriptionDetail,english:boolean)=>Object.entries(item.spend
 const cycle=(item:SubscriptionDetail,english:boolean)=>english?`${item.billingIntervalValue} ${item.billingIntervalUnit}${item.billingIntervalValue===1?"":"s"}`:`每${item.billingIntervalValue===1?"":item.billingIntervalValue}${({day:"天",week:"周",month:"个月",year:"年"}[item.billingIntervalUnit])}`;
 
 export function SubscriptionDetailView({initial}:{initial:SubscriptionDetail}){
+  const businessFetch=useBusinessRequest();
   const previewOnly=useFormPreview();const {read,local,iconSources}=useSubscriptionsData();
   useDataRefresh("/subscriptions", () => reload());const{english}=useLocale();const[item,setItem]=useServerDataState(initial),[panel,setPanel]=useState<"edit"|"payment"|"resume"|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const [iconFile, setIconFile] = useState<File | null>(null), [removeIcon, setRemoveIcon] = useState(false);
@@ -31,16 +33,16 @@ export function SubscriptionDetailView({initial}:{initial:SubscriptionDetail}){
   async function submitEdit(event:FormEvent){
     event.preventDefault(); if(previewOnly||busy)return; setBusy(true);setError("");
     try {
-      const response=await fetch(`/api/subscriptions/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...edit,billingIntervalValue:Number(edit.billingIntervalValue),reminderDaysBefore:Number(edit.reminderDaysBefore)})});
+      const response=await businessFetch(`/api/subscriptions/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...edit,billingIntervalValue:Number(edit.billingIntervalValue),reminderDaysBefore:Number(edit.reminderDaysBefore)})});
       if(!response.ok){setError(await responseError(response,"Request failed."));return;}
-      try { await saveIconSelection(item.id,iconFile,removeIcon); }
+      try { await saveIconSelection(item.id,iconFile,removeIcon,businessFetch); }
       catch { setError(english?"Changes saved, but the icon could not be saved. Please retry.":"订阅修改已保存，但图标未能保存，请重试。");await reload();return; }
       setIconFile(null);setRemoveIcon(false);setPanel(null);await reload();
     } catch { setError(english?"Couldn’t save. Please try again.":"保存失败，请重试。"); }
     finally {setBusy(false);}
   }
-  async function submitPayment(event:FormEvent){event.preventDefault();if(previewOnly||busy)return;setBusy(true);setError("");const response=await fetch(`/api/subscriptions/${item.id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payment)});setBusy(false);if(!response.ok){setError(await responseError(response,"Request failed."));return;}setPanel(null);await reload();}
-  async function status(next:"active"|"paused"|"ended",nextRenewalOn?:string){if(previewOnly||busy)return;setBusy(true);setError("");const response=await fetch(`/api/subscriptions/${item.id}/status`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:next,nextRenewalOn})});setBusy(false);if(!response.ok){setError(await responseError(response,"Request failed."));return;}setPanel(null);await reload();}
+  async function submitPayment(event:FormEvent){event.preventDefault();if(previewOnly||busy)return;setBusy(true);setError("");const response=await businessFetch(`/api/subscriptions/${item.id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payment)});setBusy(false);if(!response.ok){setError(await responseError(response,"Request failed."));return;}setPanel(null);await reload();}
+  async function status(next:"active"|"paused"|"ended",nextRenewalOn?:string){if(previewOnly||busy)return;setBusy(true);setError("");const response=await businessFetch(`/api/subscriptions/${item.id}/status`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:next,nextRenewalOn})});setBusy(false);if(!response.ok){setError(await responseError(response,"Request failed."));return;}setPanel(null);await reload();}
   function openEdit(){setIconFile(null);setRemoveIcon(false);setEdit({name:item.name,amount:amount(item.currentAmountMinor),currency:item.currency,billingIntervalValue:String(item.billingIntervalValue),billingIntervalUnit:item.billingIntervalUnit,startedOn:item.startedOn,nextRenewalOn:item.nextRenewalOn,autoRenew:item.autoRenew,reminderEnabled:item.reminderEnabled,reminderDaysBefore:String(item.reminderDaysBefore),reminderTime:item.reminderTime??"09:00",notes:item.notes});setError("");setPanel("edit");}
   const stateLabel=english?({active:"Active",paused:"Paused",ended:"Ended"}[item.status]):({active:"进行中",paused:"已暂停",ended:"已结束"}[item.status]);
   return <div className="page subscription-detail-page"><PageHeader eyebrow={stateLabel.toUpperCase()} title={item.name} description={`${money(item.currentAmountMinor,item.currency)} · ${english?"next renewal":"下次续费"} ${date(item.nextRenewalOn,english)}`} action={<button className="button secondary" onClick={openEdit}><Icon name="edit"/>{english?"Edit":"编辑"}</button>}/>

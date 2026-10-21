@@ -1,4 +1,5 @@
 "use client";
+import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
@@ -28,6 +29,7 @@ function sourceLabel(source: ChronicleSource) {
 }
 
 export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
+  const businessFetch=useBusinessRequest();
   const { english } = useLocale();
   const readonly=useFormPreview(),{read,local,complete}=useChronicleData();
   const [items, setItems] = useState(initial);
@@ -66,7 +68,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   async function submit(event: FormEvent) {
     event.preventDefault(); if(readonly)return; setSaving(true); setError("");
     try {
-      const response = await fetch("/api/chronicle", {
+      const response = await businessFetch("/api/chronicle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
