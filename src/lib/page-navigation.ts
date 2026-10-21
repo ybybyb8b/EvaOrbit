@@ -43,5 +43,9 @@ export function isAppDataMutation(input: RequestInfo | URL, init: RequestInit | 
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
   const url = new URL(request?.url ?? String(input), origin);
   const headers = new Headers(init?.headers ?? request?.headers);
+  // The EventKit transaction runner publishes only committed business changes,
+  // including partial progress on failure. Intermediate writes must not refresh each page.
+  if (url.pathname.startsWith("/api/eventkit/") || url.pathname === "/api/preferences/eventkit" ||
+      headers.get("x-evaorbit-refresh-owner") === "eventkit" && /^\/api\/(tasks|reminders|calendar-events)(\/|$)/.test(url.pathname)) return false;
   return url.origin === origin && (url.pathname.startsWith("/api/") || headers.has("next-action"));
 }

@@ -23,7 +23,8 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
-  assert.match(calendar, /<BottomLogScope selectedDate=\{selected\} onSaved=\{refreshSelectedDate\}/);
+  assert.match(calendar, /<BottomLogScope selectedDate=\{selected\}/);
+  assert.doesNotMatch(calendar, /refreshSelectedDate/, "global invalidation owns refresh after Log writes");
   assert.match(shell, /<HomeQuickLog key=\{pathname\}/);
   assert.match(quickLog, /aria-label=\{action\?\.label \?\? \(english \? "Quick Log" : "快速记录"\)\}/);
   assert.doesNotMatch(quickLog, /<span>Log<\/span>/);
@@ -48,7 +49,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
 
 test("Home keeps the compact Due reminder stack", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /getDueReminders\(\)/);
+  assert.match(page, /getDueReminders\(50, now, \{ readOnly: true \}\)/);
   assert.match(page, /<DueReminders items=\{due\} compact \/>/);
 });
 

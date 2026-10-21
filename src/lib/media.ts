@@ -1,10 +1,16 @@
 import { ConflictError } from "./errors.ts";
-import { buildMediaStorageTitle, mediaMatchesQuery } from "./media-display.ts";
+import { buildMediaStorageTitle, selectMediaItems } from "./media-display.ts";
 import type { EvaOrbitRepository, MediaDraftPatch, MediaListInput, NewMediaDraft } from "./repositories/types.ts";
 import type { MediaDetail, MediaListItem } from "./types.ts";
 
 export async function listMediaWithRepository(repository:EvaOrbitRepository,input:MediaListInput={}):Promise<MediaListItem[]> {
-  const items=await repository.listMediaItems({...input,query:undefined,rewatched:undefined,limit:200});
+  const items:Awaited<ReturnType<EvaOrbitRepository["listMediaItems"]>>=[];
+  for(let offset=0;;offset+=200){
+    const page=await repository.listMediaItems({...input,query:undefined,rewatched:undefined,limit:200,offset});
+    items.push(...page);
+    if(page.length<200)break;
+    if(offset>=19800)throw new ConflictError("Media collection is too large for this view. Narrow the filters.");
+  }
   if(!items.length)return[];
   const itemIds=new Set(items.map(item=>item.id));
   const grouped=new Map<number,Awaited<ReturnType<EvaOrbitRepository["listMediaViewings"]>>>();
@@ -19,11 +25,7 @@ export async function listMediaWithRepository(repository:EvaOrbitRepository,inpu
     const latest=viewings.reduce((value,viewing)=>viewing.watchedDate>value?viewing.watchedDate:value,"");
     return{...item,latestWatchedDate:latest||null,viewingCount:viewings.length};
   });
-  const query=input.query?.trim().toLocaleLowerCase();
-  return summaries
-    .filter(item=>(!query||mediaMatchesQuery(item,query))&&(!input.rewatched||item.viewingCount>1))
-    .sort((left,right)=>(right.latestWatchedDate??"").localeCompare(left.latestWatchedDate??"")||right.id-left.id)
-    .slice(0,Math.min(Math.max(input.limit??100,1),200));
+  return selectMediaItems(summaries,input);
 }
 
 export async function getMediaDetailWithRepository(repository:EvaOrbitRepository,id:number):Promise<MediaDetail|null> {

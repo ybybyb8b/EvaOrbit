@@ -32,3 +32,8 @@ export function mediaMatchesQuery(item:MediaNameSource,query:string){
   const needle=mediaNameKey(query);if(!needle)return true;
   return[item.originalTitle,item.translatedTitle,item.seriesName,item.seasonTitle,item.title].some(value=>mediaNameKey(value).includes(needle));
 }
+
+// One selection rule for cloud services and downloaded Media.
+export function selectMediaItems(items:import("./types").MediaListItem[],input:import("./repositories/types").MediaListInput={}){
+ return items.filter(item=>(!input.query||mediaMatchesQuery(item,input.query))&&(!input.mediaType||item.mediaType===input.mediaType)&&(!input.status||item.status===input.status)&&(!input.rating||item.rating===input.rating)&&(input.favorite===undefined||item.isFavorite===input.favorite)&&(!input.rewatched||item.viewingCount>1)&&(!input.seriesId||item.seriesId===input.seriesId)).sort((a,b)=>(b.latestWatchedDate??"").localeCompare(a.latestWatchedDate??"")||b.id-a.id).slice(input.offset??0,(input.offset??0)+Math.min(Math.max(input.limit??100,1),200));
+}

@@ -30,6 +30,13 @@ test("mutation tracking excludes reads, external requests and ordinary navigatio
   assert.equal(isAppDataMutation("/api/health/weight", undefined, origin), false);
   assert.equal(isAppDataMutation("/health", { method: "POST" }, origin), false);
   assert.equal(isAppDataMutation("https://other.example/api/tasks", { method: "DELETE" }, origin), false);
+  for (const path of ["/api/eventkit/links", "/api/eventkit/calendar-import", "/api/preferences/eventkit"]) {
+    assert.equal(isAppDataMutation(path, { method: "PUT" }, origin), false, path);
+  }
+  for (const path of ["/api/tasks/2", "/api/reminders/2/complete", "/api/calendar-events/2"]) {
+    assert.equal(isAppDataMutation(path, { method: "PATCH", headers: { "x-evaorbit-refresh-owner": "eventkit" } }, origin), false, path);
+    assert.equal(isAppDataMutation(path, { method: "PATCH" }, origin), true, "ordinary edits still invalidate");
+  }
 });
 
 test("history markers preserve the initial entry on back, forward, and reload", () => {

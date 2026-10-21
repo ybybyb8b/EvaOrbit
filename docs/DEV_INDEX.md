@@ -168,7 +168,7 @@
 
 ## Native
 
-- **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[同步契约](../src/lib/native-sync-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。
-- **数据与接口**：`native_devices`、`native_sync_mutations`，以及 HealthKit / EventKit 各自的样本、回执与映射表；`/api/native/*`、`/api/healthkit/energy/ingest`、`/api/eventkit/*`。
+- **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[Tracker 协议2](../src/lib/tracker-local-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。旧 [协议1](../src/lib/native-sync-contract.ts) 仅保留兼容代码，不再连接生产同步路由。
+- **数据与接口**：`native_devices`、`tracker_sync_receipts`、`tracker_sync_heads` 与 Tracker 行版本，以及 HealthKit / EventKit 各自样本、回执与映射表；`/api/native/sync` 使用原子 RPC，`/api/native/*-readonly` 使用各模块只读 Repository 白名单；旧 `native_sync_mutations` 保留。在线配置会话声明及账户头保护见 [main 整合说明](NATIVE_API_MAIN_RELEASE.md)。
 - **依赖与决定**：Web 主体仍部署在 Vercel，Host 用 WKWebView 提供原生能力；设备本地 outbox/幂等与账户数据隔离。HealthKit、EventKit、原生通知分别遵循各自授权及同步契约，网页缓存不能替代设备状态。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
 - **详文**：涉及本节改动先完整阅读 [维护契约](IOS_NATIVE_MAINTENANCE.md)，再按需看 [Host Runbook](IOS_NATIVE_HOST.md)、[安装简版](IOS_IPA_INSTALL_QUICKSTART.md)、[Sleep](HEALTHKIT_SLEEP.md)、[体重合并](HEALTHKIT_WEIGHT_MERGE.md)、[EventKit 偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)。

@@ -386,3 +386,5 @@ Bark 的 `open_in_host` 默认 false；安装新版后才能在通知设置切�
 - 尚未覆盖的场景，以及哪些验证必须由 macOS CI 或真机完成。
 
 具体的 Windows 管理员命令、WSL 初装、xtool 登录、AppTokens 503、续签和升级步骤继续以 [`docs/IOS_NATIVE_HOST.md`](./IOS_NATIVE_HOST.md) 为准；本文负责维护架构和不变量，避免后续开发会话破坏已经验证的实现方式。
+
+Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.

@@ -22,14 +22,19 @@ export async function readCalendarTimelineRecords(range: { from: string; to: str
 export function buildCalendarTimelineEvents(records: CalendarEvent[], range: { from: string; to: string }): TimelineEvent[] {
   const first = dateInEvaOrbit(new Date(range.from)), until = dateInEvaOrbit(new Date(range.to));
   const events: TimelineEvent[] = [];
+  const days: Array<{ date: string; from: number; to: number }> = [];
+  for (let date = first; date < until; date = shiftDate(date, 1)) {
+    const day = dateRange(date);
+    days.push({ date, from: Date.parse(day.from), to: Date.parse(day.to) });
+  }
   for (const record of records) {
     if (record.status === "cancelled") continue;
     const start = record.isAllDay ? dateRange(record.startAt).from : record.startAt;
     const end = record.isAllDay ? dateRange(record.endAt).from : record.endAt;
-    if (!Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) continue;
-    for (let date = first; date < until; date = shiftDate(date, 1)) {
-      const day = dateRange(date);
-      if (Date.parse(end) <= Date.parse(day.from) || Date.parse(start) >= Date.parse(day.to)) continue;
+    const startMs = Date.parse(start), endMs = Date.parse(end);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue;
+    for (const { date, from, to } of days) {
+      if (endMs <= from || startMs >= to) continue;
       events.push({
         id: `calendar:${record.id}:${date}`, eventType: "calendar.event", sourceType: "calendar", sourceId: record.id,
         title: record.title, detail: record.location, occurredAt: record.isAllDay ? `${record.startAt}T12:00:00.000Z` : new Date(record.startAt).toISOString(),

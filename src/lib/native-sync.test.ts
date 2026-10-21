@@ -58,13 +58,28 @@ test("keeps an in-flight duplicate retryable without applying concurrently", asy
   assert.equal(applications, 0);
 });
 
-test("sync receipt migration is owner-scoped and server writes reuse Tracker services", () => {
+test("legacy receipt failure after a business write fails closed without reapplying", async () => {
+  let claimed = false, writes = 0;
+  const store: MutationReceiptStore = {
+    async claim() { if (claimed) return { kind: "processing" }; claimed = true; return { kind: "claimed" }; },
+    async complete() { throw new Error("lost receipt"); },
+    async release() { claimed = false; },
+  };
+  const apply = async (): Promise<NativeSyncResult> => ({ mutationId: mutation.mutationId, resourceType: "tracker", localId: "local", status: "applied", serverId: ++writes });
+  await assert.rejects(() => applyIdempotently(mutation, store, apply));
+  assert.equal((await applyIdempotently(mutation, store, apply)).status, "retry");
+  assert.equal(writes, 1);
+});
+
+test("production sync uses the atomic RPC and legacy helper is disconnected from the route", () => {
   const migration = readFileSync(new URL("../../supabase/migrations/202609090001_native_sync_mutations.sql", import.meta.url), "utf8");
   const service = readFileSync(new URL("native-sync-service.ts", import.meta.url), "utf8");
   assert.match(migration, /primary key \(user_id, mutation_id\)/i);
   assert.match(migration, /enable row level security/i);
   assert.match(migration, /to authenticated/i);
-  assert.match(service, /createTrackerField.*createTrackerGoal.*createTrackerReminder.*deleteTrackerField.*deleteTrackerGoal.*deleteTrackerReminder/s);
-  assert.match(service, /resetTrackerIcon.*saveTrackerIcon/s);
-  assert.doesNotMatch(service, /from\("trackers"\)|from\("tracker_entries"\)/);
+  assert.match(service, /rpc\("tracker_sync_v2"/);
+  assert.doesNotMatch(service, /applyIdempotently|native_sync_mutations/);
+  const route = readFileSync(new URL("../app/api/native/sync/route.ts", import.meta.url), "utf8");
+  assert.match(route, /parseTrackerSyncRequest/);
+  assert.doesNotMatch(route, /parseNativeSyncRequest/);
 });

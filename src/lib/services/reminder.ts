@@ -64,9 +64,11 @@ export async function cancelReminder(id: number) {
 }
 export const deleteReminder = cancelReminder;
 
-export async function listScheduledNotifications(now = new Date()): Promise<ScheduledNotification[]> {
-  await catchUpAutomaticSubscriptionPayments(now);
-  await reconcilePeriodMedicationReminders(now);
+export async function listScheduledNotifications(now = new Date(), options: {readOnly?:boolean} = {}): Promise<ScheduledNotification[]> {
+  if (!options.readOnly) {
+    await catchUpAutomaticSubscriptionPayments(now);
+    await reconcilePeriodMedicationReminders(now);
+  }
   const repository = await getRepository();
   const source = (await repository.listReminders({ activeOnly: true })).filter((reminder) => reminder.nextDueAt && (["scheduled", "failed"].includes(reminder.status) || (reminder.status === "sent" && reminder.repeatWhileOverdue)));
   const reminders = (await Promise.all(source.map(async (reminder) => {
@@ -91,9 +93,11 @@ export async function listScheduledNotifications(now = new Date()): Promise<Sche
 
 export async function listNotificationHistory(limit = 100) { return (await getRepository()).listNotificationDeliveries(limit); }
 
-export async function getDueReminders(limit = 50, now = new Date()): Promise<DueReminder[]> {
-  await catchUpAutomaticSubscriptionPayments(now);
-  await reconcilePeriodMedicationReminders(now);
+export async function getDueReminders(limit = 50, now = new Date(), options: { readOnly?: boolean } = {}): Promise<DueReminder[]> {
+  if (!options.readOnly) {
+    await catchUpAutomaticSubscriptionPayments(now);
+    await reconcilePeriodMedicationReminders(now);
+  }
   const repository = await getRepository();
   const candidates = selectDueReminders(await repository.listReminders({ activeOnly: true }), now, limit * 2);
   const reminders = (await Promise.all(candidates.map(async (reminder) => {

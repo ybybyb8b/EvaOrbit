@@ -2,13 +2,32 @@ import { getUiPreferences } from "@/lib/services/evaorbit";
 import { getTimelineMonthSummary } from "@/lib/services/timeline";
 import { getHomeDayOverview } from "@/lib/services/home-day";
 import { getDueReminders } from "@/lib/services/reminder";
-import { EVAORBIT_TIME_ZONE } from "@/lib/time";
+import { EVAORBIT_TIME_ZONE, dateInEvaOrbit } from "@/lib/time";
 import { DueReminders } from "@/components/due-reminders";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import styles from "./home.module.css";
 import { getHomeCacheScope } from "@/lib/services/home-cache-scope";
 
+import { catchUpAutomaticSubscriptionPayments } from "@/lib/services/subscription";
+import { reconcilePeriodMedicationReminders } from "@/lib/services/period-medication-reminder";
+
 export const dynamic = "force-dynamic";
+
+async function loadHomeData() {
+  const now = new Date();
+  const date = dateInEvaOrbit(now);
+  // Share renewal preparation; reminder calibration must not delay the timeline.
+  const renewalsReady = catchUpAutomaticSubscriptionPayments(now);
+  return Promise.all([
+    renewalsReady.then(() => getHomeDayOverview(date, { readOnly: true })),
+    renewalsReady.then(() => getTimelineMonthSummary(date.slice(0, 7), { readOnly: true })),
+    renewalsReady.then(async () => {
+      await reconcilePeriodMedicationReminders(now);
+      return getDueReminders(50, now, { readOnly: true });
+    }),
+  ]);
+}
+
 
 function dateLabel(english: boolean) {
   if (english) return new Intl.DateTimeFormat("en", { year: "numeric", month: "long", day: "numeric", weekday: "long", timeZone: EVAORBIT_TIME_ZONE }).format(new Date());
@@ -27,7 +46,7 @@ function greeting(english: boolean) {
 }
 
 export default async function HomePage() {
-  const [preferences, today, monthSummary, due, cacheScope] = await Promise.all([getUiPreferences(), getHomeDayOverview(), getTimelineMonthSummary(), getDueReminders(), getHomeCacheScope()]);
+  const [preferences, [today, monthSummary, due], cacheScope] = await Promise.all([getUiPreferences(), loadHomeData(), getHomeCacheScope()]);
   const english = preferences.uiLanguage === "en";
 
   return <div className="page home-page">

@@ -420,3 +420,5 @@ Sleep / 只读指标扩展见 [`HEALTHKIT_SLEEP.md`](./HEALTHKIT_SLEEP.md)：新
 | WSL 本地 usbmuxd 停止状态 | 不应假设持久 | 每次由辅助脚本停止 |
 
 需要人工保留的只有非敏感审计信息：使用的 EvaOrbit Git SHA、GitHub Actions run/artifact、IPA 的 `SHA256SUMS`、Xcode 版本、固定 xtool upstream commit 和已审计 AppImage SHA。Apple ID、密码、2FA、token、cookie、UDID、IMEI、手机号和设备序列号都不得记录。
+
+Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.

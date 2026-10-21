@@ -25,3 +25,5 @@ There is no server revision endpoint or push subscription: this does not claim t
 When API response contracts change incompatibly, bump the `client-v1` token in `revision()`; do not reuse incompatible snapshots. New modules must explicitly define both safe reads and write dependencies in `cache-policy.ts`.
 
 Checks: `npm test` covers policy exclusions, related invalidation, request deduplication, account separation, stale reads, in-flight invalidation, filter restoration and draft-safe server updates. Mobile browser QA additionally checks real IndexedDB reloads and native route reuse.
+
+Resource optimization: Web Home reuses one server refresh for today, its month and Due, and only refetches other selected dates or visible months. EventKit mapping/preferences and marked intermediate writes defer invalidation to the committed-domain notification, including partial failure. Native notification triggers merge into an active execution plus one follow-up.
