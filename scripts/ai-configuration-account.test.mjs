@@ -17,5 +17,11 @@ test('local AI settings reject a switched authenticated account before the API r
  assert.equal((await exports.updateSession(request('account-a'))).headers.get('Cache-Control'),'no-store');
  const switched=await exports.updateSession(request('account-b'));assert.equal(switched.status,409);assert.match((await switched.json()).error,/account changed/);
  assert.equal((await exports.updateSession(request())).status,200,'Existing Web settings keep their authentication behavior');
+ for (const path of ['/api/preferences/life-day','/api/calendar-interpretation']) {
+  assert.equal((await exports.updateSession(request('account-a',path))).status,200);
+  assert.equal((await exports.updateSession(request('account-a',path))).headers.get('Cache-Control'),'no-store');
+  assert.equal((await exports.updateSession(request('account-b',path))).status,409,'Cloud preferences reject a switched account before writing');
+  assert.equal((await exports.updateSession(request(undefined,path))).status,200,'Existing Web preference forms remain compatible');
+ }
  claims={};assert.equal((await exports.updateSession(request('account-a'))).status,401);
 });

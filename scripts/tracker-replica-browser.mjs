@@ -36,7 +36,13 @@ async function open(){
  const p=context.pages()[0];p.on('pageerror',e=>errors.push(String(e)));await p.goto(`http://127.0.0.1:${port}`,{waitUntil:'networkidle'});return p;
 }
 async function dismiss(p){for(const b of await p.locator('.error-banner-close').all())await b.click();}
-async function sync(p){await dismiss(p);const info=p.locator('main.local-trackers > details').first();if(!await info.evaluate(el=>el.open))await info.locator('summary').first().click();const button=p.getByRole('button',{name:'同步',exact:true});await button.click();await p.waitForFunction(()=>!document.querySelector('.local-sync-status button')?.disabled);}
+async function sync(p){
+ await dismiss(p);await p.locator('.tracker-sync-button').click();
+ const button=p.locator('.tracker-sync-settings .section-heading button');await button.waitFor();
+ await p.waitForFunction(()=>!document.querySelector('.tracker-sync-settings .section-heading button')?.disabled);
+ await button.click();await p.waitForFunction(()=>!document.querySelector('.tracker-sync-settings .section-heading button')?.disabled);
+ await p.locator('.form-sheet-header button').click();await p.locator('.form-sheet-layer').waitFor({state:'detached'});
+}
 async function entry(p,note){await dismiss(p);await p.getByRole('button',{name:'新增记录',exact:true}).click();await p.locator('#tracker-entry-form textarea').fill(note);await p.locator('button[form="tracker-entry-form"]').click();await p.locator('#tracker-entry-form').waitFor({state:'detached'});await p.getByText(note,{exact:true}).waitFor();}
 try{
  await server.listen();console.log(JSON.stringify({pid:process.pid,port}));let p=await open();

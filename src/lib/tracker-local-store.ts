@@ -173,13 +173,19 @@ export class LocalTrackerStore {
     const localId = id ?? newTrackerLocalId();
     await this.change(next => {
       const row = next.records.find(row => row.id === localId);
+      let commandPayload=payload;
       if (row?.serverId && !row.version) throw new Error("请先联网取得 Tracker 同步版本，再编辑已有记录");
-      if(resourceType!=="tracker"){const parent=parentFor(next,payload);if(parent?.serverId&&!parent.version)throw new Error("请先联网取得 Tracker 同步版本，再记录");}
+      if(resourceType!=="tracker"){
+        const parent=parentFor(next,{...row?.payload,...payload});
+        if(!parent||parent.status||parent.payload.archivedAt||next.outbox.some(item=>item.localId===parent.id&&item.operation==="delete"))throw new Error("所属 Tracker 不可用，请刷新或先处理同步问题");
+        if(parent.serverId&&!parent.version)throw new Error("请先联网取得 Tracker 同步版本，再记录");
+        commandPayload={...payload,trackerId:parent.serverId,trackerLocalId:parent.id};
+      }
       if (row?.status) throw new Error("请先处理这条记录的同步问题");
       if (next.outbox.some(item => item.localId === localId && item.operation === "delete")) throw new Error("记录正在删除");
       if (row) row.payload = { ...row.payload, ...payload };
       else next.records.push({ id: localId, resourceType, payload });
-      next.outbox.push({ mutationId: newTrackerLocalId(), localId, resourceType, operation: row ? "update" : "create", payload });
+      next.outbox.push({ mutationId: newTrackerLocalId(), localId, resourceType, operation: row ? "update" : "create", payload:commandPayload });
     });
     return localId;
   }

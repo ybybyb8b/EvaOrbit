@@ -98,6 +98,7 @@ try {
   await page.getByRole('button',{name:'返回上一页',exact:true}).click();
   await page.screenshot({path:'tmp/tracker-local-desktop.png',fullPage:true});
   await page.locator('.sidebar').getByRole('link',{name:'设置',exact:true}).click();
+  await page.getByRole('button',{name:/应用与外观/}).click();
   await page.getByRole('button',{name:/粉棕/}).click();
   await page.getByRole('button',{name:'跟随系统',exact:false}).click();
   await page.locator('.sidebar').getByRole('link',{name:'观测',exact:true}).click();

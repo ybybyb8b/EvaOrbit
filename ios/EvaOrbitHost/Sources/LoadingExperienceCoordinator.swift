@@ -22,14 +22,18 @@ final class LoadingExperienceCoordinator {
     private(set) var state: LoadingExperienceState = .dismissed
     private weak var presenter: LoadingExperiencePresenting?
     private var dismissalStarted = false
+    private let waitsForIntro: Bool
+    private var readyDuringIntro = false
 
-    init(presenter: LoadingExperiencePresenting) {
+    init(presenter: LoadingExperiencePresenting, waitsForIntro: Bool = false) {
         self.presenter = presenter
+        self.waitsForIntro = waitsForIntro
     }
 
     func startColdLaunch() {
         guard state == .dismissed else { return }
         dismissalStarted = false
+        readyDuringIntro = false
         state = .introPlaying
         presenter?.playIntro { [weak self] in self?.introReachedNaturalEnd() }
     }
@@ -37,6 +41,10 @@ final class LoadingExperienceCoordinator {
     func webViewDidBecomeReady() {
         switch state {
         case .introPlaying:
+            if waitsForIntro {
+                readyDuringIntro = true
+                return
+            }
             state = .readyToDismiss
             dismissOnce()
         case .waitingForWebView:
@@ -49,6 +57,7 @@ final class LoadingExperienceCoordinator {
 
     func beginRecovery() {
         dismissalStarted = false
+        readyDuringIntro = false
         state = .waitingForWebView
         presenter?.showRecoveryLoading()
     }
@@ -63,8 +72,13 @@ final class LoadingExperienceCoordinator {
     private func introReachedNaturalEnd() {
         switch state {
         case .introPlaying:
-            state = .waitingForWebView
-            presenter?.beginQuietLoop()
+            if readyDuringIntro {
+                state = .readyToDismiss
+                dismissOnce()
+            } else {
+                state = .waitingForWebView
+                presenter?.beginQuietLoop()
+            }
         case .readyToDismiss:
             dismissOnce()
         case .waitingForWebView, .failure, .dismissed:

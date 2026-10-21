@@ -4,7 +4,7 @@ import {QuickLogPicker,QuickLogTrigger} from "@/components/quick-log-picker";
 import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, Cat, Cup, ForkKnife, Inbox, type IconComponent } from "reicon-react";
+import {QUICK_LOG_OPTIONS,type QuickEntryKind} from "@/components/quick-log-options";
 import { FormSheet } from "@/components/form-sheet";
 import { showActionToast } from "@/components/action-toast";
 import { Icon } from "@/components/icons";
@@ -15,14 +15,14 @@ import type { ApiError, CatRecordKind, Pet, Tracker, TrackerField } from "@/lib/
 import { CatRecordEditor } from "./cats/cat-record-editor";
 import { DrinkRecordEditor } from "./drinks/drink-ui";
 import { FoodRecordEditor } from "./food/food-record-editor";
-import { getHealthQuickLog, HEALTH_QUICK_LOGS, type HealthQuickLogKind } from "./health/health-quick-log";
+import { getHealthQuickLog } from "./health/health-quick-log";
 import { InboxCaptureForm } from "./inbox/inbox-capture-form";
 import { TrackerEntryEditor } from "./trackers/tracker-entry-editor";
 import { TrackerIcon } from "@/components/tracker-icon";
 import { useBottomLog } from "@/components/bottom-log";
 import { dateInEvaOrbit } from "@/lib/time";
 
-type QuickEntryKind = "food" | "drink" | "tracker" | "cats" | "inbox" | HealthQuickLogKind;
+
 type QuickKind = "picker" | QuickEntryKind;
 const quickLogUrls = {
   cats: "/api/cats/pets",
@@ -87,11 +87,7 @@ export function HomeQuickLog() {
     } catch { setError(english ? "Could not save this record" : "暂时无法保存记录"); }
     finally { setLoading(false); }
   }
-  const options: Array<{ kind: QuickEntryKind; icon: IconComponent; en: string; zh: string }> = [
-    { kind: "food", icon: ForkKnife, en: "Food", zh: "饮食" }, { kind: "drink", icon: Cup, en: "Drink", zh: "饮品" }, ...HEALTH_QUICK_LOGS,
-    { kind: "tracker", icon: Activity, en: "Tracker", zh: "观测" }, { kind: "cats", icon: Cat, en: "Cats", zh: "猫咪" }, { kind: "inbox", icon: Inbox, en: "Inbox", zh: "散落" },
-  ];
-  const visibleOptions = action?.picker ? options.filter(option => option.kind === action.picker) : options;
+  const visibleOptions = action?.picker ? QUICK_LOG_OPTIONS.filter(option => option.kind === action.picker) : QUICK_LOG_OPTIONS;
   const healthQuickLog = getHealthQuickLog(active);
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>

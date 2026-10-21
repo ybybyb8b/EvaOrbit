@@ -436,3 +436,15 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 ## Tracker 独立编辑副本
 
 本地 bridge v1 新增 `trackers.readReplica`、`trackers.commitReplica`、`trackers.syncReplica`，按能力检测启用；旧 Host 保持只读。SQLite 新增 `tracker_replica_state`，复用既有 CAS/原子文档提交，不改 `tracker_state` 或冻结旧 outbox。旧 `trackers.commitState`/`trackers.sync` 仍关闭。上传只能使用新表中已冻结且内容完全匹配的 wire；先空批次验证协议2完整快照，再允许实际批次，账户/generation/冻结 Cookie 与服务端 request.accountId 联合保护。协议1/缺少 migration/请求失败时只保存本机，不上传旧队列。设置暂停编辑保留新副本及队列；导出包含 legacy/replica 两部分。无新权限、framework、entitlement 或签名链变化；新IPA及 macOS XCTest/真机验收仍需要。见 [编辑阶段](TRACKER_EDITABLE_REPLICA.md)。
+
+## Settings 共享目录与在线偏好
+
+开发版复用 Web 八项设置目录与现有表单。Bridge v1 增加 `settings.configuration`，仅精确 GET/PATCH `/api/preferences/life-day`、GET/PUT `/api/calendar-interpretation`；复用现有 AI 通道的账户/generation、冻结 Cookie、ephemeral URLSession 和无缓存/队列/重试约束。服务端需声明 `settingsConfigurationProtocol:1` 并对账户头做校验；旧服务端/旧 Host 拒绝该通道，不回退到任意 fetch。
+
+本地 core 白名单额外允许既有 `healthkit.getStatus`、`eventkit.getStatus`、`notification.getStatus` 与用户主动 `notification.openSettings`。原组件 readOnly 模式不请求权限、不配置凭据、不触发健康/日历/提醒写入或通知排程/取消。其他原生业务方法仍禁止；在线 Host 原行为保留。无新 framework、权限、Info.plist、entitlement 或签名链变化。需要重建开发版 IPA，在线偏好另需 session/proxy 发布；本轮不部署、不迁移。验证与回退见 [Settings 共享阶段](SETTINGS_LOCAL_SHARED.md)。
+
+## 本地包短开屏
+
+本地 Host 使用同一个 `LoadingOverlayView` 的 `.local` 播放方式：完整既有轨道/核心与字标以 0.28 秒淡入和轻微缩放显现，页面就绪后 0.16 秒淡出，快速冷启动约 0.44 秒；减少动态效果时只做 0.10 + 0.10 秒淡入淡出。`LoadingExperienceCoordinator` 仅本地冷启动等待这段短入场结束；不等待账户网络请求或云端同步，页面未就绪时仍保留静态加载层。重试不重播冷启动动画，前台恢复/模块切换不新建动画层。在线 Web Host 保留原播放方式和快速就绪即退出语义。
+
+复用 `OrbitArtworkView`、`LoadingCore` 浅深资源与既有布局，不添加 React 开屏或新资源。无 Bridge、权限、framework、entitlement、数据库或签名链变化；需重建开发版 IPA。新增 XCTest 覆盖快/慢就绪、重复 ready、失败重试和时长预算；Windows 无 Xcode/可用 Swift 工具链，尚未运行 XCTest 或真机动画验收。

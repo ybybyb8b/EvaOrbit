@@ -1,8 +1,9 @@
+import {PageLogAction} from "@/components/bottom-log-core";
 import {canEditTrackerRecord} from "@/lib/tracker-replica";
 import {LocalBackAction} from "./navigation-header";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import { ErrorNotice } from "@/components/error-notice";
-import {DevelopmentDetails} from "@/components/development-details";
+import {TrackerSyncButton} from "./tracker-sync-settings";
 import { useLocale } from "@/components/locale-controller";
 import { showActionToast } from "@/components/action-toast";
 import { PageHeading } from "@/components/page-heading";
@@ -17,55 +18,34 @@ import { TrackerCreateSheet } from "@/app/trackers/tracker-create-sheet";
 import { TrackerCaptureToggle } from "@/app/trackers/tracker-capture-toggle";
 import { TrackerTimelineRecords } from "@/app/trackers/tracker-timeline-records";
 import { TrackerActivityInsights } from "@/app/trackers/tracker-activity-insights";
-import { LocalTrackerStore, newTrackerLocalId, type LocalTrackerRecord } from "@/lib/tracker-local-store";
+import { newTrackerLocalId, type LocalTrackerRecord } from "@/lib/tracker-local-store";
 import { matchesTrackerSearch, entryMatchesPeriod, entryMatchesField, type TimelinePeriod } from "@/lib/tracker-timeline";
 import { TrackerTimelineToolbar } from "@/app/trackers/tracker-timeline-toolbar";
 import { trackerDistributionEntries, trackerInsightEntries, type TrackerInsightPeriod } from "@/lib/tracker-insights";
-import { validatedTrackerValues } from "@/lib/tracker-values";
-import { parseNewTracker, parseNewTrackerEntry, parseNewTrackerField } from "@/lib/validation";
-import type { Tracker, TrackerField } from "@/lib/types";
+import { parseNewTracker, parseNewTrackerField } from "@/lib/validation";
+import type { Tracker } from "@/lib/types";
 import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
-export function asField(row: LocalTrackerRecord): TrackerField {
-  return { id: row.serverId ?? 0, trackerId: Number(row.payload.trackerId ?? 0), key: String(row.payload.key), name: String(row.payload.name), type: row.payload.type as TrackerField["type"], required: Boolean(row.payload.required), defaultValue: row.payload.defaultValue ?? null, options: row.payload.options as string[] ?? [], showAfterQuickCapture: Boolean(row.payload.showAfterQuickCapture), includeInStats: Boolean(row.payload.includeInStats), sortOrder: Number(row.payload.sortOrder ?? 0), unit: String(row.payload.unit ?? ""), precision: Number(row.payload.precision ?? 0), config: {}, archivedAt: row.payload.archivedAt as string | null ?? null, createdAt: String(row.payload.createdAt ?? ""), updatedAt: String(row.payload.updatedAt ?? "") };
-}
-export function belongs(row: LocalTrackerRecord, tracker: LocalTrackerRecord) { return row.payload.trackerLocalId === tracker.id || tracker.serverId !== undefined && row.payload.trackerId === tracker.serverId; }
+import {asField,belongs} from "./tracker-records";
+import {trackerSession,saveLocalTrackerEntry,synchronizeTrackerSession} from "./tracker-session";
 
 export function TrackerWorkspace({ account, platform }: { account: LocalAccount; platform: TrackerPlatform }) {
   const {english}=useLocale();
   const readOnly = platform.readOnly(account);
-  const [inspection, setInspection] = useState<{pending:number;frozen:number;backupFile?:string}|null>(null);
-  const refreshing = useRef<Promise<void>|null>(null);
-  const store = useMemo(() => new LocalTrackerStore(account.accountId, platform.storage(account)), [account, platform]);
+  const store = useMemo(() => trackerSession(account, platform), [account, platform]);
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
-  const [ready, setReady] = useState(false), [error, setError] = useState(""), [syncing, setSyncing] = useState(false);
+  const [ready, setReady] = useState(false), [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null), [create, setCreate] = useState(false), [capture, setCapture] = useState(false);
   const [editing, setEditing] = useState<LocalTrackerRecord | undefined>(), [deleting, setDeleting] = useState<LocalTrackerRecord | null>(null);
-  const [discarding, setDiscarding] = useState<LocalTrackerRecord | null>(null);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"timeline" | "insights" | "settings">("timeline");
   const [periodFilter, setPeriodFilter] = useState<TimelinePeriod>("all"), [fieldFilter, setFieldFilter] = useState(""), [fieldValueFilter, setFieldValueFilter] = useState("");
   const [insightPeriod, setInsightPeriod] = useState<TrackerInsightPeriod>("month");
   const [chartFilter, setChartFilter] = useState<{kind:"monthly"|"weekdays"|"dayParts";key:string;label:string}|null>(null);
   const [showBasics, setShowBasics] = useState(false), [working, setWorking] = useState(false);
-  const [syncedAt, setSyncedAt] = useState<string | null>(null);
-  async function sync() {
-    if (isPreviewAccount(account) && !readOnly) return;
-    if (refreshing.current) return refreshing.current;
-    const job = (async () => {
-      setSyncing(true);
-      try {
-        if (readOnly) { setInspection(await platform.inspection(account)); await platform.refreshReadonly(account); await store.initialize(); }
-        else {try{await store.synchronize(platform.sync);}catch(reason){if(!store.getSnapshot().remoteRevision){try{await platform.refreshReadonly(account);await store.initialize();}catch{ /* A failed download must not discard local drafts. */ }}throw reason;}}
-        setError(""); setSyncedAt(new Date().toISOString());
-      } catch (reason) { setError(reason instanceof TypeError ? english ? "Offline or unable to reach the cloud. Your read-only snapshot is preserved." : "离线或暂时无法读取云端，只读快照已保留。" : reason instanceof Error ? reason.message : english ? "Could not refresh records. Your read-only snapshot is preserved." : "暂时无法读取云端记录，上次只读快照已保留"); }
-      finally { setSyncing(false); }
-    })();
-    refreshing.current = job;
-    try { await job; } finally { if (refreshing.current === job) refreshing.current = null; }
-  }
+  async function sync() { try { await synchronizeTrackerSession(account,platform); } catch { /* Background status belongs to the sync panel. */ } }
   useEffect(() => {
     let alive = true;
-    store.initialize().then(() => { if (alive) { setReady(true); void platform.inspection(account).then(setInspection).catch(reason=>setError(String(reason))); void sync(); } }).catch(reason => { if (alive) setError(String(reason)); });
+    store.initialize().then(() => { if (alive) { setReady(true); void sync(); } }).catch(reason => { if (alive) setError(String(reason)); });
     const refresh = () => { if (alive && document.visibilityState !== "hidden") void sync(); };
     window.addEventListener("online", refresh); window.addEventListener("evaorbit:native-active", refresh); document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 60000);
@@ -82,7 +62,6 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   const chartRows = chartFilter ? new Set(trackerDistributionEntries(trackerInsightEntries(timelineEntries, insightPeriod), chartFilter.kind, chartFilter.key).map(entry => entry.id)) : null;
   const filtersActive = Boolean(query.trim() || chartFilter || periodFilter !== "all" || fieldFilter);
   const filtered = timelineEntries.filter(entry => matchesTrackerSearch(entry, query) && (!chartRows || chartRows.has(entry.id)) && entryMatchesPeriod(entry, periodFilter) && entryMatchesField(entry, fields.find(field=>field.key===fieldFilter), fieldValueFilter));
-  const issues = state.records.filter(row => row.status);
   async function perform(action: () => Promise<unknown>) { if (working) return; setWorking(true); try { if(readOnly)throw new Error("只读验收模式禁止修改记录"); await action(); setError(""); void sync(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败，请重试"); } finally { setWorking(false); } }
   function status(row: LocalTrackerRecord) { if(readOnly)return "只读快照"; return row.status ? "需要处理" : state.outbox.some(item => item.localId === row.id) ? "待同步" : "已保存"; }
   function openTracker(row: LocalTrackerRecord, detailed=false) { setSelectedId(row.id); setQuery(""); setPeriodFilter("all"); setFieldFilter(""); setFieldValueFilter(""); setChartFilter(null); setTab("timeline"); if (detailed) { setEditing(undefined); setCapture(true); } }
@@ -90,34 +69,15 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
     if (readOnly || !canEditTrackerRecord(row) || row.payload.archivedAt || !ready) return;
     if (!row.payload.quickCaptureEnabled) { openTracker(row, true); return; }
     await perform(async () => {
-      const recordFields = state.records.filter(field => field.resourceType === "tracker_field" && belongs(field, row)).map(asField);
-      await store.save("tracker_entry", undefined, { ...parseNewTrackerEntry({}, row.serverId ?? 1), trackerId: row.serverId, trackerLocalId: row.id, values: validatedTrackerValues(recordFields, {}, true, false) });
+      await saveLocalTrackerEntry(store,row,{});
       showActionToast("已保存到本机");
     });
   }
-  const action = <button className="button primary" disabled={!ready || working || Boolean(selected&&!canEditTrackerRecord(selected)) || Boolean(selected?.status) || Boolean(selected?.payload.archivedAt)} onClick={() => selected ? void recordNow(selected) : setCreate(true)}><Icon name="plus" />{selected ? selected.payload.quickCaptureEnabled ? "立即记录" : "新增记录" : "新增观测"}</button>;
+  const action = <PageLogAction label={selected?(english?"Record Tracker":"新增记录"):(english?"New Tracker":"新增观测")} className="button primary" disabled={!ready || working || Boolean(selected&&!canEditTrackerRecord(selected)) || Boolean(selected?.status) || Boolean(selected?.payload.archivedAt)} onClick={() => selected ? void recordNow(selected) : setCreate(true)}><Icon name="plus" />{selected ? selected.payload.quickCaptureEnabled ? "立即记录" : "新增记录" : "新增观测"}</PageLogAction>;
   return <main className={selected ? "page tracker-detail-page local-trackers" : "page tracker-page local-trackers"}>
     <LocalBackAction onBack={selectedId?()=>{setSelectedId(null);setQuery("");setChartFilter(null);}:undefined}/>
-    <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={readOnly ? <span className="tracker-archived-label">只读验收</span> : selected?.payload.archivedAt ? <span className="tracker-archived-label">已归档</span> : action} />
-    <DevelopmentDetails>
-    <div className="local-sync-status" role="status"><span>{readOnly ? (syncing ? "正在读取云端数据 · 上传已停用" : "只读快照 · 原有数据与队列已隔离") : !state.remoteRevision&&!isPreviewAccount(account) ? "本地编辑已开放 · 云端同步尚未就绪" : isPreviewAccount(account) ? "本机预览 · 数据不会上传" : syncing ? "正在同步" : state.outbox.length ? state.outbox.length+" 项待同步 · 已保存在本机" : state.records.some(row=>row.status)?"同步问题待处理 · 本机数据已保留":syncedAt ? "已同步 · 本机可离线使用" : "本机记录"}</span><button className="text-button" disabled={syncing || !ready || isPreviewAccount(account) && !readOnly} onClick={() => void sync()}>{readOnly ? "刷新只读数据" : "同步"}</button></div>
-    {!readOnly&&!state.remoteRevision&&<DevelopmentDetails title={english?"Tracker editing availability":"Tracker 编辑范围"}><p>{english?"New local Trackers can be edited offline. Existing cloud records stay read-only until a complete, versioned sync succeeds. The original queue is never uploaded.":"新建的本地 Tracker 可离线编辑；已有云端记录取得完整同步版本后开放编辑。原队列始终隔离，不会上传。"}</p></DevelopmentDetails>}
-    {inspection && <p className="tracker-settings-help" role="status">{english ? `Original queue (isolated): ${inspection.pending} pending, including ${inspection.frozen} frozen; nothing uploaded. ${inspection.backupFile ? "SQLite backup verified." : "Original queue unchanged."}` : `原队列 ${inspection.pending} 项，其中 ${inspection.frozen} 项已冻结；未上传。${inspection.backupFile ? "SQLite 备份已校验。" : "原有队列保持不变。"}`}</p>}
-    </DevelopmentDetails>
+    <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={<span className="page-actions"><TrackerSyncButton account={account} platform={platform} onEditConflict={row=>{const parent=trackers.find(tracker=>belongs(row,tracker));if(!parent){setError("所属 Tracker 已删除，可先导出本地内容");return;}setSelectedId(parent.id);setEditing(row);setCapture(true);}}/>{readOnly?null:selected?.payload.archivedAt?<span className="tracker-archived-label">已归档</span>:action}</span>} />
     {error && <ErrorNotice>{error}</ErrorNotice>}
-    {issues.length > 0 && <section className="local-sync-issues" aria-label="同步问题">{issues.map(row => <article key={row.id}>
-      <strong>{String(row.payload.name ?? row.payload.note ?? "记录") || "记录"}</strong><p>{row.error}</p>
-      <details><summary>查看保留的本地与远端内容</summary><pre>{JSON.stringify({ local: row.payload, remote: row.remote?.payload ?? null }, null, 2)}</pre></details>
-      <div className="local-issue-actions"><button className="button secondary" disabled={readOnly||working} onClick={() => void perform(() => store.resolve(row.id, "local"))}>保留本地并重试</button>
-        {row.resourceType === "tracker_entry" && <button className="text-button" disabled={readOnly||working} onClick={() => {
-          const parent = trackers.find(tracker => belongs(row, tracker));
-          if (!parent) { setError("所属 Tracker 已删除，可先导出本地内容"); return; }
-          setSelectedId(parent.id); setEditing(row); setCapture(true);
-        }}>编辑本地记录</button>}
-        <button className="text-button" disabled={readOnly||working} onClick={() => setDiscarding(row)}>{row.remote ? "采用远端" : "放弃本地更改"}</button>
-      </div>
-    </article>)}</section>}
-
     {!ready ? <p role="status">正在读取本机记录…</p> : readOnly && state.revision === 0 && !state.readOnly && !state.records.length ? <p role="status">尚未缓存真实 Tracker 数据，请联网刷新只读数据。</p> : selected ? <>
       <nav className="tracker-tabs" role="tablist" aria-label="Tracker 视图">{(["timeline","insights","settings"] as const).map((value,index,values) => <button type="button" role="tab" id={"tracker-tab-"+value} aria-controls={"tracker-panel-"+value} aria-selected={tab===value} tabIndex={tab===value?0:-1} className={tab===value?"active":""} onClick={()=>setTab(value)} onKeyDown={event=>{const next=event.key==="ArrowRight"?values[(index+1)%values.length]:event.key==="ArrowLeft"?values[(index+values.length-1)%values.length]:event.key==="Home"?values[0]:event.key==="End"?values.at(-1):undefined;if(next){event.preventDefault();setTab(next);document.getElementById("tracker-tab-"+next)?.focus();}}} key={value}>{{timeline:"时间线",insights:"洞察",settings:"设置"}[value]}</button>)}</nav>
       <div role="tabpanel" id={"tracker-panel-"+tab} aria-labelledby={"tracker-tab-"+tab} tabIndex={0}>
@@ -143,13 +103,10 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
     }} />}
     {capture && selected && <TrackerEntryEditor readOnly={readOnly||!canEditTrackerRecord(selected)} trackerId={selected.serverId ?? 0} fields={fields} entry={editing ? { id:editing.id, occurredAt:String(editing.payload.occurredAt), values:editing.payload.values as Record<string,unknown>, note:String(editing.payload.note??"") } : undefined} onClose={()=>setCapture(false)} onSaved={()=>{showActionToast("已保存到本机");void sync();}} saveRecord={async input=>{
       if(readOnly||!canEditTrackerRecord(selected))throw new Error("请先联网取得 Tracker 同步版本，再编辑已有记录");
-      const parsed=parseNewTrackerEntry(input,selected.serverId??1);
-      const payload={...parsed,trackerId:selected.serverId,trackerLocalId:selected.id,values:validatedTrackerValues(fields,parsed.values,Boolean(selected.payload.quickCaptureEnabled),Boolean(editing))};
-      if(editing?.status)await store.resolve(editing.id,"local",payload);else await store.save("tracker_entry",editing?.id,payload);
+      await saveLocalTrackerEntry(store,selected,input,editing);
     }} />}
     {!readOnly && showBasics && selected && <LocalTrackerBasics tracker={selected} groups={trackers.map(row=>String(row.payload.groupName))} onClose={()=>setShowBasics(false)} onSave={async input=>{const parsed=parseNewTracker(input);await store.save("tracker",selected.id,{name:parsed.name,groupName:parsed.groupName,quickCaptureEnabled:parsed.quickCaptureEnabled});showActionToast("已保存到本机");void sync();}} />}
     {!readOnly && deleting && <FormSheet title="删除记录" onClose={()=>setDeleting(null)} formId="local-delete-record" submitLabel="确认删除" busy={working}><form id="local-delete-record" onSubmit={event=>{event.preventDefault();void perform(async()=>{await store.remove(deleting.id);showActionToast("已从本机删除","deleted");setDeleting(null);});}}><p>删除这条记录及其备注和属性值？联网后会同步删除。</p></form></FormSheet>}
-    {!readOnly && discarding && <FormSheet title="放弃本地更改" onClose={()=>setDiscarding(null)}><p>本地尚未同步的更改会被远端版本替换；远端已删除的记录会从本机移除。可先导出本地记录留存。</p><button className="button danger" disabled={working} onClick={()=>void perform(async()=>{await store.resolve(discarding.id,"remote");setDiscarding(null);})}>确认放弃本地更改</button></FormSheet>}
   </main>;
 }
 

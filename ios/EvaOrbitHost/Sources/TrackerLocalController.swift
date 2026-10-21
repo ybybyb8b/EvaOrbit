@@ -119,13 +119,17 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         if path.range(of: "^/api/ai/providers/[1-9][0-9]*/models$", options: .regularExpression) != nil { return method == "POST" }
         return path.range(of: "^/api/ai/model-configs/[1-9][0-9]*$", options: .regularExpression) != nil && ["PATCH", "DELETE"].contains(method)
     }
+    static func allowsSettingsConfiguration(path: String, method: String) -> Bool {
+        if path == "/api/preferences/life-day" { return ["GET", "PATCH"].contains(method) }
+        return path == "/api/calendar-interpretation" && ["GET", "PUT"].contains(method)
+    }
     // Explicit online settings only; never persists a key or enqueues a request.
-    func aiConfiguration(accountId: String, path: String, method: String, body: Any?) async throws -> Any {
-        guard Self.allowsAIConfiguration(path: path, method: method), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
+    func aiConfiguration(accountId: String, path: String, method: String, body: Any?, settings: Bool = false) async throws -> Any {
+        guard (settings ? Self.allowsSettingsConfiguration(path: path, method: method) : Self.allowsAIConfiguration(path: path, method: method)), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
         try await database.requireAccount(accountId)
         let expectedGeneration = generation
         guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
-        guard identity["aiConfigurationProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe AI settings API must be deployed before saving configuration.") }
+        guard identity[settings ? "settingsConfigurationProtocol" : "aiConfigurationProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe AI settings API must be deployed before saving configuration.") }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         var outgoing = URLRequest(url: baseURL.appendingPathComponent(String(path.dropFirst())))
@@ -138,7 +142,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         let header = HTTPCookie.requestHeaderFields(with: cookies.cookies(for: baseURL) ?? [])
         outgoing.setValue(header["Cookie"], forHTTPHeaderField: "Cookie")
         if let body {
-            guard ["POST", "PATCH"].contains(method), body is [String: Any] else { throw TrackerLocalError.invalid }
+            guard ["POST", "PATCH", "PUT"].contains(method), body is [String: Any] else { throw TrackerLocalError.invalid }
             let encoded = try JSONSerialization.data(withJSONObject: body)
             guard encoded.count <= 32768 else { throw TrackerLocalError.invalid }
             outgoing.httpBody = encoded

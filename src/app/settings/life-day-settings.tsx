@@ -6,11 +6,11 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
 import { ToastNotice } from "@/components/action-toast";
 import Link from "next/link";
-import { PageHeader } from "@/components/page-header";
+import { PageHeading as PageHeader } from "@/components/page-heading";
 import { ArrowLeft2, Clock, Refresh, Save, Sunrise } from "reicon-react";
 import styles from "./life-day-settings.module.css";
 
-export function LifeDaySettings() {
+export function LifeDaySettings({ request = fetch, embedded = false }: { request?: typeof fetch; embedded?: boolean } = {}) {
   const { english } = useLocale();
   const [time, setTime] = useState("");
   const [saved, setSaved] = useState("");
@@ -19,14 +19,14 @@ export function LifeDaySettings() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(() => {
-    return fetch("/api/preferences/life-day", { cache: "no-store" }).then(response => {
+    return request("/api/preferences/life-day", { cache: "no-store" }).then(response => {
       if (!response.ok) throw new Error();
       return response.json();
     }).then(value => {
       setError("");
       setTime(value.fallbackTime); setSaved(value.fallbackTime);
     }).catch(() => setError(english ? "Could not load life-day settings. Please retry." : "读取生活日设置失败，请重试。"));
-  }, [english]);
+  }, [english, request]);
   useEffect(() => { void load(); }, [load]);
 
   async function save(event: FormEvent) {
@@ -34,7 +34,7 @@ export function LifeDaySettings() {
     if (saving || !time) return;
     setSaving(true); setError(""); setNotice("");
     try {
-      const response = await fetch("/api/preferences/life-day", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fallbackTime: time }) });
+      const response = await request("/api/preferences/life-day", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fallbackTime: time }) });
       if (!response.ok) throw new Error();
       const value = await response.json();
       setTime(value.fallbackTime); setSaved(value.fallbackTime);
@@ -44,7 +44,7 @@ export function LifeDaySettings() {
   }
 
   return <div className="page settings-detail-page">
-    <PageHeader eyebrow="" title={<span className={styles.iconLabel}><Sunrise size={32} weight="Outline" aria-hidden="true" />{english ? "Life day" : "生活日"}</span>} action={<Link className={`settings-back-link ${styles.iconLabel}`} href="/settings"><ArrowLeft2 size={16} weight="Outline" aria-hidden="true" />{english ? "All settings" : "全部设置"}</Link>} />
+    <PageHeader eyebrow="" title={<span className={styles.iconLabel}><Sunrise size={32} weight="Outline" aria-hidden="true" />{english ? "Life day" : "生活日"}</span>} action={embedded ? undefined : <Link className={`settings-back-link ${styles.iconLabel}`} href="/settings"><ArrowLeft2 size={16} weight="Outline" aria-hidden="true" />{english ? "All settings" : "全部设置"}</Link>} />
     <section className="provider-card appearance-theme-settings" aria-labelledby="life-day-heading">
     <div className="persona-heading"><h2 id="life-day-heading">{english ? "Day boundary" : "切换规则"}</h2></div>
     <p id="life-day-help">{english ? "Recurring tasks follow your main sleep and wake time. When sleep is unavailable, the day changes at the time below. Changes apply to future completions; recorded history stays unchanged." : "循环任务优先按主睡眠的醒来时间切换生活日；没有睡眠记录时，使用下方时间。修改后用于后续完成计算，已记录的历史保持不变。"}</p>

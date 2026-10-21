@@ -41,8 +41,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
-    static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal"]
+    static let trackerMethods: Set<String> = ["trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
+    static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal", "healthkit.getStatus", "eventkit.getStatus", "notification.getStatus", "notification.openSettings"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager: NotificationManager
@@ -423,9 +423,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case "food.readOnlyResource":
                     guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, let key = parameters["key"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.foodReadOnlyResource(accountId: account, kind: kind, key: key, refresh: refresh)
-                case "settings.aiConfiguration":
+                case "settings.aiConfiguration", "settings.configuration":
                     guard let account = parameters["accountId"] as? String, let path = parameters["path"] as? String, let method = parameters["method"] as? String else { throw TrackerLocalError.invalid }
-                    result = try await controller.aiConfiguration(accountId: account, path: path, method: method, body: parameters["body"])
+                    result = try await controller.aiConfiguration(accountId: account, path: path, method: method, body: parameters["body"], settings: method == "settings.configuration")
                 case "workspaces.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, ["tasks", "projects", "lucius"].contains(kind), let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.workspaceReadOnlySnapshot(accountId: account, kind: kind, refresh: refresh)

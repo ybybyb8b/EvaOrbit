@@ -5,7 +5,7 @@ import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useCallback, useEffect, useState } from "react";
-import { getNativeHostInfo, healthKitSupported, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
+import { getNativeHostInfo, healthKitSupported, hostSupports, nativeCall, type HealthKitStatus } from "@/lib/native-bridge";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { flushPendingMenstrualFlowToHealthKit } from "@/lib/healthkit-menstrual-flow";
 
@@ -16,7 +16,7 @@ function formatTime(value: string | null) {
 }
 
 
-export function AppleHealthSection() {
+export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } = {}) {
  const copyScope=useUiCopyScope<HTMLElement>();
   const [nativeHost, setNativeHost] = useState(false);
   const [status, setStatus] = useState<HealthKitStatus | null>(null);
@@ -26,11 +26,11 @@ export function AppleHealthSection() {
 
   const refresh = useCallback(async () => {
     const info = await getNativeHostInfo();
-    if (!healthKitSupported(info)) { setNativeHost(false); setStatus(null); return; }
+    if (!(readOnly ? hostSupports(info, "healthkit.getStatus") : healthKitSupported(info))) { setNativeHost(false); setStatus(null); return; }
     setNativeHost(true); setError("");
     try { setStatus(await nativeCall<HealthKitStatus>("healthkit.getStatus")); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not read Apple Health status"); }
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refresh(), 0);
@@ -43,7 +43,7 @@ export function AppleHealthSection() {
   }, [refresh]);
 
   async function connect() {
-    if (!status) return;
+    if (!status || readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
       const registrationResponse = await fetch("/api/native/devices", {
@@ -70,6 +70,7 @@ export function AppleHealthSection() {
   }
 
   async function syncNow() {
+    if (readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
       const pending = await flushPendingMenstrualFlowToHealthKit();
@@ -84,7 +85,7 @@ export function AppleHealthSection() {
   }
 
   async function disconnect() {
-    if (!status) return;
+    if (!status || readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
       const response = await fetch("/api/native/devices", {
@@ -121,11 +122,11 @@ export function AppleHealthSection() {
       {status.lastError && <p className="apple-health-error">Last error: {status.lastError}</p>}
       {error && <ErrorNotice>{error}</ErrorNotice>}
       {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
-      <div className="apple-health-actions">
+      {!readOnly && <div className="apple-health-actions">
         {status.available && (!status.authorizationRequested || !status.credentialConfigured) && <button className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? "Connecting…" : status.credentialConfigured ? "Update Health Access" : "Connect / Request Access"}</button>}
         {status.available && status.authorizationRequested && <button className="button secondary" disabled={busy} onClick={() => void syncNow()}>{busy ? "Syncing…" : "Sync Now"}</button>}
         {status.credentialConfigured && <button className="text-button" disabled={busy} onClick={() => void disconnect()}>Revoke native upload</button>}
-      </div>
+      </div>}
       <p className="apple-health-privacy-note">HealthKit does not reveal whether read access was granted per metric. “Data read” changes only after EvaOrbit successfully receives samples.</p>
     </>}
   </section>;

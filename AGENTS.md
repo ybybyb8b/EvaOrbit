@@ -55,7 +55,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Validation
 
-- Run validation proportional to the change. Normal feature development defaults to lint, typecheck, tests, production build, and `git diff --check`.
+- Run validation proportional to the change; do not default to running the full test suite for every edit.
+- Documentation-only changes need a diff review and `git diff --check`; no application tests or builds are required.
+- Style, copy, and animation changes need relevant page/component checks and the applicable build or native tests, rather than unrelated module tests.
+- Single-module changes need that module's tests and regression checks for affected shared-component callers. Run lint, typecheck, and builds as relevant to the changed files.
+- Sync, authentication, shared data-layer changes, and formal releases need one final full regression run after the changes are ready.
+- Once checks pass, rerun only checks affected by subsequent edits. Repeat the full suite only when new changes, failures, or unresolved cross-module risks justify it; explain the reason before doing so.
 - Report any skipped or failed check and its reason; never report an unrun check as passing.
 - For database migrations, verify safe application to the existing schema, avoid duplicate objects and data loss, and only claim real-environment completion after a required migration has actually been applied.
 

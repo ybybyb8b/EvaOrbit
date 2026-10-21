@@ -1,17 +1,24 @@
 import UIKit
 
 final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
+    enum LaunchStyle: Equatable { case web, local }
+
     enum Timing {
         static let introDuration: TimeInterval = 2.0
         static let reducedMotionIntroDuration: TimeInterval = 1.65
         static let wordmarkDelay: TimeInterval = 1.35
         static let wordmarkDuration: TimeInterval = 0.60
         static let exitDuration: TimeInterval = 0.20
+        static let localIntroDuration: TimeInterval = 0.28
+        static let localReducedMotionIntroDuration: TimeInterval = 0.10
+        static let localExitDuration: TimeInterval = 0.16
+        static let localReducedMotionExitDuration: TimeInterval = 0.10
     }
 
     var onRetry: (() -> Void)?
 
     private let palette: LoadingThemePalette
+    private let launchStyle: LaunchStyle
     private let artworkView: OrbitArtworkView
     private let failureArtworkView: OrbitArtworkView
     private let wordmarkLabel = UILabel()
@@ -22,8 +29,9 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
     private let retryButton = UIButton(type: .system)
     private var animationGeneration = 0
 
-    init(palette: LoadingThemePalette = .current()) {
+    init(palette: LoadingThemePalette = .current(), launchStyle: LaunchStyle = .web) {
         self.palette = palette
+        self.launchStyle = launchStyle
         artworkView = OrbitArtworkView(palette: palette)
         failureArtworkView = OrbitArtworkView(palette: palette)
         super.init(frame: .zero)
@@ -51,6 +59,10 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         brandContainer.isHidden = false
         brandContainer.alpha = 1
         brandContainer.transform = .identity
+        if launchStyle == .local {
+            playLocalIntro(generation: generation, completion: completion)
+            return
+        }
         artworkView.prepareForIntro()
         wordmarkLabel.alpha = 0
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
@@ -73,7 +85,30 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
     }
 
     func beginQuietLoop() {
+        if launchStyle == .local { artworkView.showCompleteArtwork(); return }
         artworkView.beginQuietLoop(reduceMotion: UIAccessibility.isReduceMotionEnabled)
+    }
+
+    private func playLocalIntro(generation: Int, completion: @escaping () -> Void) {
+        artworkView.showCompleteArtwork()
+        wordmarkLabel.alpha = 1
+        wordmarkLabel.transform = .identity
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        brandContainer.alpha = 0
+        brandContainer.transform = reduceMotion ? .identity : CGAffineTransform(scaleX: 0.97, y: 0.97)
+        UIView.animate(
+            withDuration: reduceMotion ? Timing.localReducedMotionIntroDuration : Timing.localIntroDuration,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState],
+            animations: {
+                self.brandContainer.alpha = 1
+                self.brandContainer.transform = .identity
+            },
+            completion: { [weak self] _ in
+                guard let self, self.animationGeneration == generation else { return }
+                completion()
+            }
+        )
     }
 
     func showRecoveryLoading() {
@@ -85,7 +120,7 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         brandContainer.transform = .identity
         wordmarkLabel.alpha = 1
         wordmarkLabel.transform = .identity
-        artworkView.beginQuietLoop(reduceMotion: UIAccessibility.isReduceMotionEnabled)
+        beginQuietLoop()
         UIAccessibility.post(notification: .announcement, argument: "EvaOrbit is loading")
     }
 
@@ -122,12 +157,12 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         artworkView.stopAnimations(preservingVisibleState: true)
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
         UIView.animate(
-            withDuration: Timing.exitDuration,
+            withDuration: launchStyle == .local ? (reduceMotion ? Timing.localReducedMotionExitDuration : Timing.localExitDuration) : Timing.exitDuration,
             delay: 0,
             options: [.curveEaseOut, .beginFromCurrentState],
             animations: {
                 self.alpha = 0
-                self.transform = reduceMotion ? .identity : CGAffineTransform(scaleX: 0.985, y: 0.985)
+                self.transform = reduceMotion || self.launchStyle == .local ? .identity : CGAffineTransform(scaleX: 0.985, y: 0.985)
             },
             completion: { _ in
                 guard self.animationGeneration == generation else { return }

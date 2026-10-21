@@ -20,6 +20,17 @@
 .local-sync-issues details { margin-bottom:16px; }
 .local-issue-actions { display:flex; flex-wrap:wrap; gap:12px; }
 .local-entry-status { display:block; color:var(--text-secondary); font-size:11px; margin-top:8px; }
+.tracker-sync-button { position:relative; flex-shrink:0; color:var(--text-secondary); }
+.tracker-sync-button[data-status="current"] { color:var(--accent-primary); }
+.tracker-sync-mark { position:absolute; top:5px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--accent-primary); }
+.tracker-sync-button[data-status="attention"] .tracker-sync-mark { width:15px; height:15px; display:grid; place-items:center; top:1px; right:1px; background:var(--surface-warm); color:var(--text-primary); font:600 11px/1 sans-serif; }
+.tracker-sync-settings { display:grid; gap:20px; min-width:0; }
+.tracker-sync-settings .section-heading { margin:0; flex-wrap:wrap; gap:12px; }
+.tracker-sync-settings .settings-summary { margin:0; }
+.tracker-sync-settings .settings-summary strong { overflow-wrap:anywhere; }
+.tracker-sync-settings pre { max-width:100%; }
+.tracker-sync-settings .local-sync-issues { margin:0; }
+.tracker-sync-confirm { margin-top:16px; }
 @media (max-width:600px) {
   .local-trackers .page-header { align-items:start; gap:12px; }
   .local-trackers .page-header > button { flex-shrink:0; }
@@ -27,3 +38,4 @@
 }
 
 @media(max-width:720px){.local-signed-in .main-content{padding-top:calc(max(14px,env(safe-area-inset-top)) + 54px);}}
+.local-settings-account { padding-top:0; }

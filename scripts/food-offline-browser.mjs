@@ -38,7 +38,7 @@ let context,packagedServer,offline=false,wrongAccount=false;
 async function open(){
   context=await chromium.launchPersistentContext(profile,{channel:"chrome",headless:true,viewport:{width:402,height:874},isMobile:true,hasTouch:true});
   context.setDefaultTimeout(12000);
-  await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
+  await context.addInitScript(()=>{localStorage.setItem("evaorbit.trackerMode","readonly");localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
   await context.route("**/eo-api/**",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(request.method()!=="GET"){writes.push(url.pathname);return route.fulfill({status:403,body:'{"error":"Forbidden"}'});}
@@ -62,10 +62,10 @@ async function dismissErrors(page){for(const button of await page.getByRole("but
 async function closeSheet(page){await page.locator(".form-sheet-header button").click();const discard=page.getByRole("button",{name:"Discard and close",exact:true});if(await discard.isVisible())await discard.click();await page.locator(".form-sheet-layer").waitFor({state:"detached"});}
 try{
   await server.listen();console.log(`Temporary Vite listener: ${server.httpServer.address().port}, PID ${process.pid}`);let page=await open();
-  await page.evaluate(async({account,old})=>{
+  await page.evaluate(async({account,old,tracker,field,snapshot})=>{
     const db=await new Promise((resolve,reject)=>{const r=indexedDB.open("eo-tracker-local-v1",1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-    await new Promise((resolve,reject)=>{const tx=db.transaction(["states","session"],"readwrite");tx.objectStore("session").put({accountId:account,email:"test@example.invalid"},"current");tx.objectStore("states").put(old,account);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();
-  },{account,old});
+    await new Promise((resolve,reject)=>{const tx=db.transaction(["states","session"],"readwrite");tx.objectStore("session").put({accountId:account,email:"test@example.invalid"},"current");tx.objectStore("states").put(old,account);tx.objectStore("states").put({format:"eo-trackers-readonly-v1",accountId:account,capturedAt:snapshot.capturedAt,details:[{tracker,fields:[field],entries:[],goals:[],reminders:[],stats:{total:0}}]},"readonly:"+account);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();
+  },{account,old,tracker,field,snapshot});
   await page.reload({waitUntil:"networkidle"});
   await dismissErrors(page);await navigateLocal(page,"Food & Drink");
   await page.getByRole("heading",{name:"Food & Drink",exact:true}).waitFor();
@@ -120,7 +120,7 @@ try{
   await page.setViewportSize({width:402,height:874});
   await page.getByRole("button",{name:"Quick Log",exact:true}).click();
   await page.locator(".home-quick-log-grid").getByRole("button",{name:"Tracker",exact:true}).click();
-  await page.getByRole("button",{name:"Offline Tracker form",exact:true}).click();
+  await page.getByRole("button",{name:/Offline Tracker form/}).click();
   await page.locator("#tracker-entry-form").waitFor();
   assert(await page.locator('button[form="tracker-entry-form"]').isDisabled());
   await page.locator("#tracker-entry-form").evaluate(form=>form.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));

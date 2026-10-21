@@ -1,3 +1,4 @@
+import {allowsSettingsConfiguration} from "../lib/settings-configuration-request";
 import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../lib/tracker-replica";
 import {allowsAiConfiguration} from "../lib/ai-configuration-request";
 import {workspaceKinds,validateWorkspaceSnapshot,type WorkspaceKind,type WorkspaceReadonlySnapshot} from "../lib/workspace-readonly";
@@ -22,6 +23,7 @@ import {foodResourceKey,validateFoodResource,type FoodReadonlyResource,type Food
 
 export type LocalAccount = { accountId: string; email: string };
 export type TrackerPlatform = {
+  settingsConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   aiConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,refresh?:boolean):Promise<WorkspaceReadonlySnapshot|null>;
   mediaSnapshot(account:LocalAccount,refresh?:boolean):Promise<MediaReadonlySnapshot|null>;
@@ -418,6 +420,7 @@ export function trackerPlatform({editableTrackers=false,editingPaused=false}:{ed
   let editable=editableTrackers&&!native;
   if (native) return {
     native,
+    settingsConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init,true),
     aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
     inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
@@ -444,6 +447,7 @@ export function trackerPlatform({editableTrackers=false,editingPaused=false}:{ed
   };
   return {
     native,
+    settingsConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init,true),
     aiConfiguration:(account,path,init)=>aiConfiguration(account,path,native,init),    foodSnapshot:(account,refresh=false)=>foodSnapshot(account,native,refresh),
     catsSnapshot:(account,refresh=false)=>catsSnapshot(account,native,refresh),
     inboxSnapshot:(account,refresh=false)=>inboxSnapshot(account,native,refresh),
@@ -556,24 +560,24 @@ async function workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,native:
 }
 
 // Online only. No cache, durable draft, outbox, retry, or background request.
-async function aiConfiguration(account:LocalAccount,path:string,native:boolean,init:RequestInit={}):Promise<Response>{
+async function aiConfiguration(account:LocalAccount,path:string,native:boolean,init:RequestInit={},settings=false):Promise<Response>{
   const method=(init.method??"GET").toUpperCase();
-  if(!allowsAiConfiguration(path,method))throw new Error("Unsupported AI configuration request");
-  if(!navigator.onLine)throw new Error("AI settings require an internet connection. Nothing was queued.");
+  if(!(settings?allowsSettingsConfiguration(path,method):allowsAiConfiguration(path,method)))throw new Error(settings?"Unsupported settings configuration request":"Unsupported AI configuration request");
+  if(!navigator.onLine)throw new Error(settings?"Settings require an internet connection. Nothing was queued.":"AI settings require an internet connection. Nothing was queued.");
   const body=init.body;
   if(body!==undefined&&(typeof body!=="string"||new TextEncoder().encode(body).length>32768))throw new Error("Invalid AI configuration body");
   if((method==="GET"||method==="DELETE")&&body!==undefined)throw new Error("Unexpected AI configuration body");
   if(native){
     const info=await nativeCall<{methods?:string[]}>("host.getInfo");
-    if(!info.methods?.includes("settings.aiConfiguration"))throw new Error("Install the new development Host to manage AI settings.");
-    const result=await nativeCall<{status:number;body:unknown}>("settings.aiConfiguration",{accountId:account.accountId,path,method,...(body===undefined?{}:{body:JSON.parse(body as string)})});
+    if(!info.methods?.includes(settings?"settings.configuration":"settings.aiConfiguration"))throw new Error(settings?"Install the new development Host to manage settings.":"Install the new development Host to manage AI settings.");
+    const result=await nativeCall<{status:number;body:unknown}>(settings?"settings.configuration":"settings.aiConfiguration",{accountId:account.accountId,path,method,...(body===undefined?{}:{body:JSON.parse(body as string)})});
     return new Response(result.status===204?null:JSON.stringify(result.body),{status:result.status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
   }
-  if(isPreviewAccount(account)||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Connect a real account to manage AI settings");
-  const identity=await api<{authenticated:boolean;accountId:string;aiConfigurationProtocol?:number}>("session","GET");
-  if(!identity.authenticated||identity.accountId!==account.accountId||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("AI configuration account changed");
-  if(identity.aiConfigurationProtocol!==1)throw new Error("The account-safe AI settings API must be deployed before saving configuration.");
-  const response=await fetch(`/eo-api/ai-config/${path.slice("/api/ai/".length)}`,{method,body,credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","X-EvaOrbit-Account":account.accountId},signal:AbortSignal.timeout(20000),redirect:"error"});
+  if(isPreviewAccount(account)||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error(settings?"Connect a real account to manage settings":"Connect a real account to manage AI settings");
+  const identity=await api<{authenticated:boolean;accountId:string;aiConfigurationProtocol?:number;settingsConfigurationProtocol?:number}>("session","GET");
+  if(!identity.authenticated||identity.accountId!==account.accountId||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error(settings?"Settings account changed":"AI configuration account changed");
+  if((settings?identity.settingsConfigurationProtocol:identity.aiConfigurationProtocol)!==1)throw new Error(settings?"The account-safe settings API must be deployed before saving configuration.":"The account-safe AI settings API must be deployed before saving configuration.");
+  const response=await fetch(settings?`/eo-api/settings-config/${path.slice("/api/".length)}`:`/eo-api/ai-config/${path.slice("/api/ai/".length)}`,{method,body,credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","X-EvaOrbit-Account":account.accountId},signal:AbortSignal.timeout(20000),redirect:"error"});
   if((await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("AI configuration account changed; check the cloud state before retrying");
   return response;
 }

@@ -3,13 +3,13 @@
 import { ErrorNotice } from "@/components/error-notice";
 import { useCallback, useEffect, useState } from "react";
 import { ToastNotice } from "@/components/action-toast";
-import { getNativeHostInfo, nativeCall, nativeNotificationsSupported, reconcileNativeNotifications, type NativeNotificationStatus } from "@/lib/native-bridge";
+import { getNativeHostInfo, hostSupports, nativeCall, nativeNotificationsSupported, reconcileNativeNotifications, type NativeNotificationStatus } from "@/lib/native-bridge";
 
 const permissionLabel = { not_determined: "Not determined", denied: "Denied", authorized: "Authorized", provisional: "Provisional", ephemeral: "Ephemeral" } as const;
 const settingLabel = { enabled: "Enabled", disabled: "Disabled", not_supported: "Not supported" } as const;
 const authorizedPermissions = new Set<NativeNotificationStatus["permission"]>(["authorized", "provisional", "ephemeral"]);
 
-export function NativeNotificationControl() {
+export function NativeNotificationControl({ readOnly = false }: { readOnly?: boolean } = {}) {
   const [hostAvailable, setHostAvailable] = useState(false);
   const [checked, setChecked] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -22,13 +22,13 @@ export function NativeNotificationControl() {
     setError("");
     const info = await getNativeHostInfo();
     setHostAvailable(Boolean(info));
-    const available = nativeNotificationsSupported(info);
+    const available = readOnly ? hostSupports(info, "notification.getStatus") : nativeNotificationsSupported(info);
     setSupported(available);
     if (!available) { setStatus(null); setChecked(true); return; }
     try { setStatus(await nativeCall<NativeNotificationStatus>("notification.getStatus")); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not read native notification status"); }
     finally { setChecked(true); }
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refresh(), 0);
@@ -38,6 +38,7 @@ export function NativeNotificationControl() {
   }, [refresh]);
 
   async function authorize() {
+    if (readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
       setStatus(await nativeCall<NativeNotificationStatus>("notification.requestAuthorization"));
@@ -49,6 +50,7 @@ export function NativeNotificationControl() {
   }
 
   async function refreshAndReconcile() {
+    if (readOnly) { await refresh(); return; }
     setBusy(true); setError(""); setMessage("");
     try {
       const result = await reconcileNativeNotifications();
@@ -66,6 +68,7 @@ export function NativeNotificationControl() {
   }
 
   async function test() {
+    if (readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
       await nativeCall("notification.schedule", { id: `evaorbit-test-${Date.now()}`, title: "EvaOrbit", body: "Native local notifications are ready.", triggerAt: new Date(Date.now() + 5_000).toISOString() });
@@ -80,7 +83,7 @@ export function NativeNotificationControl() {
   const deliverySettingDisabled = status?.alertSetting === "disabled" || status?.soundSetting === "disabled";
   return <section className="notification-channel native-channel" aria-labelledby="native-notification-title">
     <div className="notification-channel-heading"><div><span className="eyebrow">NATIVE NOTIFICATIONS</span><h2 id="native-notification-title">On this iPhone</h2><p>Local reminders scheduled by the installed EvaOrbit Native Host. No APNs remote push is required.</p></div><span className={`status-pill ${supported ? "" : "disabled"}`}>{supported ? "Available" : hostAvailable ? "Update required" : "Not installed"}</span></div>
-    {supported && status ? <><div className="notification-channel-status"><div><span>Permission</span><strong>{permissionLabel[status.permission]}</strong></div><div><span>Alerts</span><strong>{status.alertSetting ? settingLabel[status.alertSetting] : "Unknown"}</strong></div><div><span>Sounds</span><strong>{status.soundSetting ? settingLabel[status.soundSetting] : "Unknown"}</strong></div><div><span>Scheduled</span><strong>{status.scheduledCount ?? 0}</strong></div></div><div className="notification-channel-actions">{status.permission === "not_determined" && <button className="button primary" disabled={busy} onClick={() => void authorize()}>{busy ? "Working…" : "Request Access"}</button>}{(status.permission === "denied" || deliverySettingDisabled) && <button className="button primary" disabled={busy} onClick={() => void openSettings()}>Open iOS Settings</button>}<button className="button secondary" disabled={busy} onClick={() => void refreshAndReconcile()}>Refresh status</button><button className="button secondary" disabled={busy || !authorized} onClick={() => void test()}>Test notification</button></div>{status.permission === "denied" && <p className="channel-note">Permission is denied. EvaOrbit will not request it repeatedly; enable Notifications in iOS Settings if you want local delivery.</p>}{authorized && deliverySettingDisabled && <p className="channel-note">iOS has disabled alerts or sounds for EvaOrbit. Enable them in iOS Settings to receive the complete notification.</p>}{authorized && status.scheduledCount === 0 && <p className="channel-note">No future reminders with an explicit time are scheduled on this iPhone. Refresh while EvaOrbit is online after adding or editing a reminder.</p>}</> : <p className="channel-note">This installed IPA does not expose the Native Notification bridge yet. Web Notifications remain available below.</p>}
+    {supported && status ? <><div className="notification-channel-status"><div><span>Permission</span><strong>{permissionLabel[status.permission]}</strong></div><div><span>Alerts</span><strong>{status.alertSetting ? settingLabel[status.alertSetting] : "Unknown"}</strong></div><div><span>Sounds</span><strong>{status.soundSetting ? settingLabel[status.soundSetting] : "Unknown"}</strong></div><div><span>Scheduled</span><strong>{status.scheduledCount ?? 0}</strong></div></div><div className="notification-channel-actions">{!readOnly && status.permission === "not_determined" && <button className="button primary" disabled={busy} onClick={() => void authorize()}>{busy ? "Working…" : "Request Access"}</button>}{(status.permission === "denied" || deliverySettingDisabled) && <button className="button primary" disabled={busy} onClick={() => void openSettings()}>Open iOS Settings</button>}<button className="button secondary" disabled={busy} onClick={() => void refreshAndReconcile()}>Refresh status</button><button className="button secondary" disabled={readOnly || busy || !authorized} onClick={() => void test()}>Test notification</button></div>{status.permission === "denied" && <p className="channel-note">Permission is denied. EvaOrbit will not request it repeatedly; enable Notifications in iOS Settings if you want local delivery.</p>}{authorized && deliverySettingDisabled && <p className="channel-note">iOS has disabled alerts or sounds for EvaOrbit. Enable them in iOS Settings to receive the complete notification.</p>}{authorized && status.scheduledCount === 0 && <p className="channel-note">No future reminders with an explicit time are scheduled on this iPhone. Refresh while EvaOrbit is online after adding or editing a reminder.</p>}</> : <p className="channel-note">This installed IPA does not expose the Native Notification bridge yet. Web Notifications remain available below.</p>}
     {error && <ErrorNotice>{error}</ErrorNotice>}{message && <ToastNotice message={message} onShown={() => setMessage("")} />}
   </section>;
 }

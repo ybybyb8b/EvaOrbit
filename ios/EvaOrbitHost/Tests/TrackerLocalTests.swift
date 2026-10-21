@@ -602,6 +602,18 @@ final class TrackerLocalTests: XCTestCase {
         XCTAssertTrue(NativeBridge.trackerMethods.contains("settings.aiConfiguration"))
     }
 
+    @MainActor func testSettingsConfigurationDoesNotGrantBusinessOrNativeWrites() {
+        let rules: [(String, Set<String>)] = [("/api/preferences/life-day", ["GET", "PATCH"]), ("/api/calendar-interpretation", ["GET", "PUT"])]
+        for (path, methods) in rules {
+            for method in ["GET", "POST", "PUT", "PATCH", "DELETE"] { XCTAssertEqual(TrackerLocalController.allowsSettingsConfiguration(path: path, method: method), methods.contains(method)) }
+            for suffix in ["/", "?account=other", "#fragment", "/../ai/providers"] { XCTAssertFalse(TrackerLocalController.allowsSettingsConfiguration(path: path + suffix, method: "GET")) }
+        }
+        for path in ["https://evil.invalid/api/preferences/life-day", "/api/notifications", "/api/native/sync", "/api/ai/providers", "/api/calendar"] { XCTAssertFalse(TrackerLocalController.allowsSettingsConfiguration(path: path, method: "GET")) }
+        XCTAssertTrue(NativeBridge.trackerMethods.contains("settings.configuration"))
+        for method in ["healthkit.getStatus", "eventkit.getStatus", "notification.getStatus", "notification.openSettings"] { XCTAssertTrue(NativeBridge.localCoreMethods.contains(method)) }
+        for method in ["healthkit.configureCredential", "healthkit.syncNow", "eventkit.save", "eventkit.delete", "notification.schedule", "notification.cancel", "notification.requestAuthorization"] { XCTAssertFalse(NativeBridge.localCoreMethods.contains(method)) }
+    }
+
     func testLocalAssetsAreConfinedToBundleAndProductionDoesNotTrustLocalOrigin() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("TrackerWeb")
         let handler = TrackerAssetHandler(root: root)

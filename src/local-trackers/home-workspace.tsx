@@ -1,3 +1,4 @@
+import {BottomLogScope} from "@/components/bottom-log-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HomeCalendarTimeline, type HomeTimelineProps, type HomeLinkProps } from "@/components/home-calendar-timeline";
 import { HomePageView } from "@/components/home-page-view";
@@ -77,6 +78,6 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
     </DevelopmentDetails>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
     </div>
-    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language} due={initial.due?<DueRemindersView readOnly compact LinkComponent={ReadOnlyHomeLink} items={initial.due.data as DueReminder[]}/>:<p>{english?"Reminder snapshot has not been downloaded.":"尚未下载提醒快照。"}</p>}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly LinkComponent={ReadOnlyHomeLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<PageLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect after the read-only API is available. No empty account data has been inferred.":"只读接口可用后联网下载；当前状态不表示账户没有记录。"}</p></div>}
+    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language} due={initial.due?<DueRemindersView readOnly compact LinkComponent={ReadOnlyHomeLink} items={initial.due.data as DueReminder[]}/>:<p>{english?"Reminder snapshot has not been downloaded.":"尚未下载提醒快照。"}</p>}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly LogScope={BottomLogScope} LinkComponent={ReadOnlyHomeLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<PageLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect after the read-only API is available. No empty account data has been inferred.":"只读接口可用后联网下载；当前状态不表示账户没有记录。"}</p></div>}
   </div>;
 }

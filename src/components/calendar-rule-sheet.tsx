@@ -13,9 +13,13 @@ import { ReiconSymbol } from "./reicon-symbol";
 import { homeDurationLabel } from "@/lib/home-day";
 import type { CalendarEvent } from "@/lib/types";
 
-export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClose, onSaved }: { settings: CalendarInterpretation; rule?: CalendarRule; records: CalendarEvent[]; initialTitle?: string; onClose: () => void; onSaved: (settings: CalendarInterpretation) => void | Promise<void> }) {
-  const { english } = useLocale();
+type CalendarRuleSheetProps = { request?: typeof fetch; settings: CalendarInterpretation; rule?: CalendarRule; records: CalendarEvent[]; initialTitle?: string; onClose: () => void; onSaved: (settings: CalendarInterpretation) => void | Promise<void> };
+export function CalendarRuleSheet(props: CalendarRuleSheetProps) {
   const router = useRouter();
+  return <CalendarRuleSheetContent {...props} onRefresh={() => router.refresh()} />;
+}
+export function CalendarRuleSheetContent({ settings, rule, records, initialTitle, onClose, onSaved, request = fetch, onRefresh }: CalendarRuleSheetProps & { onRefresh?: () => void }) {
+  const { english } = useLocale();
   const [base, setBase] = useState(settings), [prefix, setPrefix] = useState(rule?.prefix ?? suggestedCalendarPrefix(initialTitle ?? ""));
   const [categoryId, setCategoryId] = useState(rule?.categoryId ?? "phone"), [newName, setNewName] = useState("");
   const [enabled, setEnabled] = useState(rule?.enabled ?? true), [include, setInclude] = useState(rule?.includeInSummary ?? true);
@@ -42,10 +46,10 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
       });
       const updated: CalendarRule = { id: rule?.id ?? crypto.randomUUID(), prefix: prefix.trim(), categoryId: nextCategoryId, enabled, includeInSummary: categories.find(item => item.id === nextCategoryId)?.kind !== "sleep" && include, ...(mealType ? { mealType } : {}) };
       const next = parseCalendarInterpretation({ ...base, categories, rules: rule ? base.rules.map(item => item.id === rule.id ? updated : item) : [...base.rules, updated] });
-      const response = await fetch("/api/calendar-interpretation", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+      const response = await request("/api/calendar-interpretation", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
       const result = await response.json();
       if (!response.ok) { setConflict(response.status === 409); throw new Error(result.error || (english ? "Could not save rules" : "无法保存规则")); }
-      await onSaved(result as CalendarInterpretation); router.refresh(); onClose();
+      await onSaved(result as CalendarInterpretation); onRefresh?.(); onClose();
     } catch (reason) { setError(reason instanceof Error ? reason.message : english ? "Could not save rules" : "无法保存规则"); }
     finally { setBusy(false); }
   }
@@ -53,7 +57,7 @@ export function CalendarRuleSheet({ settings, rule, records, initialTitle, onClo
   async function reloadRules() {
     setBusy(true);
     try {
-      const response = await fetch("/api/calendar-interpretation", { cache: "no-store" });
+      const response = await request("/api/calendar-interpretation", { cache: "no-store" });
       if (!response.ok) throw new Error(english ? "Could not reload rules" : "无法重新读取规则");
       const result = await response.json();
       if (rule && !result.settings.rules.some((item: CalendarRule) => item.id === rule.id)) throw new Error(english ? "This rule no longer exists. Close and reopen the editor." : "这条规则已不存在，请关闭后重新打开。");

@@ -18,7 +18,7 @@ final class WebViewController: UIViewController {
         hostConfiguration = configuration
         bridge = nativeBridge
         palette = themePalette
-        loadingOverlay = LoadingOverlayView(palette: themePalette)
+        loadingOverlay = LoadingOverlayView(palette: themePalette, launchStyle: configuration.localTrackers ? .local : .web)
 
         let userContentController = WKUserContentController()
         userContentController.addUserScript(WKUserScript(
@@ -50,7 +50,7 @@ final class WebViewController: UIViewController {
         healthKitCoordinator.onReadDataUploaded = { [weak self] in
             self?.notifyDataChanged(domains: ["health"], source: "healthkit")
         }
-        loadingCoordinator = LoadingExperienceCoordinator(presenter: loadingOverlay)
+        loadingCoordinator = LoadingExperienceCoordinator(presenter: loadingOverlay, waitsForIntro: configuration.localTrackers)
         loadingOverlay.onRetry = { [weak self] in self?.retryFromFailure() }
     }
 

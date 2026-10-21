@@ -1,9 +1,9 @@
 "use client";
 import { PageLoading } from "@/components/page-loading";
 
-import { useEffect, useId, useState } from "react";
+import { useContext, useEffect, useId, useState } from "react";
 import { useLocale } from "./locale-controller";
-import { ReiconSymbol } from "./reicon-symbol";
+import { ReiconAssetContext, ReiconSymbol } from "./reicon-symbol";
 
 const common = ["Iphone", "Tv", "Gamepad", "Book", "Book2", "Pen", "Laptop", "Headphones", "Music", "Coffee", "ForkKnife", "Walk", "Run", "Dumbbell", "Heart", "MoonSleep", "Sun", "Car", "Train", "People"];
 const aliases: Record<string, string> = { Iphone: "手机 phone", Tv: "电视电影 screen movie", Gamepad: "游戏 gaming", Book: "阅读读书 reading", Book2: "阅读读书 reading", Pen: "写作日记 writing", Laptop: "电脑工作 computer work", Headphones: "耳机音乐 music", Coffee: "咖啡", ForkKnife: "吃饭用餐 food", Walk: "散步运动", Run: "跑步运动", Dumbbell: "健身运动 gym", Heart: "爱心", MoonSleep: "睡眠 sleep", Sun: "太阳", Car: "开车汽车", Train: "火车", People: "社交朋友 social" };
@@ -11,10 +11,11 @@ const pageSize = 40;
 
 export function ReiconPicker({ value, onChange, disabled = false }: { value: string | null; onChange: (value: string | null) => void; disabled?: boolean }) {
   const { english } = useLocale();
+  const assets = useContext(ReiconAssetContext);
   const [open, setOpen] = useState(false), [names, setNames] = useState<string[] | null>(null), [query, setQuery] = useState(""), [page, setPage] = useState(0), [error, setError] = useState(false), [retry, setRetry] = useState(0);
   const panelId = useId(), searchId = useId();
   useEffect(() => {
-    if (!open || names) return;
+    if (!open || names || assets) return;
     const controller = new AbortController();
     fetch("/api/reicon", { signal: controller.signal }).then(async response => {
       if (!response.ok) throw new Error("Could not load icons");
@@ -23,9 +24,11 @@ export function ReiconPicker({ value, onChange, disabled = false }: { value: str
       setNames(result.names); setError(false);
     }).catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
-  }, [open, names, retry]);
+  }, [open, names, retry, assets]);
+  const localNames = assets ? Object.keys(assets) : null;
+  const catalog = localNames?.length ? localNames : assets ? null : names;
   const normalized = query.trim().toLowerCase().replace(/\s/g, "");
-  const ordered = names ? [...common.filter(name => names.includes(name)), ...names.filter(name => !common.includes(name))] : [];
+  const ordered = catalog ? [...common.filter(name => catalog.includes(name)), ...catalog.filter(name => !common.includes(name))] : [];
   const matches = ordered.filter(name => `${name} ${aliases[name] ?? ""}`.toLowerCase().replace(/\s/g, "").includes(normalized));
   const visible = matches.slice(page * pageSize, (page + 1) * pageSize);
   return <div className="calendar-icon-picker">
@@ -34,9 +37,9 @@ export function ReiconPicker({ value, onChange, disabled = false }: { value: str
     </button>
     {open && <div id={panelId} className="calendar-icon-browser">
       <label className="field" htmlFor={searchId}><span>{english ? "Search Reicon" : "搜索 Reicon"}</span><input id={searchId} type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder={english ? "Phone, book, music…" : "手机、阅读，或英文图标名……"} disabled={disabled} /></label>
-      {!names && !error && <PageLoading title="图标" englishTitle="icons" inline />}
+      {!catalog && !error && <PageLoading title="图标" englishTitle="icons" inline />}
       {error && <p role="alert">{english ? "Could not load icons." : "图标加载失败。"} <button type="button" className="text-button" disabled={disabled} onClick={() => { setError(false); setRetry(retry + 1); }}>{english ? "Retry" : "重试"}</button></p>}
-      {names && <>
+      {catalog && <>
         <div className="calendar-icon-grid" role="group" aria-label={english ? "Reicon icons" : "Reicon 图标"}>
           {visible.map(name => <button key={name} type="button" data-form-change aria-label={name} aria-pressed={value === name} title={name} disabled={disabled} onClick={() => { onChange(name); setOpen(false); }}><ReiconSymbol name={name} size={26} /><span>{name}</span></button>)}
         </div>

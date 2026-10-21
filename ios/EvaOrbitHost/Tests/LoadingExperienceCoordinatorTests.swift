@@ -3,6 +3,58 @@ import XCTest
 
 @MainActor
 final class LoadingExperienceCoordinatorTests: XCTestCase {
+    func testLocalFastLaunchFinishesOnlyTheShortIntroBeforeDismissingOnce() {
+        let presenter = LoadingPresenterSpy()
+        let coordinator = LoadingExperienceCoordinator(presenter: presenter, waitsForIntro: true)
+        coordinator.startColdLaunch()
+        coordinator.webViewDidBecomeReady()
+        coordinator.webViewDidBecomeReady()
+        XCTAssertEqual(coordinator.state, .introPlaying)
+        XCTAssertEqual(presenter.dismissCount, 0)
+        presenter.finishIntro()
+        XCTAssertEqual(coordinator.state, .readyToDismiss)
+        XCTAssertEqual(presenter.dismissCount, 1)
+        XCTAssertEqual(presenter.quietLoopCount, 0)
+        presenter.finishIntro()
+        XCTAssertEqual(presenter.dismissCount, 1)
+        presenter.finishDismissal()
+        XCTAssertEqual(coordinator.state, .dismissed)
+        coordinator.webViewDidBecomeReady()
+        XCTAssertEqual(presenter.introCount, 1)
+    }
+
+    func testLocalSlowLaunchNeverRevealsAnUnreadyPage() {
+        let presenter = LoadingPresenterSpy()
+        let coordinator = LoadingExperienceCoordinator(presenter: presenter, waitsForIntro: true)
+        coordinator.startColdLaunch()
+        presenter.finishIntro()
+        XCTAssertEqual(coordinator.state, .waitingForWebView)
+        XCTAssertEqual(presenter.dismissCount, 0)
+        coordinator.webViewDidBecomeReady()
+        XCTAssertEqual(presenter.dismissCount, 1)
+    }
+
+    func testLocalFailureAndRetryDoNotWaitForOrReplayTheColdIntro() {
+        let presenter = LoadingPresenterSpy()
+        let coordinator = LoadingExperienceCoordinator(presenter: presenter, waitsForIntro: true)
+        coordinator.startColdLaunch()
+        coordinator.webViewDidBecomeReady()
+        coordinator.fail()
+        presenter.finishIntro()
+        XCTAssertEqual(coordinator.state, .failure)
+        XCTAssertEqual(presenter.dismissCount, 0)
+        coordinator.beginRecovery()
+        coordinator.webViewDidBecomeReady()
+        XCTAssertEqual(presenter.dismissCount, 1)
+        XCTAssertEqual(presenter.introCount, 1)
+    }
+
+    func testLocalAnimationBudgetIsUnderHalfASecond() {
+        XCTAssertLessThan(LoadingOverlayView.Timing.localIntroDuration + LoadingOverlayView.Timing.localExitDuration, 0.5)
+        XCTAssertLessThanOrEqual(LoadingOverlayView.Timing.localReducedMotionIntroDuration + LoadingOverlayView.Timing.localReducedMotionExitDuration, 0.2)
+        XCTAssertEqual(LoadingOverlayView.Timing.introDuration, 2.0)
+    }
+
     func testFastWebViewDismissesImmediatelyAndIgnoresRepeatedReadyAndStaleIntroCompletion() {
         let presenter = LoadingPresenterSpy()
         let coordinator = LoadingExperienceCoordinator(presenter: presenter)

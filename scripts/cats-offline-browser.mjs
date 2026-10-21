@@ -20,7 +20,7 @@ const server=await createServer({configFile:path.resolve("vite.trackers.config.t
 let context,packaged,offline=false,wrongAccount=false,invalid=false;
 async function open(){
   context=await chromium.launchPersistentContext(profile,{channel:"chrome",headless:true,viewport:{width:402,height:874},isMobile:true,hasTouch:true});context.setDefaultTimeout(12000);
-  await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
+  await context.addInitScript(()=>{localStorage.setItem("evaorbit.trackerMode","readonly");localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.englishFont","ibm");});
   await context.route("**/eo-api/**",async route=>{
     const request=route.request(),url=new URL(request.url());
     if(request.method()!=="GET"){writes.push(url.pathname);return route.fulfill({status:403,body:'{}'});}
@@ -46,9 +46,9 @@ try{
   const trigger=page.getByRole("button",{name:"Open spaces",exact:true});
   await trigger.click();let drawer=page.getByRole("dialog",{name:"All spaces",exact:true});
   await drawer.waitFor();await page.waitForFunction(()=>document.activeElement?.closest('[role="dialog"]'));
-  assert.deepEqual(await drawer.locator("a").evaluateAll(rows=>rows.map(row=>row.getAttribute("href"))),["/trackers","/food-drink","/subscriptions","/cats","/chronicle","/memo","/inbox"]);
+  assert.deepEqual(await drawer.locator("a").evaluateAll(rows=>rows.map(row=>row.getAttribute("href"))),["/trackers","/food-drink","/subscriptions","/health","/cats","/chronicle","/relations","/media","/memo","/inbox","/tasks","/lucius","/projects"]);
   assert(await page.locator(".main-content").evaluate(node=>node.inert));
-  await page.keyboard.press("Shift+Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("href")),"/inbox");
+  await page.keyboard.press("Shift+Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("href")),"/projects");
   await page.keyboard.press("Tab");assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute("aria-label")),"Close spaces");
   await page.waitForFunction(()=>document.querySelector(".space-drawer")?.getBoundingClientRect().right<=innerWidth+0.5);
   await page.screenshot({path:"tmp/shared-navigation-mobile.png"});

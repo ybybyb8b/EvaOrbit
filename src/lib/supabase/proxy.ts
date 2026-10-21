@@ -41,7 +41,7 @@ export async function updateSession(request: NextRequest) {
   // The local Host binds online AI settings to the account that opened the form.
   // Reject a cookie/account switch before any Provider or model mutation runs.
   const configurationAccount = request.headers.get("X-EvaOrbit-Account");
-  if (request.nextUrl.pathname.startsWith("/api/ai/") && configurationAccount) {
+  if ((request.nextUrl.pathname.startsWith("/api/ai/") || request.nextUrl.pathname === "/api/preferences/life-day" || request.nextUrl.pathname === "/api/calendar-interpretation") && configurationAccount) {
     if (configurationAccount !== claims?.sub) return NextResponse.json({ error: "AI configuration account changed" }, { status: 409, headers: { "Cache-Control": "no-store" } });
     response.headers.set("Cache-Control", "no-store");
   }

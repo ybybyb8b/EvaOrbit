@@ -5,6 +5,24 @@ import { parseTrackerSyncRequest, type TrackerRemote, type TrackerSyncResponse }
 import type { TrackerTransport } from "./tracker-local-store.ts";
 
 const account = "10000000-0000-4000-8000-000000000001";
+test("capture cannot enqueue an entry for a missing, archived or conflicted Tracker", async()=>{
+  const disk=storage(),store=new LocalTrackerStore(account,disk);
+  await store.initialize();
+  await assert.rejects(store.save("tracker_entry",undefined,{trackerLocalId:"missing"}));
+  const id=await store.createTracker({name:"Capture"});
+  await store.save("tracker",id,{archivedAt:new Date().toISOString()});
+  const before=structuredClone(await disk.read());
+  await assert.rejects(store.save("tracker_entry",undefined,{trackerLocalId:id}));
+  assert.deepEqual(await disk.read(),before);
+  await store.save("tracker",id,{archivedAt:null});
+  const current=(await disk.read())!;
+  await disk.commit(current.revision,{...current,revision:current.revision+1,records:current.records.map(row=>({...row,status:"conflict" as const}))});
+  // A stale capture window must re-check its parent after losing the CAS race.
+  await assert.rejects(store.save("tracker_entry",undefined,{trackerLocalId:id}));
+  await store.initialize();
+  await assert.rejects(store.save("tracker_entry",undefined,{trackerLocalId:id}));
+  assert.equal(store.getSnapshot().records.filter(row=>row.resourceType==="tracker_entry").length,0);
+});
 function storage() {
   let state: TrackerLocalState | null = null;
   const adapter: TrackerStorage = {
@@ -51,7 +69,7 @@ test("offline parent/field/record survives restart, maps IDs and drains dependen
   await store.initialize();
   const tracker = await store.createTracker({ name: "Sleep" }, { key: crypto.randomUUID(), name: "Hours", type: "number" });
   const entry = await store.save("tracker_entry", undefined, { trackerLocalId: tracker, occurredAt: "2026-10-18T04:00:00Z", values: {}, note: "offline" });
-  await store.save("tracker_entry", entry, { trackerLocalId: tracker, note: "edited offline" });
+  await store.save("tracker_entry", entry, { note: "edited offline" });
   const restarted = new LocalTrackerStore(account, disk); await restarted.initialize();
   assert.equal(restarted.getSnapshot().records.find(row => row.id === entry)?.payload.note, "edited offline");
   await restarted.synchronize(remote.transport);

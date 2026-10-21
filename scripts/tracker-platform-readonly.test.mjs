@@ -1,5 +1,6 @@
 import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../src/lib/tracker-replica.ts";
 import {allowsAiConfiguration} from "../src/lib/ai-configuration-request.ts";
+import {allowsSettingsConfiguration} from "../src/lib/settings-configuration-request.ts";
 import {workspaceKinds,validateWorkspaceSnapshot} from "../src/lib/workspace-readonly.ts";
 import {validateMediaSnapshot} from "../src/lib/media-readonly.ts";
 import {validateRelationsSnapshot} from "../src/lib/relations-readonly.ts";
@@ -32,6 +33,7 @@ function fixture(native, methods=[]) {
   imports["../lib/food-readonly-resource"]={foodResourceKey,validateFoodResource};
   imports["../lib/health-readonly"]={validateHealthSnapshot};
   imports["../lib/relations-readonly"]={validateRelationsSnapshot};
+  imports["../lib/settings-configuration-request"]={allowsSettingsConfiguration};
   const loaded={};new Function("require","exports","window",code)(name=>{if(!(name in imports))throw Error(name);return imports[name];},loaded,{EvaOrbitNative:native?{}:undefined});
   return {platform:loaded.trackerPlatform(),calls,account:{accountId:snapshot.accountId,email:"test@example.invalid"}};
 }
