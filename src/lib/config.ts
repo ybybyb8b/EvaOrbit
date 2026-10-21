@@ -17,3 +17,13 @@ export function supabaseConfig() {
 export function allowedEmail() {
   return process.env.EVAORBIT_ALLOWED_EMAIL?.trim().toLocaleLowerCase() ?? "";
 }
+
+// Opt-in server configuration. Supabase RLS continues to scope every row to auth.uid().
+export function isAllowedAccountEmail(email: string) {
+  const primary = allowedEmail();
+  return Boolean(primary) && (email.toLowerCase() === primary || isOnlineTestEmail(email));
+}
+export function isOnlineTestEmail(email:string){
+  const normalized=email.trim().toLowerCase();
+  return Boolean(allowedEmail())&&normalized!==allowedEmail()&&(process.env.EVAORBIT_TEST_EMAILS??"").split(",").map(value=>value.trim().toLowerCase()).filter(Boolean).includes(normalized);
+}

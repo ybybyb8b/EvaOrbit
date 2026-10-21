@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { allowedEmail, supabaseConfig, usesSupabase } from "../config";
+import { isAllowedAccountEmail, allowedEmail, supabaseConfig, usesSupabase } from "../config";
 
 function unauthorized(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -34,15 +34,15 @@ export async function updateSession(request: NextRequest) {
   const claims = data?.claims;
   const email = typeof claims?.email === "string" ? claims.email.toLocaleLowerCase() : "";
   const expectedEmail = allowedEmail();
-  const authorized = Boolean(claims?.sub) && Boolean(expectedEmail) && email === expectedEmail;
+  const authorized = Boolean(claims?.sub) && Boolean(expectedEmail) && isAllowedAccountEmail(email);
   const isLogin = request.nextUrl.pathname === "/login";
 
   if (!authorized && !isLogin) return unauthorized(request);
   // The local Host binds online AI settings to the account that opened the form.
   // Reject a cookie/account switch before any Provider or model mutation runs.
   const configurationAccount = request.headers.get("X-EvaOrbit-Account");
-  if ((request.nextUrl.pathname.startsWith("/api/ai/") || request.nextUrl.pathname === "/api/preferences/life-day" || request.nextUrl.pathname === "/api/calendar-interpretation") && configurationAccount) {
-    if (configurationAccount !== claims?.sub) return NextResponse.json({ error: "AI configuration account changed" }, { status: 409, headers: { "Cache-Control": "no-store" } });
+  if (request.nextUrl.pathname.startsWith("/api/") && configurationAccount) {
+    if (configurationAccount !== claims?.sub) return NextResponse.json({ error: "Account changed" }, { status: 409, headers: { "Cache-Control": "no-store" } });
     response.headers.set("Cache-Control", "no-store");
   }
   if (authorized && isLogin) return NextResponse.redirect(new URL("/", request.url));

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "codex/local-online-api-release": false,
+      "codex/tracker-local-first-poc": false
+    }
+  }
+}

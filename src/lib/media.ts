@@ -48,11 +48,17 @@ export async function createMediaWithRepository(repository:EvaOrbitRepository,in
 
 export async function updateMediaWithRepository(repository:EvaOrbitRepository,id:number,input:MediaDraftPatch) {
   const existing=await repository.getMediaItem(id);if(!existing)return null;
-  const merged={...existing,...input};const parent=await seriesName(repository,merged.seriesId);
+  const {watchedDate,...fields}=Object.fromEntries(Object.entries(input).filter(([,value])=>value!==undefined)) as MediaDraftPatch;
+  const merged={...existing,...fields};const parent=await seriesName(repository,merged.seriesId);
+  if(!["tv","anime"].includes(merged.mediaType)&&(merged.seasonNumber||merged.seasonTitle))throw new ConflictError("Only TV or Anime can have a season.");
   const wasModern=identifiable(existing,existing.seriesName);
   if(!identifiable(merged,parent)&&wasModern)throw new ConflictError("Media needs an original title, translated title, or episodic Series.");
   const title=buildMediaStorageTitle({...merged,seriesName:parent},existing.title);
-  const item=await repository.updateMediaItem(id,{...input,title});
+  const history=await repository.listMediaViewings(id);
+  if(watchedDate&&(merged.status!=="completed"||history.length&&history[0].watchedDate!==watchedDate))throw new ConflictError("Use Edit viewing date to change existing history; a completion date requires Completed status.");
+  const needsCompletion=merged.status==="completed"&&(existing.status!=="completed"||fields.status==="completed"||watchedDate!==undefined)&&!history.length;
+  if(needsCompletion&&!watchedDate)throw new ConflictError("Choose a completion date before marking this work completed.");
+  const item=needsCompletion?await repository.completeMediaItem(id,{...fields,title},watchedDate!):await repository.updateMediaItem(id,{...fields,title});
   return item?{...item,viewings:await repository.listMediaViewings(id)}:null;
 }
 
