@@ -206,7 +206,7 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
             const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const SidebarIcon = sidebarIcons[item.icon];
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}>{item.icon === "foodDrink" ? <Icon name="foodDrink" /> : <SidebarIcon className="icon" weight="Outline" aria-hidden="true" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><SidebarIcon className="icon" weight="Outline" aria-hidden="true" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
