@@ -1,3 +1,4 @@
+import nativeRoutes from "./src/lib/native-routes.json";
 import businessRoutes from "./src/lib/business-routes.json";
 import {allowsBusinessRequest} from "./src/lib/business-request-policy";
 import {allowsSettingsConfiguration} from "./src/lib/settings-configuration-request";
@@ -31,7 +32,7 @@ export default defineConfig(({ command }) => ({
       },
     } },
   },
-  plugins: [{name:"business-route-manifest",generateBundle(){this.emitFile({type:"asset",fileName:"business-routes.json",source:JSON.stringify(businessRoutes)});}}, { name: "local-settings-icons", resolveId(id) { if (id === "virtual:eo-reicon-assets") return "\0eo-reicon-assets"; }, async load(id) {
+  plugins: [{name:"business-route-manifest",generateBundle(){this.emitFile({type:"asset",fileName:"native-routes.json",source:JSON.stringify(nativeRoutes)});this.emitFile({type:"asset",fileName:"business-routes.json",source:JSON.stringify(businessRoutes)});}}, { name: "local-settings-icons", resolveId(id) { if (id === "virtual:eo-reicon-assets") return "\0eo-reicon-assets"; }, async load(id) {
     if (id !== "\0eo-reicon-assets") return;
     const names = await reiconNames(), assets: Record<string, string> = {};
     await Promise.all(names.map(async name => { assets[name] = `data:image/svg+xml,${encodeURIComponent((await reiconSvg(name))!)}`; }));

@@ -213,6 +213,8 @@
 
 ## Native
 
+- **本地主用版收尾候选**：[LocalNativeIntegrations](../src/local-trackers/native-integrations.tsx) 只注入原生调用与 [原生 API 适配](../src/lib/native-api.ts)，复用 EventKit/通知/健康协调规则；`native.invoke`/`native.api` 验证主账号，测试账号禁止系统写入。共享 [native-routes.json](../src/lib/native-routes.json) 控制配套接口，不使用全局 fetch 替换，也不增加业务离线写队列。设置直接复用原版控件；原生结果刷新本地页面，账户切换停止旧校准。服务端 session/主账号开关与 IPA 分别发布，实际结果见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
 - **主用本地版候选**：Tracker 高级配置共享 `TrackerDetailContent`，在线业务账户通道由独立正式账户开关控制；会话过期弹层保留草稿。`navigation.openNativeSettings` 复用三项在线系统设置，账户锁定、Cookie 隔离、测试账户禁止；本地自动系统同步与真机验收尚未完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 - **Tracker 只读验收边界**：`tracker-readonly.ts` 验证生产 GET 快照，`local-trackers/platform.ts` 和 Native bridge 的旧 commit/sync 通道继续关闭；独立编辑副本只放行新冻结队列，见 [编辑阶段](TRACKER_EDITABLE_REPLICA.md)；原生 SQLite 的独立 `tracker_readonly_cache` 不替换旧 state/outbox。`trackers.acceptanceStatus` 执行含 WAL 的自动 SQLite backup 与 quick_check。正式双向写入仍以单独批准的协议 2 部署为前提，参见 [验收记录](TRACKER_POC_VALIDATION.md)。

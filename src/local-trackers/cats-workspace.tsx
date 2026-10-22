@@ -22,7 +22,7 @@ export function CatsWorkspace({account,platform}:{account:LocalAccount;platform:
     let alive=true,running=false;
     async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const value=await platform.catsSnapshot(account,true);if(alive&&value){setSnapshot(value);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Could not refresh Cats; cache preserved");}finally{running=false;if(alive)setBusy(false);}}
     void platform.catsSnapshot(account).then(value=>{if(alive)setSnapshot(value);}).catch(e=>{if(alive)setError(String(e));}).finally(()=>{if(alive)void refresh();});
-    const active=()=>{if(alive&&navigator.onLine)void refresh();};
+    const active=(event:Event)=>{const detail=(event as CustomEvent).detail;if(event.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(event.type===onlineBusinessChanged&&detail?.snapshotUpdated&&detail?.resource==="cats"){void platform.catsSnapshot(account).then(value=>{if(alive&&value){setSnapshot(value);setError("");}}).catch(()=>{});return;}if(alive&&navigator.onLine)void refresh();};
     window.addEventListener(onlineBusinessChanged,active);window.addEventListener("online",active);window.addEventListener("evaorbit:native-active",active);window.addEventListener("eo:cats-refresh",active);
     return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);window.removeEventListener("eo:cats-refresh",active);};
   },[account,platform]);

@@ -9,7 +9,7 @@ import {freeLocalPort,navigateLocal} from './local-navigation-browser.mjs';
 const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||'playwright');
 const account='10000000-0000-4000-8000-000000000001',other='20000000-0000-4000-8000-000000000002';
 const directory=await fs.mkdtemp(path.resolve('tmp/online-business-browser-')),ports=[],calls=[],errors=[];
-let server,packaged,browser,context,items=[],wrong=false,protocol=1,lose=false,offline=false,testAccount=true,authenticated=true,ownerAccountAllowed=false,slowSnapshot=false;
+let server,packaged,browser,context,items=[],wrong=false,protocol=1,lose=false,offline=false,testAccount=true,authenticated=true,ownerAccountAllowed=false,slowSnapshot=false,httpUnavailable=false;
 const healthFile=path.join(directory,'health.json');
 const seeded=spawnSync(process.execPath,['--experimental-loader',pathToFileURL(path.resolve('scripts/typescript-test-loader.mjs')).href,'--input-type=module','--eval',`import {writeFileSync} from 'node:fs';import {seedHealth} from './scripts/health-readonly-fixture.mjs';import {getHealthReadonlySnapshot} from './src/lib/services/health-readonly.ts';await seedHealth();writeFileSync(process.env.HEALTH_SNAPSHOT,JSON.stringify(await getHealthReadonlySnapshot('${account}')));`],{encoding:'utf8',env:{...process.env,EVAORBIT_DATA_BACKEND:'sqlite',EVAORBIT_SQLITE_PATH:path.join(directory,'isolated.db'),HEALTH_SNAPSHOT:healthFile,VERCEL:''}});
 assert.equal(seeded.status,0,seeded.stderr||seeded.stdout);
@@ -23,6 +23,7 @@ async function routeRequest(route){
  if(p==='/eo-api/session')return json({authenticated,email:'synthetic@example.invalid',accountId:wrong?other:account,onlineBusinessProtocol:protocol,onlineBusinessTestAccount:testAccount,onlineBusinessAccountAllowed:ownerAccountAllowed});
  if(p==='/eo-api/inbox'){if(slowSnapshot)await new Promise(resolve=>setTimeout(resolve,2500));return json(items);}
  if(!p.startsWith('/eo-api/business/'))return route.fulfill({status:404,json:{error:'No synthetic snapshot for this module'}});
+ if(httpUnavailable&&method==='GET')return route.fulfill({status:503,json:{error:'Synthetic temporary outage'}});
  assert.equal(req.headers()['x-evaorbit-account'],account);calls.push({path:p,method,body:req.postData()});
  if(lose&&method!=='GET'){lose=false;return route.abort();}
  if(p==='/eo-api/business/inbox'&&method==='POST'){const item=createItem(req.postDataJSON().content);items.push(item);return json(item);}
@@ -54,6 +55,7 @@ try{
  offline=true;await page.evaluate(()=>localStorage.setItem('synthetic-offline','1'));await page.reload();await openInbox(page);await page.getByRole('button',{name:'Processed',exact:true}).click();await page.getByText('Online capture canary',{exact:true}).waitFor();
  const before=calls.length;await page.locator('.inbox-capture textarea').fill('Never queued');await page.locator('.inbox-capture button[type="submit"]').click();await page.getByText(/Connect to the internet to save/).first().waitFor();assert.equal(calls.length,before);assert.equal(items.length,1);
  offline=false;await page.evaluate(()=>localStorage.removeItem('synthetic-offline'));await page.evaluate(()=>document.querySelector('.inbox-capture textarea').value='');
+ httpUnavailable=true;await page.reload();await openInbox(page);await page.getByRole('button',{name:'Processed',exact:true}).click();await page.getByText('Online capture canary',{exact:true}).waitFor();httpUnavailable=false;
  // Old protocol and wrong identity cannot reach a business endpoint.
  for(const kind of ['protocol','account','owner']){protocol=kind==='protocol'?0:1;wrong=kind==='account';testAccount=kind!=='owner';const count=calls.length;const message=await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');try{await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks',{method:'POST',body:'{}'});return 'unexpected';}catch(error){return error.message;}},account);assert.notEqual(message,'unexpected');assert.equal(calls.length,count);}
  wrong=false;protocol=1;testAccount=false;ownerAccountAllowed=true;

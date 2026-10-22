@@ -169,3 +169,15 @@ issuance or the external `/api/mcp` bearer-token authentication exchange.
    database or re-enable legacy unsafe writes as a routine rollback.
 6. Existing HealthKitCoordinator async `NSLock` warnings remain in Swift 5 mode.
    These are separate migration work before adopting Swift 6 language mode.
+
+
+## Agent-run pre-primary acceptance — 2026-10-22
+
+User delegated automated acceptance; no production account records, Apple Health, Calendar or Reminders were modified. No IPA installation, database migration, production flags or deployment was performed.
+
+- Current local run: 34 Tracker PostgreSQL/replica/EventKit scheduler/notification contract tests passed, without skips. PGlite executes the actual Tracker migration/RPC and replica state against isolated PostgreSQL semantics: replay identity, changed-payload rejection, committed response loss, stale-version conflicts, delete reconciliation, transaction rollback, complete snapshots and two-account isolation. This is not a hosted Supabase request.
+- Tracker browser regression passed: offline create/edit/reopen, response-loss retry, conflict, remote deletion, permanent deletion preserving unrelated pending edits, pause/draft retention and unchanged legacy queue. Synthetic transport, no real account writes. Its test listener was closed.
+- HealthKit contract tests: 11 passed. EventKit migration/import transaction test was initially skipped for an unset optional engine path; rerun with the existing PGlite dependency passed (1/1), checking atomic import/reinstallation and account isolation. These are not real Apple permission or sample-write tests.
+- At the user's explicit one-time authorization, inspected existing run [39720469729](https://github.com/ybybyb8b/EvaOrbit/actions/runs/39720469729), commit 073ce5f: completed/success; both build (macOS build/XCTest) and isolated Supabase Tracker integration jobs succeeded. No new dispatch or continued polling. Current unpushed spacing/pinch changes are outside that run.
+- iPhone was subsequently connected: audited xtool SHA, Windows/WSL TCP transport and Activated state verified. No device identifiers logged. Screenshot service was unavailable because a developer image was not mounted; no screen or UI operation was claimed. The existing WKWebView source has no explicit inspectable-page configuration, and current tooling provides no verified remote page automation.
+- Not passed: complete local-shell native lifecycle. The online AppShell mounts EventKitReconciler/NativeNotificationReconciler, while local main does not; localCoreMethods deliberately excludes HealthKit manual writes. The trusted online settings panel is not proof of automatic local-shell parity. HealthKit restoreAtLaunch remains present. Primary native opt-in was not enabled and actual iPhone permission/write-back/background behavior remains unverified.

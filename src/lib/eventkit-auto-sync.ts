@@ -1,3 +1,4 @@
+import {nativeApiFetch} from "./native-api.ts";
 import { eventKitSupported, getNativeHostInfo, nativeCall } from "./native-bridge.ts";
 import { eventKitCalendarReadModes, synchronizeEventKit, type EventKitModes, type EventKitReminderRoutes, type EventKitSource, type EventKitStatus } from "./eventkit-sync.ts";
 import { captureEventKitPreferences, parseEventKitPreferences, resolveEventKitPreferences, type EventKitPreferences } from "./eventkit-preferences.ts";
@@ -14,7 +15,7 @@ let preferenceNotice = "";
 export function eventKitPreferenceNotice() { return preferenceNotice; }
 type AccountPreferences = { available: boolean; userId?: string; revision?: number; preferences?: EventKitPreferences | null };
 async function preferenceRequest(init?: RequestInit): Promise<AccountPreferences> {
-  const response = await fetch("/api/preferences/eventkit", { cache: "no-store", ...init });
+  const response = await nativeApiFetch("/api/preferences/eventkit", { cache: "no-store", ...init });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "账户同步偏好读取或保存失败");
   if (typeof result.available !== "boolean") throw new Error("账户同步偏好响应不正确");

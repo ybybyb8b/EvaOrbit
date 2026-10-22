@@ -1,4 +1,5 @@
 "use client";
+import {nativeApiFetch} from "@/lib/native-api";
 import { ErrorNotice } from "@/components/error-notice";
 import { apiErrorMessage } from "@/lib/response-error";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
@@ -34,11 +35,15 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refresh(), 0);
-    const ready = () => void refresh();
+    const ready = () => { if(document.visibilityState!=="hidden")void refresh(); };
     window.addEventListener("evaorbit:native-ready", ready);
+    window.addEventListener("evaorbit:native-active", ready);
+    document.addEventListener("visibilitychange", ready);
     return () => {
       window.clearTimeout(initialRefresh);
       window.removeEventListener("evaorbit:native-ready", ready);
+      window.removeEventListener("evaorbit:native-active", ready);
+      document.removeEventListener("visibilitychange", ready);
     };
   }, [refresh]);
 
@@ -46,7 +51,7 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
     if (!status || readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      const registrationResponse = await fetch("/api/native/devices", {
+      const registrationResponse = await nativeApiFetch("/api/native/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ installationId: status.installationId }),
@@ -58,7 +63,7 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
       await nativeCall("healthkit.configureCredential", {
         credential: registration.credential,
         syncMetrics: registration.syncMetrics ?? ["sleep"],
-        ingestUrl: `${window.location.origin}/api/healthkit/energy/ingest`,
+        ingestUrl: `${(await getNativeHostInfo())?.apiOrigin ?? window.location.origin}/api/healthkit/energy/ingest`,
       });
       await nativeCall<HealthKitStatus>("healthkit.requestAuthorization");
       await flushPendingMenstrualFlowToHealthKit();
@@ -88,7 +93,7 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
     if (!status || readOnly) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/native/devices", {
+      const response = await nativeApiFetch("/api/native/devices", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ installationId: status.installationId }),

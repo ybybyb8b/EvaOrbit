@@ -1,0 +1,17 @@
+[
+  {"pattern":"^/api/native/devices$","methods":["POST","DELETE"]},
+  {"pattern":"^/api/notifications$","methods":["GET"]},
+  {"pattern":"^/api/preferences/eventkit$","methods":["GET","PUT"]},
+  {"pattern":"^/api/eventkit/links$","methods":["GET","POST","PUT","DELETE"]},
+  {"pattern":"^/api/eventkit/calendar-import$","methods":["POST"]},
+  {"pattern":"^/api/calendar-events$","methods":["GET"]},
+  {"pattern":"^/api/calendar-events/[1-9][0-9]*$","methods":["GET","PATCH","DELETE"]},
+  {"pattern":"^/api/tasks$","methods":["GET","POST"]},
+  {"pattern":"^/api/tasks/[1-9][0-9]*$","methods":["GET","DELETE"]},
+  {"pattern":"^/api/tasks/[1-9][0-9]*/eventkit$","methods":["PUT"]},
+  {"pattern":"^/api/reminders$","methods":["GET"]},
+  {"pattern":"^/api/reminders/[1-9][0-9]*/complete$","methods":["POST"]},
+  {"pattern":"^/api/health/menstrual-flow$","methods":["GET"]},
+  {"pattern":"^/api/health/menstrual-flow/[1-9][0-9]*$","methods":["DELETE"]},
+  {"pattern":"^/api/health/weight$","methods":["GET"]}
+]

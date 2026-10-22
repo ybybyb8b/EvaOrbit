@@ -8,6 +8,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     private var activeSession: URLSession?
     private var generation = 0
     private var nativeSettingsAccount: String?
+    private var nativeOperations = 0
     private var replicaSessions: [String: Int] = [:]
     private var acceptanceReceipts: [String: [String: Any]] = [:]
     private var session: URLSession {
@@ -74,6 +75,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
 
     func signIn(email: String, password: String) async throws -> [String: String] {
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before switching accounts.") }
+        guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
         generation += 1
         let expectedGeneration = generation
@@ -86,6 +88,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
     func signOut() async throws {
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before signing out.") }
+        guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
         generation += 1
         try await database.clearAccount()
@@ -143,7 +146,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     func beginNativeSettings(accountId: String) async throws -> [HTTPCookie] {
         try await database.requireAccount(accountId)
         let expectedGeneration = generation
-        guard nativeSettingsAccount == nil,
+        guard nativeSettingsAccount == nil, nativeOperations == 0,
               let identity = try await request(path: "session", method: "GET") as? [String: Any],
               identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId,
               identity["nativeIntegrationsAccountAllowed"] as? Bool == true,
@@ -155,10 +158,38 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         nativeSettingsAccount = accountId
         return cookies.cookies(for: baseURL) ?? []
     }
+    func beginNativeOperation(accountId: String) async throws {
+        try await database.requireAccount(accountId)
+        let expectedGeneration = generation
+        guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close the online native settings panel first.") }
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true else { throw TrackerLocalError.sessionExpired }
+        guard identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard Self.nativeAccountAllowed(identity, accountId: accountId) else { throw TrackerLocalError.network("Native integrations require an explicitly enabled primary account. Test accounts cannot modify Apple data.") }
+        try await database.requireAccount(accountId)
+        guard generation == expectedGeneration, nativeSettingsAccount == nil else { throw TrackerLocalError.account }
+        nativeOperations += 1
+    }
+    func endNativeOperation() { nativeOperations = max(0, nativeOperations - 1) }
+    static func nativeAccountAllowed(_ identity: [String: Any], accountId: String) -> Bool {
+        identity["authenticated"] as? Bool == true && identity["accountId"] as? String == accountId && identity["nativeIntegrationsAccountAllowed"] as? Bool == true && identity["onlineBusinessTestAccount"] as? Bool != true
+    }
+    static func allowsNativeAPI(path: String, method: String) -> Bool {
+        let pathname = String(path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)[0])
+        guard path.utf8.count <= 4096, pathname.hasPrefix("/api/"), !path.contains("#"),
+              !pathname.contains("%"), !pathname.contains("\\"), !pathname.contains("//"),
+              !pathname.unicodeScalars.contains(where: { $0.value <= 32 }),
+              !pathname.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }),
+              let file = Bundle.main.url(forResource: "native-routes", withExtension: "json", subdirectory: "TrackerWeb"),
+              let data = try? Data(contentsOf: file), let routes = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return false }
+        return routes.contains { route in
+            guard let pattern = route["pattern"] as? String, let methods = route["methods"] as? [String] else { return false }
+            return methods.contains(method) && pathname.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
     func endNativeSettings(accountId: String) { if nativeSettingsAccount == accountId { nativeSettingsAccount = nil } }
 
-    func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool) async throws -> Any {
-        guard Self.allowsBusinessRequest(path: path, method: method), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
+    func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool, nativeIntegration: Bool = false) async throws -> Any {
+        guard (nativeIntegration ? Self.allowsNativeAPI(path: path, method: method) : Self.allowsBusinessRequest(path: path, method: method)), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
         try await database.requireAccount(accountId)
         let expectedGeneration = generation
         if offline {
@@ -180,7 +211,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         outgoing.setValue(accountId, forHTTPHeaderField: "X-EvaOrbit-Account")
         outgoing.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         if let bodyBase64 {
-            guard ["POST", "PATCH", "PUT"].contains(method), bodyBase64.utf8.count <= 12 * 1024 * 1024,
+            guard ["POST", "PATCH", "PUT", "DELETE"].contains(method), bodyBase64.utf8.count <= 12 * 1024 * 1024,
                   let body = Data(base64Encoded: bodyBase64), body.count <= 8 * 1024 * 1024,
                   contentType == "application/json" || contentType.hasPrefix("multipart/form-data; boundary="),
                   contentType.utf8.count <= 200, !contentType.contains("\r"), !contentType.contains("\n") else { throw TrackerLocalError.invalid }
@@ -206,7 +237,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         let result: [String: Any] = ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)]
-        if method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
+        if !nativeIntegration, method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
         // A cache failure cannot turn an acknowledged cloud write into a failed save.
         if method != "GET", (200..<300).contains(http.statusCode) { try? await database.invalidateOnlineCache(accountId: accountId, module: String(path.split(separator: "?")[0].split(separator: "/")[1])) }
         try await database.requireAccount(accountId)

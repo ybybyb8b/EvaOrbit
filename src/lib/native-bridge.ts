@@ -1,3 +1,4 @@
+import {nativeApiFetch} from "./native-api.ts";
 import type { NativeNotificationSchedule, ScheduledNotification } from "./types";
 import { isManagedNativeNotification, nativeNotificationIdentifier as managedIdentifier, nativeReminderNotification } from "./native-notifications.ts";
 
@@ -5,6 +6,7 @@ export type NativeBridgeResponse<T> = { ok: true; result: T } | { ok: false; err
 export type NativeBridge = { version: number; call<T>(method: string, params?: Record<string, unknown>): Promise<NativeBridgeResponse<T>> };
 export class NativeBridgeError extends Error {readonly code:string;constructor(message:string,code:string){super(message);this.name="NativeBridgeError";this.code=code;}}
 export type NativeHostInfo = {
+  apiOrigin?: string;
   platform?: string;
   bridgeVersion?: number;
   appVersion?: string;
@@ -45,7 +47,12 @@ declare global {
   interface Window { EvaOrbitNative?: NativeBridge }
 }
 
-export async function nativeCall<T>(method: string, params: Record<string, unknown> = {}) {
+type NativeRequest=<T>(method:string,params:Record<string,unknown>)=>Promise<T>;
+let nativeRequest:{request:NativeRequest}|undefined;
+export function installNativeRequest(request:NativeRequest){const session={request};nativeRequest=session;return()=>{if(nativeRequest===session)nativeRequest=undefined;};}
+export function captureNativeSessionGuard(){const session=nativeRequest;return()=>{if(nativeRequest!==session)throw new Error("Account changed. Native reconciliation stopped.");};}
+export function nativeCall<T>(method:string,params:Record<string,unknown>={}){return nativeRequest?nativeRequest.request<T>(method,params):rawNativeCall<T>(method,params);}
+export async function rawNativeCall<T>(method: string, params: Record<string, unknown> = {}) {
   const bridge = typeof window === "undefined" ? undefined : window.EvaOrbitNative;
   if (!bridge) throw new Error("EvaOrbit Native Host is not available");
   const response = await bridge.call<T>(method, params);
@@ -92,32 +99,37 @@ export function nativeNotificationSchedule(item: ScheduledNotification): NativeN
 let reconcileQueue: Promise<void> = Promise.resolve();
 
 export function reconcileNativeNotifications() {
-  const next = reconcileQueue.then(() => performNativeNotificationReconcile());
+  const guardSession=captureNativeSessionGuard();
+  const next = reconcileQueue.then(() => performNativeNotificationReconcile(guardSession));
   reconcileQueue = next.then(() => undefined, () => undefined);
   return next;
 }
 
-async function performNativeNotificationReconcile() {
+async function performNativeNotificationReconcile(guardSession:()=>void) {
+  guardSession();
   const info = await getNativeHostInfo();
   if (!nativeNotificationsSupported(info)) return { supported: false, authorized: false, scheduled: 0 };
   const status = await nativeCall<NativeNotificationStatus>("notification.getStatus");
   if (!["authorized", "provisional", "ephemeral"].includes(status.permission)) {
     return { supported: true, authorized: false, scheduled: status.scheduledCount ?? 0 };
   }
-  const desired = await fetch("/api/notifications", { cache: "no-store" }).then(async (response) => {
+  const desired = await nativeApiFetch("/api/notifications", { cache: "no-store" }).then(async (response) => {
     if (!response.ok) throw new Error("Could not load reminders for native notifications");
     return (await response.json() as { nativeNotifications: NativeNotificationSchedule[] }).nativeNotifications;
   }).then((items) => items
     .filter((item) => new Date(item.triggerAt).getTime() > Date.now())
     .sort((a, b) => a.triggerAt.localeCompare(b.triggerAt))
     .slice(0, nativePendingReminderLimit));
+  guardSession();
   const pendingResult = await nativeCall<NativePendingNotification[] | { notifications: NativePendingNotification[] }>("notification.listPending");
   const pending = Array.isArray(pendingResult) ? pendingResult : pendingResult.notifications;
   const desiredIds = new Set(desired.map((item) => item.id));
   for (const item of pending) {
+    guardSession();
     if (isManagedNativeNotification(item.id) && !desiredIds.has(item.id)) await nativeCall("notification.cancel", { id: item.id });
   }
   for (const item of desired) {
+    guardSession();
     await nativeCall("notification.schedule", { ...item });
   }
   return { supported: true, authorized: true, scheduled: desired.length };

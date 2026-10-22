@@ -1,5 +1,15 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## 本地主用版收尾候选：原生连接
+
+本地 React 通过桥接 v1 的 `native.invoke` 调用原有 HealthKit/EventKit/通知分派，`native.api` 只转发安装包 `native-routes.json` 清单内的配套业务接口。每次验证当前 SQLite 账户、服务器主账号原生授权和 generation；测试账号拒绝。原生操作完成前阻止切换账户；API 冻结 Cookie、拒绝重定向，不缓存系统凭据、不写业务离线队列。`host.getInfo.apiOrigin` 提供可信服务器地址，健康注册不使用 `eo-local://` 拼接 ingest URL。
+
+本地设置直接复用原版三个原生控件，已有在线设置面板只作兼容保留。前台调度复用 `startEventKitAutoSync`、EventKit 同步、经量 pending 回放及通知校准；保存事件触发校准，原生数据刷新事件不反向触发同步。账户切换使正在等待的日历/通知校准失效，权限变化回到前台刷新状态；自动任务不请求权限。HealthKit observer/上传仍沿用原 coordinator，不重复实现。
+
+本次没有新增权限、framework、entitlement 或改变签名链；需构建新的独立 IPA，既有成功 CI 不能代替该候选的 macOS/XCTest。主账号开关及 session 补丁发布需要单独确认，测试/模拟桥接通过不代表 Apple 实机已验收。范围和实际结果见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
+本地 React Host 在 `configureWebView` 禁用 WKWebView 滚动视图的页面 pinch 手势，避免整个 App 界面被双指缩放；不禁用滚动、侧滑返回、DOM 内图片查看手势或系统辅助功能缩放。普通在线 Host、Web/PWA 和 Windows 预览保持原行为。无权限、Bridge、签名变更，需随下一次 IPA 构建验收，Windows 未运行原生手势测试。
+
 主用本地版候选新增 `navigation.openNativeSettings`：仅允许 Health/Apple Integration/Notifications 三个可信同源设置路径，隔离非持久 Cookie、锁定本地账户切换，正式账户须由服务端额外启用且拒绝测试账户。本地 core 不开放系统写方法；`session_expired` 错误用于保留页面草稿的重新登录弹层。Native 数据变更事件可通知本地 UI 刷新。无新权限、framework、entitlement 或签名链变更；新增面板与 XCTest 尚待 macOS CI/真机，不代表自动系统同步生命周期已完全迁移。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 > 面向后续开发会话的必读文档。凡涉及 `ios/EvaOrbitHost`、iOS 权限或 capability、JS↔Swift bridge、IPA 打包、个人免费签名、Windows/WSL 真机安装，都应先完整阅读本文，再查看对应源码。

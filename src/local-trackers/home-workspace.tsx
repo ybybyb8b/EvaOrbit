@@ -36,7 +36,7 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
       if(!day&&!month)throw new Error("Home request refused");
       const kind=day?"day":"month",key=(day??month)![1];
       const cached=await resources(kind,key);signal.throwIfAborted();
-      if(cached){onCached(cached.data as T);if(!force)return cached.data as T;}
+      if(cached){onCached(cached.data as T);if(!navigator.onLine||!force&&Date.now()-Date.parse(cached.capturedAt)<60_000)return cached.data as T;}
       const fresh=await resources(kind,key,true);signal.throwIfAborted();
       if(!fresh)throw new Error("This date has not been downloaded. Connect to load it.");
       return fresh.data as T;
@@ -62,7 +62,8 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
         // Bounded prefetch; navigation also caches dates explicitly opened by the user.
         for(let offset=1;offset<=6&&alive;offset++){
           const date=shiftDate(today,-offset);
-          await Promise.allSettled([resources("day",date,true),date.slice(0,7)!==today.slice(0,7)?resources("month",date.slice(0,7),true):Promise.resolve()]);
+          const previous=await resources("day",date);
+          if(!previous||Date.now()-Date.parse(previous.capturedAt)>15*60_000)await Promise.allSettled([resources("day",date,true),date.slice(0,7)!==today.slice(0,7)?resources("month",date.slice(0,7),true):Promise.resolve()]);
         }
       }catch(reason){if(alive)setError(reason instanceof TypeError?(english?"Offline or unable to reach the cloud. Downloaded Home snapshots are preserved.":"离线或暂时无法读取云端，已下载的首页快照已保留。"):reason instanceof Error?reason.message:"Could not refresh Home. Cached data is preserved.");}
       finally{running=false;if(alive)setLoading(false);}

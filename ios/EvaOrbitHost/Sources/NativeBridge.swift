@@ -41,7 +41,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["navigation.openNativeSettings", "business.request", "trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
+    static let nativeIntegrationMethods = supportedMethods.filter { $0.hasPrefix("healthkit.") || $0.hasPrefix("eventkit.") || $0.hasPrefix("notification.") || $0 == "host.getInfo" || $0 == "host.notifyDataChanged" }
+    static let trackerMethods: Set<String> = ["native.invoke", "native.api", "navigation.openNativeSettings", "business.request", "trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal", "healthkit.getStatus", "eventkit.getStatus", "notification.getStatus", "notification.openSettings"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -392,6 +393,20 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 guard let controller = trackerController else { throw TrackerLocalError.storage }
                 let result: Any
                 switch method {
+                case "native.invoke":
+                    guard let account = parameters["accountId"] as? String, let target = parameters["method"] as? String,
+                          Self.nativeIntegrationMethods.contains(target), let arguments = parameters["arguments"] as? [String: Any] else { throw TrackerLocalError.invalid }
+                    try await controller.beginNativeOperation(accountId: account)
+                    dispatchCore(method: target, parameters: arguments, id: id, allowed: Set(Self.nativeIntegrationMethods).union(Self.localCoreMethods).union(Self.trackerMethods)) { value, error in
+                        controller.endNativeOperation()
+                        replyHandler(value, error)
+                    }
+                    return
+                case "native.api":
+                    guard let account = parameters["accountId"] as? String, let path = parameters["path"] as? String, let verb = parameters["method"] as? String else { throw TrackerLocalError.invalid }
+                    try await controller.beginNativeOperation(accountId: account)
+                    defer { controller.endNativeOperation() }
+                    result = try await controller.businessRequest(accountId: account, path: path, method: verb, contentType: "application/json", bodyBase64: parameters["bodyBase64"] as? String, offline: false, nativeIntegration: true)
                 case "trackers.getSession":
                     if let account = try await controller.database.account() { result = account } else { result = NSNull() }
                 case "trackers.signIn":
@@ -534,6 +549,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private func hostInfo() -> [String: Any] {
         let bundle = Bundle.main
         return [
+            "apiOrigin": hostConfiguration.baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
             "platform": "ios",
             "bridgeVersion": Self.protocolVersion,
             "appVersion": bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",

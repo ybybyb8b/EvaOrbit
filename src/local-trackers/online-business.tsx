@@ -22,10 +22,12 @@ export function OnlineBusinessProvider({account,platform,children}:{account:Loca
       if(response.ok&&(init?.method??"GET").toUpperCase()!=="GET"){
         clearClientJsonCache();
         const domain=path.split("/")[2];
+        const resource=domain==="food"||domain==="drinks"?"food":domain==="project-items"?"projects":domain==="nutrition"||domain==="preferences"?"health":domain;
+        let snapshotUpdated=false;
         const refresh=domain==="trackers"?async()=>{}:domain==="food"||domain==="drinks"?()=>platform.foodSnapshot(account,true):domain==="tasks"||domain==="projects"||domain==="project-items"||domain==="lucius"?()=>platform.workspaceSnapshot(account,domain==="project-items"?"projects":domain,true):domain==="health"||domain==="nutrition"||domain==="preferences"?()=>platform.healthSnapshot(account,true):domain==="cats"?()=>platform.catsSnapshot(account,true):domain==="relations"?()=>platform.relationsSnapshot(account,true):domain==="media"?()=>platform.mediaSnapshot(account,true):domain==="subscriptions"?()=>platform.subscriptionsSnapshot(account,true):domain==="chronicle"?()=>platform.chronicleSnapshot(account,true):domain==="memos"?()=>platform.memoSnapshot(account,true):domain==="inbox"?()=>platform.inboxSnapshot(account,true):()=>platform.homeResource(account,"day",dateInEvaOrbit(),true);
         // Acknowledged writes are final. Cache work must not keep the form submitting
         // or turn an acknowledged save into an apparent failure/retry.
-        void refresh().then(()=>{if(alive)setWarning(null);},()=>{if(alive)setWarning({accountId:account.accountId,text:"Saved online. The offline copy could not be refreshed; connect again before relying on it."});}).finally(()=>{if(alive)window.dispatchEvent(new CustomEvent(onlineBusinessChanged,{detail:{accountId:account.accountId,path}}));});
+        void refresh().then(()=>{snapshotUpdated=true;if(alive)setWarning(null);},()=>{if(alive)setWarning({accountId:account.accountId,text:"Saved online. The offline copy could not be refreshed; connect again before relying on it."});}).finally(()=>{if(alive)window.dispatchEvent(new CustomEvent(onlineBusinessChanged,{detail:{accountId:account.accountId,path,resource,snapshotUpdated}}));});
 
       }
       return response;
@@ -55,7 +57,7 @@ export function useOnlineReader(fallback:BusinessRequest):BusinessRequest{
     // especially after a remote deletion. Use visited-response cache only when
     // the snapshot cannot answer the request.
     if(!navigator.onLine){try{return await fallback(path,init);}catch{return request(path,init);}}
-    try{return await request(path,init);}catch(error){
+    try{const response=await request(path,init);if(response.status>=500||response.status===408||response.status===429){try{return await fallback(path,init);}catch{/* Preserve the actual server error when no snapshot can answer. */}}return response;}catch(error){
       if(init?.signal?.aborted)throw error;
       return fallback(path,init);
     }

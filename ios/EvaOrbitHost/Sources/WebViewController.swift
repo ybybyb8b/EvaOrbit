@@ -82,6 +82,7 @@ final class WebViewController: UIViewController {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.keyboardDismissMode = .interactive
+        if hostConfiguration.localTrackers { webView.scrollView.pinchGestureRecognizer?.isEnabled = false }
         webView.isOpaque = false
         webView.backgroundColor = palette.loadingBackground
         webView.scrollView.backgroundColor = palette.loadingBackground

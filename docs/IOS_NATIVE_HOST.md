@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+本地主用版收尾候选使用账户绑定的 `native.invoke`/`native.api` 连接现有原生分派和白名单 API；原生配置页在本地 React 直接复用 Web 控件。主账号须通过 session 和两个服务器开关授权，测试账号仍只能读状态。系统 API/凭据不进入本地业务缓存或重放队列；不添加权限、framework、entitlement，不改变本页安装链。必须先通过新候选 macOS/XCTest，再覆盖安装独立开发版，保留正式 EO、SQLite 和未同步队列；生产发布仍单独确认。详见 [维护契约](IOS_NATIVE_MAINTENANCE.md) 与 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
+本地 React 构建仅禁用 WKWebView 的页面双指缩放手势，保留滚动与侧滑返回；普通在线 Host、Web/PWA 保持原行为。随下一 IPA 覆盖安装验证，不需 API 发布、权限或签名变更，Windows 尚未运行原生手势验收。
+
 主用本地版候选新增 `navigation.openNativeSettings`：仅三个既有系统设置路径，复用线上设置/Bridge，非持久 Cookie、打开期间锁定本地账户切换，服务端双开关且拒绝测试账户。`session_expired` 错误供本地重新登录弹层保留草稿。没有新 framework、权限、entitlement 或安装链变更。新增 UIKit 面板/XCTest 尚待 macOS CI；本地主界面自动 EventKit/通知协调和 HealthKit 写回尚未等同在线 Host。发布、验收与回退边界见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 ## Tracker Local-first PoC（独立运行模式）

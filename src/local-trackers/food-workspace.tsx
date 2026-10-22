@@ -43,12 +43,13 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   const [section,setSection]=useState<"home"|"food"|"drink"|"places"|"library"|"place">(initialPlace?"place":initial.pathname==="/food/places"?"places":initial.pathname==="/food/library"?"library":initial.pathname==="/food"?"food":initial.pathname.startsWith("/drinks")?"drink":"home"),[editor,setEditor]=useState<FoodDrinkRecord|null>(null);
   const [placeId,setPlaceId]=useState(Number(initialPlace?.[1])||0);
   const [date,setDate]=useState(initial.searchParams.get("date")??dateInEvaOrbit()),[query,setQuery]=useState(""),[meal,setMeal]=useState(initial.searchParams.get("mealType")??""),[drinkType,setDrinkType]=useState<DrinkType|"">("");
-  const load=useCallback(async(signal:AbortSignal)=>{
+  const load=useCallback(async(signal:AbortSignal,refresh=true)=>{
     setLoading(true);
     try{
       const cached=await platform.foodSnapshot(account);
       if(signal.aborted)return;
       if(cached){setSnapshot(cached);setDate(current=>current>cached.window.to?cached.window.to:current);}
+      if(cached&&!refresh){setError("");return;}
       const fresh=await platform.foodSnapshot(account,true);
       if(signal.aborted)return;
       if(fresh){setSnapshot(fresh);setDate(current=>current>fresh.window.to?fresh.window.to:current);setError("");}
@@ -58,10 +59,10 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   },[account,platform,setLoading,setSnapshot,setDate,setError]);
   useEffect(()=>{
     const controller=new AbortController();let running=false;
-    const refresh=()=>{if(!running){running=true;void load(controller.signal).finally(()=>{running=false;});}};
+    const refresh=(event?:Event)=>{const detail=(event as CustomEvent|undefined)?.detail;if(event?.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(!running){running=true;void load(controller.signal,!(detail?.snapshotUpdated&&detail?.resource==="food")).finally(()=>{running=false;});}};
     refresh();window.addEventListener(onlineBusinessChanged,refresh);window.addEventListener("online",refresh);window.addEventListener("evaorbit:native-active",refresh);
     return()=>{controller.abort();window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
-  },[load]);
+  },[load,account.accountId]);
   const q=query.trim().toLocaleLowerCase();
   const historyKey=JSON.stringify([section,date,meal,drinkType,query,navigator.onLine,snapshot?.capturedAt]);
   useEffect(()=>{
