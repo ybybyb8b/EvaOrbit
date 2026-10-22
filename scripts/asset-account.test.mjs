@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import test from 'node:test';import {readFileSync} from 'node:fs';import ts from 'typescript';import fs from 'node:fs/promises';import path from 'node:path';import crypto from 'node:crypto';
+for(const [file,fn] of [['cat-avatar','readCatAvatar'],['media-cover','readMediaCover'],['relation-photo','readRelationPhoto'],['subscription-icon','readSubscriptionIcon'],['tracker-icon','readTrackerIcon']])test(file+' reads only the allowed current account storage namespace',async()=>{
+ const account='20000000-0000-4000-8000-000000000002',calls=[];let claims={sub:account,email:'test@example.invalid'};
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6hUAAAAASUVORK5CYII=','base64');
+ const row={id:7,avatarUrl:'/api/cats/pets/7/avatar?type=png',coverUrl:'/api/media/7/cover?type=png',photoPath:'/api/relations/people/7/photo?type=png',iconPath:'10000000-0000-4000-8000-000000000001.png',iconType:'image',iconValue:'png'};
+ const repo={getPet:async()=>row,getMediaItem:async()=>row,getRelationPerson:async()=>row,getSubscription:async()=>row,getTracker:async()=>row};
+ const client={auth:{getClaims:async()=>({data:{claims}})},storage:{from:bucket=>({download:async name=>{calls.push({bucket,name});return{data:new Blob([png])};}})}};
+ const imports={'server-only':{},'node:fs/promises':fs,'node:path':path,'node:crypto':crypto,'../avatar':{},'../config':{usesSupabase:()=>true,isAllowedAccountEmail:email=>['owner@example.invalid','test@example.invalid'].includes(email)},'../repositories':{getRepository:async()=>repo},'../supabase/server':{createSupabaseServerClient:async()=>client},'../validation':{ValidationError:Error},'../subscription-icon':{validSubscriptionIconKey:()=>true}};
+ const source=ts.transpileModule(readFileSync('src/lib/services/'+file+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,exports={};new Function('require','exports',source)(name=>{assert(name in imports,name);return imports[name];},exports);
+ assert((await exports[fn](7,null)).bytes.length);assert.equal(calls.length,1);assert(calls[0].name.startsWith(account+'/'));assert(!calls[0].name.includes('owner'));
+ claims={sub:account,email:'stranger@example.invalid'};await assert.rejects(exports[fn](7,null));assert.equal(calls.length,1,'Unknown account must never contact storage');
+});

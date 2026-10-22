@@ -23,7 +23,7 @@ export async function getCatsReadonlySnapshot(accountId:string){return withCatsR
   const foods=await listCatFood();
   // Embed authenticated avatar bytes; the bundled UI must not load protected remote URLs.
   for(const {pet} of dashboard.pets){
-    if(pet.avatarUrl){const image=await readCatAvatar(pet.id);if(!image||image.bytes.length>4*1024*1024)throw new Error("Could not download cat photo; cache preserved");pet.avatarUrl=`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`;}
+    if(pet.avatarUrl){const image=await readCatAvatar(pet.id);if(image&&image.bytes.length>4*1024*1024)throw new Error("Cat photo exceeds the cache limit");pet.avatarUrl=image?`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`:"";}
     const detail=details.find(d=>d.pet.id===pet.id)!;detail.pet={...pet};
   }
   return validateCatsSnapshot({format:"eo-cats-readonly-v1",accountId,capturedAt:new Date().toISOString(),dashboard,details,records,foods},accountId);
