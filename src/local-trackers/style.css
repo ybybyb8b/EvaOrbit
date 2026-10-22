@@ -39,3 +39,23 @@
 
 @media(max-width:720px){.local-signed-in .main-content{padding-top:calc(max(14px,env(safe-area-inset-top)) + 54px);}}
 .local-settings-account { padding-top:0; }
+
+.local-signed-in .main-content { min-width:0; }
+
+.local-signed-in .page[class*="local-"][class*="-status"] { padding-block:0; }
+.local-signed-in .page[class*="-status"] details { margin-block:12px; }
+.local-signed-in .page[class*="-status"] + .page { padding-top:24px; }
+.local-signed-in .page[class*="-status"]:empty { display:none; }
+.local-header-actions { position:absolute; top:max(14px,env(safe-area-inset-top)); right:max(14px,env(safe-area-inset-right)); display:flex; align-items:center; gap:8px; pointer-events:auto; }
+.local-header-actions .spaces-drawer-trigger { position:static; inset:auto; }
+.local-download-button { position:relative; width:44px; height:44px; flex-shrink:0; color:var(--text-secondary); }
+.local-download-button[data-status="cached"] { color:var(--accent-primary); }
+.local-download-button > span { position:absolute; top:2px; right:2px; background:var(--surface-warm); border-radius:50%; width:15px; height:15px; font:600 11px/15px sans-serif; }
+.local-download-details { display:grid; gap:16px; }
+.local-download-details p { margin:0; overflow-wrap:anywhere; }
+.local-shell .desktop-page-navigation { justify-content:space-between; }
+.local-shell .desktop-page-navigation:empty { display:none; }
+.local-shell .desktop-page-navigation > .local-download-button:first-child { margin-left:auto; }
+.local-data-sync { margin-block:24px; }
+.local-data-sync > summary { cursor:pointer; min-height:44px; padding-block:12px; }
+.local-data-sync > .tracker-sync-settings { margin-top:16px; }

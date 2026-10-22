@@ -1,0 +1,19 @@
+"use client";
+import {useEffect,useState,type ReactNode} from "react";
+import {useLocale} from "./locale-controller";
+import {PageHeading} from "./page-heading";
+import {FormSheet} from "./form-sheet";
+import {ErrorNotice} from "./error-notice";
+import {syncModules,type SyncModuleId,type ModuleSyncStatus} from "@/lib/sync-modules";
+import styles from "./sync-manager.module.css";
+
+export function SyncManager({local=false,online:providedOnline,statuses={},onRefresh,onRefreshAll,trackerDetails}:{local?:boolean;online?:boolean;statuses?:Partial<Record<SyncModuleId,ModuleSyncStatus>>;onRefresh?:(id:SyncModuleId)=>void;onRefreshAll?:()=>void;trackerDetails?:ReactNode}){
+ const [connected,setConnected]=useState(true);
+ useEffect(()=>{const changed=()=>setConnected(navigator.onLine);changed();window.addEventListener("online",changed);window.addEventListener("offline",changed);return()=>{window.removeEventListener("online",changed);window.removeEventListener("offline",changed);};},[]);
+ const online=providedOnline??connected;
+ const {english}=useLocale(),[selected,setSelected]=useState<SyncModuleId|null>(null),selectedModule=syncModules.find(row=>row.id===selected),status=selected?statuses[selected]:undefined;
+ const label=(row:typeof syncModules[number])=>english?row.en:row.zh;
+ const mode=(row:typeof syncModules[number])=>!local?(english?"Online save":"在线保存"):row.offlineWrites?(english?"Offline editing & sync":"离线编辑与同步"):(english?"Online save · offline viewing":"联网保存 · 离线查看");
+ const summary=(value?:ModuleSyncStatus)=>value?.busy?(english?"Updating…":"更新中…"):value?.error||value?.issues?(english?"Needs attention":"需要处理"):value?.paused?(english?"Editing paused":"编辑已暂停"):value?.pending?(english?`${value.pending} pending`:`${value.pending} 项待同步`):!online?(english?"Offline":"离线"):!local?(english?"Cloud access":"云端访问"):(value?.capturedAt||value?.hasLocalData)?(english?"Downloaded":"已下载"):(english?"Not downloaded":"尚未下载");
+ return <div className="page settings-detail-page"><PageHeading eyebrow="" title={english?"Data & Sync":"数据与同步"}/><div className={styles.actions}><p role="status">{english?local?"On this device":"Web session":local?"当前设备":"网页会话"}{!online?(english?" · Offline":" · 离线"):""}</p>{onRefreshAll&&<button type="button" className="button secondary" disabled={!online||Object.values(statuses).some(row=>row?.busy)} onClick={onRefreshAll}>{english?"Update all":"全部更新"}</button>}</div><div className={styles.list}>{syncModules.map(row=><button key={row.id} type="button" className={styles.row} onClick={()=>setSelected(row.id)}><span><strong>{label(row)}</strong><small>{mode(row)}</small></span><span className={styles.state} data-attention={Boolean(statuses[row.id]?.error||statuses[row.id]?.issues)}>{summary(statuses[row.id])}</span></button>)}</div>{selectedModule&&<FormSheet title={label(selectedModule)} onClose={()=>setSelected(null)}><div className={styles.detail}><p>{mode(selectedModule)}</p>{selected==="trackers"&&trackerDetails?trackerDetails:<><p role="status">{summary(status)}</p>{local&&<p>{english?"Last download: ":"上次下载："}{status?.capturedAt?new Date(status.capturedAt).toLocaleString(english?"en-US":"zh-CN"):"—"}</p>}{local&&<p>{english?"Downloaded records remain available offline. Changes currently require a connection; offline writes are not queued.":"已下载记录可离线查看。当前修改需联网保存，离线修改不会进入上传队列。"}</p>}{status?.complete===false&&<p>{english?"Some history is still online. Updating does not imply the entire account is downloaded.":"部分历史仍在云端，更新不表示已下载账户全部数据。"}</p>}{status?.error&&<ErrorNotice inline>{status.error}</ErrorNotice>}{onRefresh&&<button type="button" className="button secondary" disabled={!online||status?.busy} onClick={()=>onRefresh(selectedModule.id)}>{english?"Update downloaded data":"更新本机数据"}</button>}</>}</div></FormSheet>}</div>;
+}

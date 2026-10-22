@@ -205,7 +205,7 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func notifyDataChanged(domains: [String], source: String) {
-        guard let url = webView.url, hostConfiguration.allows(url),
+        guard let url = webView.url, (hostConfiguration.allows(url) || hostConfiguration.allowsTrackerUI(url)),
               let accepted = NativeBridge.dataChangeDomains(domains), ["eventkit", "healthkit"].contains(source),
               let data = try? JSONSerialization.data(withJSONObject: ["domains": accepted, "source": source]),
               let detail = String(data: data, encoding: .utf8) else { return }

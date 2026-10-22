@@ -9,7 +9,7 @@ import {freeLocalPort,navigateLocal} from './local-navigation-browser.mjs';
 const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||'playwright');
 const account='10000000-0000-4000-8000-000000000001',other='20000000-0000-4000-8000-000000000002';
 const directory=await fs.mkdtemp(path.resolve('tmp/online-business-browser-')),ports=[],calls=[],errors=[];
-let server,packaged,browser,context,items=[],wrong=false,protocol=1,lose=false,offline=false,testAccount=true;
+let server,packaged,browser,context,items=[],wrong=false,protocol=1,lose=false,offline=false,testAccount=true,authenticated=true,ownerAccountAllowed=false,slowSnapshot=false;
 const healthFile=path.join(directory,'health.json');
 const seeded=spawnSync(process.execPath,['--experimental-loader',pathToFileURL(path.resolve('scripts/typescript-test-loader.mjs')).href,'--input-type=module','--eval',`import {writeFileSync} from 'node:fs';import {seedHealth} from './scripts/health-readonly-fixture.mjs';import {getHealthReadonlySnapshot} from './src/lib/services/health-readonly.ts';await seedHealth();writeFileSync(process.env.HEALTH_SNAPSHOT,JSON.stringify(await getHealthReadonlySnapshot('${account}')));`],{encoding:'utf8',env:{...process.env,EVAORBIT_DATA_BACKEND:'sqlite',EVAORBIT_SQLITE_PATH:path.join(directory,'isolated.db'),HEALTH_SNAPSHOT:healthFile,VERCEL:''}});
 assert.equal(seeded.status,0,seeded.stderr||seeded.stdout);
@@ -20,8 +20,8 @@ async function seed(page){await page.evaluate(async({account,legacy})=>{localSto
 async function routeRequest(route){
  if(offline)return route.abort();
  const req=route.request(),url=new URL(req.url()),p=url.pathname,method=req.method(),json=value=>route.fulfill({json:value});
- if(p==='/eo-api/session')return json({authenticated:true,accountId:wrong?other:account,onlineBusinessProtocol:protocol,onlineBusinessTestAccount:testAccount});
- if(p==='/eo-api/inbox')return json(items);
+ if(p==='/eo-api/session')return json({authenticated,email:'synthetic@example.invalid',accountId:wrong?other:account,onlineBusinessProtocol:protocol,onlineBusinessTestAccount:testAccount,onlineBusinessAccountAllowed:ownerAccountAllowed});
+ if(p==='/eo-api/inbox'){if(slowSnapshot)await new Promise(resolve=>setTimeout(resolve,2500));return json(items);}
  if(!p.startsWith('/eo-api/business/'))return route.fulfill({status:404,json:{error:'No synthetic snapshot for this module'}});
  assert.equal(req.headers()['x-evaorbit-account'],account);calls.push({path:p,method,body:req.postData()});
  if(lose&&method!=='GET'){lose=false;return route.abort();}
@@ -44,7 +44,10 @@ try{
  const paths=['food/logs','drinks/logs','cats/pets','health/weight','subscriptions','chronicle','memos','relations/people','media','tasks','projects','project-items','lucius/diary','daily-journal'];
  await page.evaluate(async({account,paths})=>{const {trackerPlatform}=await import('/platform.ts');const platform=trackerPlatform();for(const path of paths){const r=await platform.businessRequest({accountId:account,email:'synthetic@example.invalid'},'/api/'+path,{method:'POST',body:JSON.stringify({synthetic:true})});if(!r.ok)throw Error(path);}window.onlinePlatform=platform;}, {account,paths});
  assert.equal(calls.filter(call=>call.method==='POST').length,paths.length);
- await openInbox(page);await capture(page,'Online capture canary');assert.equal(items.length,1);
+ await openInbox(page);slowSnapshot=true;
+ await page.locator('.inbox-capture textarea').fill('Online capture canary');await page.locator('.inbox-capture button[type="submit"]').click();
+ await page.waitForFunction(()=>document.querySelector('.inbox-capture textarea')?.value==='',{},{timeout:1500});
+ await page.locator('.inbox-row p').filter({hasText:'Online capture canary'}).waitFor();slowSnapshot=false;assert.equal(items.length,1);
  await page.getByRole('button',{name:'Mark processed',exact:true}).click();await page.getByRole('button',{name:'Processed',exact:true}).click();await page.getByText('Online capture canary',{exact:true}).waitFor();assert.equal(items[0].status,'processed');
  await page.screenshot({path:path.join(directory,'inbox-online-mobile.png'),fullPage:true});
  // Persisted snapshot survives a network-free restart.
@@ -53,11 +56,18 @@ try{
  offline=false;await page.evaluate(()=>localStorage.removeItem('synthetic-offline'));await page.evaluate(()=>document.querySelector('.inbox-capture textarea').value='');
  // Old protocol and wrong identity cannot reach a business endpoint.
  for(const kind of ['protocol','account','owner']){protocol=kind==='protocol'?0:1;wrong=kind==='account';testAccount=kind!=='owner';const count=calls.length;const message=await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');try{await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks',{method:'POST',body:'{}'});return 'unexpected';}catch(error){return error.message;}},account);assert.notEqual(message,'unexpected');assert.equal(calls.length,count);}
- wrong=false;protocol=1;testAccount=true;lose=true;const count=calls.length;const unknown=await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');try{await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks',{method:'POST',body:'{}'});}catch(error){return error.message;}},account);assert.match(unknown,/result is unknown/);assert.equal(calls.length,count+1,'Lost response is never retried');
+ wrong=false;protocol=1;testAccount=false;ownerAccountAllowed=true;
+ assert.equal(await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');return(await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks')).ok;},account),true);ownerAccountAllowed=false;
+ wrong=false;protocol=1;testAccount=true;authenticated=true;lose=true;const count=calls.length;const unknown=await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');try{await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks',{method:'POST',body:'{}'});}catch(error){return error.message;}},account);assert.match(unknown,/result is unknown/);assert.equal(calls.length,count+1,'Lost response is never retried');
  // Frozen legacy queue remains byte-identical.
  const original=await page.evaluate(async account=>{const db=await new Promise(resolve=>{const r=indexedDB.open('eo-tracker-local-v1',1);r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const r=db.transaction('states').objectStore('states').get(account);r.onsuccess=()=>{resolve(r.result);db.close();};});},account);assert.deepEqual(original,legacy);
  page.on('dialog',dialog=>dialog.accept());await page.getByRole('button',{name:'Delete Inbox item',exact:true}).click();await page.locator('.inbox-row').waitFor({state:'detached'});assert.equal(items.length,0);
  await page.setViewportSize({width:1280,height:900});await page.screenshot({path:path.join(directory,'inbox-online-desktop.png'),fullPage:true});
+ // Expired login is an overlay, not a destructive navigation away from the current draft.
+ await page.locator('.inbox-capture textarea').fill('Draft preserved through reconnect');authenticated=false;
+ await page.evaluate(async account=>{const {trackerPlatform}=await import('/platform.ts');try{await trackerPlatform().businessRequest({accountId:account,email:''},'/api/tasks');}catch{}},account);
+ await page.getByRole('heading',{name:'Reconnect account',exact:true}).waitFor();assert.equal(await page.locator('.inbox-capture textarea').inputValue(),'Draft preserved through reconnect');authenticated=true;
+ await page.locator('#local-login input[name=password]').fill('synthetic-not-a-real-password');await page.locator('button[form="local-login"]').click();await page.locator('#local-login').waitFor({state:'detached'});assert.equal(await page.locator('.inbox-capture textarea').inputValue(),'Draft preserved through reconnect');
  await context.close();context=null;
  // Installed bundle: original form saves through the bridge under connect-src:none.
  const bundlePort=await freeLocalPort();ports.push(bundlePort);packaged=await preview({configFile:path.resolve('vite.trackers.config.ts'),preview:{host:'127.0.0.1',port:bundlePort,strictPort:true}});

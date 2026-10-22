@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+主用本地版候选新增 `navigation.openNativeSettings`：仅允许 Health/Apple Integration/Notifications 三个可信同源设置路径，隔离非持久 Cookie、锁定本地账户切换，正式账户须由服务端额外启用且拒绝测试账户。本地 core 不开放系统写方法；`session_expired` 错误用于保留页面草稿的重新登录弹层。Native 数据变更事件可通知本地 UI 刷新。无新权限、framework、entitlement 或签名链变更；新增面板与 XCTest 尚待 macOS CI/真机，不代表自动系统同步生命周期已完全迁移。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
 > 面向后续开发会话的必读文档。凡涉及 `ios/EvaOrbitHost`、iOS 权限或 capability、JS↔Swift bridge、IPA 打包、个人免费签名、Windows/WSL 真机安装，都应先完整阅读本文，再查看对应源码。
 >
 > 本文记录截至 2026-09-05 的仓库现状和已经走通的路径。源码和 CI 是最终事实来源；如果实现发生有意变化，必须在同一次改动中更新本文和详细 runbook [`docs/IOS_NATIVE_HOST.md`](./IOS_NATIVE_HOST.md)。

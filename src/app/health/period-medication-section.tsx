@@ -70,10 +70,10 @@ export function PeriodMedicationSection({ initialPeriods, initialFlows, initialP
   return <section className="health-section period-medication-section" aria-labelledby="period-medication-title">
     <BottomLogScope label={english ? "Log period or medication" : "记录经期或用药"} onClick={() => setLogPickerOpen(true)} />
     {logPickerOpen && <FormSheet title={english ? "Log period or medication" : "记录经期或用药"} onClose={() => setLogPickerOpen(false)}><div className="health-log-choices">
-      <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen(current ? "flow" : "start"); }}><Icon name="plus" /><span>{current ? (english ? "Log flow" : "记录经量") : (english ? "Start period" : "开始经期")}</span><Icon name="arrow" /></button>
-      {!current && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen("flow"); }}><Icon name="plus" /><span>{english ? "Log earlier flow" : "补录历史经量"}</span><Icon name="arrow" /></button>}
-      <button type="button" disabled={!presets.length} onClick={() => { setLogPickerOpen(false); setEditingDose(undefined); setOpen("dose"); }}><Icon name="plus" /><span>{english ? "Log dose" : "记录服药"}</span><Icon name="arrow" /></button>
-      {!presets.length && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingPreset(undefined); setOpen("preset"); }}><Icon name="plus" /><span>{english ? "Add medication first" : "先添加药物配置"}</span><Icon name="arrow" /></button>}
+      <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen(current ? "flow" : "start"); }}><Icon name="plus" /><span>{current ? (english ? "Log flow" : "记录经量") : (english ? "Start period" : "开始经期")}</span></button>
+      {!current && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen("flow"); }}><Icon name="plus" /><span>{english ? "Log earlier flow" : "补录历史经量"}</span></button>}
+      <button type="button" disabled={!presets.length} onClick={() => { setLogPickerOpen(false); setEditingDose(undefined); setOpen("dose"); }}><Icon name="plus" /><span>{english ? "Log dose" : "记录服药"}</span></button>
+      {!presets.length && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingPreset(undefined); setOpen("preset"); }}><Icon name="plus" /><span>{english ? "Add medication first" : "先添加药物配置"}</span></button>}
     </div></FormSheet>}
     {open === "start" && <StartPeriodEditor initialDate={currentLocalDate()} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Period started" : "经期已开始")} />}
     {open === "period" && editingPeriod && <PeriodEditor record={editingPeriod} ending={endingPeriod} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Period updated" : "经期已更新")} />}

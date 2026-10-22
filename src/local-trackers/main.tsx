@@ -1,10 +1,15 @@
+import {LocalNativeDataEvents} from "./native-data-events";
+import {sessionExpiredEvent} from "./session-events";
+import {ErrorNotice} from "@/components/error-notice";
+import {LocalRouteContext} from "./routes";
+import {DownloadStatusProvider} from "./download-status";
 import {OnlineBusinessProvider} from "./online-business";
 import {ReadOnlyWorkspace} from "./read-only-workspace";
 import {MediaWorkspace} from "./media-workspace";
 import {RelationsWorkspace} from "./relations-workspace";
 import {HealthWorkspace} from "./health-workspace";
 import { createRoot } from "react-dom/client";
-import { createContext,useContext,useEffect, useState } from "react";
+import { createContext,useContext,useEffect,useRef, useState } from "react";
 import { LocaleController } from "@/components/locale-controller";
 import { ErrorFeedbackProvider } from "@/components/error-feedback";
 import { ActionToastViewport } from "@/components/action-toast";
@@ -59,19 +64,34 @@ function LocalBrandImage(){
 
 function App() {
   const [account, setAccount] = useState<LocalAccount | null>(null), [ready, setReady] = useState(false);
+  const [reconnecting,setReconnecting]=useState(false),[reconnectBusy,setReconnectBusy]=useState(false);
   const [signingIn, setSigningIn] = useState(false), [error, setError] = useState("");
-  const [module,setModule]=useState<LocalModule>("home");
+  const [module,setModule]=useState<LocalModule>("home"),[navigationKey,setNavigationKey]=useState(0);
+  const [initialPath,setInitialPath]=useState("/");
+  const history=useRef<Array<{module:LocalModule;path:string}>>([]);
+  const backModule=()=>{const previous=history.current.pop();setModule(previous?.module??"home");setInitialPath(previous?.path??"/");setNavigationKey(n=>n+1);window.scrollTo(0,0);};
   const pathname=module==="home"?"/":module==="food"?"/food-drink":"/"+module;
-  function navigate(href:string){const routes:Record<string,LocalModule>={"/tasks":"tasks","/projects":"projects","/lucius":"lucius","/media":"media","/relations":"relations","/health":"health","/":"home","/trackers":"trackers","/food-drink":"food","/cats":"cats","/subscriptions":"subscriptions","/chronicle":"chronicle","/memo":"memo","/inbox":"inbox","/settings":"settings"};if(routes[href]){setModule(routes[href]);window.scrollTo(0,0);}}
+  function navigate(href:string){
+    if(!href.startsWith("/")||href.startsWith("//"))return;
+    const url=new URL(href,"https://offline.invalid"),root=url.pathname.split("/")[1];
+    const routes:Record<string,LocalModule>={tasks:"tasks",projects:"projects",lucius:"lucius",media:"media",relations:"relations",health:"health","":"home",trackers:"trackers","food-drink":"food",food:"food",drinks:"food",cats:"cats",subscriptions:"subscriptions",chronicle:"chronicle",memo:"memo",inbox:"inbox",settings:"settings"};
+    if(url.origin!=="https://offline.invalid")return;
+    if(root==="notifications"){url.pathname="/settings/notifications";}
+    const next=root==="notifications"?"settings":routes[root];if(!next){setError("This page is not available in the app yet.");return;}
+    if(next!==module)history.current.push({module,path:initialPath});
+    setError("");setInitialPath(url.pathname+url.search+url.hash);setModule(next);setNavigationKey(n=>n+1);window.scrollTo(0,0);
+  }
+
+  useEffect(()=>{const expired=(event:Event)=>{if(account&&(event as CustomEvent).detail?.accountId===account.accountId)setReconnecting(true);};window.addEventListener(sessionExpiredEvent,expired);return()=>window.removeEventListener(sessionExpiredEvent,expired);},[account]);
   useEffect(() => { platform.account().then(setAccount).catch(() => setError("暂时无法打开本机账户，请重试。")).finally(() => setReady(true)); }, []);
-  return <LocaleController localOnly defaults={LOCAL_APPEARANCE_BASELINE}><ThemeController /><ErrorFeedbackProvider><OnlineBusinessProvider account={account&&!signingIn?account:null} platform={platform}><Navigate.Provider value={navigate}><BottomLogProvider pathname={pathname}><LocalNavigationProvider key={module} fallback={account&&!signingIn&&["tasks","projects","lucius","media","relations","health","trackers","chronicle","memo","inbox","settings"].includes(module)?()=>navigate("/"):undefined}><div className={`local-tracker-app local-shell app-shell ${account&&!signingIn?"local-signed-in":""} ${bottomNav.shell}`} data-ui-copy-ready="true">
+  return <LocaleController localOnly defaults={LOCAL_APPEARANCE_BASELINE}><ThemeController /><ErrorFeedbackProvider><OnlineBusinessProvider account={account&&!signingIn?account:null} platform={platform}><Navigate.Provider value={navigate}><LocalRouteContext.Provider value={{path:initialPath,navigate}}><BottomLogProvider pathname={pathname}><DownloadStatusProvider key={account?.accountId??"signed-out"}><LocalNavigationProvider key={module+":"+navigationKey} fallback={account&&!signingIn&&["tasks","projects","lucius","media","relations","health","trackers","food","cats","subscriptions","chronicle","memo","inbox","settings"].includes(module)?backModule:undefined}><div className={`local-tracker-app local-shell app-shell ${account&&!signingIn?"local-signed-in":""} ${bottomNav.shell}`} data-ui-copy-ready="true">
     {account&&!signingIn?<AppSidebar pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} brandImage={<LocalBrandImage/>}/>:<LocalAppearance/>}
-    <main className={`main-content${["tasks","projects","media"].includes(module)?" has-page-back":""}`}><LocalDesktopBack/>
+    <main className={`main-content${["tasks","projects","media"].includes(module)?" has-page-back":""}`}><LocalDesktopBack/>{account&&!signingIn&&error&&<ErrorNotice>{error}</ErrorNotice>}
     {!ready ? <LoginSurface><p role="status">正在打开本机记录…</p></LoginSurface> : account && !signingIn
       ? ["tasks","projects","lucius"].includes(module)?<ReadOnlyWorkspace key={account.accountId+module} kind={module as "tasks"|"projects"|"lucius"} account={account} platform={platform}/>:module==="media"?<MediaWorkspace key={account.accountId} account={account} platform={platform}/>:module==="relations"?<RelationsWorkspace key={account.accountId} account={account} platform={platform}/>:module==="health"?<HealthWorkspace key={account.accountId} account={account} platform={platform}/>:module==="inbox"?<InboxWorkspace key={account.accountId} account={account} platform={platform}/>:module==="memo"?<MemoWorkspace key={account.accountId} account={account} platform={platform}/>:module==="chronicle"?<ChronicleWorkspace key={account.accountId} account={account} platform={platform}/>:module==="subscriptions"?<SubscriptionsWorkspace key={account.accountId} account={account} platform={platform}/>:module==="cats"?<CatsWorkspace key={account.accountId} account={account} platform={platform}/>:module==="home"?<HomeWorkspace key={account.accountId} account={account} platform={platform}/>:module==="food"?<FoodWorkspace key={account.accountId} account={account} platform={platform}/>:module==="settings"?<SettingsWorkspace account={account} platform={platform} onSignIn={()=>setSigningIn(true)} onSignOut={()=>setAccount(null)}/>:<TrackerWorkspace key={account.accountId} account={account} platform={platform} />
-      : <LocalLogin platform={platform} initialError={error} onSignedIn={next => { setAccount(next); setSigningIn(false); setError(""); }} onCancel={account ? () => setSigningIn(false) : undefined} onPreview={!platform.native && !account ? async () => { setAccount(await startBrowserPreview()); setError(""); } : undefined} />}
+      : <LocalLogin platform={platform} initialError={error} onSignedIn={next => { setAccount(next); setSigningIn(false);setReconnecting(false); setError("");history.current=[];setInitialPath("/");setModule("home");setNavigationKey(n=>n+1); }} onCancel={account ? () => setSigningIn(false) : undefined} onPreview={!platform.native && !account ? async () => { setAccount(await startBrowserPreview()); setError(""); } : undefined} />}
     </main>
-    {account&&!signingIn&&<><SpacesNavigation pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} renderTrigger={spaces=><LocalNavigationHeader spaces={spaces}/>}/><MobileBottomNavigation pathname={pathname} LinkComponent={LocalNavLink}/><LocalQuickLog key={account.accountId+":"+module} account={account} platform={platform}/></>}
-  </div><ActionToastViewport /></LocalNavigationProvider></BottomLogProvider></Navigate.Provider></OnlineBusinessProvider></ErrorFeedbackProvider></LocaleController>;
+    {account&&!signingIn&&<><LocalNativeDataEvents accountId={account.accountId}/><SpacesNavigation pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} renderTrigger={spaces=><LocalNavigationHeader spaces={spaces}/>}/><MobileBottomNavigation pathname={pathname} LinkComponent={LocalNavLink}/><LocalQuickLog key={account.accountId+":"+module} account={account} platform={platform}/></>}
+  </div>{reconnecting&&account&&<FormSheet title="Reconnect account" formId="local-login" submitLabel="Reconnect" busy={reconnectBusy} onClose={()=>setReconnecting(false)}><LocalLogin embedded onBusyChange={setReconnectBusy} initialEmail={account.email} platform={platform} onSignedIn={next=>{setAccount(next);setReconnecting(false);setError("");if(next.accountId!==account.accountId){history.current=[];setInitialPath("/");setModule("home");setNavigationKey(n=>n+1);}}}/></FormSheet>}<ActionToastViewport /></LocalNavigationProvider></DownloadStatusProvider></BottomLogProvider></LocalRouteContext.Provider></Navigate.Provider></OnlineBusinessProvider></ErrorFeedbackProvider></LocaleController>;
 }
 createRoot(document.getElementById("root")!).render(<App />);

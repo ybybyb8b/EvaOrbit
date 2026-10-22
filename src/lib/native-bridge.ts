@@ -3,6 +3,7 @@ import { isManagedNativeNotification, nativeNotificationIdentifier as managedIde
 
 export type NativeBridgeResponse<T> = { ok: true; result: T } | { ok: false; error: { code: string; message: string } };
 export type NativeBridge = { version: number; call<T>(method: string, params?: Record<string, unknown>): Promise<NativeBridgeResponse<T>> };
+export class NativeBridgeError extends Error {readonly code:string;constructor(message:string,code:string){super(message);this.name="NativeBridgeError";this.code=code;}}
 export type NativeHostInfo = {
   platform?: string;
   bridgeVersion?: number;
@@ -48,7 +49,7 @@ export async function nativeCall<T>(method: string, params: Record<string, unkno
   const bridge = typeof window === "undefined" ? undefined : window.EvaOrbitNative;
   if (!bridge) throw new Error("EvaOrbit Native Host is not available");
   const response = await bridge.call<T>(method, params);
-  if (!response.ok) throw new Error(response.error.message);
+  if (!response.ok) throw new NativeBridgeError(response.error.message,response.error.code);
   return response.result;
 }
 

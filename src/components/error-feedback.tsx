@@ -64,7 +64,7 @@ export function RegisteredErrorNotice({ inline, className, role = "alert", child
   const hydrated = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot);
   useEffect(() => {
     if (registry) {
-      if (inline) registry.remove(id);
+      if (inline || !messageText(children).trim()) registry.remove(id);
       else registry.put({ id, content: children, signature: messageText(children) });
     }
   }, [registry, id, children, inline]);

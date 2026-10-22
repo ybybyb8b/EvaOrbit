@@ -69,13 +69,24 @@ try{
   await page.reload({waitUntil:"networkidle"});
   await dismissErrors(page);await navigateLocal(page,"Food & Drink");
   await page.getByRole("heading",{name:"Food & Drink",exact:true}).waitFor();
-  const info=page.locator(".local-food-status details");
-  assert.equal(await info.getAttribute("open"),null);
-  assert.equal(await page.getByText("Up to 500 food and 500 drink records from the last 30 days.",{exact:false}).isVisible(),false);
-  await info.locator("summary").click();
-  assert(await page.getByText("Up to 500 food and 500 drink records from the last 30 days.",{exact:false}).isVisible());
-  await info.locator("summary").press("Enter");
-  assert.equal(await info.getAttribute("open"),null);
+  assert.equal(await page.getByText("Development info",{exact:true}).count(),0);
+  await page.locator(".mobile-global-header .local-download-button").click();
+  await page.getByRole("heading",{name:"Data status",exact:true}).waitFor();
+  await page.locator(".form-sheet-header button").click();
+  await page.locator(".form-sheet-layer").waitFor({state:"detached"});
+  if(process.argv.includes("--navigation-only")){
+    await page.getByRole("link",{name:"Food records",exact:true}).click();
+    await page.getByRole("heading",{name:"Food offline canary",exact:true}).waitFor();
+    await page.locator(".mobile-global-header").getByRole("button",{name:"Back to previous page",exact:true}).click();
+    await page.getByRole("link",{name:"Places",exact:true}).click();
+    await page.locator(".food-places-page").waitFor();
+    await navigateLocal(page,"Food & Drink");
+    await page.getByRole("link",{name:"Food records",exact:true}).waitFor();
+    await page.getByRole("link",{name:"Drink records",exact:true}).click();
+    await page.locator(".mobile-global-header").getByRole("button",{name:"Back to previous page",exact:true}).click();
+    await page.getByRole("link",{name:"Places",exact:true}).waitFor();
+    console.log("PASS Food navigation: header Back, sidebar resets nested Places, Drink returns to overview");
+  }else{
   await page.getByText("Today",{exact:true}).count();
   await page.getByRole("link",{name:"Food records",exact:true}).click();
   await page.getByRole("heading",{name:"Food offline canary",exact:true}).waitFor();
@@ -246,4 +257,5 @@ try{
   assert.deepEqual(await page.evaluate(()=>window.mockMutations),[]);
   assert.deepEqual(network,[]);assert.equal(errors.length,0,errors.join("\n"));
   console.log(JSON.stringify({result:"PASS",checks:["shared Food/Drink/Places/Library pages","place details, menus, nutrition forms and linked navigation","date-only history and notes","all preview form submissions blocked","contextual Universal Log for Place and Library creation","offline restart and account-mismatch cache retention","undownloaded place is not mistaken for deletion","legacy outbox unchanged","402/1280 layout","packaged CSP bundle with bridge mock and zero API fetches"],writes:writes.length,unexpected,errors}));
+  }
 }finally{if(context)await context.close();await server.close();if(packagedServer)await new Promise(resolve=>packagedServer.httpServer.close(resolve));}

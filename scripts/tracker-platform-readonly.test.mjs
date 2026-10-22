@@ -19,6 +19,7 @@ import {validateCatsSnapshot} from "../src/lib/cats-readonly.ts";
 import {validateSubscriptionsSnapshot} from "../src/lib/subscriptions-readonly.ts";
 import {foodResourceKey,validateFoodResource} from "../src/lib/food-readonly-resource.ts";
 import { homeResourceKey, validateHomeResource } from "../src/lib/home-readonly.ts";
+import {notifySessionExpired} from "../src/local-trackers/session-events.ts";
 
 function fixture(native, methods=[]) {
   const calls=[], snapshot={format:"eo-trackers-readonly-v1",accountId:"10000000-0000-4000-8000-000000000001",capturedAt:"2026-10-19T00:00:00Z",details:[]};
@@ -35,6 +36,7 @@ function fixture(native, methods=[]) {
   imports["../lib/health-readonly"]={validateHealthSnapshot};
   imports["../lib/relations-readonly"]={validateRelationsSnapshot};
   imports["../lib/settings-configuration-request"]={allowsSettingsConfiguration};
+  imports["./session-events"]={notifySessionExpired};
   const loaded={};new Function("require","exports","window",code)(name=>{if(!(name in imports))throw Error(name);return imports[name];},loaded,{EvaOrbitNative:native?{}:undefined});
   return {platform:loaded.trackerPlatform(),calls,account:{accountId:snapshot.accountId,email:"test@example.invalid"}};
 }

@@ -5,7 +5,7 @@ import { useServerDataState, useDataRefresh } from "@/components/use-data-refres
 import { useLocale } from "@/components/locale-controller";
 
 import Link from "next/link";
-import { responseError } from "@/lib/response-error";
+import {createTrackerWithProperties} from "./create-tracker";
 import { TrackerCreateSheet, type TrackerCreateInput } from "./tracker-create-sheet";
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/icons";
@@ -35,30 +35,10 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
 
 
   async function createTracker({ draft, iconFile, fields }: TrackerCreateInput) {
-    const response = await fetch("/api/trackers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
-    if (!response.ok) throw new Error(await responseError(response, "Could not create the Tracker. Please try again."));
-    {
-      const tracker = await response.json() as TrackerSummary;
-      const followUpErrors: string[] = [];
-      if (iconFile) {
-        const body = new FormData(); body.set("file", iconFile);
-        const upload = await fetch(`/api/trackers/${tracker.id}/icon`, { method: "POST", body });
-        if (!upload.ok) followUpErrors.push("its image could not be uploaded");
-      }
-      for (const [sortOrder, field] of fields.entries()) {
-        const fieldResponse = await fetch(`/api/trackers/${tracker.id}/fields`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-            name: field.name, type: field.type, options: field.options.split(/[,，]/).map((item) => item.trim()).filter(Boolean), required: field.required,
-            includeInStats: field.includeInStats, showAfterQuickCapture: false, unit: field.unit, precision: Number(field.precision), defaultValue: null, sortOrder,
-          }),
-        });
-        if (!fieldResponse.ok) followUpErrors.push(`the property “${field.name}” could not be added`);
-      }
-      invalidateCachedJson("/api/trackers/quick-log");
-      await load();
-      if (followUpErrors.length) setError(`Tracker created, but ${followUpErrors.join(" and ")}. You can finish it in Settings.`);
-      else showActionToast(english ? "Tracker created." : "观测已创建。");
-    }
+    const {followUpErrors}=await createTrackerWithProperties(fetch,{draft,iconFile,fields});
+    invalidateCachedJson("/api/trackers/quick-log");await load();
+    if(followUpErrors.length)setError(`Tracker created, but ${followUpErrors.join(" and ")}. You can finish it in Settings.`);
+    else showActionToast(english?"Tracker created.":"观测已创建。");
   }
 
   async function quickCapture(tracker: TrackerSummary) {

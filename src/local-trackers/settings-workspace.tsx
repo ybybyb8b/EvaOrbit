@@ -1,4 +1,7 @@
-import {TrackerSyncSettings} from "./tracker-sync-settings";
+import {NativeIntegrationAccess} from "./native-integration-access";
+import {useLocalInitialPath} from "./routes";
+import {LocalSyncManager} from "./sync-manager";
+import {AccountSettings} from "@/components/account-settings";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { SettingsDirectory } from "@/app/settings/settings-directory";
 import { AppearanceSettings } from "@/components/appearance-settings";
@@ -24,7 +27,7 @@ import { browserTrackerExport, type LocalAccount, type TrackerPlatform } from ".
 
 export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
   const { english } = useLocale();
-  const [section, setSection] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [section, setSection] = useState(useLocalInitialPath("/settings").replace(/^\/settings$/, "")), [error, setError] = useState("");
   const request = useCallback((path: RequestInfo | URL, init?: RequestInit) => {
     if (typeof path !== "string") return Promise.reject(new Error("Unsupported settings request"));
     return platform.settingsConfiguration(account, path, init);
@@ -41,22 +44,19 @@ export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { 
   const back = <LocalBackAction onBack={section ? () => navigate("") : undefined} />;
   const web = (path: string) => <a className="button secondary" href={`https://eva-orbit.vercel.app${path}`} target="_blank" rel="noreferrer">{english ? "Manage on Web" : "在网页版管理"}</a>;
   const detail = (title: string, children: ReactNode) => <div className="page settings-detail-page local-settings">{back}<PageHeading eyebrow="" title={title} />{children}</div>;
-  const nativeNote = <DevelopmentDetails title={english ? "Development version" : "开发版说明"}><p>{english ? "Device status is available here. Health uploads, Calendar/Reminders sync and notification scheduling remain disabled in this development version; existing data and queues are retained." : "此处可查看设备状态；开发版暂不开放健康上传、日历/提醒事项同步和通知排程，保留已有数据和队列。"}</p></DevelopmentDetails>;
+  const nativeNote = <DevelopmentDetails title={english ? "Development version" : "开发版说明"}><p>{english ? "Device status is available here. Native integration is managed in the app’s secure online settings panel. Primary-account access must be enabled on the server. Existing data and queues are retained." : "此处可查看设备状态；原生接入通过 App 内安全在线设置页管理，主账号须由服务端启用。保留已有数据和队列。"}</p></DevelopmentDetails>;
 
+  if (section === "/settings/data-sync") return <>{back}<LocalSyncManager key={account.accountId} account={account} platform={platform}/></>;
   if (section === "/settings/app-appearance") return detail(english ? "App & Appearance" : "应用与外观", <div className="provider-card"><AppearanceSettings localOnly /></div>);
   if (section === "/settings/life-day") return <>{back}<LifeDaySettings request={request} embedded /></>;
   if (section === "/settings/ai-connection") return detail(english ? "AI & Connection" : "AI 与连接", <AiProvidersSettings request={aiRequest} onlineOnly />);
   if (section === "/settings/calendar-interpretation") return <>{back}<LocalCalendarSettings request={request} onAppleIntegration={() => navigate("/settings/apple-integration")} /></>;
-  if (section === "/settings/health-native") return detail(english ? "Health & Native" : "健康与原生能力", <><AppleHealthSection readOnly />{nativeNote}</>);
-  if (section === "/settings/apple-integration") return detail(english ? "Apple Integration" : "Apple 日历与提醒事项", <><AppleIntegrationSection readOnly />{nativeNote}</>);
-  if (section === "/settings/notifications") return detail(english ? "Notifications" : "通知", <><div className="notification-channels"><NativeNotificationControl readOnly /></div><section className="notification-channel"><h2>{english ? "Reminder rules & delivery" : "提醒规则与投递"}</h2><p>{english ? "Manage Bark, browser push, reminder rules and delivery history with your online account." : "Bark、网页推送、提醒规则与投递历史由在线账户管理。"}</p>{web("/settings/notifications")}</section>{nativeNote}</>);
-  if (section === "/settings/data-backup") return detail(english ? "Data & Backup" : "数据与备份", <><div className="settings-summary"><section><span>{english ? "Cloud data" : "云端数据"}</span><strong>Supabase Postgres</strong></section><section><span>{english ? "On this device" : "本机存储"}</span><strong>{platform.native ? "SQLite" : "IndexedDB"}</strong></section><section><span>{english ? "Access" : "访问方式"}</span><strong>{english ? "Private account · RLS" : "私人账户 · RLS"}</strong></section></div><BackupExportCard onExport={exportLocal} /><section className="legacy-data-settings"><div><h2>{english ? "Cloud backup & preserved data" : "云端备份与保留数据"}</h2><p>{english ? "Export full cloud business data or access legacy Memory on Web. Local unsynced drafts are included only in the local Tracker export above." : "前往网页版导出完整云端业务数据或访问旧 Memory。未同步本机草稿仅包含在上方的本机 Tracker 导出中。"}</p></div>{web("/settings/data-backup")}</section></>);
+  if (section === "/settings/health-native") return detail(english ? "Health & Native" : "健康与原生能力", <><NativeIntegrationAccess account={account} path="/settings/health-native"/><AppleHealthSection readOnly />{nativeNote}</>);
+  if (section === "/settings/apple-integration") return detail(english ? "Apple Integration" : "Apple 日历与提醒事项", <><NativeIntegrationAccess account={account} path="/settings/apple-integration"/><AppleIntegrationSection readOnly />{nativeNote}</>);
+  if (section === "/settings/notifications") return detail(english ? "Notifications" : "通知", <><NativeIntegrationAccess account={account} path="/settings/notifications"/><div className="notification-channels"><NativeNotificationControl readOnly /></div><section className="notification-channel"><h2>{english ? "Reminder rules & delivery" : "提醒规则与投递"}</h2><p>{english ? "Manage Bark, browser push, reminder rules and delivery history with your online account." : "Bark、网页推送、提醒规则与投递历史由在线账户管理。"}</p>{web("/settings/notifications")}</section>{nativeNote}</>);
+  if (section === "/settings/data-backup") return detail(english ? "Data & Backup" : "数据与备份", <><AccountSettings email={account.email} onSwitch={onSignIn} onSignOut={async()=>{await platform.signOut();onSignOut();}}/>{error&&<ErrorNotice>{error}</ErrorNotice>}<div className="settings-summary"><section><span>{english ? "Cloud data" : "云端数据"}</span><strong>Supabase Postgres</strong></section><section><span>{english ? "On this device" : "本机存储"}</span><strong>{platform.native ? "SQLite" : "IndexedDB"}</strong></section><section><span>{english ? "Access" : "访问方式"}</span><strong>{english ? "Private account · RLS" : "私人账户 · RLS"}</strong></section></div><button type="button" className="button secondary" onClick={()=>navigate("/settings/data-sync")}>{english?"Manage data & sync":"管理数据与同步"}</button><BackupExportCard onExport={exportLocal} /><section className="legacy-data-settings"><div><h2>{english ? "Cloud backup & preserved data" : "云端备份与保留数据"}</h2><p>{english ? "Export full cloud business data or access legacy Memory on Web. Local unsynced drafts are included only in the local Tracker export above." : "前往网页版导出完整云端业务数据或访问旧 Memory。未同步本机草稿仅包含在上方的本机 Tracker 导出中。"}</p></div>{web("/settings/data-backup")}</section></>);
 
-  return <>{back}<SettingsDirectory onNavigate={navigate} /><div className="page local-settings local-settings-account">
-    {error && <ErrorNotice>{error}</ErrorNotice>}
-    <section className="provider-card"><h2>{english ? "Account" : "账户"}</h2><p className="user-content">{account.email}</p><div className="long-term-actions"><button className="button secondary" disabled={busy} onClick={onSignIn}>{english ? "Connect account" : "连接账户"}</button><button className="text-button" disabled={busy} onClick={async () => { if (busy) return; setBusy(true); setError(""); try { await platform.signOut(); onSignOut(); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); } finally { setBusy(false); } }}>{english ? "Sign out" : "退出账户"}</button></div></section>
-    <TrackerSyncSettings account={account} platform={platform}/>
-  </div></>;
+  return <>{back}<SettingsDirectory onNavigate={navigate} /></>;
 }
 
 function LocalCalendarSettings({ request, onAppleIntegration }: { request: typeof fetch; onAppleIntegration: () => void }) {

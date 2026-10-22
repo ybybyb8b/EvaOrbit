@@ -41,7 +41,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     """#
 
     private let hostConfiguration: HostConfiguration
-    static let trackerMethods: Set<String> = ["business.request", "trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
+    static let trackerMethods: Set<String> = ["navigation.openNativeSettings", "business.request", "trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal", "healthkit.getStatus", "eventkit.getStatus", "notification.getStatus", "notification.openSettings"]
     private let trackerController: TrackerLocalController?
     private let healthKitCoordinator: HealthKitCoordinator
@@ -466,6 +466,24 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case "trackers.sync":
                     guard let request = parameters["request"] as? [String: Any] else { throw TrackerLocalError.invalid }
                     result = try await controller.synchronize(request)
+                case "navigation.openNativeSettings":
+                    guard let accountId = parameters["accountId"] as? String, let path = parameters["path"] as? String,
+                          let target = URL(string: path, relativeTo: hostConfiguration.baseURL)?.absoluteURL,
+                          NativeIntegrationViewController.allows(target, configuration: hostConfiguration),
+                          let presenter = webView?.window?.rootViewController, presenter.presentedViewController == nil,
+                          let onlineConfiguration = HostConfiguration(validating: hostConfiguration.baseURL) else { throw TrackerLocalError.invalid }
+                    let frozenCookies = try await controller.beginNativeSettings(accountId: accountId)
+                    guard presenter.presentedViewController == nil else { controller.endNativeSettings(accountId: accountId); throw TrackerLocalError.invalid }
+                    let settingsBridge = NativeBridge(hostConfiguration: onlineConfiguration, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager, eventKitSyncEngine: eventKitSyncEngine)
+                    settingsBridge.onDataChanged = onDataChanged
+                    let settings = NativeIntegrationViewController(configuration: onlineConfiguration, target: target, cookies: frozenCookies, bridge: settingsBridge)
+                    settings.onClose = { [weak webView] in
+                        controller.endNativeSettings(accountId: accountId)
+                        webView?.evaluateJavaScript("window.dispatchEvent(new Event('evaorbit:native-active'))")
+                    }
+                    let navigation = UINavigationController(rootViewController: settings)
+                    presenter.present(navigation, animated: true) { navigation.presentationController?.delegate = settings }
+                    result = ["opened": true]
                 case "trackers.exportState":
                     guard let account = try await controller.database.account()?["accountId"], let presenter = webView?.window?.rootViewController else { throw TrackerLocalError.account }
                     let legacy = try await controller.database.read(accountId: account)
@@ -483,7 +501,10 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 replyHandler(["ok": true, "id": id, "result": result], nil)
             } catch {
                 let message = (error as? TrackerLocalError)?.localizedDescription ?? "Tracker 操作失败，本地数据已保留，请稍后重试"
-                replyHandler(failure(id: id, code: "tracker_failed", message: message), nil)
+                let code: String
+                if let localError = error as? TrackerLocalError, case .sessionExpired = localError { code = "session_expired" }
+                else { code = "tracker_failed" }
+                replyHandler(failure(id: id, code: code, message: message), nil)
             }
         }
     }

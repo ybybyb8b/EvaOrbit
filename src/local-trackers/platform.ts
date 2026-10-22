@@ -1,3 +1,4 @@
+import {notifySessionExpired} from "./session-events";
 import {allowsSettingsConfiguration} from "../lib/settings-configuration-request";
 import {allowsBusinessRequest} from "../lib/business-request-policy";
 import {trackerReplicaState,requireReplicaMutations,validateReplicaHandshake} from "../lib/tracker-replica";
@@ -13,7 +14,7 @@ import {validateSubscriptionsSnapshot,type SubscriptionsReadonlySnapshot} from "
 import {validateCatsSnapshot,type CatsReadonlySnapshot} from "../lib/cats-readonly";
 import type { TrackerLocalState, TrackerStorage } from "../lib/tracker-local-store";
 import type { TrackerSyncRequest, TrackerSyncResponse } from "../lib/tracker-local-contract";
-import { nativeCall } from "../lib/native-bridge";
+import { nativeCall,NativeBridgeError } from "../lib/native-bridge";
 import { responseError } from "../lib/response-error";
 import { fetchReadonlyTrackers, readonlyTrackerState, type TrackerReadonlySnapshot } from "../lib/tracker-readonly";
 import { homeResourceKey, validateHomeResource, type HomeReadonlyResource, type HomeResourceKind } from "../lib/home-readonly";
@@ -583,7 +584,8 @@ async function businessRequest(account:LocalAccount,path:string,native:boolean,i
   if(native){
     const info=await nativeCall<{methods?:string[]}>("host.getInfo");
     if(!info.methods?.includes("business.request"))throw new Error("Install the updated development Host to save online.");
-    const result=await nativeCall<{status:number;body:unknown}>("business.request",{accountId:account.accountId,path,method,contentType,...(bodyBase64===undefined?{}:{bodyBase64}),offline:!navigator.onLine});
+    const result=await nativeCall<{status:number;body:unknown}>("business.request",{accountId:account.accountId,path,method,contentType,...(bodyBase64===undefined?{}:{bodyBase64}),offline:!navigator.onLine}).catch(reason=>{if(reason instanceof NativeBridgeError&&reason.code==="session_expired")notifySessionExpired(account.accountId);throw reason;});
+    if(result?.status===401)notifySessionExpired(account.accountId);
     init.signal?.throwIfAborted();
     if(!result)throw new Error("This content has not been downloaded. Connect to load it.");
     return new Response(result.status===204?null:JSON.stringify(result.body),{status:result.status,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
@@ -596,13 +598,15 @@ async function businessRequest(account:LocalAccount,path:string,native:boolean,i
     if(!cached)throw new Error("This content has not been downloaded. Connect to load it.");
     return Response.json(cached.body,{status:cached.status});
   }
-  const identity=await api<{authenticated:boolean;accountId:string;onlineBusinessProtocol?:number;onlineBusinessTestAccount?:boolean}>("session","GET");
+  const identity=await api<{authenticated:boolean;accountId:string;onlineBusinessProtocol?:number;onlineBusinessTestAccount?:boolean;onlineBusinessAccountAllowed?:boolean}>("session","GET");
   await current();
-  if(!identity.authenticated||identity.accountId!==account.accountId)throw new Error("Account changed. Reopen the form.");
+  if(!identity.authenticated){notifySessionExpired(account.accountId);throw new Error("Session expired. Reconnect to save; local data is preserved.");}
+  if(identity.accountId!==account.accountId)throw new Error("Account changed. Reopen the form.");
   if(identity.onlineBusinessProtocol!==1)throw new Error("The account-safe online API must be published before saving. Downloaded data is preserved.");
-  if(identity.onlineBusinessTestAccount!==true)throw new Error("Online business testing is enabled only for configured test accounts. Tracker sync is unchanged.");
+  if(identity.onlineBusinessTestAccount!==true&&identity.onlineBusinessAccountAllowed!==true)throw new Error("Online saving is not enabled for this account. Downloaded data and Tracker sync are preserved.");
   const response=await fetch(`/eo-api/business/${path.slice(5)}`,{method,body:init.body,headers:{...(typeof init.body==="string"?{"Content-Type":"application/json"}:{}),"X-EvaOrbit-Account":account.accountId},credentials:"same-origin",cache:"no-store",redirect:"error",signal:init.signal??AbortSignal.timeout(20000)}).catch(error=>{if(method!=="GET")throw new Error("The save result is unknown. Reconnect and refresh before submitting again; nothing will retry automatically.");throw error;});
   await current();
+  if(response.status===401)notifySessionExpired(account.accountId);
   if(method==="GET"&&response.ok){
     const value=await response.clone().json();await current();
     if(new TextEncoder().encode(JSON.stringify(value)).length>8*1024*1024)throw new Error("Downloaded response exceeds the offline cache limit; previous data is preserved.");

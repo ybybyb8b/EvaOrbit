@@ -20,6 +20,7 @@ export type DailySleepSummary = {
   comparable: boolean;
   napMinutes: number;
   secondary: Array<{ actual: ActualSleep; window: HomeSleepSummary["records"][number] | null }>;
+  recordedWindows?: HomeSleepSummary["records"];
   source: "apple_health" | "timeline_estimate" | "none";
 };
 type Interval = [number, number];
@@ -104,12 +105,31 @@ export function buildDailySleepSummary(date: string, samples: SleepSample[], tim
     efficiency: comparable ? actual!.durationMinutes / window!.durationMinutes : null, comparable,
     napMinutes: sessions.slice(1).reduce((sum, session) => sum + session.durationMinutes, 0),
     secondary,
+    recordedWindows: windows.filter(record => !sessions.some(session => Date.parse(record.startAt) < Date.parse(session.endAt) && Date.parse(record.endAt) > Date.parse(session.startAt))),
     source: actual ? "apple_health" : window ? "timeline_estimate" : "none",
   };
 }
 
 export function sleepDisplay(summary: DailySleepSummary) {
   return summary.actual ? { ...summary.actual, source: "apple_health" as const } : summary.window ? { ...summary.window, source: "timeline_estimate" as const } : null;
+}
+
+export function recordedSleepWindows(summary: DailySleepSummary, timeline?: HomeSleepSummary | null) {
+  const sessions = [summary.actual, ...summary.secondary.map(episode => episode.actual)].filter((value): value is ActualSleep => value !== null);
+  return (timeline?.records ?? summary.recordedWindows ?? []).filter(record => !sessions.some(session => Date.parse(record.startAt) < Date.parse(session.endAt) && Date.parse(record.endAt) > Date.parse(session.startAt)));
+}
+
+export function sleepPresentationRows(summary: DailySleepSummary, timeline?: HomeSleepSummary | null): Array<{ kind: "total" | "main" | "other" | "window" | "recorded" | "mixedTotal"; durationMinutes: number }> {
+  const recorded = recordedSleepWindows(summary, timeline);
+  // Calendar windows may overlap each other. Count their union once, keeping measured sleep separate.
+  const intervals = union(recorded.map(record => [Date.parse(record.startAt), Date.parse(record.endAt)]));
+  if (intervals.length) {
+    const calendarRows = intervals.map(([start, end]) => ({kind: "recorded" as const, durationMinutes: (end - start) / 60_000}));
+    const measuredRows = summary.actual ? [{kind: "main" as const, durationMinutes: summary.actual.durationMinutes}, ...summary.secondary.map(({actual}) => ({kind: "other" as const, durationMinutes: actual.durationMinutes}))] : [];
+    const rows = [...measuredRows, ...calendarRows];
+    return rows.length > 1 ? [...rows, {kind: "mixedTotal", durationMinutes: rows.reduce((sum, row) => sum + row.durationMinutes, 0)}] : rows;
+  }
+  return sleepOverviewRows(summary);
 }
 
 export function sleepOverviewRows(summary: DailySleepSummary): Array<{ kind: "total" | "main" | "other" | "window"; durationMinutes: number }> {

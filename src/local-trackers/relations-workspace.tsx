@@ -1,9 +1,10 @@
+import {useLocalInitialPath} from "./routes";
 import {createContext,useContext,useCallback,useEffect,useState,type ComponentProps} from "react";
 import {RelationsView} from "@/app/relations/relations-view";
 import {RelationPersonContent} from "@/app/relations/[id]/person-content";
 import {RelationsDataProvider,type RelationsRead} from "@/components/relations-data-context";
 import {OnlineForms as FormPreview,useOnlineReader,onlineBusinessChanged} from "./online-business";
-import {DevelopmentDetails} from "@/components/development-details";
+import {LocalDownloadStatus} from "./download-status";
 import {ErrorNotice} from "@/components/error-notice";
 import {PageLoading} from "@/components/page-loading";
 import {readRelationsSnapshot,type RelationsReadonlySnapshot} from "@/lib/relations-readonly";
@@ -13,7 +14,7 @@ import type {LocalAccount,TrackerPlatform} from "./platform";
 const Navigate=createContext<(path:string)=>void>(()=>{});
 function LocalRelationsLink({href,children,...props}:ComponentProps<"a">&{href:string}){const navigate=useContext(Navigate);return <a {...props} href={href} onClick={event=>{event.preventDefault();navigate(href);}}>{children}</a>;}
 export function RelationsWorkspace({account,platform}:{account:LocalAccount;platform:TrackerPlatform}){
-  const [snapshot,setSnapshot]=useState<RelationsReadonlySnapshot|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(true),[path,setPath]=useState("/relations"),[attempt,setAttempt]=useState(0);
+  const [snapshot,setSnapshot]=useState<RelationsReadonlySnapshot|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(true),[path,setPath]=useState(useLocalInitialPath("/relations")),[attempt,setAttempt]=useState(0);
   useEffect(()=>{
     let alive=true,running=false;
     async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const value=await platform.relationsSnapshot(account,true);if(alive&&value){setSnapshot(value);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Could not refresh Relations; cache preserved");}finally{running=false;if(alive)setBusy(false);}}
@@ -27,7 +28,7 @@ export function RelationsWorkspace({account,platform}:{account:LocalAccount;plat
   const detail=snapshot?.details.find(row=>path===`/relations/${row.person.id}`);
   return <>
     {path!=="/relations"&&<LocalBackAction onBack={()=>navigate("/relations")}/>}
-    <div className="page local-relations-status"><DevelopmentDetails><p>Downloaded Relations · {snapshot?new Date(snapshot.capturedAt).toLocaleString():"Not downloaded"}. Up to 100 people and fewer than 500 exchanges; 8 MiB per account. Photos and notes are cached. Incomplete ledgers are refused. Changes save online. Offline writes are not queued.</p><button className="text-button" disabled={busy} onClick={()=>setAttempt(n=>n+1)}>{busy?"Refreshing…":"Refresh downloaded Relations"}</button></DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
+    <div className="page local-relations-status"><LocalDownloadStatus module="Relations" capturedAt={snapshot?.capturedAt} busy={busy} error={error}  refresh={()=>setAttempt(n=>n+1)}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
     {!snapshot?busy?<PageLoading title="关系" englishTitle="Relations"/>:<div className="page"><p>Relations has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><RelationsDataProvider read={read} Link={LocalRelationsLink}><FormPreview>
       {path==="/relations"?<RelationsView initialPeople={snapshot.people.filter(person=>!person.archivedAt)}/>:detail?<RelationPersonContent key={detail.person.id} initial={detail} people={snapshot.people} navigate={navigate}/>:<div className="page"><p>This person is not in the downloaded snapshot.</p></div>}
     </FormPreview></RelationsDataProvider></Navigate.Provider>}

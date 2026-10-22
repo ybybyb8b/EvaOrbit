@@ -105,7 +105,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
     {items.length ? <div className="chronicle-list" aria-busy={loading}>{items.map((entry) => <Link className="chronicle-row" href={`/chronicle/${entry.id}`} key={entry.id}>
       <time className="chronicle-row-date" dateTime={entry.date}>{chronicleDateLabel(entry.date,english)}</time>
       <span className="chronicle-row-copy"><span className="chronicle-row-heading"><strong>{entry.title}</strong><small>{entry.source==="manual"&&!english?"手动":sourceLabel(entry.source)}</small></span><span className="chronicle-row-excerpt">{chronicleExcerpt(entry.contentMd)}</span></span>
-      <Icon name="arrow" />
+
     </Link>)}</div> : loading ? <p role="status">{english?"Loading entries…":"正在加载纪事…"}</p> : error ? <button className="button secondary" onClick={()=>void load()}>{english?"Try again":"重试"}</button> : <div className="empty-state chronicle-empty"><span className="empty-icon"><Icon name="chronicle" /></span><h2>{query ? "No matching entries" : "Chronicle is empty"}</h2><p>{query ? "Try a different title or phrase." : "Add a dated Markdown entry to begin."}</p>{!query && <button className="button secondary" onClick={openCreate}><Icon name="plus" />New entry</button>}</div>}
   </div>;
 }

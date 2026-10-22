@@ -211,7 +211,6 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
         <span className="task-title-line"><span className="task-title">{task.title}</span>{task.priority === "high" && <span className="priority-label high">{english ? "High" : "高优先级"}</span>}</span>
         {(due || reminder || task.notes || task.tags.length > 0) && <span className="task-meta">{due && (task.dueDate !== activeDate || task.dueTime) && <time dateTime={`${task.dueDate}${task.dueTime ? `T${task.dueTime}` : ""}`}>{task.dueDate === activeDate ? task.dueTime : due}</time>}{task.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}{reminder && <span className="task-reminder-state" title={reminder.triggerType === "absolute" ? `${reminder.absoluteDate} ${reminder.absoluteTime}` : (english ? "At due time" : "截止时提醒")}><Icon name="notifications" variant="stroke" /><span className="sr-only">{english ? "Reminder set" : "已设置提醒"}</span></span>}{task.notes && <span className="task-note-indicator" title={task.notes}><Icon name="memory" variant="stroke" /><span className="sr-only">{english ? "Has notes" : "有备注"}</span></span>}</span>}
       </button>
-      <Icon name="arrow" />
     </article>;
   }
 

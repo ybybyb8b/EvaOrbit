@@ -3,7 +3,7 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { detectAvatarImage, MAX_AVATAR_BYTES } from "../avatar";
-import { allowedEmail, usesSupabase } from "../config";
+import { isAllowedAccountEmail, usesSupabase } from "../config";
 import { getRepository } from "../repositories";
 import { createSupabaseServerClient } from "../supabase/server";
 import { ValidationError } from "../validation";
@@ -25,7 +25,7 @@ async function cloudIdentity() {
   if (error) throw new Error("验证 Tracker 图片访问失败");
   const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : "";
   const email = typeof data?.claims?.email === "string" ? data.claims.email.toLocaleLowerCase() : "";
-  if (!userId || !allowedEmail() || email !== allowedEmail()) throw new Error("当前账户无权访问 Tracker 图片");
+  if (!userId || !isAllowedAccountEmail(email)) throw new Error("当前账户无权访问 Tracker 图片");
   return { client, userId };
 }
 

@@ -78,7 +78,7 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     {local&&<p className="chronicle-scope">{english?`Searching downloaded Memo${complete?"":" · latest 100 only"}`:`搜索已下载碎片${complete?"":" · 仅最近100条"}`}</p>}
     {items.length ? <div className="memo-list" aria-busy={loading}>{items.map((item) => <Link className="memo-row" href={`/memo/${item.id}`} key={item.id}>
       <span className="memo-row-copy"><span><strong>{item.title}</strong><small>{optionLabel(memoTypeOptions, item.type)} · {optionLabel(memoStatusOptions, item.status)}</small></span><span>{plainExcerpt(item.content)}</span>{item.tags.length > 0 && <span className="tag-line">{item.tags.map((value) => <em key={value}>{value}</em>)}</span>}</span>
-      <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleDateString()}</time><Icon name="arrow" />
+      <time dateTime={item.updatedAt}>{new Date(item.updatedAt).toLocaleDateString()}</time>
     </Link>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="memory" /></span><h2>No matching Memo</h2><p>Adjust the filters or keep a new long-term memory.</p></div>}
   </div>;
 }

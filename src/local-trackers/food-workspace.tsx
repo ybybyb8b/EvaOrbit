@@ -1,3 +1,5 @@
+import {useLocalInitialPath} from "./routes";
+import {LocalBackAction} from "./navigation-header";
 import {LimitEditor} from "@/app/food-drink/limit-editor";
 import type {DrinkLimit,FoodLog,DrinkLog} from "@/lib/types";
 import {useBusinessRequest} from "@/components/business-request-context";
@@ -6,7 +8,7 @@ import {FoodDrinkHomeView,type FoodDrinkRecord} from "@/components/food-drink-ho
 import {FoodRecordsView} from "@/components/food-records-view";
 import {FoodSourceLinks} from "@/app/food/food-source-links";
 import {DrinkRecordsView} from "@/components/drink-records-view";
-import {DevelopmentDetails} from "@/components/development-details";
+import {LocalDownloadStatus} from "./download-status";
 import {ErrorNotice} from "@/components/error-notice";
 import {PageLoading} from "@/components/page-loading";
 import {FoodLocalData} from "./food-local-data";
@@ -30,15 +32,17 @@ export function FoodPreviewEditor({editor,onClose,onSaved=onClose,date=dateInEva
 }
 
 export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:TrackerPlatform}){
+  const initial=new URL(useLocalInitialPath("/food-drink"),"https://offline.invalid");
+  const initialPlace=/^\/food\/places\/([1-9][0-9]*)$/.exec(initial.pathname);
   const onlineBusiness=useOnlineBusiness();
   const request=useBusinessRequest();
   const [history,setHistory]=useState<{key:string;foods?:FoodLog[];drinks?:DrinkLog[]}|null>(null);
   const [limitEditor,setLimitEditor]=useState<DrinkLimit|"new"|null>(null);
   const [resourceError,setResourceError]=useState("");
   const [snapshot,setSnapshot]=useState<FoodReadonlySnapshot|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
-  const [section,setSection]=useState<"home"|"food"|"drink"|"places"|"library"|"place">("home"),[editor,setEditor]=useState<FoodDrinkRecord|null>(null);
-  const [placeId,setPlaceId]=useState(0);
-  const [date,setDate]=useState(dateInEvaOrbit),[query,setQuery]=useState(""),[meal,setMeal]=useState(""),[drinkType,setDrinkType]=useState<DrinkType|"">("");
+  const [section,setSection]=useState<"home"|"food"|"drink"|"places"|"library"|"place">(initialPlace?"place":initial.pathname==="/food/places"?"places":initial.pathname==="/food/library"?"library":initial.pathname==="/food"?"food":initial.pathname.startsWith("/drinks")?"drink":"home"),[editor,setEditor]=useState<FoodDrinkRecord|null>(null);
+  const [placeId,setPlaceId]=useState(Number(initialPlace?.[1])||0);
+  const [date,setDate]=useState(initial.searchParams.get("date")??dateInEvaOrbit()),[query,setQuery]=useState(""),[meal,setMeal]=useState(initial.searchParams.get("mealType")??""),[drinkType,setDrinkType]=useState<DrinkType|"">("");
   const load=useCallback(async(signal:AbortSignal)=>{
     setLoading(true);
     try{
@@ -51,7 +55,7 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
       else if(!cached)setError("Food & Drink has not been downloaded. Connect after the read-only API is available.");
     }catch(reason){if(!signal.aborted)setError(reason instanceof Error?reason.message:"Could not refresh Food & Drink. Cached data is preserved.");}
     finally{if(!signal.aborted)setLoading(false);}
-  },[account,platform]);
+  },[account,platform,setLoading,setSnapshot,setDate,setError]);
   useEffect(()=>{
     const controller=new AbortController();let running=false;
     const refresh=()=>{if(!running){running=true;void load(controller.signal).finally(()=>{running=false;});}};
@@ -73,8 +77,8 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   const drinks=(history?.key===historyKey?history.drinks:undefined)??snapshot?.drinks.filter(row=>(!drinkType||row.drinkType===drinkType)&&(!q||[drinkRecordName(row),row.notes,row.foodPlaceName??""].some(value=>value.toLocaleLowerCase().includes(q))))??[];
   function LocalLink({href,children,...props}:FoodLinkProps){return <a {...props} href={href} onClick={event=>{event.preventDefault();const place=/^\/food\/places\/([1-9][0-9]*)$/.exec(href);if(place){setPlaceId(Number(place[1]));setSection("place");}else if(href==="/food/places")setSection("places");else if(href==="/food/library")setSection("library");else if(href==="/food-drink")setSection("home");else if(href==="/food")setSection("food");else if(href==="/drinks/history")setSection("drink");else return;setQuery("");window.scrollTo(0,0);}}>{children}</a>;}
   return <FoodLocalData account={account} platform={platform} Link={LocalLink} onIssue={setResourceError}><FormPreview>
-    <div className="page local-food-status"><DevelopmentDetails><p role="status" className="tracker-settings-help">Downloaded offline · {snapshot?`${snapshot.window.from} – ${snapshot.window.to} · Downloaded ${new Date(snapshot.capturedAt).toLocaleString()}`:"Not downloaded"}</p><p className="tracker-settings-help">Up to 500 food and 500 drink records from the last 30 days. Places and Library cache up to 200 places and 100 items; only downloaded details are available offline. Changes save online; offline writes are not queued.</p>{snapshot&&(!snapshot.window.foodComplete||!snapshot.window.drinkComplete)&&<p role="status">Record limit reached. Downloaded history is partial.</p>}</DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}{resourceError&&<ErrorNotice>{resourceError}</ErrorNotice>}</div>
-    {section==="places"?<FoodPlacesView/>:section==="library"?<FoodLibraryView/>:section==="place"?<FoodPlaceDetailContent key={placeId} id={placeId} onRemoved={()=>setSection("places")}/>:section==="home"?<FoodDrinkHomeView data={snapshot?.home??null} loading={loading} error={snapshot?"":error} onRetry={()=>void load(new AbortController().signal)} onRecord={setEditor} onLimit={setLimitEditor} LinkComponent={LocalLink} readOnly={!onlineBusiness} action={<button className="button primary" onClick={()=>setEditor({kind:"food"})}>Log</button>}/>:<><div className="page local-food-back"><button className="back-link text-button" onClick={()=>{setSection("home");setQuery("");}}>Back to Food & Drink</button></div>
+    <LocalBackAction onBack={section!=="home"?()=>{setSection(section==="place"?"places":"home");setQuery("");window.scrollTo(0,0);}:undefined}/><div className="page local-food-status"><LocalDownloadStatus module="Food & Drink" capturedAt={snapshot?.capturedAt} busy={loading} error={error}  refresh={()=>window.dispatchEvent(new Event("online"))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}{resourceError&&<ErrorNotice>{resourceError}</ErrorNotice>}</div>
+    {section==="places"?<FoodPlacesView/>:section==="library"?<FoodLibraryView/>:section==="place"?<FoodPlaceDetailContent key={placeId} id={placeId} onRemoved={()=>setSection("places")}/>:section==="home"?<FoodDrinkHomeView data={snapshot?.home??null} loading={loading} error={snapshot?"":error} onRetry={()=>void load(new AbortController().signal)} onRecord={setEditor} onLimit={setLimitEditor} LinkComponent={LocalLink} readOnly={!onlineBusiness} action={<button className="button primary" onClick={()=>setEditor({kind:"food"})}>Log</button>}/>:<>
       {loading&&!snapshot?<PageLoading/>:section==="food"?<FoodRecordsView date={date} setDate={setDate} query={query} setQuery={setQuery} mealFilter={meal} setMealFilter={setMeal} logs={foods} action={<PageLogAction label="Record food" onClick={()=>setEditor({kind:"food"})}>Log</PageLogAction>} renderSources={log=><FoodSourceLinks record={log}/>} onOpen={record=>setEditor({kind:"food",record})} readOnly={!onlineBusiness} emptyMessage={!snapshot?"No downloaded records.":date<snapshot.window.from||date>snapshot.window.to?"This date is outside the downloaded window.":"No matching downloaded records"}/>:<DrinkRecordsView logs={drinks} logScope={<PageLogAction label="Record drink" onClick={()=>setEditor({kind:"drink"})}>Log</PageLogAction>} query={query} setQuery={setQuery} type={drinkType} setType={setDrinkType} onOpen={record=>setEditor({kind:"drink",record})} readOnly={!onlineBusiness} LinkComponent={LocalLink} emptyMessage={!snapshot?"No downloaded records.":"No matching downloaded records"}/>}</>}
     {limitEditor&&<LimitEditor limit={limitEditor==="new"?undefined:limitEditor} onClose={()=>setLimitEditor(null)} onSaved={()=>load(new AbortController().signal)}/>}
     {editor&&<FoodPreviewEditor editor={editor} date={date} onClose={()=>setEditor(null)}/>}

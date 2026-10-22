@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+主用本地版候选新增 `navigation.openNativeSettings`：仅三个既有系统设置路径，复用线上设置/Bridge，非持久 Cookie、打开期间锁定本地账户切换，服务端双开关且拒绝测试账户。`session_expired` 错误供本地重新登录弹层保留草稿。没有新 framework、权限、entitlement 或安装链变更。新增 UIKit 面板/XCTest 尚待 macOS CI；本地主界面自动 EventKit/通知协调和 HealthKit 写回尚未等同在线 Host。发布、验收与回退边界见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
 ## Tracker Local-first PoC（独立运行模式）
 
 独立 SwiftUI 界面已废弃。现有 Host 可选加载本地打包 React Tracker，流程见 [Tracker PoC 契约](TRACKER_LOCAL_FIRST_POC.md)。Windows 使用 `npm run dev:trackers` 实时预览；构建前执行 `npm run build:trackers`。CI 手动启用 `local_trackers` 会使用独立 Bundle ID 构建 PoC，默认仍构建线上 Host。先应用新的 Tracker 同步迁移并部署 API，再验收设备双向同步；本地自动化不等于迁移已应用或真机已通过。

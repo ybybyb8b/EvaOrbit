@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { detectAvatarImage, MAX_AVATAR_BYTES } from "../avatar";
-import { allowedEmail, usesSupabase } from "../config";
+import { isAllowedAccountEmail, usesSupabase } from "../config";
 import { getRepository } from "../repositories";
 import { createSupabaseServerClient } from "../supabase/server";
 import { validSubscriptionIconKey } from "../subscription-icon";
@@ -20,7 +20,7 @@ async function cloudIdentity() {
   const { data, error } = await client.auth.getClaims();
   const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : "";
   const email = typeof data?.claims?.email === "string" ? data.claims.email.toLowerCase() : "";
-  if (error || !userId || !allowedEmail() || email !== allowedEmail()) throw new Error("当前账户无权访问订阅图标");
+  if (error || !userId || !isAllowedAccountEmail(email)) throw new Error("当前账户无权访问订阅图标");
   return { client, userId };
 }
 

@@ -60,3 +60,15 @@ test("error owners retain recovery actions, clean up on unmount and allow inline
   assert.equal(fallback.props.className, "form-error extra");
   assert.equal(fallback.props.id, "field-error");
 });
+
+test("empty initial or cleared errors never create a blank banner", () => {
+  const f=fixture(),owner=f.owner("loading");
+  for(const children of ["", "   ", null, false]){
+    f.render(owner,f.loaded.RegisteredErrorNotice,{children});
+    assert.equal(f.banner(),undefined);
+  }
+  f.render(owner,f.loaded.RegisteredErrorNotice,{children:"Could not load"});
+  assert.ok(f.banner());
+  f.render(owner,f.loaded.RegisteredErrorNotice,{children:""});
+  assert.equal(f.banner(),undefined);
+});

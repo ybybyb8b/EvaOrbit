@@ -6769,3 +6769,38 @@ html[data-mode="dark"] :is(.cats-page,.pet-detail-page){--cats-work-shadow:0 4px
 .media-rename-action {margin-bottom:16px;}
 .media-more {margin-top:24px;}
 .media-series-copy small,.media-cover-fallback small {color:var(--text-secondary);}
+
+/* Shared narrow-screen acceptance fixes: content owns its width; controls do not overlap. */
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+.long-term-toolbar > * { min-width:0; max-width:100%; }
+.project-row-main > div { min-width:0; flex:1; }
+.project-row-main strong { display:block; overflow-wrap:anywhere; }
+.project-row-main p { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.6; }
+.memo-row-copy > span:first-child { flex-wrap:wrap; max-width:100%; }
+.memo-row-copy strong { max-width:100%; overflow-wrap:anywhere; white-space:normal; }
+.medication-presets .weight-record-list article { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:12px; }
+.medication-presets .weight-record-list article > button:first-child { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; padding:16px 0; }
+.medication-presets .weight-record-list article > button:first-child > * { grid-area:auto; max-width:100%; white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.medication-presets .weight-record-list article > button:first-child > span { font-size:14px; line-height:1.6; }
+.medication-presets .weight-record-list article > .text-button { position:static; margin-top:12px; min-height:44px; }
+.memo-row { grid-template-columns:minmax(0,1fr) 92px; }
+.project-row { grid-template-columns:minmax(0,1fr) auto 96px auto; }
+.chronicle-page .chronicle-row { grid-template-columns:120px minmax(0,1fr); }
+@media(max-width:760px) {
+  .long-term-toolbar,.diary-toolbar,.case-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .long-term-toolbar .search-box { grid-column:1/-1; }
+  .project-row { grid-template-columns:minmax(0,1fr); padding:20px 4px; }
+  .project-row-main strong { font-size:20px; line-height:1.3; }
+  .project-row-main p { font-size:14px; }
+  .chronicle-page .chronicle-row { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .chronicle-page .chronicle-row-copy { grid-column:1; grid-row:auto; }
+  .chronicle-page .chronicle-row-heading strong { font-size:21px; line-height:1.4; }
+  .memo-row { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .memo-row > time { text-align:left; grid-column:1; }
+}
+@media(max-width:600px) { .long-term-toolbar,.diary-toolbar,.case-toolbar { grid-template-columns:minmax(0,1fr); } }
+
+.health-record-card { grid-template-columns:84px minmax(0,1fr); }
+.relation-person-row { grid-template-columns:54px minmax(0,1fr) auto; }
+@media(max-width:720px) { .relation-person-row { grid-template-columns:48px minmax(0,1fr); } }
+@media(max-width:600px) { .health-record-card { grid-template-columns:minmax(0,1fr); } }

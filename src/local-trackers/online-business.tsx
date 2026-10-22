@@ -11,7 +11,7 @@ import {isPreviewAccount,type LocalAccount,type TrackerPlatform} from "./platfor
 export const onlineBusinessChanged = "eo:online-business-changed";
 const Context=BusinessRequestContext;
 export function OnlineBusinessProvider({account,platform,children}:{account:LocalAccount|null;platform:TrackerPlatform;children:ReactNode}){
-  const [warning,setWarning]=useState("");
+  const [warning,setWarning]=useState<{accountId:string;text:string}|null>(null);
   const session=useMemo(()=>{
     if(!account||isPreviewAccount(account))return null;
     let alive=true;
@@ -22,10 +22,11 @@ export function OnlineBusinessProvider({account,platform,children}:{account:Loca
       if(response.ok&&(init?.method??"GET").toUpperCase()!=="GET"){
         clearClientJsonCache();
         const domain=path.split("/")[2];
-        const refresh=domain==="food"||domain==="drinks"?()=>platform.foodSnapshot(account,true):domain==="tasks"||domain==="projects"||domain==="project-items"||domain==="lucius"?()=>platform.workspaceSnapshot(account,domain==="project-items"?"projects":domain,true):domain==="health"||domain==="nutrition"||domain==="preferences"?()=>platform.healthSnapshot(account,true):domain==="cats"?()=>platform.catsSnapshot(account,true):domain==="relations"?()=>platform.relationsSnapshot(account,true):domain==="media"?()=>platform.mediaSnapshot(account,true):domain==="subscriptions"?()=>platform.subscriptionsSnapshot(account,true):domain==="chronicle"?()=>platform.chronicleSnapshot(account,true):domain==="memos"?()=>platform.memoSnapshot(account,true):domain==="inbox"?()=>platform.inboxSnapshot(account,true):()=>platform.homeResource(account,"day",dateInEvaOrbit(),true);
-        try{await refresh();if(alive)setWarning("");}catch{if(alive)setWarning("Saved online. The offline copy could not be refreshed; connect again before relying on it.");}
-        if(!alive)throw new Error("Account changed. Check the cloud before submitting again.");
-        window.dispatchEvent(new CustomEvent(onlineBusinessChanged,{detail:{accountId:account.accountId,path}}));
+        const refresh=domain==="trackers"?async()=>{}:domain==="food"||domain==="drinks"?()=>platform.foodSnapshot(account,true):domain==="tasks"||domain==="projects"||domain==="project-items"||domain==="lucius"?()=>platform.workspaceSnapshot(account,domain==="project-items"?"projects":domain,true):domain==="health"||domain==="nutrition"||domain==="preferences"?()=>platform.healthSnapshot(account,true):domain==="cats"?()=>platform.catsSnapshot(account,true):domain==="relations"?()=>platform.relationsSnapshot(account,true):domain==="media"?()=>platform.mediaSnapshot(account,true):domain==="subscriptions"?()=>platform.subscriptionsSnapshot(account,true):domain==="chronicle"?()=>platform.chronicleSnapshot(account,true):domain==="memos"?()=>platform.memoSnapshot(account,true):domain==="inbox"?()=>platform.inboxSnapshot(account,true):()=>platform.homeResource(account,"day",dateInEvaOrbit(),true);
+        // Acknowledged writes are final. Cache work must not keep the form submitting
+        // or turn an acknowledged save into an apparent failure/retry.
+        void refresh().then(()=>{if(alive)setWarning(null);},()=>{if(alive)setWarning({accountId:account.accountId,text:"Saved online. The offline copy could not be refreshed; connect again before relying on it."});}).finally(()=>{if(alive)window.dispatchEvent(new CustomEvent(onlineBusinessChanged,{detail:{accountId:account.accountId,path}}));});
+
       }
       return response;
     };
@@ -38,7 +39,7 @@ export function OnlineBusinessProvider({account,platform,children}:{account:Loca
     const uninstall=installBusinessRequest(session.request);
     return()=>{session.dispose();uninstall();clearClientJsonCache();};
   },[session]);
-  return <Context.Provider value={session?.request??null}>{children}{warning&&account&&<ErrorNotice>{warning}</ErrorNotice>}</Context.Provider>;
+  return <Context.Provider value={session?.request??null}>{children}{warning&&warning.accountId===account?.accountId&&<ErrorNotice>{warning.text}</ErrorNotice>}</Context.Provider>;
 }
 export function useOnlineBusiness(){return Boolean(useContext(Context));}
 export function OnlineForms({children}:{children:ReactNode}){

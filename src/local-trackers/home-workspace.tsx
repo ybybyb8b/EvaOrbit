@@ -1,22 +1,22 @@
+import {LocalRouteLink} from "./routes";
 import {useOnlineBusiness,onlineBusinessChanged} from "./online-business";
 import {BottomLogScope} from "@/components/bottom-log-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HomeCalendarTimeline, type HomeTimelineProps, type HomeLinkProps } from "@/components/home-calendar-timeline";
+import { HomeCalendarTimeline, type HomeTimelineProps } from "@/components/home-calendar-timeline";
 import { HomePageView } from "@/components/home-page-view";
 import { DueRemindersView } from "@/components/due-reminders-view";
 import { ReiconAssetContext } from "@/components/reicon-symbol";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
-import {DevelopmentDetails} from "@/components/development-details";
+import {LocalDownloadStatus} from "./download-status";
 import { useLocale } from "@/components/locale-controller";
 import type { HomeDayOverview } from "@/lib/home-day";
 import type { TimelineMonthSummary, DueReminder } from "@/lib/types";
 import type { HomeReadonlyResource, HomeResourceKind } from "@/lib/home-readonly";
 import { dateInEvaOrbit, shiftDate } from "@/lib/time";
-import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
+import { type LocalAccount, type TrackerPlatform } from "./platform";
 
 type Initial = {day:HomeReadonlyResource;month:HomeReadonlyResource;due:HomeReadonlyResource|null};
-function ReadOnlyHomeLink(props:HomeLinkProps) { return <a {...props} aria-disabled="true" tabIndex={-1} onClick={event=>event.preventDefault()}/>; }
 export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:TrackerPlatform}) {
   const {english,language}=useLocale();
   const onlineBusiness=useOnlineBusiness();
@@ -74,12 +74,9 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
   },[resources,english]);
   return <div className="local-home" data-no-translate="true">
     <div className="page local-home-status">
-    <DevelopmentDetails>
-    <div className="local-sync-status" role="status"><span>{isPreviewAccount(account)&&!platform.native?(english?"Home · Synthetic local preview":"Home · 本机示例预览"):(english?"Home · Downloaded offline snapshots":"Home · 只读离线快照")}{initial?" · "+new Date(initial.day.capturedAt).toLocaleString(language):""}</span>{loading&&<span>{english?"Refreshing…":"正在刷新…"}</span>}</div>
-    <p className="tracker-settings-help">{english?"Recent and previously opened dates are available offline. Saving requires a connection. Offline changes are not queued.":"最近及已打开的日期下载后可离线查看。联网可保存，离线改动不进入上传队列。"}</p>
-    </DevelopmentDetails>
+    <LocalDownloadStatus module="Home" capturedAt={initial?.day.capturedAt} busy={loading} error={error} refresh={()=>window.dispatchEvent(new Event("online"))}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
     </div>
-    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language} due={initial.due?<DueRemindersView readOnly={!onlineBusiness} compact LinkComponent={ReadOnlyHomeLink} items={initial.due.data as DueReminder[]}/>:<p>{english?"Reminder snapshot has not been downloaded.":"尚未下载提醒快照。"}</p>}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly={!onlineBusiness} LogScope={BottomLogScope} LinkComponent={ReadOnlyHomeLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<PageLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect after the read-only API is available. No empty account data has been inferred.":"只读接口可用后联网下载；当前状态不表示账户没有记录。"}</p></div>}
+    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language} due={initial.due?<DueRemindersView readOnly={!onlineBusiness} compact LinkComponent={LocalRouteLink} items={initial.due.data as DueReminder[]}/>:<p>{english?"Reminder snapshot has not been downloaded.":"尚未下载提醒快照。"}</p>}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly={!onlineBusiness} LogScope={BottomLogScope} LinkComponent={LocalRouteLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<PageLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect to download Home for offline access.":"联网下载首页后即可离线查看。"}</p></div>}
   </div>;
 }

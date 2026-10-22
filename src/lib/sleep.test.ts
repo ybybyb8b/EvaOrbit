@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { actualSleepSessions, buildDailySleepSummary, sleepDisplay, sleepOverviewRows, type SleepSample } from "./sleep.ts";
+import { actualSleepSessions, buildDailySleepSummary, sleepDisplay, sleepOverviewRows, sleepPresentationRows, recordedSleepWindows, type SleepSample } from "./sleep.ts";
 import { enabledHealthKitReadMetrics, parseHealthKitReadChanges } from "./healthkit-read.ts";
 import { parseHealthKitUpload } from "./healthkit.ts";
 import type { HomeSleepSummary } from "./home-day.ts";
@@ -14,6 +14,27 @@ const night = [
   sample("deep", "2026-10-04T18:00:00Z", "2026-10-04T20:00:00Z", 4),
   sample("rem", "2026-10-04T20:00:00Z", "2026-10-04T23:00:00Z", 5),
 ];
+
+test("calendar-only naps remain visible alongside measured sleep, including older cached summaries", () => {
+  const nap={id:2,title:"Sleep",startAt:"2026-10-05T06:49:00Z",endAt:"2026-10-05T07:43:00Z",durationMinutes:54,notes:""};
+  const timeline={...window,records:[...window.records,nap]};
+  const summary=buildDailySleepSummary("2026-10-05",night,timeline);
+  assert.deepEqual(sleepPresentationRows(summary),[{kind:"main",durationMinutes:420},{kind:"recorded",durationMinutes:54},{kind:"mixedTotal",durationMinutes:474}]);
+  assert.equal(summary.napMinutes,0); // The measured total is never inflated by a calendar record.
+  const legacy={...summary};delete legacy.recordedWindows;
+  assert.deepEqual(sleepPresentationRows(legacy,timeline),sleepPresentationRows(summary));
+  const measured=buildDailySleepSummary("2026-10-05",[...night,sample("nap",nap.startAt,nap.endAt)],timeline);
+  assert.deepEqual(recordedSleepWindows(measured),[]);
+  assert.deepEqual(sleepPresentationRows(measured),[{kind:"main",durationMinutes:420},{kind:"other",durationMinutes:54},{kind:"total",durationMinutes:474}]);
+});
+
+test("overlapping calendar sleep records count once and work without HealthKit", () => {
+  const a={id:2,title:"Sleep",startAt:"2026-10-05T06:00:00Z",endAt:"2026-10-05T07:00:00Z",durationMinutes:60,notes:""};
+  const b={...a,id:3,startAt:"2026-10-05T06:30:00Z",endAt:"2026-10-05T07:30:00Z"};
+  const summary=buildDailySleepSummary("2026-10-05",[],{...window,records:[a,b]});
+  assert.deepEqual(sleepPresentationRows(summary),[{kind:"recorded",durationMinutes:90}]);
+  assert.equal(summary.actual,null);assert.equal(summary.efficiency,null);
+});
 
 test("all night stages belong to wake date; Actual Sleep excludes Awake/In Bed and compares against window", () => {
   const result = buildDailySleepSummary("2026-10-05", night, window);

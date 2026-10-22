@@ -13,7 +13,7 @@ export async function getRelationsReadonlySnapshot(accountId:string){return with
   for(const person of people){
     const detail=await getRelationPersonDetail(person.id);
     if(!detail)throw new Error("Relations changed during download; previous cache preserved");
-    if(person.photoPath){const image=await readRelationPhoto(person.id);if(!image||image.bytes.length>4*1024*1024||!detectAvatarImage(image.bytes))throw new Error("Could not download relation photo; previous cache preserved");person.photoPath=`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`;}
+    if(person.photoPath){const image=await readRelationPhoto(person.id);if(image&&(image.bytes.length>4*1024*1024||!detectAvatarImage(image.bytes)))throw new Error("Invalid relation photo; previous cache preserved");person.photoPath=image?`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`:null;}
     detail.person={...detail.person,photoPath:person.photoPath};
     details.push(detail);
   }

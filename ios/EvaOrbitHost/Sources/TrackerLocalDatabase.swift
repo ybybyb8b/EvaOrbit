@@ -2,11 +2,12 @@ import Foundation
 import SQLite3
 
 enum TrackerLocalError: LocalizedError {
-    case storage, account, invalid, readOnly, network(String)
+    case storage, account, invalid, readOnly, sessionExpired, network(String)
     var errorDescription: String? {
         switch self {
         case .storage: return "本地数据库读写失败，原有数据已保留，请检查设备存储空间"
         case .account: return "本地账户与同步账户不同，请重新连接账户"
+        case .sessionExpired: return "登录已过期，请重新连接账户；本地记录已保留"
         case .invalid: return "Tracker 请求或数据版本不正确，原有数据已保留"
         case .readOnly: return "当前为真实数据只读验收，写入和旧队列上传已停用"
         case .network(let message): return message

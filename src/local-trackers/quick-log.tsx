@@ -1,4 +1,5 @@
 import {OnlineForms,useOnlineReader,useOnlineBusiness} from "./online-business";
+import {useBusinessRequest} from "@/components/business-request-context";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore,type ComponentProps} from "react";
 import {InboxCaptureForm} from "@/app/inbox/inbox-capture-form";
 import {CatRecordEditor} from "@/app/cats/cat-record-editor";
@@ -10,7 +11,6 @@ import {HealthDataProvider,type HealthRead} from "@/components/health-data-conte
 import {CatsDataProvider,type CatsRead} from "@/components/cats-data-context";
 import {FormSheet} from "@/components/form-sheet";
 import {FormPreview} from "@/components/form-preview";
-import {DevelopmentDetails} from "@/components/development-details";
 import {ErrorNotice} from "@/components/error-notice";
 import {showActionToast} from "@/components/action-toast";
 import {useLocale} from "@/components/locale-controller";
@@ -30,6 +30,7 @@ function PreviewLink({children,...props}:ComponentProps<"a">&{href:string}){retu
 
 export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:TrackerPlatform}){
   const onlineBusiness=useOnlineBusiness();
+  const businessRequest=useBusinessRequest();
   const action=useBottomLog(),{english}=useLocale();
   const store=useMemo(()=>trackerSession(account,platform),[account,platform]);
   const state=useSyncExternalStore(store.subscribe,store.getSnapshot);
@@ -78,7 +79,8 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   const selected=state.records.find(row=>row.resourceType==="tracker"&&row.id===selectedId);
   const hidden=new Set(state.outbox.filter(item=>item.operation==="delete").map(item=>item.localId));
   const trackers=state.records.filter(row=>row.resourceType==="tracker"&&!row.payload.archivedAt&&!hidden.has(row.id));
-  const readHealth=useOnlineReader(useCallback<HealthRead>(async(path,init)=>{if(!health)throw new Error("Health is not downloaded");return readHealthSnapshot(health,path,init);},[health]));
+  // Opening a downloaded form must never wait for the online business/session roundtrip.
+  const readHealth=useCallback<HealthRead>(async(path,init)=>{if((init?.method??"GET").toUpperCase()!=="GET")return businessRequest(path,init);if(!health)throw new Error("Health is not downloaded");return readHealthSnapshot(health,path,init);},[health,businessRequest]);
   const readCats=useOnlineReader(useCallback<CatsRead>(async(path,init)=>{if(!cats)throw new Error("Cats is not downloaded");return readCatsSnapshot(cats,path,init);},[cats]));
   const healthDefinition=getHealthQuickLog(active),HealthEditor=healthDefinition?.Editor;
   async function selectTracker(id:string){
@@ -100,7 +102,7 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
       setDate(action?.selectedDate??dateInEvaOrbit());setError("");setActive("picker");if(action?.picker)void choose(action.picker);
     }}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
-    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}<DevelopmentDetails><p>{english?"Tracker records save on this device and sync when available. Other forms save online; offline changes are not queued.":"Tracker 记录保存到本机，联网后同步。其他表单联网保存，离线不排队上传。"}</p></DevelopmentDetails></FormSheet>}
+    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}</FormSheet>}
     {active==="inbox"&&<OnlineForms><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" submitLabel={english?"Save":"记下"} submitDisabled={!onlineBusiness}><InboxCaptureForm sheet formId="local-inbox-capture" onSaved={close}/></FormSheet></OnlineForms>}
     {(active==="food"||active==="drink")&&<FoodPreviewEditor date={date} editor={{kind:active}} onClose={close}/>}
     {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={async()=>close()}/></OnlineForms></HealthDataProvider>}

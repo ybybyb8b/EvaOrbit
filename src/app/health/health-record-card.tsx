@@ -2,7 +2,6 @@
 import {HealthLink as Link} from "@/components/health-data-context";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
-import { Icon } from "@/components/icons";
 import type { HealthRecord } from "@/lib/types";
 import { formatRecordDate, formatRecordDateTime, healthRecordStatusLabels, healthRecordTypeLabels, healthRecordUsesStatus, recordSummary } from "./health-record-utils";
 
@@ -16,7 +15,7 @@ export function HealthRecordCard({ record }: { record: HealthRecord }) {
       <h3>{record.title}</h3>
       {summary && <p>{summary}</p>}
     </div>
-    <Icon name="arrow" />
+
   </Link>;
 }
 

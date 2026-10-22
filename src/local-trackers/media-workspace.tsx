@@ -1,9 +1,10 @@
+import {useLocalInitialPath} from "./routes";
 import {createContext,useContext,useCallback,useEffect,useMemo,useState,type ComponentProps} from "react";
 import {MediaView} from "@/app/media/media-view";
 import {MediaDetailContent} from "@/app/media/[id]/media-detail-content";
 import {MediaDataProvider,type MediaRead} from "@/components/media-data-context";
 import {OnlineForms as FormPreview,useOnlineReader,onlineBusinessChanged} from "./online-business";
-import {DevelopmentDetails} from "@/components/development-details";
+import {LocalDownloadStatus} from "./download-status";
 import {ErrorNotice} from "@/components/error-notice";
 import {PageLoading} from "@/components/page-loading";
 import {readMediaSnapshot,mediaListItems,type MediaReadonlySnapshot} from "@/lib/media-readonly";
@@ -13,7 +14,7 @@ import type {LocalAccount,TrackerPlatform} from "./platform";
 const Navigate=createContext<(path:string)=>void>(()=>{});
 function LocalMediaLink({href,children,...props}:ComponentProps<"a">&{href:string}){const navigate=useContext(Navigate);return <a {...props} href={href} onClick={event=>{event.preventDefault();navigate(href);}}>{children}</a>;}
 export function MediaWorkspace({account,platform}:{account:LocalAccount;platform:TrackerPlatform}){
-  const [snapshot,setSnapshot]=useState<MediaReadonlySnapshot|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(true),[path,setPath]=useState("/media"),[attempt,setAttempt]=useState(0);
+  const [snapshot,setSnapshot]=useState<MediaReadonlySnapshot|null>(null),[error,setError]=useState(""),[busy,setBusy]=useState(true),[path,setPath]=useState(useLocalInitialPath("/media")),[attempt,setAttempt]=useState(0);
   useEffect(()=>{
     let alive=true,running=false;
     async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const value=await platform.mediaSnapshot(account,true);if(alive&&value){setSnapshot(value);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Could not refresh Media; cache preserved");}finally{running=false;if(alive)setBusy(false);}}
@@ -32,6 +33,6 @@ export function MediaWorkspace({account,platform}:{account:LocalAccount;platform
     {!snapshot?busy?<PageLoading title="影视" englishTitle="Media"/>:<div className="page"><p>Media has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><MediaDataProvider read={read} Link={LocalMediaLink}><FormPreview>
       {path==="/media"?<MediaView initial={initial} initialSeries={snapshot.series}/>:series?<MediaView key={series.id} initial={initial} initialSeries={snapshot.series} defaultSeries={series}/>:detail?<MediaDetailContent key={detail.id} initial={detail} initialSeries={snapshot.series} navigate={navigate}/>:<div className="page"><p>This work is not in the downloaded snapshot.</p></div>}
     </FormPreview></MediaDataProvider></Navigate.Provider>}
-    <div className="page local-media-status"><DevelopmentDetails><p>Downloaded Media · {snapshot?new Date(snapshot.capturedAt).toLocaleString():"Not downloaded"}. Up to 1,000 works with viewing history and covers; 8 MiB per account. Incomplete downloads are refused. Changes save online. Offline writes are not queued.</p><button className="text-button" disabled={busy} onClick={()=>setAttempt(n=>n+1)}>{busy?"Refreshing…":"Refresh downloaded Media"}</button></DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
+    <div className="page local-media-status"><LocalDownloadStatus module="Media" capturedAt={snapshot?.capturedAt} busy={busy} error={error}  refresh={()=>setAttempt(n=>n+1)}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
   </>;
 }

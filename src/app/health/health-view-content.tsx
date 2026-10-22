@@ -55,7 +55,7 @@ export function HealthViewContent({ navigation, view = "overview", initialSleep,
   const titles = { overview: "Health", sleep: english ? "Sleep" : "睡眠", weight: english ? "Weight" : "体重", training: english ? "Training" : "训练", energy: english ? "Energy" : "能量", cycle: english ? "Period & medication" : "经期与用药", records: english ? "Health records" : "健康记录" };
   return <div className={`page health-page health-refined${view !== "overview" ? ` ${styles.detail}` : ""}`} data-view={view} data-has-current={dashboard.current.length > 0}>
     <PageHeader eyebrow="" title={titles[view]} action={(view === "overview" || view === "records") ? <PageLogAction label={view === "overview" ? "记录健康" : "新增健康记录"} className="button primary" onClick={view === "overview" ? () => setQuickPicker(true) : openCreate}><Icon name="plus" />{english ? "Log" : "记录"}</PageLogAction> : undefined} />
-    {quickPicker && <FormSheet title={english ? "Log health" : "记录健康"} onClose={() => setQuickPicker(false)}><div className="health-log-choices">{HEALTH_QUICK_LOGS.map(item => <button type="button" key={item.kind} onClick={() => { setQuickPicker(false); setQuickKind(item.kind); }}><item.icon /><span>{english ? item.en : item.zh}</span><Icon name="arrow" /></button>)}</div></FormSheet>}
+    {quickPicker && <FormSheet title={english ? "Log health" : "记录健康"} onClose={() => setQuickPicker(false)}><div className="health-log-choices">{HEALTH_QUICK_LOGS.map(item => <button type="button" key={item.kind} onClick={() => { setQuickPicker(false); setQuickKind(item.kind); }}><item.icon /><span>{english ? item.en : item.zh}</span></button>)}</div></FormSheet>}
     {QuickEditor && <QuickEditor initialDate={today} onClose={() => setQuickKind(null)} onSaved={async () => { router.refresh(); }} />}
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
     {error && <ErrorNotice>{error}</ErrorNotice>}
@@ -67,7 +67,7 @@ export function HealthViewContent({ navigation, view = "overview", initialSleep,
     {view === "sleep" && <SleepSection initial={initialSleep} />}
     {view === "training" && <TrainingSection initialPlan={initialTrainingPlan} initial={initialTraining} initialRecent={initialRecentTraining} initialSuggestions={initialTrainingSuggestions} initialFocused={initialFocusedTraining} today={today} />}
     {view === "energy" && <DailyEnergyCard initial={initialEnergy} initialHistory={initialEnergyHistory} />}
-    {view === "records" && <section className="health-section health-records-section"><div className="section-heading"><div><h2>{english ? "Recent records" : "近期记录"}</h2></div><Link href="/health/records">{english ? "View all" : "查看全部"} <Icon name="arrow" /></Link></div><HealthRecordList records={dashboard.recent} /></section>}
+    {view === "records" && <section className="health-section health-records-section"><div className="section-heading"><div><h2>{english ? "Recent records" : "近期记录"}</h2></div><Link href="/health/records">{english ? "View all" : "查看全部"} </Link></div><HealthRecordList records={dashboard.recent} /></section>}
   </div>;
 }
 

@@ -7,6 +7,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     private let cookies: HTTPCookieStorage
     private var activeSession: URLSession?
     private var generation = 0
+    private var nativeSettingsAccount: String?
     private var replicaSessions: [String: Int] = [:]
     private var acceptanceReceipts: [String: [String: Any]] = [:]
     private var session: URLSession {
@@ -72,6 +73,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
 
     func signIn(email: String, password: String) async throws -> [String: String] {
+        guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before switching accounts.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
         generation += 1
         let expectedGeneration = generation
@@ -83,6 +85,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         return ["accountId": id, "email": email]
     }
     func signOut() async throws {
+        guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before signing out.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
         generation += 1
         try await database.clearAccount()
@@ -137,6 +140,23 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
             return methods.contains(method) && pathname.range(of: pattern, options: .regularExpression) != nil
         }
     }
+    func beginNativeSettings(accountId: String) async throws -> [HTTPCookie] {
+        try await database.requireAccount(accountId)
+        let expectedGeneration = generation
+        guard nativeSettingsAccount == nil,
+              let identity = try await request(path: "session", method: "GET") as? [String: Any],
+              identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId,
+              identity["nativeIntegrationsAccountAllowed"] as? Bool == true,
+              identity["onlineBusinessTestAccount"] as? Bool != true else {
+            throw TrackerLocalError.network("Native integrations require an explicitly enabled primary account. Test account data cannot write to Apple Health or Reminders.")
+        }
+        try await database.requireAccount(accountId)
+        guard generation == expectedGeneration, nativeSettingsAccount == nil else { throw TrackerLocalError.account }
+        nativeSettingsAccount = accountId
+        return cookies.cookies(for: baseURL) ?? []
+    }
+    func endNativeSettings(accountId: String) { if nativeSettingsAccount == accountId { nativeSettingsAccount = nil } }
+
     func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool) async throws -> Any {
         guard Self.allowsBusinessRequest(path: path, method: method), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
         try await database.requireAccount(accountId)
@@ -147,9 +167,10 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
             guard expectedGeneration == generation else { throw TrackerLocalError.account }
             return cached
         }
-        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true, identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
+        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true else { throw TrackerLocalError.sessionExpired }
+        guard identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
         guard identity["onlineBusinessProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe online API must be published before saving. Downloaded data is preserved.") }
-        guard identity["onlineBusinessTestAccount"] as? Bool == true else { throw TrackerLocalError.network("Online business testing is enabled only for configured test accounts. Tracker sync is unchanged.") }
+        guard identity["onlineBusinessTestAccount"] as? Bool == true || identity["onlineBusinessAccountAllowed"] as? Bool == true else { throw TrackerLocalError.network("Online saving is not enabled for this account. Downloaded data and Tracker sync are preserved.") }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation, let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL, endpoint.host == baseURL.host, endpoint.scheme == baseURL.scheme, endpoint.port == baseURL.port else { throw TrackerLocalError.account }
         var outgoing = URLRequest(url: endpoint)

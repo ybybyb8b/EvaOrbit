@@ -8,7 +8,9 @@
 
 本地 React 当前在 Tracker 离线同步之外接入统一的 [在线业务请求层](LOCAL_ONLINE_BUSINESS.md)：原版表单通过账户绑定的 `BusinessRequestContext`、平台 `businessRequest` 与 Native `business.request` 使用既有 API；其余模块只在联网时保存，下载快照和访问缓存用于离线查看，不建立新的写入队列。Web 默认 fetch 和业务服务保持原职责。服务器须发布 `onlineBusinessProtocol:1` 并明确配置测试账号，不能仅靠 UI 解除只读；发布契约、已授权的 Media 迁移与独立 API 发布/回退记录见该文。
 
-下方各模块的“只读阶段”说明保留其 GET 快照、缓存容量与原始迁移边界；当前真实账户的交互写入以本节为准。Home 部分跨模块导航、系统权限、Eva/Graph 和 Tracker 高级设置仍未因此开放。
+本地缺图仅退化到占位图，不得阻断业务快照；认证失败、损坏图片及容量越界仍拒绝。表单首次打开优先使用已下载数据，不等待在线候选请求。Tracker 的记录增删改继续使用独立副本；整个 Tracker 的永久删除单独走测试账号在线白名单 DELETE，确认后先同步并检查该 Tracker 自身待提交操作，不重放其他模块队列。修复与验收边界见 [本地版集中验收修复](LOCAL_ACCEPTANCE_FIXES.md)。
+
+下方各模块的“只读阶段”说明保留其 GET 快照、缓存容量与原始迁移边界；当前真实账户的交互写入以本节为准。Home 跨模块链接经本地路由适配；系统权限写入、Eva/Graph 和 Tracker 高级设置仍未因此开放。
 
 ## 模块速查
 
@@ -45,17 +47,18 @@
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，不依赖 Next 或自动重试请求；服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
 - **共享外观**：[fonts.css](../src/app/fonts.css) 统一 Web／本地的字体文件与注册；[appearance-preferences.ts](../src/lib/appearance-preferences.ts)、`LocaleController` 统一偏好读取、应用和持久化，`ThemeController` 统一系统外观及既有 Native loading 适配。两端使用同一 [AppearanceSettings](../src/components/appearance-settings.tsx)；Web 沿用偏好 API，本地只写设备持久存储，不进入业务 outbox。首次本地预览以英语／August 为基准，保留已有显式选择；Web 默认值不变。旧字体键 `ibm` 继续对应 August。
-- **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一八个设置入口；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
+- **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一设置目录；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器、选择器及 [菜单定义](../src/components/quick-log-options.ts)。本地 [Universal Log](../src/local-trackers/quick-log.tsx) 与 Tracker 页面经 [tracker-session.ts](../src/local-trackers/tracker-session.ts) 共用会话 Store、字段校验和独立同步队列；首页向表单传递所选日期，一键快速记录沿用当前时间语义。其他模块复用原表单，明确授权的测试账户通过统一在线请求层保存，离线只读适配仍作为读取后备。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
 - **共享导航**：[app-navigation.tsx](../src/components/app-navigation.tsx) 统一 Web 与本地 React 的侧栏菜单、图标、选中状态及手机抽屉（焦点约束、Escape、遮罩关闭和关闭后焦点恢复）。Web 保留全部入口、认证退出和系统协调器，本地仅注入已迁移模块链接；Home/Settings 继续复用底栏，本地不再维护顶部模块按钮。
+- **本地数据状态**：[DownloadStatusProvider](../src/local-trackers/download-status.tsx) 将各业务加载器的下载时间、忙碌、失败及完整性投影到统一 Header 云朵入口，不另发请求，不把快照下载称为离线写同步。Tracker 保留独立副本状态与冲突处理。账户卡片两端复用 [AccountSettings](../src/components/account-settings.tsx)，入口归 Data & Backup；[数据与同步](../src/app/settings/data-sync/page.tsx) 是两端统一管理入口，本地 [LocalSyncManager](../src/local-trackers/sync-manager.tsx) 读取各账户快照状态、按两板块并发更新，Tracker 独立队列/冲突控制集中在其详情中；设置目录不再单列账户或 Tracker Sync。模块能力由 [sync-modules](../src/lib/sync-modules.ts) 明确声明，不能用 UI 开关伪装尚无协议的离线写入。
 - **Header 与返回契约**：两端复用 [NavigationBackControl](../src/components/navigation-back-control.tsx)，Web 保留 `PageBackButton` 的历史/fallback 语义；本地壳层管理返回，详情仅注册动作，账户操作归 Settings。新模块不再自画返回按钮，现有模块的批量迁移边界见 [统一 Header](SHARED_NAVIGATION_HEADER.md)。
 - **时间与缓存**：[time.ts](../src/lib/time.ts) 与 [validation.ts](../src/lib/validation.ts) 统一日期处理；未知时间保留日期锚点及 explicit-time 标记。生活日分界由 [life-day.ts](../src/lib/life-day.ts) 和 [服务](../src/lib/services/life-day.ts) 计算循环完成日期，不把所有业务日期统一平移。新增可缓存 API 时同时检查 [cache-policy.ts](../src/lib/cache-policy.ts) 的读取白名单与依赖失效。
 - **详文**：[开发规则](../AGENTS.md)、[部署](../DEPLOYMENT.md)、[客户端缓存](CLIENT_PAGE_CACHE.md)、[备份与本地恢复](DATA_BACKUP.md)、[表单体验](FORM_INPUT_EXPERIENCE_REVIEW.md)。
 
 ## Home
 
-- **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 禁止写入及未迁移模块导航，通过平台接口访问账户隔离快照。
+- **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 使用账户隔离快照，表单复用在线业务请求，跨模块链接由 [本地路由](../src/local-trackers/routes.tsx) 转入已迁移模块。
 - **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。只读接口独立于 Tracker 同步协议及迁移；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
 - **职责与入口**：[page.tsx](../src/app/page.tsx)、[home-calendar-timeline.tsx](../src/app/home-calendar-timeline.tsx)、[home-day 服务](../src/lib/services/home-day.ts)、[timeline 服务](../src/lib/services/timeline.ts)。
 - **数据与接口**：`/api/home-day`、`/api/timeline`；读取 Calendar、Tasks、Food/Drink、Trackers、Health、Cats、Relations、Subscriptions 等原始记录。今日一记使用 `daily_journal_entries` 与 `/api/daily-journal`，服务为 [daily-journal.ts](../src/lib/services/daily-journal.ts)。
@@ -209,6 +212,8 @@
 - **详文**：[远程 MCP 配置与契约](../MCP.md)、[服务边界与兼容限制](../src/lib/mcp/README.md)。
 
 ## Native
+
+- **主用本地版候选**：Tracker 高级配置共享 `TrackerDetailContent`，在线业务账户通道由独立正式账户开关控制；会话过期弹层保留草稿。`navigation.openNativeSettings` 复用三项在线系统设置，账户锁定、Cookie 隔离、测试账户禁止；本地自动系统同步与真机验收尚未完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 - **Tracker 只读验收边界**：`tracker-readonly.ts` 验证生产 GET 快照，`local-trackers/platform.ts` 和 Native bridge 的旧 commit/sync 通道继续关闭；独立编辑副本只放行新冻结队列，见 [编辑阶段](TRACKER_EDITABLE_REPLICA.md)；原生 SQLite 的独立 `tracker_readonly_cache` 不替换旧 state/outbox。`trackers.acceptanceStatus` 执行含 WAL 的自动 SQLite backup 与 quick_check。正式双向写入仍以单独批准的协议 2 部署为前提，参见 [验收记录](TRACKER_POC_VALIDATION.md)。
 

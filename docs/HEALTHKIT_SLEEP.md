@@ -25,6 +25,7 @@ Sleep 首次完整读取可访问历史；明确更新 Health Access 会重置�
 - HealthKit 无统一 session ID；连续/重叠区间或间隔不超过 **90 分钟**的区间归为同一 episode，较长间隔作为独立睡眠/小睡。这是摘要的明确启发式规则，不能宣称与 Apple Health 聚合结果逐分钟相同。
 - 完整夜间 episode 按最后实际 asleep 区间结束的当地日期归属，午夜前阶段也保留在醒来日期。优先样本 metadata 时区；缺失时记录读取时的设备时区及 `device` 标记，无法还原缺失的历史时区。DST 用真实 instant 时差，不用墙钟相减。
 - Home 与 Health 主摘要显示该醒来日期时长最长的实际睡眠；其他 episode 作为额外睡眠单列。窗口选择与主睡眠重叠最多的 Calendar 窗口；没有实际睡眠时保持既有主窗口 fallback。
+- 日历记录的睡眠不要求必须有 HealthKit 测量。共享 Home 卡片与睡眠详情同时保留未被测量 episode 覆盖的日历记录，标记 Calendar record / 无设备测量；有重叠实测的同一窗口不重复列入合计，日历记录之间按区间并集计时。混合来源合计明确标记 includes calendar，实测 `napMinutes`、效率和原始记录保持原语义。`recordedWindows` 是可选展示字段；Home 可由旧快照的 `sleep.records` 推导，无需清缓存或数据库迁移。
 - 有重叠窗口时：差值 = **Window − Actual**，效率 = **Actual / Window**。无窗口或不重叠时不计算。超过 100% 原样保留并提示检查窗口，不能截断掩盖不一致。
 
 ## 部署与验证

@@ -5,6 +5,8 @@ final class OnlineBusinessTests: XCTestCase {
     @MainActor func testBundledRouteManifestRejectsPrivilegedAndEscapedPaths() throws {
         guard Bundle.main.url(forResource: "business-routes", withExtension: "json", subdirectory: "TrackerWeb") != nil else { throw XCTSkip("Local React bundle was not built for this Host variant") }
         XCTAssertTrue(NativeBridge.trackerMethods.contains("business.request"))
+        XCTAssertTrue(TrackerLocalController.allowsBusinessRequest(path: "/api/trackers/1", method: "DELETE"))
+        XCTAssertTrue(TrackerLocalController.allowsBusinessRequest(path: "/api/trackers/1", method: "PATCH"))
         XCTAssertTrue(TrackerLocalController.allowsBusinessRequest(path: "/api/health/weight", method: "POST"))
         XCTAssertTrue(TrackerLocalController.allowsBusinessRequest(path: "/api/memos?q=old%20note", method: "GET"))
         for path in ["https://evil.invalid/api/tasks", "/api/tasks/../ai/providers", "/api/tasks/%2e%2e/ai/providers", "/api/native/sync", "/api/trackers/1", "/api/ai/providers", "/api/eventkit/links", "/api/reminders/deliver"] {

@@ -739,5 +739,42 @@
       "GET",
       "PATCH"
     ]
+  },
+  {
+    "pattern": "^/api/trackers/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/trackers/[1-9][0-9]*/icon$",
+    "methods": [
+      "POST",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/trackers/[1-9][0-9]*/(?:fields|reminders)$",
+    "methods": [
+      "POST",
+      "PATCH",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/trackers/[1-9][0-9]*/goals$",
+    "methods": [
+      "POST",
+      "DELETE"
+    ]
+  },
+  {
+    "pattern": "^/api/trackers$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
   }
 ]

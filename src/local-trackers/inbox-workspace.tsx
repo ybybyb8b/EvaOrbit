@@ -2,7 +2,7 @@ import {useCallback,useEffect,useState} from "react";
 import {InboxView} from "@/app/inbox/inbox-view";
 import {InboxDataProvider,type InboxRead} from "@/components/inbox-data-context";
 import {OnlineForms as FormPreview,useOnlineReader,onlineBusinessChanged} from "./online-business";
-import {DevelopmentDetails} from "@/components/development-details";
+import {LocalDownloadStatus} from "./download-status";
 import {ErrorNotice} from "@/components/error-notice";
 import {PageLoading} from "@/components/page-loading";
 import {readInboxSnapshot,type InboxReadonlySnapshot} from "@/lib/inbox-readonly";
@@ -18,7 +18,7 @@ export function InboxWorkspace({account,platform}:{account:LocalAccount;platform
     return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);window.removeEventListener("eo:inbox-refresh",active);};
   },[account,platform]);
   const read=useOnlineReader(useCallback<InboxRead>(async(path,init)=>{if(!snapshot)throw new Error("Inbox is not downloaded");return readInboxSnapshot(snapshot,path,init);},[snapshot]));
-  return <><div className="page local-inbox-status"><DevelopmentDetails><p>Downloaded Inbox · {snapshot?new Date(snapshot.capturedAt).toLocaleString():"Not downloaded"}. Up to 500 downloaded Inbox items; 8 MiB per account. Status filters cover downloaded items. Changes save online; offline writes are not queued.</p><button className="text-button" disabled={busy} onClick={()=>window.dispatchEvent(new Event("eo:inbox-refresh"))}>{busy?"Refreshing…":"Refresh downloaded Inbox"}</button></DevelopmentDetails>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
+  return <><div className="page local-inbox-status"><LocalDownloadStatus module="Inbox" capturedAt={snapshot?.capturedAt} busy={busy} error={error}  refresh={()=>window.dispatchEvent(new Event("eo:inbox-refresh"))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
     {!snapshot?busy?<PageLoading title="散落" englishTitle="Inbox"/>:<div className="page"><p>Inbox has not been downloaded. Connect and refresh to make it available offline.</p></div>:<InboxDataProvider read={read}><FormPreview><InboxView/></FormPreview></InboxDataProvider>}
 
   </>;
