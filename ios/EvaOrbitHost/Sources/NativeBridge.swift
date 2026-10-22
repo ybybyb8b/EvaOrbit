@@ -105,6 +105,16 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             handleTracker(method: method, parameters: parameters, id: identifier, webView: message.webView, replyHandler: replyHandler)
             return
         }
+        dispatchCore(method: method, parameters: parameters, id: identifier, allowed: allowed, replyHandler: replyHandler)
+    }
+
+    private func dispatchCore(
+        method: String,
+        parameters: [String: Any],
+        id identifier: String,
+        allowed: Set<String>,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
         switch method {
         case "host.ping":
             replyHandler(success(id: identifier, result: ["pong": true]), nil)
