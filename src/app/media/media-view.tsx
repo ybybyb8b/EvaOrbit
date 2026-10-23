@@ -41,7 +41,8 @@ function SeriesCard({group,items}:{group:MediaSeries;items:MediaListItem[]}){
   const quantity=language==="en"?`${group.itemCount} ${noun}${group.itemCount===1?"":"s"}`:`${group.itemCount} ${noun==="season"?"季":noun==="movie"?"部电影":"部作品"}`;
   const status=items.some(item=>item.status==="watching")?"watching":complete&&items.every(item=>item.status===items[0].status)?items[0].status:null;
   return <Link ref={copyScope} className="media-poster-card media-series-card" href={`/media/series/${group.id}`}>
-    <span className="media-series-stack" aria-hidden="true">{previews.length?previews.map(item=><MediaCover key={item.id} item={item} compact/>):<span className="media-cover media-cover-fallback"><span className="media-cover-initial">{Array.from(group.name)[0]}</span></span>}</span>
+    {!local&&previews.slice(1).map(item=><span key={item.id} className="media-ticket-back" aria-hidden="true"><MediaCover item={item} compact/><span className="media-ticket-back-paper"/></span>)}
+    <span className="media-series-stack" aria-hidden="true">{previews.length?(local?previews:previews.slice(0,1)).map(item=><MediaCover key={item.id} item={item} compact/>):<span className="media-cover media-cover-fallback"><span className="media-cover-initial">{Array.from(group.name)[0]}</span></span>}</span>
     <span className="media-poster-copy"><strong>{group.name}</strong>{!local&&<span className="media-label-alternate">{language==="en"?"Collected together":"系列套装"}</span>}<small className={local?undefined:"media-label-details"}><span>{!local&&language!=="en"?`收录 ${quantity}`:quantity}</span>{local?<span>{translateUiCopy(status?statusLabel(status):"Series / Franchise",language)}</span>:<span className="media-label-rating media-label-set">{language==="en"?"SET":"套装"}</span>}</small></span>
   </Link>;
 }

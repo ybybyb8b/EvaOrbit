@@ -1,4 +1,8 @@
-/* A quiet album of watched works; scoped to the Web trial. */
+/* Static paper grain is tiled only on ticket stock, never over the poster or text. */
+.media-exhibit-page {
+  --media-paper: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22160%22%20height%3D%22160%22%3E%3Cfilter%20id%3D%22p%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%22.78%22%20numOctaves%3D%223%22%20stitchTiles%3D%22stitch%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%22linear%22%20slope%3D%22.07%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Cpath%20fill%3D%22white%22%20filter%3D%22url%28%23p%29%22%20d%3D%22M0%200h160v160H0z%22%2F%3E%3C%2Fsvg%3E"), linear-gradient(110deg,rgb(var(--surface-raised-rgb) / .55),transparent 70%), linear-gradient(var(--surface-card),var(--surface-card));
+  --media-ticket-edge: radial-gradient(circle at 0 0,transparent 8px,#000 8.6px) top left / 51% 51% no-repeat, radial-gradient(circle at 100% 0,transparent 8px,#000 8.6px) top right / 51% 51% no-repeat, radial-gradient(circle at 0 100%,transparent 8px,#000 8.6px) bottom left / 51% 51% no-repeat, radial-gradient(circle at 100% 100%,transparent 8px,#000 8.6px) bottom right / 51% 51% no-repeat;
+}
 .media-exhibit-page > .page-header { margin-bottom: 24px; }
 .media-exhibit-page .media-toolbar { margin-bottom: 16px; }
 .media-exhibit-page .media-search { background: rgb(var(--surface-raised-rgb) / .55); }
@@ -11,12 +15,9 @@
 .media-exhibit-page .media-shelf-heading > span { color: var(--text-secondary); font-size: 14px; }
 .media-exhibit-page .media-collection-unit { margin-left: 3px; }
 .media-exhibit-page .media-poster-grid { grid-template-columns: repeat(auto-fill,minmax(175px,1fr)); gap: 28px 20px; align-items: start; }
-.media-exhibit-page .media-poster-card { gap: 0; border-radius: 14px; background: transparent; box-shadow: 0 5px 14px rgb(var(--shadow-rgb) / .055); }
-.media-exhibit-page .media-poster-card > .media-cover { border-radius: 14px 14px 0 0; }
-.media-exhibit-page .media-poster-copy { position: relative; padding: 15px 14px 18px; min-height: 142px; gap: 6px !important; border-top: 1px dashed rgb(var(--border-rgb) / .36); border-radius: 0 0 9px 9px; background: linear-gradient(115deg,rgb(var(--surface-raised-rgb) / .6),transparent 65%),var(--surface-card); -webkit-mask: radial-gradient(circle at 9px 100%,transparent 3px,#000 3.5px) 0 0 / 18px 100% repeat-x; mask: radial-gradient(circle at 9px 100%,transparent 3px,#000 3.5px) 0 0 / 18px 100% repeat-x; }
-.media-exhibit-page .media-poster-copy::before,.media-exhibit-page .media-poster-copy::after { content: ""; position: absolute; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--surface-canvas); }
-.media-exhibit-page .media-poster-copy::before { left: -6px; }
-.media-exhibit-page .media-poster-copy::after { right: -6px; }
+.media-exhibit-page .media-poster-card { gap: 0; border-radius: 0; background: transparent; isolation: isolate; filter: drop-shadow(0 5px 7px rgb(var(--shadow-rgb) / .09)); }
+.media-exhibit-page .media-poster-card > .media-cover { border-radius: 0; -webkit-mask: var(--media-ticket-edge); mask: var(--media-ticket-edge); }
+.media-exhibit-page .media-poster-copy { position: relative; padding: 15px 14px 18px; min-height: 142px; gap: 6px !important; border-top: 1px dashed rgb(var(--border-rgb) / .36); border-radius: 0; background-image: var(--media-paper); background-size: 160px 160px,100% 100%,100% 100%; -webkit-mask: var(--media-ticket-edge); mask: var(--media-ticket-edge); }
 .media-exhibit-page .media-poster-copy > strong { font-family: var(--font-editorial-label); font-size: 16px; font-weight: 600; line-height: 1.4; }
 .media-exhibit-page .media-poster-copy > small { min-height: 21px; gap: 4px 10px; align-items: baseline; font-size: 14px; line-height: 1.5; }
 .media-exhibit-page .media-poster-copy time { font-variant-numeric: tabular-nums; }
@@ -29,15 +30,18 @@
 .media-exhibit-page .media-label-set { border-style: double; border-width: 3px; padding: 3px 5px; }
 .media-exhibit-page .media-cover-initial { font-size: clamp(48px,8vw,78px); opacity: .55; }
 .media-exhibit-page .media-favorite-mark { width: 25px; height: 25px; top: 10px; right: 10px; border-radius: 50%; }
-.media-exhibit-page .media-series-stack { border-radius: 14px 14px 0 0; }
-.media-exhibit-page .media-series-stack::before { inset: 0 8px 8px; background: var(--surface-tint); }
-.media-exhibit-page .media-series-stack > .media-cover { border-radius: 12px 12px 0 0; transform: none; }
-.media-exhibit-page .media-series-stack > .media-cover:first-child { inset: 8px 0 0; width: 100%; height: calc(100% - 8px); }
-.media-exhibit-page .media-series-stack > .media-cover:nth-child(2) { inset: 4px 4px; width: calc(100% - 8px); height: calc(100% - 8px); }
-.media-exhibit-page .media-series-stack > .media-cover:nth-child(3) { inset: 0 8px 8px; width: calc(100% - 16px); height: calc(100% - 8px); }
+.media-exhibit-page .media-series-card { margin: 12px 7px 0; }
+.media-exhibit-page .media-series-stack { border-radius: 0; z-index: 2; }
+.media-exhibit-page .media-series-stack::before { content: none; }
+.media-exhibit-page .media-series-stack > .media-cover:first-child { inset: 0; width: 100%; height: 100%; border-radius: 0; transform: none; -webkit-mask: var(--media-ticket-edge); mask: var(--media-ticket-edge); }
+.media-exhibit-page .media-series-card > .media-poster-copy { z-index: 2; }
+.media-exhibit-page .media-series-card > .media-ticket-back { display: flex; position: absolute; inset: 0; z-index: 0; gap: 0; transform-origin: 50% 80%; transform: translate(3px,-5px) rotate(2.5deg); background: var(--surface-card); -webkit-mask: var(--media-ticket-edge); mask: var(--media-ticket-edge); box-shadow: 0 3px 8px rgb(var(--shadow-rgb) / .12); pointer-events: none; }
+.media-exhibit-page .media-series-card > .media-ticket-back:nth-child(2) { transform: translate(-3px,-7px) rotate(-2.5deg); z-index: -1; }
+.media-exhibit-page .media-ticket-back > .media-cover { border-radius: 0; flex: 0 0 auto; }
+.media-exhibit-page .media-ticket-back-paper { flex: 1; min-height: 142px; border-top: 1px dashed rgb(var(--border-rgb) / .36); background-image: var(--media-paper); background-size: 160px 160px,100% 100%,100% 100%; }
 .media-exhibit-page .media-poster-card:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 5px; }
 @media (hover:hover) {
-  .media-exhibit-page .media-poster-card:hover { box-shadow: 0 8px 22px rgb(var(--shadow-rgb) / .09); }
+  .media-exhibit-page .media-poster-card:hover { filter: drop-shadow(0 8px 11px rgb(var(--shadow-rgb) / .13)); }
 }
 @media (max-width:720px) {
   .media-exhibit-page > .page-header { margin-bottom: 18px; }
