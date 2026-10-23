@@ -12,7 +12,7 @@ const directory=await fs.mkdtemp(path.resolve('tmp/media-feedback-')),snapshotFi
 const seeded=spawnSync(process.execPath,['--experimental-loader',pathToFileURL(path.resolve('scripts/typescript-test-loader.mjs')).href,'--input-type=module','--eval',`import fs from 'node:fs';import {seedMedia} from './scripts/media-readonly-fixture.mjs';import {getMediaReadonlySnapshot} from './src/lib/services/media-readonly.ts';await seedMedia();fs.writeFileSync(process.env.MEDIA_SNAPSHOT,JSON.stringify(await getMediaReadonlySnapshot('${account}')));`],{encoding:'utf8',env:{...process.env,EVAORBIT_DATA_BACKEND:'sqlite',EVAORBIT_SQLITE_PATH:path.join(directory,'fixture.db'),EVAORBIT_MEDIA_COVER_DIR:path.join(directory,'covers'),MEDIA_SNAPSHOT:snapshotFile,VERCEL:''}});
 assert.equal(seeded.status,0,seeded.stderr||seeded.stdout);
 const snapshot=JSON.parse(await fs.readFile(snapshotFile,'utf8')),port=await freeLocalPort();
-const server=await preview({configFile:path.resolve('vite.trackers.config.ts'),preview:{host:'127.0.0.1',port,strictPort:true}});
+const server=await preview({configFile:path.resolve('vite.trackers.config.ts'),...(process.env.EVAORBIT_TRACKER_TEST_OUT_DIR?{build:{outDir:path.resolve(process.env.EVAORBIT_TRACKER_TEST_OUT_DIR)}}:{}),preview:{host:'127.0.0.1',port,strictPort:true}});
 let browser;
 try{
  browser=await chromium.launch({channel:'chrome',headless:true});
@@ -43,6 +43,15 @@ try{
    const open=async()=>{await page.goto(`http://127.0.0.1:${port}`);await navigateLocal(page,'Media');await page.locator('.media-page').waitFor();await page.waitForFunction(()=>window.calls.some(c=>c.method==='business.request'&&c.params.path.startsWith('/api/media?')));};
    const covers=async()=>{await page.waitForFunction(()=>{const images=[...document.querySelectorAll('.media-page img')];return images.length>0&&images.every(img=>img.src.startsWith('data:image/')&&img.complete&&img.naturalWidth>0);});};
    await open();await covers();
+   assert.equal(await page.locator('.media-exhibit-page').count(),1,'Local Media shares the accepted ticket presentation');assert.equal(await page.locator('.media-poster-grid').evaluate(el=>getComputedStyle(el).columnGap),'30px');assert.equal(await page.locator('.media-poster-copy > small').first().evaluate(el=>getComputedStyle(el).fontSize),'14px');
+   assert.equal(await page.locator('.media-ticket-front').count(),1);assert.equal(await page.locator('.media-ticket-clip:not(.media-ticket-clip-back)').count(),1);assert.equal(await page.locator('.media-filter-panel').count(),0);
+   const filter=page.locator('.media-filter-trigger'),popover=page.locator('.media-filter-popover'),before=await page.locator('.media-results').boundingBox();
+   await filter.click();await page.waitForFunction(()=>document.querySelector('.media-filter-popover')?.matches(':popover-open'));await page.waitForTimeout(200);
+   const after=await page.locator('.media-results').boundingBox();assert.equal(before.y,after.y,'Local filters do not shift tickets');
+   await popover.getByLabel('Filter by rating').selectOption('goat');await page.waitForFunction(()=>window.calls.some(c=>c.method==='business.request'&&c.params.path.includes('rating=goat')));
+   await page.screenshot({path:path.join(directory,`media-filters-${haptics}.png`),fullPage:false});
+   await popover.getByRole('button',{name:'Reset',exact:true}).click();await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('.media-filter-popover')?.matches(':popover-open'));assert(await filter.evaluate(el=>el===document.activeElement));
+
    // Refresh the mounted list: metadata must change without replacing image bytes
    // with authenticated relative URLs that the installed CSP cannot load.
    await page.evaluate(()=>{window.mediaRevision=1;window.dispatchEvent(new CustomEvent('eo:client-data-changed',{detail:{domains:['media'],reason:'invalidate'}}));});
@@ -61,7 +70,7 @@ try{
    assert.equal(await page.evaluate(()=>window.calls.some(c=>c.method==='business.request'&&c.params.method!=='GET')),false);
   }finally{await context.close();}
  }
- console.log(JSON.stringify({passed:true,checks:'Packaged CSP; relative online cover URLs; list refresh and fresh metadata; filters; series/back; reload; supported and old Host haptics; no business writes',evidence:directory}));
+ console.log(JSON.stringify({passed:true,checks:'Shared ticket/Set/paperclip presentation; anchored filter popup, native request and focus restore; packaged CSP; relative online cover URLs; list refresh and fresh metadata; filters; series/back; reload; supported and old Host haptics; no business writes',evidence:directory}));
 }finally{
  await browser?.close();await new Promise(resolve=>server.httpServer.close(resolve));
  const {createServer}=await import('node:net');await new Promise((resolve,reject)=>{const probe=createServer();probe.once('error',reject);probe.listen(port,'127.0.0.1',()=>probe.close(resolve));});console.log(JSON.stringify({closedTestPort:port}));
