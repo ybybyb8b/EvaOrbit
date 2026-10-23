@@ -2,9 +2,11 @@ name: iOS Native Host
 
 on:
   workflow_dispatch:
+  # Push source changes freely; package frontend updates on demand via workflow_dispatch.
   push:
     paths:
       - "ios/EvaOrbitHost/**"
+      - "!ios/EvaOrbitHost/Resources/TrackerWeb/**"
       - "scripts/ios/prepare-assets.sh"
       - "scripts/ios/package-ad-hoc-ipa.sh"
       - ".github/workflows/ios-native-host.yml"

@@ -30,6 +30,8 @@ EventKit 稳定性更新新增 bridge v1 的 `eventkit.getItem`：已有 mapping
 
 ### Native Host 构建链
 
+日常页面、组件、样式、前端依赖和业务代码改动可正常提交并 push，iOS workflow 不自动打包；生成的 `ios/EvaOrbitHost/Resources/TrackerWeb/**` 也不自动触发。原生工程、资源准备/IPA 打包脚本或 workflow 自身改动仍自动构建。需要安装累计的前端更新时，在 Actions 手动运行 `iOS Native Host`，本地 React 版选择 `local_trackers=true`；提交到远端不等于已安装包获得了新界面。
+
 GitHub Actions 的 `iOS Native Host` workflow 当前配置使用标准 `macos-15-intel` runner（2026-10-05 从 `macos-15` 切换，避开 arm64 容量排队；不是付费 large runner）。同时升级为 Node.js 24 runtime 的 `actions/checkout@v5` / `actions/upload-artifact@v6`。以下打包与签名步骤保持不变；新 runner 的 Simulator 单测和 IPA 构建结果须由下一次 macOS CI 验证，尚不能宣称新配置已实跑通过：
 
 1. 安装 XcodeGen 并从 `ios/EvaOrbitHost/project.yml` 生成 Xcode 工程。
