@@ -118,6 +118,8 @@ export const sqliteRepository: EvaOrbitRepository = {
   async listMediaSeries() { return sqlite.listMediaSeries(); },
   async getMediaSeries(id) { return sqlite.getMediaSeries(id); },
   async createMediaSeries(name) { return sqlite.createMediaSeries(name); },
+  async updateMediaSeries(id,name) { return sqlite.updateMediaSeries(id,name); },
+  async completeMediaItem(id,input,date) { return sqlite.completeMediaItem(id,input,date); },
   async getMediaItem(id) { return sqlite.getMediaItem(id); },
   async createMediaItem(input) { return sqlite.createMediaItem(input); },
   async updateMediaItem(id, input) { return sqlite.updateMediaItem(id, input); },

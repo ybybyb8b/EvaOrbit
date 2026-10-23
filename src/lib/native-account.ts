@@ -1,6 +1,6 @@
 import "server-only";
 
-import { allowedEmail, usesSupabase } from "./config";
+import { isAllowedAccountEmail, allowedEmail, usesSupabase } from "./config";
 import { HttpError } from "./errors";
 import { createSupabaseServerClient } from "./supabase/server";
 
@@ -14,6 +14,6 @@ export async function currentNativeAccount(): Promise<NativeAccount | null> {
   const { data, error } = await supabase.auth.getClaims();
   const id = typeof data?.claims?.sub === "string" ? data.claims.sub : "";
   const email = typeof data?.claims?.email === "string" ? data.claims.email.toLocaleLowerCase() : "";
-  if (error || !id || email !== expectedEmail) return null;
+  if (error || !id || !isAllowedAccountEmail(email)) return null;
   return { id, email };
 }

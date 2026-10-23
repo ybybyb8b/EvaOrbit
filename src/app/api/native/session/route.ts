@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
-import { allowedEmail, usesSupabase } from "@/lib/config";
+import { isNativeIntegrationAccountAllowed, isLocalOnlineAccountAllowed, isOnlineTestEmail, isAllowedAccountEmail, allowedEmail, usesSupabase } from "@/lib/config";
 import { HttpError } from "@/lib/errors";
 import { currentNativeAccount } from "@/lib/native-account";
 import { parseNativeLoginCredentials } from "@/lib/native-session";
@@ -14,7 +14,7 @@ const noStoreHeaders = { "Cache-Control": "no-store" };
 
 function sessionResponse(authenticated: boolean, account?: { id: string; email: string }) {
   return NextResponse.json(
-    { authenticated, ...(account ? { accountId: account.id, email: account.email, aiConfigurationProtocol: 1, settingsConfigurationProtocol: 1 } : {}) },
+    { authenticated, ...(account ? { accountId: account.id, email: account.email, aiConfigurationProtocol: 1, settingsConfigurationProtocol: 1, onlineBusinessProtocol: 1, onlineBusinessAccountAllowed:isLocalOnlineAccountAllowed(account.email), nativeIntegrationsAccountAllowed:isNativeIntegrationAccountAllowed(account.email), onlineBusinessTestAccount: isOnlineTestEmail(account.email) } : {}) },
     { headers: noStoreHeaders },
   );
 }
@@ -46,12 +46,12 @@ export async function POST(request: Request) {
     );
     const expectedEmail = allowedEmail();
     if (!expectedEmail) throw new HttpError("服务器登录配置不可用", 503);
-    if (credentials.email !== expectedEmail) throw new HttpError("邮箱或密码不正确", 401);
+    if (!isAllowedAccountEmail(credentials.email)) throw new HttpError("邮箱或密码不正确", 401);
 
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.auth.signInWithPassword(credentials);
     const email = data.user?.email?.toLocaleLowerCase() ?? "";
-    if (error || !data.user?.id || email !== expectedEmail) {
+    if (error || !data.user?.id || !isAllowedAccountEmail(email)) {
       await supabase.auth.signOut();
       throw new HttpError("邮箱或密码不正确", 401);
     }

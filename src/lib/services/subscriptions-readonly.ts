@@ -19,7 +19,8 @@ export async function getSubscriptionsReadonlySnapshot(accountId:string){return 
     items.push({...item,payments,priceChanges,paymentCount:payments.length,spendByCurrency,totalSpentMinor:spendByCurrency[item.currency]??0,latestPriceChange:priceChanges[0]??null});
     if(item.iconPath){
       const image=await readSubscriptionIcon(item.id,item.iconPath);
-      if(!image||image.bytes.length>4*1024*1024)throw new Error("Could not download subscription icon; previous cache preserved");
+      if(!image){items[items.length-1].iconPath="";continue;}
+      if(image.bytes.length>4*1024*1024)throw new Error("Subscription icon exceeds the cache limit; previous cache preserved");
       iconSources[item.id]=`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`;
       bytes+=iconSources[item.id].length;if(bytes>8*1024*1024)throw new Error("Subscription icons exceed the acceptance limit; previous cache preserved");
     }

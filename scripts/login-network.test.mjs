@@ -17,7 +17,7 @@ test("login distinguishes network failures from rejected credentials and preserv
     const moduleState = { exports: {} };
     const stubs = {
       "next/navigation": { redirect: path => { throw new Error(`redirect:${path}`); } },
-      "@/lib/config": { allowedEmail: () => "owner@example.com", usesSupabase: () => true },
+      "@/lib/config": { allowedEmail: () => "owner@example.com", isAllowedAccountEmail: email => email === "owner@example.com", usesSupabase: () => true },
       "@/lib/supabase/server": { createSupabaseServerClient: async () => ({ auth: { signInWithPassword: async credentials => {
         assert.equal(credentials.email, "owner@example.com");
         assert.equal(credentials.password, "example password");

@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { allowedEmail, usesSupabase } from "@/lib/config";
+import { isAllowedAccountEmail, allowedEmail, usesSupabase } from "@/lib/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function safeDestination(value: FormDataEntryValue | null) {
@@ -16,7 +16,7 @@ export async function login(formData: FormData) {
   const destination = safeDestination(formData.get("next"));
   const expected = allowedEmail();
   if (!expected) redirect("/login?error=config");
-  if (!email || !password || email !== expected) redirect("/login?error=invalid");
+  if (!email || !password || !isAllowedAccountEmail(email)) redirect("/login?error=invalid");
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });

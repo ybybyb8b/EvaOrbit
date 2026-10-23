@@ -32,3 +32,4 @@ export async function deleteMediaViewing(mediaId:number,viewingId:number){
 export async function listMediaSeries(){return(await getRepository()).listMediaSeries();}
 export async function getMediaSeries(id:number){return(await getRepository()).getMediaSeries(id);}
 export async function createMediaSeries(name:string){return(await getRepository()).createMediaSeries(name);}
+export async function updateMediaSeries(id:number,name:string){return(await getRepository()).updateMediaSeries(id,name);}

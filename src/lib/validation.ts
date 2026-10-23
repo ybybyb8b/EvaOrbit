@@ -109,7 +109,7 @@ export function parseNewMedia(value: unknown) {
 
 export function parseMediaPatch(value: unknown) {
   const body = objectValue(value);
-  const result = mediaFields(body, true);
+  const result = { ...mediaFields(body, true), watchedDate: body.watchedDate === undefined ? undefined : dateOnly(body.watchedDate, "完成日期") };
   if (Object.values(result).every((entry) => entry === undefined)) throw new ValidationError("没有可更新的 Media 字段");
   return result;
 }
