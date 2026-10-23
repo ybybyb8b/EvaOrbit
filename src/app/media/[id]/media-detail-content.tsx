@@ -143,7 +143,7 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
   const seriesRepeatsName = detail.seriesName && [displayTitle.primary, detail.originalTitle, detail.translatedTitle].some((name) => mediaNameKey(name) === mediaNameKey(detail.seriesName));
 
   return <div className="page media-page media-detail-page">
-    <PageHeader eyebrow={`${typeLabel(detail.mediaType)} · ${statusLabel(detail.status)}`} title={displayTitle.primary} description={displayTitle.secondary ?? "A single item from your private shelf."} />
+    <PageHeader eyebrow="" title={displayTitle.primary} />
 
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
@@ -153,11 +153,19 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
       <div className="form-actions"><button className="button primary" type="submit" disabled={preview||busy}>Save changes</button></div>
     </form></FormSheet>}
 
-    {!editing && <div className="media-detail-actions"><button className="button primary" onClick={startEdit}><Icon name="edit" />Edit</button><button className="button secondary" onClick={() => { setError(""); setNotice(""); setRewatchDate(currentLocalDate()); setRewatchOpen(true); }}><Icon name="plus" />{detail.viewings.length?"Add rewatch":"Add completion"}</button></div>}
-    {!editing && <section className="media-detail-hero"><MediaCover item={detail}/><dl>{visibleOriginal&&<div><dt>Original title</dt><dd>{visibleOriginal}</dd></div>}{visibleTranslated&&<div><dt>Translated title</dt><dd>{visibleTranslated}</dd></div>}<div><dt>Type</dt><dd>{typeLabel(detail.mediaType)}</dd></div><div><dt>Status</dt><dd>{statusLabel(detail.status)}</dd></div><div><dt>Series / Franchise</dt><dd>{detail.seriesId?<Link href={`/media/series/${detail.seriesId}`}>{seriesRepeatsName?"Open series":detail.seriesName}</Link>:"None"}</dd></div>{["tv","anime"].includes(detail.mediaType)&&<div><dt>Season</dt><dd>{detail.seasonNumber?`S${detail.seasonNumber}`:"—"}{detail.seasonTitle&&mediaNameKey(detail.seasonTitle)!==mediaNameKey(detail.seriesName)?` · ${detail.seasonTitle}`:""}</dd></div>}<div><dt>Rating</dt><dd>{detail.rating??"Not rated"}{detail.isFavorite?" · Favorite":""}</dd></div><div><dt>Completed</dt><dd>{detail.viewings[0]?.watchedDate??"Not completed"}</dd></div><div><dt>Rewatches</dt><dd>{Math.max(0,detail.viewings.length-1)}</dd></div></dl></section>}
+    {!editing && <section className="media-detail-hero">
+      <div className="media-detail-summary"><MediaCover item={detail} compact/><div className="media-detail-summary-copy">
+        <p>{typeLabel(detail.mediaType)}{displayTitle.seasonLabel?` · ${displayTitle.seasonLabel}`:""}</p>
+        <strong>{statusLabel(detail.status)}</strong>
+        <p>{detail.rating??"Not rated"}{detail.isFavorite?" · Favorite":""}</p>
+        <div className="media-detail-actions"><button className="button primary" onClick={() => { setError(""); setNotice(""); setRewatchDate(currentLocalDate()); setRewatchOpen(true); }}><Icon name="plus" />{detail.viewings.length?"Add rewatch":"Add completion"}</button><button className="button secondary" onClick={startEdit}><Icon name="edit" />Edit</button></div>
+      </div></div>
+      <dl>{visibleOriginal&&<div><dt>Original title</dt><dd>{visibleOriginal}</dd></div>}{visibleTranslated&&<div><dt>Translated title</dt><dd>{visibleTranslated}</dd></div>}{detail.seriesId&&<div><dt>Series / Franchise</dt><dd><Link href={`/media/series/${detail.seriesId}`}>{seriesRepeatsName?"Open series":detail.seriesName}</Link></dd></div>}</dl>
+    </section>}
 
     {!editing && <section className="media-detail-card">
-      <div className="media-detail-section-heading"><span className="eyebrow">VIEWINGS</span><span>{detail.viewings.length} {detail.viewings.length === 1 ? "watch" : "watches"}</span></div>
+      <div className="media-detail-section-heading"><h2>Viewings</h2><span>{detail.viewings.length} {detail.viewings.length === 1 ? "watch" : "watches"}</span></div>
+      {!detail.viewings.length&&<p className="media-viewings-empty">No viewings recorded yet.</p>}
       <ol className="media-viewings">
         {detail.viewings.map((viewing) => <li key={viewing.id}>
           {editingViewingId === viewing.id ? <FormSheet title="Edit viewing date" onClose={cancelViewingEdit} formId={`media-viewing-${viewing.id}`} submitLabel="Save" busy={busy} submitDisabled={preview}><form id={`media-viewing-${viewing.id}`} className="media-viewing-edit" onSubmit={(event) => void saveViewing(event, viewing)}>{preview&&<FormPreviewNotice/>}<label className="field"><span>Date</span><input required type="date" value={viewingDate} onChange={(event) => setViewingDate(event.target.value)} /></label><div className="media-viewing-actions"><button className="button primary compact" type="submit" disabled={preview||busy}>Save</button><button className="text-button" type="button" onClick={cancelViewingEdit}>Cancel</button></div></form></FormSheet> : <><div className="media-viewing-copy"><time dateTime={viewing.watchedDate}>{viewing.watchedDate}</time><span>{viewingLabel(viewing)}</span></div><div className="media-viewing-actions"><button className="text-button" type="button" onClick={() => startViewingEdit(viewing)}>Edit date</button>{viewing.viewingNumber > 1 && <button className="text-button danger" type="button" onClick={() => void removeViewing(viewing)} disabled={preview||busy}>Delete</button>}</div></>}
@@ -166,7 +174,7 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
       {rewatchOpen && <FormSheet title={detail.viewings.length?"Add rewatch":"Add completion"} onClose={() => setRewatchOpen(false)} formId="media-rewatch-form" submitLabel={detail.viewings.length?"Add rewatch":"Add completion"} busy={busy} submitDisabled={preview} busyLabel="Adding…"><form id="media-rewatch-form" className="media-rewatch-form" onSubmit={addRewatch}>{preview&&<FormPreviewNotice/>}<label className="field"><span>{detail.viewings.length?"Rewatch date":"Completed date"}</span><input required type="date" value={rewatchDate} onChange={(event) => setRewatchDate(event.target.value)} /></label><div className="media-form-actions"><button className="button primary compact" type="submit" disabled={preview||busy}>Save date</button><button className="text-button" type="button" onClick={() => setRewatchOpen(false)}>Cancel</button></div></form></FormSheet>}
     </section>}
 
-    {!editing && <section className="media-note-section"><span className="eyebrow">NOTE</span><p>{detail.note || "No note added."}</p></section>}
+    {!editing && <section className="media-note-section"><h2>Note</h2><p>{detail.note || "No note added."}</p></section>}
     {!editing&&<div className="media-detail-danger"><button className="text-button danger" onClick={() => void removeMedia()} disabled={preview||busy}><Icon name="trash" />Delete</button></div>}
   </div>;
 }

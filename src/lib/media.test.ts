@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { getMediaDisplayTitle, mediaMatchesQuery } from "./media-display.ts";
+import { getMediaDisplayTitle, groupMediaCollection, mediaMatchesQuery } from "./media-display.ts";
 import { addMediaRewatchWithRepository, createMediaWithRepository, deleteMediaViewingWithRepository, getMediaDetailWithRepository, listMediaWithRepository, updateMediaViewingWithRepository, updateMediaWithRepository } from "./media.ts";
 import type { EvaOrbitRepository, MediaItemPatch, MediaListInput, NewMediaItem } from "./repositories/types.ts";
-import type { MediaItem, MediaViewing } from "./types.ts";
+import type { MediaItem, MediaListItem, MediaSeries, MediaViewing } from "./types.ts";
+
+test("collection groups known series once, preserves standalone order and exposes unpaged parents",()=>{
+  const groups=[{id:7,name:"Series",itemCount:3},{id:8,name:"Older series",itemCount:2},{id:9,name:"Empty series",itemCount:0}] as MediaSeries[];
+  const items=[{id:1,seriesId:null},{id:2,seriesId:7},{id:3,seriesId:7},{id:4,seriesId:99}] as MediaListItem[];
+  const result=groupMediaCollection(items,groups);
+  assert.deepEqual(result.map(entry=>entry.kind==="item"?`item:${entry.item.id}`:`series:${entry.group.id}`),["item:1","series:7","item:4","series:8","series:9"]);
+  const parent=result[1];assert.equal(parent.kind,"series");
+  if(parent.kind==="series"){assert.deepEqual(parent.items.map(item=>item.id),[2,3]);assert.equal(parent.group.itemCount,3);}
+  assert.deepEqual(items.map(item=>item.id),[1,2,3,4]);
+  assert.equal(groupMediaCollection([],[]).length,0);
+});
 import { parseMediaPatch, parseMediaViewing, parseNewMedia } from "./validation.ts";
 
 function fakeMediaRepository(){

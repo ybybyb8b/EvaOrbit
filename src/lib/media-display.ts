@@ -1,4 +1,21 @@
-import type { MediaItem } from "./types";
+import type { MediaItem, MediaListItem, MediaSeries } from "./types";
+
+type MediaCollectionEntry = {kind:"item";item:MediaListItem}|{kind:"series";group:MediaSeries;items:MediaListItem[]};
+
+/** Preserve list order, replacing the first member of each known series with its parent. */
+export function groupMediaCollection(items:MediaListItem[],series:MediaSeries[]):MediaCollectionEntry[]{
+  const groups=new Map(series.map(group=>[group.id,{kind:"series" as const,group,items:[] as MediaListItem[]}]));
+  const seen=new Set<number>(),entries:MediaCollectionEntry[]=[];
+  for(const item of items){
+    const entry=item.seriesId===null?undefined:groups.get(item.seriesId);
+    if(!entry){entries.push({kind:"item",item});continue;}
+    entry.items.push(item);
+    if(!seen.has(entry.group.id)){seen.add(entry.group.id);entries.push(entry);}
+  }
+  // Series outside the current item page still have an accessible parent card.
+  for(const entry of groups.values())if(!seen.has(entry.group.id))entries.push(entry);
+  return entries;
+}
 
 export type MediaNameSource = Pick<MediaItem,"title"|"originalTitle"|"translatedTitle"|"seriesName"|"mediaType"|"seasonNumber"|"seasonTitle">;
 
