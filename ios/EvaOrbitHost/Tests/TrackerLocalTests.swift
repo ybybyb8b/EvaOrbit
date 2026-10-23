@@ -1,63 +1,122 @@
 import XCTest
 import SQLite3
 import WebKit
+import UIKit
 @testable import EvaOrbitHost
 
 final class TrackerLocalTests: XCTestCase {
+    // XCTest's deadline returns even when WebKit never invokes its callback.
+    // A racing TaskGroup would still wait for the stuck WebKit child to finish.
+    @MainActor private func runJavaScript(_ script: String, in webView: WKWebView, asyncFunction: Bool = false, timeout: TimeInterval = 10) async throws -> Any? {
+        let completed = expectation(description: "WebKit JavaScript completed: \(script.prefix(100))")
+        var output: Result<Any?, Error>?
+        let receive: (Result<Any?, Error>) -> Void = { result in
+            output = result
+            completed.fulfill()
+        }
+        if asyncFunction {
+            webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
+                receive(result.map { Optional($0) })
+            }
+        } else {
+            webView.evaluateJavaScript(script) { value, error in
+                receive(error.map { .failure($0) } ?? .success(value))
+            }
+        }
+        let waited = await XCTWaiter.fulfillment(of: [completed], timeout: timeout)
+        guard waited == .completed else {
+            throw NSError(domain: "EvaOrbitHostTests.JavaScriptDeadline", code: 1, userInfo: [NSLocalizedDescriptionKey: "WebKit did not complete within \(timeout)s: \(script.prefix(100))"])
+        }
+        return try XCTUnwrap(output, "WebKit did not respond; stop this test instead of awaiting another page operation").get()
+    }
+
+    @MainActor private func showWebView(_ webView: WKWebView) -> () -> Void {
+        let controller = UIViewController()
+        let window = UIWindow(frame: webView.frame)
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let previousKeyWindow = scene?.windows.first { $0.isKeyWindow }
+        window.windowScene = scene
+        window.rootViewController = controller
+        controller.view.addSubview(webView)
+        window.makeKeyAndVisible()
+        return {
+            webView.stopLoading()
+            webView.removeFromSuperview()
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+    }
+
+    @MainActor private func waitForHeading(_ expected: String, in webView: WKWebView) async throws {
+        let deadline = Date().addingTimeInterval(40)
+        var title: String?
+        repeat {
+            title = try await runJavaScript("document.querySelector('h1')?.textContent", in: webView, timeout: min(30, max(1, deadline.timeIntervalSinceNow))) as? String
+            if title == expected { return }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        } while Date() < deadline
+        let diagnostics = try await runJavaScript("JSON.stringify({url:location.href,state:document.readyState,text:document.body?.innerText?.slice(0,1500),errors:window.__eoTestErrors})", in: webView)
+        let attachment = XCTAttachment(string: String(describing: diagnostics))
+        attachment.name = "Local React startup diagnostics"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        // Unlike XCTAssertEqual, a thrown failure stops the following readiness/font waits.
+        _ = try XCTUnwrap(title == expected ? title : nil, "Expected \(expected), got \(String(describing: title)). \(String(describing: diagnostics))")
+    }
+
+    @MainActor func testWebKitPromiseDeadlineReturnsWithoutWaitingForThePromise() async throws {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 402, height: 874), configuration: configuration)
+        let close = showWebView(webView)
+        defer { close() }
+        webView.loadHTMLString("<h1>Deadline fixture</h1>", baseURL: nil)
+        try await waitForHeading("Deadline fixture", in: webView)
+        do {
+            _ = try await runJavaScript("await new Promise(() => {}); return true;", in: webView, asyncFunction: true, timeout: 0.2)
+            XCTFail("An unresolved WebKit promise must time out")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "EvaOrbitHostTests.JavaScriptDeadline")
+        }
+        let responsive = try await runJavaScript("true", in: webView)
+        XCTAssertEqual(responsive as? Bool, true, "Timing out one promise must not block later WebKit callbacks")
+    }
+
     @MainActor func testBundledReactBootsFromTheLocalScheme() async throws {
         let root = try XCTUnwrap(Bundle.main.url(forResource: "TrackerWeb", withExtension: nil))
         let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
         configuration.ignoresViewportScaleLimits = false
         configuration.userContentController.addUserScript(WKUserScript(source: WebViewController.localViewportScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         configuration.setURLSchemeHandler(TrackerAssetHandler(root: root), forURLScheme: TrackerAssetHandler.scheme)
         // Offline, signed-out bridge fixture: the document must still render a
         // usable entry, without a hosted page or a successful session request.
-        configuration.userContentController.addUserScript(WKUserScript(source: "window.EvaOrbitNative={version:1,call:async()=>({ok:true,result:null})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        configuration.userContentController.addUserScript(WKUserScript(source: "window.__eoTestErrors=[];addEventListener('error',event=>window.__eoTestErrors.push(event.message));addEventListener('unhandledrejection',event=>window.__eoTestErrors.push(String(event.reason)));window.EvaOrbitNative={version:1,call:async()=>({ok:true,result:null})};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 402, height: 874), configuration: configuration)
+        // requestAnimationFrame may be suspended in a detached WKWebView.
+        // The production Host is visible, so the test must provide the same lifecycle.
+        let close = showWebView(webView)
+        defer { close() }
         webView.load(URLRequest(url: TrackerAssetHandler.entryURL))
-        var title: String?
-        for _ in 0..<100 {
-            title = try? await webView.evaluateJavaScript("document.querySelector('h1')?.textContent") as? String
-            if title == "Welcome back to EvaOrbit" { break }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        XCTAssertEqual(title, "Welcome back to EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
-        let contentReady: Any? = try await withCheckedThrowingContinuation { continuation in
-            webView.callAsyncJavaScript(WebViewController.localContentReadyScript, arguments: [:], in: nil, in: .page) { result in
-                switch result {
-                case .success(let value): continuation.resume(returning: value)
-                case .failure(let error): continuation.resume(throwing: error)
-                }
-            }
-        }
+        try await waitForHeading("Welcome back to EvaOrbit", in: webView)
+        let contentReady = try await runJavaScript(WebViewController.localContentReadyScript, in: webView, asyncFunction: true)
         XCTAssertEqual(contentReady as? Bool, true, "Signed-out React must release the native launch overlay")
-        let viewport = try await webView.evaluateJavaScript("document.querySelector('meta[name=viewport]').content") as? String
+        let viewport = try await runJavaScript("document.querySelector('meta[name=viewport]').content", in: webView) as? String
         XCTAssertTrue(viewport?.contains("maximum-scale=1") == true)
         XCTAssertTrue(viewport?.contains("user-scalable=no") == true)
-        let fontResult: Any? = try await withCheckedThrowingContinuation { continuation in
-            webView.callAsyncJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", arguments: [:], in: nil, in: .page, completionHandler: { result in
-                switch result {
-                case .success(let value): continuation.resume(returning: value)
-                case .failure(let error): continuation.resume(throwing: error)
-                }
-            })
-        }
+        let fontResult = try await runJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", in: webView, asyncFunction: true)
         XCTAssertEqual(fontResult as? Bool, true, "The actual August asset must load offline, without falling back")
-        _ = try await webView.evaluateJavaScript("localStorage.setItem('evaorbit.englishFont','polyamine'); localStorage.setItem('evaorbit.uiLanguage','zh-CN'); true")
+        _ = try await runJavaScript("localStorage.setItem('evaorbit.englishFont','polyamine'); localStorage.setItem('evaorbit.uiLanguage','zh-CN'); true", in: webView)
         webView.reload()
-        for _ in 0..<100 {
-            title = try? await webView.evaluateJavaScript("document.querySelector('h1')?.textContent") as? String
-            if title == "回到 EvaOrbit" { break }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        XCTAssertEqual(title, "回到 EvaOrbit", "Explicit language must survive a local document reload")
-        let reloadedViewport = try await webView.evaluateJavaScript("document.querySelector('meta[name=viewport]').content") as? String
+        try await waitForHeading("回到 EvaOrbit", in: webView)
+        let reloadedViewport = try await runJavaScript("document.querySelector('meta[name=viewport]').content", in: webView) as? String
         XCTAssertEqual(reloadedViewport, viewport, "The local viewport constraint must survive a document reload")
-        let persistedFont = try await webView.evaluateJavaScript("document.documentElement.dataset.englishFont") as? String
+        let persistedFont = try await runJavaScript("document.documentElement.dataset.englishFont", in: webView) as? String
         XCTAssertEqual(persistedFont, "polyamine")
-        _ = try await webView.evaluateJavaScript("localStorage.removeItem('evaorbit.englishFont'); localStorage.removeItem('evaorbit.uiLanguage'); true")
+        _ = try await runJavaScript("localStorage.removeItem('evaorbit.englishFont'); localStorage.removeItem('evaorbit.uiLanguage'); true", in: webView)
         XCTAssertEqual(webView.url?.scheme, TrackerAssetHandler.scheme)
-        let random = try await webView.evaluateJavaScript("crypto.getRandomValues(new Uint8Array(1)).length") as? Int
+        let random = try await runJavaScript("crypto.getRandomValues(new Uint8Array(1)).length", in: webView) as? Int
         XCTAssertEqual(random, 1)
     }
 

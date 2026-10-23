@@ -68,19 +68,28 @@ jobs:
             build-for-testing
 
       - name: Run native unit tests on iPhone 16 Pro Simulator
+        timeout-minutes: 10
         working-directory: ios/EvaOrbitHost
         run: |
+          simulator_os="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          echo "Testing iPhone 16 Pro with the selected Xcode SDK runtime: $simulator_os"
+          xcrun simctl list runtimes
           xcodebuild \
             -project EvaOrbitHost.xcodeproj \
             -scheme EvaOrbitHost \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Tests" \
+            -destination "platform=iOS Simulator,name=iPhone 16 Pro,OS=$simulator_os" \
+            -destination-timeout 60 \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Simulator" \
             -resultBundlePath "$RUNNER_TEMP/EvaOrbitHost-TestResults.xcresult" \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 \
+            -maximum-test-execution-time-allowance 120 \
             CODE_SIGNING_ALLOWED=NO \
             EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
-            test
+            test-without-building
 
       - name: Upload native test diagnostics
         if: always()

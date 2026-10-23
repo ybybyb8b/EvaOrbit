@@ -132,6 +132,10 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 
 页面、共享组件、样式、前端依赖和业务代码可以正常提交并 push，不自动触发 iOS 打包。`push.paths` 仅保留 Native Host（排除生成的 `Resources/TrackerWeb/**`）、原生资源准备/IPA 打包脚本和 workflow 本身；需要把累计的本地 React 更新安装到手机时，手动运行 `iOS Native Host`，本地版选择 `local_trackers=true`。此调整只改变触发时机，完整测试、构建、签名和安装链保持不变。
 
+模拟器测试复用 `build-for-testing` 的 DerivedData，使用 `test-without-building`；iPhone 16 Pro 的 OS 按所选 Xcode 的 Simulator SDK 版本明确指定，不再自动挑选 runner 上更新的运行时。缺少匹配运行时应明确失败，不下载或切换工具链。测试串行运行，每项默认60秒、最多120秒，测试步骤最多10分钟；失败仍阻断设备签名/IPA。保留 `always()` 上传 xcresult。#60 两次在本地 React 启动用例失败后等待就绪 Promise 耗尽30分钟，重跑伴有 WebKit GPU 无响应，不能仅归因于运行时。
+
+WKWebView 启动测试使用非持久数据存储和可见 UIWindow，使渲染帧等待具有实际窗口生命周期；所有 JavaScript 回调及 Promise 使用 XCTest 有界等待，标题未就绪即抛错，不继续进入就绪/字体等待。页面可响应但启动失败时，xcresult 附件记录页面状态和脚本错误。新增永不完成 Promise 的期限回归测试；Windows 仅验证 workflow 约束，Swift/XCTest 与新 IPA 产出仍需下一次 macOS CI 实际确认。
+
 ### 3.3 Artifact 与重建判断
 
 下载同一个 `EvaOrbitHost-ad-hoc-<run-number>` artifact 中的：
