@@ -45,6 +45,7 @@ test("a deliberate half-threshold flick above the velocity threshold triggers", 
 
 test("pull refresh preserves the current document instead of forcing a white reload frame", () => {
   const source = readFileSync(new URL("../components/pull-to-refresh.tsx", import.meta.url), "utf8");
-  assert.match(source, /startRefreshTransition\(\(\) => router\.refresh\(\)\)/);
+  assert.match(source, /router\.refresh\(\)/);
+  assert.match(source, /PullToRefreshView/);
   assert.doesNotMatch(source, /window\.location\.reload|location\.reload/);
 });

@@ -42,6 +42,7 @@
 
 ## Core
 
+- **下拉刷新**：[pull-to-refresh-core.tsx](../src/components/pull-to-refresh-core.tsx) 共享手势、阻尼、阈值和提示；Web 包装失效缓存并刷新路由，本地 [适配器](../src/local-trackers/pull-to-refresh.tsx) 调用 [refresh.ts](../src/local-trackers/refresh.ts) 中当前挂载模块注册的既有加载器，不重载文档、不模拟网络恢复或前台事件。本地 Host 关闭原生刷新控件和滚动回弹，避免露出网页外背景；普通在线 Host 保持原行为。
 - **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。

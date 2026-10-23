@@ -73,7 +73,7 @@ jobs:
             EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
             PRODUCT_BUNDLE_IDENTIFIER="${{ inputs.local_trackers && 'com.evaorbit.nativehost.trackerspoc' || 'com.evaorbit.nativehost' }}" \
             EVAORBIT_URL_SCHEME="${{ inputs.local_trackers && 'evaorbit-trackers-poc' || 'evaorbit' }}" \
-            EVAORBIT_DISPLAY_NAME="${{ inputs.local_trackers && 'EvaOrbit Trackers PoC' || 'EvaOrbit' }}" \
+            EVAORBIT_DISPLAY_NAME="${{ inputs.local_trackers && 'EO Dev' || 'EvaOrbit' }}" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             build
 

@@ -1,3 +1,4 @@
+import {registerLocalRefresh} from "./refresh";
 import {LocalRouteLink} from "./routes";
 import {useOnlineBusiness,onlineBusinessChanged} from "./online-business";
 import {BottomLogScope} from "@/components/bottom-log-core";
@@ -68,10 +69,11 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
       }catch(reason){if(alive)setError(reason instanceof TypeError?(english?"Offline or unable to reach the cloud. Downloaded Home snapshots are preserved.":"离线或暂时无法读取云端，已下载的首页快照已保留。"):reason instanceof Error?reason.message:"Could not refresh Home. Cached data is preserved.");}
       finally{running=false;if(alive)setLoading(false);}
     };
+    const stopPullRefresh=registerLocalRefresh(run);
     void run();
     const refresh=()=>{if(document.visibilityState!=="hidden")void run();};
     window.addEventListener(onlineBusinessChanged,refresh);window.addEventListener("online",refresh);window.addEventListener("evaorbit:native-active",refresh);
-    return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
+    return()=>{stopPullRefresh();alive=false;window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
   },[resources,english]);
   return <div className="local-home" data-no-translate="true" data-local-launch-ready={initial||error?"true":undefined}>
     <div className="page local-home-status">

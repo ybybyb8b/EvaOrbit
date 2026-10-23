@@ -1,3 +1,4 @@
+import {registerLocalRefresh} from "./refresh";
 import {createTrackerWithProperties} from "@/app/trackers/create-tracker";
 import {TrackerOnlineSettings} from "./tracker-online-settings";
 import {useLocalInitialPath} from "./routes";
@@ -55,11 +56,12 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   async function sync() { try { await synchronizeTrackerSession(account,platform); } catch { /* Background status belongs to the sync panel. */ } }
   useEffect(() => {
     let alive = true;
+    const stopPullRefresh=registerLocalRefresh(sync);
     store.initialize().then(() => { if (alive) { setReady(true); void sync(); } }).catch(reason => { if (alive) setError(String(reason)); });
     const refresh = () => { if (alive && document.visibilityState !== "hidden") void sync(); };
     window.addEventListener("online", refresh); window.addEventListener("evaorbit:native-active", refresh); document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 60000);
-    return () => { alive = false; clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("evaorbit:native-active", refresh); document.removeEventListener("visibilitychange", refresh); };
+    return () => { stopPullRefresh();alive = false; clearInterval(timer); window.removeEventListener("online", refresh); window.removeEventListener("evaorbit:native-active", refresh); document.removeEventListener("visibilitychange", refresh); };
     // The store and account are the lifecycle; edits do not restart the scheduler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);

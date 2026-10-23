@@ -1,4 +1,6 @@
 .local-shell:not(.local-signed-in) > .main-content { margin-left:0; }
+html[data-local-appearance="true"],html[data-local-appearance="true"] body { overscroll-behavior-y:none; background-color:var(--surface-canvas); }
+.local-shell { --local-header-top:max(14px,env(safe-area-inset-top)); --local-header-control-size:44px; --local-header-gap:8px; }
 .local-appearance-trigger { display:block; margin: max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 0 auto; min-height:44px; }
 .local-food-status.page { padding-top:24px; padding-bottom:0; }
 .local-food-back.page { padding-top:24px; padding-bottom:0; }
@@ -21,7 +23,6 @@
 .local-issue-actions { display:flex; flex-wrap:wrap; gap:12px; }
 .local-entry-status { display:block; color:var(--text-secondary); font-size:11px; margin-top:8px; }
 .tracker-sync-button { position:relative; flex-shrink:0; color:var(--text-secondary); }
-.tracker-sync-button[data-status="current"] { color:var(--accent-primary); }
 .tracker-sync-mark { position:absolute; top:5px; right:4px; width:8px; height:8px; border-radius:50%; background:var(--accent-primary); }
 .tracker-sync-button[data-status="attention"] .tracker-sync-mark { width:15px; height:15px; display:grid; place-items:center; top:1px; right:1px; background:var(--surface-warm); color:var(--text-primary); font:600 11px/1 sans-serif; }
 .tracker-sync-settings { display:grid; gap:20px; min-width:0; }
@@ -37,7 +38,13 @@
   .local-trackers .tracker-title > span:last-child { overflow-wrap:anywhere; min-width:0; }
 }
 
-@media(max-width:720px){.local-shell.local-signed-in > .main-content{padding-top:calc(max(14px,env(safe-area-inset-top)) + 44px);}}
+@media(max-width:720px){
+  .local-shell.local-signed-in > .main-content { padding-top:calc(var(--local-header-top) + var(--local-header-control-size)); }
+  .local-shell.local-signed-in > .main-content:has(.local-home) { padding-top:0; }
+  .local-home { padding-top:var(--local-header-top); }
+  .local-home .home-masthead { padding-top:0; }
+  .local-home .home-masthead > span:first-child { display:flex; align-items:center; min-height:var(--local-header-control-size); padding-inline-end:calc(2 * var(--local-header-control-size) + 2 * var(--local-header-gap)); }
+}
 .local-settings-account { padding-top:0; }
 
 .local-signed-in .main-content { min-width:0; }
@@ -46,10 +53,13 @@
 .local-signed-in .page[class*="-status"] details { margin-block:12px; }
 .local-signed-in .main-content > .page { padding-top:24px; }
 .local-signed-in .page[class*="-status"]:empty { display:none; }
-.local-header-actions { position:absolute; top:max(14px,env(safe-area-inset-top)); right:max(14px,env(safe-area-inset-right)); display:flex; align-items:center; gap:8px; pointer-events:auto; }
+.local-header-actions { position:absolute; top:var(--local-header-top); right:max(14px,env(safe-area-inset-right)); display:flex; align-items:center; gap:var(--local-header-gap); pointer-events:auto; }
 .local-header-actions .spaces-drawer-trigger { position:static; inset:auto; }
-.local-download-button { position:relative; width:44px; height:44px; flex-shrink:0; color:var(--text-secondary); }
-.local-download-button[data-status="cached"] { color:var(--accent-primary); }
+.local-download-button { position:relative; flex-shrink:0; }
+html .icon-button:is(.local-download-button,.tracker-sync-button) { width:44px; height:44px; min-width:44px; min-height:44px; border:0; background:transparent; box-shadow:none; color:var(--text-secondary); }
+html .icon-button:is(.local-download-button,.tracker-sync-button) > svg { width:18px; height:18px; }
+html .icon-button:is(.local-download-button,.tracker-sync-button):hover { background:transparent; color:var(--text-primary); }
+html .icon-button:is(.local-download-button,.tracker-sync-button):focus-visible { outline:2px solid var(--accent-primary); outline-offset:-5px; }
 .local-download-button > span { position:absolute; top:2px; right:2px; background:var(--surface-warm); border-radius:50%; width:15px; height:15px; font:600 11px/15px sans-serif; }
 .local-download-details { display:grid; gap:16px; }
 .local-download-details p { margin:0; overflow-wrap:anywhere; }

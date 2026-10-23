@@ -1,3 +1,4 @@
+import {registerLocalRefresh} from "./refresh";
 import {useLocalInitialPath} from "./routes";
 import {LocalBackAction} from "./navigation-header";
 import {LimitEditor} from "@/app/food-drink/limit-editor";
@@ -61,9 +62,10 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   },[account,platform,setLoading,setSnapshot,setDate,setError]);
   useEffect(()=>{
     const controller=new AbortController();let running=false;
-    const refresh=(event?:Event)=>{const detail=(event as CustomEvent|undefined)?.detail;if(event?.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(!running){running=true;void load(controller.signal,!(detail?.snapshotUpdated&&detail?.resource==="food")).finally(()=>{running=false;});}};
+    const refresh=(event?:Event)=>{const detail=(event as CustomEvent|undefined)?.detail;if(event?.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(!running){running=true;return load(controller.signal,!(detail?.snapshotUpdated&&detail?.resource==="food")).finally(()=>{running=false;});}};
+    const stopPullRefresh=registerLocalRefresh(()=>refresh());
     refresh();window.addEventListener(onlineBusinessChanged,refresh);window.addEventListener("online",refresh);window.addEventListener("evaorbit:native-active",refresh);
-    return()=>{controller.abort();window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
+    return()=>{stopPullRefresh();controller.abort();window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
   },[load,account.accountId]);
   const q=query.trim().toLocaleLowerCase();
   const historyKey=JSON.stringify([section,date,meal,drinkType,query,navigator.onLine,snapshot?.capturedAt]);

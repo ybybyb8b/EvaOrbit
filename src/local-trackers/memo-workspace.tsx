@@ -1,3 +1,4 @@
+import {registerLocalRefresh} from "./refresh";
 import {useLocalInitialPath} from "./routes";
 import {LocalBackAction} from "./navigation-header";
 import {createContext,useContext,useCallback,useEffect,useState,type ComponentProps} from "react";
@@ -19,9 +20,10 @@ export function MemoWorkspace({account,platform}:{account:LocalAccount;platform:
     let alive=true,running=false;
     async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const value=await platform.memoSnapshot(account,true);if(alive&&value){setSnapshot(value);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Could not refresh Memo; cache preserved");}finally{running=false;if(alive)setBusy(false);}}
     void platform.memoSnapshot(account).then(value=>{if(alive)setSnapshot(value);}).catch(e=>{if(alive)setError(String(e));}).finally(()=>{if(alive)void refresh();});
-    const active=(event:Event)=>{const detail=(event as CustomEvent).detail;if(event.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(event.type===onlineBusinessChanged&&detail?.snapshotUpdated&&detail?.resource==="memos"){void platform.memoSnapshot(account).then(value=>{if(alive&&value){setSnapshot(value);setError("");}}).catch(()=>{});return;}if(alive&&navigator.onLine)void refresh();};
+    const stopPullRefresh=registerLocalRefresh(refresh);
+  const active=(event:Event)=>{const detail=(event as CustomEvent).detail;if(event.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(event.type===onlineBusinessChanged&&detail?.snapshotUpdated&&detail?.resource==="memos"){void platform.memoSnapshot(account).then(value=>{if(alive&&value){setSnapshot(value);setError("");}}).catch(()=>{});return;}if(alive&&navigator.onLine)void refresh();};
     window.addEventListener(onlineBusinessChanged,active);window.addEventListener("online",active);window.addEventListener("evaorbit:native-active",active);window.addEventListener("eo:memo-refresh",active);
-    return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);window.removeEventListener("eo:memo-refresh",active);};
+    return()=>{stopPullRefresh();alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);window.removeEventListener("eo:memo-refresh",active);};
   },[account,platform]);
   const read=useOnlineReader(useCallback<MemoRead>(async(path,init)=>{if(!snapshot)throw new Error("Memo is not downloaded");return readMemoSnapshot(snapshot,path,init);},[snapshot]));
   function navigate(path:string){const match=/^\/memo(?:\/([1-9][0-9]*))?$/.exec(path);if(!match){setError("This page is not available in the offline preview");return;}setId(match[1]?Number(match[1]):null);window.scrollTo(0,0);}

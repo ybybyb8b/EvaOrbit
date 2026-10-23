@@ -6,6 +6,19 @@ const Context=createContext<{action:Action|null;register:(action:Action)=>()=>vo
 export function LocalNavigationProvider({children,fallback}:{children:ReactNode;fallback?:()=>void}){
  const [action,setAction]=useState<Action|null>(null);
  const register=useCallback((next:Action)=>{setAction(next);return()=>setAction(current=>current===next?null:current);},[]);
+ useEffect(()=>{
+  const canBack=()=>Boolean(action?.back??fallback)&&!document.querySelector('[role="dialog"][aria-modal="true"]');
+  const start=(event:Event)=>{if(canBack())event.preventDefault();};
+  const back=(event:Event)=>{
+   // Keep form drafts and the open navigation drawer in their current layer.
+   if(!canBack())return;
+   (action?.back??fallback)?.();
+   event.preventDefault();
+  };
+  window.addEventListener("evaorbit:native-back-start",start);
+  window.addEventListener("evaorbit:native-back",back);
+  return()=>{window.removeEventListener("evaorbit:native-back-start",start);window.removeEventListener("evaorbit:native-back",back);};
+ },[action,fallback]);
  return <Context.Provider value={{action,register,fallback}}>{children}</Context.Provider>;
 }
 // A page declares its destination; only the shell renders a back button.

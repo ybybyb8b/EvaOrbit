@@ -1,6 +1,14 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+独立开发版主屏幕显示名称为 `EO Dev`（workflow的`local_trackers=true`）；沿用 `com.evaorbit.nativehost.trackerspoc` 与原URL scheme，覆盖安装而非新建应用。正式在线Host仍显示`EvaOrbit`。改名需新IPA，不改变签名、权限或数据目录。
+
+本地 Host 的下拉刷新改用 Web 共享的页面内手势与提示，调用当前模块加载器，保留页面筛选及详情状态。仅本地关闭 `UIRefreshControl`、`bounces` 与 `alwaysBounceVertical`，网页背景使用当前主题，避免顶部回弹露出底层背景；普通在线 Host 不变。合成浏览器已验证刷新及弹层/横滑保护，黑边、顶部安全区与普通滚动仍待下一次 IPA 在 iPhone 16 Pro 验收，本轮不打包。
+
 按用户要求，IPA 打包不再编译或执行 Simulator XCTest。保留前端构建/Node 回归、设备版 Release 编译、ad-hoc 签名、entitlement 校验及产物哈希；原生功能安装后在手机验收。原生测试源码保留，CI 成功不代表 XCTest 或真机已通过。#60/#61 的模拟器失败保留为未验证的历史问题。
+
+待后续打包的本地返回手势：从屏幕左边缘向右滑，完成有效手势后复用顶部返回按钮目的地；表单/侧栏打开时不退页，无返回目的地时不动作。仅独立本地 Host 启用，不修改普通在线 Host。源代码更新暂未安装到手机，不能将 React 事件测试通过作为原生边缘手势已验证。
+
+页面位移由原生层跟手驱动，取消时回弹，松手成功时移出离开页临时快照并显示返回页；系统减少动态效果时改为轻淡出。反向拖动、弹层中途出现、快速反复拖动及旋转/前后台切换都需在下次真机验收中检查，本轮不打包、不安装。
 
 本地主用版收尾候选使用账户绑定的 `native.invoke`/`native.api` 连接现有原生分派和白名单 API；原生配置页在本地 React 直接复用 Web 控件。主账号须通过 session 和两个服务器开关授权，测试账号仍只能读状态。系统 API/凭据不进入本地业务缓存或重放队列；不添加权限、framework、entitlement，不改变本页安装链。必须先通过新候选 macOS 设备版构建与签名校验，再覆盖安装独立开发版，保留正式 EO、SQLite 和未同步队列；生产发布仍单独确认。详见 [维护契约](IOS_NATIVE_MAINTENANCE.md) 与 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 

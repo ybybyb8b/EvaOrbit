@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host 维护契约
 
+打包选择`local_trackers=true`时仅将`CFBundleDisplayName`缩短为`EO Dev`；原Bundle ID、URL scheme、entitlement与覆盖安装链不变。正式在线Host仍为`EvaOrbit`，不因改名迁移或清空任何账户数据。
+
+本地 Host 关闭原生 `UIRefreshControl` 与 UIScrollView 回弹，使用 Web/本地共享的 React 下拉刷新组件；正常文档滚动保留。当前模块加载器随挂载注册、卸载清理，刷新不整页 reload，也不派发 online/native-active 或直接调用系统同步调度；Tracker 仍复用自身既有同步入口。CSS 同步限制纵向 overscroll 并使用主题背景。普通在线 Host、权限、Bridge 与签名链不变。浏览器合成测试不能证明 WKWebView 黑边已解决，需以后新 IPA 验证顶部安全区、键盘与真实触摸。
+
 ## 本地主用版收尾候选：原生连接
 
 本地 React 通过桥接 v1 的 `native.invoke` 调用原有 HealthKit/EventKit/通知分派，`native.api` 只转发安装包 `native-routes.json` 清单内的配套业务接口。每次验证当前 SQLite 账户、服务器主账号原生授权和 generation；测试账号拒绝。原生操作完成前阻止切换账户；API 冻结 Cookie、拒绝重定向，不缓存系统凭据、不写业务离线队列。`host.getInfo.apiOrigin` 提供可信服务器地址，健康注册不使用 `eo-local://` 拼接 ingest URL。
@@ -11,6 +15,10 @@
 本地 React Host 设置 WKWebView `ignoresViewportScaleLimits=false`，仅对本地 Host 在主文档加载末尾注入固定为 1 的 viewport 缩放范围，并在初始化及每次 `didFinish` 禁用页面 pinch 手势，补齐仅初始化关闭手势仍可缩放的问题。保留 `viewport-fit=cover`、滚动、侧滑返回、DOM 图片自有触摸逻辑和系统辅助功能缩放；普通在线 Host、Web/PWA 和 Windows 预览不注入此限制。无权限、Bridge、签名变更。Windows 的脚本幂等检查通过；WKWebView 首次加载/重载 XCTest 已补充但未运行，下一次 IPA 必须验收真机双指、键盘和刷新行为。
 
 本地开屏的就绪条件还包括 React 内容：`didFinish` 后通过页面观察器等待 `data-local-launch-ready="true"` 及渲染帧，再交给既有开屏协调器退出。账户未读完、首页缓存未就绪时保持原开屏；登录页、已缓存首页或明确错误状态可结束等待，缓存后的网络刷新不阻塞开屏。沿用25秒失败/重试出口，重载时旧导航回调不能关闭新开屏。没有新增 Bridge 方法；普通在线 Host 保留原行为。合成浏览器验证已通过，WKWebView XCTest 和真机时序待新 IPA 验收。
+
+本地 Host 的左边缘右滑通过 `UIScreenEdgePanGestureRecognizer` 发出 `evaorbit:native-back` 页面事件，由本地 `LocalNavigationProvider` 复用当前页面返回动作，再回退到模块返回。结束时达到距离或速度阈值才触发，短滑、反向拖回、垂直手势和取消不导航；表单/侧栏的模态层存在时忽略事件，首页没有目的地时不动作。仅可信本地页面且开屏已结束时启用；本地停用基于网页历史的 WebKit 返回手势以避免重复，普通在线 Host 保留原行为。不新增 Bridge 方法、权限、签名能力或业务写入。React 动作回归可在 Windows 运行，Swift 阈值测试保留；本轮不打包，原生手势实际效果待以后真机验收。
+
+返回动效在原生层跟随手指移动 WKWebView；开始时用可取消的 `evaorbit:native-back-start` 确认 React 有可用目的地且没有模态层，松手时再次校验。取消使用临界阻尼弹簧并继承释放速度，回弹中可从当前画面位置再次拖动。成功时用临时离开页快照覆盖 React 的切换，等待两帧后移出快照并显示返回页；拖动阶段不预加载或恢复上一页业务状态，快照不持久化。开始确认350毫秒、切换确认800毫秒超时会复位视觉，不重发返回；旋转、原生导航、离开窗口和恢复前台均清理临时状态。减少动态效果时不做页面位移，改为短淡出。没有新增 bridge 方法或页面历史栈；Windows 仅验证事件与提交脚本，Swift 动画和真机流畅度尚未验证。
 
 主用本地版候选新增 `navigation.openNativeSettings`：仅允许 Health/Apple Integration/Notifications 三个可信同源设置路径，隔离非持久 Cookie、锁定本地账户切换，正式账户须由服务端额外启用且拒绝测试账户。本地 core 不开放系统写方法；`session_expired` 错误用于保留页面草稿的重新登录弹层。Native 数据变更事件可通知本地 UI 刷新。无新权限、framework、entitlement 或签名链变更；新增面板与 XCTest 尚待 macOS CI/真机，不代表自动系统同步生命周期已完全迁移。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 

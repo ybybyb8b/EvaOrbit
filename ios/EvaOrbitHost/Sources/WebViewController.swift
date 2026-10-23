@@ -12,7 +12,21 @@ final class WebViewController: UIViewController {
     private var launchURL: URL?
     private var awaitingLocalContent = false
     private var navigationAttempt = 0
+    private lazy var localBackGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleLocalBack(_:)))
+    private var localBackAnimator: UIViewPropertyAnimator?
+    private var localBackSnapshot: UIView?
+    private var localBackTimeout: DispatchWorkItem?
+    private var localBackGeneration = 0
+    private var localBackTracking = false
+    private var localBackCommitting = false
+    private var localBackStartOffset: CGFloat = 0
+    private var localBackRelease: (translation: CGPoint, velocity: CGPoint, cancelled: Bool)?
     private static let navigationTimeout: TimeInterval = 25
+    static let localBackCommitScript = #"""
+    const accepted = !window.dispatchEvent(new Event('evaorbit:native-back', {cancelable: true}));
+    if (accepted) await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return accepted;
+    """#
     static let localContentReadyScript = #"""
     await new Promise(resolve => {
       const ready = () => document.querySelector('[data-local-launch-ready="true"]');
@@ -113,15 +127,29 @@ final class WebViewController: UIViewController {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        webView.allowsBackForwardNavigationGestures = true
+        webView.allowsBackForwardNavigationGestures = !hostConfiguration.localTrackers
+        if hostConfiguration.localTrackers {
+            localBackGesture.edges = .left
+            localBackGesture.maximumNumberOfTouches = 1
+            localBackGesture.delegate = self
+            webView.addGestureRecognizer(localBackGesture)
+            webView.scrollView.panGestureRecognizer.require(toFail: localBackGesture)
+        }
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.keyboardDismissMode = .interactive
         disableLocalPageZoom()
         webView.isOpaque = false
         webView.backgroundColor = palette.loadingBackground
         webView.scrollView.backgroundColor = palette.loadingBackground
-        webView.scrollView.refreshControl = UIRefreshControl()
-        webView.scrollView.refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
+        if hostConfiguration.localTrackers {
+            // React shares the Web pull gesture and refreshes data in place.
+            // Keep overscroll from revealing the native loading background.
+            webView.scrollView.bounces = false
+            webView.scrollView.alwaysBounceVertical = false
+        } else {
+            webView.scrollView.refreshControl = UIRefreshControl()
+            webView.scrollView.refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
+        }
         view.addSubview(webView)
 
         NSLayoutConstraint.activate([
@@ -146,6 +174,142 @@ final class WebViewController: UIViewController {
     private func disableLocalPageZoom() {
         guard hostConfiguration.localTrackers else { return }
         webView.scrollView.pinchGestureRecognizer?.isEnabled = false
+    }
+
+    static func shouldCommitLocalBack(translation: CGPoint, velocity: CGPoint, width: CGFloat) -> Bool {
+        guard width > 0, translation.x > 20, translation.x > abs(translation.y), velocity.x >= 0 else { return false }
+        return translation.x >= width * 0.28 || velocity.x >= 600
+    }
+
+    static func localBackOffset(translation: CGFloat, startingOffset: CGFloat, width: CGFloat) -> CGFloat {
+        min(max(0, width), max(0, startingOffset + translation))
+    }
+
+    private func resetLocalBackMotion() {
+        localBackGeneration += 1
+        localBackTimeout?.cancel()
+        localBackTimeout = nil
+        if localBackAnimator?.state == .active { localBackAnimator?.stopAnimation(true) }
+        localBackAnimator = nil
+        localBackSnapshot?.removeFromSuperview()
+        localBackSnapshot = nil
+        webView.transform = .identity
+        localBackTracking = false
+        localBackCommitting = false
+        localBackRelease = nil
+    }
+
+    private func animateLocalBack(_ moving: UIView, to offset: CGFloat, velocity: CGFloat, completion: @escaping () -> Void) {
+        let distance = offset - moving.transform.tx
+        let relativeVelocity = abs(distance) > 1 ? velocity / distance : 0
+        let timing = UISpringTimingParameters(dampingRatio: 1, initialVelocity: CGVector(dx: max(-10, min(10, relativeVelocity)), dy: 0))
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled, isLivePage = moving === webView
+        let animator = reduceMotion
+            ? UIViewPropertyAnimator(duration: 0.12, curve: .easeOut)
+            : UIViewPropertyAnimator(duration: 0.28, timingParameters: timing)
+        let generation = localBackGeneration
+        animator.addAnimations {
+            if reduceMotion { moving.alpha = isLivePage ? 1 : 0 }
+            else { moving.transform = CGAffineTransform(translationX: offset, y: 0) }
+        }
+        animator.addCompletion { [weak self] position in
+            guard let self, self.localBackGeneration == generation, position == .end else { return }
+            completion()
+        }
+        localBackAnimator = animator
+        animator.startAnimation()
+    }
+
+    private func finishLocalBack(translation: CGPoint, velocity: CGPoint, cancelled: Bool) {
+        let offset = Self.localBackOffset(translation: translation.x, startingOffset: localBackStartOffset, width: webView.bounds.width)
+        localBackTracking = false
+        guard !cancelled, Self.shouldCommitLocalBack(translation: CGPoint(x: offset, y: translation.y), velocity: velocity, width: webView.bounds.width) else {
+            animateLocalBack(webView, to: 0, velocity: velocity.x) { [weak self] in self?.resetLocalBackMotion() }
+            return
+        }
+        localBackCommitting = true
+        // Keep the departing pixels above the live page while React goes back.
+        // The snapshot is transient and is never persisted or added to navigation history.
+        if let snapshot = webView.snapshotView(afterScreenUpdates: false) {
+            snapshot.frame = webView.bounds
+            snapshot.transform = webView.transform
+            view.insertSubview(snapshot, aboveSubview: webView)
+            localBackSnapshot = snapshot
+        }
+        webView.transform = .identity
+        let generation = localBackGeneration
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self, self.localBackGeneration == generation else { return }
+            self.resetLocalBackMotion()
+        }
+        localBackTimeout = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: timeout)
+        webView.callAsyncJavaScript(Self.localBackCommitScript, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self, self.localBackGeneration == generation else { return }
+            self.localBackTimeout?.cancel()
+            self.localBackTimeout = nil
+            if case .success(let accepted) = result, accepted as? Bool == true {
+                if let snapshot = self.localBackSnapshot {
+                    self.animateLocalBack(snapshot, to: self.webView.bounds.width, velocity: velocity.x) { [weak self] in self?.resetLocalBackMotion() }
+                } else { self.resetLocalBackMotion() }
+            } else {
+                self.localBackSnapshot?.removeFromSuperview()
+                self.localBackSnapshot = nil
+                self.webView.transform = CGAffineTransform(translationX: UIAccessibility.isReduceMotionEnabled ? 0 : offset, y: 0)
+                self.animateLocalBack(self.webView, to: 0, velocity: velocity.x) { [weak self] in self?.resetLocalBackMotion() }
+            }
+        }
+    }
+
+    @objc private func handleLocalBack(_ gesture: UIScreenEdgePanGestureRecognizer) {
+        let translation = gesture.translation(in: view), velocity = gesture.velocity(in: view)
+        switch gesture.state {
+        case .began:
+            // A new drag can grab a returning page at its current visible position.
+            let offset = webView.layer.presentation()?.affineTransform().tx ?? webView.transform.tx
+            resetLocalBackMotion()
+            localBackStartOffset = offset
+            webView.transform = CGAffineTransform(translationX: offset, y: 0)
+            let generation = localBackGeneration
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, self.localBackGeneration == generation else { return }
+                self.resetLocalBackMotion()
+            }
+            localBackTimeout = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: timeout)
+            webView.evaluateJavaScript("!window.dispatchEvent(new Event('evaorbit:native-back-start', {cancelable: true}))") { [weak self] accepted, _ in
+                guard let self, self.localBackGeneration == generation else { return }
+                self.localBackTimeout?.cancel()
+                self.localBackTimeout = nil
+                guard accepted as? Bool == true else { self.resetLocalBackMotion(); return }
+                self.localBackTracking = true
+                if let release = self.localBackRelease {
+                    self.finishLocalBack(translation: release.translation, velocity: release.velocity, cancelled: release.cancelled)
+                } else if !UIAccessibility.isReduceMotionEnabled {
+                    let x = Self.localBackOffset(translation: gesture.translation(in: self.view).x, startingOffset: self.localBackStartOffset, width: self.webView.bounds.width)
+                    self.webView.transform = CGAffineTransform(translationX: x, y: 0)
+                }
+            }
+        case .changed:
+            if localBackTracking && !UIAccessibility.isReduceMotionEnabled {
+                let x = Self.localBackOffset(translation: translation.x, startingOffset: localBackStartOffset, width: webView.bounds.width)
+                webView.transform = CGAffineTransform(translationX: x, y: 0)
+            }
+        case .ended, .cancelled, .failed:
+            localBackRelease = (translation, velocity, gesture.state != .ended)
+            if localBackTracking { finishLocalBack(translation: translation, velocity: velocity, cancelled: gesture.state != .ended) }
+        default: break
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        resetLocalBackMotion()
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        resetLocalBackMotion()
+        super.viewWillTransition(to: size, with: coordinator)
     }
 
     private func loadEvaOrbit() {
@@ -205,8 +369,19 @@ final class WebViewController: UIViewController {
     }
 }
 
+extension WebViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === localBackGesture else { return true }
+        guard !localBackCommitting, loadingCoordinator.state == .dismissed,
+              let url = webView.url, hostConfiguration.allowsTrackerUI(url) else { return false }
+        let velocity = localBackGesture.velocity(in: view)
+        return velocity.x > 0 && velocity.x > abs(velocity.y)
+    }
+}
+
 extension WebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        resetLocalBackMotion()
         startNavigationTimeout()
     }
 
@@ -257,6 +432,7 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func notifyApplicationDidBecomeActive() {
+        if hostConfiguration.localTrackers { resetLocalBackMotion() }
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:native-active'))")
     }
 

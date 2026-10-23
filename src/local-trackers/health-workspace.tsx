@@ -1,3 +1,4 @@
+import {registerLocalRefresh} from "./refresh";
 import {useLocalInitialPath} from "./routes";
 import {createContext,useContext,useCallback,useEffect,useState,type ComponentProps} from "react";
 import {HealthViewContent,type HealthViewName} from "@/app/health/health-view-content";
@@ -22,9 +23,10 @@ export function HealthWorkspace({account,platform}:{account:LocalAccount;platfor
     let alive=true,running=false;
     async function refresh(){if(running)return;running=true;if(alive)setBusy(true);try{const value=await platform.healthSnapshot(account,true);if(alive&&value){setSnapshot(value);setError("");}}catch(e){if(alive)setError(e instanceof Error?e.message:"Could not refresh Health; cache preserved");}finally{running=false;if(alive)setBusy(false);}}
     void platform.healthSnapshot(account).then(value=>{if(alive)setSnapshot(value);}).catch(e=>{if(alive)setError(String(e));}).finally(()=>{if(alive)void refresh();});
-    const active=(event:Event)=>{const detail=(event as CustomEvent).detail;if(event.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(event.type===onlineBusinessChanged&&detail?.snapshotUpdated&&detail?.resource==="health"){void platform.healthSnapshot(account).then(value=>{if(alive&&value){setSnapshot(value);setError("");}}).catch(()=>{});return;}if(alive&&navigator.onLine)void refresh();};
+    const stopPullRefresh=registerLocalRefresh(refresh);
+  const active=(event:Event)=>{const detail=(event as CustomEvent).detail;if(event.type===onlineBusinessChanged&&detail?.accountId!==account.accountId)return;if(event.type===onlineBusinessChanged&&detail?.snapshotUpdated&&detail?.resource==="health"){void platform.healthSnapshot(account).then(value=>{if(alive&&value){setSnapshot(value);setError("");}}).catch(()=>{});return;}if(alive&&navigator.onLine)void refresh();};
     window.addEventListener(onlineBusinessChanged,active);window.addEventListener("online",active);window.addEventListener("evaorbit:native-active",active);
-    return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);};
+    return()=>{stopPullRefresh();alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);};
   },[account,platform,attempt]);
   const read=useOnlineReader(useCallback<HealthRead>(async(url,init)=>{if(!snapshot)throw new Error("Health is not downloaded");return readHealthSnapshot(snapshot,url,init);},[snapshot]));
   const url=new URL(path,"https://offline.invalid"),requested=url.searchParams.get("view") as HealthViewName,view=views.includes(requested)?requested:url.hash==="#weight-title"?"weight":url.hash==="#period-medication-title"?"cycle":url.searchParams.has("training")?"training":"overview";

@@ -1,4 +1,5 @@
 import {useOnlineReader,onlineBusinessChanged} from "./online-business";
+import {registerLocalRefresh} from "./refresh";
 import {useCallback,useEffect,useRef,type ReactNode,type ComponentType} from "react";
 import {FoodDataProvider,type FoodLinkProps,type FoodRead} from "@/components/food-data-context";
 import {createFoodLocalReader} from "@/lib/food-local-reader";
@@ -25,9 +26,10 @@ export function FoodLocalData({account,platform,Link,onIssue,children}:{account:
   const read=useOnlineReader(useCallback<FoodRead>((path,init)=>createFoodLocalReader(resource)(path,{signal:init?.signal??undefined}),[resource]));
   useEffect(()=>{
     alive.current=true;
-    const online=()=>{const recent=[...refreshed.current].slice(-2);for(const token of new Set(["catalog/current",...recent])){const [kind,key]=token.split("/");void refresh(kind as FoodResourceKind,key).catch(reason=>{if(alive.current)onIssue(String(reason instanceof Error?reason.message:"Could not refresh Food data."));});}};
+    const online=()=>{const recent=[...refreshed.current].slice(-2);return Promise.all([...new Set(["catalog/current",...recent])].map(token=>{const [kind,key]=token.split("/");return refresh(kind as FoodResourceKind,key).catch(reason=>{if(alive.current)onIssue(String(reason instanceof Error?reason.message:"Could not refresh Food data."));});}));};
+    const stopPullRefresh=registerLocalRefresh(online);
     window.addEventListener(onlineBusinessChanged,online);window.addEventListener("online",online);window.addEventListener("evaorbit:native-active",online);
-    return()=>{alive.current=false;window.removeEventListener(onlineBusinessChanged,online);window.removeEventListener("online",online);window.removeEventListener("evaorbit:native-active",online);};
+    return()=>{stopPullRefresh();alive.current=false;window.removeEventListener(onlineBusinessChanged,online);window.removeEventListener("online",online);window.removeEventListener("evaorbit:native-active",online);};
   },[refresh,onIssue]);
   return <FoodDataProvider read={read} Link={Link}>{children}</FoodDataProvider>;
 }

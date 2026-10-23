@@ -1,5 +1,6 @@
 import {LocalNativeIntegrations} from "./native-integrations";
 import {LocalNativeDataEvents} from "./native-data-events";
+import {LocalPullToRefresh} from "./pull-to-refresh";
 import {sessionExpiredEvent} from "./session-events";
 import {ErrorNotice} from "@/components/error-notice";
 import {LocalRouteContext} from "./routes";
@@ -88,6 +89,7 @@ function App() {
   useEffect(() => { platform.account().then(setAccount).catch(() => setError("暂时无法打开本机账户，请重试。")).finally(() => setReady(true)); }, []);
   return <LocaleController localOnly defaults={LOCAL_APPEARANCE_BASELINE}><ThemeController /><ErrorFeedbackProvider><OnlineBusinessProvider account={account&&!signingIn?account:null} platform={platform}><LocalNativeIntegrations account={account&&!signingIn?account:null} native={platform.native}><Navigate.Provider value={navigate}><LocalRouteContext.Provider value={{path:initialPath,navigate}}><BottomLogProvider pathname={pathname}><DownloadStatusProvider key={account?.accountId??"signed-out"}><LocalNavigationProvider key={module+":"+navigationKey} fallback={account&&!signingIn&&["tasks","projects","lucius","media","relations","health","trackers","food","cats","subscriptions","chronicle","memo","inbox","settings"].includes(module)?backModule:undefined}><div className={`local-tracker-app local-shell app-shell ${account&&!signingIn?"local-signed-in":""} ${bottomNav.shell}`} data-ui-copy-ready="true" data-local-launch-ready={ready&&(!account||signingIn||module!=="home")?"true":undefined}>
     <NativeHapticController />
+    {account&&!signingIn&&<LocalPullToRefresh key={account.accountId+":"+pathname} pathname={pathname}/>}
     {account&&!signingIn?<AppSidebar pathname={pathname} LinkComponent={LocalNavLink} allowedPaths={localPaths} brandImage={<LocalBrandImage/>}/>:<LocalAppearance/>}
     <main className={`main-content${["tasks","projects","media"].includes(module)?" has-page-back":""}`}><LocalDesktopBack/>{account&&!signingIn&&error&&<ErrorNotice>{error}</ErrorNotice>}
     {!ready ? <LoginSurface><p role="status">正在打开本机记录…</p></LoginSurface> : account && !signingIn
