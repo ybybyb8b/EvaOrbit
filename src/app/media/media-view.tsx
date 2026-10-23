@@ -1,4 +1,5 @@
 "use client";
+import "./media-exhibit.css";
 import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
@@ -15,21 +16,25 @@ import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { MediaCover } from "@/components/media-cover";
 import { MediaPageHeader as PageHeader } from "@/components/media-data-context";
-import { getMediaDisplayTitle, groupMediaCollection } from "@/lib/media-display";
+import { getMediaDisplayTitle, groupMediaCollection, mediaNameKey } from "@/lib/media-display";
 import { useLocale } from "@/components/locale-controller";
 import { translateUiCopy } from "@/lib/ui-copy";
 import type { MediaDetail, MediaListItem, MediaRating, MediaSeries, MediaStatus, MediaType } from "@/lib/types";
 
 export function MediaPosterCard({item}:{item:MediaListItem}){
   const copyScope=useUiCopyScope<HTMLAnchorElement>(false),display=getMediaDisplayTitle(item);
+  const {local}=useMediaData();
+  const {language}=useLocale();
+  const alternate=[item.originalTitle,item.translatedTitle].find(value=>value&&mediaNameKey(value)!==mediaNameKey(display.primary));
   return <Link ref={copyScope} className="media-poster-card" href={`/media/${item.id}`}>
     <MediaCover item={item} compact/>
-    <span className="media-poster-copy"><strong>{display.primary}</strong><small>{display.seasonLabel&&<b className="media-season-mark">{display.seasonLabel}</b>}<span>{statusLabel(item.status)}</span>{item.rating&&<span>{item.rating}</span>}</small></span>
+    <span className="media-poster-copy"><strong>{display.primary}</strong>{!local&&alternate&&<span className="media-label-alternate">{alternate}</span>}<small className={local?undefined:"media-label-details"}>{display.seasonLabel&&<b className="media-season-mark">{display.seasonLabel}</b>}{local?<span>{statusLabel(item.status)}</span>:item.latestWatchedDate?<span className="media-label-date"><span>{language==="en"?"Watched":"观看日期"}</span><time dateTime={item.latestWatchedDate}>{item.latestWatchedDate.replaceAll("-",".")}</time></span>:null}{item.rating&&<span className="media-label-rating">{item.rating}</span>}</small></span>
     {item.isFavorite&&<span className="media-favorite-mark" aria-label="Favorite">♥</span>}
   </Link>;
 }
 function SeriesCard({group,items}:{group:MediaSeries;items:MediaListItem[]}){
   const {language}=useLocale(),copyScope=useUiCopyScope<HTMLAnchorElement>(false);
+  const {local}=useMediaData();
   const previews=[...items].sort((a,b)=>Number(Boolean(b.coverUrl))-Number(Boolean(a.coverUrl))||(a.seasonNumber??9999)-(b.seasonNumber??9999)||a.id-b.id).slice(0,3);
   const complete=items.length===group.itemCount&&items.length>0;
   const noun=complete&&items.every(item=>(item.mediaType==="tv"||item.mediaType==="anime")&&item.seasonNumber!==null)?"season":complete&&items.every(item=>item.mediaType==="movie")?"movie":"item";
@@ -37,12 +42,13 @@ function SeriesCard({group,items}:{group:MediaSeries;items:MediaListItem[]}){
   const status=items.some(item=>item.status==="watching")?"watching":complete&&items.every(item=>item.status===items[0].status)?items[0].status:null;
   return <Link ref={copyScope} className="media-poster-card media-series-card" href={`/media/series/${group.id}`}>
     <span className="media-series-stack" aria-hidden="true">{previews.length?previews.map(item=><MediaCover key={item.id} item={item} compact/>):<span className="media-cover media-cover-fallback"><span className="media-cover-initial">{Array.from(group.name)[0]}</span></span>}</span>
-    <span className="media-poster-copy"><strong>{group.name}</strong><small><span>{quantity}</span><span>{translateUiCopy(status?statusLabel(status):"Series / Franchise",language)}</span></small></span>
+    <span className="media-poster-copy"><strong>{group.name}</strong>{!local&&<span className="media-label-alternate">{language==="en"?"Collected together":"系列套装"}</span>}<small className={local?undefined:"media-label-details"}><span>{!local&&language!=="en"?`收录 ${quantity}`:quantity}</span>{local?<span>{translateUiCopy(status?statusLabel(status):"Series / Franchise",language)}</span>:<span className="media-label-rating media-label-set">{language==="en"?"SET":"套装"}</span>}</small></span>
   </Link>;
 }
 
 export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaListItem[];initialSeries:MediaSeries[];defaultSeries?:MediaSeries}){
-  const {read}=useMediaData(),preview=useFormPreview();
+  const {read,local}=useMediaData(),preview=useFormPreview();
+  const {language}=useLocale();
   const request=useRef<AbortController|null>(null);
   useEffect(()=>()=>request.current?.abort(),[]);
   const[series,setSeries]=useServerDataState(initialSeries),[query,setQuery]=useRememberedState(`MediaView:${defaultSeries?.id??"all"}:query`, "");
@@ -68,7 +74,7 @@ export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaLi
   async function submit(event:FormEvent){event.preventDefault();if(preview||saving)return;setSaving(true);setError("");setNotice("");try{const seriesId=await resolveSeries();const response=await read("/api/media",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({originalTitle:draft.originalTitle||null,translatedTitle:draft.translatedTitle||null,mediaType:draft.mediaType,status:draft.status,watchedDate:draft.status==="completed"?draft.watchedDate:null,rating:draft.rating||null,isFavorite:draft.isFavorite,note:draft.note||null,seriesId,seasonNumber:draft.seasonNumber||null,seasonTitle:draft.seasonTitle||null})});if(!response.ok){setError(await responseError(response,"Could not save media."));return;}const created=await response.json() as MediaDetail;let coverFailed=false;if(coverFile){const body=new FormData();body.set("file",coverFile);const upload=await read(`/api/media/${created.id}/cover`,{method:"POST",body});coverFailed=!upload.ok;}setShowForm(false);setDraft(emptyDraft());setCoverFile(null);setNotice(coverFailed?"Media added, but its cover could not be uploaded.":"Media added.");await load();const seriesResponse=await read("/api/media/series",{cache:"no-store"});if(seriesResponse.ok)setSeries(await seriesResponse.json() as MediaSeries[]);}catch(reason){setError(reason instanceof Error?reason.message:"Could not save media.");}finally{setSaving(false);}}
   function clearFilters(){setQuery("");setMediaType("");setStatus("");setRating("");setFavoriteOnly(false);setRewatchedOnly(false);}
 
-  return <div className="page media-page">
+  return <div className={`page media-page${local?"":" media-exhibit-page"}`}>
     <PageHeader eyebrow="" title={defaultSeries?(series.find(item=>item.id===defaultSeries.id)?.name??defaultSeries.name):"Media"} translatePage={!defaultSeries} action={<PageLogAction label={addLabel} className="button primary" onClick={()=>{setDraft({...emptyDraft(),...(defaultSeries?{seriesChoice:String(defaultSeries.id),mediaType:seriesType,status:"planned" as const}:{})});setCoverFile(null);setError("");setShowForm(true);}}><Icon name="plus"/>{addLabel}</PageLogAction>}/>
     {showForm&&<FormSheet title={addLabel} onClose={()=>setShowForm(false)} formId="media-record-form" submitLabel={addLabel} busy={saving} submitDisabled={preview}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}><MediaFields draft={draft} setDraft={setDraft} coverFile={coverFile} setCoverFile={setCoverFile} series={series}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>}
     {renaming&&<FormSheet title="Rename series" onClose={()=>setRenaming(false)} formId="media-series-form" submitLabel="Save changes" submitDisabled={preview} busy={saving}><form id="media-series-form" onSubmit={async event=>{event.preventDefault();if(preview||saving||!defaultSeries)return;setSaving(true);setError("");try{const response=await read(`/api/media/series/${defaultSeries.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:seriesName})});if(!response.ok)throw new Error(await responseError(response,"Could not rename series."));const updated=await response.json() as MediaSeries;setSeries(current=>current.map(item=>item.id===updated.id?updated:item));setRenaming(false);setNotice("Series renamed.");await load();}catch(e){setError(e instanceof Error?e.message:"Could not rename series.");}finally{setSaving(false);}}}>{preview&&<FormPreviewNotice/>}<label className="field"><span>Series name</span><input required maxLength={200} value={seriesName} onChange={event=>setSeriesName(event.target.value)}/></label>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>}
@@ -88,7 +94,7 @@ export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaLi
       </details>
     </>}
     <section className="media-results" aria-busy={loading} aria-label="Media collection">
-      <div className="media-shelf-heading"><h2>{defaultSeries?"Works":filtered?"Results":"Collection"}</h2><span role="status">{loading?"Loading…":`${collection.length}${hasMore?"+":""}`}</span>{filtered&&<button className="text-button" type="button" onClick={clearFilters}>Clear filters</button>}</div>
+      <div className="media-shelf-heading">{(local||filtered||defaultSeries)&&<h2>{defaultSeries?"Works":filtered?"Results":"Collection"}</h2>}<span role="status">{loading?"Loading…":`${collection.length}${hasMore?"+":""}`}{!local&&!filtered&&!defaultSeries&&<span className="media-collection-unit">{language==="en"?(collection.length===1?" work":" works"):"件收藏"}</span>}</span>{filtered&&<button className="text-button" type="button" onClick={clearFilters}>Clear filters</button>}</div>
       {collection.length?<div className="media-poster-grid">{collection.map(entry=>entry.kind==="series"?<SeriesCard key={`series-${entry.group.id}`} group={entry.group} items={entry.items}/>:<MediaPosterCard key={`item-${entry.item.id}`} item={entry.item}/>)}</div>:!loading?<div className="empty-state media-empty"><span className="empty-icon"><Icon name="media"/></span><h2>{filtered?"No matching media":"Your private shelf"}</h2><p>{filtered?"Try a different title, series, or filter.":"Add the first work you want to keep close."}</p>{!filtered&&<button className="button secondary" onClick={()=>setShowForm(true)}><Icon name="plus"/>Add Media</button>}</div>:null}
     </section>
     {hasMore&&<button className="button secondary media-more" disabled={loading} onClick={()=>void load(items.length)}>{loading?"Loading…":"Load more"}</button>}
