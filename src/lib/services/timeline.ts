@@ -13,6 +13,7 @@ import { combineMealTimeline, resolveMealTimes } from "../meal-calendar";
 
 // Daily and monthly Home views share this read only within one server render.
 const requestCatTimeline = cache(catTimeline);
+const requestRelationPeople = cache((repository: Awaited<ReturnType<typeof getRepository>>) => repository.listRelationPeople({ includeArchived: true }));
 
 function catsInRange(items:Awaited<ReturnType<typeof catTimeline>>,range:{from:string;to:string}):TimelineEvent[]{return items.filter(item=>item.occurredAt>=range.from&&item.occurredAt<range.to).map(item=>({id:`cat:${item.kind}:${item.id}`,eventType:`cat.${item.eventType}`,sourceType:"cat",sourceId:item.id,title:item.title,detail:item.summary,occurredAt:item.occurredAt,hasExplicitTime:item.occurredHasExplicitTime,endAt:null,href:item.petId?`/cats/${item.petId}`:"/cats",relatedPeople:[],relatedPets:item.petId?[item.petId]:[],metadata:{kind:item.kind,...item.metadata}}));}
 
@@ -28,11 +29,11 @@ async function calendarRecordsInRange(range: { from: string; to: string }) {
   return readCalendarTimelineRecords(range, query => repository.listCalendarEvents(query));
 }
 
-async function subscriptionSources(repository: Awaited<ReturnType<typeof getRepository>>) {
+const subscriptionSources = cache(async (repository: Awaited<ReturnType<typeof getRepository>>) => {
   const subscriptions = await repository.listSubscriptions();
   const subscriptionPayments = (await Promise.all(subscriptions.map(item => repository.listSubscriptionPayments(item.id)))).flat();
   return { subscriptions, subscriptionPayments };
-}
+});
 
 async function loadSources(range: { from: string; to: string }, readOnly = false) {
   if (!readOnly) await catchUpAutomaticSubscriptionPayments();
@@ -44,7 +45,7 @@ async function loadSources(range: { from: string; to: string }, readOnly = false
     repository.listTrackers(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
-    repository.listRelationPeople({ includeArchived: true }),
+    requestRelationPeople(repository),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),
@@ -98,7 +99,7 @@ export async function getDailyTimelineOverview(date = dateInEvaOrbit(), options:
     requestCatTimeline(),
     repository.listHealthRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listRelationEvents({ from: range.from, to: range.to, limit: 100 }),
-    repository.listRelationPeople({ includeArchived: true }),
+    requestRelationPeople(repository),
     repository.listTrainingLogs({ from: range.from, to: range.to, limit: 100 }),
     repository.listWeightRecords({ from: range.from, to: range.to, limit: 100 }),
     repository.listMenstrualFlowRecords({from:range.from,to:range.to,limit:100}),

@@ -53,7 +53,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
 
 test("Home keeps the compact Due reminder stack", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /getDueReminders\(\)/);
+  assert.match(page, /getDueReminders\(50, now, \{ readOnly: true \}\)/);
   assert.match(page, /<DueReminders items=\{due\} compact\s*\/>/);
 });
 
