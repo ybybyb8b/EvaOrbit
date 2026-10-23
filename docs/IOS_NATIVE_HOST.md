@@ -1,8 +1,8 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
-CI 停滞排查：Simulator 单测现在复用预编译产物，明确选择与当前 Xcode Simulator SDK 同版本的 iPhone 16 Pro，串行运行；单项最多120秒、测试步骤最多10分钟，失败后保留 xcresult 且不进入 IPA 打包。本地页面启动测试挂载可见窗口并为 JavaScript/Promise 设置期限，页面不就绪即退出，避免标题断言失败后仍无限等待。#60 两次停在此测试，重跑伴有 WebKit GPU 无响应；新方案仍待 macOS CI 验证，不能把 workflow 检查通过当作 IPA 已成功。
+按用户要求，IPA 打包不再编译或执行 Simulator XCTest。保留前端构建/Node 回归、设备版 Release 编译、ad-hoc 签名、entitlement 校验及产物哈希；原生功能安装后在手机验收。原生测试源码保留，CI 成功不代表 XCTest 或真机已通过。#60/#61 的模拟器失败保留为未验证的历史问题。
 
-本地主用版收尾候选使用账户绑定的 `native.invoke`/`native.api` 连接现有原生分派和白名单 API；原生配置页在本地 React 直接复用 Web 控件。主账号须通过 session 和两个服务器开关授权，测试账号仍只能读状态。系统 API/凭据不进入本地业务缓存或重放队列；不添加权限、framework、entitlement，不改变本页安装链。必须先通过新候选 macOS/XCTest，再覆盖安装独立开发版，保留正式 EO、SQLite 和未同步队列；生产发布仍单独确认。详见 [维护契约](IOS_NATIVE_MAINTENANCE.md) 与 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+本地主用版收尾候选使用账户绑定的 `native.invoke`/`native.api` 连接现有原生分派和白名单 API；原生配置页在本地 React 直接复用 Web 控件。主账号须通过 session 和两个服务器开关授权，测试账号仍只能读状态。系统 API/凭据不进入本地业务缓存或重放队列；不添加权限、framework、entitlement，不改变本页安装链。必须先通过新候选 macOS 设备版构建与签名校验，再覆盖安装独立开发版，保留正式 EO、SQLite 和未同步队列；生产发布仍单独确认。详见 [维护契约](IOS_NATIVE_MAINTENANCE.md) 与 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 独立本地 Host 对主文档注入固定为 1 的 viewport 缩放范围，并在初始化与每次页面加载完成后禁用页面 pinch 手势；保留安全区、滚动、侧滑返回及系统辅助功能缩放，普通在线 Host、Web/PWA 和 Windows 预览不注入限制。需要新 IPA 覆盖安装后检查首次打开、下拉刷新及重进页面的双指缩放，并确认输入框键盘和滚动正常。Windows 仅通过脚本检查；macOS/XCTest 与真机手势仍待验收。不需 API 发布、权限或签名变更。
 

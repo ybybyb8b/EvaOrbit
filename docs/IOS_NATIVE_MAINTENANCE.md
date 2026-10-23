@@ -99,7 +99,6 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 ```text
 提交并 push Native 改动
   → GitHub Actions macos-15-intel + XcodeGen + Xcode
-  → Simulator 编译和 iPhone 16 Pro Simulator 单测
   → iphoneos Release ad-hoc signed .app
   → 校验 HealthKit entitlements 后打包 IPA
   → 下载 artifact 到 Windows
@@ -113,28 +112,26 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 
 按用户明确的协作偏好：后续 push 后的 GitHub Actions 由用户查看结果；代理提供分支、提交、Actions 入口和本地验证情况，不默认启动 `gh run watch` 或反复轮询。用户带回失败信息或明确要求代查后再排障。未运行、未核实的 XCTest 仍须标为待验收，不能视为通过。
 
-2026-10-05 起，workflow 配置使用标准 `macos-15-intel` runner，避开 GitHub 提示的 macOS arm64 容量排队；不使用付费 large runner，也不保证其他队列没有等待。`actions/checkout@v5` 和 `actions/upload-artifact@v6` 使用 Node.js 24 action runtime。此配置更新不改变设备目标、ad-hoc signing、entitlement 校验或 patched xtool；Intel runner 下的 Simulator 单测及完整 IPA 构建仍需下一次 macOS CI 实际验证，不能将此前的成功产物作为新 runner 已通过的证据。
+2026-10-05 起，workflow 配置使用标准 `macos-15-intel` runner，避开 GitHub 提示的 macOS arm64 容量排队；不使用付费 large runner，也不保证其他队列没有等待。`actions/checkout@v5` 和 `actions/upload-artifact@v6` 使用 Node.js 24 action runtime。此配置更新不改变设备目标、ad-hoc signing、entitlement 校验或 patched xtool；Intel runner 下的完整 IPA 构建仍需下一次 macOS CI 实际验证，不能将此前的成功产物作为新 runner 已通过的证据。
 
 `.github/workflows/ios-native-host.yml` 当前会：
 
 1. 安装 XcodeGen，从 `ios/EvaOrbitHost/project.yml` 生成工程。
-2. 对 Simulator 执行 `build-for-testing`。
-3. 在 iPhone 16 Pro Simulator 执行 Native 单元测试。
-4. 用 `iphoneos`、Release 和 ad-hoc code signing 构建设备 `.app`。
-5. 由 `scripts/ios/package-ad-hoc-ipa.sh` 验证签名，并断言以下 entitlement 都是 `true`：
+2. 用 `iphoneos`、Release 和 ad-hoc code signing 构建设备 `.app`。
+3. 由 `scripts/ios/package-ad-hoc-ipa.sh` 验证签名，并断言以下 entitlement 都是 `true`：
    - `com.apple.developer.healthkit`
    - `com.apple.developer.healthkit.background-delivery`
-6. 发布 IPA、导出的 entitlements、SHA-256、dSYM、Git SHA 和 Xcode 版本。
+4. 发布 IPA、导出的 entitlements、SHA-256、dSYM、Git SHA 和 Xcode 版本。
 
-设备 build 不能改成完全 unsigned 的 `CODE_SIGNING_ALLOWED=NO`。patched xtool 需要从 ad-hoc 签名中读取并重建 entitlement。Simulator 的 unsigned build 不受此限制。
+设备 build 不能改成完全 unsigned 的 `CODE_SIGNING_ALLOWED=NO`。patched xtool 需要从 ad-hoc 签名中读取并重建 entitlement。
 
 GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件不会进入 IPA。仓库规则仍是不默认替用户 commit 或 push。
 
 页面、共享组件、样式、前端依赖和业务代码可以正常提交并 push，不自动触发 iOS 打包。`push.paths` 仅保留 Native Host（排除生成的 `Resources/TrackerWeb/**`）、原生资源准备/IPA 打包脚本和 workflow 本身；需要把累计的本地 React 更新安装到手机时，手动运行 `iOS Native Host`，本地版选择 `local_trackers=true`。此调整只改变触发时机，完整测试、构建、签名和安装链保持不变。
 
-模拟器测试复用 `build-for-testing` 的 DerivedData，使用 `test-without-building`；iPhone 16 Pro 的 OS 按所选 Xcode 的 Simulator SDK 版本明确指定，不再自动挑选 runner 上更新的运行时。缺少匹配运行时应明确失败，不下载或切换工具链。测试串行运行，每项默认60秒、最多120秒，测试步骤最多10分钟；失败仍阻断设备签名/IPA。保留 `always()` 上传 xcresult。#60 两次在本地 React 启动用例失败后等待就绪 Promise 耗尽30分钟，重跑伴有 WebKit GPU 无响应，不能仅归因于运行时。
+2026-10-23 按用户明确要求，打包 workflow 移除 Simulator 编译、Native XCTest 执行及 xcresult 上传。保留前端构建/Node 回归、iphoneos Release 编译、ad-hoc 签名和 entitlement 校验、产物校验资料及隔离数据库测试。原生行为交由安装后的手机验收；CI 成功仅表示构建与保留的检查通过，不表示原生测试通过。
 
-WKWebView 启动测试使用非持久数据存储和可见 UIWindow，使渲染帧等待具有实际窗口生命周期；所有 JavaScript 回调及 Promise 使用 XCTest 有界等待，标题未就绪即抛错，不继续进入就绪/字体等待。页面可响应但启动失败时，xcresult 附件记录页面状态和脚本错误。新增永不完成 Promise 的期限回归测试；Windows 仅验证 workflow 约束，Swift/XCTest 与新 IPA 产出仍需下一次 macOS CI 实际确认。
+保留仓库中的原生测试源码及有界等待修复，供日后手动在 macOS 运行，当前不作为打包门槛。历史 #60 停在页面启动测试；#61 在测试 App 启动时缺少 libswiftWebKit.dylib，尚未执行用例即超时。移除模拟器门槛不等于修复或验证该运行库问题，不能将其记录为已通过。
 
 ### 3.3 Artifact 与重建判断
 

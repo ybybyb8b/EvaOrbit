@@ -23,7 +23,6 @@ test("build workflows use Node 24 actions without insecure runtime overrides", (
 test("Intel runner selection preserves native signing and packaging", () => {
   const workflow = readWorkflow("ios-native-host");
   assert.match(workflow, /runs-on: macos-15-intel\b/);
-  assert.match(workflow, /name=iPhone 16 Pro/);
   assert.match(workflow, /CODE_SIGN_IDENTITY="-"/);
   assert.match(workflow, /CODE_SIGNING_ALLOWED=YES/);
   assert.match(workflow, /AD_HOC_CODE_SIGNING_ALLOWED=YES/);
@@ -31,22 +30,14 @@ test("Intel runner selection preserves native signing and packaging", () => {
   assert.match(readWorkflow("xtool-patched"), /XTOOL_COMMIT: 2d58d987edff728fccebc6df643b1672e3583f00/);
 });
 
-test("Simulator tests use the selected SDK runtime, reuse their build and fail within bounded deadlines", () => {
+test("IPA packaging omits Simulator execution and retains build validation", () => {
   const workflow = readWorkflow("ios-native-host");
-  const step = workflow.split("- name: Run native unit tests on iPhone 16 Pro Simulator")[1]?.split("- name: Upload native test diagnostics")[0];
-  assert.ok(step, "Keep the complete native test step before packaging");
-  assert.match(step, /timeout-minutes: 10\b/);
-  assert.match(step, /simulator_os="\$\(xcrun --sdk iphonesimulator --show-sdk-version\)"/);
-  assert.match(step, /name=iPhone 16 Pro,OS=\$simulator_os/);
-  assert.match(step, /-destination-timeout 60\b/);
-  assert.match(step, /-parallel-testing-enabled NO\b/);
-  assert.match(step, /-test-timeouts-enabled YES\b/);
-  assert.match(step, /-maximum-test-execution-time-allowance 120\b/);
-  assert.match(step, /test-without-building/);
-  const compilation = workflow.split("- name: Compile host and tests for Simulator")[1]?.split("- name: Run native unit tests")[0];
-  const derivedData = text => text.match(/-derivedDataPath "([^"]+)"/)?.[1];
-  assert.ok(derivedData(compilation));
-  assert.equal(derivedData(step), derivedData(compilation));
-  assert.doesNotMatch(step, /continue-on-error|skip-testing|only-testing/);
-  assert.match(workflow, /- name: Upload native test diagnostics\s+if: always\(\)/);
+  assert.doesNotMatch(workflow, /iphonesimulator|simctl|build-for-testing|test-without-building|Upload native test diagnostics/);
+  assert.match(workflow, /npm run build:trackers/);
+  assert.match(workflow, /node --test/);
+  assert.match(workflow, /-sdk iphoneos/);
+  assert.match(workflow, /-destination 'generic\/platform=iOS'/);
+  assert.match(workflow, /name: Verify entitlements and package IPA/);
+  assert.match(workflow, /name: Isolated Supabase Tracker integration/);
+  assert.doesNotMatch(workflow, /continue-on-error/);
 });
