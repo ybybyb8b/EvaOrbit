@@ -39,6 +39,8 @@ html[data-local-appearance="true"],html[data-local-appearance="true"] body { ove
 }
 
 @media(max-width:720px){
+  .local-header-actions > .tracker-sync-button { order:-1; }
+  .local-trackers.tracker-detail-page > .page-header > .page-actions { display:contents; }
   .local-shell.local-signed-in > .main-content { padding-top:calc(var(--local-header-top) + var(--local-header-control-size)); }
   .local-shell.local-signed-in > .main-content:has(.local-home) { padding-top:0; }
   .local-home { padding-top:var(--local-header-top); }

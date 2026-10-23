@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useState,useSyncExternalStore} from "react";
+import {createPortal} from "react-dom";
 import {Cloud,CloudChange,CloudCheck} from "reicon-react";
 import {FormSheet} from "@/components/form-sheet";
 import {DevelopmentDetails} from "@/components/development-details";
@@ -22,8 +23,16 @@ function useSyncStatus({account,platform}:Props){
 }
 export function TrackerSyncButton(props:Props){
  const [open,setOpen]=useState(false),{status,label,english}=useSyncStatus(props);
+ const [headerTarget,setHeaderTarget]=useState<Element|null>(null);
+ useEffect(()=>{
+  const mobile=window.matchMedia("(max-width: 720px)");
+  const update=()=>setHeaderTarget(mobile.matches?document.querySelector(".mobile-global-header .local-header-actions"):null);
+  update();mobile.addEventListener("change",update);
+  return()=>mobile.removeEventListener("change",update);
+ },[]);
  const SyncIcon=status==="syncing"?CloudChange:status==="current"?CloudCheck:Cloud;
- return <><button type="button" className="icon-button tracker-sync-button" data-status={status} title={label} aria-label={(english?"Tracker sync: ":"Tracker 同步：")+label} aria-haspopup="dialog" aria-busy={status==="syncing"} onClick={()=>setOpen(true)}><SyncIcon size={21} weight="Outline"/>{["attention","pending","offline"].includes(status)&&<span className="tracker-sync-mark" aria-hidden="true">{status==="attention"?"!":""}</span>}</button>{open&&<FormSheet title={english?"Tracker sync":"Tracker 同步"} onClose={()=>setOpen(false)}><TrackerSyncSettings {...props} inSheet onEditConflict={props.onEditConflict?row=>{props.onEditConflict?.(row);setOpen(false);}:undefined}/></FormSheet>}</>;
+ const button=<button type="button" className="icon-button tracker-sync-button" data-status={status} title={label} aria-label={(english?"Tracker sync: ":"Tracker 同步：")+label} aria-haspopup="dialog" aria-busy={status==="syncing"} onClick={()=>setOpen(true)}><SyncIcon size={21} weight="Outline"/>{["attention","pending","offline"].includes(status)&&<span className="tracker-sync-mark" aria-hidden="true">{status==="attention"?"!":""}</span>}</button>;
+ return <>{headerTarget?createPortal(button,headerTarget):button}{open&&<FormSheet title={english?"Tracker sync":"Tracker 同步"} onClose={()=>setOpen(false)}><TrackerSyncSettings {...props} inSheet onEditConflict={props.onEditConflict?row=>{props.onEditConflict?.(row);setOpen(false);}:undefined}/></FormSheet>}</>;
 }
 export function TrackerSyncSettings(props:Props){
  const {account,platform,onEditConflict}=props,{store,state,progress,issues,paused,preview,label,english}=useSyncStatus(props);
