@@ -3,7 +3,7 @@
 .detail :global(.section-heading) { align-items:center; gap:12px; }
 .detail > :global(.health-section) > :global(.section-heading) { margin-bottom:16px; }
 .detail :global(.section-heading h2),
-.detail :global(.daily-energy-heading h2) { margin:0; font-size:17px; font-weight:600; line-height:1.4; }
+.detail :global(.daily-energy-heading h2) { margin:0; font-size:17px; font-weight:500; line-height:1.4; }
 .detail :global(.section-heading p) { margin:6px 0 0; color:var(--text-secondary); font-size:12px; }
 .detail :global(.text-button) { min-height:44px; font-size:13px; font-weight:500; }
 .detail :global(.health-inline-empty) { padding:18px; border-radius:16px; background:var(--surface-soft); color:var(--text-secondary); font-size:13px; line-height:1.6; }
