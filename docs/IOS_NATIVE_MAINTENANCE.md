@@ -130,6 +130,8 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 
 GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件不会进入 IPA。仓库规则仍是不默认替用户 commit 或 push。
 
+页面、共享组件、样式、前端依赖和业务代码可以正常提交并 push，不自动触发 iOS 打包。`push.paths` 仅保留 Native Host（排除生成的 `Resources/TrackerWeb/**`）、原生资源准备/IPA 打包脚本和 workflow 本身；需要把累计的本地 React 更新安装到手机时，手动运行 `iOS Native Host`，本地版选择 `local_trackers=true`。此调整只改变触发时机，完整测试、构建、签名和安装链保持不变。
+
 ### 3.3 Artifact 与重建判断
 
 下载同一个 `EvaOrbitHost-ad-hoc-<run-number>` artifact 中的：
