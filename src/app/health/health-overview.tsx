@@ -8,6 +8,7 @@ import { homeDurationLabel } from "@/lib/home-day";
 import { sleepDisplay, type DailySleepSummary } from "@/lib/sleep";
 import { dateInEvaOrbit, EVAORBIT_TIME_ZONE } from "@/lib/time";
 import { formatWeightKg, normalizeWeightKg } from "@/lib/weight";
+import { periodDayForDate } from "@/lib/timeline";
 import type { DailyNutritionSummary, MenstrualPeriod, ScheduledNotification, TrainingLog, WeightRecord } from "@/lib/types";
 import { trainingTypeLabels } from "./training-log-editor";
 import styles from "./health-overview.module.css";
@@ -35,9 +36,10 @@ export function HealthOverview({ initialSleep: sleep, initialEnergy: energy, ini
   const training = initialTraining.filter(item => dateInEvaOrbit(new Date(item.occurredAt)) === today);
   const knownMinutes = training.reduce((sum, item) => sum + (item.durationMinutes ?? 0), 0);
   const hasDuration = training.some(item => item.durationMinutes !== null);
-  const period = [...initialPeriods].filter(item => !item.endedOn && item.startedOn <= today).sort((a, b) => b.startedOn.localeCompare(a.startedOn))[0];
+  const periodContext = periodDayForDate([...initialPeriods].sort((a,b) => b.startedOn.localeCompare(a.startedOn)), today, today);
+  const period = periodContext?.period;
   const lastEnded = [...initialPeriods].filter(item => item.endedOn && item.endedOn <= today).sort((a, b) => b.endedOn!.localeCompare(a.endedOn!))[0];
-  const periodDay = period ? Math.floor((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${period.startedOn}T12:00:00Z`)) / 86_400_000) + 1 : null;
+  const periodDay = periodContext?.day ?? null;
   const reminder = [...initialMedicationReminders].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0];
   const number = (value: number | null) => value === null ? "—" : value.toLocaleString(english ? "en-US" : "zh-CN", { maximumFractionDigits: 0 });
   const date = (value: string, hasTime = false, zone = EVAORBIT_TIME_ZONE) => new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", {
