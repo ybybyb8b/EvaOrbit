@@ -7,6 +7,8 @@ final class TrackerLocalTests: XCTestCase {
     @MainActor func testBundledReactBootsFromTheLocalScheme() async throws {
         let root = try XCTUnwrap(Bundle.main.url(forResource: "TrackerWeb", withExtension: nil))
         let configuration = WKWebViewConfiguration()
+        configuration.ignoresViewportScaleLimits = false
+        configuration.userContentController.addUserScript(WKUserScript(source: WebViewController.localViewportScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         configuration.setURLSchemeHandler(TrackerAssetHandler(root: root), forURLScheme: TrackerAssetHandler.scheme)
         // Offline, signed-out bridge fixture: the document must still render a
         // usable entry, without a hosted page or a successful session request.
@@ -20,6 +22,18 @@ final class TrackerLocalTests: XCTestCase {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         XCTAssertEqual(title, "Welcome back to EvaOrbit", "Bundled modules/fonts must work through WKURLSchemeHandler")
+        let contentReady: Any? = try await withCheckedThrowingContinuation { continuation in
+            webView.callAsyncJavaScript(WebViewController.localContentReadyScript, arguments: [:], in: nil, in: .page) { result in
+                switch result {
+                case .success(let value): continuation.resume(returning: value)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+        }
+        XCTAssertEqual(contentReady as? Bool, true, "Signed-out React must release the native launch overlay")
+        let viewport = try await webView.evaluateJavaScript("document.querySelector('meta[name=viewport]').content") as? String
+        XCTAssertTrue(viewport?.contains("maximum-scale=1") == true)
+        XCTAssertTrue(viewport?.contains("user-scalable=no") == true)
         let fontResult: Any? = try await withCheckedThrowingContinuation { continuation in
             webView.callAsyncJavaScript("await document.fonts.load('400 24px \"EO August Stories\"'); return Array.from(document.fonts).some(font => font.family.replaceAll('\"','') === 'EO August Stories' && font.status === 'loaded');", arguments: [:], in: nil, in: .page, completionHandler: { result in
                 switch result {
@@ -37,6 +51,8 @@ final class TrackerLocalTests: XCTestCase {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         XCTAssertEqual(title, "回到 EvaOrbit", "Explicit language must survive a local document reload")
+        let reloadedViewport = try await webView.evaluateJavaScript("document.querySelector('meta[name=viewport]').content") as? String
+        XCTAssertEqual(reloadedViewport, viewport, "The local viewport constraint must survive a document reload")
         let persistedFont = try await webView.evaluateJavaScript("document.documentElement.dataset.englishFont") as? String
         XCTAssertEqual(persistedFont, "polyamine")
         _ = try await webView.evaluateJavaScript("localStorage.removeItem('evaorbit.englishFont'); localStorage.removeItem('evaorbit.uiLanguage'); true")

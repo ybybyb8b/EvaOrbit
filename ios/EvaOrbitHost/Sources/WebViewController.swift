@@ -10,7 +10,33 @@ final class WebViewController: UIViewController {
     private var loadingCoordinator: LoadingExperienceCoordinator!
     private var navigationTimeoutWorkItem: DispatchWorkItem?
     private var launchURL: URL?
+    private var awaitingLocalContent = false
+    private var navigationAttempt = 0
     private static let navigationTimeout: TimeInterval = 25
+    static let localContentReadyScript = #"""
+    await new Promise(resolve => {
+      const ready = () => document.querySelector('[data-local-launch-ready="true"]');
+      if (ready()) { resolve(); return; }
+      const observer = new MutationObserver(() => {
+        if (ready()) { observer.disconnect(); resolve(); }
+      });
+      observer.observe(document.documentElement, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-local-launch-ready']});
+    });
+    // Allow the ready React tree to reach a rendered frame before dismissal.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return true;
+    """#
+    static let localViewportScript = #"""
+    (() => {
+      let viewport = document.querySelector('meta[name="viewport"]');
+      if (!viewport) {
+        viewport = document.createElement('meta');
+        viewport.name = 'viewport';
+        document.head.appendChild(viewport);
+      }
+      viewport.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+    })();
+    """#
 
     init(configuration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
         let nativeBridge = NativeBridge(hostConfiguration: configuration, healthKitCoordinator: healthKitCoordinator, notificationManager: notificationManager, eventKitSyncEngine: eventKitSyncEngine)
@@ -34,6 +60,14 @@ final class WebViewController: UIViewController {
         )
 
         let webConfiguration = WKWebViewConfiguration()
+        if configuration.localTrackers {
+            webConfiguration.ignoresViewportScaleLimits = false
+            userContentController.addUserScript(WKUserScript(
+                source: Self.localViewportScript,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            ))
+        }
         if configuration.localTrackers, let root = Bundle.main.url(forResource: "TrackerWeb", withExtension: nil) {
             webConfiguration.setURLSchemeHandler(TrackerAssetHandler(root: root), forURLScheme: TrackerAssetHandler.scheme)
         }
@@ -82,7 +116,7 @@ final class WebViewController: UIViewController {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.keyboardDismissMode = .interactive
-        if hostConfiguration.localTrackers { webView.scrollView.pinchGestureRecognizer?.isEnabled = false }
+        disableLocalPageZoom()
         webView.isOpaque = false
         webView.backgroundColor = palette.loadingBackground
         webView.scrollView.backgroundColor = palette.loadingBackground
@@ -107,6 +141,11 @@ final class WebViewController: UIViewController {
             loadingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
             loadingOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+    }
+
+    private func disableLocalPageZoom() {
+        guard hostConfiguration.localTrackers else { return }
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
     }
 
     private func loadEvaOrbit() {
@@ -141,8 +180,11 @@ final class WebViewController: UIViewController {
 
     private func startNavigationTimeout() {
         navigationTimeoutWorkItem?.cancel()
+        navigationAttempt += 1
+        awaitingLocalContent = hostConfiguration.localTrackers
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self, self.webView.isLoading else { return }
+            guard let self, self.webView.isLoading || self.awaitingLocalContent else { return }
+            self.awaitingLocalContent = false
             self.webView.stopLoading()
             self.webView.scrollView.refreshControl?.endRefreshing()
             self.loadingCoordinator.fail()
@@ -152,6 +194,7 @@ final class WebViewController: UIViewController {
     }
 
     private func finishNavigationAttempt() {
+        awaitingLocalContent = false
         navigationTimeoutWorkItem?.cancel()
         navigationTimeoutWorkItem = nil
         webView.scrollView.refreshControl?.endRefreshing()
@@ -193,8 +236,24 @@ extension WebViewController: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        finishNavigationAttempt()
-        loadingCoordinator.webViewDidBecomeReady()
+        // WebKit may create or re-enable its recognizer while loading a document.
+        disableLocalPageZoom()
+        guard hostConfiguration.localTrackers else {
+            finishNavigationAttempt()
+            loadingCoordinator.webViewDidBecomeReady()
+            return
+        }
+        let attempt = navigationAttempt
+        webView.callAsyncJavaScript(Self.localContentReadyScript, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self, self.navigationAttempt == attempt, self.awaitingLocalContent else { return }
+            self.finishNavigationAttempt()
+            switch result {
+            case .success:
+                self.loadingCoordinator.webViewDidBecomeReady()
+            case .failure:
+                self.loadingCoordinator.fail()
+            }
+        }
     }
 
     func notifyApplicationDidBecomeActive() {

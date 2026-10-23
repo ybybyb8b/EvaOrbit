@@ -4,7 +4,9 @@ import {LimitEditor} from "@/app/food-drink/limit-editor";
 import type {DrinkLimit,FoodLog,DrinkLog} from "@/lib/types";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useCallback,useEffect,useState} from "react";
-import {FoodDrinkHomeView,type FoodDrinkRecord} from "@/components/food-drink-home-view";
+import {FoodDrinkHomeView,FoodDrinkRecordChoices,type FoodDrinkRecord} from "@/components/food-drink-home-view";
+import {FormSheet} from "@/components/form-sheet";
+import {Icon} from "@/components/icons";
 import {FoodRecordsView} from "@/components/food-records-view";
 import {FoodSourceLinks} from "@/app/food/food-source-links";
 import {DrinkRecordsView} from "@/components/drink-records-view";
@@ -40,7 +42,7 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   const [limitEditor,setLimitEditor]=useState<DrinkLimit|"new"|null>(null);
   const [resourceError,setResourceError]=useState("");
   const [snapshot,setSnapshot]=useState<FoodReadonlySnapshot|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
-  const [section,setSection]=useState<"home"|"food"|"drink"|"places"|"library"|"place">(initialPlace?"place":initial.pathname==="/food/places"?"places":initial.pathname==="/food/library"?"library":initial.pathname==="/food"?"food":initial.pathname.startsWith("/drinks")?"drink":"home"),[editor,setEditor]=useState<FoodDrinkRecord|null>(null);
+  const [section,setSection]=useState<"home"|"food"|"drink"|"places"|"library"|"place">(initialPlace?"place":initial.pathname==="/food/places"?"places":initial.pathname==="/food/library"?"library":initial.pathname==="/food"?"food":initial.pathname.startsWith("/drinks")?"drink":"home"),[editor,setEditor]=useState<FoodDrinkRecord|{kind:"choose"}|null>(null);
   const [placeId,setPlaceId]=useState(Number(initialPlace?.[1])||0);
   const [date,setDate]=useState(initial.searchParams.get("date")??dateInEvaOrbit()),[query,setQuery]=useState(""),[meal,setMeal]=useState(initial.searchParams.get("mealType")??""),[drinkType,setDrinkType]=useState<DrinkType|"">("");
   const load=useCallback(async(signal:AbortSignal,refresh=true)=>{
@@ -79,9 +81,10 @@ export function FoodWorkspace({account,platform}:{account:LocalAccount;platform:
   function LocalLink({href,children,...props}:FoodLinkProps){return <a {...props} href={href} onClick={event=>{event.preventDefault();const place=/^\/food\/places\/([1-9][0-9]*)$/.exec(href);if(place){setPlaceId(Number(place[1]));setSection("place");}else if(href==="/food/places")setSection("places");else if(href==="/food/library")setSection("library");else if(href==="/food-drink")setSection("home");else if(href==="/food")setSection("food");else if(href==="/drinks/history")setSection("drink");else return;setQuery("");window.scrollTo(0,0);}}>{children}</a>;}
   return <FoodLocalData account={account} platform={platform} Link={LocalLink} onIssue={setResourceError}><FormPreview>
     <LocalBackAction onBack={section!=="home"?()=>{setSection(section==="place"?"places":"home");setQuery("");window.scrollTo(0,0);}:undefined}/><div className="page local-food-status"><LocalDownloadStatus module="Food & Drink" capturedAt={snapshot?.capturedAt} busy={loading} error={error}  refresh={()=>window.dispatchEvent(new Event("online"))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}{resourceError&&<ErrorNotice>{resourceError}</ErrorNotice>}</div>
-    {section==="places"?<FoodPlacesView/>:section==="library"?<FoodLibraryView/>:section==="place"?<FoodPlaceDetailContent key={placeId} id={placeId} onRemoved={()=>setSection("places")}/>:section==="home"?<FoodDrinkHomeView data={snapshot?.home??null} loading={loading} error={snapshot?"":error} onRetry={()=>void load(new AbortController().signal)} onRecord={setEditor} onLimit={setLimitEditor} LinkComponent={LocalLink} readOnly={!onlineBusiness} action={<button className="button primary" onClick={()=>setEditor({kind:"food"})}>Log</button>}/>:<>
+    {section==="places"?<FoodPlacesView/>:section==="library"?<FoodLibraryView/>:section==="place"?<FoodPlaceDetailContent key={placeId} id={placeId} onRemoved={()=>setSection("places")}/>:section==="home"?<FoodDrinkHomeView data={snapshot?.home??null} loading={loading} error={snapshot?"":error} onRetry={()=>void load(new AbortController().signal)} onRecord={setEditor} onLimit={setLimitEditor} LinkComponent={LocalLink} readOnly={!onlineBusiness} action={<PageLogAction label="Add record" onClick={()=>setEditor({kind:"choose"})}><Icon name="plus"/>新增记录</PageLogAction>}/>:<>
       {loading&&!snapshot?<PageLoading/>:section==="food"?<FoodRecordsView date={date} setDate={setDate} query={query} setQuery={setQuery} mealFilter={meal} setMealFilter={setMeal} logs={foods} action={<PageLogAction label="Record food" onClick={()=>setEditor({kind:"food"})}>Log</PageLogAction>} renderSources={log=><FoodSourceLinks record={log}/>} onOpen={record=>setEditor({kind:"food",record})} readOnly={!onlineBusiness} emptyMessage={!snapshot?"No downloaded records.":date<snapshot.window.from||date>snapshot.window.to?"This date is outside the downloaded window.":"No matching downloaded records"}/>:<DrinkRecordsView logs={drinks} logScope={<PageLogAction label="Record drink" onClick={()=>setEditor({kind:"drink"})}>Log</PageLogAction>} query={query} setQuery={setQuery} type={drinkType} setType={setDrinkType} onOpen={record=>setEditor({kind:"drink",record})} readOnly={!onlineBusiness} LinkComponent={LocalLink} emptyMessage={!snapshot?"No downloaded records.":"No matching downloaded records"}/>}</>}
     {limitEditor&&<LimitEditor limit={limitEditor==="new"?undefined:limitEditor} onClose={()=>setLimitEditor(null)} onSaved={()=>load(new AbortController().signal)}/>}
-    {editor&&<FoodPreviewEditor editor={editor} date={date} onClose={()=>setEditor(null)}/>}
+    {editor?.kind==="choose"&&<FormSheet title="新增记录" onClose={()=>setEditor(null)}><FoodDrinkRecordChoices onChoose={setEditor}/></FormSheet>}
+    {editor&&editor.kind!=="choose"&&<FoodPreviewEditor editor={editor} date={date} onClose={()=>setEditor(null)}/>}
   </FormPreview></FoodLocalData>;
 }

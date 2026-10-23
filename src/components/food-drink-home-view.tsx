@@ -13,6 +13,9 @@ import {limitStateLabels,limitPeriodLabels} from "@/lib/drink-limit-labels";
 import styles from "@/app/food-drink/food-drink.module.css";
 export type FoodDrinkLinkProps={href:string;children:ReactNode};
 export type FoodDrinkRecord={kind:"food";record?:FoodLog}|{kind:"drink";record?:DrinkLog};
+export function FoodDrinkRecordChoices({onChoose}:{onChoose:(record:FoodDrinkRecord)=>void}){
+  return <div className={styles.recordChoices}><button onClick={()=>onChoose({kind:"food"})}><Icon name="food"/><span><strong>Record food</strong><small>记录一餐、加餐或包装食品</small></span></button><button onClick={()=>onChoose({kind:"drink"})}><Icon name="drink"/><span><strong>Record drink</strong><small>记录饮品、糖度、冷热与容量</small></span></button></div>;
+}
 const destinations = [
   { href: "/food", label: "Food records", icon: "food" as const },
   { href: "/drinks/history", label: "Drink records", icon: "drink" as const },

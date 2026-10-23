@@ -20,7 +20,7 @@ type Initial = {day:HomeReadonlyResource;month:HomeReadonlyResource;due:HomeRead
 export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:TrackerPlatform}) {
   const {english,language}=useLocale();
   const onlineBusiness=useOnlineBusiness();
-  const [initial,setInitial]=useState<Initial|null>(null),[error,setError]=useState(""),[loading,setLoading]=useState(false);
+  const [initial,setInitial]=useState<Initial|null>(null),[error,setError]=useState(""),[loading,setLoading]=useState(true);
   const [assets,setAssets]=useState<Record<string,string>>({});
   const active=useRef(new Map<string,Promise<HomeReadonlyResource|null>>());
   const resources=useCallback((kind:HomeResourceKind,key:string,refresh=false)=>{
@@ -73,7 +73,7 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
     window.addEventListener(onlineBusinessChanged,refresh);window.addEventListener("online",refresh);window.addEventListener("evaorbit:native-active",refresh);
     return()=>{alive=false;window.removeEventListener(onlineBusinessChanged,refresh);window.removeEventListener("online",refresh);window.removeEventListener("evaorbit:native-active",refresh);};
   },[resources,english]);
-  return <div className="local-home" data-no-translate="true">
+  return <div className="local-home" data-no-translate="true" data-local-launch-ready={initial||error?"true":undefined}>
     <div className="page local-home-status">
     <LocalDownloadStatus module="Home" capturedAt={initial?.day.capturedAt} busy={loading} error={error} refresh={()=>window.dispatchEvent(new Event("online"))}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}

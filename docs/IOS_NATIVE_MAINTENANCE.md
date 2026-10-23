@@ -8,7 +8,9 @@
 
 本次没有新增权限、framework、entitlement 或改变签名链；需构建新的独立 IPA，既有成功 CI 不能代替该候选的 macOS/XCTest。主账号开关及 session 补丁发布需要单独确认，测试/模拟桥接通过不代表 Apple 实机已验收。范围和实际结果见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
-本地 React Host 在 `configureWebView` 禁用 WKWebView 滚动视图的页面 pinch 手势，避免整个 App 界面被双指缩放；不禁用滚动、侧滑返回、DOM 内图片查看手势或系统辅助功能缩放。普通在线 Host、Web/PWA 和 Windows 预览保持原行为。无权限、Bridge、签名变更，需随下一次 IPA 构建验收，Windows 未运行原生手势测试。
+本地 React Host 设置 WKWebView `ignoresViewportScaleLimits=false`，仅对本地 Host 在主文档加载末尾注入固定为 1 的 viewport 缩放范围，并在初始化及每次 `didFinish` 禁用页面 pinch 手势，补齐仅初始化关闭手势仍可缩放的问题。保留 `viewport-fit=cover`、滚动、侧滑返回、DOM 图片自有触摸逻辑和系统辅助功能缩放；普通在线 Host、Web/PWA 和 Windows 预览不注入此限制。无权限、Bridge、签名变更。Windows 的脚本幂等检查通过；WKWebView 首次加载/重载 XCTest 已补充但未运行，下一次 IPA 必须验收真机双指、键盘和刷新行为。
+
+本地开屏的就绪条件还包括 React 内容：`didFinish` 后通过页面观察器等待 `data-local-launch-ready="true"` 及渲染帧，再交给既有开屏协调器退出。账户未读完、首页缓存未就绪时保持原开屏；登录页、已缓存首页或明确错误状态可结束等待，缓存后的网络刷新不阻塞开屏。沿用25秒失败/重试出口，重载时旧导航回调不能关闭新开屏。没有新增 Bridge 方法；普通在线 Host 保留原行为。合成浏览器验证已通过，WKWebView XCTest 和真机时序待新 IPA 验收。
 
 主用本地版候选新增 `navigation.openNativeSettings`：仅允许 Health/Apple Integration/Notifications 三个可信同源设置路径，隔离非持久 Cookie、锁定本地账户切换，正式账户须由服务端额外启用且拒绝测试账户。本地 core 不开放系统写方法；`session_expired` 错误用于保留页面草稿的重新登录弹层。Native 数据变更事件可通知本地 UI 刷新。无新权限、framework、entitlement 或签名链变更；新增面板与 XCTest 尚待 macOS CI/真机，不代表自动系统同步生命周期已完全迁移。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
@@ -322,6 +324,8 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 ## 五、JS↔Swift bridge 安全契约
 
 ### 同步完成后的 Web 数据刷新
+
+EventKit 编排对单次只读步骤设置 30 秒等待上限，包括账户偏好、EO GET、Apple 批量读取/关联恢复与能力检测。超时报告具体步骤并结束该轮，不将超时当作空列表或删除依据；迟到的只读响应不会恢复该轮业务写入。已提交更改保持，完成通知超时则降级为本地数据刷新事件。写入与权限请求不使用此超时包装，不因超时重放写入；既有调度时机、身份校验及 Native 在途操作锁保留。此保护不能证明真机卡住的具体原因，需要更新本地包后依据报错步骤继续排查。
 
 EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。Web 复用本轮完整分页 Calendar 和 Tasks 的批量读取结果；窗口外或批次缺失的 EO 记录才按 ID 单独读取，只有明确 404 表示不存在。关联恢复安全屏障完成后先核对 Calendar，已提交的 Calendar 变化立即通过 bridge v1 的 `host.notifyDataChanged` 通知页面，再处理 Reminder 镜像；其余已提交的 `tasks / reminders` 变化在 single-flight 结束时通知。已成功通知的 Calendar domain 不重复发送，后续失败仍报告错误并保留已提交变化；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
 

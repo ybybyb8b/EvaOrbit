@@ -1,10 +1,16 @@
 import {nativeApiFetch} from "./native-api.ts";
-import { notifyDataChanged, type DataDomain } from "./data-changed.ts";
+import { eventKitRead, EventKitReadTimeout } from "./eventkit-read.ts";
+import { dataChangedEvent, notifyDataChanged, type DataDomain } from "./data-changed.ts";
 import type { CalendarEvent,Reminder,Task } from "./types.ts";
-import { getNativeHostInfo, hostSupports, nativeCall as callNative, captureNativeSessionGuard } from "./native-bridge.ts";
+import { getNativeHostInfo as readNativeHostInfo, hostSupports, nativeCall as callNative, captureNativeSessionGuard } from "./native-bridge.ts";
 
 let checkSession:(()=>void)|undefined;
-function nativeCall<T>(method:string,params:Record<string,unknown>={}){checkSession?.();return callNative<T>(method,params);}
+const getNativeHostInfo=()=>eventKitRead(readNativeHostInfo(),"Native Host capabilities");
+function nativeCall<T>(method:string,params:Record<string,unknown>={}){
+  checkSession?.();const result=callNative<T>(method,params);
+  return ["eventkit.fetch","eventkit.getItem","eventkit.recover"].includes(method)
+    ?eventKitRead(result,`Apple ${params.kind==="calendar"?"Calendar":"Reminders"} (${method})`):result;
+}
 
 export type EventKitSyncMode="off"|"import"|"two_way";
 export type EventKitNotificationOwner="eo"|"apple";
@@ -47,7 +53,16 @@ export function eventKitEventRangeValid(snapshot:Item){const start=String(snapsh
 export function eventKitRecoveryURL(token:string){if(!/^[0-9a-f-]{36}$/i.test(token))throw new Error("Invalid EventKit recovery token");return`evaorbit://eventkit/${token.toLowerCase()}`;}
 export function appleReminderPayload(snapshot:Item,calendarIdentifier:string,identifier?:string,existing?:Item,timezone?:string){const existingAlarms=Array.isArray(existing?.alarms)?existing.alarms:[];return{calendarItemIdentifier:identifier,calendarIdentifier,title:snapshot.title,notes:snapshot.notes,dueDate:snapshot.dueDate,dueTime:snapshot.dueTime,timezone:timezone??(typeof existing?.timezone==="string"?existing.timezone:Intl.DateTimeFormat().resolvedOptions().timeZone),priority:Number(existing?.priority??0),completed:snapshot.completed,completionDate:snapshot.completionDate,alarms:existingAlarms.length?existingAlarms:snapshot.dueTime?[{relativeOffset:0}]:[]};}
 class EventKitRequestError extends Error{readonly code:string|undefined;constructor(message:string,code:string|undefined){super(message);this.code=code;}}
-async function json(url:string,init?:RequestInit,allowMissing=false){checkSession?.();const response=await nativeApiFetch(url,{cache:"no-store",...init});if(allowMissing&&response.status===404)return null;if(!response.ok){const body=await response.json().catch(()=>({}));throw new EventKitRequestError(`${body.error??"Sync request failed"} (${init?.method??"GET"} ${url.split("?")[0]}, HTTP ${response.status})`,body.code);}return response.status===204?null:response.json();}
+async function json(url:string,init?:RequestInit,allowMissing=false){
+  checkSession?.();
+  const request=(async()=>{
+    const response=await nativeApiFetch(url,{cache:"no-store",...init});
+    if(allowMissing&&response.status===404)return null;
+    if(!response.ok){const body=await response.json().catch(()=>({}));throw new EventKitRequestError(`${body.error??"Sync request failed"} (${init?.method??"GET"} ${url.split("?")[0]}, HTTP ${response.status})`,body.code);}
+    return response.status===204?null:response.json();
+  })();
+  return (init?.method??"GET")==="GET"?eventKitRead(request,`EO ${url.split("?")[0]}`):request;
+}
 export async function eventKitCalendarRecords(from:Date,to:Date){const records:CalendarEvent[]=[];let afterId=0;for(;;){const page=await json(`/api/calendar-events?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}&limit=500&afterId=${afterId}`) as CalendarEvent[];if(!page.length)return records;const next=page[page.length-1].id;if(next<=afterId)throw new Error("Calendar pagination did not advance");records.push(...page);afterId=next;}}
 async function importCalendarEvent(status:EventKitStatus,apple:Item,snapshot:Item){return json("/api/eventkit/calendar-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({installationId:status.installationId,apple,snapshot})}) as Promise<{id:number}>;}
 export function eventKitNotificationOwner(item:Item):EventKitNotificationOwner{return Array.isArray(item.alarms)&&item.alarms.length>0?"apple":"eo";}
@@ -74,7 +89,12 @@ async function createReminderLink(status:EventKitStatus,entityType:"task"|"remin
 async function adoptReminderLink(status:EventKitStatus,entityType:"task"|"reminder",eoId:number,snapshot:Item,apple:Item,timezone?:string){const saved=reminderNeedsDueAlarm(snapshot,apple)||stable(appleReminderSnapshot(apple))!==stable(snapshot)?await nativeCall<{item:Item}>("eventkit.save",{kind:"reminder",item:appleReminderPayload(snapshot,String(apple.calendarIdentifier),String(apple.calendarItemIdentifier),apple,timezone)}).then(value=>value.item):apple;await saveLink(status,entityType,eoId,"reminder",saved,snapshot);return saved;}
 
 const eventKitJSON=json;
-export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={}){const guardSession=captureNativeSessionGuard();return runEventKitSyncSingleFlight(async()=>{guardSession();checkSession=guardSession;const changed=new Set<DataDomain>();try{return await performEventKitSync(status,modes,routes,changed);}finally{try{guardSession();if(changed.size)await notifyDataChanged([...changed],"eventkit").catch(()=>{});}finally{checkSession=undefined;}}});}
+async function notifyCommittedChanges(domains:DataDomain[]){
+  await eventKitRead(notifyDataChanged(domains,"eventkit"),"sync completion notification").catch(()=>{
+    if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent(dataChangedEvent,{detail:{domains,source:"eventkit"}}));
+  });
+}
+export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={}){const guardSession=captureNativeSessionGuard();return runEventKitSyncSingleFlight(async()=>{guardSession();checkSession=guardSession;const changed=new Set<DataDomain>();try{return await performEventKitSync(status,modes,routes,changed);}finally{try{guardSession();if(changed.size)await notifyCommittedChanges([...changed]);}finally{checkSession=undefined;}}});}
 async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},changed=new Set<DataDomain>()):Promise<EventKitSyncResult>{
   // Track committed EO mutations only; reads and mapping-only writes never request a refresh.
   async function json(url:string,init?:RequestInit,allowMissing=false){const result=await eventKitJSON(url,init,allowMissing);if(init?.method&&init.method!=="GET"){if(url.startsWith("/api/calendar-events"))changed.add("calendar");else if(url.startsWith("/api/tasks")){changed.add("tasks");changed.add("reminders");}else if(url.startsWith("/api/reminders"))changed.add("reminders");}return result;}
@@ -226,8 +246,8 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
     for(const eo of reminders){if(blockedKinds.has("reminder"))continue;if(excludedEO.has(eo.id)||linkedEO.has(eo.id)||!eo.isActive||!eo.nextDueAt)continue;const domain=eventKitReminderDomain(eo),destination=domain?status.reminderLists.find(source=>source.identifier===routes[domain]&&source.allowsContentModifications):null;if(!destination)continue;const snapshot=reminderSnapshot(eo),legacy=eo.note===snapshot.notes?snapshot:{...snapshot,notes:eo.note},candidates=appleReminders.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedApple.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot,legacy]));if(candidates.length>1){conflicts.push({entityType:"reminder",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"reminder",eo.id,snapshot,existing,eo.timezone);claimedApple.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone);exported++;}}
   // Publish committed Calendar changes before processing Reminder mirrors.
   let failed=false,firstError:unknown;
-  try{await reconcile("event","calendar_event",appleEvents,events);}catch(error){failed=true;firstError=error;}
-  finally{if(changed.has("calendar")){await notifyDataChanged(["calendar"],"eventkit").catch(()=>{});changed.delete("calendar");}}
+  try{await reconcile("event","calendar_event",appleEvents,events);}catch(error){if(error instanceof EventKitReadTimeout)throw error;failed=true;firstError=error;}
+  finally{if(changed.has("calendar")){await notifyCommittedChanges(["calendar"]);changed.delete("calendar");}}
   const calendarCounts={imported,exported,merged};
   try{await reconcile("reminder","task",appleReminders,tasks);await reconcileDomainReminders();}catch(error){if(!failed){failed=true;firstError=error;}}
   if(failed)throw firstError;

@@ -28,9 +28,10 @@ export function MediaWorkspace({account,platform}:{account:LocalAccount;platform
   const detail=snapshot?.items.find(row=>path===`/media/${row.id}`);
   const series=snapshot?.series.find(row=>path===`/media/series/${row.id}`);
   const initial=useMemo(()=>snapshot?mediaListItems(snapshot.items.filter(item=>!series||item.seriesId===series.id)).slice(0,200):[],[snapshot,series]);
+  const coverSources=useMemo(()=>Object.fromEntries(snapshot?.items.map(item=>[item.id,item.coverUrl])??[]),[snapshot]);
   return <>
     {path!=="/media"&&<LocalBackAction onBack={()=>navigate(detail?.seriesId?`/media/series/${detail.seriesId}`:"/media")}/>}
-    {!snapshot?busy?<PageLoading title="影视" englishTitle="Media"/>:<div className="page"><p>Media has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><MediaDataProvider read={read} Link={LocalMediaLink}><FormPreview>
+    {!snapshot?busy?<PageLoading title="影视" englishTitle="Media"/>:<div className="page"><p>Media has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><MediaDataProvider read={read} Link={LocalMediaLink} coverSources={coverSources}><FormPreview>
       {path==="/media"?<MediaView initial={initial} initialSeries={snapshot.series}/>:series?<MediaView key={series.id} initial={initial} initialSeries={snapshot.series} defaultSeries={series}/>:detail?<MediaDetailContent key={detail.id} initial={detail} initialSeries={snapshot.series} navigate={navigate}/>:<div className="page"><p>This work is not in the downloaded snapshot.</p></div>}
     </FormPreview></MediaDataProvider></Navigate.Provider>}
     <div className="page local-media-status"><LocalDownloadStatus module="Media" capturedAt={snapshot?.capturedAt} busy={busy} error={error}  refresh={()=>setAttempt(n=>n+1)}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
