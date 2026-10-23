@@ -3,6 +3,8 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["筛选", "Filters"], ["收藏库", "Collection"], ["作品", "Works"], ["观看记录", "Viewings"], ["尚无观看记录。", "No viewings recorded yet."],
+  ["系列／母作品", "Series & Franchises"], ["搜索片名、系列或季名…", "Search names, series or season…"],
   ["本机预览", "Local preview"],
   ["返回本机记录", "Back to local records"],
   ["回到 EvaOrbit", "Welcome back to EvaOrbit"],

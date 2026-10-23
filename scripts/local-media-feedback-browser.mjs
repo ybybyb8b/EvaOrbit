@@ -53,7 +53,7 @@ try{
    assert.equal(feedback.length>0,haptics,'Local selection feedback must follow Host capability');
    if(haptics)assert(feedback.some(c=>c.params.kind==='selection'));
    await page.getByRole('button',{name:'All',exact:true}).click();await page.locator('a.media-series-card').first().click();await page.locator('.media-poster-grid').waitFor();await covers();
-   await page.locator('.mobile-global-header').getByRole('button',{name:/Back/}).click();await page.locator('.media-series-shelf').waitFor();await covers();
+   await page.locator('.mobile-global-header').getByRole('button',{name:/Back/}).click();await page.locator('.media-series-card').waitFor();await covers();
    // Native pull-to-refresh reloads WKWebView. Re-enter with the same cached account.
    await page.reload();await navigateLocal(page,'Media');await covers();
    await page.screenshot({path:path.join(directory,`media-haptics-${haptics}.png`),fullPage:true});
