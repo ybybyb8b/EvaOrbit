@@ -18,6 +18,8 @@ EventKit 接入不新增 entitlement，也不改变本 runbook 的 ad-hoc IPA、
 
 EventKit 自动同步由全局 App shell 负责：启动、回到前台、系统数据变化、网络恢复和设置变更触发，前台在线在上一轮结束后等待 60 秒再补偿；无需进入设置页，手动 Sync now 仍可用。本轮批量 EO 记录复用于核对，仅批次缺失/窗口外关联单独读取；关联恢复完成后先同步并刷新 Calendar，再处理 Reminders。标题包含“续火花”的 Reminder 不参与导入、导出或已有关联项的更新，已有数据与映射保留。App 不运行时仍不保证即时同步。
 
+循环护理在 EO 完成（包括午夜后完成前一天的任务）时，同步应将原 Apple Reminder 标为完成并保留原 Due，再创建下一期；改期/跳过不生成完成记录。基线 `eoLastCompletedAt` 防止重试重复完成 EO；旧基线仅补认到期后的完成，既往被改期覆盖的历史不重建。在线 Host 更新 Web，本地 Host 更新安装包内 React；无需新 migration、Bridge 或权限。真机检查旧项完成、下一期未完成，以及重试/改期不增加重复项。
+
 EventKit 稳定性更新新增 bridge v1 的 `eventkit.getItem`：已有 mapping 的 Apple 对象未出现在批量结果时，按 identifier 直接查找，并区分 found、明确 missing 与 unavailable。Calendar 移出发现窗口仍更新原 EO ID；权限异常、来源暂停或不可读不会被当作删除。旧 IPA 通过 capability detection 安全降级，保留未读到的关联并暂停删除/重建；完整行为需要重新构建和安装 IPA。没有新增 framework、Info.plist 权限或 entitlement，原构建、免费 Team 重签及 Windows/WSL 安装链不变。
 
 此前稳定性更新的 Web 发布前先应用 `supabase/migrations/202610040001_eventkit_calendar_import.sql`，再部署 Web，最后安装新 Host。迁移新增 security-invoker RPC，使 Calendar EO event 和 mapping 在同一事务内建立、失败回滚、重试复用 ID；EO Calendar 与 mapping 列表完整分页，已关联 EO 对象直接按 ID 读取。未完成 Task 的镜像明确删除后重建，包括旧完成任务 reopen；已完成 Task 不重建。日期时间在冲突比较/hash 前统一 UTC ISO，date-only 不转换为伪造时间。

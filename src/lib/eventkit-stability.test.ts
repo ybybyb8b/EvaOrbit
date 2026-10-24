@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
 import { dataChangedEvent, type DataChangedDetail } from "./data-changed.ts";
+import { reminderSnapshot } from "./eventkit-sync.ts";
+import type { Reminder } from "./types.ts";
 
 type Item = Record<string, unknown>;
 const calendarBase = { title: "Visit", notes: "", startAt: "2026-10-06T02:00:00.000Z", endAt: "2026-10-06T03:00:00.000Z", isAllDay: false, timezone: "Asia/Shanghai", location: "", status: "confirmed" };
@@ -11,11 +13,11 @@ const status: EventKitStatus = { available: true, installationId: "00000000-0000
 
 function fixture() {
   const events = new Map<number, Item>(), tasks = new Map<number, Item>(), links = new Map<number, Item>(), apple = new Map<string, Item>();
-  const logical = new Map<string, Item>();
+  const logical = new Map<string, Item>(), reminders = new Map<number, Item>();
   const calls: Array<{ method: string; target: string; body: Item }> = [], batchMissing = new Set<string>(), listMissing = new Set<number>();
   let nextEvent = 10000, nextApple = 0;
   const f = {
-    events, tasks, links, apple, calls, batchMissing, listMissing, logical,
+    events, tasks, links, apple, calls, batchMissing, listMissing, logical, reminders,
     lookupAvailable: true, lookupResult: "", failImport: "", failEORead: false, failBinding: false, includeEOFlags: true, failBindingCode: "",
     reinstall() { for (const [id, link] of links) { const token = `00000000-0000-4000-8000-${String(id).padStart(12,"0")}`; logical.set(`${link.entity_type}:${link.eo_id}`, { recovery_token: token, initial_snapshot: link.last_synced_snapshot }); links.set(id, { ...link, logical_link_id: token, recovery_token: token, binding_state: "recovery", bindings: [{ ...link }] }); } },
     linkEvent(id: number) {
@@ -54,10 +56,14 @@ function fixture() {
       const url = new URL(String(input), "https://eo.test"), path = url.pathname, method = init?.method ?? "GET", body: Item = init?.body ? JSON.parse(String(init.body)) : {};
       calls.push({ method, target: path, body });
       if (path === "/api/eventkit/links") {
-        if (method === "GET") return Response.json([...links.values()].map(link => f.includeEOFlags ? { ...link, eo_record_missing: link.entity_type === "calendar_event" ? !events.has(Number(link.eo_id)) : link.entity_type === "task" ? !tasks.has(Number(link.eo_id)) : true } : link));
+        if (method === "GET") return Response.json([...links.values()].map(link => f.includeEOFlags ? { ...link, eo_record_missing: !(link.entity_type === "calendar_event" ? events : link.entity_type === "task" ? tasks : reminders).has(Number(link.eo_id)) } : link));
         if (method === "DELETE") { links.delete(Number(body.id)); return new Response(null, { status: 204 }); }
         if (method === "POST") {
           const key = `${body.entityType}:${body.eoId}`, reserved = logical.get(key) ?? { recovery_token: `00000000-0000-4000-8000-${String(body.eoId).padStart(12,"0")}`, initial_snapshot: body.lastSyncedSnapshot };
+          if(body.nextOccurrence && JSON.stringify(reserved.initial_snapshot)!==JSON.stringify(body.lastSyncedSnapshot)){
+            reserved.recovery_token = `10000000-0000-4000-8000-${String(++nextApple).padStart(12,"0")}`;
+            reserved.initial_snapshot = body.lastSyncedSnapshot;
+          }
           logical.set(key, reserved);
           if (![...links.values()].some(link => link.entity_type === body.entityType && link.eo_id === body.eoId)) links.set(Number(body.eoId), { id: 0, logical_link_id: reserved.recovery_token, recovery_token: reserved.recovery_token, binding_state: "pending", entity_type: body.entityType, eo_id: body.eoId, eventkit_entity_type: "reminder", calendar_item_identifier: "", calendar_identifier: "", source_identifier: "", last_synced_snapshot: reserved.initial_snapshot, bindings: [] });
           return Response.json(reserved);
@@ -72,7 +78,7 @@ function fixture() {
       }
       if (path === "/api/tasks") return Response.json([...tasks.values()]);
       if (path === "/api/tasks/1" && method === "GET") return tasks.has(1) ? Response.json(tasks.get(1)) : Response.json({ error: "not found" }, { status: 404 });
-      if (path === "/api/reminders") return Response.json([]);
+      if (path === "/api/reminders") return Response.json([...reminders.values()]);
       if (path === "/api/tasks/1/eventkit") { const patch = body.task as Item; tasks.set(1, { ...tasks.get(1), ...patch, completedAt: patch.completionDate }); return Response.json(tasks.get(1)); }
       if (path === "/api/eventkit/calendar-import") {
         assert.equal(method, "POST");
@@ -112,6 +118,32 @@ async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>
   globalThis.fetch = f.fetch;
   try { await run(f); } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch; }
 }
+
+for(const legacy of [false,true]) test(`EO cross-midnight routine completion closes the old Apple occurrence (legacy=${legacy})`,async()=>withFixture(async f=>{
+  const routine={id:27,title:"上药",note:"",targetType:"cat",sourceType:"cat_routine",isActive:true,status:"scheduled",nextDueAt:"2026-10-23T15:00:00Z",snoozedUntil:null,timezone:"Asia/Shanghai",dueHasExplicitTime:true,lastCompletedAt:null} as Reminder;
+  const base=reminderSnapshot(routine);if(legacy)delete base.eoLastCompletedAt;
+  f.reminders.set(27,{...routine});
+  f.apple.set("routine-old",{...base,calendarItemIdentifier:"routine-old",calendarIdentifier:"list",sourceIdentifier:"source",alarms:[{relativeOffset:0}]});
+  f.links.set(27,{id:27,entity_type:"reminder",eo_id:27,eventkit_entity_type:"reminder",calendar_item_identifier:"routine-old",calendar_identifier:"list",source_identifier:"source",last_synced_snapshot:base});
+  f.reminders.set(27,{...routine,lastCompletedAt:"2026-10-23T17:22:09.089+00:00",nextDueAt:"2026-10-24T15:00:00Z"});
+  const run=()=>synchronizeEventKit(status,{}, {cats:"list"});
+  await run();
+  assert.equal(f.apple.get("routine-old")?.completed,true);
+  assert.equal(f.apple.get("routine-old")?.dueDate,"2026-10-23");
+  assert.equal(f.apple.get("routine-old")?.completionDate,"2026-10-23T17:22:09.089+00:00");
+  const next=String(f.links.get(27)?.calendar_item_identifier);
+  assert.notEqual(next,"routine-old");assert.equal(f.apple.get(next)?.completed,false);assert.equal(f.apple.get(next)?.dueDate,"2026-10-24");
+  const writes=f.writes().length;await run();assert.equal(f.apple.size,2);assert.equal(f.writes().length,writes);
+  // Editing a schedule after completion must keep the same unfinished mirror.
+  f.reminders.set(27,{...f.reminders.get(27),nextDueAt:"2026-10-25T15:00:00Z"});await run();
+  assert.equal(f.apple.size,2);assert.equal(f.apple.get(next)?.completed,false);
+  // An early completion also creates a distinct occurrence with the new watermark.
+  f.reminders.set(27,{...f.reminders.get(27),lastCompletedAt:"2026-10-25T12:00:00Z",nextDueAt:"2026-10-26T15:00:00Z"});
+  f.failBinding=true;await assert.rejects(run(),/binding failed/);
+  assert.equal(f.apple.get(next)?.completed,true);
+  await run();await run();assert.equal(f.apple.size,3);
+  assert.equal(f.calls.filter(call=>call.target==="/api/reminders/27/complete").length,0);
+}));
 
 test("610 Calendar mappings paginate every EO record and updates keep the original ID", async () => withFixture(async f => {
   for (let id = 1; id <= 610; id++) f.linkEvent(id);
