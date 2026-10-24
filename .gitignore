@@ -48,3 +48,6 @@ supabase/.branches/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Private software-library uploads
+data/software-icons/
