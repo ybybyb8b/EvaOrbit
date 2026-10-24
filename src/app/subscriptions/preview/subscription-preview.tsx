@@ -3,7 +3,7 @@ import { useRememberedState } from "@/components/use-remembered-state";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log";
 
-import Link from "next/link";
+import {SubscriptionLink as Link,useSubscriptionsData} from "@/components/subscriptions-data-context";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -14,17 +14,18 @@ import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
 import { trackSubscriptionScroll } from "@/lib/subscription-stack-scroll";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
-import { RenewalTimeline } from "./renewal-timeline";
-import { useServerDataState } from "@/components/use-data-refresh";
 import { SubscriptionSections } from "../subscription-sections";
 import { MotionDiagnostics } from "./motion-diagnostics";
+import { RenewalTimeline } from "./renewal-timeline";
+import { useServerDataState } from "@/components/use-data-refresh";
 
 const money = (amount: number, currency: string, english: boolean) => new Intl.NumberFormat(english ? "en-US" : "zh-CN", { style: "currency", currency }).format(amount / 100);
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
 export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false, initialView }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean; initialView?: "home" | "trends" }) {
-  const [items,setItems]=useServerDataState(initialItems);
+  const [items, setItems] = useServerDataState(initialItems);
+  const {local}=useSubscriptionsData();
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
   const [rememberedView, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
@@ -39,17 +40,17 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   // Sample uploaded images only. Built-in SVGs are monochrome masks, coloured by
   // mark() with their published brand palette; their raw pixels are always black.
   const sources = useMemo(() => Object.fromEntries(items.flatMap(item => {
-    const source = iconSources?.[item.id] ?? subscriptionIconSource(item);
+    const source = iconSources?.[item.id] ?? (local?null:subscriptionIconSource(item));
     return source ? [[item.id, source]] : [];
-  })), [items, iconSources]);
+  })), [items, iconSources, local]);
   const { colors, transparent, palette, neutralFilter } = useIconColors(sources);
   const stats = useMemo(() => subscriptionPreviewStats(items, payments, today), [items, payments, today]);
   const selectedCurrency = currency || stats.currencies[0] || "CNY";
   const active = items.filter(item => item.status === "active");
   const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || a.nextRenewalOn.localeCompare(b.nextRenewalOn) || a.id - b.id), [items]);
   useEffect(() => {
-    const node = rail.current;
-    if (!refined || view !== "home" || !node) return;
+    const node = rail.current, faceContainer = faces.current;
+    if (!refined || view !== "home" || !node || !faceContainer) return;
     let width = 0;
     let maxLeft = 0;
     let cards: { slide: HTMLElement; center: number; width: number }[] = [];
@@ -85,11 +86,13 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
     const scroll = trackSubscriptionScroll(node, paint);
     scrollController.current = scroll;
     function measure() {
+      // A queued resize may run after switching tabs or removing the last item.
+      if (!node!.isConnected || !faceContainer!.isConnected) return;
       width = node!.clientWidth;
       maxLeft = Math.max(0, node!.scrollWidth - width);
       cards = Array.from(node!.children).map((child, index) => {
         const target = child as HTMLElement;
-        return { slide: faces.current!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
+        return { slide: faceContainer!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
       });
       scroll.invalidate();
     }
@@ -118,7 +121,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const spend = (item: Subscription) => Object.entries(item.spendByCurrency).map(([key, value]) => money(value, key, english)).join(" / ") || t("Not recorded", "尚未记录");
   function mark(item: Subscription) {
     const brand = subscriptionBrand(item.name);
-    const uploaded = iconSources?.[item.id] ?? subscriptionIconSource(item);
+    const uploaded = iconSources?.[item.id] ?? (local?null:subscriptionIconSource(item));
     if (uploaded) return <span key={uploaded} className={`${styles.brandIcon} ${styles.uploadedIcon}`} data-transparent={transparent[item.id]} aria-hidden="true">
       <b hidden>{item.name.slice(0, 1).toUpperCase()}</b>
       {/* Tiny unoptimized source is also the input to the canvas sampler. */}
@@ -160,7 +163,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const cardLabel = (item: Subscription) => `${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`;
   function featuredCard(item: Subscription, decorative = false) {
     const brand = subscriptionBrand(item.name);
-    const accent = colors[item.id] ?? (iconSources?.[item.id] || subscriptionIconSource(item) ? null : brand?.color ?? null);
+    const accent = colors[item.id] ?? (iconSources?.[item.id] || (!local && subscriptionIconSource(item)) ? null : brand?.color ?? null);
     return <Link href={`/subscriptions/${item.id}`} className={styles.featureCard} tabIndex={decorative ? -1 : undefined} style={{ "--preview-tone": accent ?? "var(--accent-primary)", ...palette(accent) } as CSSProperties} aria-label={cardLabel(item)}>
       <div className={styles.cardContent}>
         <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>
@@ -190,7 +193,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       {onCreate && <PageLogAction label={t("Add subscription", "新增订阅")} onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</PageLogAction>}
     </header>
     {refined && view === "home" && <MotionDiagnostics rail={rail} />}
-    {<SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>}
+    <SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>
     {(!refined || view !== "home") && summary}
     {view === "home" ? <>
       {featured.length > 0 && <section className={styles.featured} data-subscription-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
@@ -210,7 +213,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
         </div>}
       </section>}
       {refined && summary}
-      <RenewalTimeline items={items} payments={payments} today={today} mark={mark} onDateChanged={updated=>setItems(current=>current.map(item=>item.id===updated.id?updated:item))}/>
+      <RenewalTimeline items={items} payments={payments} today={today} mark={mark} onDateChanged={updated => setItems(current => current.map(item => item.id === updated.id ? updated : item))} />
       <section className={styles.ledger}>
         <div className={styles.sectionHead}><h2>{t("Your ledger", "订阅账簿")}</h2><span>{visible.length} {t("subscriptions", "个订阅")}</span></div>
         <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended"] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>

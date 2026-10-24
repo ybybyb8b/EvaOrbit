@@ -1,5 +1,8 @@
 "use client";
 
+import { useBusinessRequest } from "@/components/business-request-context";
+import { useFormPreview, FormPreviewNotice } from "@/components/form-preview";
+import { useSubscriptionsData } from "@/components/subscriptions-data-context";
 import { SubscriptionSections } from "../subscription-sections";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
@@ -19,17 +22,19 @@ import styles from "./library.module.css";
 const emptyEntry = (): LibraryEntry => ({ id: 0, iconPath: "", name: "", category: "", platforms: [], license: "perpetual", version: "", acquisition: "giveaway", acquiredOn: null, website: "", notes: "", createdAt: "", updatedAt: "" });
 
 export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
+  const businessFetch=useBusinessRequest(), previewOnly=useFormPreview();
+  const {read,local,libraryIconSources}=useSubscriptionsData();
   const { english } = useLocale(), t = (en: string, zh: string) => english ? en : zh;
   const [entries, setEntries] = useServerDataState(initial), [busy, setBusy] = useState(false);
   const [query, setQuery] = useState(""), [acquisition, setAcquisition] = useState<"all" | LibraryAcquisition>("all"), [category, setCategory] = useState(""), [platform, setPlatform] = useState("");
   const [selected, setSelected] = useState<LibraryEntry | null>(null), [editing, setEditing] = useState<LibraryEntry | null>(null), [error, setError] = useState("");
   const [iconFile,setIconFile]=useState<File|null>(null),[removeIcon,setRemoveIcon]=useState(false);
-  const iconSource=(entry:LibraryEntry)=>entry.iconPath ? `/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}` : null;
-  const sources=useMemo(()=>Object.fromEntries(entries.filter(entry=>entry.iconPath).map(entry=>[entry.id,`/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}`])),[entries]);
+  const iconSource=(entry:LibraryEntry)=>!entry.iconPath?null:local?(initial.some(item=>item.id===entry.id&&item.iconPath===entry.iconPath)?libraryIconSources?.[entry.id]??null:null):`/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}`;
+  const sources=useMemo(()=>Object.fromEntries(entries.flatMap(entry=>{const source=!entry.iconPath?null:local?(initial.some(item=>item.id===entry.id&&item.iconPath===entry.iconPath)?libraryIconSources?.[entry.id]:null):`/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}`;return source?[[entry.id,source]]:[];})),[entries,local,libraryIconSources,initial]);
   const {transparent,colors,neutralFilter}=useIconColors(sources);
   const storeEntry=(saved:LibraryEntry)=>setEntries(current=>(current.some(entry=>entry.id===saved.id)?current.map(entry=>entry.id===saved.id?saved:entry):[...current,saved]).sort((a,b)=>a.name.localeCompare(b.name)||a.id-b.id));
   const formId = useId();
-  useDataRefresh("/subscriptions", async () => { const response = await fetch("/api/subscriptions/library", { cache: "no-store" }); if (response.ok) setEntries(await response.json() as LibraryEntry[]); });
+  useDataRefresh("/subscriptions", async () => { const response = await read("/api/subscriptions/library", { cache: "no-store" }); if (response.ok) setEntries(await response.json() as LibraryEntry[]); });
   const platformId = useId(), platformAnchor = useRef<HTMLDivElement>(null), platformButton = useRef<HTMLButtonElement>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
   useEffect(() => {
@@ -48,7 +53,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
   function resetFilters() { setQuery(""); setAcquisition("all"); setCategory(""); setPlatform(""); }
   function add() { resetFilters(); setError(""); setIconFile(null);setRemoveIcon(false);setEditing(emptyEntry()); }
   async function save(event: FormEvent) {
-    event.preventDefault(); if (!editing || busy) return;
+    event.preventDefault(); if (previewOnly || !editing || busy) return;
     if (!editing.name.trim()) { setError(t("Give this software a name.", "请填写软件名称。")); return; }
     if (editing.license === "version" && !editing.version.trim()) { setError(t("Enter the licensed version.", "请填写授权版本。")); return; }
     if (!editing.platforms.length) { setError(t("Choose at least one platform.", "请至少选择一个平台。")); return; }
@@ -56,13 +61,13 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     if (website === null) { setError(t("Use a complete http or https link.", "请填写完整的 http 或 https 链接。")); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/subscriptions/library${editing.id ? `/${editing.id}` : ""}`, { method: editing.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editing, name: editing.name.trim(), category: editing.category.trim(), version: editing.license === "version" ? editing.version.trim() : "", website }) });
+      const response = await businessFetch(`/api/subscriptions/library${editing.id ? `/${editing.id}` : ""}`, { method: editing.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editing, name: editing.name.trim(), category: editing.category.trim(), version: editing.license === "version" ? editing.version.trim() : "", website }) });
       if (!response.ok) { setError(await responseError(response, t("Couldn’t save. Try again.", "保存失败，请重试。"))); return; }
       let saved = await response.json() as LibraryEntry;
       storeEntry(saved);setEditing(saved);
       if(iconFile||removeIcon){
         const body=new FormData();if(iconFile)body.set("file",iconFile);
-        const uploaded=await fetch(`/api/subscriptions/library/${saved.id}/icon`,{method:iconFile?"POST":"DELETE",...(iconFile?{body}:{})});
+        const uploaded=await businessFetch(`/api/subscriptions/library/${saved.id}/icon`,{method:iconFile?"POST":"DELETE",...(iconFile?{body}:{})});
         if(!uploaded.ok){setError(t("Software saved; icon could not be saved. Retry to keep this image.","软件资料已保存，图标保存失败，请重试。"));return;}
         saved=await uploaded.json() as LibraryEntry;storeEntry(saved);
       }
@@ -72,10 +77,10 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     finally { setBusy(false); }
   }
   async function remove() {
-    if (!selected || busy || !window.confirm(t(`Remove “${selected.name}” from your library?`, `从软件库移除「${selected.name}」？`))) return;
+    if (previewOnly || !selected || busy || !window.confirm(t(`Remove “${selected.name}” from your library?`, `从软件库移除「${selected.name}」？`))) return;
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/subscriptions/library/${selected.id}`, { method: "DELETE" });
+      const response = await businessFetch(`/api/subscriptions/library/${selected.id}`, { method: "DELETE" });
       if (!response.ok) { setError(await responseError(response, t("Couldn’t remove this software.", "移除失败，请重试。"))); return; }
       setEntries(current => current.filter(entry => entry.id !== selected.id));setSelected(null);
     } catch { setError(t("Couldn’t remove this software. Try again.", "移除失败，请检查网络后重试。")); }
@@ -122,11 +127,12 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
       <dl><div><dt>{t("Acquisition", "如何获得")}</dt><dd>{acquisitionLabel(selected.acquisition)}</dd></div><div><dt>{t("Acquired on", "获取日期")}</dt><dd>{selected.acquiredOn || t("Not recorded", "未记录")}</dd></div><div><dt>{t("Category", "分类")}</dt><dd>{selected.category ? categoryLabel(selected.category) : t("Uncategorised", "未分类")}</dd></div><div><dt>{t("Licence", "授权范围")}</dt><dd>{licenseLabel(selected)}</dd></div></dl>
       <section><h3>{t("A note to remember", "留给自己的备注")}</h3><p>{selected.notes || t("No notes yet.", "尚未添加备注。")}</p></section>
       {selected.website ? <a className={`button secondary ${styles.website}`} href={selected.website} target="_blank" rel="noopener noreferrer">{t("Open website / store", "前往官网／商店")}<Icon name="arrow" /><small>{new URL(selected.website).hostname}</small></a> : <p>{t("No link saved. Add one in Edit.", "尚未保存链接，可在编辑中补充。")}</p>}
-      <button className="text-button danger" disabled={busy} onClick={() => void remove()}>{t("Remove software", "移除软件")}</button>{error && <ErrorNotice>{error}</ErrorNotice>}
+      <button className="text-button danger" disabled={previewOnly||busy} onClick={() => void remove()}>{t("Remove software", "移除软件")}</button>{error && <ErrorNotice>{error}</ErrorNotice>}
     </article></FormSheet>}
 
-    {editing && <FormSheet title={editing.id ? t("Edit software", "编辑软件") : t("Add software", "添加软件")} onClose={() => { setEditing(null); setError(""); }} formId={formId} submitLabel={t("Save", "保存")} busy={busy}><form id={formId} className="editor-card" onSubmit={save}>
-      <div className="form-grid"><SubscriptionIconField label={t("Software icon","软件图标")} name={editing.name} source={iconSource(editing)} file={iconFile} remove={removeIcon} disabled={busy} onChange={(file,remove)=>{setIconFile(file);setRemoveIcon(remove);}}/><label className="field wide"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
+    {editing && <FormSheet title={editing.id ? t("Edit software", "编辑软件") : t("Add software", "添加软件")} onClose={() => { setEditing(null); setError(""); }} formId={formId} submitLabel={t("Save", "保存")} busy={busy} submitDisabled={previewOnly}><form id={formId} className="editor-card" onSubmit={save}>
+      {previewOnly&&<FormPreviewNotice/>}
+      <div className="form-grid"><SubscriptionIconField label={t("Software icon","软件图标")} name={editing.name} source={iconSource(editing)} file={iconFile} remove={removeIcon} disabled={previewOnly||busy} onChange={(file,remove)=>{setIconFile(file);setRemoveIcon(remove);}}/><label className="field wide"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
         <fieldset className={styles.platforms}><legend>{t("Platforms · choose one or more", "平台 · 可多选")}</legend><div>{libraryPlatforms.map(value => <button type="button" key={value} data-form-change aria-pressed={editing.platforms.includes(value)} onClick={() => setEditing({ ...editing, platforms: editing.platforms.includes(value) ? editing.platforms.filter(item => item !== value) : [...editing.platforms, value] })}>{value}</button>)}</div></fieldset>
         <label className="field"><span>{t("Acquisition", "获取方式")}</span><ChoiceSelect value={editing.acquisition} onChange={event => setEditing({ ...editing, acquisition: event.target.value as LibraryAcquisition })}>{(["paid", "giveaway", "gift"] as const).map(value => <option key={value} value={value}>{acquisitionLabel(value)}</option>)}</ChoiceSelect></label>
         <label className="field"><span>{t("Licence", "授权方式")}</span><ChoiceSelect value={editing.license} onChange={event => setEditing({ ...editing, license: event.target.value as LibraryEntry["license"] })}><option value="perpetual">{t("Perpetual", "永久授权")}</option><option value="version">{t("Specific version", "指定版本买断")}</option></ChoiceSelect></label>

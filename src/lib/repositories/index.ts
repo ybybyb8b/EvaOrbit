@@ -77,7 +77,7 @@ export async function withCatsReadOnlyRepository<T>(action:()=>Promise<T>):Promi
 
 // Subscriptions' ordinary GET services can create payments and advance reminders.
 export async function withSubscriptionsReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
-  const repository=await getRepository(),allowed=new Set(["listSubscriptions","getSubscription","listSubscriptionPayments","listSubscriptionPriceChanges"]);
+  const repository=await getRepository(),allowed=new Set(["listSubscriptions","getSubscription","listSubscriptionPayments","listSubscriptionPriceChanges","listSoftwareLibrary","getSoftwareLibraryEntry"]);
   return repositoryContext.run(new Proxy(repository,{get(target,key){
     if(key==="then")return undefined;
     if(typeof key!=="string"||!allowed.has(key))throw new Error("Subscriptions read-only aggregation refused a repository operation");

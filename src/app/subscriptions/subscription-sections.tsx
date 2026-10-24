@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useMemo, useRef } from "react";
+import { SubscriptionLink as Link } from "@/components/subscriptions-data-context";
 import { useLocale } from "@/components/locale-controller";
 import { useSectionSwipe } from "@/components/use-section-swipe";
 import styles from "./subscription-sections.module.css";
@@ -11,12 +11,14 @@ const sectionKeys = ["overview", "trends", "library"] as const;
 
 export function SubscriptionSections({ active, onViewChange }: { active: Section; onViewChange?: (view: "overview" | "trends") => void }) {
   const { english } = useLocale();
-  const navRef = useRef<HTMLElement>(null), rootRef = useRef<HTMLElement | null>(null);
+  const navRef = useRef<HTMLElement>(null);
   const sections = useMemo(() => [
     { key: "overview", href: "/subscriptions?view=overview", label: english ? "Overview" : "订阅首页" },
     { key: "trends", href: "/subscriptions?view=trends", label: english ? "Trends" : "趋势统计" },
     { key: "library", href: "/subscriptions/library", label: english ? "Library" : "软件库" },
   ] as const, [english]);
+
+  const rootRef = useRef<HTMLElement | null>(null);
   const setNav = useCallback((node: HTMLElement | null) => { navRef.current = node; rootRef.current = node?.closest<HTMLElement>(".page") ?? null; }, []);
   const activate = useCallback((section: Section) => navRef.current?.querySelector<HTMLElement>(`[data-section-key="${section}"]`)?.click(), []);
   useSectionSwipe({ active, sections: sectionKeys, rootRef, feedbackRef: navRef, onChange: activate, ignoreSelector: "[data-subscription-swipe-ignore]", interactiveSurfaceSelector: "[data-subscription-swipe-surface]" });

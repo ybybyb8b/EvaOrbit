@@ -4,6 +4,7 @@ import {dateInEvaOrbit} from "../time";
 import {subscriptionSpendByCurrency} from "../subscriptions";
 import {validateSubscriptionsSnapshot,type SubscriptionsReadonlySnapshot} from "../subscriptions-readonly";
 import {readSubscriptionIcon} from "./subscription-icon";
+import {readSoftwareLibraryIcon} from "./software-library-icon";
 
 export async function getSubscriptionsReadonlySnapshot(accountId:string){return withSubscriptionsReadOnlyRepository(async()=>{
   const repository=await getRepository();
@@ -25,5 +26,16 @@ export async function getSubscriptionsReadonlySnapshot(accountId:string){return 
       bytes+=iconSources[item.id].length;if(bytes>8*1024*1024)throw new Error("Subscription icons exceed the acceptance limit; previous cache preserved");
     }
   }
-  return validateSubscriptionsSnapshot({format:"eo-subscriptions-readonly-v1",accountId,capturedAt:new Date().toISOString(),today:dateInEvaOrbit(),items,iconSources},accountId);
+  const library=(await repository.listSoftwareLibrary()).map(item=>({...item})),libraryIconSources:Record<number,string>={};
+  if(library.length>500)throw new Error("Software library exceeds 500 items; previous cache preserved");
+  for(const item of library){
+    if(!item.iconPath)continue;
+    const image=await readSoftwareLibraryIcon(item.id,item.iconPath);
+    if(!image){item.iconPath="";continue;}
+    if(image.bytes.length>4*1024*1024)throw new Error("Software icon exceeds the cache limit; previous cache preserved");
+    libraryIconSources[item.id]=`data:${image.mime};base64,${Buffer.from(image.bytes).toString("base64")}`;
+    bytes+=libraryIconSources[item.id].length;
+    if(bytes>8*1024*1024)throw new Error("Subscription and software icons exceed the cache limit; previous cache preserved");
+  }
+  return validateSubscriptionsSnapshot({format:"eo-subscriptions-readonly-v1",accountId,capturedAt:new Date().toISOString(),today:dateInEvaOrbit(),items,iconSources,library,libraryIconSources},accountId);
 });}

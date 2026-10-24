@@ -1,6 +1,8 @@
 import {getRepository} from "../src/lib/repositories/index.ts";
 import {parseNewSubscription,parseSubscriptionPayment} from "../src/lib/validation.ts";
 import {saveSubscriptionIcon} from "../src/lib/services/subscription-icon.ts";
+import {saveSoftwareLibraryIcon} from "../src/lib/services/software-library-icon.ts";
+import {parseSoftwareLibraryInput} from "../src/lib/software-library-validation.ts";
 import {dateInEvaOrbit,shiftDate} from "../src/lib/time.ts";
 export async function seedSubscriptions(){
   const repository=await getRepository(),today=dateInEvaOrbit();
@@ -14,5 +16,7 @@ export async function seedSubscriptions(){
   const ended=await create("Ended service");await repository.setSubscriptionStatus(ended.id,"ended");
   const png=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6hUAAAAASUVORK5CYII=","base64");
   await saveSubscriptionIcon(automatic.id,new File([png],"subscription.png",{type:"image/png"}));
+  const software=await repository.createSoftwareLibraryEntry(parseSoftwareLibraryInput({name:"Offline software",platforms:["iOS"],license:"perpetual",acquisition:"giveaway"}));
+  await saveSoftwareLibraryIcon(software.id,new File([png],"software.png",{type:"image/png"}));
   return {automatic,manual,paused,ended};
 }
