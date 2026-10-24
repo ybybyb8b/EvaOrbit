@@ -8,6 +8,7 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  async setSoftwareLibraryIcon(id,iconPath){return sqlite.setSoftwareLibraryIcon(id,iconPath);},
   async listSoftwareLibrary(){return sqlite.listSoftwareLibrary();},
   async getSoftwareLibraryEntry(id){return sqlite.getSoftwareLibraryEntry(id);},
   async createSoftwareLibraryEntry(input){return sqlite.createSoftwareLibraryEntry(input);},

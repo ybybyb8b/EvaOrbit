@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
 import { Icon } from "@/components/icons";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -12,15 +12,22 @@ import { PageLogAction } from "@/components/bottom-log";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { responseError } from "@/lib/response-error";
 import { libraryPlatforms, libraryWebsite, filterLibrary, type LibraryEntry, type LibraryAcquisition } from "@/lib/software-library";
+import { SubscriptionIconField } from "../subscription-icon-field";
+import { useIconColors } from "../preview/use-icon-colors";
 import styles from "./library.module.css";
 
-const emptyEntry = (): LibraryEntry => ({ id: 0, name: "", category: "", platforms: [], license: "perpetual", version: "", acquisition: "giveaway", acquiredOn: null, website: "", notes: "", createdAt: "", updatedAt: "" });
+const emptyEntry = (): LibraryEntry => ({ id: 0, iconPath: "", name: "", category: "", platforms: [], license: "perpetual", version: "", acquisition: "giveaway", acquiredOn: null, website: "", notes: "", createdAt: "", updatedAt: "" });
 
 export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
   const { english } = useLocale(), t = (en: string, zh: string) => english ? en : zh;
   const [entries, setEntries] = useServerDataState(initial), [busy, setBusy] = useState(false);
   const [query, setQuery] = useState(""), [acquisition, setAcquisition] = useState<"all" | LibraryAcquisition>("all"), [category, setCategory] = useState(""), [platform, setPlatform] = useState("");
   const [selected, setSelected] = useState<LibraryEntry | null>(null), [editing, setEditing] = useState<LibraryEntry | null>(null), [error, setError] = useState("");
+  const [iconFile,setIconFile]=useState<File|null>(null),[removeIcon,setRemoveIcon]=useState(false);
+  const iconSource=(entry:LibraryEntry)=>entry.iconPath ? `/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}` : null;
+  const sources=useMemo(()=>Object.fromEntries(entries.filter(entry=>entry.iconPath).map(entry=>[entry.id,`/api/subscriptions/library/${entry.id}/icon?v=${entry.iconPath}`])),[entries]);
+  const {transparent,colors,neutralFilter}=useIconColors(sources);
+  const storeEntry=(saved:LibraryEntry)=>setEntries(current=>(current.some(entry=>entry.id===saved.id)?current.map(entry=>entry.id===saved.id?saved:entry):[...current,saved]).sort((a,b)=>a.name.localeCompare(b.name)||a.id-b.id));
   const formId = useId();
   useDataRefresh("/subscriptions", async () => { const response = await fetch("/api/subscriptions/library", { cache: "no-store" }); if (response.ok) setEntries(await response.json() as LibraryEntry[]); });
   const platformId = useId(), platformAnchor = useRef<HTMLDivElement>(null), platformButton = useRef<HTMLButtonElement>(null);
@@ -39,7 +46,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
   const licenseLabel = (entry: LibraryEntry) => entry.license === "perpetual" ? t("Perpetual licence", "永久授权") : t(`${entry.version} licence`, `${entry.version} 版本授权`);
   const categoryLabel = (value: string) => english ? ({ "创作": "Creative", "效率": "Productivity", "工具": "Utilities" }[value] ?? value) : value;
   function resetFilters() { setQuery(""); setAcquisition("all"); setCategory(""); setPlatform(""); }
-  function add() { resetFilters(); setError(""); setEditing(emptyEntry()); }
+  function add() { resetFilters(); setError(""); setIconFile(null);setRemoveIcon(false);setEditing(emptyEntry()); }
   async function save(event: FormEvent) {
     event.preventDefault(); if (!editing || busy) return;
     if (!editing.name.trim()) { setError(t("Give this software a name.", "请填写软件名称。")); return; }
@@ -51,8 +58,15 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     try {
       const response = await fetch(`/api/subscriptions/library${editing.id ? `/${editing.id}` : ""}`, { method: editing.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editing, name: editing.name.trim(), category: editing.category.trim(), version: editing.license === "version" ? editing.version.trim() : "", website }) });
       if (!response.ok) { setError(await responseError(response, t("Couldn’t save. Try again.", "保存失败，请重试。"))); return; }
-      const saved = await response.json() as LibraryEntry;
-      setEntries(current => (current.some(entry => entry.id === saved.id) ? current.map(entry => entry.id === saved.id ? saved : entry) : [...current, saved]).sort((a,b) => a.name.localeCompare(b.name) || a.id - b.id));
+      let saved = await response.json() as LibraryEntry;
+      storeEntry(saved);setEditing(saved);
+      if(iconFile||removeIcon){
+        const body=new FormData();if(iconFile)body.set("file",iconFile);
+        const uploaded=await fetch(`/api/subscriptions/library/${saved.id}/icon`,{method:iconFile?"POST":"DELETE",...(iconFile?{body}:{})});
+        if(!uploaded.ok){setError(t("Software saved; icon could not be saved. Retry to keep this image.","软件资料已保存，图标保存失败，请重试。"));return;}
+        saved=await uploaded.json() as LibraryEntry;storeEntry(saved);
+      }
+      setIconFile(null);setRemoveIcon(false);
       setEditing(null);
     } catch { setError(t("Couldn’t save. Check your connection and try again.", "保存失败，请检查网络后重试。")); }
     finally { setBusy(false); }
@@ -67,7 +81,10 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     } catch { setError(t("Couldn’t remove this software. Try again.", "移除失败，请检查网络后重试。")); }
     finally { setBusy(false); }
   }
-  const mark = (entry: LibraryEntry) => <span className={styles.mark} data-tone={entry.acquisition} aria-hidden="true">{entry.name.trim().slice(0, 1).toUpperCase()}</span>;
+  const mark = (entry: LibraryEntry) => iconSource(entry) ? <span className={styles.mark} data-image data-transparent={transparent[entry.id]} aria-hidden="true">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={iconSource(entry)!} alt="" style={transparent[entry.id]&&colors[entry.id]===null?{filter:neutralFilter}:undefined}/>
+  </span> : <span className={styles.mark} data-tone={entry.acquisition} aria-hidden="true">{entry.name.trim().slice(0, 1).toUpperCase()}</span>;
   return <div className={`page ${styles.page}`}>
     <Link href="/subscriptions" className={styles.back}><Icon name="arrow" />{t("Subscriptions", "订阅")}</Link>
     <header className={styles.header}><h1>{t("Software library", "软件库")}</h1><PageLogAction label={t("Add software", "添加软件")} onClick={add}><Icon name="plus" />{t("Add", "添加软件")}</PageLogAction></header>
@@ -101,7 +118,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     </div>
 
     {selected && <FormSheet title={selected.name} onClose={() => { setSelected(null); setError(""); }} busy={busy}><article className={styles.detail}>
-      <div className={styles.detailHead}>{mark(selected)}<div><span>{selected.platforms.join(" · ")}</span><strong>{licenseLabel(selected)}</strong></div><button className="text-button" onClick={() => { setEditing(selected); setSelected(null); setError(""); }}>{t("Edit", "编辑资料")}</button></div>
+      <div className={styles.detailHead}>{mark(selected)}<div><span>{selected.platforms.join(" · ")}</span><strong>{licenseLabel(selected)}</strong></div><button className="text-button" onClick={() => { setIconFile(null);setRemoveIcon(false);setEditing(selected); setSelected(null); setError(""); }}>{t("Edit", "编辑资料")}</button></div>
       <dl><div><dt>{t("Acquisition", "如何获得")}</dt><dd>{acquisitionLabel(selected.acquisition)}</dd></div><div><dt>{t("Acquired on", "获取日期")}</dt><dd>{selected.acquiredOn || t("Not recorded", "未记录")}</dd></div><div><dt>{t("Category", "分类")}</dt><dd>{selected.category ? categoryLabel(selected.category) : t("Uncategorised", "未分类")}</dd></div><div><dt>{t("Licence", "授权范围")}</dt><dd>{licenseLabel(selected)}</dd></div></dl>
       <section><h3>{t("A note to remember", "留给自己的备注")}</h3><p>{selected.notes || t("No notes yet.", "尚未添加备注。")}</p></section>
       {selected.website ? <a className={`button secondary ${styles.website}`} href={selected.website} target="_blank" rel="noopener noreferrer">{t("Open website / store", "前往官网／商店")}<Icon name="arrow" /><small>{new URL(selected.website).hostname}</small></a> : <p>{t("No link saved. Add one in Edit.", "尚未保存链接，可在编辑中补充。")}</p>}
@@ -109,7 +126,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     </article></FormSheet>}
 
     {editing && <FormSheet title={editing.id ? t("Edit software", "编辑软件") : t("Add software", "添加软件")} onClose={() => { setEditing(null); setError(""); }} formId={formId} submitLabel={t("Save", "保存")} busy={busy}><form id={formId} className="editor-card" onSubmit={save}>
-      <div className="form-grid"><label className="field wide"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
+      <div className="form-grid"><SubscriptionIconField label={t("Software icon","软件图标")} name={editing.name} source={iconSource(editing)} file={iconFile} remove={removeIcon} disabled={busy} onChange={(file,remove)=>{setIconFile(file);setRemoveIcon(remove);}}/><label className="field wide"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
         <fieldset className={styles.platforms}><legend>{t("Platforms · choose one or more", "平台 · 可多选")}</legend><div>{libraryPlatforms.map(value => <button type="button" key={value} data-form-change aria-pressed={editing.platforms.includes(value)} onClick={() => setEditing({ ...editing, platforms: editing.platforms.includes(value) ? editing.platforms.filter(item => item !== value) : [...editing.platforms, value] })}>{value}</button>)}</div></fieldset>
         <label className="field"><span>{t("Acquisition", "获取方式")}</span><ChoiceSelect value={editing.acquisition} onChange={event => setEditing({ ...editing, acquisition: event.target.value as LibraryAcquisition })}>{(["paid", "giveaway", "gift"] as const).map(value => <option key={value} value={value}>{acquisitionLabel(value)}</option>)}</ChoiceSelect></label>
         <label className="field"><span>{t("Licence", "授权方式")}</span><ChoiceSelect value={editing.license} onChange={event => setEditing({ ...editing, license: event.target.value as LibraryEntry["license"] })}><option value="perpetual">{t("Perpetual", "永久授权")}</option><option value="version">{t("Specific version", "指定版本买断")}</option></ChoiceSelect></label>

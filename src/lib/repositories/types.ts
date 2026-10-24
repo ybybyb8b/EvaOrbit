@@ -361,6 +361,7 @@ export interface EvaOrbitRepository {
   listSubscriptions(input?: SubscriptionListInput): Promise<Subscription[]>;
   listSoftwareLibrary(): Promise<LibraryEntry[]>;
   getSoftwareLibraryEntry(id: number): Promise<LibraryEntry | null>;
+  setSoftwareLibraryIcon(id: number, iconPath: string): Promise<LibraryEntry | null>;
   createSoftwareLibraryEntry(input: LibraryInput): Promise<LibraryEntry>;
   updateSoftwareLibraryEntry(id: number, input: LibraryInput): Promise<LibraryEntry | null>;
   deleteSoftwareLibraryEntry(id: number): Promise<boolean>;

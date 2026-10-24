@@ -40,14 +40,32 @@ test("software Postgres migration is repeatable and isolates accounts with RLS",
    grant usage on schema public,auth to authenticated;grant execute on function auth.uid() to authenticated;
    insert into auth.users values('10000000-0000-4000-8000-000000000001'),('20000000-0000-4000-8000-000000000002');
    create table subscriptions(id int primary key,name text);insert into subscriptions values(1,'Keep me');`);
-  const sql=readFileSync('supabase/migrations/202610240001_software_library.sql','utf8');await db.exec(sql);await db.exec(sql);
+  const sql=readFileSync('supabase/migrations/202610240001_software_library.sql','utf8');await db.exec(sql);await db.exec(sql);const icons=readFileSync('supabase/migrations/202610240002_software_library_icon.sql','utf8');await db.exec(icons);await db.exec(icons);
   await db.exec(`set role authenticated;set request.jwt.claim.sub='10000000-0000-4000-8000-000000000001';insert into software_library(name,platforms,license,acquisition) values('Tool','["macOS"]','perpetual','giveaway');`);
-  const own=(await db.query('select * from software_library')).rows[0];assert.equal(own.acquired_on,null);
+  const own=(await db.query('select * from software_library')).rows[0];assert.equal(own.acquired_on,null);assert.equal(own.icon_path,'');await db.exec("update software_library set icon_path='owner.png'");
   await assert.rejects(db.exec(`insert into software_library(user_id,name,platforms,license,acquisition) values('20000000-0000-4000-8000-000000000002','Other','["macOS"]','perpetual','paid')`));
   await assert.rejects(db.exec(`insert into software_library(name,platforms,license,acquisition) values('Bad','["unknown"]','perpetual','paid')`));
   await db.exec(`set request.jwt.claim.sub='20000000-0000-4000-8000-000000000002'`);
   assert.equal((await db.query('select * from software_library')).rows.length,0);
-  await db.exec(`update software_library set name='Stolen';delete from software_library;reset role;`);
-  assert.equal((await db.query('select name from software_library')).rows[0].name,'Tool');assert.equal((await db.query('select name from subscriptions')).rows[0].name,'Keep me');
+  await db.exec(`update software_library set name='Stolen',icon_path='stolen.png';delete from software_library;reset role;`);
+  assert.equal((await db.query('select name,icon_path from software_library')).rows[0].icon_path,'owner.png');assert.equal((await db.query('select name from software_library')).rows[0].name,'Tool');assert.equal((await db.query('select name from subscriptions')).rows[0].name,'Keep me');
  }finally{await db.close();}
+});
+
+test("software icons upload, replace, survive edits, reset and clean up without touching subscription icons",()=>{
+ const directory=mkdtempSync(path.join(tmpdir(),"eo-software-icons-")),env={...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"test.db"),EVAORBIT_SOFTWARE_ICON_DIR:path.join(directory,"icons"),VERCEL:""};
+ try{const result=spawnSync(process.execPath,["--experimental-loader",pathToFileURL(path.resolve("scripts/typescript-test-loader.mjs")).href,"--input-type=module","--eval",`
+ import assert from 'node:assert/strict';import fs from 'node:fs/promises';import path from 'node:path';import {DatabaseSync} from 'node:sqlite';
+ import {createSoftwareLibraryEntry,updateSoftwareLibraryEntry,deleteSoftwareLibraryEntry,listSoftwareLibrary} from './src/lib/services/software-library.ts';
+ import {saveSoftwareLibraryIcon,readSoftwareLibraryIcon,resetSoftwareLibraryIcon} from './src/lib/services/software-library-icon.ts';
+ const input={name:'Tool',platforms:['macOS'],license:'perpetual',acquisition:'giveaway'},item=await createSoftwareLibraryEntry(input);assert.equal(item.iconPath,'');
+ const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jK1sAAAAASUVORK5CYII=','base64'),image=new File([bytes],'icon.png',{type:'image/png'});
+ await assert.rejects(saveSoftwareLibraryIcon(item.id,new File(['<svg/>'],'fake.png')));await assert.rejects(saveSoftwareLibraryIcon(item.id,new File([new Uint8Array(4194305)],'large.png')));assert.equal(await saveSoftwareLibraryIcon(99999,image),null);
+ const first=await saveSoftwareLibraryIcon(item.id,image),second=await saveSoftwareLibraryIcon(item.id,image);assert.notEqual(first.iconPath,second.iconPath);assert.equal(await readSoftwareLibraryIcon(item.id,first.iconPath),null);assert.deepEqual(Buffer.from((await readSoftwareLibraryIcon(item.id,second.iconPath)).bytes),bytes);
+ const edited=await updateSoftwareLibraryEntry(item.id,{...input,name:'Changed',iconPath:'../bad'});assert.equal(edited.iconPath,second.iconPath);
+ const folder=path.join(process.env.EVAORBIT_SOFTWARE_ICON_DIR,String(item.id));assert.deepEqual(await fs.readdir(folder),[second.iconPath]);
+ const sql=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);sql.exec("CREATE TRIGGER reject_icon BEFORE UPDATE OF icon_path ON software_library BEGIN SELECT RAISE(ABORT,'test rollback'); END");await assert.rejects(saveSoftwareLibraryIcon(item.id,image));assert.deepEqual(await fs.readdir(folder),[second.iconPath]);sql.exec('DROP TRIGGER reject_icon');
+ await resetSoftwareLibraryIcon(item.id);assert.equal(await readSoftwareLibraryIcon(item.id,null),null);assert.deepEqual(await fs.readdir(folder),[]);await saveSoftwareLibraryIcon(item.id,image);await deleteSoftwareLibraryEntry(item.id);assert.deepEqual(await fs.readdir(folder),[]);assert.equal((await listSoftwareLibrary()).length,0);
+ for(const table of ['subscriptions','subscription_payments','subscription_price_changes','reminders'])assert.equal(sql.prepare('select count(*) n from '+table).get().n,0);sql.close();
+ `],{encoding:"utf8",env});assert.equal(result.status,0,result.stderr||result.stdout);}finally{rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
 });

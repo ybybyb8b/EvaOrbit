@@ -147,7 +147,7 @@
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
-- **软件库（Web）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、平台、授权／获取方式及来源链接，三列紧凑网格与详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地原生快照、桥接白名单与原生入口暂不接入，旧预览地址重定向至正式页。
+- **软件库（Web）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，三列紧凑网格与详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地原生快照、桥接白名单与原生入口暂不接入，旧预览地址重定向至正式页。
 
 ## Projects
 

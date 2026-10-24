@@ -1676,6 +1676,9 @@ if(!hasV83)database.exec(`BEGIN;
   CREATE INDEX idx_software_library_name ON software_library(name,id);
   INSERT INTO migrations(version) VALUES(83); COMMIT;
 `);
+const hasV84=database.prepare("SELECT 1 FROM migrations WHERE version=84").get();
+if(!hasV84)database.exec("BEGIN; ALTER TABLE software_library ADD COLUMN icon_path TEXT NOT NULL DEFAULT ''; INSERT INTO migrations(version) VALUES(84); COMMIT;");
+export function setSoftwareLibraryIcon(id:number,iconPath:string){database.prepare("UPDATE software_library SET icon_path=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(iconPath,id);return getSoftwareLibraryEntry(id);}
 export function listSoftwareLibrary(){return database.prepare("SELECT * FROM software_library ORDER BY name COLLATE NOCASE,id").all().map(libraryEntryFromRow);}
 export function getSoftwareLibraryEntry(id:number){const row=database.prepare("SELECT * FROM software_library WHERE id=?").get(id);return row?libraryEntryFromRow(row):null;}
 export function createSoftwareLibraryEntry(input:LibraryInput){const result=database.prepare("INSERT INTO software_library(name,category,platforms,license,version,acquisition,acquired_on,website,notes) VALUES(?,?,?,?,?,?,?,?,?)").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes);return getSoftwareLibraryEntry(Number(result.lastInsertRowid))!;}

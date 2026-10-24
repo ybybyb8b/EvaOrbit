@@ -26,6 +26,6 @@ test("software row mapping round trips JSON platforms and date-only values",()=>
   const input=parseSoftwareLibraryInput(draft()),row=libraryEntryToRow(input);
   for(const platforms of [row.platforms,JSON.stringify(row.platforms)]){
     const entry=libraryEntryFromRow({...row,id:3,platforms,created_at:"created",updated_at:"updated"});
-    assert.deepEqual(entry,{...input,id:3,createdAt:"created",updatedAt:"updated"});
+    assert.deepEqual(entry,{...input,id:3,iconPath:"",createdAt:"created",updatedAt:"updated"});
   }
 });

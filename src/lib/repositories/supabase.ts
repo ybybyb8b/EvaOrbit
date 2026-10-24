@@ -269,6 +269,7 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     return logs.map(log=>({...log,foodPlaces:(log.foodPlaceIds??[]).flatMap(id=>places.has(id)?[places.get(id)!]:[]),foodDishes:(log.foodDishIds??[]).flatMap(id=>{const row=dishes.get(id);return row?[{id,name:String(row.name),...(row.food_place_id!=null?{foodPlaceId:Number(row.food_place_id)}:{}),...(row.food_library_id!=null?{foodLibraryId:Number(row.food_library_id)}:{})}]:[];})}));
   }
   const repository: EvaOrbitRepository = {
+    async setSoftwareLibraryIcon(id,iconPath){const{data,error}=await client.from("software_library").update({icon_path:iconPath}).eq("user_id",userId).eq("id",id).select().maybeSingle();fail(error,"更新软件图标");return data?libraryEntryFromRow(data):null;},
     async listSoftwareLibrary(){
       const rows: Row[]=[];
       for(let offset=0;;offset+=500){
