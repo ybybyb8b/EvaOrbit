@@ -193,7 +193,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
     {<SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>}
     {(!refined || view !== "home") && summary}
     {view === "home" ? <>
-      {featured.length > 0 && <section className={styles.featured} data-section-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
+      {featured.length > 0 && <section className={styles.featured} data-subscription-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
         <div className={styles.sectionHead}><h2>{t("On the horizon", "即将续费")}</h2><span>{t("Swipe to explore", "左右滑动浏览")}</span></div>
         {refined ? <div className={styles.stackStage}>
           <div className={styles.stackFaces} ref={faces} aria-hidden="true">

@@ -111,7 +111,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
           </div>
         </div>
         <div className={styles.listHeading}><h2>{category ? categoryLabel(category) : t("Your collection", "我的收藏")}<span>{visible.length}</span></h2><div className={styles.filters} role="group" aria-label={t("Acquisition type", "获取方式筛选")}>{(["all", "giveaway", "paid", "gift"] as const).map(value => <button key={value} aria-pressed={acquisition === value} onClick={() => setAcquisition(value)}>{value === "all" ? t("All", "全部") : value === "gift" ? t("Gift", "赠送") : acquisitionLabel(value)}</button>)}</div></div>
-        {visible.length ? <ul className={styles.list} data-section-swipe-surface>{visible.map(entry => <li key={entry.id}><button className={styles.entry} onClick={() => setSelected(entry)}>
+        {visible.length ? <ul className={styles.list} data-subscription-swipe-surface>{visible.map(entry => <li key={entry.id}><button className={styles.entry} onClick={() => setSelected(entry)}>
           {mark(entry)}<span className={styles.entryCopy}><strong>{entry.name}</strong></span>
         </button></li>)}</ul> : <div className={styles.empty}><Icon name={entries.length ? "search" : "projects"} /><h3>{entries.length ? t("No matching software", "没有找到匹配的软件") : t("A place for what you own", "给拥有的软件，留一个位置")}</h3><p>{entries.length ? t("Try another name, category, or platform.", "换个关键词，或调整分类与平台。") : t("Keep its name, platform, licence, and the link to find it again.", "记下名称、平台、授权和链接，下次需要时就能找到。")}</p><button className="button secondary" onClick={entries.length ? resetFilters : add}>{entries.length ? t("Clear filters", "清除筛选") : t("Add your first software", "添加第一件软件")}</button></div>}
       </section>
