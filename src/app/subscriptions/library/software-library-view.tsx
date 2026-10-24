@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { SubscriptionSections } from "../subscription-sections";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
 import { Icon } from "@/components/icons";
@@ -86,9 +86,9 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     <img src={iconSource(entry)!} alt="" style={transparent[entry.id]&&colors[entry.id]===null?{filter:neutralFilter}:undefined}/>
   </span> : <span className={styles.mark} data-tone={entry.acquisition} aria-hidden="true">{entry.name.trim().slice(0, 1).toUpperCase()}</span>;
   return <div className={`page ${styles.page}`}>
-    <Link href="/subscriptions" className={styles.back}><Icon name="arrow" />{t("Subscriptions", "订阅")}</Link>
     <header className={styles.header}><h1>{t("Software library", "软件库")}</h1><PageLogAction label={t("Add software", "添加软件")} onClick={add}><Icon name="plus" />{t("Add", "添加软件")}</PageLogAction></header>
 
+    <SubscriptionSections active="library"/>
     <div className={styles.summary}><span><strong>{entries.length.toString().padStart(2, "0")}</strong>{t("software", "件软件")}</span><span>{entries.filter(entry => entry.acquisition === "giveaway").length} {t("giveaways", "项限免")}</span><span>{platformCount} {t("platforms", "个平台")}</span></div>
     <div className={styles.workspace}>
       <nav className={styles.categories} aria-label={t("Software categories", "软件分类")}>

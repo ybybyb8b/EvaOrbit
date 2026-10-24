@@ -16,17 +16,19 @@ import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
 import { RenewalTimeline } from "./renewal-timeline";
 import { useServerDataState } from "@/components/use-data-refresh";
+import { SubscriptionSections } from "../subscription-sections";
 import { MotionDiagnostics } from "./motion-diagnostics";
 
 const money = (amount: number, currency: string, english: boolean) => new Intl.NumberFormat(english ? "en-US" : "zh-CN", { style: "currency", currency }).format(amount / 100);
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
-export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false, initialView }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean; initialView?: "home" | "trends" }) {
   const [items,setItems]=useServerDataState(initialItems);
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
-  const [view, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
+  const [rememberedView, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
+  const view = initialView ?? rememberedView;
   const [status, setStatus] = useRememberedState<"all" | SubscriptionStatus>("SubscriptionPreview:status", "all");
   const [focused, setFocused] = useState(0);
   const [currency, setCurrency] = useState("");
@@ -188,10 +190,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       {onCreate && <PageLogAction label={t("Add subscription", "新增订阅")} onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</PageLogAction>}
     </header>
     {refined && view === "home" && <MotionDiagnostics rail={rail} />}
-    <div className={styles.switcher} role="group" aria-label={t("Subscriptions view", "订阅视图")}>
-      <button aria-pressed={view === "home"} onClick={() => { setFocused(0); setView("home"); }}>{t("Overview", "订阅首页")}</button>
-      <button aria-pressed={view === "trends"} onClick={() => setView("trends")}>{t("Trends", "趋势统计")}</button>
-    </div>
+    {<SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>}
     {(!refined || view !== "home") && summary}
     {view === "home" ? <>
       {featured.length > 0 && <section className={styles.featured} aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
@@ -249,6 +248,6 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       </div>
       <p className={styles.method}>{t("Expected = payments recorded this month + remaining renewals at current prices. Paused and ended subscriptions are excluded from remaining renewals. Currencies are never combined.", "预计支出 = 本月已付 + 按当前价格计算的本月剩余续费。暂停与结束的订阅不计入剩余计划，各币种不合并。")}</p>
     </>}
-    <footer className={styles.footer}><Link href="/subscriptions/library">{t("Software library", "软件库")}</Link><span>{date(today)}</span></footer>
+    <footer className={styles.footer}>{t("Your recurring ledger", "你的订阅账簿")}<span>{date(today)}</span></footer>
   </div>;
 }

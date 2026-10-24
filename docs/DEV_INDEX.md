@@ -148,7 +148,7 @@
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
 - **续费时间线（Web）**：总览展示未来30天、未处理计划及已有付款；时间线与详情页可调整下次续费日期，沿用订阅PATCH和提醒投影，不补记被调整的旧计划，不改写付款历史。
-- **软件库（Web）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，三列紧凑网格与详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地原生快照、桥接白名单与原生入口暂不接入，旧预览地址重定向至正式页。
+- **软件库（Web）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 顶部分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地原生快照、桥接白名单与原生入口暂不接入，旧预览地址重定向至正式页。
 
 ## Projects
 
