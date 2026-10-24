@@ -9,10 +9,12 @@ import { filterProjectItems, groupProjectItems, projectModuleCatalog, projectIte
 import { SuggestedInput } from "@/components/suggested-input";
 
 import Link from "next/link";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
+import { useSectionSwipe } from "@/components/use-section-swipe";
 import { Icon } from "@/components/icons";
 import type { ApiError, Project, ProjectItem, ProjectItemStatus, ProjectItemType } from "@/lib/types";
 
+const sections = ["overview", "modules", "list"] as const;
 const types:ProjectItemType[]=["feature","bug","ui","migration","research","tech_debt","other"];
 function date(value:string){return new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric"}).format(new Date(value));}
 function monthDay(value:string){const valueDate=new Date(value);return {month:new Intl.DateTimeFormat("en-US",{month:"short"}).format(valueDate).toUpperCase(),day:String(valueDate.getDate()).padStart(2,"0")};}
@@ -21,6 +23,8 @@ export function ProjectDetailView({initialProject,initialItems}:{initialProject:
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const [items,setItems]=useServerDataState(initialItems);const [show,setShow]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState("");const [draft,setDraft]=useState({title:"",description:"",type:"feature" as ProjectItemType,module:"",priority:"",nextStep:""});
   const [view,setView]=useRememberedState("ProjectDetailView:view", "overview");
+  const swipeNav=useRef<HTMLLabelElement>(null);
+  useSectionSwipe({active:view,sections,rootRef:copyScope,feedbackRef:swipeNav,onChange:setView,enabled:!show,ignoreSelector:".project-browse-controls, .project-editor"});
   const [statusFilter,setStatusFilter]=useState<ProjectItemStatus | "unfinished" | "">("");
   const [typeFilter,setTypeFilter]=useState<ProjectItemType | "">("");
   const [moduleFilter,setModuleFilter]=useState("");
@@ -33,7 +37,7 @@ export function ProjectDetailView({initialProject,initialItems}:{initialProject:
   return <div ref={copyScope} className="page project-detail-page"><div className="project-detail-header"><div><Link href="/projects" className="back-link">← Projects</Link><span className="eyebrow">{initialProject.status.toUpperCase()}</span><h1>{initialProject.name}</h1>{initialProject.description&&<p>{initialProject.description}</p>}</div><PageLogAction label="Add Item" disabled={show || saving} onClick={()=>newItem()}><Icon name="plus"/>Item</PageLogAction></div>
     {show&&<form className="editor-card project-editor" onSubmit={submit}><div className="editor-title"><div><span className="eyebrow">CAPTURE</span><h2>Record an Item</h2></div><button type="button" className="text-button" onClick={()=>setShow(false)}>Cancel</button></div><div className="form-grid"><label className="field wide"><span>Title</span><input autoFocus required maxLength={300} value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label><label className="field"><span>Type</span><ChoiceSelect aria-label="Type" value={draft.type} onChange={e=>setDraft({...draft,type:e.target.value as ProjectItemType})}>{types.map(type=><option value={type} key={type}>{typeLabels[type]}</option>)}</ChoiceSelect></label><ProjectModuleSelect value={draft.module} modules={items.map(item=>item.module)} onChange={module=>setDraft({...draft,module})}/><label className="field wide"><span>Original request</span><textarea rows={4} maxLength={20000} value={draft.description} onChange={e=>setDraft({...draft,description:e.target.value})}/></label><div className="field"><span>Priority <small>Optional</small></span><SuggestedInput suggestionLabel="优先级" suggestions={[...items.flatMap(item => item.priority ? [item.priority] : []), "P0", "P1", "P2"]} maxLength={60} placeholder="High, P1…" value={draft.priority} onValueChange={nextValue =>setDraft({...draft,priority:nextValue})}/></div><label className="field"><span>Next step <small>Optional</small></span><input maxLength={5000} value={draft.nextStep} onChange={e=>setDraft({...draft,nextStep:e.target.value})}/></label></div>{error&&<p className="form-error">{error}</p>}<div className="form-actions"><button className="button primary" disabled={saving}>{saving?"Recording…":"Record Item"}</button></div></form>}
     <div className="project-browse-controls">
-      <label className="field"><span>View</span><ChoiceSelect aria-label="Project view" value={view} onChange={event=>setView(event.target.value)}><option value="overview">Overview</option><option value="modules">By module</option><option value="list">All Items</option></ChoiceSelect></label>
+      <label ref={swipeNav} className="field"><span>View</span><ChoiceSelect aria-label="Project view" value={view} onChange={event=>setView(event.target.value)}><option value="overview">Overview</option><option value="modules">By module</option><option value="list">All Items</option></ChoiceSelect></label>
       <label className="field"><span>Status</span><ChoiceSelect aria-label="Filter status" value={statusFilter} onChange={event=>setStatusFilter(event.target.value as typeof statusFilter)}><option value="">All statuses</option><option value="unfinished">Unfinished</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</ChoiceSelect></label>
       <label className="field"><span>Type</span><ChoiceSelect aria-label="Filter type" value={typeFilter} onChange={event=>setTypeFilter(event.target.value as typeof typeFilter)}><option value="">All types</option>{types.map(type=><option key={type} value={type}>{typeLabels[type]}</option>)}</ChoiceSelect></label>
       <label className="field"><span>Module</span><ChoiceSelect aria-label="Filter module" value={moduleFilter} onChange={event=>setModuleFilter(event.target.value)}><option value="">All modules</option>{catalog.map(entry=><option key={entry.name} value={entry.name}>{entry.name}</option>)}</ChoiceSelect></label>

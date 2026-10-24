@@ -22,6 +22,7 @@ export function useSectionSwipe<T extends string>({ active, sections, rootRef, f
     const root = rootRef.current, feedback = feedbackRef?.current;
     const index = sections.indexOf(active);
     if (!enabled || !root || index < 0) return;
+    feedback?.setAttribute("data-section-swipe-feedback", "");
     let tracking = false, intent: "pending" | "horizontal" | "vertical" = "pending", changing = false;
     let startX = 0, lastX = 0, startY = 0, lastAt = 0, velocityX = 0, suppressClickUntil = 0;
     const clearFeedback = () => { feedback?.removeAttribute("data-section-swiping"); feedback?.style.removeProperty("--section-swipe-progress"); };
@@ -35,7 +36,7 @@ export function useSectionSwipe<T extends string>({ active, sections, rootRef, f
     const ignoresSwipe = (target: Element) => Boolean(target.closest(commonIgnore) || (ignoreSelector && target.closest(ignoreSelector)) || (target.closest("button") && !(interactiveSurfaceSelector && target.closest(interactiveSurfaceSelector))) || hasHorizontalScroller(target));
     const start = (event: TouchEvent) => {
       clearFeedback(); tracking = false; intent = "pending";
-      if (event.touches.length !== 1 || (window.visualViewport?.scale ?? 1) > 1.05) return;
+      if (event.touches.length !== 1 || (window.visualViewport?.scale ?? 1) > 1.05 || root.querySelector("[data-section-swipe-pause]") || document.querySelector('[aria-modal="true"]')) return;
       const target = event.target;
       if (!(target instanceof Element) || ignoresSwipe(target)) return;
       const touch = event.touches[0], width = document.documentElement.clientWidth;
@@ -69,6 +70,6 @@ export function useSectionSwipe<T extends string>({ active, sections, rootRef, f
     const cancel = () => { tracking = false; intent = "pending"; clearFeedback(); };
     const click = (event: MouseEvent) => { if (!changing && Date.now() < suppressClickUntil) { event.preventDefault(); event.stopPropagation(); } };
     root.addEventListener("touchstart", start, { passive: true }); root.addEventListener("touchmove", move, { passive: false }); root.addEventListener("touchend", end, { passive: true }); root.addEventListener("touchcancel", cancel, { passive: true }); root.addEventListener("click", click, true);
-    return () => { root.removeEventListener("touchstart", start); root.removeEventListener("touchmove", move); root.removeEventListener("touchend", end); root.removeEventListener("touchcancel", cancel); root.removeEventListener("click", click, true); clearFeedback(); };
+    return () => { feedback?.removeAttribute("data-section-swipe-feedback"); root.removeEventListener("touchstart", start); root.removeEventListener("touchmove", move); root.removeEventListener("touchend", end); root.removeEventListener("touchcancel", cancel); root.removeEventListener("click", click, true); clearFeedback(); };
   }, [active, enabled, feedbackRef, ignoreSelector, interactiveSurfaceSelector, rootRef, sections]);
 }

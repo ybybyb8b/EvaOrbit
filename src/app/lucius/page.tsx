@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { LuciusSectionSwipe } from "./lucius-section-swipe";
 import Link from "next/link";
 import { luciusMoodPresentation } from "@/lib/lucius-mood";
 import { plainExcerpt } from "@/lib/long-term-memory";
@@ -66,7 +67,7 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
   }, new Map<number, LuciusPostComment[]>());
   const mood = luciusMoodPresentation(state.mood);
 
-  return <div className="lucius-profile-page">
+  return <LuciusSectionSwipe tab={tab}>
     <header className="lucius-profile-header">
       <div className="lucius-profile-navigation"><PageBackButton /></div>
       <div className="lucius-cover" aria-hidden="true">
@@ -132,5 +133,5 @@ export default async function LuciusPage({ searchParams }: { searchParams: Searc
         </Link>)}</div> : <div className="lucius-profile-empty"><span aria-hidden="true">✦</span><p>The cabinet is quiet.</p><small>0 files currently kept.</small></div>}
       </section>}
     </main>
-  </div>;
+  </LuciusSectionSwipe>;
 }

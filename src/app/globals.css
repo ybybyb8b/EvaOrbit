@@ -882,6 +882,9 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .tracker-tabs button { min-width: 0; min-height: 40px; padding: 0 12px; border: 0; border-radius: 11px; overflow: hidden; text-overflow: ellipsis; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; cursor: pointer; }
 .tracker-tabs button.active { background: var(--surface-raised); color: var(--green); box-shadow: 0 4px 14px rgba(41,58,47,.08); }
 .tracker-tabs[data-section-swiping] button.active { transform:translateX(calc(var(--section-swipe-progress,0) * 12px));transition:none; }
+[data-section-swipe-feedback][data-section-swiping] :is(button.active, [aria-pressed="true"], [aria-current="page"]) { transform:translateX(calc(var(--section-swipe-progress,0) * 12px));transition:none; }
+[data-section-swipe-feedback]:not([data-section-swiping]) :is(button.active, [aria-pressed="true"], [aria-current="page"]) { transform:translateX(0);transition:transform 160ms cubic-bezier(.22,1,.36,1); }
+@media (prefers-reduced-motion:reduce) { [data-section-swipe-feedback] :is(button.active, [aria-pressed="true"], [aria-current="page"]) { transition:none!important; } }
 .tracker-tabs:not([data-section-swiping]) button.active { transform:translateX(0);transition:transform 160ms cubic-bezier(.22,1,.36,1); }
 @media (prefers-reduced-motion:reduce) { .tracker-tabs button.active { transition:none!important; } }
 .tracker-insight-card { min-width: 0; margin-top: 12px; padding: 21px 20px; border: 1px solid rgb(var(--border-rgb) / .08); border-radius: 19px; background: rgb(var(--surface-card-rgb) / .62); }
