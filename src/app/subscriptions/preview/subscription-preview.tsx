@@ -14,13 +14,16 @@ import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
 import { trackSubscriptionScroll } from "@/lib/subscription-stack-scroll";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
+import { RenewalTimeline } from "./renewal-timeline";
+import { useServerDataState } from "@/components/use-data-refresh";
 import { MotionDiagnostics } from "./motion-diagnostics";
 
 const money = (amount: number, currency: string, english: boolean) => new Intl.NumberFormat(english ? "en-US" : "zh-CN", { style: "currency", currency }).format(amount / 100);
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
-export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+  const [items,setItems]=useServerDataState(initialItems);
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
   const [view, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
@@ -208,6 +211,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
         </div>}
       </section>}
       {refined && summary}
+      <RenewalTimeline items={items} payments={payments} today={today} mark={mark} onDateChanged={updated=>setItems(current=>current.map(item=>item.id===updated.id?updated:item))}/>
       <section className={styles.ledger}>
         <div className={styles.sectionHead}><h2>{t("Your ledger", "订阅账簿")}</h2><span>{visible.length} {t("subscriptions", "个订阅")}</span></div>
         <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended"] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>
