@@ -50,7 +50,26 @@ export async function listSubscriptions(input:SubscriptionListInput={}){await ca
 export async function getSubscription(id:number){await catchUpAutomaticSubscriptionPayments(new Date(),id);return(await getRepository()).getSubscription(id);}
 export async function getSubscriptionDetail(id:number){await catchUpAutomaticSubscriptionPayments(new Date(),id);const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription)return null;const[payments,priceChanges]=await Promise.all([repository.listSubscriptionPayments(id),repository.listSubscriptionPriceChanges(id)]);return{...subscription,payments,priceChanges};}
 export async function createSubscription(input:NewSubscription){const item=await(await getRepository()).createSubscription(input);await catchUpAutomaticSubscriptionPayments(new Date(),item.id);await reconcileSubscriptionReminder(item.id);return await (await getRepository()).getSubscription(item.id)??item;}
-export async function updateSubscription(id:number,input:SubscriptionPatch,effectiveOn=dateInEvaOrbit()){await catchUpAutomaticSubscriptionPayments(new Date(),id);const repository=await getRepository(),current=await repository.getSubscription(id);if(!current)return null;const reminderEnabled=input.reminderEnabled??current.reminderEnabled,reminderTime=input.reminderTime===undefined?current.reminderTime:input.reminderTime;if(reminderEnabled&&!reminderTime)throw new ConflictError("开启订阅提醒时需要选择提醒时间");const item=await repository.updateSubscription(id,input,effectiveOn);if(item)await reconcileSubscriptionReminder(id);return repository.getSubscription(id);}
+export async function updateSubscription(id:number,input:SubscriptionPatch,effectiveOn=dateInEvaOrbit()){
+  const repository=await getRepository(),before=await repository.getSubscription(id);
+  if(!before)return null;
+  const rescheduling=input.nextRenewalOn!==undefined&&input.nextRenewalOn!==before.nextRenewalOn;
+  if(rescheduling){
+    const next=input.nextRenewalOn!;
+    if(next<(input.startedOn??before.startedOn))throw new ConflictError("续费日期不能早于开始日期");
+    if((input.autoRenew??before.autoRenew)&&next<=dateInEvaOrbit())throw new ConflictError("自动记账订阅请选未来的续费日期；如需保留过去的计划日期，请先关闭自动记账");
+  }
+  // A schedule correction is not a payment. Move the date before any catch-up;
+  // unchanged schedules retain the existing automatic-payment behaviour.
+  if(!rescheduling)await catchUpAutomaticSubscriptionPayments(new Date(),id);
+  const current=await repository.getSubscription(id);
+  if(!current)return null;
+  const reminderEnabled=input.reminderEnabled??current.reminderEnabled,reminderTime=input.reminderTime===undefined?current.reminderTime:input.reminderTime;
+  if(reminderEnabled&&!reminderTime)throw new ConflictError("开启订阅提醒时需要选择提醒时间");
+  const item=await repository.updateSubscription(id,input,effectiveOn);
+  if(item)await reconcileSubscriptionReminder(id);
+  return repository.getSubscription(id);
+}
 export async function setSubscriptionStatus(id:number,status:"active"|"paused"|"ended",nextRenewalOn?:string){await catchUpAutomaticSubscriptionPayments(new Date(),id);const repository=await getRepository(),current=await repository.getSubscription(id);if(!current)return null;if(status==="active"&&current.nextRenewalOn<dateInEvaOrbit()&&!nextRenewalOn)throw new ConflictError("恢复已过期订阅时需要选择新的续费日期");const item=await repository.setSubscriptionStatus(id,status,nextRenewalOn);if(item)await reconcileSubscriptionReminder(id);return repository.getSubscription(id);}
 export async function recordSubscriptionPayment(id:number,input:NewSubscriptionPayment){const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription||subscription.status!=="active")throw new ConflictError("订阅不存在或未启用");const nextRenewalOn=nextSubscriptionRenewal(subscription.nextRenewalOn,subscription.billingIntervalValue,subscription.billingIntervalUnit);const payment=await repository.recordSubscriptionPayment(id,input,nextRenewalOn);await reconcileSubscriptionReminder(id);return payment;}
 export async function recordSubscriptionPaymentFromReminder(id:number,actedAt=new Date()){const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription)throw new ConflictError("订阅不存在");if(subscription.autoRenew){await catchUpAutomaticSubscriptionPayments(actedAt,id);const current=await repository.getSubscription(id);if(current?.nextRenewalOn===subscription.nextRenewalOn&&subscription.reminderId)return repository.updateReminder(subscription.reminderId,{isActive:false,status:"completed",nextDueAt:null,lastCompletedAt:actedAt.toISOString()});return current?.reminderId?repository.getReminder(current.reminderId):null;}await recordSubscriptionPayment(id,{scheduledFor:subscription.nextRenewalOn,paidOn:dateInEvaOrbit(actedAt),amountMinor:subscription.currentAmountMinor,currency:subscription.currency,note:"",updateCurrentPrice:false});return subscription.reminderId?repository.getReminder(subscription.reminderId):null;}

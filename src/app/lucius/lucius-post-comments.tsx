@@ -82,7 +82,7 @@ export function LuciusPostComments({ postId, initialComments }: { postId: number
         {comment.author === "user" && <button type="button" disabled={preview} onClick={() => remove(comment)}>Delete</button>}
       </article>)}</div>}
       {preview&&<FormPreviewNotice/>}
-      <form onSubmit={submit}>
+      <form data-section-swipe-pause onSubmit={submit}>
         <textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} aria-label="Write a comment" placeholder="Write a comment" />
         <button type="submit" disabled={preview||busy || !content.trim()}>{busy ? "Posting" : "Post"}</button>
       </form>

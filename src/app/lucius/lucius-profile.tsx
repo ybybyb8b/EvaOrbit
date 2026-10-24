@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { LuciusSectionSwipe } from "./lucius-section-swipe";
 import {WorkspaceLink as Link,useWorkspaceData} from "@/components/workspace-data-context";
 import { luciusMoodPresentation } from "@/lib/lucius-mood";
 import { plainExcerpt } from "@/lib/long-term-memory";
@@ -51,7 +52,7 @@ export function LuciusProfile({tab,state,posts,diaryEntries,cases,comments,now}:
   }, new Map<number, LuciusPostComment[]>());
   const mood = luciusMoodPresentation(state.mood);
 
-  return <div className="lucius-profile-page">
+  return <LuciusSectionSwipe tab={tab}>
     <header className="lucius-profile-header">
       <div className="lucius-profile-navigation">{!local&&<PageBackButton />}</div>
       <div className="lucius-cover" aria-hidden="true">
@@ -117,5 +118,5 @@ export function LuciusProfile({tab,state,posts,diaryEntries,cases,comments,now}:
         </Link>)}</div> : <div className="lucius-profile-empty"><span aria-hidden="true">✦</span><p>The cabinet is quiet.</p><small>0 files currently kept.</small></div>}
       </section>}
     </main>
-  </div>;
+  </LuciusSectionSwipe>;
 }

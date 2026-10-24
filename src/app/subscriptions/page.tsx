@@ -7,9 +7,10 @@ import { SubscriptionsView } from "./subscriptions-view";
 export const metadata: Metadata = { title: "Subscriptions" };
 export const dynamic = "force-dynamic";
 
-export default async function SubscriptionsPage() {
+export default async function SubscriptionsPage({searchParams}:{searchParams:Promise<{view?:string}>}) {
+  const view=(await searchParams).view==="trends"?"trends":"home";
   const items = await listSubscriptions({ limit: 500 });
   const repository = await getRepository();
   const payments = (await Promise.all(items.map(item => repository.listSubscriptionPayments(item.id)))).flat();
-  return <SubscriptionsView initial={items} payments={payments} today={dateInEvaOrbit()} />;
+  return <SubscriptionsView initialView={view} initial={items} payments={payments} today={dateInEvaOrbit()} />;
 }

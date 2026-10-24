@@ -14,17 +14,22 @@ import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
 import { trackSubscriptionScroll } from "@/lib/subscription-stack-scroll";
 import styles from "./preview.module.css";
 import { useIconColors } from "./use-icon-colors";
+import { SubscriptionSections } from "../subscription-sections";
 import { MotionDiagnostics } from "./motion-diagnostics";
+import { RenewalTimeline } from "./renewal-timeline";
+import { useServerDataState } from "@/components/use-data-refresh";
 
 const money = (amount: number, currency: string, english: boolean) => new Intl.NumberFormat(english ? "en-US" : "zh-CN", { style: "currency", currency }).format(amount / 100);
 const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-secondary)", "var(--accent-strong)", "var(--text-primary)"];
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
-export function SubscriptionPreview({ items, payments, today, iconSources, onCreate, refined = false }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean }) {
+export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false, initialView }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean; initialView?: "home" | "trends" }) {
+  const [items, setItems] = useServerDataState(initialItems);
   const {local}=useSubscriptionsData();
   const copyScope = useUiCopyScope<HTMLDivElement>();
   const { english } = useLocale();
-  const [view, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
+  const [rememberedView, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
+  const view = initialView ?? rememberedView;
   const [status, setStatus] = useRememberedState<"all" | SubscriptionStatus>("SubscriptionPreview:status", "all");
   const [focused, setFocused] = useState(0);
   const [currency, setCurrency] = useState("");
@@ -44,8 +49,8 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
   const active = items.filter(item => item.status === "active");
   const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || a.nextRenewalOn.localeCompare(b.nextRenewalOn) || a.id - b.id), [items]);
   useEffect(() => {
-    const node = rail.current;
-    if (!refined || view !== "home" || !node) return;
+    const node = rail.current, faceContainer = faces.current;
+    if (!refined || view !== "home" || !node || !faceContainer) return;
     let width = 0;
     let maxLeft = 0;
     let cards: { slide: HTMLElement; center: number; width: number }[] = [];
@@ -81,11 +86,13 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
     const scroll = trackSubscriptionScroll(node, paint);
     scrollController.current = scroll;
     function measure() {
+      // A queued resize may run after switching tabs or removing the last item.
+      if (!node!.isConnected || !faceContainer!.isConnected) return;
       width = node!.clientWidth;
       maxLeft = Math.max(0, node!.scrollWidth - width);
       cards = Array.from(node!.children).map((child, index) => {
         const target = child as HTMLElement;
-        return { slide: faces.current!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
+        return { slide: faceContainer!.children[index] as HTMLElement, center: target.offsetLeft + target.offsetWidth / 2, width: target.offsetWidth };
       });
       scroll.invalidate();
     }
@@ -186,13 +193,10 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       {onCreate && <PageLogAction label={t("Add subscription", "新增订阅")} onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</PageLogAction>}
     </header>
     {refined && view === "home" && <MotionDiagnostics rail={rail} />}
-    <div className={styles.switcher} role="group" aria-label={t("Subscriptions view", "订阅视图")}>
-      <button aria-pressed={view === "home"} onClick={() => { setFocused(0); setView("home"); }}>{t("Overview", "订阅首页")}</button>
-      <button aria-pressed={view === "trends"} onClick={() => setView("trends")}>{t("Trends", "趋势统计")}</button>
-    </div>
+    <SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>
     {(!refined || view !== "home") && summary}
     {view === "home" ? <>
-      {featured.length > 0 && <section className={styles.featured} aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
+      {featured.length > 0 && <section className={styles.featured} data-subscription-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
         <div className={styles.sectionHead}><h2>{t("On the horizon", "即将续费")}</h2><span>{t("Swipe to explore", "左右滑动浏览")}</span></div>
         {refined ? <div className={styles.stackStage}>
           <div className={styles.stackFaces} ref={faces} aria-hidden="true">
@@ -209,6 +213,7 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
         </div>}
       </section>}
       {refined && summary}
+      <RenewalTimeline items={items} payments={payments} today={today} mark={mark} onDateChanged={updated => setItems(current => current.map(item => item.id === updated.id ? updated : item))} />
       <section className={styles.ledger}>
         <div className={styles.sectionHead}><h2>{t("Your ledger", "订阅账簿")}</h2><span>{visible.length} {t("subscriptions", "个订阅")}</span></div>
         <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended"] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>

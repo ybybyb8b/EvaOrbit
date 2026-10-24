@@ -42,6 +42,8 @@
 
 ## Core
 
+- **分区滑动**：[use-section-swipe.ts](../src/components/use-section-swipe.ts) 统一触摸方向锁定、系统边缘保留、横向滚动控件避让和滑动后的误点抑制；页面声明分区顺序、切换回调与专属排除选择器。Subscriptions、Tracker、Notifications、猫咪详情、Lucius 主页、Tasks 列表／月历和 Project 视图按需接入；编辑表单或模态弹层打开时暂停，不注册全局页面手势，也不把筛选条件当作视图。
+
 - **下拉刷新**：[pull-to-refresh-core.tsx](../src/components/pull-to-refresh-core.tsx) 共享手势、阻尼、阈值和提示；Web 包装失效缓存并刷新路由，本地 [适配器](../src/local-trackers/pull-to-refresh.tsx) 调用 [refresh.ts](../src/local-trackers/refresh.ts) 中当前挂载模块注册的既有加载器，不重载文档、不模拟网络恢复或前台事件。本地 Host 关闭原生刷新控件和滚动回弹，避免露出网页外背景；普通在线 Host 保持原行为。
 - **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
@@ -183,9 +185,11 @@
 
 ## Subscriptions
 
-- **本地只读阶段**：[SubscriptionsWorkspace](../src/local-trackers/subscriptions-workspace.tsx) 复用原版总览/轮播、列表、分币种趋势、详情和全部现有表单。`SubscriptionsDataProvider` 注入快照 GET、导航与认证图片字节；新 `/api/native/subscriptions-readonly` 仅经 Repository 白名单读取，跳过普通订阅服务的自动续费补账和提醒写入。账户隔离 SQLite/IndexedDB 不触碰原 outbox；容量、测试及发布/回退见 [Subscriptions 只读阶段](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
+- **本地订阅**：[SubscriptionsWorkspace](../src/local-trackers/subscriptions-workspace.tsx) 共用 Overview／Trends／Library、轮播、时间线、日期调整、详情及表单，复用分区手势。`SubscriptionsDataProvider` 注入账户快照 GET、本地导航与订阅／软件图标字节；`/api/native/subscriptions-readonly` 仅通过 Repository 白名单读取，不补记自动付款。缓存支持离线查看；写操作沿用账户绑定在线通道，不进入 outbox。容量与历史阶段见 [本地订阅](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
+- **续费时间线**：总览保留品牌卡片，补充未来 30 天及未处理计划、已记录付款；日期调整复用订阅 PATCH，不补记被调整的旧计划，提醒跟随新日期，已有付款不改写。
+- **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
@@ -214,6 +218,7 @@
 
 ## Native
 
+- **手机页面热更新**：[同网 HTTPS 开发配置](IOS_PHONE_PREVIEW.md) 复用已有 Debug 固定开发源；workflow 的 `tracker_development_url` 非空时仅允许本地 Debug 包，空值保持 Release/包内资源。Vite 显式配置证书后开放局域网 HTTPS/WSS，日用默认仍为 loopback。原 Bridge 白名单、Bundle ID、数据和签名安装链保留。
 - **本地主用版收尾候选**：[LocalNativeIntegrations](../src/local-trackers/native-integrations.tsx) 只注入原生调用与 [原生 API 适配](../src/lib/native-api.ts)，复用 EventKit/通知/健康协调规则；`native.invoke`/`native.api` 验证主账号，测试账号禁止系统写入。共享 [native-routes.json](../src/lib/native-routes.json) 控制配套接口，不使用全局 fetch 替换，也不增加业务离线写队列。设置直接复用原版控件；原生结果刷新本地页面，账户切换停止旧校准。服务端 session/主账号开关与 IPA 分别发布，实际结果见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 - **主用本地版候选**：Tracker 高级配置共享 `TrackerDetailContent`，在线业务账户通道由独立正式账户开关控制；会话过期弹层保留草稿。`navigation.openNativeSettings` 复用三项在线系统设置，账户锁定、Cookie 隔离、测试账户禁止；本地自动系统同步与真机验收尚未完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。

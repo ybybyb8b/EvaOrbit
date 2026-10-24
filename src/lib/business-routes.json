@@ -712,6 +712,18 @@
     ]
   },
   {
+    "pattern": "^/api/subscriptions/library$",
+    "methods": ["GET", "POST"]
+  },
+  {
+    "pattern": "^/api/subscriptions/library/[1-9][0-9]*$",
+    "methods": ["PATCH", "DELETE"]
+  },
+  {
+    "pattern": "^/api/subscriptions/library/[1-9][0-9]*/icon$",
+    "methods": ["GET", "POST", "DELETE"]
+  },
+  {
     "pattern": "^/api/tasks/[1-9][0-9]*$",
     "methods": [
       "GET",

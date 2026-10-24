@@ -12,7 +12,7 @@ const fixture=spawnSync(process.execPath,["--experimental-loader",pathToFileURL(
   import {seedSubscriptions} from './scripts/subscriptions-readonly-fixture.mjs';
   import {getSubscriptionsReadonlySnapshot} from './src/lib/services/subscriptions-readonly.ts';
   await seedSubscriptions();console.log(JSON.stringify(await getSubscriptionsReadonlySnapshot('10000000-0000-4000-8000-000000000001')));
-`],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(profile,"fixture.db"),EVAORBIT_SUBSCRIPTION_ICON_DIR:path.join(profile,"icons"),VERCEL:""}});
+`],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(profile,"fixture.db"),EVAORBIT_SUBSCRIPTION_ICON_DIR:path.join(profile,"icons"),EVAORBIT_SOFTWARE_ICON_DIR:path.join(profile,"software-icons"),VERCEL:""}});
 assert.equal(fixture.status,0,fixture.stderr);
 const snapshot=JSON.parse(fixture.stdout.trim()),account=snapshot.accountId,errors=[],writes=[],direct=[],old={schemaVersion:1,accountId:account,revision:1,records:[],outbox:[{mutationId:"subscriptions-frozen-canary",wire:{payload:{note:"never upload"}}}]};
 const freePort=()=>new Promise((resolve,reject)=>{const p=probeServer();p.once("error",reject);p.listen(0,"127.0.0.1",()=>{const n=p.address().port;p.close(e=>e?reject(e):resolve(n));});});
@@ -47,9 +47,9 @@ try{
   await page.waitForFunction(()=>[...document.querySelectorAll('img[src^="data:image/png;base64,"]')].some(image=>image.complete&&image.naturalWidth>0));
   await page.screenshot({path:"tmp/subscriptions-shared-mobile.png",fullPage:true});
   await page.locator(".home-quick-log-trigger").click();await page.locator("#subscription-form").waitFor();await page.getByLabel("Name",{exact:true}).fill("Temporary subscription");assert(await page.locator('#subscription-form input[type="file"]').isDisabled());await forceForm(page,"subscription-form");await closeSheet(page);
-  await page.getByRole("button",{name:"Trends",exact:true}).click();await page.getByRole("heading",{name:"Where it goes",exact:true}).waitFor();await page.getByRole("group",{name:"Chart currency",exact:true}).getByRole("button",{name:"USD",exact:true}).click();await page.getByRole("link",{name:"ChatGPT",exact:true}).waitFor();
+  await page.getByRole("link",{name:"Trends",exact:true}).click();await page.getByRole("heading",{name:"Where it goes",exact:true}).waitFor();await page.getByRole("group",{name:"Chart currency",exact:true}).getByRole("button",{name:"USD",exact:true}).click();await page.getByRole("link",{name:"ChatGPT",exact:true}).waitFor();
   await page.screenshot({path:"tmp/subscriptions-trends-mobile.png",fullPage:true});
-  await page.getByRole("button",{name:"Overview",exact:true}).click();
+  await page.getByRole("link",{name:"Overview",exact:true}).click();
   await page.getByRole("button",{name:"Paused",exact:true}).click();await page.getByRole("link",{name:/Paused service/}).last().click();await page.getByRole("heading",{name:"Paused service",exact:true}).waitFor();
   assert(await page.locator(".home-quick-log-trigger").isDisabled());await page.locator(".home-quick-log-trigger").evaluate(button=>button.dispatchEvent(new MouseEvent("click",{bubbles:true})));assert.equal(await page.locator(".form-sheet-layer").count(),0);
   await page.getByRole("button",{name:"Resume",exact:true}).click();await page.locator("#subscription-resume-form").waitFor();await forceForm(page,"subscription-resume-form");await closeSheet(page);

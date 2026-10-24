@@ -8,6 +8,7 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { entryMatchesPeriod, entryMatchesField, type TimelinePeriod, matchesTrackerSearch } from "@/lib/tracker-timeline";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
+import { useSectionSwipe } from "@/components/use-section-swipe";
 
 import type {ComponentType,ReactNode} from "react";
 import type {BusinessRequest} from "@/lib/business-request";
@@ -15,7 +16,7 @@ import { TrackerSettingsView, fieldTypeLabel, periodLabel } from "../tracker-set
 import { TrackerTimelineToolbar } from "../tracker-timeline-toolbar";
 import { TrackerActivityInsights } from "../tracker-activity-insights";
 import { TrackerTimelineRecords } from "../tracker-timeline-records";
-import { FormEvent, useCallback, useEffect, useEffectEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
@@ -32,6 +33,7 @@ import type { ApiError, Tracker, TrackerEntry, TrackerField, TrackerFieldType, T
 
 export type TrackerDetailData = { groupNames?: string[]; tracker: Tracker; fields: TrackerField[]; entries: TrackerEntry[]; goals: TrackerGoal[]; reminders: TrackerReminder[]; stats: TrackerStats; insights: TrackerInsights };
 type Tab = "insights" | "timeline" | "settings";
+const trackerTabs = ["timeline", "insights", "settings"] as const;
 const fieldTypes: Array<[TrackerFieldType,string]> = [["time_range","Time range"],["number","Number"],["single_select","Single select"],["multi_select","Multi select"],["text","Text"],["boolean","Switch"],["rating","Rating"]];
 const emptyField = { name:"", type:"text" as TrackerFieldType, options:"", required:false, showAfterQuickCapture:false, includeInStats:false, unit:"", precision:"0" };
 const emptyGoal = { operator:"<=" as TrackerGoalOperator, targetValue:"", periodType:"monthly" as TrackerPeriodType, customPeriod:"" };
@@ -43,6 +45,7 @@ const webRequest:BusinessRequest=(path,init)=>fetch(path,init);
 function PlainPicture({tracker,size}:{tracker:Tracker;size?:number}){return <TrackerPicture icon={tracker.icon} size={size}/>;}
 export function TrackerDetailContent({initial,trackerId,openDetailedRecord=false,settingsOnly=false,navigation:router,transport=webRequest,LinkComponent:Link,Picture:TrackerIcon=PlainPicture,reconcileNotifications=true}:DetailProps) {
   const {english}=useLocale();
+  const swipeRootRef=useRef<HTMLDivElement>(null),swipeTabsRef=useRef<HTMLElement>(null);
   const [detail,setDetail]=useServerDataState<TrackerDetailData|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useRememberedState("TrackerDetailView:query", ""),[tab,setTab]=useRememberedState<Tab>("TrackerDetailView:tab", "timeline");
   const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
@@ -55,6 +58,7 @@ export function TrackerDetailContent({initial,trackerId,openDetailedRecord=false
   const [chartFilter,setChartFilter]=useState<{kind:"monthly"|"weekdays"|"dayParts";key:string;label:string}|null>(null);
   const [editingEntry,setEditingEntry]=useState<TrackerEntry|undefined>();
   const [pendingDeletion,setPendingDeletion]=useState<TrackerEntry|null>(null);
+  useSectionSwipe({active:tab,sections:trackerTabs,rootRef:swipeRootRef,feedbackRef:swipeTabsRef,onChange:setTab,enabled:!settingsOnly&&Boolean(detail),ignoreSelector:".tracker-bars, .tracker-heatmap-calendar, .tracker-entry-actions, .tracker-sort-grip"});
   const commitDeletion=useEffectEvent(async()=>{
     if(!pendingDeletion)return;
     await request(`/api/trackers/${trackerId}/entries?entryId=${pendingDeletion.id}`,{method:"DELETE"},english?"Record deleted.":"记录已删除。");
@@ -115,10 +119,10 @@ export function TrackerDetailContent({initial,trackerId,openDetailedRecord=false
   const filtersActive=Boolean(query.trim()||periodFilter!=="all"||fieldFilter||chartFilter);
   function openChartRecords(kind:"monthly"|"weekdays"|"dayParts",key:string,label:string){setQuery("");setPeriodFilter("all");setFieldFilter("");setFieldValueFilter("");setChartFilter({kind,key,label});setTab("timeline");}
   const activeTab=settingsOnly?"settings":tab;
-  return <div className={settingsOnly?"tracker-settings-embedded":"page tracker-detail-page"}>
+  return <div ref={swipeRootRef} className={settingsOnly?"tracker-settings-embedded":"page tracker-detail-page"}>
     {!settingsOnly&&<>
     <PageHeader eyebrow="" description={tracker.groupName || undefined} title={<span className="tracker-title"><TrackerIcon tracker={tracker} size={44}/><span>{tracker.name}</span></span>} action={tracker.archivedAt?<span className="tracker-archived-label">{english?"Archived":"已归档"}</span>:<PageLogAction label={tracker.quickCaptureEnabled?(english?"Record now":"立即记录"):(english?"Add record":"新增记录")} disabled={working} onClick={capture}><Icon name="plus"/>{tracker.quickCaptureEnabled?(english?"Record now":"立即记录"):(english?"Add record":"新增记录")}</PageLogAction>}/>
-    <nav className="tracker-tabs" role="tablist" aria-label={english?"Tracker views":"Tracker 视图"}>{(["timeline","insights","settings"] as Tab[]).map((value,index,values)=><button type="button" role="tab" id={`tracker-tab-${value}`} aria-controls={`tracker-panel-${value}`} aria-selected={tab===value} tabIndex={tab===value?0:-1} className={tab===value?"active":""} onClick={()=>setTab(value)} onKeyDown={event=>{const next=event.key==="ArrowRight"?values[(index+1)%values.length]:event.key==="ArrowLeft"?values[(index+values.length-1)%values.length]:event.key==="Home"?values[0]:event.key==="End"?values.at(-1):undefined;if(next){event.preventDefault();setTab(next);document.getElementById(`tracker-tab-${next}`)?.focus();}}} key={value}>{english?{timeline:"Timeline",insights:"Insights",settings:"Settings"}[value]:{timeline:"时间线",insights:"洞察",settings:"设置"}[value]}</button>)}</nav>
+    <nav ref={swipeTabsRef} className="tracker-tabs" role="tablist" aria-label={english?"Tracker views":"Tracker 视图"}>{trackerTabs.map((value,index,values)=><button type="button" role="tab" id={`tracker-tab-${value}`} aria-controls={`tracker-panel-${value}`} aria-selected={tab===value} tabIndex={tab===value?0:-1} className={tab===value?"active":""} onClick={()=>setTab(value)} onKeyDown={event=>{const next=event.key==="ArrowRight"?values[(index+1)%values.length]:event.key==="ArrowLeft"?values[(index+values.length-1)%values.length]:event.key==="Home"?values[0]:event.key==="End"?values.at(-1):undefined;if(next){event.preventDefault();setTab(next);document.getElementById(`tracker-tab-${next}`)?.focus();}}} key={value}>{english?{timeline:"Timeline",insights:"Insights",settings:"Settings"}[value]:{timeline:"时间线",insights:"洞察",settings:"设置"}[value]}</button>)}</nav>
     </>}
     <div role="tabpanel" id={`tracker-panel-${activeTab}`} aria-label={settingsOnly?(english?"Tracker settings":"Tracker 设置"):undefined} aria-labelledby={settingsOnly?undefined:`tracker-tab-${tab}`} tabIndex={0}>
     {error&&<ErrorNotice>{error}</ErrorNotice>}

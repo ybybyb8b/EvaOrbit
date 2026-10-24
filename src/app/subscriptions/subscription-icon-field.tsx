@@ -22,8 +22,8 @@ export async function saveIconSelection(id: number, file: File | null, remove = 
   }
 }
 
-export function SubscriptionIconField({ name, source, file, remove = false, disabled = false, onChange }: {
-  name: string; source?: string | null; file: File | null; remove?: boolean; disabled?: boolean;
+export function SubscriptionIconField({ name, source, file, remove = false, disabled = false, onChange, label }: {
+  label?: string; name: string; source?: string | null; file: File | null; remove?: boolean; disabled?: boolean;
   onChange: (file: File | null, remove: boolean) => void;
 }) {
   const { english } = useLocale();const previewOnly=useFormPreview();
@@ -49,7 +49,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
     } catch { setError(english ? "Choose a valid JPG, PNG or WebP image." : "请选择有效的 JPG、PNG 或 WebP 图片。"); }
   }
   return <div className="field wide">
-    <span>{english ? "Subscription icon" : "订阅图标"}</span>
+    <span>{label ?? (english ? "Subscription icon" : "订阅图标")}</span>
     <div className={styles.content}>
       <span className={styles.preview} data-transparent={image ? transparent[0] : Boolean(brand)} aria-hidden="true">
         {/* Small local image is also sampled by the existing icon-color hook. */}
@@ -60,7 +60,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
         <div className={styles.actions}>
           <label className={`button secondary ${styles.upload}`}>
             {english ? (image ? "Replace icon" : "Upload icon") : (image ? "更换图标" : "上传图标")}
-            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={english ? "Choose subscription icon" : "选择订阅图标"} disabled={disabled||previewOnly} onChange={event => void choose(event)} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={label ?? (english ? "Choose subscription icon" : "选择订阅图标")} disabled={disabled||previewOnly} onChange={event => void choose(event)} />
           </label>
           {(file || (source && !remove)) && <button className="text-button" type="button" disabled={disabled||previewOnly} onClick={() => { onChange(null, Boolean(source)); setError(""); }}>{english ? "Use default" : "恢复默认"}</button>}
         </div>

@@ -3,6 +3,7 @@ import {useWorkspaceData} from "@/components/workspace-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
 import { ErrorNotice } from "@/components/error-notice";
+import { useSectionSwipe } from "@/components/use-section-swipe";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log-core";
@@ -24,6 +25,7 @@ import { groupTasks, taskCalendarDates, taskDateOffset, type TaskGroup } from "@
 import type { ApiError, Task, TaskPriority } from "@/lib/types";
 
 type Status = "all" | "open" | "done";
+const sections = ["list", "month"] as const;
 type ReminderMode="none"|"at_due"|"custom";
 type TaskDraft = { title:string;notes:string;dueDate:string;dueTime:string;reminderMode:ReminderMode;reminderDate:string;reminderTime:string;repeatWhileOverdue:boolean;priority:TaskPriority;tags:string };
 const emptyDraft:TaskDraft={title:"",notes:"",dueDate:"",dueTime:"",reminderMode:"none",reminderDate:"",reminderTime:"",repeatWhileOverdue:false,priority:"medium",tags:""};
@@ -46,6 +48,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   const { english } = useLocale();
   const taskId = params.get("taskId");
   const openedTask = useRef<string | null>(null);
+  const swipeRoot=useRef<HTMLDivElement>(null),swipeNav=useRef<HTMLDivElement>(null);
   const initialStatus = params.get("status");
   const [status, setStatus] = useRememberedState<Status>("TasksView:status", initialStatus === "open" || initialStatus === "done" ? initialStatus : "all");
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -177,6 +180,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   const tags = [...new Set(tasks.flatMap(task => task.tags))].sort((a, b) => a.localeCompare(b));
   const activeTag = selectedTag && tags.includes(selectedTag) ? selectedTag : null;
   const activeDate = dateScope === "today" ? today : dateScope === "all" || dateScope === "undated" ? null : dateScope;
+  useSectionSwipe({active:view,sections,rootRef:swipeRoot,feedbackRef:swipeNav,onChange:mode=>{setView(mode);setPeriod(activeDate??today);},enabled:!showForm,ignoreSelector:".task-calendar-controls, .task-filter-bar, .task-status-tabs, .task-week-strip",interactiveSurfaceSelector:".task-month-day"});
   const taggedTasks = tasks.filter(task => !activeTag || task.tags.includes(activeTag));
   const scopeTasks = taggedTasks.filter(task => dateScope === "all" || (dateScope === "undated" ? !task.dueDate : task.dueDate === activeDate || (activeDate === today && !task.completed && task.dueDate && task.dueDate < today)));
   const visibleTasks = scopeTasks.filter(task => status === "all" || task.completed === (status === "done"));
@@ -214,7 +218,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     </article>;
   }
 
-  return <div className="page tasks-page">
+  return <div ref={swipeRoot} className="page tasks-page">
     <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
     {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} submitDisabled={preview} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className="editor-card" onSubmit={submit}>{preview&&<FormPreviewNotice/>}
       <label className="field wide quick-title"><span>{english ? "Task" : "任务内容"}</span><input required maxLength={160} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
@@ -236,7 +240,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     <div className="task-planner">
       <header className="task-calendar-controls">
         <div className="task-period-navigation"><button type="button" className="icon-button task-period-previous" onClick={() => movePeriod(-1)} aria-label={english ? (view === "list" ? "Previous week" : "Previous month") : (view === "list" ? "上一周" : "上个月")}><Icon name="arrow" /></button><h2>{clock && new Date(`${anchor}T12:00:00`).toLocaleDateString(locale, { month: "long", year: "numeric" })}</h2><button type="button" className="icon-button" onClick={() => movePeriod(1)} aria-label={english ? (view === "list" ? "Next week" : "Next month") : (view === "list" ? "下一周" : "下个月")}><Icon name="arrow" /></button></div>
-        <div className="task-calendar-actions"><button type="button" className="task-today-button" onClick={() => { setPeriod("today"); setDateScope("today"); }}>{english ? "Today" : "今天"}</button><div className="task-view-switch" aria-label={english ? "Task view" : "任务视图"}>{(["list", "month"] as const).map(mode => <button type="button" key={mode} aria-pressed={view === mode} onClick={() => { setView(mode); setPeriod(activeDate ?? today); }}><Icon name={mode === "list" ? "tasks" : "calendar"} variant="stroke" />{mode === "list" ? (english ? "List" : "列表") : (english ? "Month" : "月历")}</button>)}</div></div>
+        <div className="task-calendar-actions"><button type="button" className="task-today-button" onClick={() => { setPeriod("today"); setDateScope("today"); }}>{english ? "Today" : "今天"}</button><div ref={swipeNav} className="task-view-switch" aria-label={english ? "Task view" : "任务视图"}>{sections.map(mode => <button type="button" key={mode} aria-pressed={view === mode} onClick={() => { setView(mode); setPeriod(activeDate ?? today); }}><Icon name={mode === "list" ? "tasks" : "calendar"} variant="stroke" />{mode === "list" ? (english ? "List" : "列表") : (english ? "Month" : "月历")}</button>)}</div></div>
       </header>
       {clock && view === "list" && <nav className="task-week-strip" aria-label={english ? "Choose a due date" : "选择截止日期"}>{dates.map(date => {
         const value = new Date(`${date}T12:00:00`), count = calendarTasks.filter(task => task.dueDate === date).length;

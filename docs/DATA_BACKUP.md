@@ -29,6 +29,7 @@ The document shape is:
 `resources` contains every table in the explicit allowlist in `src/lib/data-backup.ts`. Rows retain their IDs, foreign-key values, timestamps, date-only anchors, and explicit-time flags. Supabase `user_id` values are removed because a local SQLite database has a fixed local owner.
 
 Version 2 adds `memory_entities`, `memory_facts`, and `memory_sources`. Version 6 adds the reviewed `memory_fact_candidates` queue used by Memory Graph v0.2. Older accepted backups normalize resources that did not exist in that version to empty arrays, so restore never manufactures graph data.
+Version 10 adds `software_library`, including platform lists, licence scope, acquisition method and optional acquisition dates. It is independent of subscription/payment tables. Versions 1–9 normalize its missing resource to an empty array; new-version backups require the resource. No software examples are created during migration or restore.
 
 AI settings/providers/models, API-key ciphertext, push subscriptions, native device credentials, HealthKit aggregates/raw samples, authentication/session/cookie data, and import bookkeeping are excluded. Conversation text is retained, but provider/model foreign keys are set to `null` because the secret-bearing provider tables are excluded. Storage binaries are not embedded; media records and their metadata/path fields are included.
 

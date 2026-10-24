@@ -3,6 +3,7 @@ import {createTrackerWithProperties} from "@/app/trackers/create-tracker";
 import {TrackerOnlineSettings} from "./tracker-online-settings";
 import {useLocalInitialPath} from "./routes";
 import {useBusinessRequest} from "@/components/business-request-context";
+import {useSectionSwipe} from "@/components/use-section-swipe";
 import {responseError} from "@/lib/response-error";
 import {PageLogAction} from "@/components/bottom-log-core";
 import {canEditTrackerRecord} from "@/lib/tracker-replica";
@@ -31,6 +32,8 @@ import { trackerDistributionEntries, trackerInsightEntries, type TrackerInsightP
 import { parseNewTracker, parseNewTrackerField } from "@/lib/validation";
 import type { Tracker } from "@/lib/types";
 import { isPreviewAccount, type LocalAccount, type TrackerPlatform } from "./platform";
+
+const trackerTabs = ["timeline", "insights", "settings"] as const;
 import {asField,belongs} from "./tracker-records";
 import {trackerSession,saveLocalTrackerEntry,synchronizeTrackerSession} from "./tracker-session";
 
@@ -49,6 +52,7 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   const [editing, setEditing] = useState<LocalTrackerRecord | undefined>(), [deleting, setDeleting] = useState<LocalTrackerRecord | null>(null);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"timeline" | "insights" | "settings">("timeline");
+  const swipeRootRef=useRef<HTMLElement>(null),swipeTabsRef=useRef<HTMLElement>(null);
   const [periodFilter, setPeriodFilter] = useState<TimelinePeriod>("all"), [fieldFilter, setFieldFilter] = useState(""), [fieldValueFilter, setFieldValueFilter] = useState("");
   const [insightPeriod, setInsightPeriod] = useState<TrackerInsightPeriod>("month");
   const [chartFilter, setChartFilter] = useState<{kind:"monthly"|"weekdays"|"dayParts";key:string;label:string}|null>(null);
@@ -66,6 +70,7 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
   const selected = state.records.find(row => row.id === selectedId && row.resourceType === "tracker");
+  useSectionSwipe({active:tab,sections:trackerTabs,rootRef:swipeRootRef,feedbackRef:swipeTabsRef,onChange:setTab,enabled:Boolean(selected),ignoreSelector:".tracker-bars, .tracker-heatmap-calendar, .tracker-entry-actions, .tracker-sort-grip"});
   const trackers = state.records.filter(row => row.resourceType === "tracker" && Boolean(row.payload.archivedAt)===showArchived);
   const hidden = new Set(state.outbox.filter(item => item.operation === "delete").map(item => item.localId));
   const entries = state.records.filter(row => row.resourceType === "tracker_entry" && selected && belongs(row, selected) && !hidden.has(row.id)).sort((a, b) => String(b.payload.occurredAt).localeCompare(String(a.payload.occurredAt)));
@@ -86,12 +91,12 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
     });
   }
   const action = <PageLogAction label={selected?(english?"Record Tracker":"新增记录"):(english?"New Tracker":"新增观测")} className="button primary" disabled={!ready || working || Boolean(selected&&!canEditTrackerRecord(selected)) || Boolean(selected?.status) || Boolean(selected?.payload.archivedAt)} onClick={() => selected ? void recordNow(selected) : setCreate(true)}><Icon name="plus" />{selected ? selected.payload.quickCaptureEnabled ? "立即记录" : "新增记录" : "新增观测"}</PageLogAction>;
-  return <main className={selected ? "page tracker-detail-page local-trackers" : "page tracker-page local-trackers"}>
+  return <main ref={swipeRootRef} className={selected ? "page tracker-detail-page local-trackers" : "page tracker-page local-trackers"}>
     <LocalBackAction onBack={selectedId?()=>{setSelectedId(null);setQuery("");setChartFilter(null);}:undefined}/>
     <PageHeading eyebrow={selected ? "" : "生活"} title={selected ? <span className="tracker-title"><LocalTrackerPicture row={selected} state={state} size={44} /><span className="user-content">{String(selected.payload.name)}</span></span> : "Trackers"} description={selected ? String(selected.payload.groupName ?? "") : undefined} action={<span className="page-actions">{!selected&&<button type="button" className="text-button" onClick={()=>setShowArchived(value=>!value)}>{english?showArchived?"Active":"Archived":showArchived?"当前":"已归档"}</button>}<TrackerSyncButton account={account} platform={platform} onEditConflict={row=>{const parent=trackers.find(tracker=>belongs(row,tracker));if(!parent){setError("所属 Tracker 已删除，可先导出本地内容");return;}setSelectedId(parent.id);setEditing(row);setCapture(true);}}/>{readOnly?null:selected?.payload.archivedAt?<span className="tracker-archived-label">已归档</span>:action}</span>} />
     {error && <ErrorNotice>{error}</ErrorNotice>}
     {!ready ? <p role="status">正在读取本机记录…</p> : readOnly && state.revision === 0 && !state.readOnly && !state.records.length ? <p role="status">尚未缓存真实 Tracker 数据，请联网刷新只读数据。</p> : selected ? <>
-      <nav className="tracker-tabs" role="tablist" aria-label="Tracker 视图">{(["timeline","insights","settings"] as const).map((value,index,values) => <button type="button" role="tab" id={"tracker-tab-"+value} aria-controls={"tracker-panel-"+value} aria-selected={tab===value} tabIndex={tab===value?0:-1} className={tab===value?"active":""} onClick={()=>setTab(value)} onKeyDown={event=>{const next=event.key==="ArrowRight"?values[(index+1)%values.length]:event.key==="ArrowLeft"?values[(index+values.length-1)%values.length]:event.key==="Home"?values[0]:event.key==="End"?values.at(-1):undefined;if(next){event.preventDefault();setTab(next);document.getElementById("tracker-tab-"+next)?.focus();}}} key={value}>{(english?{timeline:"Timeline",insights:"Insights",settings:"Settings"}:{timeline:"时间线",insights:"洞察",settings:"设置"})[value]}</button>)}</nav>
+      <nav ref={swipeTabsRef} className="tracker-tabs" role="tablist" aria-label="Tracker 视图">{trackerTabs.map((value,index,values) => <button type="button" role="tab" id={"tracker-tab-"+value} aria-controls={"tracker-panel-"+value} aria-selected={tab===value} tabIndex={tab===value?0:-1} className={tab===value?"active":""} onClick={()=>setTab(value)} onKeyDown={event=>{const next=event.key==="ArrowRight"?values[(index+1)%values.length]:event.key==="ArrowLeft"?values[(index+values.length-1)%values.length]:event.key==="Home"?values[0]:event.key==="End"?values.at(-1):undefined;if(next){event.preventDefault();setTab(next);document.getElementById("tracker-tab-"+next)?.focus();}}} key={value}>{(english?{timeline:"Timeline",insights:"Insights",settings:"Settings"}:{timeline:"时间线",insights:"洞察",settings:"设置"})[value]}</button>)}</nav>
       <div role="tabpanel" id={"tracker-panel-"+tab} aria-labelledby={"tracker-tab-"+tab} tabIndex={0}>
         {selected.payload.archivedAt ? <p className="tracker-archive-note">历史数据已保留。请在网页版恢复 Tracker 后继续记录。</p> : null}
         {tab==="timeline" && <section className="tracker-detail-section tracker-timeline-section"><div className="section-heading tracker-timeline-heading"><div><h2>{english?"All records":"全部记录"}</h2><p>{english?(filtersActive?`Showing ${filtered.length} / ${entries.length} records`:`${entries.length} records`):(filtersActive ? "显示 "+filtered.length+" / "+entries.length+" 条记录" : entries.length+" 条记录")}</p></div></div>
