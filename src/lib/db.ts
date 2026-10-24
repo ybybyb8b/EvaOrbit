@@ -1,5 +1,6 @@
 import { mergePlaceAddress } from "./place-menu";
 import { DatabaseSync } from "node:sqlite";
+import { libraryEntryFromRow, type LibraryInput } from "./software-library";
 import { parseTrainingPlanWrite, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
 import type { TrainingPlan } from "./types";
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration";
@@ -1655,6 +1656,31 @@ if(!hasV82)database.exec(`BEGIN;
     BEGIN SELECT RAISE(ABORT,'A referenced dish cannot move to another place'); END;
   INSERT INTO migrations(version) VALUES(82); COMMIT;
 `);
+
+const hasV83=database.prepare("SELECT 1 FROM migrations WHERE version=83").get();
+if(!hasV83)database.exec(`BEGIN;
+  CREATE TABLE software_library (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 80),
+    category TEXT NOT NULL DEFAULT '' CHECK(length(category)<=24),
+    platforms TEXT NOT NULL CHECK(json_valid(platforms) AND json_type(platforms)='array' AND json_array_length(platforms) BETWEEN 1 AND 5),
+    license TEXT NOT NULL CHECK(license IN('perpetual','version')),
+    version TEXT NOT NULL DEFAULT '' CHECK((license='perpetual' AND version='') OR (license='version' AND length(trim(version)) BETWEEN 1 AND 40)),
+    acquisition TEXT NOT NULL CHECK(acquisition IN('paid','giveaway','gift')),
+    acquired_on TEXT,
+    website TEXT NOT NULL DEFAULT '' CHECK(length(website)<=2000),
+    notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=2000),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX idx_software_library_name ON software_library(name,id);
+  INSERT INTO migrations(version) VALUES(83); COMMIT;
+`);
+export function listSoftwareLibrary(){return database.prepare("SELECT * FROM software_library ORDER BY name COLLATE NOCASE,id").all().map(libraryEntryFromRow);}
+export function getSoftwareLibraryEntry(id:number){const row=database.prepare("SELECT * FROM software_library WHERE id=?").get(id);return row?libraryEntryFromRow(row):null;}
+export function createSoftwareLibraryEntry(input:LibraryInput){const result=database.prepare("INSERT INTO software_library(name,category,platforms,license,version,acquisition,acquired_on,website,notes) VALUES(?,?,?,?,?,?,?,?,?)").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes);return getSoftwareLibraryEntry(Number(result.lastInsertRowid))!;}
+export function updateSoftwareLibraryEntry(id:number,input:LibraryInput){const result=database.prepare("UPDATE software_library SET name=?,category=?,platforms=?,license=?,version=?,acquisition=?,acquired_on=?,website=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,id);return result.changes?getSoftwareLibraryEntry(id):null;}
+export function deleteSoftwareLibraryEntry(id:number){return database.prepare("DELETE FROM software_library WHERE id=?").run(id).changes>0;}
 
 export function getTrainingPlan(): TrainingPlan | null {
   const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();

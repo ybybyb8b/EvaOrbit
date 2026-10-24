@@ -1,4 +1,5 @@
 import "server-only";
+import { libraryEntryFromRow, libraryEntryToRow } from "../software-library";
 import { trackerFromRow, trackerFieldFromRow, trackerEntryFromRow } from "../tracker-rows";
 import { mergePlaceAddress } from "../place-menu";
 
@@ -268,6 +269,18 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     return logs.map(log=>({...log,foodPlaces:(log.foodPlaceIds??[]).flatMap(id=>places.has(id)?[places.get(id)!]:[]),foodDishes:(log.foodDishIds??[]).flatMap(id=>{const row=dishes.get(id);return row?[{id,name:String(row.name),...(row.food_place_id!=null?{foodPlaceId:Number(row.food_place_id)}:{}),...(row.food_library_id!=null?{foodLibraryId:Number(row.food_library_id)}:{})}]:[];})}));
   }
   const repository: EvaOrbitRepository = {
+    async listSoftwareLibrary(){
+      const rows: Row[]=[];
+      for(let offset=0;;offset+=500){
+        const {data,error}=await client.from("software_library").select("*").eq("user_id",userId).order("name").order("id").range(offset,offset+499);
+        fail(error,"读取软件库");const batch=(data??[]) as Row[];rows.push(...batch);if(batch.length<500)break;
+      }
+      return rows.map(libraryEntryFromRow);
+    },
+    async getSoftwareLibraryEntry(id){const{data,error}=await client.from("software_library").select("*").eq("user_id",userId).eq("id",id).maybeSingle();fail(error,"读取软件");return data?libraryEntryFromRow(data):null;},
+    async createSoftwareLibraryEntry(input){const{data,error}=await client.from("software_library").insert({...libraryEntryToRow(input),user_id:userId}).select().single();fail(error,"添加软件");return libraryEntryFromRow(data);},
+    async updateSoftwareLibraryEntry(id,input){const{data,error}=await client.from("software_library").update(libraryEntryToRow(input)).eq("user_id",userId).eq("id",id).select().maybeSingle();fail(error,"更新软件");return data?libraryEntryFromRow(data):null;},
+    async deleteSoftwareLibraryEntry(id){const{data,error}=await client.from("software_library").delete().eq("user_id",userId).eq("id",id).select("id").maybeSingle();fail(error,"删除软件");return Boolean(data);},
     async getTrainingPlan() {
       const { data, error } = await client.from("training_plans").select("*").maybeSingle();
       fail(error, "读取训练计划");

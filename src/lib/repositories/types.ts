@@ -10,6 +10,7 @@ import type { CalendarEvent } from "../types";
 import type { DailyJournalEntry } from "../types";
 import type { BarkSettings } from "../push/bark";
 import type { SleepSample } from "../sleep";
+import type { LibraryEntry, LibraryInput } from "../software-library";
 
 export type TaskFilter = "all" | "open" | "done";
 
@@ -358,6 +359,11 @@ export interface EvaOrbitRepository {
   updateProjectItem(id: number, input: ProjectItemPatch): Promise<ProjectItem | null>;
 
   listSubscriptions(input?: SubscriptionListInput): Promise<Subscription[]>;
+  listSoftwareLibrary(): Promise<LibraryEntry[]>;
+  getSoftwareLibraryEntry(id: number): Promise<LibraryEntry | null>;
+  createSoftwareLibraryEntry(input: LibraryInput): Promise<LibraryEntry>;
+  updateSoftwareLibraryEntry(id: number, input: LibraryInput): Promise<LibraryEntry | null>;
+  deleteSoftwareLibraryEntry(id: number): Promise<boolean>;
   getSubscription(id: number): Promise<Subscription | null>;
   createSubscription(input: NewSubscription): Promise<Subscription>;
   updateSubscription(id: number, input: SubscriptionPatch, effectiveOn?: string): Promise<Subscription | null>;

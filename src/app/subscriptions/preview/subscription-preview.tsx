@@ -245,6 +245,6 @@ export function SubscriptionPreview({ items, payments, today, iconSources, onCre
       </div>
       <p className={styles.method}>{t("Expected = payments recorded this month + remaining renewals at current prices. Paused and ended subscriptions are excluded from remaining renewals. Currencies are never combined.", "预计支出 = 本月已付 + 按当前价格计算的本月剩余续费。暂停与结束的订阅不计入剩余计划，各币种不合并。")}</p>
     </>}
-    <footer className={styles.footer}>{t("Your recurring ledger", "你的订阅账簿")}<span>{date(today)}</span></footer>
+    <footer className={styles.footer}><Link href="/subscriptions/library">{t("Software library", "软件库")}</Link><span>{date(today)}</span></footer>
   </div>;
 }

@@ -13,6 +13,7 @@ import {
 } from "./data-backup.ts";
 
 test("backup allowlist excludes credentials and HealthKit energy infrastructure", () => {
+  assert.ok(BACKUP_TABLES.includes("software_library"));
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
   assert.ok(BACKUP_TABLES.includes("lucius_post_comments"));
@@ -30,6 +31,17 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("healthkit_daily_energy"));
+});
+
+test("software backups preserve date-only absence and accept previous version 9",()=>{
+  const resources=emptyBackupResources();
+  resources.software_library=[{id:1,name:"Tool",platforms:["macOS"],acquired_on:null,user_id:"private"}];
+  assert.deepEqual(sanitizeExportRow("software_library",resources.software_library[0]),{id:1,name:"Tool",platforms:["macOS"],acquired_on:null});
+  assert.equal(toSqliteValue(["macOS"]),'["macOS"]');
+  const document={backup_version:9,exported_at:"2026-10-24T12:00:00Z",schema:{supabase_migration:"old"},source:{backend:"supabase"},resources:{...resources}};
+  delete (document.resources as Partial<typeof resources>).software_library;
+  assert.deepEqual(parseBackupDocument(document).resources.software_library,[]);
+  assert.throws(()=>parseBackupDocument({...document,backup_version:BACKUP_VERSION}),/software_library/);
 });
 
 test("export sanitation removes account identity and dangling provider references", () => {

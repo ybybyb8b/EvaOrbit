@@ -8,6 +8,11 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  async listSoftwareLibrary(){return sqlite.listSoftwareLibrary();},
+  async getSoftwareLibraryEntry(id){return sqlite.getSoftwareLibraryEntry(id);},
+  async createSoftwareLibraryEntry(input){return sqlite.createSoftwareLibraryEntry(input);},
+  async updateSoftwareLibraryEntry(id,input){return sqlite.updateSoftwareLibraryEntry(id,input);},
+  async deleteSoftwareLibraryEntry(id){return sqlite.deleteSoftwareLibraryEntry(id);},
   async getCalendarInterpretation() { return sqlite.getCalendarInterpretation(); },
   async updateCalendarInterpretation(input) { return sqlite.updateCalendarInterpretation(input); },
   async listMemoryEntities(input){return sqlite.listMemoryEntities(input);},async getMemoryEntity(id){return sqlite.getMemoryEntity(id);},async createMemoryEntity(input){return sqlite.createMemoryEntity(input);},async updateMemoryEntity(id,input){return sqlite.updateMemoryEntity(id,input);},async setMemoryEntityArchived(id,archived){return sqlite.setMemoryEntityArchived(id,archived);},async mergeMemoryEntities(sourceId,targetId){return sqlite.mergeMemoryEntities(sourceId,targetId);},
