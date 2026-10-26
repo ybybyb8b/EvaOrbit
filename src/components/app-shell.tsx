@@ -41,7 +41,7 @@ const navigationGroups = [
   ] },
   { label: "SPACE", items: [
     { href: "/", label: "Home", zh: "首页", icon: "home" as const },
-    { href: "/insights", label: "Insights", zh: "洞察", icon: "ai" as const },
+    { href: "/insights", label: "Insights", zh: "洞察", icon: "insights" as const },
     { href: "/inbox", label: "Inbox", zh: "散落", icon: "inbox" as const },
     { href: "/tasks", label: "Tasks", zh: "待办", icon: "tasks" as const },
     { href: "/ai", label: "Eva", icon: "ai" as const },
@@ -206,8 +206,8 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
         <nav className="main-nav" aria-label={english ? "Main navigation" : "主导航"}>
           {navigationGroups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
             const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            const SidebarIcon = sidebarIcons[item.icon];
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""}><SidebarIcon className="icon" weight="Outline" aria-hidden="true" /><span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            const SidebarIcon = item.icon === "insights" ? null : sidebarIcons[item.icon];
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""}>{SidebarIcon ? <SidebarIcon className="icon" weight="Outline" aria-hidden="true" /> : <Icon name="insights" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
