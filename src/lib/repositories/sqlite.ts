@@ -160,6 +160,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async setSubscriptionStatus(id, status, nextRenewalOn) { return sqlite.setSubscriptionStatus(id, status, nextRenewalOn); },
   async listSubscriptionPayments(subscriptionId) { return sqlite.listSubscriptionPayments(subscriptionId); },
   async listSubscriptionPriceChanges(subscriptionId) { return sqlite.listSubscriptionPriceChanges(subscriptionId); },
+  async recordSubscriptionPurchase(id,input){return sqlite.recordSubscriptionPurchase(id,input);},
   async recordSubscriptionPayment(subscriptionId, input, nextRenewalOn) { return sqlite.recordSubscriptionPayment(subscriptionId, input, nextRenewalOn); },
   async listMemos(input) { return sqlite.listMemos(input); },
   async getMemo(id) { return sqlite.getMemo(id); },

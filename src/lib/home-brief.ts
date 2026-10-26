@@ -95,7 +95,7 @@ function todayItems(input: BuildHomeBriefInput): HomeBriefItem[] {
     .sort((a, b) => a.days - b.days)[0];
   if (upcoming) items.push({
     period: "today", type: "subscription",
-    text: input.english ? `${upcoming.item.name} renews in ${upcoming.days} day${upcoming.days === 1 ? "" : "s"}` : `${upcoming.item.name} ${upcoming.days} 天后续费`,
+    text: input.english ? `${upcoming.item.name} ${upcoming.item.mode==="manual"?"expires":"renews"} in ${upcoming.days} day${upcoming.days === 1 ? "" : "s"}` : `${upcoming.item.name} ${upcoming.days} 天后${upcoming.item.mode==="manual"?"会员到期":"续费"}`,
     priority: 70, href: `/subscriptions/${upcoming.item.id}`,
   });
   return items.sort((a, b) => b.priority - a.priority).slice(0, 3);

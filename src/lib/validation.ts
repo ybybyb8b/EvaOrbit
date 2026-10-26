@@ -1106,17 +1106,22 @@ export function parseNewSubscription(value: unknown) {
   const body = objectValue(value);
   const reminderEnabled=booleanValue(body.reminderEnabled, "订阅提醒", false),reminderTime=subscriptionReminderTime(body.reminderTime);
   if(reminderEnabled&&!reminderTime)throw new ValidationError("开启订阅提醒时需要选择提醒时间");
+  const mode=enumValue(body.mode,"订阅模式",["recurring","manual"] as const,"recurring");
+  const expiresOn=mode==="manual"?dateOnly(body.expiresOn,"会员到期日"):null;
   return {
-    name: text(body.name, "订阅名称", 200)!, currentAmountMinor: moneyMinor(body.amount, "金额"), currency: currencyCode(body.currency),
-    billingIntervalValue: positiveInteger(body.billingIntervalValue, "扣款周期"), billingIntervalUnit: enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
-    startedOn: dateOnly(body.startedOn, "开始日期"), nextRenewalOn: dateOnly(body.nextRenewalOn, "下次续费日期"),
-    autoRenew: booleanValue(body.autoRenew, "自动续费", true), reminderEnabled, reminderTime,
+    mode,expiresOn,
+    name: text(body.name, "订阅名称", 200)!, currentAmountMinor: mode==="manual"?0:moneyMinor(body.amount, "金额"), currency: currencyCode(body.currency??(mode==="manual"?"CNY":undefined)),
+    billingIntervalValue: mode==="manual"?1:positiveInteger(body.billingIntervalValue, "扣款周期"), billingIntervalUnit: mode==="manual"?"month" as const:enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
+    startedOn: dateOnly(body.startedOn??(mode==="manual"?dateInEvaOrbit():undefined), "开始日期"), nextRenewalOn: mode==="manual"?expiresOn!:dateOnly(body.nextRenewalOn, "下次续费日期"),
+    autoRenew: mode==="manual"?false:booleanValue(body.autoRenew, "自动续费", true), reminderEnabled, reminderTime,
     reminderDaysBefore: integerValue(body.reminderDaysBefore, "提前提醒天数", 0, 3650, 3), notes: text(body.notes ?? "", "备注", 5000, false) ?? "", status: "active" as const,
   };
 }
 
 export function parseSubscriptionPatch(value: unknown) {
   const body = objectValue(value), reminderTime=body.reminderTime===undefined?undefined:subscriptionReminderTime(body.reminderTime), result = {
+    mode:body.mode===undefined?undefined:enumValue(body.mode,"订阅模式",["recurring","manual"] as const,"recurring"),
+    expiresOn:body.expiresOn===undefined?undefined:dateOnly(body.expiresOn,"会员到期日"),
     name: body.name === undefined ? undefined : text(body.name, "订阅名称", 200)!,
     currentAmountMinor: body.amount === undefined ? undefined : moneyMinor(body.amount, "金额"),
     currency: body.currency === undefined ? undefined : currencyCode(body.currency),
@@ -1134,6 +1139,23 @@ export function parseSubscriptionPatch(value: unknown) {
 export function parseSubscriptionPayment(value: unknown) {
   const body = objectValue(value);
   return { scheduledFor: dateOnly(body.scheduledFor, "账期日期"), paidOn: dateOnly(body.paidOn, "扣款日期"), amountMinor: moneyMinor(body.amount, "实际金额"), currency: currencyCode(body.currency), note: text(body.note ?? "", "备注", 5000, false) ?? "", updateCurrentPrice: booleanValue(body.updateCurrentPrice, "更新后续价格", false) };
+}
+
+export function parseSubscriptionPurchase(value: unknown) {
+  const body=objectValue(value),paidOn=dateOnly(body.paidOn,"购买日期"),validUntil=dateOnly(body.validUntil,"最终会员有效期");
+  if(validUntil<paidOn)throw new ValidationError("会员有效期不能早于购买日期");
+  const purchaseKey=text(body.purchaseKey,"购买请求标识",100)!;
+  if(!/^[A-Za-z0-9_-]{8,100}$/.test(purchaseKey))throw new ValidationError("购买请求标识格式不正确");
+  const duration=(value:unknown,unit:unknown,label:string)=>{
+    if(value===undefined||value===null||value===""){
+      if(unit!==undefined&&unit!==null&&unit!=="")throw new ValidationError(`${label}需要同时填写数量与单位`);
+      return {value:null,unit:null};
+    }
+    if(unit===undefined||unit===null||unit==="")throw new ValidationError(`${label}需要同时填写数量与单位`);
+    return {value:integerValue(value,label,1,36500),unit:enumValue(unit,label,subscriptionUnits,"month")};
+  };
+  const purchased=duration(body.purchasedValue,body.purchasedUnit,"购买时长"),bonus=duration(body.bonusValue,body.bonusUnit,"赠送时长");
+  return {purchaseKey,paidOn,validUntil,amountMinor:moneyMinor(body.amount,"实付金额"),currency:currencyCode(body.currency),note:text(body.note??"","购买备注",5000,false)??"",purchasedValue:purchased.value,purchasedUnit:purchased.unit,bonusValue:bonus.value,bonusUnit:bonus.unit};
 }
 
 function timestampWithExplicitTime(value:unknown,field="时间"){

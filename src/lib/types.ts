@@ -810,6 +810,10 @@ export type ProjectItemStatus = "to_solve" | "doing" | "blocked" | "done" | "ver
 export type SubscriptionStatus = "active" | "paused" | "ended";
 export type SubscriptionIntervalUnit = "day" | "week" | "month" | "year";
 export interface Subscription {
+  /** Absent on legacy snapshots, which always use recurring semantics. */
+  mode?: "recurring" | "manual";
+  expiresOn?: string | null;
+  latestPayment?: SubscriptionPayment | null;
   id: number;
   name: string;
   /** Versioned private image key; absent on records created before icon uploads. */
@@ -837,6 +841,12 @@ export interface Subscription {
   updatedAt: string;
 }
 export interface SubscriptionPayment {
+  purchaseKey?: string | null;
+  validUntil?: string | null;
+  purchasedValue?: number | null;
+  purchasedUnit?: SubscriptionIntervalUnit | null;
+  bonusValue?: number | null;
+  bonusUnit?: SubscriptionIntervalUnit | null;
   id: number;
   subscriptionId: number;
   scheduledFor: string;

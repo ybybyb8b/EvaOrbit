@@ -5013,6 +5013,9 @@ html[data-mode="dark"] .settings-directory-page .settings-directory-item:hover {
 .subscription-history-grid .section-heading { margin-bottom:5px; }
 .subscription-history-grid .section-heading h2 { font-size:17px; }
 .subscription-history-list { gap:4px; }
+.subscription-history-single { grid-template-columns:minmax(0,1fr); }
+.subscription-history-list article:has(>.subscription-purchase-entitlement) { flex-wrap:wrap; }
+.subscription-purchase-entitlement { flex-basis:100%;display:grid;gap:5px; }
 .subscription-history-list article {
   padding:11px 12px;
   border-top:0;

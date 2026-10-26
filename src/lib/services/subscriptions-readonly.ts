@@ -17,7 +17,7 @@ export async function getSubscriptionsReadonlySnapshot(accountId:string){return 
     history+=payments.length+priceChanges.length;
     if(payments.length>=1000||priceChanges.length>=1000||history>5000)throw new Error("Subscription history reached the acceptance boundary; full pagination required. Previous cache preserved.");
     const spendByCurrency=subscriptionSpendByCurrency(payments);
-    items.push({...item,payments,priceChanges,paymentCount:payments.length,spendByCurrency,totalSpentMinor:spendByCurrency[item.currency]??0,latestPriceChange:priceChanges[0]??null});
+    items.push({...item,latestPayment:payments[0]??null,payments,priceChanges,paymentCount:payments.length,spendByCurrency,totalSpentMinor:spendByCurrency[item.currency]??0,latestPriceChange:priceChanges[0]??null});
     if(item.iconPath){
       const image=await readSubscriptionIcon(item.id,item.iconPath);
       if(!image){items[items.length-1].iconPath="";continue;}

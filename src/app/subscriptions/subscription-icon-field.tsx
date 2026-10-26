@@ -1,5 +1,8 @@
 "use client";
+import type {BusinessRequest} from "@/lib/business-request";
+import {useFormPreview} from "@/components/form-preview";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useLocale } from "@/components/locale-controller";
 import { detectAvatarImage, MAX_AVATAR_BYTES } from "@/lib/avatar";
@@ -8,11 +11,11 @@ import type { ApiError } from "@/lib/types";
 import { useIconColors } from "./preview/use-icon-colors";
 import styles from "./subscription-icon-field.module.css";
 
-export async function saveIconSelection(id: number, file: File | null, remove = false) {
+export async function saveIconSelection(id: number, file: File | null, remove = false, request:BusinessRequest=fetch) {
   if (!file && !remove) return;
   const body = new FormData();
   if (file) body.set("file", file);
-  const response = await fetch(`/api/subscriptions/${id}/icon`, { method: file ? "POST" : "DELETE", ...(file ? { body } : {}) });
+  const response = await request(`/api/subscriptions/${id}/icon`, { method: file ? "POST" : "DELETE", ...(file ? { body } : {}) });
   if (!response.ok) {
     const error = await response.json().catch(() => null) as ApiError | null;
     throw new Error(error?.error ?? "Icon could not be saved.");
@@ -23,7 +26,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
   label?: string; name: string; source?: string | null; file: File | null; remove?: boolean; disabled?: boolean;
   onChange: (file: File | null, remove: boolean) => void;
 }) {
-  const { english } = useLocale();
+  const { english } = useLocale();const previewOnly=useFormPreview();
   const preview = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
   const [error, setError] = useState("");
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -32,6 +35,7 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
   const { colors, transparent, neutralFilter } = useIconColors(sources);
   const brand = subscriptionBrand(name);
   async function choose(event: ChangeEvent<HTMLInputElement>) {
+    if(disabled||previewOnly)return;
     const selected = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!selected) return;
@@ -56,13 +60,13 @@ export function SubscriptionIconField({ name, source, file, remove = false, disa
         <div className={styles.actions}>
           <label className={`button secondary ${styles.upload}`}>
             {english ? (image ? "Replace icon" : "Upload icon") : (image ? "更换图标" : "上传图标")}
-            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={label ?? (english ? "Choose subscription icon" : "选择订阅图标")} disabled={disabled} onChange={event => void choose(event)} />
+            <input type="file" accept="image/jpeg,image/png,image/webp" aria-label={label ?? (english ? "Choose subscription icon" : "选择订阅图标")} disabled={disabled||previewOnly} onChange={event => void choose(event)} />
           </label>
-          {(file || (source && !remove)) && <button className="text-button" type="button" disabled={disabled} onClick={() => { onChange(null, Boolean(source)); setError(""); }}>{english ? "Use default" : "恢复默认"}</button>}
+          {(file || (source && !remove)) && <button className="text-button" type="button" disabled={disabled||previewOnly} onClick={() => { onChange(null, Boolean(source)); setError(""); }}>{english ? "Use default" : "恢复默认"}</button>}
         </div>
         <small>{english ? "JPG, PNG, WebP · up to 4 MB" : "JPG、PNG、WebP · 最大 4 MB"}</small>
       </div>
     </div>
-    {error && <p className="form-error" role="alert">{error}</p>}
+    {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
   </div>;
 }
