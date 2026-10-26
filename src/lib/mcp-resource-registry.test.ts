@@ -12,7 +12,7 @@ test("production schemas describe every action and distinguish create from PATCH
   for (const [, key] of bindings.matchAll(/^\s*(\w+):\s*\{/gm)) Object.assign(operations, { [key]: {} });
   const registry = createResourceRegistry(operations);
   assert.equal(registry.resources().length, 36);
-  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 37);
+  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 38);
   for (const item of registry.resources()) {
     const schema = registry.schema(item.resource);
     assert.equal(item.description, schema.description);

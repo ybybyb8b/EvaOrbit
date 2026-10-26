@@ -686,7 +686,7 @@
     ]
   },
   {
-    "pattern": "^/api/subscriptions/[1-9][0-9]*/payments$",
+    "pattern": "^/api/subscriptions/[1-9][0-9]*/(?:payments|purchases)$",
     "methods": [
       "POST"
     ]

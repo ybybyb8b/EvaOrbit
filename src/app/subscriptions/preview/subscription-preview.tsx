@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import type { Subscription, SubscriptionPayment, SubscriptionStatus } from "@/lib/types";
+import {isManualSubscription,membershipState,subscriptionDate} from "@/lib/subscriptions";
 import { subscriptionBrand, subscriptionPreviewStats } from "@/lib/subscription-preview";
 import { subscriptionIconSource } from "@/lib/subscription-icon";
 import { subscriptionStackPose } from "@/lib/subscription-stack-motion";
@@ -30,7 +31,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const { english } = useLocale();
   const [rememberedView, setView] = useRememberedState<"home" | "trends">("SubscriptionPreview:view", "home");
   const view = initialView ?? rememberedView;
-  const [status, setStatus] = useRememberedState<"all" | SubscriptionStatus>("SubscriptionPreview:status", "all");
+  const [status, setStatus] = useRememberedState<"all" | SubscriptionStatus | "expired">("SubscriptionPreview:status", "all");
   const [focused, setFocused] = useState(0);
   const [currency, setCurrency] = useState("");
   const [month, setMonth] = useState(today.slice(0, 7));
@@ -46,8 +47,8 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const { colors, transparent, palette, neutralFilter } = useIconColors(sources);
   const stats = useMemo(() => subscriptionPreviewStats(items, payments, today), [items, payments, today]);
   const selectedCurrency = currency || stats.currencies[0] || "CNY";
-  const active = items.filter(item => item.status === "active");
-  const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || a.nextRenewalOn.localeCompare(b.nextRenewalOn) || a.id - b.id), [items]);
+  const active = items.filter(item => membershipState(item,today)==="active");
+  const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || subscriptionDate(a).localeCompare(subscriptionDate(b)) || a.id - b.id), [items]);
   useEffect(() => {
     const node = rail.current, faceContainer = faces.current;
     if (!refined || view !== "home" || !node || !faceContainer) return;
@@ -107,7 +108,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       scrollController.current = null;
     };
   }, [refined, view, featured]);
-  const visible = featured.filter(item => status === "all" || item.status === status);
+  const visible = featured.filter(item => status === "all" || membershipState(item,today) === status);
   const dotStart = Math.max(0, Math.min(focused - 2, featured.length - 5));
   const parts = stats.breakdown(month, selectedCurrency);
   const total = stats.actual[month]?.[selectedCurrency] ?? 0;
@@ -115,10 +116,11 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const t = (en: string, zh: string) => english ? en : zh;
   const date = (value: string, short = false) => new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", { month: "short", day: "numeric", ...(short ? {} : { year: "numeric" as const }), timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
   const monthLabel = (key: string, long = false) => new Intl.DateTimeFormat(english ? "en-US" : "zh-CN", { month: long ? "long" : "short", ...(long ? { year: "numeric" as const } : {}), timeZone: "UTC" }).format(new Date(`${key}-01T12:00:00Z`));
-  const cycle = (item: Subscription) => english ? `${item.billingIntervalValue === 1 ? "" : `${item.billingIntervalValue} `}${item.billingIntervalUnit}${item.billingIntervalValue === 1 ? "" : "s"}` : `每${item.billingIntervalValue === 1 ? "" : item.billingIntervalValue}${({ day: "天", week: "周", month: "月", year: "年" }[item.billingIntervalUnit])}`;
-  const statusLabel = (value: "all" | SubscriptionStatus) => ({ all: t("All", "全部"), active: t("Active", "进行中"), paused: t("Paused", "已暂停"), ended: t("Ended", "已结束") }[value]);
+  const cycle = (item: Subscription) => isManualSubscription(item)?t("Manual renewal", "手动续期"):english ? `${item.billingIntervalValue === 1 ? "" : `${item.billingIntervalValue} `}${item.billingIntervalUnit}${item.billingIntervalValue === 1 ? "" : "s"}` : `每${item.billingIntervalValue === 1 ? "" : item.billingIntervalValue}${({ day: "天", week: "周", month: "月", year: "年" }[item.billingIntervalUnit])}`;
+  const statusLabel = (value: "all" | SubscriptionStatus | "expired") => ({ all: t("All", "全部"), active: t("Active", "进行中"), paused: t("Paused", "已暂停"), ended: t("Ended", "已结束"),expired:t("Expired","已到期") }[value]);
   const totals = (values: Record<string, number>) => stats.currencies.length ? stats.currencies.map(key => <span key={key}>{money(values[key] ?? 0, key, english)}</span>) : <span>—</span>;
   const spend = (item: Subscription) => Object.entries(item.spendByCurrency).map(([key, value]) => money(value, key, english)).join(" / ") || t("Not recorded", "尚未记录");
+  const listedPrice=(item:Subscription)=>isManualSubscription(item)?(item.latestPayment?money(item.latestPayment.amountMinor,item.latestPayment.currency,english):t("Not recorded","尚未购买")):money(item.currentAmountMinor,item.currency,english);
   function mark(item: Subscription) {
     const brand = subscriptionBrand(item.name);
     const uploaded = iconSources?.[item.id] ?? (local?null:subscriptionIconSource(item));
@@ -160,15 +162,15 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
     setFocused(nearest);
   }
 
-  const cardLabel = (item: Subscription) => `${item.name}, ${money(item.currentAmountMinor, item.currency, english)}, ${statusLabel(item.status)}, ${date(item.nextRenewalOn)}`;
+  const cardLabel = (item: Subscription) => `${item.name}, ${listedPrice(item)}, ${statusLabel(membershipState(item,today))}, ${date(subscriptionDate(item))}`;
   function featuredCard(item: Subscription, decorative = false) {
     const brand = subscriptionBrand(item.name);
     const accent = colors[item.id] ?? (iconSources?.[item.id] || (!local && subscriptionIconSource(item)) ? null : brand?.color ?? null);
     return <Link href={`/subscriptions/${item.id}`} className={styles.featureCard} tabIndex={decorative ? -1 : undefined} style={{ "--preview-tone": accent ?? "var(--accent-primary)", ...palette(accent) } as CSSProperties} aria-label={cardLabel(item)}>
       <div className={styles.cardContent}>
         <div className={styles.cardTop}>{mark(item)}<h3 data-no-translate>{item.name}</h3></div>
-        <strong className={styles.cardPrice}>{money(item.currentAmountMinor, item.currency, english)}</strong>
-        <div className={styles.cardBottom}><small>{cycle(item)}</small><div><small>{item.status === "active" ? t("Next renewal", "下次续费") : statusLabel(item.status)}</small><span>{item.status === "active" ? date(item.nextRenewalOn, true) : t("No scheduled charge", "暂无续费计划")}</span></div></div>
+        <strong className={styles.cardPrice} title={isManualSubscription(item)?t("Last actual payment","最近实际付款"):undefined}>{isManualSubscription(item)&&!item.latestPayment?"—":listedPrice(item)}</strong>
+        <div className={styles.cardBottom}><small>{cycle(item)}{isManualSubscription(item)?` · ${statusLabel(membershipState(item,today))}`:""}</small><div><small>{isManualSubscription(item)?t("Valid until","有效期至"):item.status === "active" ? t("Next renewal", "下次续费") : statusLabel(item.status)}</small><span>{isManualSubscription(item)?date(subscriptionDate(item),true):item.status === "active" ? date(item.nextRenewalOn, true) : t("No scheduled charge", "暂无续费计划")}</span></div></div>
       </div>
     </Link>;
   }
@@ -216,9 +218,9 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       <RenewalTimeline items={items} payments={payments} today={today} mark={mark} onDateChanged={updated => setItems(current => current.map(item => item.id === updated.id ? updated : item))} />
       <section className={styles.ledger}>
         <div className={styles.sectionHead}><h2>{t("Your ledger", "订阅账簿")}</h2><span>{visible.length} {t("subscriptions", "个订阅")}</span></div>
-        <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended"] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>
+        <div className={styles.filters} role="group" aria-label={t("Subscription status", "订阅状态")}>{(["all", "active", "paused", "ended",...(items.some(isManualSubscription)?["expired" as const]:[])] as const).map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{statusLabel(value)}</button>)}</div>
         {visible.length ? <div className={styles.list}>{visible.map(item => <Link key={item.id} href={`/subscriptions/${item.id}`} className={styles.row}>
-          {mark(item)}<div className={styles.rowCopy}><div className={styles.rowHead}><h3 data-no-translate><span>{item.name}</span></h3><span data-status={item.status}>{statusLabel(item.status)}</span></div><p>{cycle(item)} · {item.status === "active" ? t("Next", "下次") : t("Scheduled", "原计划")} {date(item.nextRenewalOn, true)}</p></div><strong className={styles.rowAmount}><span>{money(item.currentAmountMinor, item.currency, english)}</span></strong><span className={styles.rowSpend} title={`${t("Spent", "累计")} ${spend(item)}`}>{t("Spent", "累计")} {spend(item)}</span>
+          {mark(item)}<div className={styles.rowCopy}><div className={styles.rowHead}><h3 data-no-translate><span>{item.name}</span></h3><span data-status={membershipState(item,today)}>{statusLabel(membershipState(item,today))}</span></div><p>{cycle(item)} · {isManualSubscription(item)?t("Expires","到期"):item.status === "active" ? t("Next", "下次") : t("Scheduled", "原计划")} {date(subscriptionDate(item), true)}</p></div><strong className={styles.rowAmount}><span>{listedPrice(item)}</span></strong><span className={styles.rowSpend} title={`${t("Spent", "累计")} ${spend(item)}`}>{t("Spent", "累计")} {spend(item)}</span>
         </Link>)}</div> : <div className={styles.empty}><Icon name="calendar" /><h3>{t("A quiet ledger", "安静的账簿")}</h3><p>{items.length ? t("No subscriptions with this status.", "这个状态下暂时没有订阅。") : t("Add a subscription to bring your renewals into view.", "添加订阅后，即可在这里浏览续费与支出。")}</p>{onCreate ? <button className="button secondary" onClick={onCreate}><Icon name="plus" />{t("Add subscription", "新增订阅")}</button> : <Link className="button secondary" href="/subscriptions">{t("Open subscriptions", "前往订阅页面")}</Link>}</div>}
       </section>
     </> : <>

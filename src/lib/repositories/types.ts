@@ -115,8 +115,8 @@ export type ProjectListInput = { query?: string; status?: ProjectStatus; limit?:
 export type NewProjectItem = Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">;
 export type ProjectItemPatch = Partial<Omit<NewProjectItem, "projectId">> & { projectId?: number };
 export type ProjectItemListInput = { query?: string; projectId?: number; project?: string; status?: ProjectItemStatus; type?: ProjectItemType; module?: string; limit?: number };
-export type NewSubscription = Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "notes"> & { status?: Subscription["status"] };
-export type SubscriptionPatch = Partial<Pick<Subscription, "iconPath" | "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "reminderId" | "notes">>;
+export type NewSubscription = Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "notes"> & { status?: Subscription["status"]; mode?: Subscription["mode"]; expiresOn?: string|null };
+export type SubscriptionPatch = Partial<Pick<Subscription, "mode" | "expiresOn" | "iconPath" | "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "reminderId" | "notes">>;
 export type SubscriptionListInput = { query?: string; status?: Subscription["status"]; limit?: number };
 export type NewSubscriptionPayment = Pick<SubscriptionPayment, "scheduledFor" | "paidOn" | "amountMinor" | "currency" | "note"> & { updateCurrentPrice: boolean };
 export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
@@ -371,6 +371,7 @@ export interface EvaOrbitRepository {
   setSubscriptionStatus(id: number, status: Subscription["status"], nextRenewalOn?: string): Promise<Subscription | null>;
   listSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]>;
   listSubscriptionPriceChanges(subscriptionId: number): Promise<SubscriptionPriceChange[]>;
+  recordSubscriptionPurchase(subscriptionId: number, input: NewSubscriptionPurchase): Promise<SubscriptionPayment>;
   recordSubscriptionPayment(subscriptionId: number, input: NewSubscriptionPayment, nextRenewalOn: string): Promise<SubscriptionPayment>;
 
   listMemos(input?: MemoListInput): Promise<Memo[]>;
@@ -506,3 +507,5 @@ export interface EvaOrbitRepository {
   listNutritionSettings(limit?: number): Promise<NutritionSettings[]>;
   updateNutritionSettings(date: string, input: { restingEnergyKcal: number | null; activeEnergyKcal: number | null; notes: string }): Promise<void>;
 }
+
+export type NewSubscriptionPurchase = Required<Pick<SubscriptionPayment, "purchaseKey" | "validUntil" | "purchasedValue" | "purchasedUnit" | "bonusValue" | "bonusUnit">> & Pick<SubscriptionPayment, "paidOn" | "amountMinor" | "currency" | "note">;

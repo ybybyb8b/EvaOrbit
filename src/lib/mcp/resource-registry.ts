@@ -1,3 +1,6 @@
+import {membershipState} from "../subscriptions.ts";
+import {dateInEvaOrbit} from "../time.ts";
+import {parseSubscriptionPurchase} from "../validation.ts";
 import { ConflictError } from "../errors.ts";
 import type { FoodLog, DrinkLog, DailyNutritionSummary, DrinkLimitStatus } from "../types.ts";
 import { parseNewFoodLog, parseFoodLogPatch, parseNewDrinkLog, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseDailyEnergy } from "../validation.ts";
@@ -165,7 +168,7 @@ export type ResourceRegistryOperations = {
   catRecord?: { search(petId?:number|null):Promise<CatTimelineEntry[]>; get(kind:CatRecordKind,id:number):Promise<object|null>; create(kind:CatRecordKind,input:ReturnType<typeof parseCatRecord>["record"]):Promise<object>; update(kind:CatRecordKind,id:number,input:Record<string,unknown>):Promise<object|null>; delete(kind:CatRecordKind,id:number):Promise<boolean> };
   catRoutine?: { search(input:{scope?:string;petId?:number|null;enabledOnly?:boolean}):Promise<CatRoutine[]>; get(id:number):Promise<CatRoutine|null>; create(input:ReturnType<typeof parseCatRoutine>):Promise<CatRoutine>; update(id:number,input:Record<string,unknown>):Promise<CatRoutine|null>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; archive(id:number):Promise<boolean>; delete(id:number):Promise<boolean> };
   reminder?: { search(input:{targetType?:string;targetId?:number|null;activeOnly?:boolean}):Promise<Reminder[]>; create(input:ReturnType<typeof parseReminder>):Promise<Reminder>; update(id:number,input:Record<string,unknown>):Promise<Reminder|null>; delete(id:number):Promise<boolean>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; snooze(id:number,choice:"later_today"|"tomorrow"|"custom",custom?:string):Promise<Reminder|null> };
-  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
+  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; recordPurchase?(id:number,input:ReturnType<typeof parseSubscriptionPurchase>):Promise<SubscriptionPayment>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
   foodPlace?: {getLibraryItems?(id:number):Promise<{item:FoodLibraryItem;recordCount:number;lastRecordedAt:string|null}[]>;search(query?:string,options?:{kind?:FoodPlace["kind"];scope?:FoodPlace["scope"];status?:FoodPlace["status"];category?:string;purpose?:"food"|"drink";limit?:number}):Promise<FoodPlace[]>;get(id:number):Promise<FoodPlace|null>;create(input:ReturnType<typeof parseFoodPlace>):Promise<FoodPlace>;update(id:number,input:ReturnType<typeof parseFoodPlacePatch>):Promise<FoodPlace|null>;delete(id:number):Promise<{id:number;action:"deleted"|"archived"}|null>};
   foodDish?: {search(query?:string,options?:{foodPlaceId?:number;kind?:"food"|"drink";recommended?:boolean;rating?:FoodDish["rating"];limit?:number}):Promise<FoodDish[]>;get(id:number):Promise<FoodDish|null>;create(input:ReturnType<typeof parseFoodDish>):Promise<FoodDish>;update(id:number,input:ReturnType<typeof parseFoodDishPatch>):Promise<FoodDish|null>;delete(id:number):Promise<boolean>};
 };
@@ -797,15 +800,19 @@ function reminderResource(operations:NonNullable<ResourceRegistryOperations["rem
   };
 }
 
-const subscriptionMap={name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
+const subscriptionMap={mode:"mode",expires_on:"expiresOn",name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
 function subscriptionResource(operations:NonNullable<ResourceRegistryOperations["subscription"]>):RegisteredResource {
   const writable=Object.keys(subscriptionMap);
   return {
     schema:{
       resource:"subscription",
-      description:"Recurring subscriptions with renewal reminders, immutable actual-payment history, price history, and pause/resume lifecycle.",
+      description:"Recurring subscriptions and manual-renewal memberships with actual-payment history and owned date reminders.",
       fields:{
         id:{type:"integer",description:"Subscription id.",read_only:true},
+        mode:{type:"string",enum:["recurring","manual"],default:"recurring",description:"recurring uses fixed billing; manual uses expires_on and record_purchase only."},
+        expires_on:{type:"string",format:"date",nullable:true,description:"Required for manual membership. Updating expiry never records payment."},
+        membership_state:{type:"string",enum:["active","expired","paused","ended"],derived:true,read_only:true,description:"Manual expiry is evaluated against today; expiry date is inclusive."},
+        latest_payment:{type:"object",read_only:true,nullable:true,description:"Most recent actual payment including purchase entitlement metadata when applicable."},
         name:{type:"string",description:"Subscription name."},
         amount:{type:"number",description:"Write-only current price in major currency units; responses use current_amount_minor."},
         current_amount_minor:{type:"integer",description:"Current recurring price in minor currency units.",read_only:true},
@@ -813,9 +820,9 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
         billing_interval_value:{type:"integer",description:"Billing interval amount."},
         billing_interval_unit:{type:"string",enum:["day","week","month","year"],description:"Billing interval unit."},
         started_on:{type:"string",format:"date",description:"Date-only start date."},
-        next_renewal_on:{type:"string",format:"date",description:"Date-only next renewal."},
+        next_renewal_on:{type:"string",format:"date",description:"Recurring due date. In manual mode this is only a legacy mirror of expires_on, never a scheduled charge."},
         status:{type:"string",enum:["active","paused","ended"],description:"Lifecycle state; change through actions.",read_only:true},
-        auto_renew:{type:"boolean",description:"Whether the provider renews automatically."},
+        auto_renew:{type:"boolean",description:"Whether automatic due-payment bookkeeping is enabled; manual mode always uses false."},
         reminder_enabled:{type:"boolean",description:"Whether the owned renewal reminder is enabled."},
         reminder_days_before:{type:"integer",description:"Whole days before renewal."},
         reminder_time:{type:"string",description:"Explicit local HH:mm time; required when reminders are enabled."},
@@ -828,14 +835,17 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
         notes:{type:"string",description:"Notes."},
         ...timestamps,
       },
-      required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"],
+      required_fields:["name"],
+      field_variants:{recurring:{fields:Object.keys(subscriptionMap).filter(key=>key!=="expires_on"),required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"]},manual:{fields:["mode","name","expires_on","notes","currency","reminder_enabled","reminder_days_before","reminder_time"],required_fields:["mode","name","expires_on"]}},
       writable_fields:writable,
       searchable_fields:["name","status"],
-      supported_actions:["pause","resume","end","record_payment"],
+      supported_actions:["pause","resume","end","record_payment","record_purchase"],
       validation_rules:[
         "amount inputs use major currency units and outputs use integer minor units",
         "cumulative spending sums actual payments only and remains grouped by currency",
         "price changes append history instead of rewriting payments",
+        "manual requires expires_on, never auto-books or predicts a charge; record_purchase requires a stable purchase_key per logical purchase",
+        "purchase valid_until is authoritative; older history never shortens current expiry; optional duration/bonus are metadata only",
         "pause disables the owned reminder without deleting history",
         "dates are date-only; reminder_time is explicit and required only when reminders are enabled",
         "unknown fields are rejected",
@@ -844,12 +854,12 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
     async search({query,filters={},limit,cursor}) {
       assertOnlyKeys(filters,["status"],"subscription search filters");
       rejectCursor(cursor,"Subscription");
-      return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(snakeRecord),next_cursor:null};
+      return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(item=>({...snakeRecord(item),membership_state:membershipState(item,dateInEvaOrbit())})),next_cursor:null};
     },
     async get(value) {
       const item=await operations.get(numericId(value,"Subscription"));
       if(!item)throw new ConflictError("Subscription not found.");
-      return snakeRecord(item);
+      return {...snakeRecord(item),membership_state:membershipState(item,dateInEvaOrbit())};
     },
     async create(data) {
       assertOnlyKeys(data,writable,"subscription create");
@@ -864,6 +874,12 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
     async action({id,action,data}) {
       if(id===undefined)throw new ValidationError(`${action} requires a subscription id.`);
       const subscriptionId=numericId(id,"Subscription");
+      if(action==="record_purchase") {
+        const map={purchase_key:"purchaseKey",paid_on:"paidOn",amount:"amount",currency:"currency",valid_until:"validUntil",purchased_value:"purchasedValue",purchased_unit:"purchasedUnit",bonus_value:"bonusValue",bonus_unit:"bonusUnit",note:"note"};
+        assertOnlyKeys(data,Object.keys(map),"subscription record_purchase");
+        if(!operations.recordPurchase)throw new ValidationError("record_purchase is unavailable");
+        return snakeRecord(await operations.recordPurchase(subscriptionId,parseSubscriptionPurchase(mappedInput(data,map))));
+      }
       if(action==="record_payment") {
         assertOnlyKeys(data,["scheduled_for","paid_on","amount","currency","note","update_current_price"],"subscription record_payment");
         return snakeRecord(await operations.recordPayment(subscriptionId,parseSubscriptionPayment(mappedInput(data,{scheduled_for:"scheduledFor",paid_on:"paidOn",amount:"amount",currency:"currency",note:"note",update_current_price:"updateCurrentPrice"}))));
