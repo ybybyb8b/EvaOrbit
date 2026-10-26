@@ -19,11 +19,14 @@ export function markMissingEventKitRecords<T extends { entity_type: unknown; eo_
 /** Account links are returned even when this installation has never synced. */
 export function projectEventKitLinks(logical: Row[], bindings: Row[], installationId: string) {
   const identities = new Map<string, Set<unknown>>();
+  const historyByLink = new Map<unknown, Row[]>();
   for (const link of logical) if (link.external_identifier) {
     const key = `${link.eventkit_entity_type}:external:${link.external_identifier}`, owners = identities.get(key) ?? new Set();
     owners.add(link.id); identities.set(key, owners);
   }
   for (const binding of bindings) {
+    const history = historyByLink.get(binding.logical_link_id) ?? [];
+    history.push(binding); historyByLink.set(binding.logical_link_id, history);
     for (const identity of [binding.external_identifier && `external:${binding.external_identifier}`, `local:${binding.calendar_item_identifier}`]) {
       if (!identity) continue;
       const key = `${binding.eventkit_entity_type}:${identity}`;
@@ -32,7 +35,7 @@ export function projectEventKitLinks(logical: Row[], bindings: Row[], installati
     }
   }
   return logical.map(link => {
-    const history = bindings.filter(binding => binding.logical_link_id === link.id);
+    const history = historyByLink.get(link.id) ?? [];
     const eligible = history.filter(binding => binding.recovery_token === link.recovery_token || (!link.pending_creation && link.mirror_generation == null && binding.recovery_token == null));
     const selected = eligible.find(binding => binding.installation_id === installationId) ?? eligible.sort((a, b) => String(b.last_synced_at).localeCompare(String(a.last_synced_at)) || Number(b.id) - Number(a.id))[0];
     const identityConflict = (link.external_identifier && (identities.get(`${link.eventkit_entity_type}:external:${link.external_identifier}`)?.size ?? 0) > 1) || history.some(binding => [binding.external_identifier && `external:${binding.external_identifier}`, `local:${binding.calendar_item_identifier}`].some(identity => identity && (identities.get(`${binding.eventkit_entity_type}:${identity}`)?.size ?? 0) > 1));

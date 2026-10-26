@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { healthKitSupported, hostSupports, nativeHapticsSupported, nativeNotificationIdentifier, nativeNotificationSchedule, nativeNotificationsSupported } from "./native-bridge.ts";
+import { healthKitSupported, hostSupports, nativeHapticsSupported, nativeNotificationIdentifier, nativeNotificationSchedule, nativeNotificationsSupported, reconcileNativeNotifications } from "./native-bridge.ts";
 import type { ScheduledNotification } from "./types.ts";
 
 test("native capabilities are detected from getInfo, never from user agent", () => {
@@ -15,6 +15,24 @@ test("native capabilities are detected from getInfo, never from user agent", () 
   ] };
   assert.equal(nativeNotificationsSupported(nextHost), true);
   assert.equal(nativeHapticsSupported({ platform: "ios", methods: ["haptic.play"] }), true);
+});
+
+test("notification triggers merge into one in-flight run and one follow-up", async () => {
+  const oldWindow = globalThis.window, oldFetch = globalThis.fetch;
+  let reads = 0, release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const methods = ["notification.getStatus", "notification.requestAuthorization", "notification.schedule", "notification.cancel", "notification.listPending", "notification.openSettings"];
+  globalThis.window = { EvaOrbitNative: { version: 1, call: async (method: string) => ({ ok: true, result: method === "host.getInfo" ? { methods } : method === "notification.getStatus" ? { permission: "authorized" } : [] }) } } as unknown as Window & typeof globalThis;
+  globalThis.fetch = async () => { reads++; if (reads === 1) await gate; return Response.json({ nativeNotifications: [] }); };
+  try {
+    const first = reconcileNativeNotifications();
+    await new Promise(resolve => setImmediate(resolve));
+    const rest = Array.from({ length: 10 }, () => reconcileNativeNotifications());
+    assert.ok(rest.every(work => work === first));
+    release(); await Promise.all([first, ...rest]);
+    assert.equal(reads, 2, "events during an active read retain one fresh reconciliation");
+    await reconcileNativeNotifications(); assert.equal(reads, 3);
+  } finally { release(); globalThis.window = oldWindow; globalThis.fetch = oldFetch; }
 });
 
 test("partial notification bridges stay unavailable", () => {

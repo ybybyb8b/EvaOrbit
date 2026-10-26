@@ -25,7 +25,7 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const healthQuickLog = readFileSync(new URL("../app/health/health-quick-log.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(page, /HomeDestinations|home-destinations/);
-  assert.match(calendar, /<BottomLogScope selectedDate=\{selected\} onSaved=\{readOnly\?undefined:refreshSelectedDate\}/);
+  assert.match(calendar, /<BottomLogScope selectedDate=\{selected\}/);
   assert.match(shell, /<HomeQuickLog key=\{pathname\}/);
   assert.match(quickLog, /<QuickLogTrigger label=\{action\?\.label\}/);
   assert.match(picker, /label\?\?\(english\?"Quick Log":"快速记录"\)/);

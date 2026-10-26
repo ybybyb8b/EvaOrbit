@@ -10,7 +10,7 @@ create/update payloads strictly, documents its update mode, and delegates
 deletes and non-CRUD actions to existing business services. Register resources
 one at a time rather than mirroring every database table.
 
-The registry has 39 resources and 40 actions. Food Log, Drink Log, Food Library,
+The registry has 39 resources and 41 actions. Food Log, Drink Log, Food Library,
 daily nutrition and manual energy now route through generic tools to their
 existing parsers/services. Drink mutations include item.limits. Food portions
 preserve snapshots; Food Library create is name/brand upsert and removal keeps

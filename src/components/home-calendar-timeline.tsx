@@ -119,6 +119,8 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
 
   const refreshChangedData = useEffectEvent(async () => {
     const date = selected, requiredMonths = calendarExpanded ? [month] : [...new Set(visibleWeek.map(value => value.slice(0, 7)))];
+    const needsDay = Boolean(dataSource) || readOnly || date !== initialDay.date;
+    const monthsToRead = requiredMonths.filter(value => Boolean(dataSource) || readOnly || value !== initialSummary.month);
     nativeRefreshRequest.current?.abort(); dayRequest.current?.abort(); monthRequest.current?.abort(); backgroundMonthRequest.current?.abort();
     const controller = new AbortController(); nativeRefreshRequest.current = controller;
     // Invalidate other cached dates without resetting selection, expansion or unsaved drafts.
@@ -126,12 +128,13 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
     setSummaries(current => Object.fromEntries(Object.entries(current).filter(([value]) => requiredMonths.includes(value))));
     try {
       const [nextDay, nextSummaries] = await Promise.all([
-        readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, () => {}, true),
-        Promise.all(requiredMonths.map(value => readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${value}`, controller.signal, () => {}, true))),
+        needsDay ? readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, () => {}, true) : Promise.resolve(null),
+        Promise.all(monthsToRead.map(value => readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${value}`, controller.signal, () => {}, true))),
       ]);
       const next = { day: nextDay, summaries: nextSummaries };
       if (controller.signal.aborted) return;
-      setDays({ [date]: next.day }); setSummaries(Object.fromEntries(next.summaries.map(summary => [summary.month, summary])));
+      if (next.day) { const day = next.day; setDays(current => ({...current,[date]:day})); }
+      setSummaries(current => ({...current,...Object.fromEntries(next.summaries.map(summary => [summary.month, summary]))}));
       setRefreshFailed(false);
     } catch (reason) {
       if (!controller.signal.aborted && (reason as Error)?.name !== "AbortError") setRefreshFailed(true);
@@ -254,7 +257,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, language, cac
         return meal ? <button type="button" key={item.id} className="home-activity-item" data-source="food" onClick={() => setMealDetail(item)} aria-haspopup="dialog">{content}</button> : calendar ? <button type="button" id={`calendar-event-${item.sourceId}`} key={item.id} className="home-activity-item" data-source="calendar" onClick={() => setCalendarDetail(item)} aria-haspopup="dialog">{content}</button> : <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}>{content}</Link>;
       })}</div> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有 Timeline 记录"}</p>}</section>
     </>}
-    <BottomLogScope selectedDate={selected} onSaved={readOnly?undefined:refreshSelectedDate} />
+    <BottomLogScope selectedDate={selected} />
     {mealDetail && <FormSheet title={titleFor(mealDetail, english)} onClose={() => setMealDetail(null)}><div className="home-time-detail"><p className="user-content">{mealDetail.detail}</p><p>{timeLabel(mealDetail.occurredAt)}–{timeLabel(mealDetail.endAt!)} · {english ? "Time from Calendar" : "时间来自日历"}</p><p className="home-time-context">{english ? "Food and Calendar describe one meal. The original Food time is preserved." : "饮食内容和日历时段已合并为同一顿饭，原饮食时间保留。"}</p><Link className="button secondary" href={mealDetail.href}>{english ? "Edit Food record" : "编辑饮食记录"}</Link>{Boolean(mealDetail.metadata.calendarEvent) && <button type="button" className="button secondary" onClick={() => { setCalendarDetail(mealDetail.metadata.calendarEvent as TimelineEvent); setMealDetail(null); }}>{english ? "View Calendar event" : "查看日历事项"}</button>}</div></FormSheet>}
     {sleepSheetOpen && day && <FormSheet title={english ? "Sleep records" : "睡眠记录"} onClose={() => setSleepSheetOpen(false)}><div className="home-time-detail"><p>{selectedLabel}</p>{sleepSummary && <SleepSummary summary={sleepSummary} timeline={day.sleep} english={english} />}<p className="home-time-context">{english ? "Calendar / 3×3 records describe sleep windows. Edit windows in 3×3 or Apple Calendar; manage measured sleep in Apple Health." : "Calendar / 3×3 记录表示睡眠窗口。请在 3×3 或 Apple Calendar 修改窗口，在 Apple Health 管理实际睡眠。"}</p>{day.sleep ? day.sleep.records.filter(record => sleepSummary?.actual && sleepSummary.window?.startAt === record.startAt && sleepSummary.window.endAt === record.endAt).map((record) => <section key={record.id}><header><h3>{sleepSummary?.window?.startAt === record.startAt && sleepSummary.window.endAt === record.endAt ? english ? "Main sleep window" : "主要睡眠窗口" : english ? "Calendar record · no device measurement" : "日历记录 · 无设备测量"}</h3><span>{durationLabel(record.durationMinutes, english)}</span></header><p>{new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(record.startAt))} — {new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(record.endAt))}</p>{record.notes && <p className="user-content home-sleep-notes">{record.notes}</p>}</section>) : <p className="home-pane-empty">{english ? "No timeline sleep windows" : "没有时间线睡眠窗口"}</p>}</div></FormSheet>}
     {activitySheetOpen && day && <FormSheet title={english ? "Recorded time" : "已记录的时间"} onClose={() => setActivitySheetOpen(false)}>

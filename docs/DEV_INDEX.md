@@ -200,6 +200,9 @@
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
+- **续费时间线（Web）**：总览展示未来30天、未处理计划及已有付款；时间线与详情页可调整下次续费日期，沿用订阅PATCH和提醒投影，不补记被调整的旧计划，不改写付款历史。
+- **软件库（Web／本地共享界面）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。共享 `SubscriptionsDataProvider` 与账户请求上下文默认保持 Web 行为，本地分支注入导航、快照及在线写入。`/api/native/subscriptions-readonly` 可选增加 `library`／`libraryIconSources`，兼容旧缓存，最多 500 个软件，全部快照合计仍限 8 MiB；旧预览地址重定向至正式页。本地新界面需后续更新前端包。
+
 ## Projects
 
 - **本地只读阶段**：原项目列表、详情、事项详情和表单由 [ReadOnlyWorkspace](../src/local-trackers/read-only-workspace.tsx) 注入读取与导航，保留 Done/Verified 和生命周期差异；不创建或修改事项。与 Tasks/Lucius 共用 `/api/native/workspace-readonly/:kind` 与独立缓存，见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
@@ -242,4 +245,8 @@
 - **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[同步契约](../src/lib/native-sync-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。
 - **数据与接口**：`native_devices`、`native_sync_mutations`，以及 HealthKit / EventKit 各自的样本、回执与映射表；`/api/native/*`、`/api/healthkit/energy/ingest`、`/api/eventkit/*`。
 - **依赖与决定**：Web 主体仍部署在 Vercel；普通 Host 加载线上页面，独立 Tracker PoC 模式加载安装包 React 资源，并经原生 SQLite/受限 bridge 读写本地业务副本。独立 SwiftUI 工程已废弃。`/api/native/sync` 使用协议 2 的 Tracker 事务同步，旧协议写入停用；HealthKit、EventKit、原生通知继续遵循各自契约。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
+
+- **职责与入口**：[ios/EvaOrbitHost](../ios/EvaOrbitHost/)、[桥接](../src/lib/native-bridge.ts)、[同步服务](../src/lib/native-sync-service.ts)、[Tracker 协议2](../src/lib/tracker-local-contract.ts)、[EventKit 自动同步](../src/lib/eventkit-auto-sync.ts)。旧 [协议1](../src/lib/native-sync-contract.ts) 仅保留兼容代码，不再连接生产同步路由。
+- **数据与接口**：`native_devices`、`tracker_sync_receipts`、`tracker_sync_heads` 与 Tracker 行版本，以及 HealthKit / EventKit 各自样本、回执与映射表；`/api/native/sync` 使用原子 RPC，`/api/native/*-readonly` 使用各模块只读 Repository 白名单；旧 `native_sync_mutations` 保留。在线配置会话声明及账户头保护见 [main 整合说明](NATIVE_API_MAIN_RELEASE.md)。
+- **依赖与决定**：Web 主体仍部署在 Vercel，Host 用 WKWebView 提供原生能力；设备本地 outbox/幂等与账户数据隔离。HealthKit、EventKit、原生通知分别遵循各自授权及同步契约，网页缓存不能替代设备状态。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
 - **详文**：涉及本节改动先完整阅读 [维护契约](IOS_NATIVE_MAINTENANCE.md)，再按需看 [Host Runbook](IOS_NATIVE_HOST.md)、[安装简版](IOS_IPA_INSTALL_QUICKSTART.md)、[Sleep](HEALTHKIT_SLEEP.md)、[体重合并](HEALTHKIT_WEIGHT_MERGE.md)、[EventKit 偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)。

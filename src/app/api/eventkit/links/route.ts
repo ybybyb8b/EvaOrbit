@@ -22,10 +22,13 @@ export async function GET(request: NextRequest) {
   try {
     const user = await account(), installationId = installation(request.nextUrl.searchParams.get("installationId"));
     if (request.nextUrl.searchParams.get("protocol") !== "2") throw new HttpError("请刷新 EvaOrbit 后恢复 EventKit 同步", 409);
+    const kind = request.nextUrl.searchParams.get("kind");
+    if (kind !== null && kind !== "event" && kind !== "reminder") throw new ValidationError("EventKit kind 格式不正确");
     const client = await createSupabaseServerClient();
     function readAll(table: string, columns = "*") {
       return readEventKitRows(async cursor => {
         let query = client.from(table).select(columns).eq("user_id", user.id).order("id");
+        if (kind && (table === "eventkit_logical_links" || table === "eventkit_links")) query = query.eq("eventkit_entity_type", kind);
         if (cursor !== undefined) query = query.gt("id", cursor);
         const { data, error } = await query.limit(500).returns<Record<string, unknown>[]>();
         if (error) throw error;
@@ -33,7 +36,7 @@ export async function GET(request: NextRequest) {
       });
     }
     // Check existence across the account, never against a window or truncated list.
-    const [logical, bindings, tasks, reminders, events] = await Promise.all([readAll("eventkit_logical_links"), readAll("eventkit_links"), readAll("tasks", "id"), readAll("reminders", "id"), readAll("calendar_events", "id")]);
+    const [logical, bindings, tasks, reminders, events] = await Promise.all([readAll("eventkit_logical_links"), readAll("eventkit_links"), kind === "event" ? [] : readAll("tasks", "id"), kind === "event" ? [] : readAll("reminders", "id"), kind === "reminder" ? [] : readAll("calendar_events", "id")]);
     return NextResponse.json(markMissingEventKitRecords(projectEventKitLinks(logical, bindings, installationId), { task: tasks, reminder: reminders, calendar_event: events }));
   } catch (error) { return eventKitApiError(error); }
 }

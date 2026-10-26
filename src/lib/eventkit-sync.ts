@@ -65,7 +65,9 @@ class EventKitRequestError extends Error{readonly code:string|undefined;construc
 async function json(url:string,init?:RequestInit,allowMissing=false){
   checkSession?.();
   const request=(async()=>{
-    const response=await nativeApiFetch(url,{cache:"no-store",...init});
+    const headers=new Headers(init?.headers);
+    if(init?.method&&init.method!=="GET")headers.set("x-evaorbit-refresh-owner","eventkit");
+    const response=await nativeApiFetch(url,{cache:"no-store",...init,headers});
     if(allowMissing&&response.status===404)return null;
     if(!response.ok){const body=await response.json().catch(()=>({}));throw new EventKitRequestError(`${body.error??"Sync request failed"} (${init?.method??"GET"} ${url.split("?")[0]}, HTTP ${response.status})`,body.code);}
     return response.status===204?null:response.json();
@@ -108,8 +110,25 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
   // Track committed EO mutations only; reads and mapping-only writes never request a refresh.
   async function json(url:string,init?:RequestInit,allowMissing=false){const result=await eventKitJSON(url,init,allowMissing);if(init?.method&&init.method!=="GET"){if(url.startsWith("/api/calendar-events"))changed.add("calendar");else if(url.startsWith("/api/tasks")){changed.add("tasks");changed.add("reminders");}else if(url.startsWith("/api/reminders"))changed.add("reminders");}return result;}
   const effectiveModes={...modes};for(const identifier of Object.values(routes))if(identifier)effectiveModes[identifier]="two_way";
-  const calendarModes=eventKitCalendarReadModes(status.calendars,effectiveModes),links=await json(`/api/eventkit/links?protocol=2&installationId=${encodeURIComponent(status.installationId)}`) as Link[],claimedReminderIDs=new Set(links.filter(link=>link.eventkit_entity_type==="reminder").map(link=>link.calendar_item_identifier)),calendarIDs=status.calendars.filter(source=>eventKitSourceEnabled(source.identifier,calendarModes)).map(source=>source.identifier),linkedReminderIDs=Object.keys(routes).length?links.filter(link=>link.eventkit_entity_type==="reminder").map(link=>link.calendar_identifier):[],reminderIDs=[...new Set([...status.reminderLists.filter(source=>eventKitSourceEnabled(source.identifier,effectiveModes)).map(source=>source.identifier),...linkedReminderIDs])].filter(identifier=>status.reminderLists.some(source=>source.identifier===identifier)),{from,to}=eventKitCalendarSyncRange();
-  const [appleEvents,appleReminders,tasks,reminders,events]=await Promise.all([calendarIDs.length?nativeCall<{items:Item[]}>("eventkit.fetch",{kind:"calendar",calendarIdentifiers:calendarIDs,from:from.toISOString(),to:to.toISOString()}).then(value=>value.items):[] as Item[],reminderIDs.length?nativeCall<{items:Item[]}>("eventkit.fetch",{kind:"reminder",calendarIdentifiers:reminderIDs,completedSince:new Date(Date.now()-30*86400000).toISOString()}).then(value=>value.items):[] as Item[],json("/api/tasks?status=all") as Promise<Task[]>,json("/api/reminders") as Promise<Reminder[]>,eventKitCalendarRecords(from,to)]);
+  const calendarModes = eventKitCalendarReadModes(status.calendars, effectiveModes);
+  const calendarIDs = status.calendars.filter(source => eventKitSourceEnabled(source.identifier, calendarModes)).map(source => source.identifier);
+  const syncCalendar = calendarIDs.length > 0;
+  const syncReminders = status.reminderLists.some(source => eventKitSourceEnabled(source.identifier, effectiveModes)) || Object.values(routes).some(Boolean);
+  const kind = syncCalendar && syncReminders ? "" : syncCalendar ? "&kind=event" : "&kind=reminder";
+  const allLinks = syncCalendar || syncReminders ? await json(`/api/eventkit/links?protocol=2&installationId=${encodeURIComponent(status.installationId)}${kind}`) as Link[] : [];
+  // Old servers ignore kind. Keep the same safety boundary on the client as well.
+  const links = allLinks.filter(link => link.eventkit_entity_type === "event" ? syncCalendar : syncReminders);
+  const claimedReminderIDs = new Set(links.filter(link => link.eventkit_entity_type === "reminder").map(link => link.calendar_item_identifier));
+  const linkedReminderIDs = Object.keys(routes).length ? links.filter(link => link.eventkit_entity_type === "reminder").map(link => link.calendar_identifier) : [];
+  const reminderIDs = [...new Set([...status.reminderLists.filter(source => eventKitSourceEnabled(source.identifier, effectiveModes)).map(source => source.identifier), ...linkedReminderIDs])].filter(identifier => status.reminderLists.some(source => source.identifier === identifier));
+  const { from, to } = eventKitCalendarSyncRange();
+  const [appleEvents, appleReminders, tasks, reminders, events] = await Promise.all([
+    syncCalendar ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "calendar", calendarIdentifiers: calendarIDs, from: from.toISOString(), to: to.toISOString()}).then(value => value.items) : [] as Item[],
+    reminderIDs.length ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "reminder", calendarIdentifiers: reminderIDs, completedSince: new Date(Date.now() - 30 * 86400000).toISOString()}).then(value => value.items) : [] as Item[],
+    syncReminders ? json("/api/tasks?status=all") as Promise<Task[]> : [],
+    syncReminders ? json("/api/reminders") as Promise<Reminder[]> : [],
+    syncCalendar ? eventKitCalendarRecords(from, to) : [],
+  ]);
   // Reuse this run's batch results. A missing batch entry is never proof of deletion.
   const eoRecords:Record<"calendar_event"|"task",Map<number,CalendarEvent|Task|null>>={calendar_event:new Map(events.map(item=>[item.id,item])),task:new Map(tasks.map(item=>[item.id,item]))};
   async function readEO(entityType:"calendar_event"|"task",id:number){
@@ -263,10 +282,10 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
     for(const eo of reminders){if(blockedKinds.has("reminder"))continue;if(excludedEO.has(eo.id)||linkedEO.has(eo.id)||!eo.isActive||!eo.nextDueAt)continue;const domain=eventKitReminderDomain(eo),destination=domain?status.reminderLists.find(source=>source.identifier===routes[domain]&&source.allowsContentModifications):null;if(!destination)continue;const snapshot=reminderSnapshot(eo),legacy=eo.note===snapshot.notes?snapshot:{...snapshot,notes:eo.note},candidates=appleReminders.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedApple.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot,legacy]));if(candidates.length>1){conflicts.push({entityType:"reminder",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"reminder",eo.id,snapshot,existing,eo.timezone);claimedApple.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone);exported++;}}
   // Publish committed Calendar changes before processing Reminder mirrors.
   let failed=false,firstError:unknown;
-  try{await reconcile("event","calendar_event",appleEvents,events);}catch(error){if(error instanceof EventKitReadTimeout)throw error;failed=true;firstError=error;}
+  try{if(syncCalendar)await reconcile("event","calendar_event",appleEvents,events);}catch(error){if(error instanceof EventKitReadTimeout)throw error;failed=true;firstError=error;}
   finally{if(changed.has("calendar")){await notifyCommittedChanges(["calendar"]);changed.delete("calendar");}}
   const calendarCounts={imported,exported,merged};
-  try{await reconcile("reminder","task",appleReminders,tasks);await reconcileDomainReminders();}catch(error){if(!failed){failed=true;firstError=error;}}
+  try{if(syncReminders){await reconcile("reminder","task",appleReminders,tasks);await reconcileDomainReminders();}}catch(error){if(!failed){failed=true;firstError=error;}}
   if(failed)throw firstError;
   const reminderDiagnostics={selectedLists:reminderIDs.length,readReminders:appleReminders.length,imported:imported-calendarCounts.imported,exported:exported-calendarCounts.exported,merged:merged-calendarCounts.merged,conflicts:conflicts.filter(conflict=>conflict.entityType!=="calendar_event").length,excludedReminders:appleReminders.filter(item=>eventKitReminderExcluded(item)).length};
   return{imported,exported,merged,conflicts,skippedEvents,calendarDiagnostics,reminderDiagnostics,lastSync:new Date().toISOString()};}

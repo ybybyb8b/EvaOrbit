@@ -84,6 +84,35 @@ test("续火花 excludes imports, exports and existing links without deleting ei
 
 test("automatic sync is inert outside Native Host", async () => { assert.equal(await syncConfiguredEventKit(), null); });
 
+test("EventKit reads only enabled domains and ignores inactive links from old servers", async () => {
+  const oldWindow = globalThis.window, oldFetch = globalThis.fetch;
+  const requests: string[] = [], nativeKinds: unknown[] = [];
+  const status: EventKitStatus = { available: true, installationId: "test", calendarPermission: "full_access", reminderPermission: "full_access", calendars: [{ identifier: "calendar", title: "Calendar", sourceIdentifier: "source", sourceTitle: "iCloud", allowsContentModifications: true }], reminderLists: [{ identifier: "list", title: "Tasks", sourceIdentifier: "source", sourceTitle: "iCloud", allowsContentModifications: true }] };
+  let inactiveKind = "event";
+  globalThis.window = { EvaOrbitNative: { version: 1, call: async (method: string, params?: Record<string, unknown>) => {
+    assert.equal(method, "eventkit.fetch"); nativeKinds.push(params?.kind);
+    return { ok: true, result: { items: [] } };
+  } } } as unknown as Window & typeof globalThis;
+  globalThis.fetch = async (url, init) => {
+    assert.ok(!init?.method || init.method === "GET", "inactive links must never cause writes");
+    requests.push(String(url));
+    return Response.json(String(url).startsWith("/api/eventkit/links") ? [{ eventkit_entity_type: inactiveKind, entity_type: inactiveKind === "event" ? "calendar_event" : "task", eo_id: 99, binding_state: "recovery" }] : []);
+  };
+  try {
+    await synchronizeEventKit(status, { list: "import" });
+    assert.ok(requests[0].endsWith("&kind=reminder"));
+    assert.ok(requests.includes("/api/tasks?status=all"));
+    assert.ok(requests.includes("/api/reminders"));
+    assert.ok(requests.every(url => !url.startsWith("/api/calendar-events")));
+    assert.deepEqual(nativeKinds, ["reminder"]);
+    requests.length = 0; nativeKinds.length = 0; inactiveKind = "reminder";
+    await synchronizeEventKit(status, { calendar: "import" });
+    assert.ok(requests[0].endsWith("&kind=event"));
+    assert.ok(requests.every(url => !url.startsWith("/api/tasks") && !url.startsWith("/api/reminders")));
+    assert.deepEqual(nativeKinds, ["calendar"]);
+  } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch; }
+});
+
 test("configured auto sync migrates legacy routes, records success, and never fetches after permission revocation", async () => {
   const oldWindow = globalThis.window, oldStorage = globalThis.localStorage, oldFetch = globalThis.fetch;
   const values = new Map([["evaorbit.eventkit.sources.v1", JSON.stringify({ list: "two_way" })]]);

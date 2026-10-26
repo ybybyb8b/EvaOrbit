@@ -486,3 +486,5 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 本地 PoC bridge v1 新增 `business.request`，仅在既有本地主框架白名单内可用。与 TypeScript/Vite 共用安装包 `TrackerWeb/business-routes.json` 的显式路径/方法清单，不允许任意 URL、Tracker 同步、凭据、MCP 或系统同步接口。请求校验当前 SQLite 账号、会话 `onlineBusinessProtocol:1`、generation 和 `X-EvaOrbit-Account`，冻结 Cookie、使用 ephemeral URLSession、拒绝重定向；JSON/multipart 正文最多 8 MiB，不重试或入队。其他模块离线仍只读，Tracker 独立同步不变。
 
 附加 SQLite `online_business_cache` 保存账户隔离的访问结果（128 项/64 MiB，单项 8 MiB），不改旧数据/队列。Settings 分派保留 bridge method 与 HTTP verb 的区别。无权限、framework、entitlement、签名或安装链变化。必须先核验并获准发布配套业务 API、测试账户配置和必要 migration，再安装集中验收 IPA；未运行新 macOS CI/XCTest 或真实账户验收前不得声称已完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
+
+Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.

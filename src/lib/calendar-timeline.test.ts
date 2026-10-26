@@ -7,6 +7,18 @@ import type { CalendarEvent } from "./types.ts";
 
 const overnight: CalendarEvent = { id: 1, title: "😴 8h", notes: "原始评论\n不解读标签", startAt: "2026-09-30T15:00:00.000Z", endAt: "2026-09-30T23:00:00.000Z", isAllDay: false, timezone: "Asia/Shanghai", location: "卧室", status: "confirmed", createdAt: "", updatedAt: "" };
 
+test("month boundaries are calculated once per day rather than per event", () => {
+  const range = { from: dateRange("2026-10-01").from, to: dateRange("2026-10-31").to };
+  const original = Intl.DateTimeFormat.prototype.formatToParts;
+  let calls = 0;
+  Intl.DateTimeFormat.prototype.formatToParts = function (value) { calls++; return original.call(this, value); };
+  try {
+    const records = Array.from({ length: 100 }, (_, id) => ({ ...overnight, id, startAt: "2026-10-10T04:00:00Z", endAt: "2026-10-10T05:00:00Z" }));
+    assert.equal(buildCalendarTimelineEvents(records, range).length, 100);
+    assert.equal(calls, 62);
+  } finally { Intl.DateTimeFormat.prototype.formatToParts = original; }
+});
+
 test("Calendar timeline keeps true intervals and original content across days and month boundaries", () => {
   const events = buildCalendarTimelineEvents([overnight], { from: dateRange("2026-09-30").from, to: dateRange("2026-10-01").to });
   assert.equal(events.length, 2);

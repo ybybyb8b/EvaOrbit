@@ -486,3 +486,5 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 ## Tasks、Projects、Lucius 与 AI 设置
 
 本地 React 通过 `workspaces.readOnlySnapshot` 请求三种账户隔离快照，Native SQLite `workspace_readonly_cache` 与旧业务队列分离。`settings.aiConfiguration` 是仅限在线 Provider/模型管理的独立能力：固定路径/方法白名单、服务端协议与账户绑定、临时无缓存 HTTP 请求，无离线密钥或请求重放。原 Web Host 不公开这些本地专用方法；原权限、签名、HealthKit/EventKit/通知链不变。验收与回退见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
+
+Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.

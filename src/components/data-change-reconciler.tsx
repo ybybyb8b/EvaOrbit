@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { dataChangedDomains, dataChangedEvent, subscribeDataChanged } from "@/lib/data-changed";
+import { dataChangedDomains, dataChangedEvent } from "@/lib/data-changed";
 import { createPageFreshness, isAppDataMutation } from "@/lib/page-navigation";
 import { invalidateHomeCache } from "@/lib/home-cache";
 import { affectsData, dataDomain } from "@/lib/cache-policy";
@@ -65,10 +65,12 @@ export function DataChangeReconciler({ cacheScope }: { cacheScope: string | null
       if (document.visibilityState !== "visible" || Date.now() - lastActive < 30_000) return;
       lastActive = Date.now(); invalidate(["*"]);
     };
+    const online = () => { if (document.visibilityState === "visible") invalidate(["*"]); };
     window.addEventListener(dataChangedEvent, synced);
     window.addEventListener("storage", storage);
     window.addEventListener(clientDataChanged, changed);
     document.addEventListener("visibilitychange", visible);
+    window.addEventListener("online", online);
     return () => {
       active = false;
       clearTimeout(refreshTimer);
@@ -77,12 +79,9 @@ export function DataChangeReconciler({ cacheScope }: { cacheScope: string | null
       window.removeEventListener("storage", storage);
       window.removeEventListener(clientDataChanged, changed);
       document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("online", online);
     };
   }, [cacheScope, router]);
-  useEffect(() => {
-    if (pathname !== "/") return;
-    return subscribeDataChanged(["tasks", "reminders"], () => router.refresh());
-  }, [pathname, router]);
   useEffect(() => {
     const prefetched = new Set<string>();
     const intent = (event: Event) => {

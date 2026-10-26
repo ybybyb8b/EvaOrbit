@@ -96,13 +96,24 @@ export function nativeNotificationSchedule(item: ScheduledNotification): NativeN
   return nativeReminderNotification(item, typeof document === "undefined" ? "zh-CN" : document.documentElement.lang || navigator.language);
 }
 
-let reconcileQueue: Promise<void> = Promise.resolve();
+let reconcileWork: ReturnType<typeof performNativeNotificationReconcile> | null = null;
+let reconcilePending = false;
 
 export function reconcileNativeNotifications() {
   const guardSession=captureNativeSessionGuard();
-  const next = reconcileQueue.then(() => performNativeNotificationReconcile(guardSession));
-  reconcileQueue = next.then(() => undefined, () => undefined);
-  return next;
+  reconcilePending = true;
+  if (reconcileWork) return reconcileWork;
+  const work = (async () => {
+    let result;
+    do {
+      reconcilePending = false;
+      result = await performNativeNotificationReconcile(guardSession);
+    } while (reconcilePending);
+    return result;
+  })();
+  reconcileWork = work;
+  void work.then(() => { reconcileWork = null; }, () => { reconcileWork = null; });
+  return work;
 }
 
 async function performNativeNotificationReconcile(guardSession:()=>void) {

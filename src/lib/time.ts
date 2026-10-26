@@ -1,5 +1,17 @@
 export const EVAORBIT_TIME_ZONE = process.env.EVAORBIT_TIME_ZONE || "Asia/Shanghai";
 
+const dateFormat = new Intl.DateTimeFormat("en-CA", { timeZone: EVAORBIT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+const dateTimeFormats = new Map<string, Intl.DateTimeFormat>();
+function dateTimeFormat(timeZone: string) {
+  let formatter = dateTimeFormats.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+    if (dateTimeFormats.size >= 32) dateTimeFormats.delete(dateTimeFormats.keys().next().value!);
+    dateTimeFormats.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
 export function formatDurationMinutes(value: number) {
   if (!Number.isFinite(value) || value < 0) return "";
   const minutes = Number(value.toFixed(2));
@@ -10,9 +22,7 @@ export function formatDurationMinutes(value: number) {
 }
 
 export function zonedDateParts(value: string | Date, timeZone = EVAORBIT_TIME_ZONE) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date(value));
+  const parts = dateTimeFormat(timeZone).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
   return { date: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
 }
@@ -45,13 +55,11 @@ export function addCalendarInterval(date: string, amount: number, unit: "day" | 
 }
 
 export function dateInEvaOrbit(value = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: EVAORBIT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
+  return dateFormat.format(value);
 }
 
 function offsetAt(utcMs: number) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: EVAORBIT_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date(utcMs));
+  const parts = dateTimeFormat(EVAORBIT_TIME_ZONE).formatToParts(new Date(utcMs));
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day), Number(map.hour), Number(map.minute), Number(map.second)) - utcMs;
 }
