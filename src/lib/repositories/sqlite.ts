@@ -8,6 +8,18 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  async getInsightRun(date){return sqlite.getInsightRun(date);},
+  async listInsightRuns(){return sqlite.listInsightRuns();},
+  async listInsightRunAttempts(id){return sqlite.listInsightRunAttempts(id);},
+  async claimInsightRun(input){return sqlite.claimInsightRun(input);},
+  async finishInsightRun(id,snapshot,hash){return sqlite.finishInsightRun(id,snapshot,hash);},
+  async failInsightRun(id,error,retryable){return sqlite.failInsightRun(id,error,retryable);},
+  async listInsightReports(input){return sqlite.listInsightReports(input);},
+  async getInsightReport(id){return sqlite.getInsightReport(id);},
+  async getInsightReportForDate(date){return sqlite.getInsightReportForDate(date);},
+  async getInsightVersion(id,version){return sqlite.getInsightVersion(id,version);},
+  async listInsightVersions(id,before){return sqlite.listInsightVersions(id,before);},
+  async saveInsightReport(input){return sqlite.saveInsightReport(input);},
   async setSoftwareLibraryIcon(id,iconPath){return sqlite.setSoftwareLibraryIcon(id,iconPath);},
   async listSoftwareLibrary(){return sqlite.listSoftwareLibrary();},
   async getSoftwareLibraryEntry(id){return sqlite.getSoftwareLibraryEntry(id);},

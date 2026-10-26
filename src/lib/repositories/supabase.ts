@@ -1,4 +1,6 @@
 import "server-only";
+import { insightReportFromRow, insightVersionFromRow } from "../insight-reports";
+import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow } from "../insight-runs";
 import { libraryEntryFromRow, libraryEntryToRow } from "../software-library";
 import { trackerFromRow, trackerFieldFromRow, trackerEntryFromRow } from "../tracker-rows";
 import { mergePlaceAddress } from "../place-menu";
@@ -269,6 +271,26 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     return logs.map(log=>({...log,foodPlaces:(log.foodPlaceIds??[]).flatMap(id=>places.has(id)?[places.get(id)!]:[]),foodDishes:(log.foodDishIds??[]).flatMap(id=>{const row=dishes.get(id);return row?[{id,name:String(row.name),...(row.food_place_id!=null?{foodPlaceId:Number(row.food_place_id)}:{}),...(row.food_library_id!=null?{foodLibraryId:Number(row.food_library_id)}:{})}]:[];})}));
   }
   const repository: EvaOrbitRepository = {
+    async getInsightRun(date){const{data,error}=await client.from('insight_runs').select('*').eq('user_id',userId).eq('date',date).maybeSingle();fail(error,'读取日报执行状态');if(!data)return null;const run=insightRunFromRow(data);const attempt=await client.from('insight_run_attempts').select('*').eq('user_id',userId).eq('id',run.currentAttemptId).maybeSingle();fail(attempt.error,'读取日报执行输入');return{run,attempt:attempt.data?insightAttemptFromRow(attempt.data):null};},
+    async listInsightRuns(){const{data,error}=await client.from('insight_runs').select('*').eq('user_id',userId).order('date',{ascending:false}).limit(50);fail(error,'读取日报执行记录');return(data as Row[]).map(insightRunFromRow);},
+    async listInsightRunAttempts(id){const{data,error}=await client.from('insight_run_attempts').select('id,run_id,attempt_number,request_key,status,expected_version,lease_until,started_at,finished_at,error,output_hash').eq('user_id',userId).eq('run_id',id).order('attempt_number',{ascending:false}).limit(3);fail(error,'读取日报执行历史');return(data as Row[]).map(insightAttemptSummaryFromRow);},
+    async claimInsightRun(input){const{data,error}=await client.rpc('claim_insight_run',{p_date:input.date,p_request_key:input.requestKey,p_base:input.base,p_empty:input.empty});if(error?.message.includes('INSIGHT_'))throw new ConflictError('执行请求冲突，请重新读取状态。');fail(error,'获取日报执行租约');const result=data as {run:Row;attempt:Row|null};return{run:insightRunFromRow(result.run),attempt:result.attempt?insightAttemptFromRow(result.attempt):null};},
+    async finishInsightRun(id,snapshot,hash){const{data,error}=await client.rpc('finish_insight_run',{p_attempt_id:id,p_snapshot:snapshot,p_output_hash:hash});if(error?.message.includes('INSIGHT_'))throw new ConflictError('执行租约、输入或报告版本已变化，请读取运行状态后重试。');fail(error,'完成 AI 日报');const result=data as {run:Row;report:Row;version:Row;newly_completed:boolean};return{run:insightRunFromRow(result.run),report:insightReportFromRow(result.report),version:insightVersionFromRow(result.version),newlyCompleted:result.newly_completed};},
+    async failInsightRun(id,errorMessage,retryable){const{data,error}=await client.rpc('fail_insight_run',{p_attempt_id:id,p_error:errorMessage,p_retryable:retryable});if(error?.message.includes('INSIGHT_'))throw new ConflictError('执行尝试不存在或租约已变化。');fail(error,'记录日报执行失败');return insightRunFromRow(data as Row);},
+    async listInsightReports(input){
+      let request=client.from('insight_reports').select('*').eq('user_id',userId).eq('period_type',input.periodType);
+      if(input.before)request=request.lt('period_start',input.before);
+      const{data,error}=await request.order('period_start',{ascending:false}).limit(50);fail(error,'读取洞察报告');return(data as Row[]).map(insightReportFromRow);
+    },
+    async getInsightReport(id){const{data,error}=await client.from('insight_reports').select('*').eq('user_id',userId).eq('id',id).maybeSingle();fail(error,'读取洞察报告');return data?insightReportFromRow(data):null;},
+    async getInsightReportForDate(date){const{data,error}=await client.from('insight_reports').select('*').eq('user_id',userId).eq('period_type','daily').eq('period_start',date).maybeSingle();fail(error,'读取日报');return data?insightReportFromRow(data):null;},
+    async getInsightVersion(id,version){const{data,error}=await client.from('insight_report_versions').select('*').eq('user_id',userId).eq('report_id',id).eq('version',version).maybeSingle();fail(error,'读取洞察版本');return data?insightVersionFromRow(data):null;},
+    async listInsightVersions(id,before){let request=client.from('insight_report_versions').select('id,report_id,version,created_at,method:snapshot->>method,agent:snapshot->>agent,revision_note:snapshot->>revisionNote').eq('user_id',userId).eq('report_id',id);if(before)request=request.lt('version',before);const{data,error}=await request.order('version',{ascending:false}).limit(50);fail(error,'读取洞察版本历史');return(data as Row[]).map(row=>({id:String(row.id),reportId:String(row.report_id),version:Number(row.version),createdAt:String(row.created_at),method:row.method as 'rule'|'ai',agent:String(row.agent),revisionNote:String(row.revision_note)}));},
+    async saveInsightReport(input){
+      const{data,error}=await client.rpc('save_insight_report',{p_date:input.date,p_period_end:input.periodEnd,p_expected_version:input.expectedVersion,p_request_key:input.requestKey,p_request_hash:input.requestHash,p_snapshot:input.snapshot});
+      if(error?.message.includes('INSIGHT_'))throw new ConflictError('报告版本或请求内容冲突，请刷新后重试。');
+      fail(error,'保存洞察版本');const result=data as {report:Row;version:Row};return{report:insightReportFromRow(result.report),version:insightVersionFromRow(result.version)};
+    },
     async setSoftwareLibraryIcon(id,iconPath){const{data,error}=await client.from("software_library").update({icon_path:iconPath}).eq("user_id",userId).eq("id",id).select().maybeSingle();fail(error,"更新软件图标");return data?libraryEntryFromRow(data):null;},
     async listSoftwareLibrary(){
       const rows: Row[]=[];

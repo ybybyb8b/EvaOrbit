@@ -62,9 +62,6 @@ export function FoodDrinkHome({ initialRecord }: { initialRecord?: "food" | "dri
         {warning ? <button className={styles.briefWarning} onClick={() => setLimitEditor(warning.limit)}><span className="user-content">{warning.limit.name}</span> · {limitStateLabels[warning.state]} <Icon name="arrow" /></button> : <p className={styles.hint}>{data.limitStatuses.length ? "当前限额均在范围内。" : "当前没有启用中的限额。"}</p>}
       </>}
     </section>
-    <section className={styles.insights} aria-labelledby="insights-title"><div className="section-heading"><h2 id="insights-title">Insights</h2></div>
-      {ready ? <>{!data.window.complete && <p className={styles.hint}>记录较多，仅展示已读取内容的代表性模式，暂停前后比较。</p>}{data.insights.length ? <ol className={styles.insightList}>{data.insights.map(insight => <li key={insight.id}><h3>{insight.href ? <Link href={insight.href}>{insight.title}<Icon name="arrow" /></Link> : insight.title}</h3><p>{insight.body}</p></li>)}</ol> : <p className={styles.insightEmpty}>近期还没有足够记录形成有代表性的模式。先记下来，有值得注意的变化再放在这里。</p>}</> : error ? <p className={styles.hint}>重新加载后查看近期洞察。</p> : <PageLoading title="近期洞察" englishTitle="insights" inline />}
-    </section>
     <section id="limits" className={styles.limits} aria-labelledby="limits-title"><div className="section-heading"><h2 id="limits-title">Limits</h2><button className="text-button" onClick={() => setLimitEditor("new")}>设置限额</button></div>
       {ready ? data.limits.length ? <div className={styles.limitList}>{data.limits.map(limit => {
         const status = data.limitStatuses.find(item => item.limit.id === limit.id);

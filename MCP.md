@@ -30,7 +30,7 @@ The MCP exposes exactly 8 generic tools:
 
 Generic tools keep `resource` as a plain string. Call `eo_resources`, then `eo_schema`, before operating on a resource. The server-side registry decides which resources, fields, capabilities, validations, and actions are available.
 
-The current registry contains 36 resources:
+The current registry contains 39 resources:
 
 - Memory and capture: `memory_entity`, `memory_fact`, `memory_source`, `inbox`, `memo`, `chronicle`.
 - Work and calendar: `task`, `calendar_event`, `project`, `project_item`.
@@ -39,9 +39,10 @@ The current registry contains 36 resources:
 - Health and activity: `health_record`, `training_log`, `tracker`.
 - Media: `media`, `media_series`.
 - Cats: `cat_pet`, `cat_record`, `cat_routine`.
-- Reminders and subscriptions: `reminder`, `subscription`.
+  - Reminders and subscriptions: `reminder`, `subscription`. Subscriptions default to `mode=recurring`; `mode=manual` requires `expires_on` and records actual purchases using `record_purchase` with stable `purchase_key`, `paid_on`, `amount`, `currency`, `valid_until` and optional purchased/bonus duration pairs. Manual expiry never auto-books or predicts payment; updating `expires_on` changes the reminder without payment.
 - Food sources and limits: `food_place`, `food_dish`, `drink_limit`.
 - Food/Drink and nutrition: `food_log`, `drink_log`, `food_library`, `nutrition_daily`, `daily_energy`.
+- Analysis: `insight_context` (get only; ended natural-day IDs), `insight_report` (get only; UUID or UUID/v/N), `insight_run` (get/search and start/complete/fail). Daily run IDs are `yesterday` or `day/YYYY-MM-DD`. Existing generic tools support the full external Agent cycle; no dedicated tools or arbitrary report writes were added. See [Agent protocol](docs/INSIGHTS_AGENT.md) and [user Scheduled Task prompt](docs/INSIGHTS_DAILY_TASK.md).
 
 These are business resources discovered through tools, not MCP protocol `resources/list` registrations. All dedicated Food/Drink tools have been removed; callers must use the generic resource operations below. `tracker_list` and `tracker_create_entry` have been removed: use `eo_search(tracker)` plus `eo_get(tracker,id)`, and `eo_action(tracker,create_entry)`. Search exposes `group_name`; detail fields include historical fields, so filter out non-null `archived_at` when presenting active fields. Entry input uses `data.values`; action output uses `result`.
 

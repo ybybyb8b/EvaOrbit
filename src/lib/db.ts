@@ -2,6 +2,11 @@ import {sameSubscriptionPurchase} from "./subscription-purchase";
 import type {NewSubscriptionPurchase} from "./repositories/types";
 import { mergePlaceAddress } from "./place-menu";
 import { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
+import { shiftDate } from "./time";
+import { insightReportFromRow, insightVersionFromRow, type InsightReportWrite, type InsightPeriodType } from "./insight-reports";
+import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow, stableInsightJson, type InsightRunClaimInput, type InsightRunClaim } from "./insight-runs";
+import type { InsightSnapshot } from "./insight-reports";
 import { libraryEntryFromRow, type LibraryInput } from "./software-library";
 import { parseTrainingPlanWrite, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
 import type { TrainingPlan } from "./types";
@@ -1686,6 +1691,143 @@ export function getSoftwareLibraryEntry(id:number){const row=database.prepare("S
 export function createSoftwareLibraryEntry(input:LibraryInput){const result=database.prepare("INSERT INTO software_library(name,category,platforms,license,version,acquisition,acquired_on,website,notes) VALUES(?,?,?,?,?,?,?,?,?)").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes);return getSoftwareLibraryEntry(Number(result.lastInsertRowid))!;}
 export function updateSoftwareLibraryEntry(id:number,input:LibraryInput){const result=database.prepare("UPDATE software_library SET name=?,category=?,platforms=?,license=?,version=?,acquisition=?,acquired_on=?,website=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,id);return result.changes?getSoftwareLibraryEntry(id):null;}
 export function deleteSoftwareLibraryEntry(id:number){return database.prepare("DELETE FROM software_library WHERE id=?").run(id).changes>0;}
+
+const hasV85=database.prepare("SELECT 1 FROM migrations WHERE version=85").get();
+if(!hasV85)database.exec(`BEGIN;
+  CREATE TABLE insight_reports (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'local',
+    period_type TEXT NOT NULL CHECK(period_type IN ('daily','monthly','quarterly','yearly')),
+    period_start TEXT NOT NULL, period_end TEXT NOT NULL CHECK(period_end>period_start),
+    time_zone TEXT NOT NULL DEFAULT 'Asia/Shanghai' CHECK(time_zone='Asia/Shanghai'),
+    current_version INTEGER NOT NULL DEFAULT 0 CHECK(current_version>=0),
+    status TEXT NOT NULL CHECK(status IN ('ready','no_findings')),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(user_id,period_type,period_start)
+  );
+  CREATE TABLE insight_report_versions (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'local', report_id TEXT NOT NULL REFERENCES insight_reports(id),
+    version INTEGER NOT NULL CHECK(version>0), request_key TEXT NOT NULL, request_hash TEXT NOT NULL,
+    snapshot TEXT NOT NULL CHECK(json_valid(snapshot) AND json_type(snapshot)='object'), created_at TEXT NOT NULL,
+    UNIQUE(user_id,request_key), UNIQUE(report_id,version)
+  );
+  CREATE TRIGGER insight_versions_immutable BEFORE UPDATE ON insight_report_versions BEGIN SELECT RAISE(ABORT,'Insight versions are immutable'); END;
+  INSERT INTO migrations(version) VALUES(85); COMMIT;`);
+
+export function listInsightReports(input:{periodType:InsightPeriodType;before?:string}) {
+  return database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND period_type=? AND period_start<? ORDER BY period_start DESC LIMIT 50")
+    .all(input.periodType,input.before??"9999-12-31").map(insightReportFromRow);
+}
+export function getInsightReport(id:string) {const row=database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND id=?").get(id);return row?insightReportFromRow(row):null;}
+export function getInsightReportForDate(date:string) {const row=database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND period_type='daily' AND period_start=?").get(date);return row?insightReportFromRow(row):null;}
+export function getInsightVersion(reportId:string,version:number) {const row=database.prepare("SELECT * FROM insight_report_versions WHERE user_id='local' AND report_id=? AND version=?").get(reportId,version);return row?insightVersionFromRow(row):null;}
+export function listInsightVersions(reportId:string,before=2147483647) {
+  return database.prepare("SELECT id,report_id,version,created_at,json_extract(snapshot,'$.method') AS method,json_extract(snapshot,'$.agent') AS agent,json_extract(snapshot,'$.revisionNote') AS revision_note FROM insight_report_versions WHERE user_id='local' AND report_id=? AND version<? ORDER BY version DESC LIMIT 50").all(reportId,before)
+    .map(row=>({id:String(row.id),reportId:String(row.report_id),version:Number(row.version),createdAt:String(row.created_at),method:row.method as 'rule'|'ai',agent:String(row.agent),revisionNote:String(row.revision_note)}));
+}
+export function saveInsightReport(input:InsightReportWrite) {
+  return insightTransaction(()=>saveInsightReportInTransaction(input));
+}
+function insightTransaction<T>(operation:()=>T):T {
+  database.exec("BEGIN IMMEDIATE");
+  try{const result=operation();database.exec("COMMIT");return result;}catch(error){database.exec("ROLLBACK");throw error;}
+}
+function saveInsightReportInTransaction(input:InsightReportWrite) {
+    const replay=database.prepare("SELECT * FROM insight_report_versions WHERE user_id='local' AND request_key=?").get(input.requestKey);
+    if(replay){
+      const version=insightVersionFromRow(replay),report=getInsightReport(version.reportId)!;
+      if(version.requestHash!==input.requestHash||report.periodStart!==input.date)throw new ConflictError("请求标识已用于其他内容，请重新发起分析。");
+      return {report,version};
+    }
+    let report=getInsightReportForDate(input.date);
+    if((report?.currentVersion??0)!==input.expectedVersion)throw new ConflictError("报告已有新版本，请刷新后重试。");
+    for(const finding of input.snapshot.findings)for(const ref of finding.revises){
+      const previous=getInsightVersion(ref.reportId,ref.version);
+      if(!previous?.snapshot.findings.some(item=>item.id===ref.findingId))throw new ConflictError("修订引用不存在或不属于当前账户。");
+    }
+    const now=new Date().toISOString();
+    if(!report){
+      const id=randomUUID();database.prepare("INSERT INTO insight_reports(id,period_type,period_start,period_end,status,created_at,updated_at) VALUES(?,'daily',?,?,'ready',?,?)").run(id,input.date,input.periodEnd,now,now);report=getInsightReport(id)!;
+    }
+    const id=randomUUID(),versionNumber=report.currentVersion+1;
+    database.prepare("INSERT INTO insight_report_versions(id,report_id,version,request_key,request_hash,snapshot,created_at) VALUES(?,?,?,?,?,?,?)").run(id,report.id,versionNumber,input.requestKey,input.requestHash,JSON.stringify(input.snapshot),now);
+    database.prepare("UPDATE insight_reports SET current_version=?,status=?,updated_at=? WHERE id=?").run(versionNumber,input.snapshot.findings.length?'ready':'no_findings',now,report.id);
+    const result={report:getInsightReport(report.id)!,version:getInsightVersion(report.id,versionNumber)!};
+    return result;
+}
+
+const hasV86=database.prepare("SELECT 1 FROM migrations WHERE version=86").get();
+if(!hasV86)database.exec(`BEGIN;
+  CREATE TABLE insight_runs (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT 'local',date TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN('running','succeeded','waiting_data','waiting_retry','failed')),
+    attempt_count INTEGER NOT NULL CHECK(attempt_count BETWEEN 0 AND 3),current_attempt_id TEXT NOT NULL,
+    lease_until TEXT,next_retry_at TEXT,report_id TEXT,report_version INTEGER,last_error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+    UNIQUE(user_id,date),FOREIGN KEY(report_id,report_version) REFERENCES insight_report_versions(report_id,version)
+  );
+  CREATE TABLE insight_run_attempts (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT 'local',run_id TEXT NOT NULL REFERENCES insight_runs(id),
+    attempt_number INTEGER NOT NULL CHECK(attempt_number BETWEEN 1 AND 3),request_key TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN('running','succeeded','failed','expired','waiting_data')),
+    base_snapshot TEXT NOT NULL CHECK(json_valid(base_snapshot)),expected_version INTEGER NOT NULL,lease_until TEXT NOT NULL,
+    started_at TEXT NOT NULL,finished_at TEXT,error TEXT,output_hash TEXT,UNIQUE(user_id,request_key),UNIQUE(run_id,attempt_number)
+  );
+  CREATE TRIGGER insight_attempts_guard BEFORE UPDATE ON insight_run_attempts WHEN OLD.status<>'running' OR NEW.id<>OLD.id OR NEW.user_id<>OLD.user_id OR NEW.run_id<>OLD.run_id OR NEW.request_key<>OLD.request_key OR NEW.attempt_number<>OLD.attempt_number OR NEW.base_snapshot<>OLD.base_snapshot OR NEW.expected_version<>OLD.expected_version BEGIN SELECT RAISE(ABORT,'Insight attempt input or completed history is immutable'); END;
+  INSERT INTO migrations(version) VALUES(86);COMMIT;`);
+export function getInsightRun(date:string):InsightRunClaim|null {
+  const row=database.prepare("SELECT * FROM insight_runs WHERE user_id='local' AND date=?").get(date);if(!row)return null;
+  const run=insightRunFromRow(row),attempt=database.prepare("SELECT * FROM insight_run_attempts WHERE user_id='local' AND id=?").get(run.currentAttemptId);
+  return{run,attempt:attempt?insightAttemptFromRow(attempt):null};
+}
+export function listInsightRuns(){return database.prepare("SELECT * FROM insight_runs WHERE user_id='local' ORDER BY date DESC LIMIT 50").all().map(insightRunFromRow);}
+export function listInsightRunAttempts(runId:string){return database.prepare("SELECT id,run_id,attempt_number,request_key,status,expected_version,lease_until,started_at,finished_at,error,output_hash FROM insight_run_attempts WHERE user_id='local' AND run_id=? ORDER BY attempt_number DESC LIMIT 3").all(runId).map(insightAttemptSummaryFromRow);}
+export function claimInsightRun(input:InsightRunClaimInput):InsightRunClaim {
+  return insightTransaction(()=>{
+    const now=new Date().toISOString(),leaseUntil=new Date(Date.now()+30*60000).toISOString();
+    const replay=database.prepare("SELECT * FROM insight_run_attempts WHERE user_id='local' AND request_key=?").get(input.requestKey);
+    if(replay){const original=database.prepare("SELECT * FROM insight_runs WHERE id=? AND user_id='local'").get(String(replay.run_id))!;if(original.date!==input.date)throw new ConflictError("运行请求 UUID 已用于另一个日期。");return{run:insightRunFromRow(original),attempt:insightAttemptFromRow(replay)};}
+    let current=getInsightRun(input.date);
+    if(current){
+      const{run}=current;
+      const leased=run.status==='running'&&run.leaseUntil!==null&&Date.parse(run.leaseUntil)>Date.parse(now);
+      if(run.status==='succeeded'||run.status==='failed'||leased||run.nextRetryAt&&Date.parse(run.nextRetryAt)>Date.parse(now))return{run,attempt:null};
+      if(run.status==='running')database.prepare("UPDATE insight_run_attempts SET status='expired',finished_at=?,error='Agent lease expired' WHERE id=? AND status='running'").run(now,run.currentAttemptId);
+      if(run.attemptCount>=3){database.prepare("UPDATE insight_runs SET status='failed',last_error='Retry limit reached',lease_until=NULL,next_retry_at=NULL,updated_at=? WHERE id=?").run(now,run.id);return{run:getInsightRun(input.date)!.run,attempt:null};}
+    }
+    const attemptId=randomUUID(),number=(current?.run.attemptCount??0)+1,deferred=input.empty&&number===1;
+    if(!current){const id=randomUUID();database.prepare("INSERT INTO insight_runs(id,date,status,attempt_count,current_attempt_id,created_at,updated_at) VALUES(?,?,'running',0,?,?,?)").run(id,input.date,attemptId,now,now);current=getInsightRun(input.date)!;}
+    const error=deferred?'No target-day observations; defer once for late records':null;
+    database.prepare("INSERT INTO insight_run_attempts(id,run_id,attempt_number,request_key,status,base_snapshot,expected_version,lease_until,started_at,finished_at,error) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(attemptId,current.run.id,number,input.requestKey,deferred?'waiting_data':'running',JSON.stringify(input.base),getInsightReportForDate(input.date)?.currentVersion??0,leaseUntil,now,deferred?now:null,error);
+    database.prepare("UPDATE insight_runs SET status=?,attempt_count=?,current_attempt_id=?,lease_until=?,next_retry_at=?,last_error=?,updated_at=? WHERE id=?")
+      .run(deferred?'waiting_data':'running',number,attemptId,deferred?null:leaseUntil,deferred?new Date(Date.now()+3600000).toISOString():null,error,now,current.run.id);
+    return getInsightRun(input.date)!;
+  });
+}
+function insightAttemptState(id:string){const row=database.prepare("SELECT * FROM insight_run_attempts WHERE id=? AND user_id='local'").get(id);if(!row)throw new ConflictError("运行尝试不存在。");const attempt=insightAttemptFromRow(row),header=database.prepare("SELECT * FROM insight_runs WHERE id=? AND user_id='local'").get(attempt.runId)!;return{attempt,run:insightRunFromRow(header)};}
+export function finishInsightRun(attemptId:string,snapshot:InsightSnapshot,outputHash:string){
+  return insightTransaction(()=>{
+    const{run,attempt}=insightAttemptState(attemptId);
+    if(attempt.status==='succeeded'){
+      if(attempt.outputHash!==outputHash)throw new ConflictError("已完成尝试不能提交不同输出。");
+      return{run,report:getInsightReport(run.reportId!)!,version:getInsightVersion(run.reportId!,run.reportVersion!)!,newlyCompleted:false};
+    }
+    const now=new Date().toISOString();
+    if(run.currentAttemptId!==attemptId||run.status!=='running'||attempt.status!=='running'||Date.parse(attempt.leaseUntil)<=Date.parse(now))throw new ConflictError("运行租约已失效，请重新获取执行状态。");
+    if(stableInsightJson(snapshot.input)!==stableInsightJson(attempt.base.input)||stableInsightJson(snapshot.evidence)!==stableInsightJson(attempt.base.evidence)||snapshot.agent!==attempt.base.agent||snapshot.method!=='ai'||snapshot.revisionNote!==attempt.base.revisionNote||attempt.base.findings.some(finding=>!snapshot.findings.some(item=>stableInsightJson(item)===stableInsightJson(finding))))throw new ConflictError("报告必须使用锁定的输入、证据和规则发现。");
+    const saved=saveInsightReportInTransaction({date:run.date,periodEnd:shiftDate(run.date,1),expectedVersion:attempt.expectedVersion,requestKey:attempt.id,requestHash:outputHash,revisionNote:snapshot.revisionNote,snapshot});
+    database.prepare("UPDATE insight_run_attempts SET status='succeeded',finished_at=?,output_hash=? WHERE id=?").run(now,outputHash,attemptId);
+    database.prepare("UPDATE insight_runs SET status='succeeded',lease_until=NULL,next_retry_at=NULL,last_error=NULL,report_id=?,report_version=?,updated_at=? WHERE id=?").run(saved.report.id,saved.version.version,now,run.id);
+    return{...saved,run:getInsightRun(run.date)!.run,newlyCompleted:true};
+  });
+}
+export function failInsightRun(attemptId:string,error:string,retryable:boolean){
+  return insightTransaction(()=>{
+    const state=insightAttemptState(attemptId);if(state.attempt.status!=='running')return state.run;
+    if(state.run.currentAttemptId!==attemptId)throw new ConflictError("运行租约已失效。");
+    const now=new Date().toISOString(),retry=retryable&&state.run.attemptCount<3;
+    database.prepare("UPDATE insight_run_attempts SET status='failed',finished_at=?,error=? WHERE id=?").run(now,error,attemptId);
+    database.prepare("UPDATE insight_runs SET status=?,lease_until=NULL,next_retry_at=?,last_error=?,updated_at=? WHERE id=?").run(retry?'waiting_retry':'failed',retry?new Date(Date.now()+600000).toISOString():null,error,now,state.run.id);
+    return getInsightRun(state.run.date)!.run;
+  });
+}
 
 export function getTrainingPlan(): TrainingPlan | null {
   const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();

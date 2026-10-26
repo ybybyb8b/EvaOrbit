@@ -10,13 +10,26 @@ create/update payloads strictly, documents its update mode, and delegates
 deletes and non-CRUD actions to existing business services. Register resources
 one at a time rather than mirroring every database table.
 
-The registry has 36 resources and 37 actions. Food Log, Drink Log, Food Library,
+The registry has 39 resources and 41 actions. Food Log, Drink Log, Food Library,
 daily nutrition and manual energy now route through generic tools to their
 existing parsers/services. Drink mutations include item.limits. Food portions
 preserve snapshots; Food Library create is name/brand upsert and removal keeps
 referenced history. Daily Energy replacement is an explicit upsert action.
 Tracker search supports cursors so generic discovery can read more than 100
 Trackers; use get for fields and create_entry with data.values.
+
+`insight_context` exposes only get, accepting `yesterday` or `day/YYYY-MM-DD`
+for an ended Asia/Shanghai natural day. It delegates to the same read-only
+context service used internally, with 7/30-day baselines and explicit caps,
+omissions and provenance. It never persists reports or catches up subscriptions.
+See [Insights context](../../../docs/INSIGHTS_CONTEXT.md).
+
+`insight_run` adds a bounded Daily lease and start/complete/fail actions. The
+external Agent cannot replace the frozen input/evidence or deterministic rules;
+completion atomically persists a report and execution outcome. `insight_report`
+reads fixed versions as UUID/v/N. User-configured ChatGPT cloud tasks use these
+resources through the same OAuth context, without App model keys or new tools.
+See [Agent backend](../../../docs/INSIGHTS_AGENT.md).
 
 Schema discovery includes `create_fields`, `update_fields`, Cat Record
 `field_variants`, `required_conditions`, `usage_guidance`, `search_schema`,

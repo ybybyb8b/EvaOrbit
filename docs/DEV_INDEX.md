@@ -16,6 +16,7 @@
 | [Lucius](#lucius) | `/lucius`：状态、动态、评论、日记与 Case |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
 | [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
+| [Insights](#insights) | `/insights`：报告、证据、不可变版本与只读分析上下文 |
 | [Inbox](#inbox) | `/inbox`：捕获、处理与转换 |
 | [Tasks](#tasks) | `/tasks`：待办及其提醒规则 |
 | [Trackers](#trackers) | `/trackers`：自定义观测、属性、记录与目标 |
@@ -163,6 +164,15 @@
 - **职责与入口**：[chronicle/](../src/app/chronicle/)、[chronicle 服务](../src/lib/services/chronicle.ts)；`chronicle_entries`；`/api/chronicle`，MCP `chronicle`。
 - **依赖与决定**：纪事保存 date、标题、Markdown 正文和来源；与 Home 今日一记、Lucius 日记、Memo 各有数据表及服务，修改时不要按“都是日记”互相替换。
 - **契约**：[MCP](../MCP.md)；字段与校验以 [chronicle.ts](../src/lib/chronicle.ts) 为准。
+
+- **共享/本地只读**：[ChronicleWorkspace](../src/local-trackers/chronicle-workspace.tsx) 通过 [ChronicleDataProvider](../src/components/chronicle-data-context.tsx) 复用原版列表、详情与 [ChronicleEditor](../src/app/chronicle/chronicle-editor.tsx)。既有纯 GET 下载最近 100 篇至账户隔离缓存；表单只预览、不写入 outbox。排版、阅读宽度及预览改进同时作用于 Web 和 Host。范围、媒体限制与回退见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。
+
+## Insights
+
+- **职责与入口**：[报告页](../src/app/insights/)、[报告服务](../src/lib/services/insight-reports.ts)、[报告类型与校验](../src/lib/insight-reports.ts)、[Context service](../src/lib/services/insight-context.ts)。MCP `insight_context` 仅支持 get，ID 为 `yesterday`、`day/YYYY-MM-DD`，限已经结束的上海自然日。
+- **数据与边界**：`insight_reports` 按账户/周期/起点保持稳定身份，`insight_report_versions` 保存不可变快照；`/api/insights` 与详情接口管理规则/AI 报告、证据与版本。`insight_runs` / `insight_run_attempts` 保存外部 Agent 的冻结输入、30 分钟租约、三次执行及结果引用，`/api/insights/runs` 提供只读状态查询。Postgres 仅授予账户 SELECT，受控 RPC 原子完成报告与运行；SQLite 保持对应事务及备份恢复。报告写入、执行控制与 Context 只读白名单分开。
+- **依赖与决定**：复用 Food 行为规则、Tracker 字段统计与营养估算；Context 按日读取前 30 天基线，并附最多 50 个既往日报版本引用。公开覆盖限制，不调用订阅补记或独立 Web 身份 HealthKit 能量读取。Food 旧行为展示已迁移，Tracker 图表与统计保留。外部 AI 通过 MCP `insight_run` start/complete/fail 受控执行，`insight_report` 只读历史；用户选择自行配置 ChatGPT 云端 Scheduled Task，不调用 App 内模型。长期周期计算及独立本地 Host 适配未开启。
+- **详文**：[Context 口径](INSIGHTS_CONTEXT.md)、[报告与 Phase 2](INSIGHTS_REPORTS.md)、[Agent 后台与 Phase 3](INSIGHTS_AGENT.md)、[用户定时任务正文](INSIGHTS_DAILY_TASK.md)。
 
 ## MCP
 

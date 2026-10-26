@@ -156,6 +156,18 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  getInsightRun(date: string): Promise<import("../insight-runs").InsightRunClaim | null>;
+  listInsightRuns(): Promise<import("../insight-runs").InsightRun[]>;
+  listInsightRunAttempts(runId: string): Promise<import("../insight-runs").InsightAttemptSummary[]>;
+  claimInsightRun(input: import("../insight-runs").InsightRunClaimInput): Promise<import("../insight-runs").InsightRunClaim>;
+  finishInsightRun(attemptId: string, snapshot: import("../insight-reports").InsightSnapshot, outputHash: string): Promise<import("../insight-runs").InsightRunFinish>;
+  failInsightRun(attemptId: string, error: string, retryable: boolean): Promise<import("../insight-runs").InsightRun>;
+  listInsightReports(input: { periodType: import("../insight-reports").InsightPeriodType; before?: string }): Promise<import("../insight-reports").InsightReport[]>;
+  getInsightReport(id: string): Promise<import("../insight-reports").InsightReport | null>;
+  getInsightReportForDate(date: string): Promise<import("../insight-reports").InsightReport | null>;
+  getInsightVersion(reportId: string, version: number): Promise<import("../insight-reports").InsightVersion | null>;
+  listInsightVersions(reportId: string, before?: number): Promise<import("../insight-reports").InsightVersionSummary[]>;
+  saveInsightReport(input: import("../insight-reports").InsightReportWrite): Promise<import("../insight-reports").InsightReportResult>;
   listMemoryEntities(input?: MemoryEntityListInput): Promise<MemoryEntity[]>;
   getMemoryEntity(id: string): Promise<MemoryEntity | null>;
   createMemoryEntity(input: NewMemoryEntity): Promise<MemoryEntity>;

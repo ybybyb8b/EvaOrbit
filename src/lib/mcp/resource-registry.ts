@@ -2,6 +2,8 @@ import {membershipState} from "../subscriptions.ts";
 import {dateInEvaOrbit} from "../time.ts";
 import {parseSubscriptionPurchase} from "../validation.ts";
 import { ConflictError } from "../errors.ts";
+import { insightPeriod, type InsightContext } from "../insight-context.ts";
+import { insightOutputFromMcp } from "../insight-runs.ts";
 import type { FoodLog, DrinkLog, DailyNutritionSummary, DrinkLimitStatus } from "../types.ts";
 import { parseNewFoodLog, parseFoodLogPatch, parseNewDrinkLog, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseDailyEnergy } from "../validation.ts";
 import { documentedActionSchemas, resourceActionSchemas } from "./resource-actions.ts";
@@ -135,6 +137,14 @@ export type LuciusStateResourceOperations = {
 };
 
 export type ResourceRegistryOperations = {
+  insightRun?: {
+    get(id:string):Promise<object>; search(dueOnly?:boolean):Promise<object[]>;
+    start(id:string,key:unknown,fingerprint:unknown):Promise<object>;
+    complete(id:string,attemptId:unknown,output:unknown):Promise<object>;
+    fail(id:string,attemptId:unknown,error:unknown,retryable:unknown):Promise<object>;
+  };
+  insightReport?: {get(id:string,version?:number):Promise<object>};
+  insightContext?: { get(id: string): Promise<InsightContext> };
   foodLog?: { search(input: { query?: string; date?: string; mealType?: string; foodPlaceId?: number; foodDishId?: number; limit?: number }): Promise<FoodLog[]>; get(id: number): Promise<FoodLog | null>; create(input: ReturnType<typeof parseNewFoodLog>): Promise<FoodLog>; update(id: number, input: Record<string, unknown>): Promise<FoodLog | null>; delete(id: number): Promise<boolean> };
   drinkLog?: { search(input: { query?: string; date?: string; drinkType?: string; foodPlaceId?: number; drinkMenuId?: number; limit?: number }): Promise<DrinkLog[]>; get(id: number): Promise<DrinkLog | null>; create(input: ReturnType<typeof parseNewDrinkLog>): Promise<{ drink: DrinkLog; limits: DrinkLimitStatus[] }>; update(id: number, input: Record<string, unknown>): Promise<{ drink: DrinkLog; limits: DrinkLimitStatus[] } | null>; delete(id: number): Promise<boolean> };
   foodLibrary?: { search(query?: string, brand?: string, options?: { name?: string; category?: FoodLibraryItem["category"]; limit?: number }): Promise<FoodLibraryItem[]>; get(id: number): Promise<FoodLibraryItem | null>; create(input: ReturnType<typeof parseFoodLibraryItem>): Promise<FoodLibraryItem>; update(id: number, input: ReturnType<typeof parseFoodLibraryItemPatch>): Promise<FoodLibraryItem | null>; delete(id: number): Promise<{ id: number; action: "deleted" | "archived" } | null> };
@@ -1214,5 +1224,31 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
   if(operations.foodLibrary)resources.push(foodLibraryResource(operations.foodLibrary));
   if(operations.nutritionDaily)resources.push(nutritionDailyResource(operations.nutritionDaily));
   if(operations.dailyEnergy)resources.push(dailyEnergyResource(operations.dailyEnergy));
+  if(operations.insightReport)resources.push({
+    schema:{resource:"insight_report",description:"Read saved Insights reports, fixed historical versions, evidence and revision relationships.",fields:{report:{type:"object",read_only:true,description:"Stable report identity and current version."},version:{type:"object",read_only:true,description:"Immutable selected snapshot."},versions:{type:"array",read_only:true,description:"Recent version metadata."}},required_fields:[],writable_fields:[],searchable_fields:[],supported_actions:[],validation_rules:["get ID is report UUID or UUID/v/positive-version", "Read only; automated writes use insight_run with frozen server inputs"]},
+    async get(id){const match=typeof id==="string"?/^([a-f0-9-]{36})(?:\/v\/([1-9]\d{0,6}))?$/i.exec(id):null;if(!match)throw new ValidationError("Report ID must be UUID or UUID/v/N.");return snakeRecord(await operations.insightReport!.get(match[1],match[2]?Number(match[2]):undefined));},
+  });
+  if(operations.insightRun)resources.push({
+    schema:{resource:"insight_run",description:"Single external Agent Daily execution: immutable input lease, attempts, failure/retry and atomic report completion.",fields:{date:{type:"string",description:"Ended Shanghai natural day."},run:{type:"object",read_only:true,description:"Stable per-user/day run, current lease, retry time and result reference."},attempts:{type:"array",read_only:true,description:"Up to three execution attempts; inputs are private to a claimed lease."}},required_fields:[],writable_fields:[],searchable_fields:[],supported_actions:["start","complete","fail"],validation_rules:["IDs: yesterday or day/YYYY-MM-DD for ended days", "search filters.status is all or due; due includes yesterday and already-created retryable runs in the previous seven days", "At most one live 30-minute lease per day, max three attempts; first entirely empty day defers once for one hour", "Only complete writes reports; server retains frozen input/evidence/rules, Agent supplies summary and ai-* findings", "Reuse request_key on an uncertain start response; reuse identical output on an uncertain completion response"]},
+    async get(id){return snakeRecord(await operations.insightRun!.get(insightPeriod(id).id));},
+    async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["status"],"insight_run search");rejectCursor(cursor,"insight_run");if(query||filters.status!==undefined&&!["all","due"].includes(String(filters.status)))throw new ValidationError("insight_run accepts only filters.status=all|due.");const items=await operations.insightRun!.search(filters.status==="due");return{items:items.slice(0,limit).map(snakeRecord),next_cursor:null};},
+    async action({id,action,data}){const period=insightPeriod(id);if(action==="start")return snakeRecord(await operations.insightRun!.start(period.id,data.request_key,data.context_fingerprint));if(action==="complete")return snakeRecord(await operations.insightRun!.complete(period.id,data.attempt_id,insightOutputFromMcp(data.output)));return snakeRecord(await operations.insightRun!.fail(period.id,data.attempt_id,data.error,data.retryable));},
+  });
+  if (operations.insightContext) resources.push({
+    schema: {
+      resource: "insight_context", description: "Read-only Daily analysis context: Asia/Shanghai ended day, 7/30-day recorded-activity baselines, evidence, coverage and deterministic input fingerprint. Phase 1 only.",
+      fields: Object.fromEntries([
+        ["schema_version", "integer"], ["period", "object"], ["captured_at", "string"], ["related_reports", "array"], ["snapshot_fingerprint", "string"], ["consistency", "string"],
+        ["coverage", "object"], ["metadata_coverage", "object"], ["metrics", "object"], ["domain_metrics", "object"], ["tracker_statistics", "array"], ["tasks", "object"], ["nutrition", "object"],
+        ["findings", "array"], ["evidence", "array"], ["evidence_coverage", "object"], ["baseline_references", "array"], ["baseline_reference_coverage", "object"], ["limitations", "array"], ["omitted", "object"],
+      ].map(([key, type]) => [key, { type: type as ResourceField["type"], read_only: true, description: "Structured analysis context; see coverage and limitations before interpreting values." }])),
+      required_fields: [], writable_fields: [], searchable_fields: [], supported_actions: [],
+      validation_rules: ["get ID: yesterday or day/YYYY-MM-DD for an ended natural day", "month/quarter/year IDs are rejected until their implementation phases", "No writes, search or actions; observed counts do not establish real-world completeness"],
+    },
+    async get(id) {
+      const period = insightPeriod(id);
+      return snakeRecord(await operations.insightContext!.get(period.id));
+    },
+  });
   return new ResourceRegistry(resources);
 }

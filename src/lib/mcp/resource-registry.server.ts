@@ -1,4 +1,7 @@
 import "server-only";
+import { getInsightContext } from "../services/insight-context";
+import { getInsightReportDetail } from "../services/insight-reports";
+import { getInsightRunStatus, listInsightRunStatus, startInsightRun, completeInsightRun, failInsightRun } from "../services/insight-runs";
 import { createFoodLog, deleteFoodLog, getFoodLog, getFoodLibraryItem, listFoodLogs, searchFoodLibrary, upsertFoodLibraryItem, updateFoodLog, updateFoodLibraryItem, removeFoodLibraryItem } from "../services/food";
 import { createDrinkLog, deleteDrinkLog, getDrinkLog, listDrinkLogs, updateDrinkLog } from "../services/drink";
 import { getDailyEnergy, getDailyNutritionSummary, updateDailyEnergy } from "../services/nutrition";
@@ -25,6 +28,9 @@ import { createTask, deleteTask, getTask, listTasks, updateTask } from "../servi
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
+  insightReport:{get:getInsightReportDetail},
+  insightRun:{get:getInsightRunStatus,search:listInsightRunStatus,start:startInsightRun,complete:completeInsightRun,fail:failInsightRun},
+  insightContext: { get: getInsightContext },
   foodLog: { search: listFoodLogs, get: getFoodLog, create: createFoodLog, update: updateFoodLog, delete: deleteFoodLog },
   drinkLog: { search: listDrinkLogs, get: getDrinkLog, create: createDrinkLog, update: updateDrinkLog, delete: deleteDrinkLog },
   foodLibrary: { search: searchFoodLibrary, get: getFoodLibraryItem, create: upsertFoodLibraryItem, update: updateFoodLibraryItem, delete: removeFoodLibraryItem },

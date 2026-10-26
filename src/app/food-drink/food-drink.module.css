@@ -13,17 +13,6 @@
 .destinations a:active { background:rgb(var(--surface-tint-rgb) / .85); }
 .destinations a > :global(.feature-icon) { width:32px; height:32px; flex:none; }
 .hint { margin:8px 0 0; font-size:12px; line-height:1.7; color:var(--text-secondary); }
-.insights { margin-bottom:32px; }
-.insights :global(.section-heading) { align-items:baseline; flex-wrap:wrap; gap:8px; }
-.insights :global(.section-heading h2) { font-size:20px; }
-.insightList { display:grid; gap:22px; padding:0; margin:18px 0 0; list-style:none; }
-.insightList li { min-width:0; }
-.insightList h3 { margin:0; font-size:17px; line-height:1.5; font-weight:500; overflow-wrap:anywhere; text-wrap:pretty; }
-.insightList h3 a { display:inline-flex; align-items:baseline; gap:8px; color:inherit; }
-.insightList h3 a:hover { color:var(--green); }
-.insightList h3 :global(.icon) { width:13px; height:13px; flex:none; color:var(--text-secondary); }
-.insightList p,.insightEmpty { max-width:65ch; margin:5px 0 0; color:var(--text-secondary); font-size:13px; line-height:1.7; overflow-wrap:anywhere; text-wrap:pretty; }
-.insightEmpty { max-width:55ch; margin-top:16px; }
 .limits { scroll-margin-top:80px; padding:16px 18px; border-radius:var(--radius-content); background:rgb(var(--surface-card-rgb) / .55); }
 .limits :global(.section-heading) { margin-bottom:8px; }
 .limits :global(.section-heading h2) { font-size:17px; }
