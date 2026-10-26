@@ -31,6 +31,10 @@ Web／本地复用购买与编辑组件。`business.request` 清单增加 purcha
 
 开发工作区备份版本 13（包含尚未发布的 Insights 资源）在原 subscriptions／subscription_payments 资源保留新增列，继续支持版本 1–12；本次正式发布不包含 Insights，保留生产备份版本 10 并更新 schema 标识，会员新增列随原表完整导出。正常恢复顺序和账户重绑定不变。生产迁移已于 2026-10-26 应用，原有 8 个订阅与 8 笔付款数据指纹不变。Web main `28ac476` 已部署成功，线上 MCP 已确认 `record_purchase`；本地源码 `3b65661` 已推送。本轮跳过 IPA 打包与 iPhone 真机验收。
 
+历史生产发布说明（保留原发布验证）：
+
+本次生产发布沿用备份版本 10，在原 subscriptions／subscription_payments 资源保留新增列；未引入额外资源表，既有版本恢复行为保持兼容。正常恢复顺序和账户重绑定不变。生产迁移已于 2026-10-26 应用并核验，原有 8 个订阅与 8 笔付款数据指纹保持一致。独立 Web 发布副本的完整回归为 626 项（614 通过、12 跳过），生产构建及手机深浅色界面检查通过；本地源码副本构建、类型检查及 32 项相关检查通过。本轮发布 Web 与配套接口，跳过 IPA 打包和 iPhone 真机验收；不包含工作区未发布的 Insights 功能。
+
 `scripts/manual-memberships.test.mjs` 覆盖购买、赠送、同日多次购买、幂等冲突、过期不补账、提醒、MCP、模式切换、真实备份恢复、SQLite 旧表迁移与 Postgres RLS；`scripts/manual-memberships-browser.mjs` 使用临时 SQLite 与合成原生桥接验证共享界面及账户请求通道。
 
 2026-10-26 实际验证：完整 Node 回归 705 项，693 通过、12 跳过；最后提醒防重复调整后的 32 项相关检查通过。Web／本地前端构建、TypeScript 和相关 ESLint 通过。Chromium／WebKit 完成创建、购买、权益历史、仅改有效期、已到期筛选、深浅主题，以及本地打包界面通过桥接购买与离线拒绝写入；375／402／1280 宽度无横向溢出。本地模拟额外关闭 randomUUID，验证幂等标识使用 getRandomValues，不依赖安全上下文专属 API。所有服务器使用本轮临时 SQLite 并在结束后关闭，截图和日志保留在 `tmp/manual-memberships-evidence/`。

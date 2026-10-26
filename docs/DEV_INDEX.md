@@ -194,7 +194,7 @@
 - **本地订阅**：[SubscriptionsWorkspace](../src/local-trackers/subscriptions-workspace.tsx) 共用 Overview／Trends／Library、轮播、时间线、日期调整、详情及表单，复用分区手势。`SubscriptionsDataProvider` 注入账户快照 GET、本地导航与订阅／软件图标字节；`/api/native/subscriptions-readonly` 仅通过 Repository 白名单读取，不补记自动付款。缓存支持离线查看；写操作沿用账户绑定在线通道，不进入 outbox。容量与历史阶段见 [本地订阅](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
-- **手动续期会员**：`mode=manual` 以 `expires_on` 管理权益，购买元数据与幂等标识存入原付款表，通过 `/api/subscriptions/:id/purchases`／MCP `record_purchase` 原子记录实际付款与有效期；不进入自动补账、固定周期推进或未来确定支出。截止日含当天，已到期为派生状态，生命周期仍保留 Active／Paused／Ended。Web／本地共享表单和展示；详见 [手动续期会员](SUBSCRIPTIONS_MANUAL_MEMBERSHIP.md)。
+- **手动续期会员**：`mode=manual` 以 `expires_on` 管理权益，购买元数据与幂等标识存入原付款表，通过 `/api/subscriptions/:id/purchases`／MCP `record_purchase` 幂等、原子记录实际付款与有效期；不进入自动补账、固定周期推进或未来确定支出。截止日含当天，已到期为派生状态，生命周期仍保留 Active／Paused／Ended。Web／本地共享表单和展示；详见 [手动续期会员](SUBSCRIPTIONS_MANUAL_MEMBERSHIP.md)。
 - **续费时间线**：总览保留品牌卡片，补充未来 30 天及未处理计划、已记录付款；日期调整复用订阅 PATCH，不补记被调整的旧计划，提醒跟随新日期，已有付款不改写。
 - **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
