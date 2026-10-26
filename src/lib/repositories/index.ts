@@ -7,6 +7,25 @@ import type { McpOAuthIdentity } from "../mcp-oauth";
 import type { EvaOrbitRepository } from "./types";
 
 const repositoryContext = new AsyncLocalStorage<EvaOrbitRepository>();
+
+export async function withInsightsReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
+  const repository = await getRepository();
+  const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrainingLogs", "listHealthRecords", "listWeightRecords", "listMenstrualFlowRecords", "listTrackerEntries", "listTrackers", "listTrackerFields", "listTasks", "getNutritionSettings", "listInsightReports"]);
+  return repositoryContext.run(new Proxy(repository, { get(target, key) {
+    if (key === "then") return undefined;
+    if (typeof key !== "string" || !allowed.has(key)) throw new Error("Insights read-only aggregation refused a repository operation");
+    return Reflect.get(target, key).bind(target);
+  } }), action);
+}
+
+export async function withInsightEvidenceReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
+  const repository = await getRepository(), allowed = new Set(["getFoodLog", "getDrinkLog", "getTrainingLog", "getHealthRecord", "getWeightRecord", "getMenstrualFlowRecord", "getTrackerEntry", "getTask"]);
+  return repositoryContext.run(new Proxy(repository, { get(target, key) {
+    if (key === "then") return undefined;
+    if (typeof key !== "string" || !allowed.has(key)) throw new Error("Insight evidence read refused a repository operation");
+    return Reflect.get(target, key).bind(target);
+  } }), action);
+}
 // React cache lasts only for this server render, never across users or requests.
 const requestSupabaseRepository = cache(async () => {
   const { createSupabaseRepository } = await import("./supabase");

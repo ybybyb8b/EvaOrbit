@@ -13,6 +13,7 @@ import {buildHealthDashboard} from "@/lib/health-dashboard";
 import {readHealthSnapshot,type HealthReadonlySnapshot} from "@/lib/health-readonly";
 import {LocalBackAction} from "./navigation-header";
 import type {LocalAccount,TrackerPlatform} from "./platform";
+import type {TrainingLog} from "@/lib/types";
 
 const Navigate=createContext<(path:string)=>void>(()=>{});
 function LocalHealthLink({href,children,...props}:ComponentProps<"a">&{href:string}){const navigate=useContext(Navigate);const enabled=/^\/health(?:\?|\/records|$)/.test(href);return <a {...props} href={href} aria-disabled={!enabled||undefined} onClick={event=>{event.preventDefault();if(enabled)navigate(href);}}>{children}</a>;}
@@ -29,14 +30,23 @@ export function HealthWorkspace({account,platform}:{account:LocalAccount;platfor
     return()=>{stopPullRefresh();alive=false;window.removeEventListener(onlineBusinessChanged,active);window.removeEventListener("online",active);window.removeEventListener("evaorbit:native-active",active);};
   },[account,platform,attempt]);
   const read=useOnlineReader(useCallback<HealthRead>(async(url,init)=>{if(!snapshot)throw new Error("Health is not downloaded");return readHealthSnapshot(snapshot,url,init);},[snapshot]));
+  const trainingId=Number(new URL(path,"https://offline.invalid").searchParams.get("training"));
+  const cachedTraining=snapshot&&[...snapshot.training,...snapshot.recentTraining,...snapshot.pendingTraining??[]].find(row=>row.id===trainingId);
+  const [focusedTraining,setFocusedTraining]=useState<TrainingLog|null>(null);
+  useEffect(()=>{
+    if(!Number.isSafeInteger(trainingId)||trainingId<1||cachedTraining)return;
+    let active=true;
+    void read(`/api/health/training/${trainingId}`).then(async response=>{if(!response.ok)throw new Error("Training details are not downloaded. Connect and try again.");const log:TrainingLog=await response.json();if(active)setFocusedTraining(log);}).catch(error=>{if(active)setError(error instanceof Error?error.message:String(error));});
+    return()=>{active=false;};
+  },[trainingId,cachedTraining,read]);
   const url=new URL(path,"https://offline.invalid"),requested=url.searchParams.get("view") as HealthViewName,view=views.includes(requested)?requested:url.hash==="#weight-title"?"weight":url.hash==="#period-medication-title"?"cycle":url.searchParams.has("training")?"training":"overview";
-  function navigate(next:string){if(!/^\/health(?:\?view=(?:overview|sleep|weight|training|energy|cycle|records)|\/records(?:\/[1-9][0-9]*)?)?$/.test(next)){setError("This page is not available in the offline preview");return;}setPath(next);window.scrollTo(0,0);}
+  function navigate(next:string){if(!/^\/health(?:\?view=(?:overview|sleep|weight|training|energy|cycle|records)|\?training=[1-9][0-9]*|\/records(?:\/[1-9][0-9]*)?)?$/.test(next)){setError("This page is not available in the offline preview");return;}setPath(next);window.scrollTo(0,0);}
   const navigation={push:navigate,refresh:()=>setAttempt(n=>n+1)},id=/^\/health\/records\/([1-9][0-9]*)$/.exec(url.pathname),record=snapshot?.records.find(row=>row.id===Number(id?.[1]));
   return <>
     {path!=="/health"&&<LocalBackAction onBack={()=>navigate(id?"/health/records":"/health")}/>}
     <div className="page local-health-status"><LocalDownloadStatus module="Health" capturedAt={snapshot?.capturedAt} busy={busy} error={error}  refresh={()=>setAttempt(n=>n+1)}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</div>
     {!snapshot?busy?<PageLoading title="健康" englishTitle="Health"/>:<div className="page"><p>Health has not been downloaded. Connect and refresh to make it available offline.</p></div>:<Navigate.Provider value={navigate}><HealthDataProvider read={read} Link={LocalHealthLink}><FormPreview>
-      {url.pathname==="/health/records"?<HealthRecordsView initial={snapshot.records}/>:id?record?<HealthRecordDetailContent key={record.id} initial={record} navigation={navigation}/>:<div className="page"><p>This record is not in the downloaded snapshot.</p></div>:<HealthViewContent key={view} navigation={navigation} view={view} initialSleep={snapshot.sleep} initial={buildHealthDashboard(snapshot.records)} initialEnergy={snapshot.energy} initialEnergyHistory={snapshot.energyHistory} initialTraining={snapshot.training} initialRecentTraining={snapshot.recentTraining} initialTrainingSuggestions={snapshot.suggestions} initialTrainingPlan={snapshot.plan} initialWeights={snapshot.weights} initialWeightSettings={snapshot.weightSettings} initialPeriods={snapshot.periods} initialMenstrualFlows={snapshot.flows} initialMedicationPresets={snapshot.presets} initialMedicationDoses={snapshot.doses} initialMedicationReminders={snapshot.reminders} today={snapshot.today}/ >}
+      {url.pathname==="/health/records"?<HealthRecordsView initial={snapshot.records}/>:id?record?<HealthRecordDetailContent key={record.id} initial={record} navigation={navigation}/>:<div className="page"><p>This record is not in the downloaded snapshot.</p></div>:<HealthViewContent key={`${view}:${cachedTraining?.id??(focusedTraining?.id===trainingId?trainingId:"")}`} initialFocusedTraining={cachedTraining??(focusedTraining?.id===trainingId?focusedTraining:undefined)} navigation={navigation} view={view} initialSleep={snapshot.sleep} initial={buildHealthDashboard(snapshot.records)} initialEnergy={snapshot.energy} initialEnergyHistory={snapshot.energyHistory} initialTraining={snapshot.training} initialRecentTraining={snapshot.recentTraining} initialTrainingSuggestions={snapshot.suggestions} initialTrainingPlan={snapshot.plan} initialWeights={snapshot.weights} initialWeightSettings={snapshot.weightSettings} initialPeriods={snapshot.periods} initialMenstrualFlows={snapshot.flows} initialMedicationPresets={snapshot.presets} initialMedicationDoses={snapshot.doses} initialMedicationReminders={snapshot.reminders} today={snapshot.today}/ >}
     </FormPreview></HealthDataProvider></Navigate.Provider>}
   </>;
 }

@@ -308,13 +308,14 @@ actor TrackerLocalDatabase {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter()
         guard formatter.date(from: captured) != nil || plain.date(from: captured) != nil else { throw TrackerLocalError.invalid }
-        let limits = ["records": 100, "training": 100, "recentTraining": 100, "weights": 1000, "periods": 31, "flows": 60, "presets": 100, "doses": 60, "reminders": 1000]
+        var limits = ["records": 100, "training": 100, "recentTraining": 100, "weights": 1000, "periods": 31, "flows": 60, "presets": 100, "doses": 60, "reminders": 1000]
+        if snapshot["pendingTraining"] != nil { limits["pendingTraining"] = 100 }
         for (key, limit) in limits {
             guard let rows = snapshot[key] as? [[String: Any]], rows.count <= limit else { throw TrackerLocalError.invalid }
             var ids = Set<Int>()
             for row in rows {
                 guard let id = row["id"] as? Int, id > 0, id <= 9007199254740991, ids.insert(id).inserted else { throw TrackerLocalError.invalid }
-                if ["records", "training", "recentTraining", "weights", "flows"].contains(key) {
+                if ["records", "training", "recentTraining", "pendingTraining", "weights", "flows"].contains(key) {
                     guard row["occurredAt"] is String, row["occurredHasExplicitTime"] is Bool else { throw TrackerLocalError.invalid }
                 }
             }

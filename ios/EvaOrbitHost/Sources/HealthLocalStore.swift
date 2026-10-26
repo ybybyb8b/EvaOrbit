@@ -249,7 +249,7 @@ final class HealthLocalStore {
 
     func resetReadAnchors() throws {
         try locked {
-            try execute("DELETE FROM anchors WHERE metric IN ('sleep','heart_rate','resting_heart_rate','hrv')")
+            try execute("DELETE FROM anchors WHERE metric IN ('sleep','heart_rate','resting_heart_rate','hrv','workout')")
             try setMetadataUnlocked("readAuthorizationEpoch", value: UUID().uuidString)
         }
     }

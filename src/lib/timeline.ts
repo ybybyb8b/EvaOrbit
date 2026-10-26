@@ -1,3 +1,5 @@
+import { workoutActivityLabel, workoutStatus } from "./training-workout.ts";
+import { trainingSessionTitle } from "./training-session.ts";
 import { drinkRecordName } from "./drink-display.ts";
 import type { DrinkLog, FoodLog, HealthRecord, MedicationDoseEvent, MenstrualFlowRecord, MenstrualPeriod, RelationEvent, RelationPerson, Subscription, SubscriptionPayment, TimelineDaySummary, TimelineEvent, TrainingLog, Tracker, TrackerEntry, WeightRecord } from "./types";
 import { dateInEvaOrbit } from "./time.ts";
@@ -62,16 +64,16 @@ export function buildTimelineEvents(foods: FoodLog[], drinks: DrinkLog[], tracke
 }
 
 export function buildTrainingTimelineEvents(logs: TrainingLog[]): TimelineEvent[] {
-  const events: TimelineEvent[] = logs.map((item) => ({
+  const events: TimelineEvent[] = logs.filter(item => !item.workoutDeleted).map((item) => ({
     id: `training:${item.id}`,
     eventType: "training.logged",
     sourceType: "training" as const,
     sourceId: item.id,
-    title: item.course || "Training",
-    detail: [item.bodyParts.join(" · "), item.teacher, item.durationMinutes ? `${item.durationMinutes} min` : ""].filter(Boolean).join(" · "),
+    title: item.course || trainingSessionTitle(item.sessionDetails) || workoutActivityLabel(item, true) || "Training",
+    detail: [workoutStatus(item, true), item.bodyParts.join(" · "), item.teacher, item.trainingContent, item.durationMinutes ? `${item.durationMinutes} min` : ""].filter(Boolean).join(" · "),
     occurredAt: item.occurredAt,
     hasExplicitTime: item.occurredHasExplicitTime,
-    endAt: null,
+    endAt: item.workout?.endAt ?? null,
     href: `/health?training=${item.id}`,
     relatedPeople: [],
     relatedPets: [],

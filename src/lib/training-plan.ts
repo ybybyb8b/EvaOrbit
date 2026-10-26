@@ -1,8 +1,8 @@
-import type { TrainingLog, TrainingPlan, TrainingPlanDay } from "./types.ts";
-import { parseNewTrainingLog, ValidationError } from "./validation.ts";
+import type { TrainingPlan, TrainingPlanDay } from "./types.ts";
+import { parseNewTrainingLog, parseTrainingExercises, ValidationError } from "./validation.ts";
 
 export type TrainingPlanWrite = Pick<TrainingPlan, "name" | "days" | "currentDayId"> & { expectedVersion: number };
-export type TrainingPlanCompletion = { expectedVersion: number; dayId: string; requestKey: string; log: Omit<TrainingLog, "id" | "createdAt" | "updatedAt"> };
+export type TrainingPlanCompletion = { expectedVersion: number; dayId: string; requestKey: string; log: import("./repositories/types").NewTrainingLog };
 
 export function trainingTemplate(): Pick<TrainingPlan, "name" | "days" | "currentDayId"> {
   const days: TrainingPlanDay[] = [
@@ -29,7 +29,11 @@ export function trainingDayDraft(plan: TrainingPlan) {
   const index = plan.days.findIndex(day => day.id === plan.currentDayId);
   const day = plan.days[index];
   if (!day) throw new ValidationError("请先添加训练日");
-  return { trainingType: day.trainingType, bodyParts: [...day.bodyParts], teacher: "", course: `Day ${index + 1}｜${day.name}`, durationMinutes: day.durationMinutes, notes: [day.content, ...day.videoUrls].filter(Boolean).join("\n") };
+  return { trainingType: day.trainingType, bodyParts: [...day.bodyParts], teacher: "", course: "", durationMinutes: day.durationMinutes, notes: "", sessionDetails: {
+    plan: { name: plan.name, dayName: day.name, dayNumber: index + 1, content: day.content },
+    exercises: (day.exercises ?? []).map(exercise => ({ ...exercise, completedSets: 0, completed: false })),
+    videos: day.videoUrls.map(url => ({ url, completed: false })),
+  } };
 }
 
 function object(value: unknown): Record<string, unknown> {
@@ -61,7 +65,7 @@ export function parseTrainingPlanWrite(value: unknown): TrainingPlanWrite {
       catch { throw new ValidationError("视频链接须为完整的 http 或 https 地址"); }
       return url;
     });
-    return { id, name: text(day.name, 120), trainingType: fields.trainingType, bodyParts: fields.bodyParts, durationMinutes: fields.durationMinutes, content: text(day.content, 2500, false), videoUrls };
+    return { id, name: text(day.name, 120), trainingType: fields.trainingType, bodyParts: fields.bodyParts, durationMinutes: fields.durationMinutes, content: text(day.content, 2500, false), videoUrls, ...(day.exercises === undefined ? {} : { exercises: parseTrainingExercises(day.exercises) }) };
   });
   if (new Set(days.map(day => day.id)).size !== days.length) throw new ValidationError("训练日 ID 不能重复");
   const currentDayId = input.currentDayId === null ? null : text(input.currentDayId, 64);

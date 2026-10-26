@@ -2,8 +2,10 @@ import type {DailySleepSummary} from "./sleep";
 import type {DailyNutritionSummary,HealthRecord,MedicationDoseEvent,MedicationPreset,MenstrualFlowRecord,MenstrualPeriod,ScheduledNotification,TrainingInputSuggestions,TrainingLog,TrainingPlan,WeightRecord,WeightSettings} from "./types";
 import {dateInEvaOrbit,dateRange} from "./time.ts";
 import {parseTrainingPlanWrite} from "./training-plan.ts";
+import { parseHealthKitReadChanges } from "./healthkit-read.ts";
+import {parseTrainingSessionDetails,parseTrainingExercises} from "./validation.ts";
 
-export type HealthReadonlySnapshot={format:"eo-health-readonly-v1";accountId:string;capturedAt:string;today:string;sleep:DailySleepSummary;records:HealthRecord[];energy:DailyNutritionSummary;energyHistory:DailyNutritionSummary[];training:TrainingLog[];recentTraining:TrainingLog[];suggestions:TrainingInputSuggestions;plan:TrainingPlan|null;weights:WeightRecord[];weightSettings:WeightSettings;periods:MenstrualPeriod[];flows:MenstrualFlowRecord[];presets:MedicationPreset[];doses:MedicationDoseEvent[];reminders:ScheduledNotification[]};
+export type HealthReadonlySnapshot={format:"eo-health-readonly-v1";accountId:string;capturedAt:string;today:string;sleep:DailySleepSummary;records:HealthRecord[];energy:DailyNutritionSummary;energyHistory:DailyNutritionSummary[];training:TrainingLog[];recentTraining:TrainingLog[];pendingTraining?:TrainingLog[];suggestions:TrainingInputSuggestions;plan:TrainingPlan|null;weights:WeightRecord[];weightSettings:WeightSettings;periods:MenstrualPeriod[];flows:MenstrualFlowRecord[];presets:MedicationPreset[];doses:MedicationDoseEvent[];reminders:ScheduledNotification[]};
 const day=(v:unknown):v is string=>typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v;
 const stamp=(v:unknown)=>typeof v==="string"&&Number.isFinite(Date.parse(v));
 const id=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>0;
@@ -14,11 +16,15 @@ const bool=(v:unknown)=>typeof v==="boolean";
 const fail=():never=>{throw new Error("Invalid or incomplete Health snapshot; previous cache preserved");};
 export function validateHealthSnapshot(value:HealthReadonlySnapshot,accountId:string){
   if(!value||value.format!=="eo-health-readonly-v1"||value.accountId!==accountId||!stamp(value.capturedAt)||!day(value.today))fail();
-  const groups=[value.records,value.training,value.recentTraining,value.weights,value.periods,value.flows,value.presets,value.doses,value.reminders];
-  const limits=[100,100,100,1000,31,60,100,60,1000];
+  const groups=[value.records,value.training,value.recentTraining,value.pendingTraining??[],value.weights,value.periods,value.flows,value.presets,value.doses,value.reminders];
+  const limits=[100,100,100,100,1000,31,60,100,60,1000];
   groups.forEach((rows,index)=>{if(!Array.isArray(rows)||rows.length>limits[index])fail();const ids=new Set<number>();for(const row of rows){if(!row||!id(row.id)||ids.has(row.id))fail();ids.add(row.id);}});
   for(const row of value.records)if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!bool(row.startedHasExplicitTime)||!bool(row.endedHasExplicitTime)||!["symptom","medication","visit","test","condition","treatment","measurement","note"].includes(row.type)||!["active","resolved"].includes(row.status)||!text(row.title)||!text(row.summary)||!row.details||typeof row.details!=="object"||Array.isArray(row.details)||(row.startedAt!==null&&!stamp(row.startedAt))||(row.endedAt!==null&&!stamp(row.endedAt)))fail();
-  for(const row of [...value.training,...value.recentTraining])if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!["cardio","strength","mixed"].includes(row.trainingType)||!Array.isArray(row.bodyParts)||row.bodyParts.some(part=>!["胸","背","腿","肩","手臂","核心","全身","其他"].includes(part))||!text(row.teacher)||!text(row.course)||!text(row.notes)||!nullableNumber(row.durationMinutes))fail();
+  for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]])if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!["cardio","strength","mixed"].includes(row.trainingType)||!Array.isArray(row.bodyParts)||row.bodyParts.some(part=>!["胸","背","腿","肩","手臂","核心","全身","其他"].includes(part))||!text(row.teacher)||!text(row.course)||!text(row.notes)||!nullableNumber(row.durationMinutes))fail();
+  for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]]) {
+    if(row.trainingContent!==undefined&&(!text(row.trainingContent)||row.trainingContent.length>5000))fail();
+    if(row.workout){const parsed=parseHealthKitReadChanges([row.workout]);if(parsed[0].metric!=="workout"||parsed[0].operation!=="upsert"||!bool(row.workoutDeleted)||(row.detailsCompletedAt!==null&&!stamp(row.detailsCompletedAt)))fail();}
+  }
   for(const row of value.weights)if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!number(row.weightKg)||row.weightKg<=0||!["manual","apple_health"].includes(row.source))fail();
   for(const row of value.periods)if(!day(row.startedOn)||(row.endedOn!==null&&(!day(row.endedOn)||row.endedOn<row.startedOn))||!text(row.notes))fail();
   for(const row of value.flows)if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!bool(row.isCycleStart)||!["none","unspecified","light","medium","heavy"].includes(row.flow)||!["manual","apple_health"].includes(row.source)||!text(row.notes))fail();
@@ -28,6 +34,9 @@ export function validateHealthSnapshot(value:HealthReadonlySnapshot,accountId:st
   const settings=value.weightSettings;
   if(!settings||!nullableNumber(settings.targetWeightKg)||!bool(settings.reminderEnabled)||!/^\d{2}:\d{2}$/.test(settings.reminderTime))fail();
   const suggestions=value.suggestions;
+  for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]])if(row.sessionDetails!==undefined)parseTrainingSessionDetails(row.sessionDetails);
+  if(suggestions?.exercises!==undefined&&(!Array.isArray(suggestions.exercises)||suggestions.exercises.some(name=>!text(name))))fail();
+  for(const presets of [suggestions?.exercisePresets,suggestions?.previousExercises])if(presets!==undefined){if(!Array.isArray(presets))fail();parseTrainingExercises(presets.map((preset,index)=>({...preset,id:String(index)})));}
   if(!suggestions||!Array.isArray(suggestions.teachers)||!Array.isArray(suggestions.courses)||!Array.isArray(suggestions.presets)||[...suggestions.teachers,...suggestions.courses].some(v=>!text(v)))fail();
   for(const row of suggestions.presets)if(!text(row.teacher)||!text(row.course)||!Array.isArray(row.bodyParts)||!["cardio","strength","mixed"].includes(row.trainingType)||!nullableNumber(row.durationMinutes))fail();
   if(value.plan!==null){parseTrainingPlanWrite({...value.plan,expectedVersion:value.plan.version});if(!Number.isSafeInteger(value.plan.version)||value.plan.version<1)fail();}
@@ -64,7 +73,8 @@ export function readHealthSnapshot(value:HealthReadonlySnapshot,path:string,init
   else if(p==="/api/preferences/weight")data=value.weightSettings;
   else if(p==="/api/health/training/plan")data=value.plan;
   else if(p==="/api/health/training/suggestions")data=value.suggestions;
-  else if(p==="/api/health/training")data=limit((q.has("date")?value.training.filter(row=>dateInEvaOrbit(new Date(row.occurredAt))===q.get("date")):value.recentTraining.filter(row=>inRange(row.occurredAt))));
+  else if(/^\/api\/health\/training\/[1-9][0-9]*$/.test(p))data=[...value.training,...value.recentTraining,...value.pendingTraining??[]].find(row=>row.id===Number(p.split("/").at(-1)));
+  else if(p==="/api/health/training")data=limit(q.get("pendingDetails")==="true"?(value.pendingTraining??value.recentTraining.filter(row=>row.workout&&!row.workoutDeleted&&!row.detailsCompletedAt)):(q.has("date")?value.training.filter(row=>dateInEvaOrbit(new Date(row.occurredAt))===q.get("date")):value.recentTraining.filter(row=>inRange(row.occurredAt))));
   else if(p==="/api/health/periods")data=limit(value.periods.filter(row=>(q.get("activeOnly")!=="true"||!row.endedOn)&&(!q.has("from")||row.startedOn>=q.get("from")!)));
   else if(p==="/api/health/menstrual-flow")data=period(value.flows,row=>row.occurredAt);
   else if(p==="/api/health/medications")data=value.presets;

@@ -591,6 +591,23 @@ export interface TrainingPlanDay {
   durationMinutes: number | null;
   content: string;
   videoUrls: string[];
+  exercises?: TrainingExercise[];
+}
+export interface TrainingExercise {
+  id: string;
+  name: string;
+  sets: number | null;
+  target: string;
+}
+export type TrainingExercisePreset = Pick<TrainingExercise, "name" | "sets" | "target">;
+export interface TrainingExerciseLog extends TrainingExercise {
+  completedSets: number;
+  completed: boolean;
+}
+export interface TrainingSessionDetails {
+  plan: { name: string; dayName: string; dayNumber: number; content: string } | null;
+  exercises: TrainingExerciseLog[];
+  videos: { url: string; completed: boolean }[];
 }
 export interface TrainingPlan {
   name: string;
@@ -609,6 +626,11 @@ export interface TrainingLog {
   course: string;
   durationMinutes: number | null;
   notes: string;
+  sessionDetails?: TrainingSessionDetails | null;
+  trainingContent?: string;
+  workout?: import("./healthkit-read").HealthKitReadChange | null;
+  workoutDeleted?: boolean;
+  detailsCompletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -616,6 +638,9 @@ export interface TrainingInputSuggestions {
   teachers: string[];
   courses: string[];
   presets: TrainingPreset[];
+  exercises?: string[];
+  exercisePresets?: TrainingExercisePreset[];
+  previousExercises?: TrainingExercisePreset[];
 }
 export interface TrainingPreset {
   trainingType: TrainingType;
@@ -810,6 +835,10 @@ export type ProjectItemStatus = "to_solve" | "doing" | "blocked" | "done" | "ver
 export type SubscriptionStatus = "active" | "paused" | "ended";
 export type SubscriptionIntervalUnit = "day" | "week" | "month" | "year";
 export interface Subscription {
+  /** Absent on legacy snapshots, which always use recurring semantics. */
+  mode?: "recurring" | "manual";
+  expiresOn?: string | null;
+  latestPayment?: SubscriptionPayment | null;
   id: number;
   name: string;
   /** Versioned private image key; absent on records created before icon uploads. */
@@ -837,6 +866,12 @@ export interface Subscription {
   updatedAt: string;
 }
 export interface SubscriptionPayment {
+  purchaseKey?: string | null;
+  validUntil?: string | null;
+  purchasedValue?: number | null;
+  purchasedUnit?: SubscriptionIntervalUnit | null;
+  bonusValue?: number | null;
+  bonusUnit?: SubscriptionIntervalUnit | null;
   id: number;
   subscriptionId: number;
   scheduledFor: string;

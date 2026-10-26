@@ -24,6 +24,7 @@
 | [Lucius](#lucius) | `/lucius`：状态、动态、评论、日记与 Case |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
 | [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
+| [Insights](#insights) | `/insights`：报告、证据、不可变版本与只读分析上下文 |
 | [Inbox](#inbox) | `/inbox`：捕获、处理与转换 |
 | [Tasks](#tasks) | `/tasks`：待办及其提醒规则 |
 | [Trackers](#trackers) | `/trackers`：自定义观测、属性、记录与目标 |
@@ -74,7 +75,7 @@
 
 - **职责与入口**：[共同主页](../src/app/food-drink/)、[Food / Places / Library](../src/app/food/)、[Drinks](../src/app/drinks/)；服务入口 [food.ts](../src/lib/services/food.ts)、[drink.ts](../src/lib/services/drink.ts)、[food-catalog.ts](../src/lib/services/food-catalog.ts)、[food-drink-home.ts](../src/lib/services/food-drink-home.ts)。
 - **数据与接口**：`food_logs`、`drink_logs`、`food_places`、`food_dishes`（含饮品菜单）、`food_library`、`drink_limits`；`/api/food/*`、`/api/drinks/*`、`/api/food-drink/home`。MCP：`food_log`、`drink_log`、`food_place`、`food_dish`、`food_library`、`drink_limit`。一条 Food 代表一顿饭，可关联多个来源；只读 `food_place_ids` 从用餐地点、菜品所属店铺、食品快照来源去重派生，单店每餐计一次。
-- **依赖与决定**：Food / Drink 独立存储，共享来源与候选；共同主页负责 Brief、入口、Insights 和 Limits，能量分析由 Health 负责。食品可显式归属一个 Place，菜单可关联 Library 营养参考；历史消费关联不证明独占归属，不据此猜填。营养快照保留历史基准；未知食用重量/饮用量保持空，包装容量不等于实际摄入。日历推导的用餐时间不覆盖原始时间。
+- **依赖与决定**：Food / Drink 独立存储，共享来源与候选；共同主页负责 Brief、入口和 Limits，行为发现进入 Insights，能量分析由 Health 负责。食品可显式归属一个 Place，菜单可关联 Library 营养参考；历史消费关联不证明独占归属，不据此猜填。营养快照保留历史基准；未知食用重量/饮用量保持空，包装容量不等于实际摄入。日历推导的用餐时间不覆盖原始时间。
 - **详文**：[信息架构](FOOD_DRINK_INFORMATION_ARCHITECTURE.md)、[食用量与营养快照](FOOD_CALCULATION.md)、[Places kind/scope](FOOD_PLACES_SOURCE_MODEL.md)。后者的早期“商品关系仅由记录派生”不覆盖当前目录归属规则，须同时看 [目录来源迁移](../supabase/migrations/202610100002_food_catalog_sources.sql) 与当前 catalog 服务；旧记录字段的兼容整理见 [精简迁移](../supabase/migrations/202610130003_simplify_consumption_records.sql)。
 
 ## Health
@@ -88,9 +89,14 @@
 
 ## Training
 
+- **动作快捷填写**：[training-session.ts](../src/lib/training-session.ts) 从现有训练历史生成最近动作参数和上次清单，Web/本地表单共用“一次填写、历史复用”；单／双侧与每组次数/时长保存在原 `target` 文本中，旧记录兼容。训练内容以动作清单为主，自由文本和完成进度按需展开，不新增动作库、独立偏好表或健康 MCP 输出。
+
+- **Apple Health Workout**：复用 Native readChanges / SQLite outbox，在 `training_logs` 以账号＋Workout UUID 幂等保存原始运动 JSON，与 `training_content`、部位、老师、课程、备注及动作快照分开。Universal Log 可选待补充训练；Health、Calendar/Timeline 共用一条记录。删除保留墓碑防复活；同步不推进计划、不累计每日能量。Health 有界快照包含待补充候选，部署及真机边界见 [Workout 同步](HEALTHKIT_WORKOUTS.md)。
+
 - **职责与入口**：[training-section.tsx](../src/app/health/training-section.tsx)、[计划编辑器](../src/app/health/training-plan-editor.tsx)、[training 服务](../src/lib/services/training.ts)、[training-plan.ts](../src/lib/training-plan.ts)。页面属于 Health，没有独立 `/training` 路由。
 - **数据与接口**：`training_logs`、`training_plans`；`/api/health/training`、`/api/health/training/plan`、`/api/health/training/plan/complete`；MCP `training_log` 只对应记录。
 - **依赖与决定**：每账户一份循环计划，按训练日顺序推进，不按日历自动跳日；完成操作原子保存记录并推进，带版本冲突检查和请求幂等键。普通记录 CRUD 不承担计划推进；训练记录进入 Health 与 Timeline。
+- **填写与自主训练**：日志按老师、课程、动作名称分别提供历史候选，不再应用整组 Recent & Common 预设。训练日 JSON 可带轻量动作清单（名称、可选目标组数、次数/时长文本）；日志的可选 `session_details` 保存当次计划参考、动作组数进度与视频完成状态的独立快照。课程与备注记录实际情况；无动作库、逐组重量或热量推算。Web 与本地 Health 共用表单与在线业务请求，MCP `training_log` 保持原字段兼容并可选读写 `session_details`。
 - **依据**：无单独专题文档；查 [计划迁移及事务](../supabase/migrations/202610150001_training_plans.sql)、[计划单测](../src/lib/training-plan.test.ts)、[SQLite 集成测试](../scripts/training-plan-sqlite.test.mjs)。
 
 ## Lucius
@@ -188,6 +194,7 @@
 - **本地订阅**：[SubscriptionsWorkspace](../src/local-trackers/subscriptions-workspace.tsx) 共用 Overview／Trends／Library、轮播、时间线、日期调整、详情及表单，复用分区手势。`SubscriptionsDataProvider` 注入账户快照 GET、本地导航与订阅／软件图标字节；`/api/native/subscriptions-readonly` 仅通过 Repository 白名单读取，不补记自动付款。缓存支持离线查看；写操作沿用账户绑定在线通道，不进入 outbox。容量与历史阶段见 [本地订阅](SUBSCRIPTIONS_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
+- **手动续期会员**：`mode=manual` 以 `expires_on` 管理权益，购买元数据与幂等标识存入原付款表，通过 `/api/subscriptions/:id/purchases`／MCP `record_purchase` 原子记录实际付款与有效期；不进入自动补账、固定周期推进或未来确定支出。截止日含当天，已到期为派生状态，生命周期仍保留 Active／Paused／Ended。Web／本地共享表单和展示；详见 [手动续期会员](SUBSCRIPTIONS_MANUAL_MEMBERSHIP.md)。
 - **续费时间线**：总览保留品牌卡片，补充未来 30 天及未处理计划、已记录付款；日期调整复用订阅 PATCH，不补记被调整的旧计划，提醒跟随新日期，已有付款不改写。
 - **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
@@ -208,6 +215,13 @@
 - **契约**：[MCP](../MCP.md)；字段与校验以 [chronicle.ts](../src/lib/chronicle.ts) 为准。
 
 - **共享/本地只读**：[ChronicleWorkspace](../src/local-trackers/chronicle-workspace.tsx) 通过 [ChronicleDataProvider](../src/components/chronicle-data-context.tsx) 复用原版列表、详情与 [ChronicleEditor](../src/app/chronicle/chronicle-editor.tsx)。既有纯 GET 下载最近 100 篇至账户隔离缓存；表单只预览、不写入 outbox。排版、阅读宽度及预览改进同时作用于 Web 和 Host。范围、媒体限制与回退见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。
+
+## Insights
+
+- **职责与入口**：[报告页](../src/app/insights/)、[报告服务](../src/lib/services/insight-reports.ts)、[报告类型与校验](../src/lib/insight-reports.ts)、[Context service](../src/lib/services/insight-context.ts)。MCP `insight_context` 仅支持 get，ID 为 `yesterday`、`day/YYYY-MM-DD`，限已经结束的上海自然日。
+- **数据与边界**：`insight_reports` 按账户/周期/起点保持稳定身份，`insight_report_versions` 保存不可变快照；`/api/insights` 与详情接口管理规则/AI 报告、证据与版本。`insight_runs` / `insight_run_attempts` 保存外部 Agent 的冻结输入、30 分钟租约、三次执行及结果引用，`/api/insights/runs` 提供只读状态查询。Postgres 仅授予账户 SELECT，受控 RPC 原子完成报告与运行；SQLite 保持对应事务及备份恢复。报告写入、执行控制与 Context 只读白名单分开。
+- **依赖与决定**：复用 Food 行为规则、Tracker 字段统计与营养估算；Context 按日读取前 30 天基线，并附最多 50 个既往日报版本引用。公开覆盖限制，不调用订阅补记或独立 Web 身份 HealthKit 能量读取。Food 旧行为展示已迁移，Tracker 图表与统计保留。外部 AI 通过 MCP `insight_run` start/complete/fail 受控执行，`insight_report` 只读历史；用户选择自行配置 ChatGPT 云端 Scheduled Task，不调用 App 内模型。长期周期计算及独立本地 Host 适配未开启。
+- **详文**：[Context 口径](INSIGHTS_CONTEXT.md)、[报告与 Phase 2](INSIGHTS_REPORTS.md)、[Agent 后台与 Phase 3](INSIGHTS_AGENT.md)、[用户定时任务正文](INSIGHTS_DAILY_TASK.md)。
 
 ## MCP
 

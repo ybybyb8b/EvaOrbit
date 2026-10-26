@@ -19,14 +19,20 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       import { getRepository } from "./src/lib/repositories/index.ts";
       import { parseTrainingPlanWrite, trainingTemplate, trainingDayDraft, retainedTrainingDay } from "./src/lib/training-plan.ts";
       const r = await getRepository();
-      const log = { occurredAt: "2026-10-15T04:00:00.000Z", occurredHasExplicitTime: false, ...trainingDayDraft({ ...trainingTemplate(), version: 1, updatedAt: "" }) };
+      const template = trainingTemplate();
+      template.days[0].exercises = [{ id: "row", name: "划船", sets: 3, target: "12 次" }];
+      template.days[0].videoUrls = ["https://example.com/training"];
+      const log = { occurredAt: "2026-10-15T04:00:00.000Z", occurredHasExplicitTime: false, ...trainingDayDraft({ ...template, version: 1, updatedAt: "" }) };
+      log.sessionDetails.exercises[0].completedSets = 2;
+      log.sessionDetails.videos[0].completed = true;
       const ordinary = await r.createTrainingLog(log);
       assert.equal(await r.getTrainingPlan(), null, "ordinary and MCP writes never create a plan");
-      let plan = await r.saveTrainingPlan(parseTrainingPlanWrite({ ...trainingTemplate(), expectedVersion: 0 }));
+      let plan = await r.saveTrainingPlan(parseTrainingPlanWrite({ ...template, expectedVersion: 0 }));
       await assert.rejects(r.saveTrainingPlan({ ...trainingTemplate(), expectedVersion: 0 }), /更新/);
       const initial = structuredClone(plan);
       const firstRequest = { expectedVersion: plan.version, dayId: plan.currentDayId, requestKey: randomUUID(), log };
       const first = await r.completeTrainingPlan(firstRequest);
+      assert.deepEqual(first.log.sessionDetails, log.sessionDetails);
       assert.equal(first.plan.currentDayId, "day-2");
       assert.equal((await r.completeTrainingPlan(firstRequest)).log.id, first.log.id);
       assert.equal((await r.listTrainingLogs()).length, 2);
@@ -60,6 +66,7 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       assert.equal(plan.currentDayId, "day-4");
       assert.deepEqual(await r.getTrainingLog(first.log.id), first.log, "plan editing cannot rewrite historical snapshots");
       await r.updateTrainingLog(ordinary.id, { notes: "MCP update" });
+      assert.deepEqual((await r.getTrainingLog(ordinary.id)).sessionDetails, log.sessionDetails, "legacy PATCH must not clear session details");
       await r.deleteTrainingLog(first.log.id);
       assert.deepEqual(await r.getTrainingPlan(), plan, "log edits/deletion do not change cursor");
       plan = await r.saveTrainingPlan({ ...plan, days: [], currentDayId: null, expectedVersion: plan.version });
@@ -75,6 +82,7 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       const restored = spawnSync(process.execPath,['scripts/restore-backup.mjs',backupPath],{ encoding: 'utf8', env: process.env });
       assert.equal(restored.status,0,restored.stderr || restored.stdout);
       assert.deepEqual(await r.getTrainingPlan(),plan,'backup restore preserves the current plan, cursor and version');
+      assert.deepEqual((await r.getTrainingLog(ordinary.id)).sessionDetails,log.sessionDetails,'backup restore preserves actual sets and video completion');
       db.close();
       console.log("PASS completion, rollback, full loop, retry, stale device, reorder, current deletion, empty plan, independent logs");
     `;

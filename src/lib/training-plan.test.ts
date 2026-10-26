@@ -11,9 +11,11 @@ test("training template reuses log fields, with no invented duration or video UR
   const draft = trainingDayDraft({ ...template, version: 1, updatedAt: "" });
   template.days[0].content = "changed";
   template.days[0].bodyParts.push("背");
-  assert.equal(draft.notes, "Anna 手臂塑形视频 + 自主核心训练");
+  assert.equal(draft.notes, "");
+  assert.equal(draft.sessionDetails.plan.content, "Anna 手臂塑形视频 + 自主核心训练");
   assert.deepEqual(draft.bodyParts, ["手臂", "核心"]);
-  assert.equal(draft.course, "Day 1｜上肢 + 核心");
+  assert.equal(draft.course, "");
+  assert.equal(draft.sessionDetails.plan.dayNumber, 1);
 });
 
 test("reordering preserves current identity; removing it chooses next survivor, and empty has no current day", () => {
@@ -36,6 +38,6 @@ test("plan boundaries reject invalid references, duplicate days, unsafe links an
   }
   assert.throws(() => parseTrainingPlanWrite({ ...valid, days: [{ ...valid.days[0], durationMinutes: 1.5 }] }));
   const withLinks = parseTrainingPlanWrite({ ...valid, days: [{ ...valid.days[0], videoUrls: ["https://example.com/a", "https://example.com/b"] }] });
-  assert.equal(trainingDayDraft({ ...withLinks, version: 1, updatedAt: "" }).notes.split("\n").length, 3);
+  assert.equal(trainingDayDraft({ ...withLinks, version: 1, updatedAt: "" }).sessionDetails.videos.length, 2);
   assert.throws(() => parseTrainingPlanCompletion({ expectedVersion: 1, dayId: "day-1", requestKey: "invalid", log: {} }));
 });

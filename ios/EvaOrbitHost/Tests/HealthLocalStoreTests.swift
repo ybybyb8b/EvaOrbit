@@ -4,6 +4,38 @@ import XCTest
 @testable import EvaOrbitHost
 
 final class HealthLocalStoreTests: XCTestCase {
+    func testWorkoutUsesDurableReadOutboxWithoutEnergyAggregation() throws {
+        try store.setMetadata("readSyncMetrics", value: "sleep,workout")
+        let sample = HealthReadSample(sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24d", metric: .workout,
+            startAt: "2026-10-26T06:00:00.123Z", endAt: "2026-10-26T07:00:00.456Z", timeZone: "Asia/Shanghai", timeZoneSource: "metadata",
+            stage: nil, value: nil, unit: nil, sourceBundle: "test", sourceName: "Synthetic Watch", syncIdentifier: nil, syncVersion: nil,
+            workout: HealthWorkoutDetails(activityType: HKWorkoutActivityType.traditionalStrengthTraining.rawValue, activityName: "traditionalStrengthTraining", durationSeconds: 3540.333,
+                activeEnergyKcal: 234.567, distance: nil, distanceUnit: nil, deviceName: nil, deviceModel: "Test Watch", deviceManufacturer: nil))
+        let now = Date()
+        try store.commitReadDelta(metric: .workout, delta: HealthReadDelta(added: [sample], deletedUUIDs: [], encodedAnchor: Data("workout-one".utf8)), now: now)
+        let batch = try store.takePendingReadBatch(limit: 10, now: now)
+        XCTAssertEqual(batch.count, 1)
+        XCTAssertEqual(batch.first?.change.workout?.durationSeconds, 3540.333)
+        XCTAssertEqual(batch.first?.change.workout?.activeEnergyKcal, 234.567)
+        XCTAssertEqual(try store.readAnchor(for: .workout), Data("workout-one".utf8))
+        try store.failReadUpload(ids: batch.map(\.id), reason: "offline", now: now)
+        let retried = try store.takePendingReadBatch(limit: 10, now: now.addingTimeInterval(86400))
+        XCTAssertEqual(retried.first?.change, batch.first?.change)
+        try store.completeReadUpload(ids: retried.map(\.id))
+        try store.commitReadDelta(metric: .workout, delta: HealthReadDelta(added: [], deletedUUIDs: [sample.sampleId], encodedAnchor: Data("workout-two".utf8)))
+        let deleted = try store.takePendingReadBatch(limit: 10)
+        XCTAssertEqual(deleted.first?.change.operation, "delete")
+        XCTAssertNil(deleted.first?.change.workout)
+        try store.resetReadAnchors()
+        XCTAssertNil(try store.readAnchor(for: .workout))
+        XCTAssertEqual(HealthWorkoutActivity.name(.running), "running")
+        XCTAssertEqual(HealthWorkoutActivity.name(.yoga), "yoga")
+        let boundary = HealthDateFormatter.iso8601.date(from: "2026-09-30T16:00:00.000Z")!
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        XCTAssertTrue(HealthWorkoutSyncScope.includes(startAt: boundary, timeZone: zone))
+        XCTAssertFalse(HealthWorkoutSyncScope.includes(startAt: boundary.addingTimeInterval(-1), timeZone: zone))
+    }
+
     private var temporaryDirectory: URL!
     private var store: HealthLocalStore!
 

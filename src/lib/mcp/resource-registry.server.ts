@@ -1,4 +1,7 @@
 import "server-only";
+import { getInsightContext } from "../services/insight-context";
+import { getInsightReportDetail } from "../services/insight-reports";
+import { getInsightRunStatus, listInsightRunStatus, startInsightRun, completeInsightRun, failInsightRun } from "../services/insight-runs";
 import { createFoodLog, deleteFoodLog, getFoodLog, getFoodLibraryItem, listFoodLogs, searchFoodLibrary, upsertFoodLibraryItem, updateFoodLog, updateFoodLibraryItem, removeFoodLibraryItem } from "../services/food";
 import { createDrinkLog, deleteDrinkLog, getDrinkLog, listDrinkLogs, updateDrinkLog } from "../services/drink";
 import { getDailyEnergy, getDailyNutritionSummary, updateDailyEnergy } from "../services/nutrition";
@@ -20,11 +23,14 @@ import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryN
 import { createResourceRegistry } from "./resource-registry";
 import { getPlaceLibraryItems,createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,removeFoodPlace,updateFoodDish,updateFoodPlace } from "../services/food";
 import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
-import { createSubscription, getSubscriptionDetail, listSubscriptions, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
+import { createSubscription, getSubscriptionDetail, listSubscriptions, recordSubscriptionPurchase, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "../services/evaorbit";
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
+  insightReport:{get:getInsightReportDetail},
+  insightRun:{get:getInsightRunStatus,search:listInsightRunStatus,start:startInsightRun,complete:completeInsightRun,fail:failInsightRun},
+  insightContext: { get: getInsightContext },
   foodLog: { search: listFoodLogs, get: getFoodLog, create: createFoodLog, update: updateFoodLog, delete: deleteFoodLog },
   drinkLog: { search: listDrinkLogs, get: getDrinkLog, create: createDrinkLog, update: updateDrinkLog, delete: deleteDrinkLog },
   foodLibrary: { search: searchFoodLibrary, get: getFoodLibraryItem, create: upsertFoodLibraryItem, update: updateFoodLibraryItem, delete: removeFoodLibraryItem },
@@ -53,7 +59,7 @@ export const resourceRegistry = createResourceRegistry({
   catRecord: { search: catTimeline, get: getCatRecord, create: createCatRecord, update: updateCatRecord, delete: deleteCatRecord },
   catRoutine: { search: listCatRoutines, get: getCatRoutine, create: createCatRoutine, update: updateCatRoutine, complete: completeCatRoutine, skip: skipCatRoutineOccurrence, archive: archiveCatRoutine, delete: deleteCatRoutine },
   reminder: { search: listReminders, create: createReminder, update: updateReminder, delete: deleteReminder, complete: completeReminder, skip: skipReminder, snooze: snoozeReminder },
-  subscription: { search: listSubscriptions, get: getSubscriptionDetail, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment },
+  subscription: { search: listSubscriptions, get: getSubscriptionDetail, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment, recordPurchase: recordSubscriptionPurchase },
   project: { search: listProjects, get: getProject, create: createProject, update: updateProject },
   projectItem: { search: listProjectItems, get: getProjectItem, create: createProjectItem, update: updateProjectItem },
   relationPerson:{search:listRelationPeople,get:getRelationPersonDetail,create:createRelationPerson,update:updateRelationPerson},

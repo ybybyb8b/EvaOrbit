@@ -1,6 +1,6 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
-export const BACKUP_VERSION = 10 as const;
-export const BACKUP_SCHEMA_VERSION = "202610240002_software_library_icon";
+export const BACKUP_VERSION = 13 as const;
+export const BACKUP_SCHEMA_VERSION = "202610270001_healthkit_workouts";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -75,6 +75,10 @@ export const BACKUP_TABLES = [
   "person_memory_notes",
   "notification_deliveries",
   "meal_reminder_rules",
+  "insight_reports",
+  "insight_report_versions",
+  "insight_runs",
+  "insight_run_attempts",
 ] as const;
 
 export type BackupTable = (typeof BACKUP_TABLES)[number];
@@ -93,7 +97,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -163,7 +167,7 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== BACKUP_VERSION) {
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== BACKUP_VERSION) {
     throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 至 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {
@@ -197,6 +201,8 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if(Number(document.backup_version)<8)resources.daily_journal_entries??=[];
   if(Number(document.backup_version)<9)resources.training_plans??=[];
   if(Number(document.backup_version)<10)resources.software_library??=[];
+  if(Number(document.backup_version)<11){resources.insight_reports??=[];resources.insight_report_versions??=[];}
+  if(Number(document.backup_version)<12){resources.insight_runs??=[];resources.insight_run_attempts??=[];}
   for (const table of BACKUP_TABLES) {
     if (!Array.isArray(resources[table])) throw new Error(`备份不完整：resources.${table} 缺失或格式错误`);
     if (!(resources[table] as unknown[]).every((row) => row && typeof row === "object" && !Array.isArray(row))) {

@@ -77,9 +77,9 @@ export type FoodDishSearchOptions = { kind?: "food" | "drink"; foodPlaceId?: num
 export type FoodObjectRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
-export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt">;
+export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt" | "workout" | "workoutDeleted" | "detailsCompletedAt">;
 export type TrainingLogPatch = Partial<NewTrainingLog>;
-export type TrainingLogListInput = { from?: string; to?: string; limit?: number };
+export type TrainingLogListInput = { from?: string; to?: string; limit?: number; pendingDetails?: boolean };
 export type NewWeightRecord = Pick<WeightRecord, "occurredAt" | "occurredHasExplicitTime" | "weightKg">;
 export type WeightRecordPatch = Partial<NewWeightRecord>;
 export type WeightRecordListInput = { from?: string; to?: string; limit?: number };
@@ -115,10 +115,11 @@ export type ProjectListInput = { query?: string; status?: ProjectStatus; limit?:
 export type NewProjectItem = Omit<ProjectItem, "id" | "projectName" | "createdAt" | "startedAt" | "completedAt" | "verifiedAt" | "updatedAt">;
 export type ProjectItemPatch = Partial<Omit<NewProjectItem, "projectId">> & { projectId?: number };
 export type ProjectItemListInput = { query?: string; projectId?: number; project?: string; status?: ProjectItemStatus; type?: ProjectItemType; module?: string; limit?: number };
-export type NewSubscription = Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "notes"> & { status?: Subscription["status"] };
-export type SubscriptionPatch = Partial<Pick<Subscription, "iconPath" | "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "reminderId" | "notes">>;
+export type NewSubscription = Pick<Subscription, "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "notes"> & { status?: Subscription["status"]; mode?: Subscription["mode"]; expiresOn?: string|null };
+export type SubscriptionPatch = Partial<Pick<Subscription, "mode" | "expiresOn" | "iconPath" | "name" | "currentAmountMinor" | "currency" | "billingIntervalValue" | "billingIntervalUnit" | "startedOn" | "nextRenewalOn" | "autoRenew" | "reminderEnabled" | "reminderDaysBefore" | "reminderTime" | "reminderId" | "notes">>;
 export type SubscriptionListInput = { query?: string; status?: Subscription["status"]; limit?: number };
 export type NewSubscriptionPayment = Pick<SubscriptionPayment, "scheduledFor" | "paidOn" | "amountMinor" | "currency" | "note"> & { updateCurrentPrice: boolean };
+export type NewSubscriptionPurchase = Required<Pick<SubscriptionPayment, "purchaseKey" | "validUntil" | "purchasedValue" | "purchasedUnit" | "bonusValue" | "bonusUnit">> & Pick<SubscriptionPayment, "paidOn" | "amountMinor" | "currency" | "note">;
 export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
 export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
 export type LuciusDiaryListInput = { query?: string; tag?: string; limit?: number };
@@ -156,6 +157,18 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  getInsightRun(date: string): Promise<import("../insight-runs").InsightRunClaim | null>;
+  listInsightRuns(): Promise<import("../insight-runs").InsightRun[]>;
+  listInsightRunAttempts(runId: string): Promise<import("../insight-runs").InsightAttemptSummary[]>;
+  claimInsightRun(input: import("../insight-runs").InsightRunClaimInput): Promise<import("../insight-runs").InsightRunClaim>;
+  finishInsightRun(attemptId: string, snapshot: import("../insight-reports").InsightSnapshot, outputHash: string): Promise<import("../insight-runs").InsightRunFinish>;
+  failInsightRun(attemptId: string, error: string, retryable: boolean): Promise<import("../insight-runs").InsightRun>;
+  listInsightReports(input: { periodType: import("../insight-reports").InsightPeriodType; before?: string }): Promise<import("../insight-reports").InsightReport[]>;
+  getInsightReport(id: string): Promise<import("../insight-reports").InsightReport | null>;
+  getInsightReportForDate(date: string): Promise<import("../insight-reports").InsightReport | null>;
+  getInsightVersion(reportId: string, version: number): Promise<import("../insight-reports").InsightVersion | null>;
+  listInsightVersions(reportId: string, before?: number): Promise<import("../insight-reports").InsightVersionSummary[]>;
+  saveInsightReport(input: import("../insight-reports").InsightReportWrite): Promise<import("../insight-reports").InsightReportResult>;
   listMemoryEntities(input?: MemoryEntityListInput): Promise<MemoryEntity[]>;
   getMemoryEntity(id: string): Promise<MemoryEntity | null>;
   createMemoryEntity(input: NewMemoryEntity): Promise<MemoryEntity>;
@@ -371,6 +384,8 @@ export interface EvaOrbitRepository {
   setSubscriptionStatus(id: number, status: Subscription["status"], nextRenewalOn?: string): Promise<Subscription | null>;
   listSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]>;
   listSubscriptionPriceChanges(subscriptionId: number): Promise<SubscriptionPriceChange[]>;
+  recordSubscriptionPurchase(subscriptionId: number, input: NewSubscriptionPurchase): Promise<SubscriptionPayment>;
+  updateSubscriptionPurchase(subscriptionId: number, paymentId: number, input: NewSubscriptionPurchase, original: NewSubscriptionPurchase): Promise<SubscriptionPayment>;
   recordSubscriptionPayment(subscriptionId: number, input: NewSubscriptionPayment, nextRenewalOn: string): Promise<SubscriptionPayment>;
 
   listMemos(input?: MemoListInput): Promise<Memo[]>;

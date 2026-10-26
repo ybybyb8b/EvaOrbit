@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { trainingTemplate } from "../src/lib/training-plan.ts";
+import { trainingSessionTitle } from "../src/lib/training-session.ts";
+import { workoutActivityLabel, workoutStatus } from "../src/lib/training-workout.ts";
 
 test("Day capsules only preview; switching requires an explicit action and confirmation", async () => {
   const slots = [], requests = [], confirmations = [];
@@ -35,6 +37,8 @@ test("Day capsules only preview; switching requires an explicit action and confi
     if (name.endsWith("date-time-field")) return { compactDateTimeValue: () => "" };
     if (name.endsWith("time")) return { dateInEvaOrbit: () => "2026-10-15", shiftDate: value => value };
     if (name.endsWith("training-plan-editor")) return { TrainingPlanEditor: "plan-editor" };
+    if (name.endsWith("training-session")) return { trainingSessionTitle };
+    if (name.endsWith("training-workout")) return { workoutActivityLabel, workoutStatus };
     if (name.endsWith("training-log-editor")) return {
       TrainingLogEditor: editor,
       trainingTypeLabels: Object.fromEntries(["strength", "cardio", "mixed"].map(type => [type, { en: type, zh: type }])),

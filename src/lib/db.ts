@@ -1,5 +1,12 @@
+import {sameSubscriptionPurchase} from "./subscription-purchase";
+import type {NewSubscriptionPurchase} from "./repositories/types";
 import { mergePlaceAddress } from "./place-menu";
 import { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
+import { shiftDate } from "./time";
+import { insightReportFromRow, insightVersionFromRow, type InsightReportWrite, type InsightPeriodType } from "./insight-reports";
+import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow, stableInsightJson, type InsightRunClaimInput, type InsightRunClaim } from "./insight-runs";
+import type { InsightSnapshot } from "./insight-reports";
 import { libraryEntryFromRow, type LibraryInput } from "./software-library";
 import { parseTrainingPlanWrite, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
 import type { TrainingPlan } from "./types";
@@ -1685,6 +1692,182 @@ export function createSoftwareLibraryEntry(input:LibraryInput){const result=data
 export function updateSoftwareLibraryEntry(id:number,input:LibraryInput){const result=database.prepare("UPDATE software_library SET name=?,category=?,platforms=?,license=?,version=?,acquisition=?,acquired_on=?,website=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,id);return result.changes?getSoftwareLibraryEntry(id):null;}
 export function deleteSoftwareLibraryEntry(id:number){return database.prepare("DELETE FROM software_library WHERE id=?").run(id).changes>0;}
 
+const hasV85=database.prepare("SELECT 1 FROM migrations WHERE version=85").get();
+if(!hasV85)database.exec(`BEGIN;
+  CREATE TABLE insight_reports (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'local',
+    period_type TEXT NOT NULL CHECK(period_type IN ('daily','monthly','quarterly','yearly')),
+    period_start TEXT NOT NULL, period_end TEXT NOT NULL CHECK(period_end>period_start),
+    time_zone TEXT NOT NULL DEFAULT 'Asia/Shanghai' CHECK(time_zone='Asia/Shanghai'),
+    current_version INTEGER NOT NULL DEFAULT 0 CHECK(current_version>=0),
+    status TEXT NOT NULL CHECK(status IN ('ready','no_findings')),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(user_id,period_type,period_start)
+  );
+  CREATE TABLE insight_report_versions (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL DEFAULT 'local', report_id TEXT NOT NULL REFERENCES insight_reports(id),
+    version INTEGER NOT NULL CHECK(version>0), request_key TEXT NOT NULL, request_hash TEXT NOT NULL,
+    snapshot TEXT NOT NULL CHECK(json_valid(snapshot) AND json_type(snapshot)='object'), created_at TEXT NOT NULL,
+    UNIQUE(user_id,request_key), UNIQUE(report_id,version)
+  );
+  CREATE TRIGGER insight_versions_immutable BEFORE UPDATE ON insight_report_versions BEGIN SELECT RAISE(ABORT,'Insight versions are immutable'); END;
+  INSERT INTO migrations(version) VALUES(85); COMMIT;`);
+
+export function listInsightReports(input:{periodType:InsightPeriodType;before?:string}) {
+  return database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND period_type=? AND period_start<? ORDER BY period_start DESC LIMIT 50")
+    .all(input.periodType,input.before??"9999-12-31").map(insightReportFromRow);
+}
+export function getInsightReport(id:string) {const row=database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND id=?").get(id);return row?insightReportFromRow(row):null;}
+export function getInsightReportForDate(date:string) {const row=database.prepare("SELECT * FROM insight_reports WHERE user_id='local' AND period_type='daily' AND period_start=?").get(date);return row?insightReportFromRow(row):null;}
+export function getInsightVersion(reportId:string,version:number) {const row=database.prepare("SELECT * FROM insight_report_versions WHERE user_id='local' AND report_id=? AND version=?").get(reportId,version);return row?insightVersionFromRow(row):null;}
+export function listInsightVersions(reportId:string,before=2147483647) {
+  return database.prepare("SELECT id,report_id,version,created_at,json_extract(snapshot,'$.method') AS method,json_extract(snapshot,'$.agent') AS agent,json_extract(snapshot,'$.revisionNote') AS revision_note FROM insight_report_versions WHERE user_id='local' AND report_id=? AND version<? ORDER BY version DESC LIMIT 50").all(reportId,before)
+    .map(row=>({id:String(row.id),reportId:String(row.report_id),version:Number(row.version),createdAt:String(row.created_at),method:row.method as 'rule'|'ai',agent:String(row.agent),revisionNote:String(row.revision_note)}));
+}
+export function saveInsightReport(input:InsightReportWrite) {
+  return insightTransaction(()=>saveInsightReportInTransaction(input));
+}
+function insightTransaction<T>(operation:()=>T):T {
+  database.exec("BEGIN IMMEDIATE");
+  try{const result=operation();database.exec("COMMIT");return result;}catch(error){database.exec("ROLLBACK");throw error;}
+}
+function saveInsightReportInTransaction(input:InsightReportWrite) {
+    const replay=database.prepare("SELECT * FROM insight_report_versions WHERE user_id='local' AND request_key=?").get(input.requestKey);
+    if(replay){
+      const version=insightVersionFromRow(replay),report=getInsightReport(version.reportId)!;
+      if(version.requestHash!==input.requestHash||report.periodStart!==input.date)throw new ConflictError("请求标识已用于其他内容，请重新发起分析。");
+      return {report,version};
+    }
+    let report=getInsightReportForDate(input.date);
+    if((report?.currentVersion??0)!==input.expectedVersion)throw new ConflictError("报告已有新版本，请刷新后重试。");
+    for(const finding of input.snapshot.findings)for(const ref of finding.revises){
+      const previous=getInsightVersion(ref.reportId,ref.version);
+      if(!previous?.snapshot.findings.some(item=>item.id===ref.findingId))throw new ConflictError("修订引用不存在或不属于当前账户。");
+    }
+    const now=new Date().toISOString();
+    if(!report){
+      const id=randomUUID();database.prepare("INSERT INTO insight_reports(id,period_type,period_start,period_end,status,created_at,updated_at) VALUES(?,'daily',?,?,'ready',?,?)").run(id,input.date,input.periodEnd,now,now);report=getInsightReport(id)!;
+    }
+    const id=randomUUID(),versionNumber=report.currentVersion+1;
+    database.prepare("INSERT INTO insight_report_versions(id,report_id,version,request_key,request_hash,snapshot,created_at) VALUES(?,?,?,?,?,?,?)").run(id,report.id,versionNumber,input.requestKey,input.requestHash,JSON.stringify(input.snapshot),now);
+    database.prepare("UPDATE insight_reports SET current_version=?,status=?,updated_at=? WHERE id=?").run(versionNumber,input.snapshot.findings.length?'ready':'no_findings',now,report.id);
+    const result={report:getInsightReport(report.id)!,version:getInsightVersion(report.id,versionNumber)!};
+    return result;
+}
+
+const hasV86=database.prepare("SELECT 1 FROM migrations WHERE version=86").get();
+if(!hasV86)database.exec(`BEGIN;
+  CREATE TABLE insight_runs (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT 'local',date TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN('running','succeeded','waiting_data','waiting_retry','failed')),
+    attempt_count INTEGER NOT NULL CHECK(attempt_count BETWEEN 0 AND 3),current_attempt_id TEXT NOT NULL,
+    lease_until TEXT,next_retry_at TEXT,report_id TEXT,report_version INTEGER,last_error TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+    UNIQUE(user_id,date),FOREIGN KEY(report_id,report_version) REFERENCES insight_report_versions(report_id,version)
+  );
+  CREATE TABLE insight_run_attempts (
+    id TEXT PRIMARY KEY,user_id TEXT NOT NULL DEFAULT 'local',run_id TEXT NOT NULL REFERENCES insight_runs(id),
+    attempt_number INTEGER NOT NULL CHECK(attempt_number BETWEEN 1 AND 3),request_key TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN('running','succeeded','failed','expired','waiting_data')),
+    base_snapshot TEXT NOT NULL CHECK(json_valid(base_snapshot)),expected_version INTEGER NOT NULL,lease_until TEXT NOT NULL,
+    started_at TEXT NOT NULL,finished_at TEXT,error TEXT,output_hash TEXT,UNIQUE(user_id,request_key),UNIQUE(run_id,attempt_number)
+  );
+  CREATE TRIGGER insight_attempts_guard BEFORE UPDATE ON insight_run_attempts WHEN OLD.status<>'running' OR NEW.id<>OLD.id OR NEW.user_id<>OLD.user_id OR NEW.run_id<>OLD.run_id OR NEW.request_key<>OLD.request_key OR NEW.attempt_number<>OLD.attempt_number OR NEW.base_snapshot<>OLD.base_snapshot OR NEW.expected_version<>OLD.expected_version BEGIN SELECT RAISE(ABORT,'Insight attempt input or completed history is immutable'); END;
+  INSERT INTO migrations(version) VALUES(86);COMMIT;`);
+const hasV87=database.prepare("SELECT 1 FROM migrations WHERE version=87").get();
+if(!hasV87)database.exec(`BEGIN;
+  ALTER TABLE subscriptions ADD COLUMN mode TEXT NOT NULL DEFAULT 'recurring' CHECK(mode IN('recurring','manual'));
+  ALTER TABLE subscriptions ADD COLUMN expires_on TEXT;
+  CREATE TABLE subscription_payments_v87 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',subscription_id INTEGER NOT NULL,
+    scheduled_for TEXT NOT NULL,paid_on TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>=0),
+    currency TEXT NOT NULL CHECK(length(currency)=3),note TEXT NOT NULL DEFAULT '' CHECK(length(note)<=5000),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    purchase_key TEXT,valid_until TEXT,purchased_value INTEGER,purchased_unit TEXT,bonus_value INTEGER,bonus_unit TEXT,
+    FOREIGN KEY(subscription_id,user_id) REFERENCES subscriptions(id,user_id) ON DELETE CASCADE,
+    CHECK((purchase_key IS NULL AND valid_until IS NULL AND purchased_value IS NULL AND purchased_unit IS NULL AND bonus_value IS NULL AND bonus_unit IS NULL) OR (purchase_key IS NOT NULL AND length(purchase_key) BETWEEN 8 AND 100 AND valid_until IS NOT NULL AND valid_until>=paid_on)),
+    CHECK((purchased_value IS NULL AND purchased_unit IS NULL) OR (purchased_value IS NOT NULL AND purchased_unit IS NOT NULL AND purchased_value BETWEEN 1 AND 36500 AND purchased_unit IN('day','week','month','year'))),
+    CHECK((bonus_value IS NULL AND bonus_unit IS NULL) OR (bonus_value IS NOT NULL AND bonus_unit IS NOT NULL AND bonus_value BETWEEN 1 AND 36500 AND bonus_unit IN('day','week','month','year')))
+  );
+  INSERT INTO subscription_payments_v87(id,user_id,subscription_id,scheduled_for,paid_on,amount_minor,currency,note,created_at) SELECT id,user_id,subscription_id,scheduled_for,paid_on,amount_minor,currency,note,created_at FROM subscription_payments;
+  DROP TABLE subscription_payments;ALTER TABLE subscription_payments_v87 RENAME TO subscription_payments;
+  CREATE UNIQUE INDEX idx_subscription_cycle_unique ON subscription_payments(user_id,subscription_id,scheduled_for) WHERE purchase_key IS NULL;
+  CREATE UNIQUE INDEX idx_subscription_purchase_unique ON subscription_payments(user_id,subscription_id,purchase_key) WHERE purchase_key IS NOT NULL;
+  CREATE INDEX idx_subscription_payments_subscription ON subscription_payments(subscription_id,paid_on DESC,id DESC);
+  CREATE TRIGGER subscription_manual_insert BEFORE INSERT ON subscriptions WHEN NEW.mode='manual' AND (NEW.auto_renew<>0 OR NEW.expires_on IS NULL OR NEW.next_renewal_on<>NEW.expires_on) BEGIN SELECT RAISE(ABORT,'Invalid manual membership'); END;
+  CREATE TRIGGER subscription_manual_update BEFORE UPDATE ON subscriptions WHEN NEW.mode='manual' AND (NEW.auto_renew<>0 OR NEW.expires_on IS NULL OR NEW.next_renewal_on<>NEW.expires_on) BEGIN SELECT RAISE(ABORT,'Invalid manual membership'); END;
+  INSERT INTO migrations(version) VALUES(87);COMMIT;`);
+
+export function getInsightRun(date:string):InsightRunClaim|null {
+  const row=database.prepare("SELECT * FROM insight_runs WHERE user_id='local' AND date=?").get(date);if(!row)return null;
+  const run=insightRunFromRow(row),attempt=database.prepare("SELECT * FROM insight_run_attempts WHERE user_id='local' AND id=?").get(run.currentAttemptId);
+  return{run,attempt:attempt?insightAttemptFromRow(attempt):null};
+}
+export function listInsightRuns(){return database.prepare("SELECT * FROM insight_runs WHERE user_id='local' ORDER BY date DESC LIMIT 50").all().map(insightRunFromRow);}
+export function listInsightRunAttempts(runId:string){return database.prepare("SELECT id,run_id,attempt_number,request_key,status,expected_version,lease_until,started_at,finished_at,error,output_hash FROM insight_run_attempts WHERE user_id='local' AND run_id=? ORDER BY attempt_number DESC LIMIT 3").all(runId).map(insightAttemptSummaryFromRow);}
+export function claimInsightRun(input:InsightRunClaimInput):InsightRunClaim {
+  return insightTransaction(()=>{
+    const now=new Date().toISOString(),leaseUntil=new Date(Date.now()+30*60000).toISOString();
+    const replay=database.prepare("SELECT * FROM insight_run_attempts WHERE user_id='local' AND request_key=?").get(input.requestKey);
+    if(replay){const original=database.prepare("SELECT * FROM insight_runs WHERE id=? AND user_id='local'").get(String(replay.run_id))!;if(original.date!==input.date)throw new ConflictError("运行请求 UUID 已用于另一个日期。");return{run:insightRunFromRow(original),attempt:insightAttemptFromRow(replay)};}
+    let current=getInsightRun(input.date);
+    if(current){
+      const{run}=current;
+      const leased=run.status==='running'&&run.leaseUntil!==null&&Date.parse(run.leaseUntil)>Date.parse(now);
+      if(run.status==='succeeded'||run.status==='failed'||leased||run.nextRetryAt&&Date.parse(run.nextRetryAt)>Date.parse(now))return{run,attempt:null};
+      if(run.status==='running')database.prepare("UPDATE insight_run_attempts SET status='expired',finished_at=?,error='Agent lease expired' WHERE id=? AND status='running'").run(now,run.currentAttemptId);
+      if(run.attemptCount>=3){database.prepare("UPDATE insight_runs SET status='failed',last_error='Retry limit reached',lease_until=NULL,next_retry_at=NULL,updated_at=? WHERE id=?").run(now,run.id);return{run:getInsightRun(input.date)!.run,attempt:null};}
+    }
+    const attemptId=randomUUID(),number=(current?.run.attemptCount??0)+1,deferred=input.empty&&number===1;
+    if(!current){const id=randomUUID();database.prepare("INSERT INTO insight_runs(id,date,status,attempt_count,current_attempt_id,created_at,updated_at) VALUES(?,?,'running',0,?,?,?)").run(id,input.date,attemptId,now,now);current=getInsightRun(input.date)!;}
+    const error=deferred?'No target-day observations; defer once for late records':null;
+    database.prepare("INSERT INTO insight_run_attempts(id,run_id,attempt_number,request_key,status,base_snapshot,expected_version,lease_until,started_at,finished_at,error) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(attemptId,current.run.id,number,input.requestKey,deferred?'waiting_data':'running',JSON.stringify(input.base),getInsightReportForDate(input.date)?.currentVersion??0,leaseUntil,now,deferred?now:null,error);
+    database.prepare("UPDATE insight_runs SET status=?,attempt_count=?,current_attempt_id=?,lease_until=?,next_retry_at=?,last_error=?,updated_at=? WHERE id=?")
+      .run(deferred?'waiting_data':'running',number,attemptId,deferred?null:leaseUntil,deferred?new Date(Date.now()+3600000).toISOString():null,error,now,current.run.id);
+    return getInsightRun(input.date)!;
+  });
+}
+function insightAttemptState(id:string){const row=database.prepare("SELECT * FROM insight_run_attempts WHERE id=? AND user_id='local'").get(id);if(!row)throw new ConflictError("运行尝试不存在。");const attempt=insightAttemptFromRow(row),header=database.prepare("SELECT * FROM insight_runs WHERE id=? AND user_id='local'").get(attempt.runId)!;return{attempt,run:insightRunFromRow(header)};}
+export function finishInsightRun(attemptId:string,snapshot:InsightSnapshot,outputHash:string){
+  return insightTransaction(()=>{
+    const{run,attempt}=insightAttemptState(attemptId);
+    if(attempt.status==='succeeded'){
+      if(attempt.outputHash!==outputHash)throw new ConflictError("已完成尝试不能提交不同输出。");
+      return{run,report:getInsightReport(run.reportId!)!,version:getInsightVersion(run.reportId!,run.reportVersion!)!,newlyCompleted:false};
+    }
+    const now=new Date().toISOString();
+    if(run.currentAttemptId!==attemptId||run.status!=='running'||attempt.status!=='running'||Date.parse(attempt.leaseUntil)<=Date.parse(now))throw new ConflictError("运行租约已失效，请重新获取执行状态。");
+    if(stableInsightJson(snapshot.input)!==stableInsightJson(attempt.base.input)||stableInsightJson(snapshot.evidence)!==stableInsightJson(attempt.base.evidence)||snapshot.agent!==attempt.base.agent||snapshot.method!=='ai'||snapshot.revisionNote!==attempt.base.revisionNote||attempt.base.findings.some(finding=>!snapshot.findings.some(item=>stableInsightJson(item)===stableInsightJson(finding))))throw new ConflictError("报告必须使用锁定的输入、证据和规则发现。");
+    const saved=saveInsightReportInTransaction({date:run.date,periodEnd:shiftDate(run.date,1),expectedVersion:attempt.expectedVersion,requestKey:attempt.id,requestHash:outputHash,revisionNote:snapshot.revisionNote,snapshot});
+    database.prepare("UPDATE insight_run_attempts SET status='succeeded',finished_at=?,output_hash=? WHERE id=?").run(now,outputHash,attemptId);
+    database.prepare("UPDATE insight_runs SET status='succeeded',lease_until=NULL,next_retry_at=NULL,last_error=NULL,report_id=?,report_version=?,updated_at=? WHERE id=?").run(saved.report.id,saved.version.version,now,run.id);
+    return{...saved,run:getInsightRun(run.date)!.run,newlyCompleted:true};
+  });
+}
+export function failInsightRun(attemptId:string,error:string,retryable:boolean){
+  return insightTransaction(()=>{
+    const state=insightAttemptState(attemptId);if(state.attempt.status!=='running')return state.run;
+    if(state.run.currentAttemptId!==attemptId)throw new ConflictError("运行租约已失效。");
+    const now=new Date().toISOString(),retry=retryable&&state.run.attemptCount<3;
+    database.prepare("UPDATE insight_run_attempts SET status='failed',finished_at=?,error=? WHERE id=?").run(now,error,attemptId);
+    database.prepare("UPDATE insight_runs SET status=?,lease_until=NULL,next_retry_at=?,last_error=?,updated_at=? WHERE id=?").run(retry?'waiting_retry':'failed',retry?new Date(Date.now()+600000).toISOString():null,error,now,state.run.id);
+    return getInsightRun(state.run.date)!.run;
+  });
+}
+
+const hasV88 = database.prepare("SELECT 1 FROM migrations WHERE version=88").get();
+if (!hasV88) database.exec(`BEGIN;
+  ALTER TABLE training_logs ADD COLUMN session_details TEXT CHECK(session_details IS NULL OR (json_valid(session_details) AND json_type(session_details)='object'));
+  INSERT INTO migrations(version) VALUES(88); COMMIT;
+`);
+
+const hasV89 = database.prepare("SELECT 1 FROM migrations WHERE version=89").get();
+if (!hasV89) database.exec(`BEGIN;
+  ALTER TABLE training_logs ADD COLUMN training_content TEXT NOT NULL DEFAULT '';
+  ALTER TABLE training_logs ADD COLUMN workout TEXT;
+  ALTER TABLE training_logs ADD COLUMN workout_deleted INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE training_logs ADD COLUMN details_completed_at TEXT;
+  CREATE UNIQUE INDEX idx_training_workout ON training_logs(user_id,json_extract(workout,'$.sampleId')) WHERE workout IS NOT NULL;
+  INSERT INTO migrations(version) VALUES(89); COMMIT;
+`);
+
 export function getTrainingPlan(): TrainingPlan | null {
   const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();
   return row ? { name: String(row.name), days: JSON.parse(String(row.days)), currentDayId: row.current_day_id === null ? null : String(row.current_day_id), version: Number(row.version), updatedAt: String(row.updated_at) } : null;
@@ -2229,12 +2412,12 @@ export function createHealthRecord(input:NewHealthRecord){const result=database.
 export function updateHealthRecord(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",type:"type",title:"title",summary:"summary",status:"status",startedAt:"started_at",startedHasExplicitTime:"started_has_explicit_time",endedAt:"ended_at",endedHasExplicitTime:"ended_has_explicit_time",details:"details"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getHealthRecord(id);const value=(key:string)=>key==="details"?JSON.stringify(input[key]):key.endsWith("HasExplicitTime")?Number(input[key]):input[key] as string|null;const result=database.prepare(`UPDATE health_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getHealthRecord(id):null;}
 export function deleteHealthRecord(id:number){return database.prepare("DELETE FROM health_records WHERE id=? AND user_id='local'").run(id).changes>0;}
 
-function trainingLogFromRow(row:Record<string,unknown>):TrainingLog{let bodyParts:unknown=[];try{bodyParts=JSON.parse(String(row.body_parts??"[]"));}catch{}return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),trainingType:row.training_type as TrainingLog["trainingType"],bodyParts:Array.isArray(bodyParts)?bodyParts.map(String) as TrainingLog["bodyParts"]:[],teacher:String(row.teacher??""),course:String(row.course??""),durationMinutes:row.duration_minutes===null?null:Number(row.duration_minutes),notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-export function listTrainingLogs(input:TrainingLogListInput={}){const conditions:string[]=["user_id='local'"],values:Array<string|number>=[];if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM training_logs WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(trainingLogFromRow);}
+function trainingLogFromRow(row:Record<string,unknown>):TrainingLog{let bodyParts:unknown=[];try{bodyParts=JSON.parse(String(row.body_parts??"[]"));}catch{}return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),trainingType:row.training_type as TrainingLog["trainingType"],bodyParts:Array.isArray(bodyParts)?bodyParts.map(String) as TrainingLog["bodyParts"]:[],teacher:String(row.teacher??""),course:String(row.course??""),durationMinutes:row.duration_minutes===null?null:Number(row.duration_minutes),notes:String(row.notes??""),...(row.session_details?{sessionDetails:JSON.parse(String(row.session_details))}:{}),trainingContent:String(row.training_content??""),workout:row.workout?JSON.parse(String(row.workout)):null,workoutDeleted:Boolean(row.workout_deleted),detailsCompletedAt:row.details_completed_at?String(row.details_completed_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+export function listTrainingLogs(input:TrainingLogListInput={}){const conditions:string[]=["user_id='local'","workout_deleted=0"],values:Array<string|number>=[];if(input.pendingDetails)conditions.push("workout IS NOT NULL AND details_completed_at IS NULL");if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM training_logs WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(trainingLogFromRow);}
 export function getTrainingLog(id:number){const row=database.prepare("SELECT * FROM training_logs WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?trainingLogFromRow(row):null;}
-export function createTrainingLog(input:NewTrainingLog){const result=database.prepare("INSERT INTO training_logs(user_id,occurred_at,occurred_has_explicit_time,training_type,body_parts,teacher,course,duration_minutes,notes) VALUES('local',?,?,?,?,?,?,?,?)").run(input.occurredAt,Number(input.occurredHasExplicitTime),input.trainingType,JSON.stringify(input.bodyParts),input.teacher,input.course,input.durationMinutes,input.notes);return getTrainingLog(Number(result.lastInsertRowid))!;}
-export function updateTrainingLog(id:number,input:TrainingLogPatch){const map:Record<keyof NewTrainingLog,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",trainingType:"training_type",bodyParts:"body_parts",teacher:"teacher",course:"course",durationMinutes:"duration_minutes",notes:"notes"};const entries=Object.entries(map).filter(([key])=>input[key as keyof TrainingLogPatch]!==undefined);if(!entries.length)return getTrainingLog(id);const value=(key:string):string|number|null=>key==="bodyParts"?JSON.stringify(input.bodyParts):key==="occurredHasExplicitTime"?Number(input.occurredHasExplicitTime):input[key as keyof TrainingLogPatch] as string|number|null;const result=database.prepare(`UPDATE training_logs SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getTrainingLog(id):null;}
-export function deleteTrainingLog(id:number){return database.prepare("DELETE FROM training_logs WHERE id=? AND user_id='local'").run(id).changes>0;}
+export function createTrainingLog(input:NewTrainingLog){const result=database.prepare("INSERT INTO training_logs(user_id,occurred_at,occurred_has_explicit_time,training_type,body_parts,teacher,course,duration_minutes,notes,session_details,training_content) VALUES('local',?,?,?,?,?,?,?,?,?,?)").run(input.occurredAt,Number(input.occurredHasExplicitTime),input.trainingType,JSON.stringify(input.bodyParts),input.teacher,input.course,input.durationMinutes,input.notes,input.sessionDetails?JSON.stringify(input.sessionDetails):null,input.trainingContent??"");return getTrainingLog(Number(result.lastInsertRowid))!;}
+export function updateTrainingLog(id:number,input:TrainingLogPatch){const existing=getTrainingLog(id);if(existing?.workout){if(existing.workoutDeleted)throw new Error("Workout was deleted in Apple Health");if(["occurredAt","occurredHasExplicitTime","trainingType","durationMinutes"].some(key=>input[key as keyof TrainingLogPatch]!==undefined))throw new Error("Workout source is read only");}const map:Record<keyof NewTrainingLog,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",trainingType:"training_type",bodyParts:"body_parts",teacher:"teacher",course:"course",durationMinutes:"duration_minutes",notes:"notes",trainingContent:"training_content",sessionDetails:"session_details"};const entries=Object.entries(map).filter(([key])=>input[key as keyof TrainingLogPatch]!==undefined);if(!entries.length)return getTrainingLog(id);const value=(key:string):string|number|null=>key==="sessionDetails"?(input.sessionDetails?JSON.stringify(input.sessionDetails):null):key==="bodyParts"?JSON.stringify(input.bodyParts):key==="occurredHasExplicitTime"?Number(input.occurredHasExplicitTime):input[key as keyof TrainingLogPatch] as string|number|null;const result=database.prepare(`UPDATE training_logs SET ${entries.map(([,column])=>`${column}=?`).join(",")},details_completed_at=CASE WHEN workout IS NOT NULL THEN CURRENT_TIMESTAMP ELSE details_completed_at END,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getTrainingLog(id):null;}
+export function deleteTrainingLog(id:number){if(getTrainingLog(id)?.workout)throw new Error("Delete this workout in Apple Health");return database.prepare("DELETE FROM training_logs WHERE id=? AND user_id='local'").run(id).changes>0;}
 function weightRecordFromRow(row:Record<string,unknown>):WeightRecord{return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),weightKg:Number(row.weight_kg),source:row.source as WeightRecord["source"],healthKitSampleId:row.healthkit_sample_id?String(row.healthkit_sample_id):null,healthKitSourceBundle:row.healthkit_source_bundle?String(row.healthkit_source_bundle):null,healthKitSourceName:row.healthkit_source_name?String(row.healthkit_source_name):null,healthKitSyncIdentifier:row.healthkit_sync_identifier?String(row.healthkit_sync_identifier):null,healthKitSyncVersion:Number(row.healthkit_sync_version??1),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listWeightRecords(input:import("./repositories/types").WeightRecordListInput={}){const conditions=["user_id='local'"];const values:Array<string|number>=[];if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),2000);return(database.prepare(`SELECT * FROM weight_records WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(weightRecordFromRow);}
 export function getWeightRecord(id:number){const row=database.prepare("SELECT * FROM weight_records WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?weightRecordFromRow(row):null;}
@@ -2530,18 +2713,52 @@ export function getNutritionSettings(date:string){const row=database.prepare("SE
 export function listNutritionSettings(limit=30){const size=Math.min(Math.max(Math.trunc(limit),1),90);return(database.prepare("SELECT date,resting_energy_kcal,active_energy_kcal,notes FROM daily_nutrition_summaries WHERE resting_energy_kcal IS NOT NULL OR active_energy_kcal IS NOT NULL ORDER BY date DESC LIMIT ?").all(size) as Record<string,unknown>[]).map((row)=>({date:String(row.date),restingEnergyKcal:row.resting_energy_kcal===null||row.resting_energy_kcal===undefined?null:Number(row.resting_energy_kcal),activeEnergyKcal:row.active_energy_kcal===null||row.active_energy_kcal===undefined?null:Number(row.active_energy_kcal),notes:String(row.notes??"")}));}
 export function updateNutritionSettings(date:string,input:{restingEnergyKcal:number|null;activeEnergyKcal:number|null;notes:string}){database.prepare("INSERT INTO daily_nutrition_summaries(date,resting_energy_kcal,active_energy_kcal,notes) VALUES(?,?,?,?) ON CONFLICT(date) DO UPDATE SET resting_energy_kcal=excluded.resting_energy_kcal,active_energy_kcal=excluded.active_energy_kcal,notes=excluded.notes,updated_at=CURRENT_TIMESTAMP").run(date,input.restingEnergyKcal,input.activeEnergyKcal,input.notes);}
 
-function subscriptionPaymentFromRow(row:Record<string,unknown>):SubscriptionPayment{return{id:Number(row.id),subscriptionId:Number(row.subscription_id),scheduledFor:String(row.scheduled_for),paidOn:String(row.paid_on),amountMinor:Number(row.amount_minor),currency:String(row.currency),note:String(row.note??""),createdAt:String(row.created_at)};}
+function subscriptionPaymentFromRow(row:Record<string,unknown>):SubscriptionPayment{return{id:Number(row.id),subscriptionId:Number(row.subscription_id),purchaseKey:row.purchase_key?String(row.purchase_key):null,validUntil:row.valid_until?String(row.valid_until):null,purchasedValue:row.purchased_value==null?null:Number(row.purchased_value),purchasedUnit:(row.purchased_unit??null) as SubscriptionPayment["purchasedUnit"],bonusValue:row.bonus_value==null?null:Number(row.bonus_value),bonusUnit:(row.bonus_unit??null) as SubscriptionPayment["bonusUnit"],scheduledFor:String(row.scheduled_for),paidOn:String(row.paid_on),amountMinor:Number(row.amount_minor),currency:String(row.currency),note:String(row.note??""),createdAt:String(row.created_at)};}
 function subscriptionPriceChangeFromRow(row:Record<string,unknown>):SubscriptionPriceChange{return{id:Number(row.id),subscriptionId:Number(row.subscription_id),effectiveOn:String(row.effective_on),oldAmountMinor:Number(row.old_amount_minor),newAmountMinor:Number(row.new_amount_minor),oldCurrency:String(row.old_currency),newCurrency:String(row.new_currency),createdAt:String(row.created_at)};}
-function subscriptionFromRow(row:Record<string,unknown>):Subscription{const spendByCurrency=JSON.parse(String(row.spend_by_currency??"{}")) as Record<string,number>;return{id:Number(row.id),name:String(row.name),iconPath:String(row.icon_path??""),currentAmountMinor:Number(row.current_amount_minor),currency:String(row.currency),billingIntervalValue:Number(row.billing_interval_value),billingIntervalUnit:row.billing_interval_unit as Subscription["billingIntervalUnit"],startedOn:String(row.started_on),nextRenewalOn:String(row.next_renewal_on),status:row.status as Subscription["status"],autoRenew:Boolean(row.auto_renew),reminderEnabled:Boolean(row.reminder_enabled),reminderDaysBefore:Number(row.reminder_days_before),reminderTime:row.reminder_time?String(row.reminder_time).slice(0,5):null,reminderId:row.reminder_id===null?null:Number(row.reminder_id),notes:String(row.notes??""),pausedAt:row.paused_at?String(row.paused_at):null,endedAt:row.ended_at?String(row.ended_at):null,totalSpentMinor:Number(spendByCurrency[String(row.currency)]??0),spendByCurrency,paymentCount:Number(row.payment_count??0),latestPriceChange:row.latest_change_id?subscriptionPriceChangeFromRow({id:row.latest_change_id,subscription_id:row.id,effective_on:row.latest_change_effective_on,old_amount_minor:row.latest_change_old_amount_minor,new_amount_minor:row.latest_change_new_amount_minor,old_currency:row.latest_change_old_currency,new_currency:row.latest_change_new_currency,created_at:row.latest_change_created_at}):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-const subscriptionSelect=`SELECT s.*,(SELECT json_group_object(currency,total_minor) FROM (SELECT p.currency,SUM(p.amount_minor) total_minor FROM subscription_payments p WHERE p.subscription_id=s.id GROUP BY p.currency ORDER BY p.currency)) spend_by_currency,(SELECT COUNT(*) FROM subscription_payments p WHERE p.subscription_id=s.id) payment_count,(SELECT id FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_id,(SELECT effective_on FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_effective_on,(SELECT old_amount_minor FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_old_amount_minor,(SELECT new_amount_minor FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_new_amount_minor,(SELECT old_currency FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_old_currency,(SELECT new_currency FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_new_currency,(SELECT created_at FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_created_at FROM subscriptions s`;
+function subscriptionFromRow(row:Record<string,unknown>):Subscription{const spendByCurrency=JSON.parse(String(row.spend_by_currency??"{}")) as Record<string,number>;return{mode:(row.mode??"recurring") as Subscription["mode"],expiresOn:row.expires_on?String(row.expires_on):null,latestPayment:row.latest_payment?subscriptionPaymentFromRow(JSON.parse(String(row.latest_payment))):null,id:Number(row.id),name:String(row.name),iconPath:String(row.icon_path??""),currentAmountMinor:Number(row.current_amount_minor),currency:String(row.currency),billingIntervalValue:Number(row.billing_interval_value),billingIntervalUnit:row.billing_interval_unit as Subscription["billingIntervalUnit"],startedOn:String(row.started_on),nextRenewalOn:String(row.next_renewal_on),status:row.status as Subscription["status"],autoRenew:Boolean(row.auto_renew),reminderEnabled:Boolean(row.reminder_enabled),reminderDaysBefore:Number(row.reminder_days_before),reminderTime:row.reminder_time?String(row.reminder_time).slice(0,5):null,reminderId:row.reminder_id===null?null:Number(row.reminder_id),notes:String(row.notes??""),pausedAt:row.paused_at?String(row.paused_at):null,endedAt:row.ended_at?String(row.ended_at):null,totalSpentMinor:Number(spendByCurrency[String(row.currency)]??0),spendByCurrency,paymentCount:Number(row.payment_count??0),latestPriceChange:row.latest_change_id?subscriptionPriceChangeFromRow({id:row.latest_change_id,subscription_id:row.id,effective_on:row.latest_change_effective_on,old_amount_minor:row.latest_change_old_amount_minor,new_amount_minor:row.latest_change_new_amount_minor,old_currency:row.latest_change_old_currency,new_currency:row.latest_change_new_currency,created_at:row.latest_change_created_at}):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+const subscriptionSelect=`SELECT s.*,(SELECT json_object('id',p.id,'subscription_id',p.subscription_id,'paid_on',p.paid_on,'scheduled_for',p.scheduled_for,'amount_minor',p.amount_minor,'currency',p.currency,'note',p.note,'created_at',p.created_at,'purchase_key',p.purchase_key,'valid_until',p.valid_until,'purchased_value',p.purchased_value,'purchased_unit',p.purchased_unit,'bonus_value',p.bonus_value,'bonus_unit',p.bonus_unit) FROM subscription_payments p WHERE p.subscription_id=s.id ORDER BY p.paid_on DESC,p.id DESC LIMIT 1) latest_payment,(SELECT json_group_object(currency,total_minor) FROM (SELECT p.currency,SUM(p.amount_minor) total_minor FROM subscription_payments p WHERE p.subscription_id=s.id GROUP BY p.currency ORDER BY p.currency)) spend_by_currency,(SELECT COUNT(*) FROM subscription_payments p WHERE p.subscription_id=s.id) payment_count,(SELECT id FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_id,(SELECT effective_on FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_effective_on,(SELECT old_amount_minor FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_old_amount_minor,(SELECT new_amount_minor FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_new_amount_minor,(SELECT old_currency FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_old_currency,(SELECT new_currency FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_new_currency,(SELECT created_at FROM subscription_price_changes c WHERE c.subscription_id=s.id ORDER BY effective_on DESC,id DESC LIMIT 1) latest_change_created_at FROM subscriptions s`;
 export function listSubscriptions(input:SubscriptionListInput={}){const conditions:string[]=[],values:Array<string|number>=[];if(input.status){conditions.push("s.status=?");values.push(input.status);}if(input.query){conditions.push("s.name LIKE ?");values.push(`%${input.query}%`);}values.push(Math.min(Math.max(input.limit??200,1),500));return(database.prepare(`${subscriptionSelect}${conditions.length?` WHERE ${conditions.join(" AND ")}`:""} ORDER BY CASE s.status WHEN 'active' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END,s.next_renewal_on,s.id LIMIT ?`).all(...values) as Record<string,unknown>[]).map(subscriptionFromRow);}
 export function getSubscription(id:number){const row=database.prepare(`${subscriptionSelect} WHERE s.id=?`).get(id) as Record<string,unknown>|undefined;return row?subscriptionFromRow(row):null;}
-export function createSubscription(input:NewSubscription){const r=database.prepare("INSERT INTO subscriptions(name,current_amount_minor,currency,billing_interval_value,billing_interval_unit,started_on,next_renewal_on,status,auto_renew,reminder_enabled,reminder_days_before,reminder_time,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.name,input.currentAmountMinor,input.currency,input.billingIntervalValue,input.billingIntervalUnit,input.startedOn,input.nextRenewalOn,input.status??"active",Number(input.autoRenew),Number(input.reminderEnabled),input.reminderDaysBefore,input.reminderTime,input.notes);return getSubscription(Number(r.lastInsertRowid))!;}
-export function updateSubscription(id:number,input:SubscriptionPatch,effectiveOn=new Date().toISOString().slice(0,10)){const current=getSubscription(id);if(!current)return null;database.exec("BEGIN");try{if((input.currentAmountMinor!==undefined&&input.currentAmountMinor!==current.currentAmountMinor)||(input.currency!==undefined&&input.currency!==current.currency))database.prepare("INSERT INTO subscription_price_changes(subscription_id,effective_on,old_amount_minor,new_amount_minor,old_currency,new_currency) VALUES(?,?,?,?,?,?)").run(id,effectiveOn,current.currentAmountMinor,input.currentAmountMinor??current.currentAmountMinor,current.currency,input.currency??current.currency);updateCatsRow("subscriptions",id,input,{name:"name",currentAmountMinor:"current_amount_minor",currency:"currency",billingIntervalValue:"billing_interval_value",billingIntervalUnit:"billing_interval_unit",startedOn:"started_on",nextRenewalOn:"next_renewal_on",autoRenew:"auto_renew",reminderEnabled:"reminder_enabled",reminderDaysBefore:"reminder_days_before",reminderTime:"reminder_time",reminderId:"reminder_id",iconPath:"icon_path",notes:"notes"},[],["autoRenew","reminderEnabled"]);database.exec("COMMIT");return getSubscription(id);}catch(error){database.exec("ROLLBACK");throw error;}}
+export function createSubscription(input:NewSubscription){const r=database.prepare("INSERT INTO subscriptions(name,current_amount_minor,currency,billing_interval_value,billing_interval_unit,started_on,next_renewal_on,status,auto_renew,reminder_enabled,reminder_days_before,reminder_time,notes,mode,expires_on) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.name,input.currentAmountMinor,input.currency,input.billingIntervalValue,input.billingIntervalUnit,input.startedOn,input.nextRenewalOn,input.status??"active",Number(input.autoRenew),Number(input.reminderEnabled),input.reminderDaysBefore,input.reminderTime,input.notes,input.mode??"recurring",input.expiresOn??null);return getSubscription(Number(r.lastInsertRowid))!;}
+export function updateSubscription(id:number,input:SubscriptionPatch,effectiveOn=new Date().toISOString().slice(0,10)){const current=getSubscription(id);if(!current)return null;database.exec("BEGIN");try{if((input.currentAmountMinor!==undefined&&input.currentAmountMinor!==current.currentAmountMinor)||(input.currency!==undefined&&input.currency!==current.currency))database.prepare("INSERT INTO subscription_price_changes(subscription_id,effective_on,old_amount_minor,new_amount_minor,old_currency,new_currency) VALUES(?,?,?,?,?,?)").run(id,effectiveOn,current.currentAmountMinor,input.currentAmountMinor??current.currentAmountMinor,current.currency,input.currency??current.currency);updateCatsRow("subscriptions",id,input,{name:"name",currentAmountMinor:"current_amount_minor",currency:"currency",mode:"mode",expiresOn:"expires_on",billingIntervalValue:"billing_interval_value",billingIntervalUnit:"billing_interval_unit",startedOn:"started_on",nextRenewalOn:"next_renewal_on",autoRenew:"auto_renew",reminderEnabled:"reminder_enabled",reminderDaysBefore:"reminder_days_before",reminderTime:"reminder_time",reminderId:"reminder_id",iconPath:"icon_path",notes:"notes"},[],["autoRenew","reminderEnabled"]);database.exec("COMMIT");return getSubscription(id);}catch(error){database.exec("ROLLBACK");throw error;}}
 export function setSubscriptionStatus(id:number,status:Subscription["status"],nextRenewalOn?:string){const now=new Date().toISOString();database.prepare("UPDATE subscriptions SET status=?,next_renewal_on=COALESCE(?,next_renewal_on),paused_at=?,ended_at=?,updated_at=? WHERE id=?").run(status,nextRenewalOn??null,status==="paused"?now:null,status==="ended"?now:null,now,id);return getSubscription(id);}
 export function listSubscriptionPayments(subscriptionId:number){return(database.prepare("SELECT * FROM subscription_payments WHERE subscription_id=? ORDER BY paid_on DESC,id DESC").all(subscriptionId) as Record<string,unknown>[]).map(subscriptionPaymentFromRow);}
 export function listSubscriptionPriceChanges(subscriptionId:number){return(database.prepare("SELECT * FROM subscription_price_changes WHERE subscription_id=? ORDER BY effective_on DESC,id DESC").all(subscriptionId) as Record<string,unknown>[]).map(subscriptionPriceChangeFromRow);}
-export function recordSubscriptionPayment(subscriptionId:number,input:NewSubscriptionPayment,nextRenewalOn:string){const current=getSubscription(subscriptionId);if(!current||current.status!=="active")throw new ConflictError("订阅不存在或未启用");database.exec("BEGIN");try{if(input.updateCurrentPrice&&(input.amountMinor!==current.currentAmountMinor||input.currency!==current.currency))database.prepare("INSERT INTO subscription_price_changes(subscription_id,effective_on,old_amount_minor,new_amount_minor,old_currency,new_currency) VALUES(?,?,?,?,?,?)").run(subscriptionId,input.paidOn,current.currentAmountMinor,input.amountMinor,current.currency,input.currency);const r=database.prepare("INSERT INTO subscription_payments(subscription_id,scheduled_for,paid_on,amount_minor,currency,note) VALUES(?,?,?,?,?,?)").run(subscriptionId,input.scheduledFor,input.paidOn,input.amountMinor,input.currency,input.note);database.prepare("UPDATE subscriptions SET next_renewal_on=?,current_amount_minor=?,currency=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(nextRenewalOn,input.updateCurrentPrice?input.amountMinor:current.currentAmountMinor,input.updateCurrentPrice?input.currency:current.currency,subscriptionId);database.exec("COMMIT");return subscriptionPaymentFromRow(database.prepare("SELECT * FROM subscription_payments WHERE id=?").get(Number(r.lastInsertRowid)) as Record<string,unknown>);}catch(error){database.exec("ROLLBACK");if(error instanceof Error&&error.message.includes("UNIQUE constraint failed"))throw new ConflictError("这个账期已经记录过扣款");throw error;}}
+export function recordSubscriptionPurchase(id:number,input:NewSubscriptionPurchase){
+  database.exec("BEGIN IMMEDIATE");
+  try{
+    const current=getSubscription(id);
+    if(!current||current.mode!=="manual")throw new ConflictError("该订阅不是手动续期会员");
+    const replay=database.prepare("SELECT * FROM subscription_payments WHERE subscription_id=? AND purchase_key=?").get(id,input.purchaseKey!);
+    if(replay){const payment=subscriptionPaymentFromRow(replay);if(!sameSubscriptionPurchase(payment,input))throw new ConflictError("购买请求标识已用于另一笔购买");database.exec("COMMIT");return payment;}
+    const result=database.prepare("INSERT INTO subscription_payments(subscription_id,scheduled_for,paid_on,amount_minor,currency,note,purchase_key,valid_until,purchased_value,purchased_unit,bonus_value,bonus_unit) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").run(id,input.paidOn,input.paidOn,input.amountMinor,input.currency,input.note,input.purchaseKey!,input.validUntil!,input.purchasedValue,input.purchasedUnit,input.bonusValue,input.bonusUnit);
+    const expiresOn=!current.latestPayment||input.paidOn>=current.latestPayment.paidOn?input.validUntil!:current.expiresOn!;
+    database.prepare("UPDATE subscriptions SET expires_on=?,next_renewal_on=?,status='active',paused_at=NULL,ended_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(expiresOn,expiresOn,id);
+    const payment=subscriptionPaymentFromRow(database.prepare("SELECT * FROM subscription_payments WHERE id=?").get(Number(result.lastInsertRowid))!);
+    database.exec("COMMIT");return payment;
+  }catch(error){database.exec("ROLLBACK");throw error;}
+}
+export function updateSubscriptionPurchase(id:number,paymentId:number,input:NewSubscriptionPurchase,original:NewSubscriptionPurchase){
+  database.exec("BEGIN IMMEDIATE");
+  try{
+    const current=getSubscription(id),payments=listSubscriptionPayments(id),payment=payments.find(p=>p.id===paymentId);
+    if(!current||current.mode!=="manual"||!payment?.purchaseKey)throw new ConflictError("手动会员购买记录不存在");
+    if(input.purchaseKey!==payment.purchaseKey||original.purchaseKey!==payment.purchaseKey)throw new ConflictError("不能更改购买请求标识");
+    // A retry acknowledges the same result; a stale editor cannot overwrite a newer edit.
+    if(sameSubscriptionPurchase(payment,input)){database.exec("COMMIT");return payment;}
+    if(!sameSubscriptionPurchase(payment,original))throw new ConflictError("购买记录已被修改，请刷新后重试");
+    const latest=payments.find(p=>p.purchaseKey),datesChanged=payment.paidOn!==input.paidOn||payment.validUntil!==input.validUntil;
+    database.prepare("UPDATE subscription_payments SET scheduled_for=?,paid_on=?,amount_minor=?,currency=?,note=?,valid_until=?,purchased_value=?,purchased_unit=?,bonus_value=?,bonus_unit=? WHERE id=? AND subscription_id=?").run(input.paidOn,input.paidOn,input.amountMinor,input.currency,input.note,input.validUntil!,input.purchasedValue,input.purchasedUnit,input.bonusValue,input.bonusUnit,paymentId,id);
+    // Preserve an expiry explicitly adjusted independently of purchase history.
+    if(datesChanged&&latest?.validUntil===current.expiresOn){
+      const next=listSubscriptionPayments(id).find(p=>p.purchaseKey)!;
+      database.prepare("UPDATE subscriptions SET expires_on=?,next_renewal_on=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(next.validUntil!,next.validUntil!,id);
+    }
+    const updated=listSubscriptionPayments(id).find(p=>p.id===paymentId)!;
+    database.exec("COMMIT");return updated;
+  }catch(error){database.exec("ROLLBACK");throw error;}
+}
+export function recordSubscriptionPayment(subscriptionId:number,input:NewSubscriptionPayment,nextRenewalOn:string){const current=getSubscription(subscriptionId);if(!current||current.status!=="active"||current.mode==="manual")throw new ConflictError("固定周期订阅不存在或未启用");database.exec("BEGIN");try{if(input.updateCurrentPrice&&(input.amountMinor!==current.currentAmountMinor||input.currency!==current.currency))database.prepare("INSERT INTO subscription_price_changes(subscription_id,effective_on,old_amount_minor,new_amount_minor,old_currency,new_currency) VALUES(?,?,?,?,?,?)").run(subscriptionId,input.paidOn,current.currentAmountMinor,input.amountMinor,current.currency,input.currency);const r=database.prepare("INSERT INTO subscription_payments(subscription_id,scheduled_for,paid_on,amount_minor,currency,note) VALUES(?,?,?,?,?,?)").run(subscriptionId,input.scheduledFor,input.paidOn,input.amountMinor,input.currency,input.note);database.prepare("UPDATE subscriptions SET next_renewal_on=?,current_amount_minor=?,currency=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(nextRenewalOn,input.updateCurrentPrice?input.amountMinor:current.currentAmountMinor,input.updateCurrentPrice?input.currency:current.currency,subscriptionId);database.exec("COMMIT");return subscriptionPaymentFromRow(database.prepare("SELECT * FROM subscription_payments WHERE id=?").get(Number(r.lastInsertRowid)) as Record<string,unknown>);}catch(error){database.exec("ROLLBACK");if(error instanceof Error&&error.message.includes("UNIQUE constraint failed"))throw new ConflictError("这个账期已经记录过扣款");throw error;}}
 
 function memoryEntityFromRow(row:Record<string,unknown>):MemoryEntity{return{id:String(row.id),canonicalName:String(row.canonical_name),entityType:String(row.entity_type),aliases:stringArrayFromRow(row.aliases),description:row.description===null?null:String(row.description),status:row.status as MemoryEntity["status"],mergedIntoEntityId:row.merged_into_entity_id===null?null:String(row.merged_into_entity_id),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function memoryFactFromRow(row:Record<string,unknown>):MemoryFact{return{id:String(row.id),subjectEntityId:String(row.subject_entity_id),predicate:String(row.predicate),objectEntityId:row.object_entity_id===null?null:String(row.object_entity_id),objectValue:row.object_value===null?null:jsonValue(row.object_value,null),perspectiveEntityId:row.perspective_entity_id===null?null:String(row.perspective_entity_id),epistemicType:(row.epistemic_type??"unknown") as MemoryFact["epistemicType"],supersedesFactId:row.supersedes_fact_id===null||row.supersedes_fact_id===undefined?null:String(row.supersedes_fact_id),confidence:Number(row.confidence),importance:Number(row.importance),validFrom:row.valid_from===null?null:String(row.valid_from),validTo:row.valid_to===null?null:String(row.valid_to),status:row.status as MemoryFact["status"],invalidatedAt:row.invalidated_at===null?null:String(row.invalidated_at),invalidationReason:row.invalidation_reason===null?null:String(row.invalidation_reason),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}

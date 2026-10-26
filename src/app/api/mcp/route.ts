@@ -4,6 +4,7 @@ import { McpOAuthError } from "@/lib/mcp-oauth";
 import { withMcpRequestRepository } from "@/lib/repositories";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {

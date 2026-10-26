@@ -1,5 +1,7 @@
 # Data backup and local restore
 
+Current backup version is 13 (`202610260001_manual_subscription_memberships`). Manual memberships retain mode/expiry in `subscriptions` and purchase keys, paid/bonus durations and resulting expiry in `subscription_payments`; spending is not duplicated in a second purchase table. Versions 1–12 remain readable. The manual membership regression test exports, restores and reopens these records with their reminder links.
+
 EvaOrbit exports one JSON document from the authenticated production Supabase account. The export endpoint is read-only and relies on the same account allowlist and row-level security as the rest of the app.
 
 ## Export
@@ -30,6 +32,8 @@ The document shape is:
 
 Version 2 adds `memory_entities`, `memory_facts`, and `memory_sources`. Version 6 adds the reviewed `memory_fact_candidates` queue used by Memory Graph v0.2. Older accepted backups normalize resources that did not exist in that version to empty arrays, so restore never manufactures graph data.
 Version 10 adds `software_library`, including platform lists, licence scope, acquisition method and optional acquisition dates. It is independent of subscription/payment tables. Versions 1–9 normalize its missing resource to an empty array; new-version backups require the resource. No software examples are created during migration or restore.
+Version 11 adds `insight_reports` followed by `insight_report_versions`, preserving stable report IDs, immutable snapshots, evidence, request identities and version links. Versions 1–10 normalize missing report resources to empty arrays. Local restore deletes versions before reports and imports reports before versions; the version UPDATE guard remains enabled.
+Version 12 adds `insight_runs` and `insight_run_attempts` after report versions, retaining bounded Agent attempts, frozen inputs, leases and result references. Versions 1–11 normalize these resources to empty arrays. Terminal attempts and their inputs remain immutable; restore inserts historical rows without updating them.
 
 AI settings/providers/models, API-key ciphertext, push subscriptions, native device credentials, HealthKit aggregates/raw samples, authentication/session/cookie data, and import bookkeeping are excluded. Conversation text is retained, but provider/model foreign keys are set to `null` because the secret-bearing provider tables are excluded. Storage binaries are not embedded; media records and their metadata/path fields are included.
 

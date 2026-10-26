@@ -3,8 +3,10 @@ import "server-only";
 import { buildHistorySuggestions } from "../history-suggestions";
 import { getRepository } from "../repositories";
 import type { NewTrainingLog, TrainingLogListInput, TrainingLogPatch } from "../repositories/types";
+import { HttpError } from "../errors";
 import { dateRange } from "../time";
 import { buildTrainingPresets } from "../training-presets";
+import { trainingExerciseSuggestions } from "../training-session";
 import type { TrainingPlanWrite, TrainingPlanCompletion } from "../training-plan";
 
 export async function getTrainingPlan() { return (await getRepository()).getTrainingPlan(); }
@@ -25,8 +27,21 @@ export async function listTrainingLogs(input: TrainingLogListInput & { date?: st
 
 export async function getTrainingLog(id: number) { return (await getRepository()).getTrainingLog(id); }
 export async function createTrainingLog(input: NewTrainingLog) { return (await getRepository()).createTrainingLog(input); }
-export async function updateTrainingLog(id: number, input: TrainingLogPatch) { return (await getRepository()).updateTrainingLog(id, input); }
-export async function deleteTrainingLog(id: number) { return (await getRepository()).deleteTrainingLog(id); }
+export async function updateTrainingLog(id: number, input: TrainingLogPatch) {
+  const repository = await getRepository();
+  const existing = await repository.getTrainingLog(id);
+  if (!existing) return null;
+  if (existing.workout) {
+    if (existing.workoutDeleted) throw new HttpError("Workout was deleted in Apple Health", 409);
+    if (["occurredAt", "occurredHasExplicitTime", "trainingType", "durationMinutes"].some(key => input[key as keyof TrainingLogPatch] !== undefined)) throw new HttpError("Workout source is read only", 400);
+  }
+  return repository.updateTrainingLog(id, input);
+}
+export async function deleteTrainingLog(id: number) {
+  const repository = await getRepository();
+  if ((await repository.getTrainingLog(id))?.workout) throw new HttpError("Delete this workout in Apple Health", 409);
+  return repository.deleteTrainingLog(id);
+}
 
 export async function getTrainingInputSuggestions() {
   const logs = await (await getRepository()).listTrainingLogs({ limit: 100 });
@@ -34,5 +49,7 @@ export async function getTrainingInputSuggestions() {
     teachers: buildHistorySuggestions(logs, (log) => log.teacher, (log) => log.occurredAt),
     courses: buildHistorySuggestions(logs, (log) => log.course, (log) => log.occurredAt),
     presets: buildTrainingPresets(logs),
+    exercises: buildHistorySuggestions(logs.flatMap(log => (log.sessionDetails?.exercises ?? []).map(exercise => ({ name: exercise.name, at: log.occurredAt }))), item => item.name, item => item.at),
+    ...trainingExerciseSuggestions(logs),
   };
 }

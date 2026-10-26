@@ -87,17 +87,19 @@ final class SystemHealthKitClient: HealthKitReading {
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
         return try await withCheckedThrowingContinuation { continuation in
             // Overlap rather than strict start: retain the preceding night's stage fragments.
-            let predicate = metric == .sleep ? HKQuery.predicateForSamples(withStart: HealthSleepSyncScope.queryStart, end: nil, options: []) : nil
+            // Workout follows the existing October history boundary; never import all history.
+            let predicate = metric == .sleep ? HKQuery.predicateForSamples(withStart: HealthSleepSyncScope.queryStart, end: nil, options: []) : metric == .workout ? HKQuery.predicateForSamples(withStart: HealthWorkoutSyncScope.queryStart, end: nil, options: .strictStartDate) : nil
             let query = HKAnchoredObjectQuery(type: metric.sampleType, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {
                     let formatter = ISO8601DateFormatter()
                     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                    let added = (samples ?? []).map { sample in
+                    let added = (samples ?? []).compactMap { sample -> HealthReadSample? in
                         let recordedZone = (sample.metadata?[HKMetadataKeyTimeZone] as? String).flatMap(TimeZone.init(identifier:))
                         let zone = recordedZone ?? .current
-                        return HealthReadSample(
+                        if metric == .workout && !HealthWorkoutSyncScope.includes(startAt: sample.startDate, timeZone: zone) { return nil }
+                        var result = HealthReadSample(
                             sampleId: sample.uuid.uuidString.lowercased(), metric: metric,
                             startAt: formatter.string(from: sample.startDate), endAt: formatter.string(from: sample.endDate),
                             timeZone: zone.identifier, timeZoneSource: recordedZone == nil ? "device" : "metadata",
@@ -108,6 +110,14 @@ final class SystemHealthKitClient: HealthKitReading {
                             syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String,
                             syncVersion: sample.metadata?[HKMetadataKeySyncVersion] as? Int
                         )
+                        if let workout = sample as? HKWorkout {
+                            let distance = workout.totalDistance?.doubleValue(for: .meter())
+                            let energy = workout.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
+                            result.workout = HealthWorkoutDetails(activityType: workout.workoutActivityType.rawValue, activityName: HealthWorkoutActivity.name(workout.workoutActivityType), durationSeconds: workout.duration,
+                                activeEnergyKcal: energy, distance: distance, distanceUnit: distance == nil ? nil : "m",
+                                deviceName: workout.device?.name, deviceModel: workout.device?.model, deviceManufacturer: workout.device?.manufacturer)
+                        }
+                        return result
                     }
                     continuation.resume(returning: HealthReadDelta(added: added, deletedUUIDs: (deleted ?? []).map { $0.uuid.uuidString.lowercased() }, encodedAnchor: try HealthAnchorCodec.encode(newAnchor)))
                 } catch { continuation.resume(throwing: error) }

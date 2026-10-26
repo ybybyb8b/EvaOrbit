@@ -23,7 +23,7 @@ function optionalMonth(value: string | null) {
 export async function GET(request: NextRequest) {
   try {
     const from=optionalDate(request.nextUrl.searchParams.get("from")),to=optionalDate(request.nextUrl.searchParams.get("to"));
-    return NextResponse.json(await listTrainingLogs({ date: optionalDate(request.nextUrl.searchParams.get("date")), month: optionalMonth(request.nextUrl.searchParams.get("month")), from:from?dateRange(from).from:undefined, to:to?dateRange(to).from:undefined, limit: 100 }));
+    return NextResponse.json(await listTrainingLogs({ pendingDetails: request.nextUrl.searchParams.get("pendingDetails") === "true", date: optionalDate(request.nextUrl.searchParams.get("date")), month: optionalMonth(request.nextUrl.searchParams.get("month")), from:from?dateRange(from).from:undefined, to:to?dateRange(to).from:undefined, limit: 100 }));
   }
   catch (error) { return apiError(error); }
 }

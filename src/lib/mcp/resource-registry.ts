@@ -1,4 +1,9 @@
+import {membershipState} from "../subscriptions.ts";
+import {dateInEvaOrbit} from "../time.ts";
+import {parseSubscriptionPurchase} from "../validation.ts";
 import { ConflictError } from "../errors.ts";
+import { insightPeriod, type InsightContext } from "../insight-context.ts";
+import { insightOutputFromMcp } from "../insight-runs.ts";
 import type { FoodLog, DrinkLog, DailyNutritionSummary, DrinkLimitStatus } from "../types.ts";
 import { parseNewFoodLog, parseFoodLogPatch, parseNewDrinkLog, parseDrinkLogPatch, parseFoodLibraryItem, parseFoodLibraryItemPatch, parseDailyEnergy } from "../validation.ts";
 import { documentedActionSchemas, resourceActionSchemas } from "./resource-actions.ts";
@@ -132,6 +137,14 @@ export type LuciusStateResourceOperations = {
 };
 
 export type ResourceRegistryOperations = {
+  insightRun?: {
+    get(id:string):Promise<object>; search(dueOnly?:boolean):Promise<object[]>;
+    start(id:string,key:unknown,fingerprint:unknown):Promise<object>;
+    complete(id:string,attemptId:unknown,output:unknown):Promise<object>;
+    fail(id:string,attemptId:unknown,error:unknown,retryable:unknown):Promise<object>;
+  };
+  insightReport?: {get(id:string,version?:number):Promise<object>};
+  insightContext?: { get(id: string): Promise<InsightContext> };
   foodLog?: { search(input: { query?: string; date?: string; mealType?: string; foodPlaceId?: number; foodDishId?: number; limit?: number }): Promise<FoodLog[]>; get(id: number): Promise<FoodLog | null>; create(input: ReturnType<typeof parseNewFoodLog>): Promise<FoodLog>; update(id: number, input: Record<string, unknown>): Promise<FoodLog | null>; delete(id: number): Promise<boolean> };
   drinkLog?: { search(input: { query?: string; date?: string; drinkType?: string; foodPlaceId?: number; drinkMenuId?: number; limit?: number }): Promise<DrinkLog[]>; get(id: number): Promise<DrinkLog | null>; create(input: ReturnType<typeof parseNewDrinkLog>): Promise<{ drink: DrinkLog; limits: DrinkLimitStatus[] }>; update(id: number, input: Record<string, unknown>): Promise<{ drink: DrinkLog; limits: DrinkLimitStatus[] } | null>; delete(id: number): Promise<boolean> };
   foodLibrary?: { search(query?: string, brand?: string, options?: { name?: string; category?: FoodLibraryItem["category"]; limit?: number }): Promise<FoodLibraryItem[]>; get(id: number): Promise<FoodLibraryItem | null>; create(input: ReturnType<typeof parseFoodLibraryItem>): Promise<FoodLibraryItem>; update(id: number, input: ReturnType<typeof parseFoodLibraryItemPatch>): Promise<FoodLibraryItem | null>; delete(id: number): Promise<{ id: number; action: "deleted" | "archived" } | null> };
@@ -165,7 +178,7 @@ export type ResourceRegistryOperations = {
   catRecord?: { search(petId?:number|null):Promise<CatTimelineEntry[]>; get(kind:CatRecordKind,id:number):Promise<object|null>; create(kind:CatRecordKind,input:ReturnType<typeof parseCatRecord>["record"]):Promise<object>; update(kind:CatRecordKind,id:number,input:Record<string,unknown>):Promise<object|null>; delete(kind:CatRecordKind,id:number):Promise<boolean> };
   catRoutine?: { search(input:{scope?:string;petId?:number|null;enabledOnly?:boolean}):Promise<CatRoutine[]>; get(id:number):Promise<CatRoutine|null>; create(input:ReturnType<typeof parseCatRoutine>):Promise<CatRoutine>; update(id:number,input:Record<string,unknown>):Promise<CatRoutine|null>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; archive(id:number):Promise<boolean>; delete(id:number):Promise<boolean> };
   reminder?: { search(input:{targetType?:string;targetId?:number|null;activeOnly?:boolean}):Promise<Reminder[]>; create(input:ReturnType<typeof parseReminder>):Promise<Reminder>; update(id:number,input:Record<string,unknown>):Promise<Reminder|null>; delete(id:number):Promise<boolean>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; snooze(id:number,choice:"later_today"|"tomorrow"|"custom",custom?:string):Promise<Reminder|null> };
-  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
+  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; recordPurchase?(id:number,input:ReturnType<typeof parseSubscriptionPurchase>):Promise<SubscriptionPayment>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
   foodPlace?: {getLibraryItems?(id:number):Promise<{item:FoodLibraryItem;recordCount:number;lastRecordedAt:string|null}[]>;search(query?:string,options?:{kind?:FoodPlace["kind"];scope?:FoodPlace["scope"];status?:FoodPlace["status"];category?:string;purpose?:"food"|"drink";limit?:number}):Promise<FoodPlace[]>;get(id:number):Promise<FoodPlace|null>;create(input:ReturnType<typeof parseFoodPlace>):Promise<FoodPlace>;update(id:number,input:ReturnType<typeof parseFoodPlacePatch>):Promise<FoodPlace|null>;delete(id:number):Promise<{id:number;action:"deleted"|"archived"}|null>};
   foodDish?: {search(query?:string,options?:{foodPlaceId?:number;kind?:"food"|"drink";recommended?:boolean;rating?:FoodDish["rating"];limit?:number}):Promise<FoodDish[]>;get(id:number):Promise<FoodDish|null>;create(input:ReturnType<typeof parseFoodDish>):Promise<FoodDish>;update(id:number,input:ReturnType<typeof parseFoodDishPatch>):Promise<FoodDish|null>;delete(id:number):Promise<boolean>};
 };
@@ -614,9 +627,9 @@ function healthRecord(item:HealthRecord):ResourceRecord{return{id:item.id,occurr
 const healthMap={occurred_at:"occurredAt",occurred_has_explicit_time:"occurredHasExplicitTime",type:"type",title:"title",summary:"summary",status:"status",started_at:"startedAt",started_has_explicit_time:"startedHasExplicitTime",ended_at:"endedAt",ended_has_explicit_time:"endedHasExplicitTime",details:"details"};
 function healthRecordResource(operations:NonNullable<ResourceRegistryOperations["healthRecord"]>):RegisteredResource{const writable=Object.keys(healthMap);return{schema:{resource:"health_record",description:"Personal symptoms, medications, visits, tests, conditions, treatments, measurements, and notes.",fields:{id:{type:"integer",description:"Health record id.",read_only:true},occurred_at:{type:"string",format:"date-time",description:"Occurrence date or time."},occurred_has_explicit_time:{type:"boolean",description:"Whether occurred_at contains a user-entered time."},type:{type:"string",enum:["symptom","medication","visit","test","condition","treatment","measurement","note"],description:"Record type."},title:{type:"string",max_length:200,description:"Title."},summary:{type:"string",max_length:5000,description:"Summary."},status:{type:"string",enum:["active","resolved"],description:"Lifecycle status."},started_at:{type:"string",format:"date-time",description:"Optional start."},started_has_explicit_time:{type:"boolean",description:"Whether start has explicit time."},ended_at:{type:"string",format:"date-time",description:"Optional end."},ended_has_explicit_time:{type:"boolean",description:"Whether end has explicit time."},details:{type:"object",description:"Type-specific structured details."},...timestamps},required_fields:["occurred_at","type","title"],writable_fields:writable,searchable_fields:["type","status","date_range"],supported_actions:[],validation_rules:["search filters accept type, status, from, and to","date-only values keep their explicit-time flags","update is PATCH","unknown fields are rejected"]},async search({filters={},limit,cursor}){assertOnlyKeys(filters,["type","status","from","to"],"health_record search filters");rejectCursor(cursor,"Health record");return{items:(await operations.search({type:filterEnum(filters.type,["symptom","medication","visit","test","condition","treatment","measurement","note"] as const,"type"),status:filterEnum(filters.status,["active","resolved"] as const,"status"),from:filterText(filters.from,"from"),to:filterText(filters.to,"to"),limit})).map(healthRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Health record"));if(!item)throw new ConflictError("Health record not found.");return healthRecord(item);},async create(data){assertOnlyKeys(data,writable,"health_record create");return healthRecord(await operations.create(parseNewHealthRecord(mappedInput(data,healthMap))));},async update(value,data){assertOnlyKeys(data,writable,"health_record update");const item=await operations.update(numericId(value,"Health record"),parseHealthRecordPatch(mappedInput(data,healthMap)));if(!item)throw new ConflictError("Health record not found.");return healthRecord(item);},async delete(value){const id=numericId(value,"Health record");if(!await operations.delete(id))throw new ConflictError("Health record not found.");return{deleted:true,id};}};}
 
-function trainingRecord(item:TrainingLog):ResourceRecord{return{id:item.id,occurred_at:item.occurredAt,occurred_has_explicit_time:item.occurredHasExplicitTime,training_type:item.trainingType,body_parts:item.bodyParts,teacher:item.teacher,course:item.course,duration_minutes:item.durationMinutes,notes:item.notes,created_at:item.createdAt,updated_at:item.updatedAt};}
-const trainingMap={occurred_at:"occurredAt",occurred_has_explicit_time:"occurredHasExplicitTime",training_type:"trainingType",body_parts:"bodyParts",teacher:"teacher",course:"course",duration_minutes:"durationMinutes",notes:"notes"};
-function trainingLogResource(operations:NonNullable<ResourceRegistryOperations["trainingLog"]>):RegisteredResource{const writable=Object.keys(trainingMap);return{schema:{resource:"training_log",description:"Personal cardio, strength, and mixed training sessions.",fields:{id:{type:"integer",description:"Training log id.",read_only:true},occurred_at:{type:"string",format:"date-time",description:"Training date or time."},occurred_has_explicit_time:{type:"boolean",description:"Whether time was explicitly entered."},training_type:{type:"string",enum:["cardio","strength","mixed"],description:"Training type."},body_parts:{type:"array",items:{type:"string"},description:"Body parts trained."},teacher:{type:"string",description:"Teacher."},course:{type:"string",description:"Course."},duration_minutes:{type:"integer",description:"Optional duration."},notes:{type:"string",description:"Notes."},...timestamps},required_fields:["occurred_at","body_parts"],writable_fields:writable,searchable_fields:["date_range"],supported_actions:[],validation_rules:["search filters accept from and to","date-only values keep occurred_has_explicit_time=false","update is PATCH","unknown fields are rejected"]},async search({filters={},limit,cursor}){assertOnlyKeys(filters,["from","to"],"training_log search filters");rejectCursor(cursor,"Training log");return{items:(await operations.search({from:filterText(filters.from,"from"),to:filterText(filters.to,"to"),limit})).map(trainingRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Training log"));if(!item)throw new ConflictError("Training log not found.");return trainingRecord(item);},async create(data){assertOnlyKeys(data,writable,"training_log create");return trainingRecord(await operations.create(parseNewTrainingLog(mappedInput(data,trainingMap))));},async update(value,data){assertOnlyKeys(data,writable,"training_log update");const item=await operations.update(numericId(value,"Training log"),parseTrainingLogPatch(mappedInput(data,trainingMap)));if(!item)throw new ConflictError("Training log not found.");return trainingRecord(item);},async delete(value){const id=numericId(value,"Training log");if(!await operations.delete(id))throw new ConflictError("Training log not found.");return{deleted:true,id};}};}
+function trainingRecord(item:TrainingLog):ResourceRecord{return{id:item.id,occurred_at:item.occurredAt,occurred_has_explicit_time:item.occurredHasExplicitTime,training_type:item.trainingType,body_parts:item.bodyParts,teacher:item.teacher,course:item.course,duration_minutes:item.durationMinutes,notes:item.notes,...(item.sessionDetails?{session_details:item.sessionDetails}:{}),created_at:item.createdAt,updated_at:item.updatedAt};}
+const trainingMap={occurred_at:"occurredAt",occurred_has_explicit_time:"occurredHasExplicitTime",training_type:"trainingType",body_parts:"bodyParts",teacher:"teacher",course:"course",duration_minutes:"durationMinutes",notes:"notes",session_details:"sessionDetails"};
+function trainingLogResource(operations:NonNullable<ResourceRegistryOperations["trainingLog"]>):RegisteredResource{const writable=Object.keys(trainingMap);return{schema:{resource:"training_log",description:"Personal cardio, strength, and mixed training sessions.",fields:{id:{type:"integer",description:"Training log id.",read_only:true},occurred_at:{type:"string",format:"date-time",description:"Training date or time."},occurred_has_explicit_time:{type:"boolean",description:"Whether time was explicitly entered."},training_type:{type:"string",enum:["cardio","strength","mixed"],description:"Training type."},body_parts:{type:"array",items:{type:"string"},description:"Body parts trained."},teacher:{type:"string",description:"Teacher."},course:{type:"string",description:"Course."},duration_minutes:{type:"integer",description:"Optional duration."},notes:{type:"string",description:"Notes."},session_details:{type:"object",description:"Optional session snapshot: plan reference, exercises (id/name/sets/target/completedSets/completed) and videos (url/completed). Omit to preserve existing details on PATCH; null clears details. Exercise sets are optional; no per-set weights or automatic calorie estimates."},...timestamps},required_fields:["occurred_at","body_parts"],writable_fields:writable,searchable_fields:["date_range"],supported_actions:[],validation_rules:["search filters accept from and to","date-only values keep occurred_has_explicit_time=false","update is PATCH","unknown fields are rejected"]},async search({filters={},limit,cursor}){assertOnlyKeys(filters,["from","to"],"training_log search filters");rejectCursor(cursor,"Training log");return{items:(await operations.search({from:filterText(filters.from,"from"),to:filterText(filters.to,"to"),limit})).map(trainingRecord),next_cursor:null};},async get(value){const item=await operations.get(numericId(value,"Training log"));if(!item)throw new ConflictError("Training log not found.");return trainingRecord(item);},async create(data){assertOnlyKeys(data,writable,"training_log create");return trainingRecord(await operations.create(parseNewTrainingLog(mappedInput(data,trainingMap))));},async update(value,data){assertOnlyKeys(data,writable,"training_log update");const item=await operations.update(numericId(value,"Training log"),parseTrainingLogPatch(mappedInput(data,trainingMap)));if(!item)throw new ConflictError("Training log not found.");return trainingRecord(item);},async delete(value){const id=numericId(value,"Training log");if(!await operations.delete(id))throw new ConflictError("Training log not found.");return{deleted:true,id};}};}
 
 function mediaRecord(item:MediaListItem|MediaDetail):ResourceRecord{return{id:item.id,title:item.title,original_title:item.originalTitle,translated_title:item.translatedTitle,media_type:item.mediaType,status:item.status,rating:item.rating,is_favorite:item.isFavorite,note:item.note,cover_url:item.coverUrl,series_id:item.seriesId,series_name:item.seriesName,season_number:item.seasonNumber,season_title:item.seasonTitle,...("latestWatchedDate" in item?{latest_watched_date:item.latestWatchedDate,viewing_count:item.viewingCount}:{}),...("viewings" in item?{viewings:item.viewings.map(v=>({id:v.id,watched_date:v.watchedDate,viewing_number:v.viewingNumber,created_at:v.createdAt}))}:{}),created_at:item.createdAt,updated_at:item.updatedAt};}
 const mediaMap={title:"title",original_title:"originalTitle",translated_title:"translatedTitle",media_type:"mediaType",status:"status",rating:"rating",is_favorite:"isFavorite",note:"note",series_id:"seriesId",season_number:"seasonNumber",season_title:"seasonTitle",watched_date:"watchedDate"};
@@ -797,15 +810,19 @@ function reminderResource(operations:NonNullable<ResourceRegistryOperations["rem
   };
 }
 
-const subscriptionMap={name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
+const subscriptionMap={mode:"mode",expires_on:"expiresOn",name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
 function subscriptionResource(operations:NonNullable<ResourceRegistryOperations["subscription"]>):RegisteredResource {
   const writable=Object.keys(subscriptionMap);
   return {
     schema:{
       resource:"subscription",
-      description:"Recurring subscriptions with renewal reminders, immutable actual-payment history, price history, and pause/resume lifecycle.",
+      description:"Recurring subscriptions and manual-renewal memberships with actual-payment history and owned date reminders.",
       fields:{
         id:{type:"integer",description:"Subscription id.",read_only:true},
+        mode:{type:"string",enum:["recurring","manual"],default:"recurring",description:"recurring uses fixed billing; manual uses expires_on and record_purchase only."},
+        expires_on:{type:"string",format:"date",nullable:true,description:"Required for manual membership. Updating expiry never records payment."},
+        membership_state:{type:"string",enum:["active","expired","paused","ended"],derived:true,read_only:true,description:"Manual expiry is evaluated against today; expiry date is inclusive."},
+        latest_payment:{type:"object",read_only:true,nullable:true,description:"Most recent actual payment including purchase entitlement metadata when applicable."},
         name:{type:"string",description:"Subscription name."},
         amount:{type:"number",description:"Write-only current price in major currency units; responses use current_amount_minor."},
         current_amount_minor:{type:"integer",description:"Current recurring price in minor currency units.",read_only:true},
@@ -813,9 +830,9 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
         billing_interval_value:{type:"integer",description:"Billing interval amount."},
         billing_interval_unit:{type:"string",enum:["day","week","month","year"],description:"Billing interval unit."},
         started_on:{type:"string",format:"date",description:"Date-only start date."},
-        next_renewal_on:{type:"string",format:"date",description:"Date-only next renewal."},
+        next_renewal_on:{type:"string",format:"date",description:"Recurring due date. In manual mode this is only a legacy mirror of expires_on, never a scheduled charge."},
         status:{type:"string",enum:["active","paused","ended"],description:"Lifecycle state; change through actions.",read_only:true},
-        auto_renew:{type:"boolean",description:"Whether the provider renews automatically."},
+        auto_renew:{type:"boolean",description:"Whether automatic due-payment bookkeeping is enabled; manual mode always uses false."},
         reminder_enabled:{type:"boolean",description:"Whether the owned renewal reminder is enabled."},
         reminder_days_before:{type:"integer",description:"Whole days before renewal."},
         reminder_time:{type:"string",description:"Explicit local HH:mm time; required when reminders are enabled."},
@@ -828,14 +845,17 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
         notes:{type:"string",description:"Notes."},
         ...timestamps,
       },
-      required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"],
+      required_fields:["name"],
+      field_variants:{recurring:{fields:Object.keys(subscriptionMap).filter(key=>key!=="expires_on"),required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"]},manual:{fields:["mode","name","expires_on","notes","currency","reminder_enabled","reminder_days_before","reminder_time"],required_fields:["mode","name","expires_on"]}},
       writable_fields:writable,
       searchable_fields:["name","status"],
-      supported_actions:["pause","resume","end","record_payment"],
+      supported_actions:["pause","resume","end","record_payment","record_purchase"],
       validation_rules:[
         "amount inputs use major currency units and outputs use integer minor units",
         "cumulative spending sums actual payments only and remains grouped by currency",
         "price changes append history instead of rewriting payments",
+        "manual requires expires_on, never auto-books or predicts a charge; record_purchase requires a stable purchase_key per logical purchase",
+        "purchase valid_until is authoritative; older history never shortens current expiry; optional duration/bonus are metadata only",
         "pause disables the owned reminder without deleting history",
         "dates are date-only; reminder_time is explicit and required only when reminders are enabled",
         "unknown fields are rejected",
@@ -844,12 +864,12 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
     async search({query,filters={},limit,cursor}) {
       assertOnlyKeys(filters,["status"],"subscription search filters");
       rejectCursor(cursor,"Subscription");
-      return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(snakeRecord),next_cursor:null};
+      return{items:(await operations.search({query,status:filterEnum(filters.status,["active","paused","ended"] as const,"status"),limit})).map(item=>({...snakeRecord(item),membership_state:membershipState(item,dateInEvaOrbit())})),next_cursor:null};
     },
     async get(value) {
       const item=await operations.get(numericId(value,"Subscription"));
       if(!item)throw new ConflictError("Subscription not found.");
-      return snakeRecord(item);
+      return {...snakeRecord(item),membership_state:membershipState(item,dateInEvaOrbit())};
     },
     async create(data) {
       assertOnlyKeys(data,writable,"subscription create");
@@ -864,6 +884,12 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
     async action({id,action,data}) {
       if(id===undefined)throw new ValidationError(`${action} requires a subscription id.`);
       const subscriptionId=numericId(id,"Subscription");
+      if(action==="record_purchase") {
+        const map={purchase_key:"purchaseKey",paid_on:"paidOn",amount:"amount",currency:"currency",valid_until:"validUntil",purchased_value:"purchasedValue",purchased_unit:"purchasedUnit",bonus_value:"bonusValue",bonus_unit:"bonusUnit",note:"note"};
+        assertOnlyKeys(data,Object.keys(map),"subscription record_purchase");
+        if(!operations.recordPurchase)throw new ValidationError("record_purchase is unavailable");
+        return snakeRecord(await operations.recordPurchase(subscriptionId,parseSubscriptionPurchase(mappedInput(data,map))));
+      }
       if(action==="record_payment") {
         assertOnlyKeys(data,["scheduled_for","paid_on","amount","currency","note","update_current_price"],"subscription record_payment");
         return snakeRecord(await operations.recordPayment(subscriptionId,parseSubscriptionPayment(mappedInput(data,{scheduled_for:"scheduledFor",paid_on:"paidOn",amount:"amount",currency:"currency",note:"note",update_current_price:"updateCurrentPrice"}))));
@@ -1198,5 +1224,31 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
   if(operations.foodLibrary)resources.push(foodLibraryResource(operations.foodLibrary));
   if(operations.nutritionDaily)resources.push(nutritionDailyResource(operations.nutritionDaily));
   if(operations.dailyEnergy)resources.push(dailyEnergyResource(operations.dailyEnergy));
+  if(operations.insightReport)resources.push({
+    schema:{resource:"insight_report",description:"Read saved Insights reports, fixed historical versions, evidence and revision relationships.",fields:{report:{type:"object",read_only:true,description:"Stable report identity and current version."},version:{type:"object",read_only:true,description:"Immutable selected snapshot."},versions:{type:"array",read_only:true,description:"Recent version metadata."}},required_fields:[],writable_fields:[],searchable_fields:[],supported_actions:[],validation_rules:["get ID is report UUID or UUID/v/positive-version", "Read only; automated writes use insight_run with frozen server inputs"]},
+    async get(id){const match=typeof id==="string"?/^([a-f0-9-]{36})(?:\/v\/([1-9]\d{0,6}))?$/i.exec(id):null;if(!match)throw new ValidationError("Report ID must be UUID or UUID/v/N.");return snakeRecord(await operations.insightReport!.get(match[1],match[2]?Number(match[2]):undefined));},
+  });
+  if(operations.insightRun)resources.push({
+    schema:{resource:"insight_run",description:"Single external Agent Daily execution: immutable input lease, attempts, failure/retry and atomic report completion.",fields:{date:{type:"string",description:"Ended Shanghai natural day."},run:{type:"object",read_only:true,description:"Stable per-user/day run, current lease, retry time and result reference."},attempts:{type:"array",read_only:true,description:"Up to three execution attempts; inputs are private to a claimed lease."}},required_fields:[],writable_fields:[],searchable_fields:[],supported_actions:["start","complete","fail"],validation_rules:["IDs: yesterday or day/YYYY-MM-DD for ended days", "search filters.status is all or due; due includes yesterday and already-created retryable runs in the previous seven days", "At most one live 30-minute lease per day, max three attempts; first entirely empty day defers once for one hour", "Only complete writes reports; server retains frozen input/evidence/rules, Agent supplies summary and ai-* findings", "Reuse request_key on an uncertain start response; reuse identical output on an uncertain completion response"]},
+    async get(id){return snakeRecord(await operations.insightRun!.get(insightPeriod(id).id));},
+    async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["status"],"insight_run search");rejectCursor(cursor,"insight_run");if(query||filters.status!==undefined&&!["all","due"].includes(String(filters.status)))throw new ValidationError("insight_run accepts only filters.status=all|due.");const items=await operations.insightRun!.search(filters.status==="due");return{items:items.slice(0,limit).map(snakeRecord),next_cursor:null};},
+    async action({id,action,data}){const period=insightPeriod(id);if(action==="start")return snakeRecord(await operations.insightRun!.start(period.id,data.request_key,data.context_fingerprint));if(action==="complete")return snakeRecord(await operations.insightRun!.complete(period.id,data.attempt_id,insightOutputFromMcp(data.output)));return snakeRecord(await operations.insightRun!.fail(period.id,data.attempt_id,data.error,data.retryable));},
+  });
+  if (operations.insightContext) resources.push({
+    schema: {
+      resource: "insight_context", description: "Read-only Daily analysis context: Asia/Shanghai ended day, 7/30-day recorded-activity baselines, evidence, coverage and deterministic input fingerprint. Phase 1 only.",
+      fields: Object.fromEntries([
+        ["schema_version", "integer"], ["period", "object"], ["captured_at", "string"], ["related_reports", "array"], ["snapshot_fingerprint", "string"], ["consistency", "string"],
+        ["coverage", "object"], ["metadata_coverage", "object"], ["metrics", "object"], ["domain_metrics", "object"], ["tracker_statistics", "array"], ["tasks", "object"], ["nutrition", "object"],
+        ["findings", "array"], ["evidence", "array"], ["evidence_coverage", "object"], ["baseline_references", "array"], ["baseline_reference_coverage", "object"], ["limitations", "array"], ["omitted", "object"],
+      ].map(([key, type]) => [key, { type: type as ResourceField["type"], read_only: true, description: "Structured analysis context; see coverage and limitations before interpreting values." }])),
+      required_fields: [], writable_fields: [], searchable_fields: [], supported_actions: [],
+      validation_rules: ["get ID: yesterday or day/YYYY-MM-DD for an ended natural day", "month/quarter/year IDs are rejected until their implementation phases", "No writes, search or actions; observed counts do not establish real-world completeness"],
+    },
+    async get(id) {
+      const period = insightPeriod(id);
+      return snakeRecord(await operations.insightContext!.get(period.id));
+    },
+  });
   return new ResourceRegistry(resources);
 }

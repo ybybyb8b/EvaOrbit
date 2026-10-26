@@ -2043,6 +2043,65 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .training-plan-meta,.training-plan-hint,.training-plan-footer p { color:var(--text-secondary);font-size:13px;line-height:1.6; }
 .training-plan-meta { margin:0 0 16px; }
 .training-plan-content { margin:0;white-space:pre-wrap;font-size:14px;line-height:1.75;overflow-wrap:anywhere; }
+.training-plan-exercise-summary { margin:16px 0;padding:0;list-style:none;display:grid;gap:10px; }
+.training-plan-exercise-summary li { display:flex;justify-content:space-between;gap:12px;font-size:13px; }
+.training-plan-exercise-summary li strong { font-weight:500;overflow-wrap:anywhere; }
+.training-plan-exercise-summary li span { color:var(--text-secondary);text-align:right; }
+.training-exercises { display:grid;gap:14px;min-width:0; }
+.training-exercises > .training-plan-hint { margin:0; }
+.training-exercise { min-width:0;border:0;margin:0;padding:16px;display:grid;gap:12px;border-radius:16px;background:rgb(var(--surface-tint-rgb) / .38); }
+.training-exercise + .training-exercise { margin-top:0; }
+.training-exercise > legend { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+.training-exercise-name { display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:end;gap:8px; }
+.training-exercise-target { display:grid;grid-template-columns:72px minmax(0,1fr) 124px;gap:10px;align-items:end; }
+.training-exercise .field { gap:8px; }
+.training-exercise .field > span { font-size:11px;font-weight:500;line-height:1.4;color:var(--text-secondary); }
+.training-exercise .field input { min-height:50px;border:0;background:rgb(var(--surface-raised-rgb) / .86);font-size:16px;box-shadow:none; }
+.training-exercise .field input:focus { box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .12); }
+.training-exercise-name > .icon-button { color:var(--text-secondary); }
+.training-exercise input,.training-exercise .suggested-input { min-width:0; }
+.training-exercise-progress,.training-exercise-progress > div { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.training-exercise-progress > span { color:var(--text-secondary);font-size:13px; }
+.training-exercise .icon-button { width:44px;height:44px; }
+.training-exercise-progress output { min-width:58px;text-align:center;font-variant-numeric:tabular-nums;font-size:14px; }
+.training-exercise button:disabled { opacity:.4;cursor:default; }
+.training-exercise-side { display:flex;gap:2px;min-height:48px;padding:3px;border-radius:12px;background:rgb(var(--surface-raised-rgb) / .58); }
+.training-exercise-side button { flex:1;min-width:0;min-height:44px;padding:6px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer; }
+.training-exercise-side button.active { background:rgb(var(--accent-rgb) / .14);color:var(--accent-primary);font-weight:600; }
+.training-exercise-side button:focus-visible { outline:2px solid var(--focus-ring);outline-offset:2px; }
+.training-exercise-history { display:grid;gap:8px; }
+.training-exercise-history > span { color:var(--text-secondary);font-size:12px; }
+.training-exercise-history > div { display:flex;gap:8px;overflow-x:auto;padding-bottom:4px; }
+.training-exercise-history button { display:grid;gap:5px;flex-shrink:0;min-height:52px;padding:10px 14px;border-radius:12px;background:rgb(var(--surface-raised-rgb) / .72);font-size:13px;text-align:left; }
+.training-exercise-history small,.training-reuse-previous small { color:var(--text-secondary);font-size:12px; }
+.training-reuse-previous.text-button { display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 14px;border-radius:14px;background:rgb(var(--accent-rgb) / .07);text-align:left; }
+.training-reuse-previous > .icon { width:20px;height:20px;flex-shrink:0;color:var(--accent-primary); }
+.training-reuse-previous > span:not(.training-reuse-count) { display:grid;gap:5px;min-width:0;flex:1; }
+.training-reuse-previous strong { font-size:13px;font-weight:600; }
+.training-reuse-previous small { font-weight:400;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.training-reuse-count { min-width:28px;text-align:center;color:var(--accent-primary);font-size:14px;font-variant-numeric:tabular-nums; }
+.training-exercise-completion,.training-content-description { color:var(--text-secondary);font-size:13px; }
+.training-exercise-completion summary,.training-content-description summary { min-height:44px;align-content:center;cursor:pointer; }
+.training-exercise-completion { margin-top:0; }
+.training-exercise-completion summary { font-size:12px; }
+.training-exercises > .training-plan-add-link { width:100%;justify-self:stretch;justify-content:center;min-height:44px;margin:0;padding:10px 14px;border-radius:12px;background:rgb(var(--surface-tint-rgb) / .42);font-size:13px; }
+.training-exercise-completion > .text-button { min-height:44px; }
+.training-content-description .field { margin-top:8px; }
+html[data-mode="dark"] .training-exercise { background:rgb(255 255 255 / .035); }
+@media (max-width:480px) {
+  .training-exercise { padding:14px; }
+  .training-exercise-target { grid-template-columns:56px minmax(0,1fr) 108px;gap:8px; }
+  .training-exercise .field input { padding-inline:11px; }
+  .training-exercise-target .field > span { min-height:31px;display:flex;align-items:end; }
+}
+.training-exercise-check { display:flex;align-items:center;gap:10px;min-height:44px;color:var(--text-primary);font-size:13px; }
+.training-exercise-check input { width:20px;height:20px;flex-shrink:0;accent-color:var(--accent-primary); }
+.training-session-reference { font-size:13px;color:var(--text-secondary); }
+.training-session-reference summary { cursor:pointer;line-height:1.6; }
+.training-session-reference p { margin:10px 0 0;white-space:pre-wrap;line-height:1.7; }
+.training-session-videos { display:grid;gap:10px; }
+.training-session-video { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+.training-session-video a { display:inline-flex;align-items:center;min-height:44px;color:var(--accent-primary);font-size:13px;text-underline-offset:4px; }
 .training-plan-footer { margin-top:20px; }
 .training-plan-footer p { margin:0; }
 .training-plan-videos { margin:12px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:4px 16px; }
@@ -2110,6 +2169,18 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .training-log-main small,.training-log-meta { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .training-log-meta { max-width: 42%; text-align: right; }
 .training-form { display:grid;gap:20px; }
+.training-workout-summary { padding:16px; background:rgb(var(--surface-raised-rgb) / .72); border-radius:14px; }
+.training-workout-summary p,.training-workout-picker > p { color:var(--text-secondary); font-size:13px; line-height:1.6; }
+.training-workout-summary dl { display:grid; gap:10px; margin:18px 0; }
+.training-workout-summary dl > div { display:grid; grid-template-columns:minmax(64px,auto) minmax(0,1fr); gap:12px; }
+.training-workout-summary dt { color:var(--text-secondary); font-size:12px; }
+.training-workout-summary dd { margin:0; font-size:13px; overflow-wrap:anywhere; }
+.training-workout-picker { display:grid; gap:12px; }
+.training-workout-picker h3 { margin:16px 0 0; }
+.training-workout-picker > p { margin:0; }
+.training-workout-picker .training-log-main { width:100%; min-height:56px; }
+.training-workout-picker .training-log-main small { white-space:normal; line-height:1.5; }
+.training-workout-picker .training-log-main > span:last-child { flex-shrink:0; font-size:12px; color:var(--text-secondary); }
 .training-body-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .training-body-field legend { margin-bottom:9px;color:var(--text-label);font-size:12px;font-weight:750; }
 .training-body-parts { padding:5px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;border-radius:14px;background:rgb(var(--surface-tint-rgb) / .68); }
@@ -5021,6 +5092,11 @@ html[data-mode="dark"] .settings-directory-page .settings-directory-item:hover {
 .subscription-history-grid .section-heading { margin-bottom:5px; }
 .subscription-history-grid .section-heading h2 { font-size:17px; }
 .subscription-history-list { gap:4px; }
+.subscription-history-single { grid-template-columns:minmax(0,1fr); }
+.subscription-history-list article:has(>.subscription-purchase-entitlement) { flex-wrap:wrap; }
+.subscription-purchase-entitlement { flex-basis:100%;display:grid;gap:5px; }
+.subscription-history-actions { display:grid;justify-items:end;gap:4px;flex-shrink:0; }
+.subscription-history-actions .text-button { min-height:36px;padding:4px 8px;font-size:10px; }
 .subscription-history-list article {
   padding:11px 12px;
   border-top:0;

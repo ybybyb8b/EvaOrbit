@@ -9,8 +9,10 @@ import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { loadCachedJson } from "@/lib/client-json-cache";
 import {useHealthData} from "@/components/health-data-context";
-import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, WeightRecord } from "@/lib/types";
+import type { MedicationPreset, MenstrualPeriod, TrainingInputSuggestions, TrainingLog, WeightRecord } from "@/lib/types";
 import { HealthRecordEditor } from "./health-record-editor";
+import { workoutActivityLabel } from "@/lib/training-workout";
+import { compactDateTimeValue } from "@/components/date-time-field";
 import { TrainingLogEditor } from "./training-log-editor";
 import { WeightEditor } from "./weight-section";
 import { MedicationDoseEditor, PeriodFlowEditor, StartPeriodEditor } from "./period-medication-section";
@@ -54,7 +56,18 @@ function LoadSheet({ title, error, onClose, onRetry }: { title: string; error: s
 
 function TrainingQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {
   const request = useRemoteJson<TrainingInputSuggestions>("/api/health/training/suggestions");
-  return <TrainingLogEditor initialDate={initialDate} suggestions={request.data ?? { teachers: [], courses: [], presets: [] }} onClose={onClose} onSaved={onSaved} />;
+  const { english } = useLocale();
+  const pending = useRemoteJson<TrainingLog[]>("/api/health/training?pendingDetails=true");
+  const [selection, setSelection] = useState<TrainingLog | "new" | null>(null);
+  if (selection) return <TrainingLogEditor record={selection === "new" ? undefined : selection} initialDate={initialDate} suggestions={request.data ?? { teachers: [], courses: [], presets: [] }} onClose={onClose} onSaved={onSaved} />;
+  return <FormSheet title={english ? "Training" : "训练"} onClose={onClose}>
+    <div className="training-workout-picker">
+      <button type="button" className="button primary" onClick={() => setSelection("new")}>{english ? "Log new training" : "记录新训练"}</button>
+      <h3>{english ? "Add details to a workout" : "补充已有训练"}</h3>
+      <p>{english ? "Apple Health workouts waiting for your training details." : "选择已同步的 Apple Health 训练，补充具体内容。"}</p>
+      {pending.error ? <><ErrorNotice>{english ? "Could not load workouts. Try again." : "未能加载训练，请重试。"}</ErrorNotice><button className="button secondary" onClick={pending.retry}>{english ? "Try again" : "重试"}</button></> : !pending.data ? <PageLoading title="正在加载训练" englishTitle="Loading workouts" inline /> : pending.data.length ? <div className="training-log-list">{pending.data.map(log => <button className="training-log-main" key={log.id} onClick={() => setSelection(log)}><span><strong>{workoutActivityLabel(log, english)}</strong><small>{compactDateTimeValue(log.occurredAt, true).replace("T", " · ")} · Apple Health</small></span><span>{new Intl.NumberFormat(english ? "en" : "zh-CN", { maximumFractionDigits: 1 }).format((log.workout?.workout?.durationSeconds ?? 0) / 60)} {english ? "min" : "分钟"}</span></button>)}</div> : <p>{english ? "No downloaded workouts need details. Sync Apple Health or log new training." : "已下载的训练暂无待补充项。可同步 Apple Health，或记录新训练。"}</p>}
+    </div>
+  </FormSheet>;
 }
 
 function WeightQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {

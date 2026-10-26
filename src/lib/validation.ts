@@ -1056,6 +1056,47 @@ function trainingBodyParts(value: unknown) {
   return result;
 }
 
+export function parseTrainingExercises(value: unknown): import("./types").TrainingExercise[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 30) throw new ValidationError("每次最多 30 个自主动作");
+  const exercises = value.map(item => {
+    const exercise = objectValue(item);
+    const id = text(exercise.id, "动作标识", 64)!;
+    if (!/^[a-zA-Z0-9-]+$/.test(id)) throw new ValidationError("动作标识不正确");
+    const sets = optionalNumber(exercise.sets, "目标组数", 1, 50);
+    if (sets !== null && !Number.isInteger(sets)) throw new ValidationError("组数须为整数");
+    return { id, name: text(exercise.name, "动作名称", 120)!, sets, target: text(exercise.target ?? "", "次数或时长", 120, false) ?? "" };
+  });
+  if (new Set(exercises.map(item => item.id)).size !== exercises.length) throw new ValidationError("动作标识不能重复");
+  return exercises;
+}
+
+export function parseTrainingSessionDetails(value: unknown): import("./types").TrainingSessionDetails | null {
+  if (value === null) return null;
+  const session = objectValue(value);
+  const items = session.exercises;
+  if (!Array.isArray(items)) throw new ValidationError("自主动作明细不正确");
+  const exercises = parseTrainingExercises(items).map((exercise, index) => {
+    const progress = objectValue(items[index]);
+    const completedSets = progress.completedSets ?? 0;
+    if (typeof completedSets !== "number" || !Number.isInteger(completedSets) || completedSets < 0 || completedSets > (exercise.sets ?? 0)) throw new ValidationError("已完成组数超出目标组数");
+    const completed = booleanValue(progress.completed, "动作完成状态", false);
+    return { ...exercise, completedSets, completed: exercise.sets === null ? completed : completedSets === exercise.sets };
+  });
+  if (!Array.isArray(session.videos) || session.videos.length > 8) throw new ValidationError("视频明细最多 8 项");
+  const videos = session.videos.map(item => {
+    const video = objectValue(item);
+    const url = text(video.url, "视频链接", 250)!;
+    try { if (!["http:", "https:"].includes(new URL(url).protocol)) throw new Error(); }
+    catch { throw new ValidationError("视频链接须为完整的 http 或 https 地址"); }
+    return { url, completed: booleanValue(video.completed, "视频完成状态", false) };
+  });
+  const source = session.plan === null ? null : objectValue(session.plan);
+  const dayNumber = source?.dayNumber;
+  if (source && (typeof dayNumber !== "number" || !Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > 30)) throw new ValidationError("计划训练日编号不正确");
+  return { exercises, videos, plan: source ? { name: text(source.name, "计划名称", 120)!, dayName: text(source.dayName, "训练日名称", 120)!, dayNumber: dayNumber as number, content: text(source.content ?? "", "计划说明", 2500, false) ?? "" } : null };
+}
+
 export function parseNewTrainingLog(value: unknown) {
   const body = objectValue(value);
   return {
@@ -1067,6 +1108,8 @@ export function parseNewTrainingLog(value: unknown) {
     course: text(body.course ?? "", "课程", 160, false) ?? "",
     durationMinutes: optionalNumber(body.durationMinutes, "训练时长", 1, 1440),
     notes: text(body.notes ?? "", "训练备注", 5000, false) ?? "",
+    ...(body.trainingContent === undefined ? {} : { trainingContent: text(body.trainingContent, "训练内容", 5000, false) ?? "" }),
+    ...(body.sessionDetails === undefined ? {} : { sessionDetails: parseTrainingSessionDetails(body.sessionDetails) }),
   };
 }
 
@@ -1081,6 +1124,8 @@ export function parseTrainingLogPatch(value: unknown) {
     course: body.course === undefined ? undefined : text(body.course, "课程", 160, false) ?? "",
     durationMinutes: body.durationMinutes === undefined ? undefined : optionalNumber(body.durationMinutes, "训练时长", 1, 1440),
     notes: body.notes === undefined ? undefined : text(body.notes, "训练备注", 5000, false) ?? "",
+    ...(body.trainingContent === undefined ? {} : { trainingContent: text(body.trainingContent, "训练内容", 5000, false) ?? "" }),
+    ...(body.sessionDetails === undefined ? {} : { sessionDetails: parseTrainingSessionDetails(body.sessionDetails) }),
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的训练记录字段");
   return result;
@@ -1106,17 +1151,22 @@ export function parseNewSubscription(value: unknown) {
   const body = objectValue(value);
   const reminderEnabled=booleanValue(body.reminderEnabled, "订阅提醒", false),reminderTime=subscriptionReminderTime(body.reminderTime);
   if(reminderEnabled&&!reminderTime)throw new ValidationError("开启订阅提醒时需要选择提醒时间");
+  const mode=enumValue(body.mode,"订阅模式",["recurring","manual"] as const,"recurring");
+  const expiresOn=mode==="manual"?dateOnly(body.expiresOn,"会员到期日"):null;
   return {
-    name: text(body.name, "订阅名称", 200)!, currentAmountMinor: moneyMinor(body.amount, "金额"), currency: currencyCode(body.currency),
-    billingIntervalValue: positiveInteger(body.billingIntervalValue, "扣款周期"), billingIntervalUnit: enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
-    startedOn: dateOnly(body.startedOn, "开始日期"), nextRenewalOn: dateOnly(body.nextRenewalOn, "下次续费日期"),
-    autoRenew: booleanValue(body.autoRenew, "自动续费", true), reminderEnabled, reminderTime,
+    mode,expiresOn,
+    name: text(body.name, "订阅名称", 200)!, currentAmountMinor: mode==="manual"?0:moneyMinor(body.amount, "金额"), currency: currencyCode(body.currency??(mode==="manual"?"CNY":undefined)),
+    billingIntervalValue: mode==="manual"?1:positiveInteger(body.billingIntervalValue, "扣款周期"), billingIntervalUnit: mode==="manual"?"month" as const:enumValue(body.billingIntervalUnit, "扣款周期单位", subscriptionUnits, "month") as SubscriptionIntervalUnit,
+    startedOn: dateOnly(body.startedOn??(mode==="manual"?dateInEvaOrbit():undefined), "开始日期"), nextRenewalOn: mode==="manual"?expiresOn!:dateOnly(body.nextRenewalOn, "下次续费日期"),
+    autoRenew: mode==="manual"?false:booleanValue(body.autoRenew, "自动续费", true), reminderEnabled, reminderTime,
     reminderDaysBefore: integerValue(body.reminderDaysBefore, "提前提醒天数", 0, 3650, 3), notes: text(body.notes ?? "", "备注", 5000, false) ?? "", status: "active" as const,
   };
 }
 
 export function parseSubscriptionPatch(value: unknown) {
   const body = objectValue(value), reminderTime=body.reminderTime===undefined?undefined:subscriptionReminderTime(body.reminderTime), result = {
+    mode:body.mode===undefined?undefined:enumValue(body.mode,"订阅模式",["recurring","manual"] as const,"recurring"),
+    expiresOn:body.expiresOn===undefined?undefined:dateOnly(body.expiresOn,"会员到期日"),
     name: body.name === undefined ? undefined : text(body.name, "订阅名称", 200)!,
     currentAmountMinor: body.amount === undefined ? undefined : moneyMinor(body.amount, "金额"),
     currency: body.currency === undefined ? undefined : currencyCode(body.currency),
@@ -1134,6 +1184,23 @@ export function parseSubscriptionPatch(value: unknown) {
 export function parseSubscriptionPayment(value: unknown) {
   const body = objectValue(value);
   return { scheduledFor: dateOnly(body.scheduledFor, "账期日期"), paidOn: dateOnly(body.paidOn, "扣款日期"), amountMinor: moneyMinor(body.amount, "实际金额"), currency: currencyCode(body.currency), note: text(body.note ?? "", "备注", 5000, false) ?? "", updateCurrentPrice: booleanValue(body.updateCurrentPrice, "更新后续价格", false) };
+}
+
+export function parseSubscriptionPurchase(value: unknown) {
+  const body=objectValue(value),paidOn=dateOnly(body.paidOn,"购买日期"),validUntil=dateOnly(body.validUntil,"最终会员有效期");
+  if(validUntil<paidOn)throw new ValidationError("会员有效期不能早于购买日期");
+  const purchaseKey=text(body.purchaseKey,"购买请求标识",100)!;
+  if(!/^[A-Za-z0-9_-]{8,100}$/.test(purchaseKey))throw new ValidationError("购买请求标识格式不正确");
+  const duration=(value:unknown,unit:unknown,label:string)=>{
+    if(value===undefined||value===null||value===""){
+      if(unit!==undefined&&unit!==null&&unit!=="")throw new ValidationError(`${label}需要同时填写数量与单位`);
+      return {value:null,unit:null};
+    }
+    if(unit===undefined||unit===null||unit==="")throw new ValidationError(`${label}需要同时填写数量与单位`);
+    return {value:integerValue(value,label,1,36500),unit:enumValue(unit,label,subscriptionUnits,"month")};
+  };
+  const purchased=duration(body.purchasedValue,body.purchasedUnit,"购买时长"),bonus=duration(body.bonusValue,body.bonusUnit,"赠送时长");
+  return {purchaseKey,paidOn,validUntil,amountMinor:moneyMinor(body.amount,"实付金额"),currency:currencyCode(body.currency),note:text(body.note??"","购买备注",5000,false)??"",purchasedValue:purchased.value,purchasedUnit:purchased.unit,bonusValue:bonus.value,bonusUnit:bonus.unit};
 }
 
 function timestampWithExplicitTime(value:unknown,field="时间"){

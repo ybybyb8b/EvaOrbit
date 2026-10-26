@@ -13,6 +13,9 @@ test("online business routes allow explicit operations and Tracker settings, nev
   for(const path of ["/api/trackers/1/entries","/api/trackers/quick-log"])assert(!allowsBusinessRequest(path,"POST"));
   assert(allowsBusinessRequest("/api/trackers/1/fields?fieldId=2","PATCH"));assert(allowsBusinessRequest("/api/trackers/1/goals","POST"));assert(!allowsBusinessRequest("/api/trackers/1/goals","PATCH"));
   assert(!allowsBusinessRequest("/api/tasks","DELETE"));
+  assert(allowsBusinessRequest("/api/subscriptions/1/purchases/2","PATCH"));
+  for(const method of ["POST","DELETE","GET"])assert(!allowsBusinessRequest("/api/subscriptions/1/purchases/2",method));
+  assert(!allowsBusinessRequest("/api/subscriptions/1/purchases/0","PATCH"));
   for(const [path,method] of [["/api/subscriptions/library","POST"],["/api/subscriptions/library/1","PATCH"],["/api/subscriptions/library/1/icon","POST"],["/api/subscriptions/library/1/icon","DELETE"]])assert(allowsBusinessRequest(path,method));
   for(const path of ["/api/subscriptions/library/0","/api/subscriptions/library/-1","/api/subscriptions/library/1/export"])assert(!allowsBusinessRequest(path,"POST"));
   const manifest=JSON.parse(readFileSync(new URL("business-routes.json",import.meta.url),"utf8")) as Array<{pattern:string;methods:string[]}>;

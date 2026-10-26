@@ -3,7 +3,7 @@ import { getRepository } from "../repositories";
 import { listFoodLogs } from "./food";
 import { listDrinkLogs, checkDrinkLimits, getDrinkLimits } from "./drink";
 import { dateInEvaOrbit, dateRange, shiftDate } from "../time";
-import { buildFoodDrinkInsights, type FoodDrinkHomeData } from "../food-drink-insights";
+import type { FoodDrinkHomeData } from "../food-drink-insights";
 import { foodDrinkTimeline } from "../food-drink-timeline";
 
 export async function getFoodDrinkHome(): Promise<FoodDrinkHomeData> {
@@ -19,6 +19,7 @@ export async function getFoodDrinkHome(): Promise<FoodDrinkHomeData> {
   const complete = foods.length < 500 && drinks.length < 500;
   return {
     date, brief: { foodCount: todayFood.length, drinkCount: todayDrink.length, latest: foodDrinkTimeline(lastFood, lastDrink, true)[0] ?? null },
-    insights: buildFoodDrinkInsights(foods, drinks, date, complete), window: { from, to: date, complete }, limits, limitStatuses,
+    // Keep the legacy snapshot shape readable; behavior findings now belong to Insights reports.
+    insights: [], window: { from, to: date, complete }, limits, limitStatuses,
   };
 }

@@ -23,7 +23,7 @@ test("Web sidebar preserves every space; local sidebar filters availability and 
   const {AppSidebar}=navigation();
   const props={pathname:"/food/places/1",LinkComponent:"a",brandImage:null};
   const web=renderToStaticMarkup(createElement(AppSidebar,props));
-  for(const path of ["/memo","/lucius","/tasks","/health","/projects","/subscriptions","/cats","/settings"])assert(web.includes(`href="${path}"`),path);
+  for(const path of ["/memo","/lucius","/tasks","/health","/projects","/subscriptions","/cats","/settings","/insights"])assert(web.includes(`href="${path}"`),path);
   assert.match(web,/href="\/food-drink"[^>]*aria-current="page"/);
   const local=renderToStaticMarkup(createElement(AppSidebar,{...props,allowedPaths:new Set(["/","/trackers","/food-drink","/cats"])}));
   for(const path of ["/","/trackers","/food-drink","/cats","/settings"])assert(local.includes(`href="${path}"`),path);

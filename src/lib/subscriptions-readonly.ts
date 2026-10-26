@@ -3,6 +3,7 @@ import {subscriptionSpendByCurrency} from "./subscriptions.ts";
 import {validSubscriptionIconKey} from "./subscription-icon.ts";
 import type {LibraryEntry} from "./software-library.ts";
 import {parseSoftwareLibraryInput} from "./software-library-validation.ts";
+import {parseSubscriptionPurchase} from "./validation.ts";
 
 export type SubscriptionsReadonlySnapshot={format:"eo-subscriptions-readonly-v1";accountId:string;capturedAt:string;today:string;items:SubscriptionDetail[];iconSources:Record<number,string>;library?:LibraryEntry[];libraryIconSources?:Record<number,string>};
 const validDay=(day:unknown)=>typeof day==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(day)&&Number.isFinite(Date.parse(day))&&new Date(day).toISOString().slice(0,10)===day;
@@ -13,9 +14,17 @@ export function validateSubscriptionsSnapshot(value:SubscriptionsReadonlySnapsho
   if(!value||value.format!=="eo-subscriptions-readonly-v1"||value.accountId!==accountId||!Number.isFinite(Date.parse(value.capturedAt))||!validDay(value.today)||!Array.isArray(value.items)||value.items.length>200||!value.iconSources||typeof value.iconSources!=="object"||Array.isArray(value.iconSources))fail();
   const ids=new Set<number>(),paymentIds=new Set<number>(),changeIds=new Set<number>();let history=0;
   for(const item of value.items){
+    if(item.mode!==undefined&&item.mode!=="recurring"&&item.mode!=="manual")fail();
+    if(item.mode==="manual"&&(!validDay(item.expiresOn)||item.nextRenewalOn!==item.expiresOn||item.autoRenew))fail();
     if(!validId(item.id)||ids.has(item.id)||typeof item.name!=="string"||!money(item.currentAmountMinor)||!/^[A-Z]{3}$/.test(item.currency)||!validId(item.billingIntervalValue)||!["day","week","month","year"].includes(item.billingIntervalUnit)||!validDay(item.startedOn)||!validDay(item.nextRenewalOn)||!["active","paused","ended"].includes(item.status)||typeof item.autoRenew!=="boolean"||typeof item.reminderEnabled!=="boolean"||!Array.isArray(item.payments)||!Array.isArray(item.priceChanges)||item.payments.length>=1000||item.priceChanges.length>=1000)fail();
     ids.add(item.id);history+=item.payments.length+item.priceChanges.length;
     for(const row of item.payments){if(!validId(row.id)||paymentIds.has(row.id)||row.subscriptionId!==item.id||!money(row.amountMinor)||!/^[A-Z]{3}$/.test(row.currency)||!validDay(row.scheduledFor)||!validDay(row.paidOn))fail();paymentIds.add(row.id);}
+    const purchaseKeys=new Set<string>();
+    for(const row of item.payments){
+      if(row.purchaseKey){try{parseSubscriptionPurchase({...row,amount:row.amountMinor/100});}catch{fail();}if(purchaseKeys.has(row.purchaseKey))fail();purchaseKeys.add(row.purchaseKey);}
+      else if(row.validUntil||row.purchasedValue||row.purchasedUnit||row.bonusValue||row.bonusUnit)fail();
+    }
+    if(item.latestPayment!==undefined){const latest=[...item.payments].sort((a,b)=>b.paidOn.localeCompare(a.paidOn)||b.id-a.id)[0]??null;if(JSON.stringify(item.latestPayment)!==JSON.stringify(latest))fail();}
     for(const row of item.priceChanges){if(!validId(row.id)||changeIds.has(row.id)||row.subscriptionId!==item.id||!money(row.oldAmountMinor)||!money(row.newAmountMinor)||!validDay(row.effectiveOn)||!/^[A-Z]{3}$/.test(row.oldCurrency)||!/^[A-Z]{3}$/.test(row.newCurrency))fail();changeIds.add(row.id);}
     const spend=subscriptionSpendByCurrency(item.payments);
     if(item.paymentCount!==item.payments.length||item.totalSpentMinor!==(spend[item.currency]??0)||Object.values(spend).some(v=>!money(v))||!item.spendByCurrency||Object.keys(spend).length!==Object.keys(item.spendByCurrency).length||Object.entries(spend).some(([key,total])=>item.spendByCurrency[key]!==total))fail();

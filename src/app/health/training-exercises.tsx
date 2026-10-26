@@ -1,0 +1,35 @@
+"use client";
+
+import { Icon } from "@/components/icons";
+import { useLocale } from "@/components/locale-controller";
+import { SuggestedInput } from "@/components/suggested-input";
+import type { TrainingExerciseLog, TrainingExercisePreset } from "@/lib/types";
+import { adjustTrainingExercise, exerciseTarget, exerciseTargetParts, reuseTrainingExercises, type ExerciseSide } from "@/lib/training-session";
+
+export function TrainingExercises({ items, onChange, suggestions = [], presets = [], previous = [], title, recording = false }: { items: TrainingExerciseLog[]; onChange: (items: TrainingExerciseLog[]) => void; suggestions?: string[]; presets?: TrainingExercisePreset[]; previous?: TrainingExercisePreset[]; title?: string; recording?: boolean }) {
+  const { english } = useLocale();
+  const t = (en: string, zh: string) => english ? en : zh;
+  function update(id: string, patch: Partial<TrainingExerciseLog>) {
+    onChange(items.map(item => {
+      if (item.id !== id) return item;
+      return adjustTrainingExercise(item, patch);
+    }));
+  }
+  const currentNames = new Set(items.map(item => item.name.trim().toLocaleLowerCase()));
+  const available = presets.filter(item => !currentNames.has(item.name.trim().toLocaleLowerCase()));
+  const canReuse = previous.some(item => !currentNames.has(item.name.trim().toLocaleLowerCase())) && items.length < 30;
+  return <section className="training-exercises" aria-label={title ?? t("Self-guided exercises", "自主训练动作")}>
+    <div className="training-plan-links-heading"><span>{title ?? t("Self-guided exercises", "自主训练动作")}</span><small>{t("Optional", "可选")}</small></div>
+    {canReuse && <button type="button" className="text-button training-reuse-previous" disabled={!canReuse} data-form-change onClick={() => onChange(reuseTrainingExercises(items, previous))}><Icon name="history" /><span><strong>{t("Reuse last exercises", "沿用上次动作")}</strong><small>{previous.map(item => item.name).join(" · ")}</small></span><span className="training-reuse-count">{previous.length}</span></button>}
+    {available.length > 0 && items.length < 30 && <div className="training-exercise-history" role="group" aria-label={t("Recent exercises", "历史动作")}><span>{t("Add from history · Includes sets and reps", "历史动作 · 带入组次与单／双侧")}</span><div>{available.slice(0, 8).map(preset => <button type="button" className="text-button" data-form-change key={preset.name} onClick={() => onChange(reuseTrainingExercises(items, [preset]))}>{preset.name}<small>{[preset.sets ? `${preset.sets} ${t("sets", "组")}` : "", preset.target].filter(Boolean).join(" × ")}</small></button>)}</div></div>}
+    {!items.length && <p className="training-plan-hint">{t("Add an exercise once. Next time, its sets, reps and side are ready to reuse.", "动作只需填一次，下次直接沿用组数、次数和单／双侧。")}</p>}
+    {items.map((item, index) => { const target = exerciseTargetParts(item.target); return <fieldset className="training-exercise" key={item.id}>
+      <legend className="sr-only">{t("Exercise", "动作")} {index + 1}</legend>
+      <div className="training-exercise-name"><div className="field"><span>{t("Exercise name", "动作名称")}</span><SuggestedInput suggestionLabel={t(`Exercise ${index + 1}`, `动作 ${index + 1}`)} value={item.name} maxLength={120} required suggestions={suggestions} onValueChange={name => { const preset = presets.find(item => item.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()); update(item.id, preset && name.trim().toLocaleLowerCase() !== item.name.trim().toLocaleLowerCase() ? { ...preset, name, completedSets: 0, completed: false } : { name }); }} /></div><button type="button" className="icon-button subtle" data-form-change aria-label={t(`Remove exercise ${index + 1}`, `删除动作 ${index + 1}`)} onClick={() => onChange(items.filter(exercise => exercise.id !== item.id))}><Icon name="close" /></button></div>
+      <div className="training-exercise-target"><label className="field"><span>{t("Sets", "组数")}</span><input type="number" inputMode="numeric" min={1} max={50} step={1} placeholder={t("Optional", "可选")} value={item.sets ?? ""} onChange={event => update(item.id, { sets: event.target.value ? Number(event.target.value) : null })} /></label><label className="field"><span>{target.side === "single" ? t("Reps / time per side", "每侧次数 / 时长") : t("Reps / duration", "每组次数 / 时长")}</span><input maxLength={target.side === "unspecified" ? 120 : 115} placeholder={t("e.g. 12 reps / 30 sec", "如 12 次 / 30 秒")} value={target.reps} onChange={event => update(item.id, { target: exerciseTarget(target.side, event.target.value) })} /></label>
+      <div className="field training-exercise-side-field"><span>{t("Side", "侧别")}</span><div className="training-exercise-side" role="group" aria-label={t(`Exercise ${index + 1} side`, `动作 ${index + 1} 单／双侧`)}>{(["single", "both"] as ExerciseSide[]).map(side => <button key={side} type="button" className={target.side === side ? "active" : ""} aria-pressed={target.side === side} disabled={side !== "unspecified" && target.reps.length > 115} data-form-change onClick={() => update(item.id, { target: exerciseTarget(target.side === side ? "unspecified" : side, target.reps) })}>{side === "single" ? t("Single", "单侧") : t("Both", "双侧")}</button>)}</div></div></div>
+      {recording && <details className="training-exercise-completion"><summary>{t("Completion progress", "完成进度")} · {item.sets === null ? item.completed ? t("Done", "已完成") : t("Optional", "可选") : `${item.completedSets} / ${item.sets}`}</summary>{item.sets === null ? <label className="training-exercise-check"><input type="checkbox" checked={item.completed} onChange={event => update(item.id, { completed: event.target.checked })} />{t("Completed", "已完成")}</label> : <><div className="training-exercise-progress"><span>{t("Completed sets", "已完成组数")}</span><div><button type="button" className="icon-button subtle" aria-label={t(`Undo a set of exercise ${index + 1}`, `动作 ${index + 1} 减少一组`)} disabled={item.completedSets === 0} data-form-change onClick={() => update(item.id, { completedSets: item.completedSets - 1 })}>−</button><output aria-live="polite">{item.completedSets} / {item.sets} {t("sets", "组")}</output><button type="button" className="icon-button subtle" aria-label={t(`Complete a set of exercise ${index + 1}`, `动作 ${index + 1} 完成一组`)} disabled={item.completedSets >= item.sets} data-form-change onClick={() => update(item.id, { completedSets: item.completedSets + 1 })}><Icon name="plus" /></button></div></div><button type="button" className="text-button" data-form-change onClick={() => update(item.id, { completedSets: item.sets!, completed: true })}>{t("Mark all sets complete", "全部完成")}</button></>}</details>}
+    </fieldset>; })}
+    <button type="button" className="text-button training-plan-add-link" disabled={items.length >= 30} data-form-change onClick={() => onChange([...items, { id: crypto.randomUUID(), name: "", sets: null, target: "", completedSets: 0, completed: false }])}><Icon name="plus" />{t("Add exercise", "添加动作")}</button>
+  </section>;
+}

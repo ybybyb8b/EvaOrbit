@@ -9,6 +9,7 @@
     "build:trackers": "vite build --config vite.trackers.config.ts",
     "test:trackers:browser": "node scripts/tracker-local-browser.mjs",
     "dev:online": "node --env-file-if-exists=.env.local scripts/dev-online.mjs",
+    "dev:workout": "node scripts/dev-workout-preview.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

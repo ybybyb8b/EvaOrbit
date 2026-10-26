@@ -31,7 +31,13 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const tools=(await rpc("tools/list")).tools;
       assert.deepEqual(tools.map(tool=>tool.name).sort(),["eo_resources","eo_schema","eo_search","eo_get","eo_create","eo_update","eo_delete","eo_action"].sort());
       const resources=(await call("eo_resources")).resources;
-      assert.equal(resources.length,36);
+      assert.equal(resources.length,39);
+      assert.deepEqual(resources.find(resource=>resource.resource==="insight_context").capabilities,["get"]);
+      const {item:context}=await call("eo_get",{resource:"insight_context",id:"day/2026-01-01"});
+      assert.equal(context.period.date,"2026-01-01");
+      assert.match(context.snapshot_fingerprint,/^[a-f0-9]{64}$/);
+      await reject("eo_create",{resource:"insight_context",data:{}},/does not support/);
+      await reject("eo_get",{resource:"insight_context",id:"month/2026-01"},/Phase 1/);
       for(const resource of resources){const {schema}=await call("eo_schema",{resource:resource.resource});assert.deepEqual(Object.keys(schema.action_schemas).sort(),[...resource.actions].sort());}
       const {item:limit}=await call("eo_create",{resource:"drink_limit",data:{name:"Coffee",target_type:"coffee",period:"daily",limit_value:3}});
       const {item:disabled}=await call("eo_update",{resource:"drink_limit",id:limit.id,data:{enabled:false}});

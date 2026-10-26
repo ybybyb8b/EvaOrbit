@@ -34,8 +34,8 @@ export function subscriptionPreviewStats(items: Subscription[], payments: Subscr
   }
   const remaining: Record<string, number> = {};
   const booked = new Set(payments.map(payment => `${payment.subscriptionId}:${payment.scheduledFor}`));
-  for (const item of items.filter(item => item.status === "active")) {
-    // Manual renewals are also scheduled costs. Overdue dates stay overdue, not moved into this month.
+  for (const item of items.filter(item => item.status === "active" && item.mode!=="manual")) {
+    // Fixed cycles include manually confirmed payments. Manual memberships have no future charge.
     for (let due = item.nextRenewalOn; due <= monthEnd; due = nextSubscriptionRenewal(due, item.billingIntervalValue, item.billingIntervalUnit)) {
       if (due >= today && due >= item.startedOn && !booked.has(`${item.id}:${due}`)) remaining[item.currency] = (remaining[item.currency] ?? 0) + item.currentAmountMinor;
     }

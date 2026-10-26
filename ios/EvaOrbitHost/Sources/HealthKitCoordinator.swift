@@ -2,7 +2,7 @@ import Foundation
 
 final class HealthKitCoordinator {
     static let defaultInitialLookbackDays = 1
-    static let authorizationRevision = "4"
+    static let authorizationRevision = "5"
     private var readSyncing = Set<HealthReadMetric>()
     private var readNeedsResync = Set<HealthReadMetric>()
     private var readWaiters: [HealthReadMetric: [(Bool) -> Void]] = [:]

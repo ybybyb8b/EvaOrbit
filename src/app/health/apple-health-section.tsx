@@ -62,7 +62,7 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
       }
       await nativeCall("healthkit.configureCredential", {
         credential: registration.credential,
-        syncMetrics: registration.syncMetrics ?? ["sleep"],
+        syncMetrics: (registration.syncMetrics ?? ["sleep"]).filter(metric => status.metrics.some(supported => supported.metric === metric)),
         ingestUrl: `${(await getNativeHostInfo())?.apiOrigin ?? window.location.origin}/api/healthkit/energy/ingest`,
       });
       await nativeCall<HealthKitStatus>("healthkit.requestAuthorization");

@@ -1,15 +1,17 @@
 import { Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
-export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "insights" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
+  insights: "/icons/features/insights.png",
   home: "/icons/nav/home.png",
   lucius: "/icons/nav/lucius.png",
   settings: "/icons/nav/settings.png",
 };
 
 const featureIconSources: Partial<Record<IconName, string>> = {
+  insights: "/icons/features/insights.png",
   home: "/icons/features/home.png",
   tasks: "/icons/features/tasks.png",
   projects: "/icons/features/projects.png",
@@ -50,6 +52,7 @@ function iconSourceStyle(source: string) {
 }
 
 const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
+  insights: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><path d="m12 8 1 3 3 1-3 1-1 3-1-3-3-1 3-1Z"/></>,
   home: <><path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/></>,
   tasks: <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7"/><path d="M14 9h3M8 14h9M8 18h6"/></>,
   projects: <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7"/><path d="M14 9h3M8 14h9M8 18h6"/></>,

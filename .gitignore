@@ -6,6 +6,7 @@ work/npm-cache/
 # Next.js, deployment and test output
 .next/
 .next-verify/
+.next-workout-preview/
 out/
 coverage/
 tmp/

@@ -1,7 +1,7 @@
 import { ValidationError } from "./validation.ts";
 
 export const HEALTHKIT_READ_SCOPE = "healthkit:read-samples:write"; // Device → EO ingest; never HealthKit write access.
-export const healthKitReadMetrics = ["sleep", "heart_rate", "resting_heart_rate", "hrv"] as const;
+export const healthKitReadMetrics = ["sleep", "heart_rate", "resting_heart_rate", "hrv", "workout"] as const;
 export type HealthKitReadMetric = typeof healthKitReadMetrics[number];
 export type HealthKitReadChange = {
   operation: "upsert" | "delete";
@@ -20,11 +20,24 @@ export type HealthKitReadChange = {
   sourceName?: string;
   syncIdentifier?: string;
   syncVersion?: number;
+  workout?: HealthKitWorkout;
+};
+
+export type HealthKitWorkout = {
+  activityType: number;
+  activityName?: string;
+  durationSeconds: number;
+  activeEnergyKcal?: number;
+  distance?: number;
+  distanceUnit?: "m";
+  deviceName?: string;
+  deviceModel?: string;
+  deviceManufacturer?: string;
 };
 
 export function enabledHealthKitReadMetrics(config = process.env.HEALTHKIT_SYNC_METRICS): HealthKitReadMetric[] {
   const requested = config?.split(",").map(value => value.trim()) ?? ["sleep"];
-  return healthKitReadMetrics.filter(metric => metric === "sleep" || requested.includes(metric));
+  return healthKitReadMetrics.filter(metric => metric === "sleep" || metric === "workout" || requested.includes(metric));
 }
 
 export function parseHealthKitReadChanges(value: unknown): HealthKitReadChange[] {
@@ -47,6 +60,8 @@ export function parseHealthKitReadChanges(value: unknown): HealthKitReadChange[]
     if (change.metric === "sleep") {
       if (!Number.isInteger(row.stage) || Number(row.stage) < 0 || Number(row.stage) > 100 || Date.parse(String(row.endAt)) <= Date.parse(String(row.startAt))) throw new ValidationError("HealthKit sleep stage is invalid");
       change.stage = Number(row.stage); // Preserve raw category, including future values; unknown stages are never counted as sleep.
+    } else if (change.metric === "workout") {
+      change.workout = parseHealthKitWorkout(row.workout);
     } else {
       const unit = change.metric === "hrv" ? "ms" : "count/min";
       if (row.unit !== unit || typeof row.value !== "number" || !Number.isFinite(row.value) || row.value < 0 || row.value > (change.metric === "hrv" ? 10000 : 1000)) throw new ValidationError("HealthKit quantity or unit is invalid");
@@ -62,4 +77,28 @@ export function parseHealthKitReadChanges(value: unknown): HealthKitReadChange[]
     }
     return change;
   });
+}
+
+export function parseHealthKitWorkout(value: unknown): HealthKitWorkout {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new ValidationError("HealthKit workout is invalid");
+  const row = value as Record<string, unknown>;
+  if (!Number.isSafeInteger(row.activityType) || Number(row.activityType) < 1 || typeof row.durationSeconds !== "number" || !Number.isFinite(row.durationSeconds) || row.durationSeconds < 0) throw new ValidationError("HealthKit workout type or duration is invalid");
+  const result: HealthKitWorkout = { activityType: Number(row.activityType), durationSeconds: row.durationSeconds };
+  for (const key of ["activeEnergyKcal", "distance"] as const) {
+    if (row[key] !== undefined) {
+      if (typeof row[key] !== "number" || !Number.isFinite(row[key]) || row[key] < 0) throw new ValidationError("HealthKit workout quantity is invalid");
+      result[key] = row[key];
+    }
+  }
+  if (row.distance !== undefined || row.distanceUnit !== undefined) {
+    if (row.distance === undefined || row.distanceUnit !== "m") throw new ValidationError("HealthKit workout distance unit is invalid");
+    result.distanceUnit = "m";
+  }
+  for (const key of ["activityName", "deviceName", "deviceModel", "deviceManufacturer"] as const) {
+    if (row[key] !== undefined) {
+      if (typeof row[key] !== "string" || row[key].length > 255) throw new ValidationError("HealthKit workout device is invalid");
+      result[key] = row[key];
+    }
+  }
+  return result;
 }

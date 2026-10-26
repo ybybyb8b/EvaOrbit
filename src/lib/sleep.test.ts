@@ -127,13 +127,13 @@ test("secondary episodes retain measured durations and individually associate ov
   assert.deepEqual(sleepOverviewRows(buildDailySleepSummary("2026-10-05", night, timeline)), [{ kind: "main", durationMinutes: 420 }]);
 });
 
-test("read payload preserves sleep category/zone/source and heart quantities but default sync enables only sleep", () => {
+test("read payload preserves sleep category/zone/source and heart quantities; sleep and workout sync by default", () => {
   const base = { operation: "upsert", sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24d", streamId: "946e6cf1-96f2-4e47-9d45-b0fab32db24e", revision: 1, metric: "sleep", startAt: window.startAt, endAt: window.endAt, timeZone: "Asia/Shanghai", timeZoneSource: "metadata", stage: 5, sourceName: "Watch", syncIdentifier: "source.1", syncVersion: 2 };
   const upload = parseHealthKitUpload({ readChanges: [base] });
   assert.equal(upload.readChanges[0].stage, 5);
   assert.equal(upload.readChanges[0].syncVersion, 2);
-  assert.deepEqual(enabledHealthKitReadMetrics(""), ["sleep"]);
-  assert.deepEqual(enabledHealthKitReadMetrics("sleep,heart_rate,resting_heart_rate,hrv"), ["sleep", "heart_rate", "resting_heart_rate", "hrv"]);
+  assert.deepEqual(enabledHealthKitReadMetrics(""), ["sleep", "workout"]);
+  assert.deepEqual(enabledHealthKitReadMetrics("sleep,heart_rate,resting_heart_rate,hrv"), ["sleep", "heart_rate", "resting_heart_rate", "hrv", "workout"]);
   assert.equal(parseHealthKitReadChanges([{ ...base, metric: "hrv", stage: undefined, value: 42, unit: "ms" }])[0].value, 42);
   assert.throws(() => parseHealthKitReadChanges([{ ...base, timeZone: "invalid" }]));
   assert.throws(() => parseHealthKitReadChanges([{ ...base, endAt: "2026-10-04T14:00:00Z" }]));

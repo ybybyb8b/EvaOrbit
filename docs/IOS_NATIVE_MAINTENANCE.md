@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Workout 只读同步补充
+
+HealthKit authorization revision 5 增加 Workout 读取，复用既有 read observer、anchored query、SQLite read_outbox、重试及同一 ingest URL；桥接仍为 v1，无新方法、framework、entitlement 或 HealthKit 写权限。project.yml 的读取用途文案增加 workouts，旧 IPA 仅配置其 status.metrics 支持的同步类型。训练来源数据与补充详情分开，数据库迁移必须先于新 API/IPA；同步不推进循环计划、不重复计入每日能量。历史从 Workout 记录时区的 2026-10-01 起读取。此次 Windows 检查不能替代 Xcode/macOS CI 与 iPhone 16 Pro 后台、授权和键盘验收；详细契约及步骤见 [Workout 同步](HEALTHKIT_WORKOUTS.md)。
+
 打包选择`local_trackers=true`时仅将`CFBundleDisplayName`缩短为`EO Dev`；原Bundle ID、URL scheme、entitlement与覆盖安装链不变。正式在线Host仍为`EvaOrbit`，不因改名迁移或清空任何账户数据。
 
 本地 Host 关闭原生 `UIRefreshControl` 与 UIScrollView 回弹，使用 Web/本地共享的 React 下拉刷新组件；正常文档滚动保留。当前模块加载器随挂载注册、卸载清理，刷新不整页 reload，也不派发 online/native-active 或直接调用系统同步调度；Tracker 仍复用自身既有同步入口。CSS 同步限制纵向 overscroll 并使用主题背景。普通在线 Host、权限、Bridge 与签名链不变。浏览器合成测试不能证明 WKWebView 黑边已解决，需以后新 IPA 验证顶部安全区、键盘与真实触摸。
