@@ -24,7 +24,7 @@ type DeliveryClient = ReturnType<typeof createDeliveryClient>;
 
 async function sendToUser(client: DeliveryClient, userId: string, payload: EvaPushPayload) {
   const bark = await client.from("bark_notification_settings").select("enabled,open_in_host,ciphertext,iv,auth_tag").eq("user_id", userId).maybeSingle();
-  if (bark.error) throw new Error("Could not read notification channel settings");
+  if (bark.error) throw new Error("Could not read notification channel settings", { cause: bark.error });
   if (bark.data?.enabled) {
     const delivered = await sendBark(resolveAiApiKey({ ciphertext: bark.data.ciphertext, iv: bark.data.iv, authTag: bark.data.auth_tag }), payload,fetch,Boolean(bark.data.open_in_host));
     return { delivered, sent: Number(delivered) };
@@ -68,7 +68,9 @@ async function reconcilePeriodMedicationPushProjections(client: DeliveryClient, 
     client.from("menstrual_periods").select("id,user_id,started_on,ended_on"),
     client.from("reminders").select("*").eq("source_type", PERIOD_MEDICATION_REMINDER_SOURCE),
   ]);
-  if (presetResult.error || periodResult.error || reminderResult.error) throw new Error("Could not reconcile period medication reminders");
+  if (presetResult.error) throw new Error("Could not read medication_presets for reminder reconciliation", { cause: presetResult.error });
+  if (periodResult.error) throw new Error("Could not read menstrual_periods for reminder reconciliation", { cause: periodResult.error });
+  if (reminderResult.error) throw new Error("Could not read reminders for reminder reconciliation", { cause: reminderResult.error });
   const presets = (presetResult.data ?? []) as Row[], periods = (periodResult.data ?? []) as Row[], existing = (reminderResult.data ?? []) as Row[];
   const activePeriods = new Map<string, MenstrualPeriod>();
   for (const userId of new Set(periods.map((row) => String(row.user_id)))) {
@@ -79,7 +81,7 @@ async function reconcilePeriodMedicationPushProjections(client: DeliveryClient, 
   const doseResult = activePeriodIds.length
     ? await client.from("medication_dose_events").select("id,user_id,medication_preset_id,period_id,taken_at").in("period_id", activePeriodIds)
     : { data: [], error: null };
-  if (doseResult.error) throw new Error("Could not read period medication doses");
+  if (doseResult.error) throw new Error("Could not read period medication doses", { cause: doseResult.error });
   const doses = (doseResult.data ?? []) as Row[];
   const existingByKey = new Map(existing.map((row) => [`${String(row.user_id)}:${Number(row.source_id)}`, row]));
   const validKeys = new Set<string>();
@@ -94,7 +96,7 @@ async function reconcilePeriodMedicationPushProjections(client: DeliveryClient, 
     validKeys.add(key);
     if (!reminder) {
       const inserted = await client.from("reminders").insert({ user_id: userId, title: projection.title, target_type: "health", target_id: null, source_type: PERIOD_MEDICATION_REMINDER_SOURCE, source_id: preset.id, schedule_type: "one_time", starts_at: projection.startsAt, next_due_at: projection.nextDueAt, due_has_explicit_time: true, interval_value: null, interval_unit: null, times_of_day: [], ends_at: projection.endsAt, timezone: PERIOD_MEDICATION_REMINDER_TIMEZONE, note: "", lead_time_minutes: 0, repeat_while_overdue: false, status: "scheduled", is_active: true });
-      if (inserted.error && inserted.error.code !== "23505") throw new Error("Could not create period medication reminder projection");
+      if (inserted.error && inserted.error.code !== "23505") throw new Error("Could not create period medication reminder projection", { cause: inserted.error });
       continue;
     }
     const acknowledged = String(reminder.starts_at) === projection.startsAt && String(reminder.status) === "completed";
@@ -104,7 +106,7 @@ async function reconcilePeriodMedicationPushProjections(client: DeliveryClient, 
     else if (!acknowledged && !Boolean(reminder.is_active)) Object.assign(patch, { is_active: true, status: "scheduled", cancelled_at: null });
     if (reminder.snoozed_until && String(reminder.snoozed_until) >= projection.endsAt) patch.snoozed_until = null;
     const updated = await client.from("reminders").update(patch).eq("id", reminder.id);
-    if (updated.error) throw new Error("Could not update period medication reminder projection");
+    if (updated.error) throw new Error("Could not update period medication reminder projection", { cause: updated.error });
   }
   for (const reminder of existing) {
     const key = `${String(reminder.user_id)}:${Number(reminder.source_id)}`;
@@ -115,7 +117,7 @@ async function reconcilePeriodMedicationPushProjections(client: DeliveryClient, 
 
 async function deliverReminderPushes(client: DeliveryClient, now: Date, validPeriodMedicationKeys: Set<string>) {
   const { data, error } = await client.from("reminders").select("*").eq("is_active", true).in("status", ["scheduled", "failed", "sent"]);
-  if (error) throw new Error("Could not read due reminders");
+  if (error) throw new Error("Could not read due reminders", { cause: error });
   const due = (data as Row[]).filter((row) => reminderSourceAllows(row.source_type ? String(row.source_type) : null, "web_push") && (String(row.source_type ?? "") !== PERIOD_MEDICATION_REMINDER_SOURCE || validPeriodMedicationKeys.has(`${String(row.user_id)}:${Number(row.source_id)}`)) && notificationShouldSend({
     nextDueAt: row.next_due_at ? String(row.next_due_at) : null,
     snoozedUntil: row.snoozed_until ? String(row.snoozed_until) : null,
@@ -134,7 +136,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
   let sent = 0;
   for (const reminder of due) {
     if(appleOwnsInitialNotification({sourceType:reminder.source_type?String(reminder.source_type):null,deliveryChannel:reminder.delivery_channel as "pwa"|"apple_reminders"|undefined,repeatWhileOverdue:Boolean(reminder.repeat_while_overdue),overdueAfter:reminder.overdue_after?String(reminder.overdue_after):null,nextDueAt:reminder.next_due_at?String(reminder.next_due_at):null},now))continue;
-    if(String(reminder.source_type??"")==="task_reminder"&&reminder.source_id){const rule=await client.from("task_reminders").select("delivery_channel,repeat_while_overdue").eq("id",Number(reminder.source_id)).maybeSingle();if(rule.error)throw new Error("Could not read Task reminder ownership");if(rule.data?.delivery_channel==="apple_reminders"&&(!rule.data.repeat_while_overdue||!reminder.overdue_after||now.toISOString()<=String(reminder.overdue_after)))continue;}
+    if(String(reminder.source_type??"")==="task_reminder"&&reminder.source_id){const rule=await client.from("task_reminders").select("delivery_channel,repeat_while_overdue").eq("id",Number(reminder.source_id)).maybeSingle();if(rule.error)throw new Error("Could not read Task reminder ownership", { cause: rule.error });if(rule.data?.delivery_channel==="apple_reminders"&&(!rule.data.repeat_while_overdue||!reminder.overdue_after||now.toISOString()<=String(reminder.overdue_after)))continue;}
     const deliveryScheduledAt = notificationDeliverySlot({
       nextDueAt: reminder.next_due_at ? String(reminder.next_due_at) : null,
       snoozedUntil: reminder.snoozed_until ? String(reminder.snoozed_until) : null,
@@ -150,12 +152,12 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
     let trackerDeliveryId: number | null = null;
     if (reminderSourceDefinition(reminder.source_type ? String(reminder.source_type) : null).projectionOwner === "tracker" && reminder.source_id) {
       const ruleResult = await client.from("tracker_reminders").select("*").eq("id",Number(reminder.source_id)).eq("enabled",true).maybeSingle();
-      if (ruleResult.error) throw new Error("Could not read Tracker reminder rule");
+      if (ruleResult.error) throw new Error("Could not read Tracker reminder rule", { cause: ruleResult.error });
       if (!ruleResult.data) continue;
       const row=ruleResult.data as Row;
       trackerRule={id:Number(row.id),trackerId:Number(row.tracker_id),reminderMode:String(row.notification_mode) as TrackerReminder["reminderMode"],configuredTime:String(row.configured_time).slice(0,5),periodDays:Number(row.period_days),anchorDate:String(row.anchor_date),nextDueAt:String(row.next_due_at),timezone:String(row.timezone),reminderId:row.reminder_id===null?null:Number(row.reminder_id),enabled:Boolean(row.enabled),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};
       const entriesResult=await client.from("tracker_entries").select("occurred_at").eq("user_id",String(reminder.user_id)).eq("tracker_id",trackerRule.trackerId);
-      if(entriesResult.error)throw new Error("Could not check Tracker entries");
+      if(entriesResult.error)throw new Error("Could not check Tracker entries", { cause: entriesResult.error });
       const entries=((entriesResult.data??[]) as Row[]).map(entry=>({occurredAt:String(entry.occurred_at)}));
       if(!trackerReminderShouldNotify(trackerRule,entries,now)){
         const nextDueAt=nextTrackerNotification(trackerRule,entries,now);
@@ -164,7 +166,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
         continue;
       }
       const existing=await client.from("notification_deliveries").select("id,status").eq("user_id",String(reminder.user_id)).eq("source_type",String(reminder.source_type)).eq("source_id",trackerRule.id).eq("scheduled_at",String(reminder.next_due_at)).maybeSingle();
-      if(existing.error)throw new Error("Could not check Tracker notification history");
+      if(existing.error)throw new Error("Could not check Tracker notification history", { cause: existing.error });
       if(existing.data?.status==="sent"){
         const nextDueAt=nextTrackerNotification({...trackerRule,nextDueAt:String(reminder.next_due_at)},entries,now);
         await client.from("tracker_reminders").update({next_due_at:nextDueAt}).eq("id",trackerRule.id);
@@ -174,7 +176,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       trackerDeliveryId=existing.data?.id?Number(existing.data.id):null;
       if(trackerDeliveryId===null){
         const reservation=await client.from("notification_deliveries").insert({user_id:reminder.user_id,reminder_id:reminder.id,title:reminder.title,source_type:reminder.source_type,source_id:trackerRule.id,target_type:reminder.target_type,target_id:reminder.target_id,scheduled_at:reminder.next_due_at,scheduled_has_explicit_time:true,sent_at:null,status:"failed"}).select("id").single();
-        if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve Tracker notification");}
+        if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve Tracker notification", { cause: reservation.error });}
         trackerDeliveryId=Number(reservation.data.id);
       }
     }
@@ -182,12 +184,12 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
     if (deliveryId === null) {
       const dedupeKey = `reminder:${reminder.id}:${deliveryScheduledAt}`;
       const existing = await client.from("notification_deliveries").select("id,status").eq("user_id",String(reminder.user_id)).eq("dedupe_key",dedupeKey).maybeSingle();
-      if (existing.error) throw new Error("Could not check reminder notification history");
+      if (existing.error) throw new Error("Could not check reminder notification history", { cause: existing.error });
       if (existing.data?.status === "sent") continue;
       deliveryId = existing.data?.id ? Number(existing.data.id) : null;
       if (deliveryId === null) {
         const reservation = await client.from("notification_deliveries").insert({user_id:reminder.user_id,reminder_id:reminder.id,title:reminder.title,source_type:reminder.source_type,source_id:reminder.source_id,target_type:reminder.target_type,target_id:reminder.target_id,scheduled_at:deliveryScheduledAt,scheduled_has_explicit_time:true,sent_at:null,status:"failed",dedupe_key:dedupeKey}).select("id").single();
-        if (reservation.error) { if (reservation.error.code === "23505") continue; throw new Error("Could not reserve reminder notification"); }
+        if (reservation.error) { if (reservation.error.code === "23505") continue; throw new Error("Could not reserve reminder notification", { cause: reservation.error }); }
         deliveryId = Number(reservation.data.id);
       }
     }
@@ -239,7 +241,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
 async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
   if (!reminderSourceAllows("meal_missing", "web_push")) return { due: 0, sent: 0 };
   const { data, error } = await client.from("meal_reminder_rules").select("user_id,meal_type,remind_at,enabled").eq("enabled", true);
-  if (error) throw new Error("Could not read meal reminder rules");
+  if (error) throw new Error("Could not read meal reminder rules", { cause: error });
   const date = dateInEvaOrbit(now);
   const candidates = (data as Row[]).flatMap((row) => {
     const mealType = row.meal_type;
@@ -270,7 +272,7 @@ async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
       .eq("target_id", targetId)
       .eq("scheduled_at", candidate.scheduledAt)
       .maybeSingle();
-    if (existingResult.error) throw new Error("Could not check meal notification history");
+    if (existingResult.error) throw new Error("Could not check meal notification history", { cause: existingResult.error });
     if (existingResult.data?.status === "sent") continue;
 
     const mealResult = await client.from("food_logs")
@@ -280,7 +282,7 @@ async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
       .gte("occurred_at", candidate.from)
       .lt("occurred_at", candidate.to)
       .limit(1);
-    if (mealResult.error) throw new Error("Could not check meal records");
+    if (mealResult.error) throw new Error("Could not check meal records", { cause: mealResult.error });
     if (mealResult.data?.length) continue;
     due += 1;
 
@@ -305,7 +307,7 @@ async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
       }).select("id").single();
       if (reservation.error) {
         if (reservation.error.code === "23505") continue;
-        throw new Error("Could not reserve meal notification");
+        throw new Error("Could not reserve meal notification", { cause: reservation.error });
       }
       deliveryId = Number(reservation.data.id);
     }
@@ -329,9 +331,9 @@ async function deliverMissingMealPushes(client: DeliveryClient, now: Date) {
 
 async function deliverMissingWeightPushes(client:DeliveryClient,now:Date){
   if(!reminderSourceAllows("weight_missing","web_push"))return{due:0,sent:0};
-  const{data,error}=await client.from("weight_settings").select("user_id,reminder_enabled,reminder_time").eq("reminder_enabled",true);if(error)throw new Error("Could not read weight reminder settings");const date=dateInEvaOrbit(now);let due=0,sent=0;
-  for(const row of (data??[]) as Row[]){const userId=String(row.user_id);const window=weightReminderWindow({targetWeightKg:null,reminderEnabled:true,reminderTime:String(row.reminder_time).slice(0,5),updatedAt:""},date,now);if(!window)continue;const existing=await client.from("notification_deliveries").select("id,status").eq("user_id",userId).eq("source_type","weight_missing").eq("scheduled_at",window.scheduledAt).maybeSingle();if(existing.error)throw new Error("Could not check weight notification history");if(existing.data?.status==="sent")continue;const logged=await client.from("weight_records").select("id").eq("user_id",userId).gte("occurred_at",window.from).lt("occurred_at",window.to).limit(1);if(logged.error)throw new Error("Could not check weight records");if(logged.data?.length)continue;due+=1;
-    const preference=await client.from("ui_preferences").select("ui_language").eq("user_id",userId).maybeSingle();const english=preference.data?.ui_language==="en",title=english?"Log today’s weight":"记录今天的体重";let deliveryId=existing.data?.id?Number(existing.data.id):null;if(deliveryId===null){const reservation=await client.from("notification_deliveries").insert({user_id:userId,reminder_id:null,title,source_type:"weight_missing",source_id:1,target_type:"health",target_id:1,scheduled_at:window.scheduledAt,scheduled_has_explicit_time:true,sent_at:null,status:"failed"}).select("id").single();if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve weight notification");}deliveryId=Number(reservation.data.id);}
+  const{data,error}=await client.from("weight_settings").select("user_id,reminder_enabled,reminder_time").eq("reminder_enabled",true);if(error)throw new Error("Could not read weight reminder settings", { cause: error });const date=dateInEvaOrbit(now);let due=0,sent=0;
+  for(const row of (data??[]) as Row[]){const userId=String(row.user_id);const window=weightReminderWindow({targetWeightKg:null,reminderEnabled:true,reminderTime:String(row.reminder_time).slice(0,5),updatedAt:""},date,now);if(!window)continue;const existing=await client.from("notification_deliveries").select("id,status").eq("user_id",userId).eq("source_type","weight_missing").eq("scheduled_at",window.scheduledAt).maybeSingle();if(existing.error)throw new Error("Could not check weight notification history", { cause: existing.error });if(existing.data?.status==="sent")continue;const logged=await client.from("weight_records").select("id").eq("user_id",userId).gte("occurred_at",window.from).lt("occurred_at",window.to).limit(1);if(logged.error)throw new Error("Could not check weight records", { cause: logged.error });if(logged.data?.length)continue;due+=1;
+    const preference=await client.from("ui_preferences").select("ui_language").eq("user_id",userId).maybeSingle();const english=preference.data?.ui_language==="en",title=english?"Log today’s weight":"记录今天的体重";let deliveryId=existing.data?.id?Number(existing.data.id):null;if(deliveryId===null){const reservation=await client.from("notification_deliveries").insert({user_id:userId,reminder_id:null,title,source_type:"weight_missing",source_id:1,target_type:"health",target_id:1,scheduled_at:window.scheduledAt,scheduled_has_explicit_time:true,sent_at:null,status:"failed"}).select("id").single();if(reservation.error){if(reservation.error.code==="23505")continue;throw new Error("Could not reserve weight notification", { cause: reservation.error });}deliveryId=Number(reservation.data.id);}
     const copy=reminderNotificationCopy({title:english?"weight":"体重",sourceType:"weight_missing"},english?"en-US":"zh-CN","web_push");const delivery=await sendToUser(client,userId,{kind:"weight_missing",title:copy.title,body:copy.body,url:"/health",tag:`weight-${date}`});sent+=delivery.sent;await client.from("notification_deliveries").update({title,status:delivery.delivered?"sent":"failed",sent_at:delivery.delivered?now.toISOString():null}).eq("id",deliveryId);
   }return{due,sent};
 }
