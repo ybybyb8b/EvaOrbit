@@ -21,7 +21,7 @@ import {canEditTrackerRecord} from "@/lib/tracker-replica";
 import {readHealthSnapshot,type HealthReadonlySnapshot} from "@/lib/health-readonly";
 import {readCatsSnapshot,type CatsReadonlySnapshot} from "@/lib/cats-readonly";
 import {asField,belongs} from "./tracker-records";
-import {trackerSession,saveLocalTrackerEntry,synchronizeTrackerSession} from "./tracker-session";
+import {trackerSession,trackerSyncActivity,saveLocalTrackerEntry,synchronizeTrackerSession} from "./tracker-session";
 import {LocalTrackerPicture} from "./tracker-picture";
 import {FoodPreviewEditor} from "./food-workspace";
 import {isPreviewAccount,type LocalAccount,type TrackerPlatform} from "./platform";
@@ -45,7 +45,7 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
     let alive=true;
     const resume=async()=>{
       if(readOnly||isPreviewAccount(account))return;
-      try{await store.initialize();}catch(reason){if(alive)setError(String(reason));return;}
+      try{await store.initialize();}catch(reason){if(alive)trackerSyncActivity(store).update({error:reason instanceof Error?reason.message:String(reason)});return;}
       if(alive&&store.getSnapshot().outbox.length)await synchronizeTrackerSession(account,platform).catch(()=>{});
     };
     const refresh=()=>{if(document.visibilityState!=="hidden")void resume();};

@@ -12,10 +12,10 @@ test("decoded Health API errors preserve string messages and caller fallbacks", 
 
 test("client response errors handle JSON, empty bodies and upstream HTML without losing fallback copy", async () => {
   for (const status of [400, 401, 409, 500, 503]) {
-    assert.equal(await responseError(Response.json({ error: "服务端文案" }, { status }), "fallback"), "服务端文案");
+    assert.equal(await responseError(Response.json({ error: "服务端文案" }, { status }), "fallback"), `服务端文案 (HTTP ${status}) [EO:http_${status}]`);
   }
   for (const response of [new Response(null, { status: 204 }), new Response("<html>Bad gateway</html>", { status: 502 }), Response.json({ error: "" }), Response.json({ error: 500 }), new Response("{bad json")]) {
-    assert.equal(await responseError(response, "Could not save this record"), "Could not save this record");
+    assert.equal(await responseError(response, "Could not save this record"),response.status>=400?`Could not save this record (HTTP ${response.status}) [EO:http_${response.status}]`:"Could not save this record");
   }
 });
 

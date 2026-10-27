@@ -1,5 +1,11 @@
 # EvaOrbit iOS Native Host 维护契约
 
+原生共用错误出口使用 `NativeDiagnostics.swift`：网络、存储、响应解码、账户及 EventKit/HealthKit/通知错误分类，保留安全操作步骤并附 `[EO:code]`；不再把未识别的其他模块错误统称 Tracker 失败。在线请求分别标记连接、JSON 响应、协议及备份阶段；`session_expired` 继续触发原有保留草稿的重连。Health 上传只增强失败原因，不改退避/重试或队列。Bridge v1、成功响应、方法清单、权限、签名链与业务数据不变；无新日志存储。分类及隐私边界见 [本地错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。新增 Native XCTest 尚未在 Windows 运行，需新 IPA 验证。
+
+本地在线写请求结果不明时继续保留“不自动重试”提示，并附请求方法、不含查询参数的接口路径、网络原因及错误码；不展示请求体、凭据或系统原始错误详情，不延长超时或自动重放。用于区分 EventKit 等同步的实际失败步骤；不能据此认定底层连接问题已修复。新增 XCTest 尚待 macOS 执行。Tracker 编辑副本首次同步成功、存在图片图标且尚无独立快照缓存时补取图片；下载失败只报告资源下载问题，不撤销已确认同步或清理草稿/队列。
+
+Host 实现 WKUIDelegate 的 JavaScript confirm 确认弹窗，修复 Training Log 等使用 `confirm()` 的动作在请求发出前静默取消。仅接受当前 WebView 的可信主框架（正式同源或已批准本地源），未展示、已有原生弹层或确认进行中时返回取消；确认/取消仅完成一次，页面导航、离开控制器或释放时取消未决回调。不自动确认，不新增 Bridge、权限、framework 或 Apple 写入。需新 IPA，Windows 的训练删除确认/取消测试不能替代 UIKit 弹窗和真机验收。
+
 ## Workout 只读同步补充
 
 HealthKit authorization revision 5 增加 Workout 读取，复用既有 read observer、anchored query、SQLite read_outbox、重试及同一 ingest URL；桥接仍为 v1，无新方法、framework、entitlement 或 HealthKit 写权限。project.yml 的读取用途文案增加 workouts，旧 IPA 仅配置其 status.metrics 支持的同步类型。训练来源数据与补充详情分开，数据库迁移必须先于新 API/IPA；同步不推进循环计划、不重复计入每日能量。历史从 Workout 记录时区的 2026-10-01 起读取。此次 Windows 检查不能替代 Xcode/macOS CI 与 iPhone 16 Pro 后台、授权和键盘验收；详细契约及步骤见 [Workout 同步](HEALTHKIT_WORKOUTS.md)。
@@ -475,11 +481,11 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 
 本地 core 白名单额外允许既有 `healthkit.getStatus`、`eventkit.getStatus`、`notification.getStatus` 与用户主动 `notification.openSettings`。原组件 readOnly 模式不请求权限、不配置凭据、不触发健康/日历/提醒写入或通知排程/取消。其他原生业务方法仍禁止；在线 Host 原行为保留。无新 framework、权限、Info.plist、entitlement 或签名链变化。需要重建开发版 IPA，在线偏好另需 session/proxy 发布；本轮不部署、不迁移。验证与回退见 [Settings 共享阶段](SETTINGS_LOCAL_SHARED.md)。
 
-## 本地包短开屏
+## 本地包加载环绕
 
-本地 Host 使用同一个 `LoadingOverlayView` 的 `.local` 播放方式：完整既有轨道/核心与字标以 0.28 秒淡入和轻微缩放显现，页面就绪后 0.16 秒淡出，快速冷启动约 0.44 秒；减少动态效果时只做 0.10 + 0.10 秒淡入淡出。`LoadingExperienceCoordinator` 仅本地冷启动等待这段短入场结束；不等待账户网络请求或云端同步，页面未就绪时仍保留静态加载层。重试不重播冷启动动画，前台恢复/模块切换不新建动画层。在线 Web Host 保留原播放方式和快速就绪即退出语义。
+本地 Host 继续使用 `LoadingOverlayView.local` 与既有轨道/核心/字标，立即完整显示，仅行星持续沿轨道环绕；没有入场淡入、描边、缩放、呼吸、固定展示时长或退出淡出。环绕周期只控制速度，页面就绪可在一圈中任意时刻立即撤下；既有 React 内容就绪条件及25秒失败/重试出口保留。系统减少动态效果时保持静态。本地首页重新进入而尚无缓存时也使用同样轨道比例、原生核心图片与持续环绕，数据到达后直接卸载；缓存后台刷新不覆盖已有内容。在线 Web Host 的原动效保持。
 
-复用 `OrbitArtworkView`、`LoadingCore` 浅深资源与既有布局，不添加 React 开屏或新资源。无 Bridge、权限、framework、entitlement、数据库或签名链变化；需重建开发版 IPA。新增 XCTest 覆盖快/慢就绪、重复 ready、失败重试和时长预算；Windows 无 Xcode/可用 Swift 工具链，尚未运行 XCTest 或真机动画验收。
+复用 `OrbitArtworkView`、`LoadingCore` 浅深资源，不增加图片资源、Bridge、权限、framework、entitlement、数据库或签名链变化；需新 IPA。XCTest 覆盖立即就绪、仅行星无限运动/停止与减少动态效果；Windows 只能检查页面和源码，尚未运行 UIKit XCTest 或真机动画验收。
 
 ## 本地包在线业务请求
 

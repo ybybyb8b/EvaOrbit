@@ -357,6 +357,6 @@ enum HealthDiagnostics {
     }
 
     static func safe(_ error: Error) -> String {
-        String(describing: error).replacingOccurrences(of: "\n", with: " ").prefix(240).description
+        NativeDiagnostics.summary(error)
     }
 }

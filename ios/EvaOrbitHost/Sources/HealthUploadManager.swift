@@ -127,7 +127,10 @@ extension HealthUploadManager: URLSessionTaskDelegate, URLSessionDelegate {
                     HealthDiagnostics.log("upload=success status=\(status) count=\(description.energyIDs.count + description.bodyMassIDs.count + description.menstrualFlowIDs.count + description.readIDs.count) pending=\(self.store.pendingCount())")
                     self.startNextBatch()
                 } else {
-                    let reason = status.map { "HTTP \($0)" } ?? "network failure"
+                    let reason: String
+                    if let error { reason = NativeDiagnostics.summary(NativeDiagnostics.capture(error, operation: "Apple Health · upload")) }
+                    else if let status { reason = NativeDiagnostics.marked("Apple Health · upload · HTTP \(status)", code: "http_\(status)") }
+                    else { reason = NativeDiagnostics.marked("Apple Health · upload: No HTTP response was received.", code: "http_response_missing") }
                     try self.store.failUpload(ids: description.energyIDs, reason: reason)
                     try self.store.failBodyMassUpload(ids: description.bodyMassIDs, reason: reason)
                     try self.store.failMenstrualFlowUpload(ids: description.menstrualFlowIDs, reason: reason)

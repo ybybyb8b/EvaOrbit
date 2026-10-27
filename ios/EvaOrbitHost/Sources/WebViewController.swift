@@ -12,6 +12,7 @@ final class WebViewController: UIViewController {
     private var launchURL: URL?
     private var awaitingLocalContent = false
     private var navigationAttempt = 0
+    private var cancelJavaScriptConfirmation: (() -> Void)?
     private lazy var localBackGesture = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(handleLocalBack(_:)))
     private var localBackAnimator: UIViewPropertyAnimator?
     private var localBackSnapshot: UIView?
@@ -108,6 +109,7 @@ final class WebViewController: UIViewController {
     }
 
     deinit {
+        cancelJavaScriptConfirmation?()
         webView.configuration.userContentController.removeScriptMessageHandler(
             forName: NativeBridge.name,
             contentWorld: .page
@@ -304,6 +306,7 @@ final class WebViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        cancelJavaScriptConfirmation?()
         resetLocalBackMotion()
     }
 
@@ -381,6 +384,7 @@ extension WebViewController: UIGestureRecognizerDelegate {
 
 extension WebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        cancelJavaScriptConfirmation?()
         resetLocalBackMotion()
         startNavigationTimeout()
     }
@@ -468,6 +472,33 @@ extension WebViewController: WKNavigationDelegate {
 }
 
 extension WebViewController: WKUIDelegate {
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        guard webView === self.webView, frame.isMainFrame,
+              let source = frame.request.url,
+              hostConfiguration.allows(source) || hostConfiguration.allowsTrackerUI(source),
+              viewIfLoaded?.window != nil, presentedViewController == nil,
+              cancelJavaScriptConfirmation == nil else { completionHandler(false); return }
+        let title = source.scheme == TrackerAssetHandler.scheme ? "EvaOrbit" : source.host
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        var answered = false
+        let reply: (Bool) -> Void = { [weak self, weak alert] accepted in
+            guard !answered else { return }
+            answered = true
+            self?.cancelJavaScriptConfirmation = nil
+            alert?.dismiss(animated: false)
+            completionHandler(accepted)
+        }
+        alert.addAction(UIAlertAction(title: NSLocalizedString("Cancel", comment: "Cancel a page action"), style: .cancel) { _ in reply(false) })
+        alert.addAction(UIAlertAction(title: NSLocalizedString("Confirm", comment: "Confirm a page action"), style: .default) { _ in reply(true) })
+        cancelJavaScriptConfirmation = { reply(false) }
+        present(alert, animated: true)
+    }
+
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,

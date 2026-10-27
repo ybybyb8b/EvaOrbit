@@ -173,7 +173,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     let status = try await notificationManager.requestAuthorization()
                     replyOnMain(replyHandler, value: success(id: identifier, result: status))
                 } catch {
-                    replyOnMain(replyHandler, value: failure(id: identifier, code: "notification_authorization_failed", message: error.localizedDescription))
+                    replyOnMain(replyHandler, value: failure(id: identifier, code: "notification_authorization_failed", message: NativeDiagnostics.summary(error)))
                 }
             }
         case "notification.schedule":
@@ -212,9 +212,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     private func eventKitKind(_ parameters:[String:Any])->EKEntityType?{switch parameters["kind"] as? String{case "calendar":return .event;case "reminder":return .reminder;default:return nil}}
 
-    private func eventKitRequestAccess(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters)else{replyHandler(failure(id:id,code:"invalid_eventkit_kind",message:"EventKit kind is invalid."),nil);return};Task{do{let result=try await eventKitSyncEngine.requestAccess(kind);replyOnMain(replyHandler,value:success(id:id,result:result))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_authorization_failed",message:error.localizedDescription))}}}
+    private func eventKitRequestAccess(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters)else{replyHandler(failure(id:id,code:"invalid_eventkit_kind",message:"EventKit kind is invalid."),nil);return};Task{do{let result=try await eventKitSyncEngine.requestAccess(kind);replyOnMain(replyHandler,value:success(id:id,result:result))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_authorization_failed",message:NativeDiagnostics.summary(error)))}}}
 
-    private func eventKitFetch(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let calendarIDs=parameters["calendarIdentifiers"] as? [String],calendarIDs.count<=100,calendarIDs.allSatisfy({!$0.isEmpty&&$0.count<=500})else{replyHandler(failure(id:id,code:"invalid_eventkit_fetch",message:"EventKit fetch parameters are invalid."),nil);return};if kind == .event{guard let from=Self.parseISO8601(parameters["from"] as? String ?? ""),let to=Self.parseISO8601(parameters["to"] as? String ?? ""),to>from else{replyHandler(failure(id:id,code:"invalid_eventkit_window",message:"Calendar sync window is invalid."),nil);return};do{let items=try eventKitSyncEngine.fetchEvents(calendarIDs:calendarIDs,from:from,to:to);replyHandler(success(id:id,result:["items":items,"complete":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription),nil)}}else{let completedSince=Self.parseISO8601(parameters["completedSince"] as? String ?? "") ?? Date().addingTimeInterval(-30*86400);Task{do{let items=try await eventKitSyncEngine.fetchReminders(calendarIDs:calendarIDs,completedSince:completedSince);replyOnMain(replyHandler,value:success(id:id,result:["items":items,"complete":true]))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_fetch_failed",message:error.localizedDescription))}}}}
+    private func eventKitFetch(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let calendarIDs=parameters["calendarIdentifiers"] as? [String],calendarIDs.count<=100,calendarIDs.allSatisfy({!$0.isEmpty&&$0.count<=500})else{replyHandler(failure(id:id,code:"invalid_eventkit_fetch",message:"EventKit fetch parameters are invalid."),nil);return};if kind == .event{guard let from=Self.parseISO8601(parameters["from"] as? String ?? ""),let to=Self.parseISO8601(parameters["to"] as? String ?? ""),to>from else{replyHandler(failure(id:id,code:"invalid_eventkit_window",message:"Calendar sync window is invalid."),nil);return};do{let items=try eventKitSyncEngine.fetchEvents(calendarIDs:calendarIDs,from:from,to:to);replyHandler(success(id:id,result:["items":items,"complete":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_fetch_failed",message:NativeDiagnostics.summary(error)),nil)}}else{let completedSince=Self.parseISO8601(parameters["completedSince"] as? String ?? "") ?? Date().addingTimeInterval(-30*86400);Task{do{let items=try await eventKitSyncEngine.fetchReminders(calendarIDs:calendarIDs,completedSince:completedSince);replyOnMain(replyHandler,value:success(id:id,result:["items":items,"complete":true]))}catch{replyOnMain(replyHandler,value:failure(id:id,code:"eventkit_fetch_failed",message:NativeDiagnostics.summary(error)))}}}}
 
     private func eventKitGetItem(parameters: [String: Any], id: String, replyHandler: @escaping (Any?, String?) -> Void) {
         func identifier(_ key: String) -> String? { guard let value = parameters[key] as? String, !value.isEmpty, value.count <= 500 else { return nil }; return value }
@@ -245,9 +245,9 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
-    private func eventKitSave(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let item=parameters["item"] as? [String:Any]else{replyHandler(failure(id:id,code:"invalid_eventkit_save",message:"EventKit item is invalid."),nil);return};do{let saved=try kind == .event ? eventKitSyncEngine.saveEvent(item) : eventKitSyncEngine.saveReminder(item);replyHandler(success(id:id,result:["item":saved]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_save_failed",message:error.localizedDescription),nil)}}
+    private func eventKitSave(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let item=parameters["item"] as? [String:Any]else{replyHandler(failure(id:id,code:"invalid_eventkit_save",message:"EventKit item is invalid."),nil);return};do{let saved=try kind == .event ? eventKitSyncEngine.saveEvent(item) : eventKitSyncEngine.saveReminder(item);replyHandler(success(id:id,result:["item":saved]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_save_failed",message:NativeDiagnostics.summary(error)),nil)}}
 
-    private func eventKitDelete(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let itemID=parameters["calendarItemIdentifier"] as? String,!itemID.isEmpty,itemID.count<=500 else{replyHandler(failure(id:id,code:"invalid_eventkit_delete",message:"EventKit identifier is invalid."),nil);return};do{try eventKitSyncEngine.delete(kind:kind,identifier:itemID);replyHandler(success(id:id,result:["deleted":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_delete_failed",message:error.localizedDescription),nil)}}
+    private func eventKitDelete(parameters:[String:Any],id:String,replyHandler:@escaping(Any?,String?)->Void){guard let kind=eventKitKind(parameters),let itemID=parameters["calendarItemIdentifier"] as? String,!itemID.isEmpty,itemID.count<=500 else{replyHandler(failure(id:id,code:"invalid_eventkit_delete",message:"EventKit identifier is invalid."),nil);return};do{try eventKitSyncEngine.delete(kind:kind,identifier:itemID);replyHandler(success(id:id,result:["deleted":true]),nil)}catch{replyHandler(failure(id:id,code:"eventkit_delete_failed",message:NativeDiagnostics.summary(error)),nil)}}
 
     private func scheduleNotification(
         parameters: [String: Any],
@@ -268,7 +268,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 try await notificationManager.schedule(identifier: notificationID, title: title, body: body, triggerAt: triggerAt)
                 replyOnMain(replyHandler, value: success(id: id, result: ["scheduled": true, "id": notificationID]))
             } catch {
-                replyOnMain(replyHandler, value: failure(id: id, code: "notification_schedule_failed", message: error.localizedDescription))
+                replyOnMain(replyHandler, value: failure(id: id, code: "notification_schedule_failed", message: NativeDiagnostics.summary(error)))
             }
         }
     }
@@ -329,7 +329,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             try notificationManager.cancel(identifier: notificationID)
             replyHandler(success(id: id, result: ["cancelled": true, "id": notificationID]), nil)
         } catch {
-            replyHandler(failure(id: id, code: "notification_cancel_failed", message: error.localizedDescription), nil)
+            replyHandler(failure(id: id, code: "notification_cancel_failed", message: NativeDiagnostics.summary(error)), nil)
         }
     }
 
@@ -366,7 +366,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             try healthKitCoordinator.configureCredential(credential, ingestURL: ingestURL, syncMetrics: metrics)
             replyHandler(success(id: id, result: ["configured": true]), nil)
         } catch {
-            replyHandler(failure(id: id, code: "credential_storage_failed", message: "Native credential could not be stored."), nil)
+            replyHandler(failure(id: id, code: "credential_storage_failed", message: NativeDiagnostics.summary(error)), nil)
         }
     }
 
@@ -525,11 +525,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 }
                 replyHandler(["ok": true, "id": id, "result": result], nil)
             } catch {
-                let message = (error as? TrackerLocalError)?.localizedDescription ?? "Tracker 操作失败，本地数据已保留，请稍后重试"
-                let code: String
-                if let localError = error as? TrackerLocalError, case .sessionExpired = localError { code = "session_expired" }
-                else { code = "tracker_failed" }
-                replyHandler(failure(id: id, code: code, message: message), nil)
+                var operation = method
+                if ["native.api", "business.request", "settings.configuration", "settings.aiConfiguration"].contains(method),
+                   let path = parameters["path"] as? String, let verb = parameters["method"] as? String,
+                   path.hasPrefix("/api/"), path.range(of: "^[A-Za-z0-9/_?=&%.-]+$", options: .regularExpression) != nil,
+                   TrackerLocalController.allowsBusinessRequest(path: path, method: verb) || TrackerLocalController.allowsNativeAPI(path: path, method: verb) || TrackerLocalController.allowsSettingsConfiguration(path: path, method: verb) || TrackerLocalController.allowsAIConfiguration(path: path, method: verb) {
+                    operation += " \(verb) \(path.split(separator: "?", maxSplits: 1)[0])"
+                } else if method == "native.invoke", let target = parameters["method"] as? String, Self.nativeIntegrationMethods.contains(target) {
+                    operation += " \(target)"
+                }
+                let diagnostic = NativeDiagnostics.capture(error, operation: operation)
+                replyHandler(failure(id: id, code: diagnostic.code, message: diagnostic.message), nil)
             }
         }
     }
@@ -579,7 +585,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private func failure(id: String?, code: String, message: String) -> [String: Any] {
         var response: [String: Any] = [
             "ok": false,
-            "error": ["code": code, "message": message]
+            "error": ["code": code, "message": NativeDiagnostics.marked(message, code: code)]
         ]
         if let id { response["id"] = id }
         return response

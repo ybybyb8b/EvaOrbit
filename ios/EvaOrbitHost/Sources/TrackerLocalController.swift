@@ -42,9 +42,9 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
             if path == "health-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Health read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
             if path == "subscriptions-readonly" && http.statusCode == 404 { throw TrackerLocalError.network("The Subscriptions read-only API is unavailable (HTTP 404). Existing cached data is preserved.") }
             let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            throw TrackerLocalError.network(message?["error"] as? String ?? "同步暂时失败，本地记录已保留")
+            throw NativeDiagnosticFailure(code: "http_\(http.statusCode)", message: "\(method) \(path) · HTTP \(http.statusCode): \(message?["error"] as? String ?? "The server rejected the request.")")
         }
-        return http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)
+        return http.statusCode == 204 ? NSNull() : try Self.decodeJSON(data, operation: "\(method) \(path) · response")
     }
     private func performRequest(path: String, method: String, body: Any? = nil, replica: Bool = false) async throws -> (Data, HTTPURLResponse) {
         if path == "sync" && !replica { throw TrackerLocalError.readOnly }
@@ -68,7 +68,10 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
-        let (data, response) = try await session.data(for: request)
+        let networkResult: (Data, URLResponse)
+        do { networkResult = try await session.data(for: request) }
+        catch { throw NativeDiagnostics.capture(error, operation: "\(method) \(endpoint.path) · connection", writeResultUnknown: method != "GET") }
+        let (data, response) = networkResult
         guard let http = response as? HTTPURLResponse else { throw TrackerLocalError.invalid }
         return (data, http)
     }
@@ -111,8 +114,8 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         try await database.requireReplicaMutations(accountId: account, mutations: mutations)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         let (data, response) = try await performRequest(path: "sync", method: "POST", body: body, replica: true)
-        guard (200..<300).contains(response.statusCode) else { throw TrackerLocalError.network("Tracker sync is unavailable (HTTP \(response.statusCode)). Local changes and the original queue are preserved.") }
-        guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any], result["protocolVersion"] as? Int == 2, result["accountId"] as? String == account, let snapshot = result["snapshot"] as? [String: Any], snapshot["complete"] as? Bool == true, snapshot["records"] is [[String: Any]], let revision = snapshot["revision"] as? Int, revision > 0, result["results"] is [[String: Any]] else { throw TrackerLocalError.invalid }
+        guard (200..<300).contains(response.statusCode) else { throw NativeDiagnosticFailure(code: "http_\(response.statusCode)", message: "POST /api/native/sync · HTTP \(response.statusCode). Local changes and the original queue are preserved.") }
+        guard let result = try Self.decodeJSON(data, operation: "POST /api/native/sync · response") as? [String: Any], result["protocolVersion"] as? Int == 2, result["accountId"] as? String == account, let snapshot = result["snapshot"] as? [String: Any], snapshot["complete"] as? Bool == true, snapshot["records"] is [[String: Any]], let revision = snapshot["revision"] as? Int, revision > 0, result["results"] is [[String: Any]] else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "POST /api/native/sync · protocol validation") }
         try await database.requireAccount(account)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         if mutations.isEmpty { replicaSessions[account] = expectedGeneration }
@@ -215,7 +218,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
                   let body = Data(base64Encoded: bodyBase64), body.count <= 8 * 1024 * 1024,
                   contentType == "application/json" || contentType.hasPrefix("multipart/form-data; boundary="),
                   contentType.utf8.count <= 200, !contentType.contains("\r"), !contentType.contains("\n") else { throw TrackerLocalError.invalid }
-            if contentType == "application/json" { _ = try JSONSerialization.jsonObject(with: body) }
+            if contentType == "application/json" { _ = try Self.decodeJSON(body, operation: "\(method) \(endpoint.path) · request JSON") }
             outgoing.setValue(contentType, forHTTPHeaderField: "Content-Type")
             outgoing.httpBody = body
         }
@@ -229,14 +232,15 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         let networkResult: (Data, URLResponse)
         do { networkResult = try await connection.data(for: outgoing) }
         catch {
-            if method != "GET" { throw TrackerLocalError.network("The save result is unknown. Reconnect and refresh before submitting again; nothing retries automatically.") }
-            throw error
+            throw NativeDiagnostics.capture(error, operation: "\(method) \(endpoint.path) · connection", writeResultUnknown: method != "GET")
         }
         let (data, response) = networkResult
-        guard let http = response as? HTTPURLResponse, !(300..<400).contains(http.statusCode), data.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.invalid }
+        guard let http = response as? HTTPURLResponse else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "\(method) \(endpoint.path) · HTTP response") }
+        guard !(300..<400).contains(http.statusCode) else { throw NativeDiagnosticFailure(code: "http_redirect_blocked", message: "\(method) \(endpoint.path) · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.") }
+        guard data.count <= 8 * 1024 * 1024 else { throw NativeDiagnosticFailure(code: "response_too_large", message: "\(method) \(endpoint.path) · HTTP \(http.statusCode): Response exceeds the 8 MiB limit.") }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
-        let result: [String: Any] = ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)]
+        let result: [String: Any] = ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try Self.decodeJSON(data, operation: "\(method) \(endpoint.path) · HTTP \(http.statusCode) response")]
         if !nativeIntegration, method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
         // A cache failure cannot turn an acknowledged cloud write into a failed save.
         if method != "GET", (200..<300).contains(http.statusCode) { try? await database.invalidateOnlineCache(accountId: accountId, module: String(path.split(separator: "?")[0].split(separator: "/")[1])) }
@@ -275,18 +279,29 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         configuration.timeoutIntervalForRequest = 20
         let connection = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         defer { connection.invalidateAndCancel() }
-        let (data, response) = try await connection.data(for: outgoing)
-        guard let http = response as? HTTPURLResponse, !(300..<400).contains(http.statusCode), data.count <= 1048576 else { throw TrackerLocalError.invalid }
+        let networkResult: (Data, URLResponse)
+        do { networkResult = try await connection.data(for: outgoing) }
+        catch { throw NativeDiagnostics.capture(error, operation: "\(method) \(outgoing.url?.path ?? "settings") · connection", writeResultUnknown: method != "GET") }
+        let (data, response) = networkResult
+        guard let http = response as? HTTPURLResponse else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "Settings · HTTP response") }
+        guard !(300..<400).contains(http.statusCode) else { throw NativeDiagnosticFailure(code: "http_redirect_blocked", message: "Settings · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.") }
+        guard data.count <= 1048576 else { throw NativeDiagnosticFailure(code: "response_too_large", message: "Settings · HTTP \(http.statusCode): Response exceeds the 1 MiB limit.") }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
-        return ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try JSONSerialization.jsonObject(with: data)] as [String: Any]
+        return ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try Self.decodeJSON(data, operation: "\(method) \(outgoing.url?.path ?? "settings") · HTTP \(http.statusCode) response")] as [String: Any]
     }
     func acceptanceStatus(accountId: String) async throws -> [String: Any] {
         try await database.requireAccount(accountId)
         if let receipt = acceptanceReceipts[accountId] { return receipt }
-        let receipt = try await database.acceptanceBackup(accountId: accountId)
+        let receipt: [String: Any]
+        do { receipt = try await database.acceptanceBackup(accountId: accountId) }
+        catch { throw NativeDiagnostics.capture(error, operation: "Local database · safety backup") }
         acceptanceReceipts[accountId] = receipt
         return receipt
+    }
+    static func decodeJSON(_ data: Data, operation: String) throws -> Any {
+        do { return try JSONSerialization.jsonObject(with: data) }
+        catch { throw NativeDiagnostics.capture(error, operation: operation) }
     }
     func readOnlySnapshot(accountId: String, refresh: Bool) async throws -> Any {
         _ = try await acceptanceStatus(accountId: accountId)

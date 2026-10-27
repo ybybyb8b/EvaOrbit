@@ -1,26 +1,21 @@
 import XCTest
+import UIKit
 @testable import EvaOrbitHost
 
 @MainActor
 final class LoadingExperienceCoordinatorTests: XCTestCase {
-    func testLocalFastLaunchFinishesOnlyTheShortIntroBeforeDismissingOnce() {
-        let presenter = LoadingPresenterSpy()
-        let coordinator = LoadingExperienceCoordinator(presenter: presenter, waitsForIntro: true)
+    func testLocalFastLaunchDismissesWithoutWaitingForAnIntroOrAnOrbit() {
+        let overlay = LoadingOverlayView(launchStyle: .local)
+        overlay.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let coordinator = LoadingExperienceCoordinator(presenter: overlay, waitsForIntro: true)
         coordinator.startColdLaunch()
+        XCTAssertEqual(coordinator.state, .waitingForWebView)
+        XCTAssertFalse(overlay.isHidden)
         coordinator.webViewDidBecomeReady()
         coordinator.webViewDidBecomeReady()
-        XCTAssertEqual(coordinator.state, .introPlaying)
-        XCTAssertEqual(presenter.dismissCount, 0)
-        presenter.finishIntro()
-        XCTAssertEqual(coordinator.state, .readyToDismiss)
-        XCTAssertEqual(presenter.dismissCount, 1)
-        XCTAssertEqual(presenter.quietLoopCount, 0)
-        presenter.finishIntro()
-        XCTAssertEqual(presenter.dismissCount, 1)
-        presenter.finishDismissal()
         XCTAssertEqual(coordinator.state, .dismissed)
-        coordinator.webViewDidBecomeReady()
-        XCTAssertEqual(presenter.introCount, 1)
+        XCTAssertTrue(overlay.isHidden)
+        XCTAssertFalse(overlay.isUserInteractionEnabled)
     }
 
     func testLocalSlowLaunchNeverRevealsAnUnreadyPage() {
@@ -49,10 +44,26 @@ final class LoadingExperienceCoordinatorTests: XCTestCase {
         XCTAssertEqual(presenter.introCount, 1)
     }
 
-    func testLocalAnimationBudgetIsUnderHalfASecond() {
-        XCTAssertLessThan(LoadingOverlayView.Timing.localIntroDuration + LoadingOverlayView.Timing.localExitDuration, 0.5)
-        XCTAssertLessThanOrEqual(LoadingOverlayView.Timing.localReducedMotionIntroDuration + LoadingOverlayView.Timing.localReducedMotionExitDuration, 0.2)
-        XCTAssertEqual(LoadingOverlayView.Timing.introDuration, 2.0)
+    func testLocalOrbitMovesOnlyThePlanetUntilStoppedAndReducedMotionIsStatic() {
+        let artwork = OrbitArtworkView(palette: .current())
+        artwork.frame = CGRect(x: 0, y: 0, width: 260, height: 177)
+        artwork.layoutIfNeeded()
+        func animatedLayers(_ layer: CALayer) -> [CALayer] {
+            (layer.animationKeys()?.isEmpty == false ? [layer] : []) + (layer.sublayers ?? []).flatMap { animatedLayers($0) }
+        }
+        artwork.beginQuietLoop(reduceMotion: false, planetOnly: true)
+        let layers = animatedLayers(artwork.layer)
+        XCTAssertEqual(layers.count, 1)
+        let orbit = layers.first?.animation(forKey: "quietOrbit") as? CAKeyframeAnimation
+        XCTAssertEqual(orbit?.keyPath, "position")
+        XCTAssertEqual(orbit?.repeatCount, Float.infinity)
+        XCTAssertNotNil(orbit?.path)
+        artwork.stopAnimations()
+        XCTAssertTrue(animatedLayers(artwork.layer).isEmpty)
+        artwork.beginQuietLoop(reduceMotion: true, planetOnly: true)
+        XCTAssertTrue(animatedLayers(artwork.layer).isEmpty)
+        artwork.beginQuietLoop(reduceMotion: false)
+        XCTAssertEqual(animatedLayers(artwork.layer).count, 2, "Online Host keeps its original quiet motion")
     }
 
     func testFastWebViewDismissesImmediatelyAndIgnoresRepeatedReadyAndStaleIntroCompletion() {

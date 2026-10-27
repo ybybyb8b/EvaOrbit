@@ -9,10 +9,6 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         static let wordmarkDelay: TimeInterval = 1.35
         static let wordmarkDuration: TimeInterval = 0.60
         static let exitDuration: TimeInterval = 0.20
-        static let localIntroDuration: TimeInterval = 0.28
-        static let localReducedMotionIntroDuration: TimeInterval = 0.10
-        static let localExitDuration: TimeInterval = 0.16
-        static let localReducedMotionExitDuration: TimeInterval = 0.10
     }
 
     var onRetry: (() -> Void)?
@@ -60,7 +56,10 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         brandContainer.alpha = 1
         brandContainer.transform = .identity
         if launchStyle == .local {
-            playLocalIntro(generation: generation, completion: completion)
+            wordmarkLabel.alpha = 1
+            wordmarkLabel.transform = .identity
+            beginQuietLoop()
+            completion()
             return
         }
         artworkView.prepareForIntro()
@@ -85,30 +84,7 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
     }
 
     func beginQuietLoop() {
-        if launchStyle == .local { artworkView.showCompleteArtwork(); return }
-        artworkView.beginQuietLoop(reduceMotion: UIAccessibility.isReduceMotionEnabled)
-    }
-
-    private func playLocalIntro(generation: Int, completion: @escaping () -> Void) {
-        artworkView.showCompleteArtwork()
-        wordmarkLabel.alpha = 1
-        wordmarkLabel.transform = .identity
-        let reduceMotion = UIAccessibility.isReduceMotionEnabled
-        brandContainer.alpha = 0
-        brandContainer.transform = reduceMotion ? .identity : CGAffineTransform(scaleX: 0.97, y: 0.97)
-        UIView.animate(
-            withDuration: reduceMotion ? Timing.localReducedMotionIntroDuration : Timing.localIntroDuration,
-            delay: 0,
-            options: [.curveEaseOut, .beginFromCurrentState],
-            animations: {
-                self.brandContainer.alpha = 1
-                self.brandContainer.transform = .identity
-            },
-            completion: { [weak self] _ in
-                guard let self, self.animationGeneration == generation else { return }
-                completion()
-            }
-        )
+        artworkView.beginQuietLoop(reduceMotion: UIAccessibility.isReduceMotionEnabled, planetOnly: launchStyle == .local)
     }
 
     func showRecoveryLoading() {
@@ -133,6 +109,12 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         failureContainer.layoutIfNeeded()
         failureArtworkView.showCompleteArtwork()
         failureArtworkView.stopAnimations()
+        if launchStyle == .local {
+            brandContainer.isHidden = true
+            failureContainer.alpha = 1
+            UIAccessibility.post(notification: .screenChanged, argument: failureTitleLabel)
+            return
+        }
         failureContainer.alpha = 0
         brandContainer.alpha = 1
         UIView.animate(
@@ -155,14 +137,21 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         animationGeneration += 1
         let generation = animationGeneration
         artworkView.stopAnimations(preservingVisibleState: true)
+        if launchStyle == .local {
+            isHidden = true
+            isUserInteractionEnabled = false
+            accessibilityViewIsModal = false
+            completion()
+            return
+        }
         let reduceMotion = UIAccessibility.isReduceMotionEnabled
         UIView.animate(
-            withDuration: launchStyle == .local ? (reduceMotion ? Timing.localReducedMotionExitDuration : Timing.localExitDuration) : Timing.exitDuration,
+            withDuration: Timing.exitDuration,
             delay: 0,
             options: [.curveEaseOut, .beginFromCurrentState],
             animations: {
                 self.alpha = 0
-                self.transform = reduceMotion || self.launchStyle == .local ? .identity : CGAffineTransform(scaleX: 0.985, y: 0.985)
+                self.transform = reduceMotion ? .identity : CGAffineTransform(scaleX: 0.985, y: 0.985)
             },
             completion: { _ in
                 guard self.animationGeneration == generation else { return }

@@ -1,14 +1,21 @@
-.local-shell:not(.local-signed-in) > .main-content { margin-left:0; }
+.local-shell:not(.local-signed-in) > .main-content { margin-left:0; min-height:100dvh; padding-block:0; }
 html[data-local-appearance="true"],html[data-local-appearance="true"] body { overscroll-behavior-y:none; background-color:var(--surface-canvas); }
 .local-shell { --local-header-top:max(14px,env(safe-area-inset-top)); --local-header-control-size:44px; --local-header-gap:8px; }
-.local-appearance-trigger { display:block; margin: max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 0 auto; min-height:44px; }
+.local-appearance-trigger { position:absolute; top:var(--local-header-top); right:max(20px,env(safe-area-inset-right)); display:block; margin:0; min-height:44px; }
 .local-food-status.page { padding-top:24px; padding-bottom:0; }
 .local-food-back.page { padding-top:24px; padding-bottom:0; }
 .local-home { padding:24px env(safe-area-inset-right) max(32px,env(safe-area-inset-bottom)) env(safe-area-inset-left); }
+.local-home-loading { display:grid; place-items:center; min-block-size:calc(100svh - var(--local-header-top) - var(--local-header-control-size) - var(--mobile-bottom-bar-height,0px) - env(safe-area-inset-bottom)); padding-block:24px; }
+.local-home-loading-art { position:relative; width:min(260px,68vw); aspect-ratio:260 / 177; }
+.local-home-loading-art svg { display:block; width:100%; height:100%; stroke:var(--text-primary); stroke-width:.8; }
+.local-home-loading-planet { fill:var(--accent-primary); stroke:none; }
+.local-home-loading-core { position:absolute; inset:50% auto auto 50%; width:25.38%; aspect-ratio:1; transform:translate(-50%,-50%); background:url("../../ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset/LoadingCoreLight.png") center / contain no-repeat; }
+html[data-mode="dark"] .local-home-loading-core { background-image:url("../../ios/EvaOrbitHost/Resources/Assets.xcassets/LoadingCore.imageset/LoadingCoreDark.png"); }
 .local-home .home-page { padding:0; }
 .local-home > .local-home-status { padding:0; }
 .page.local-workspace-status,.page.local-media-status,.page.local-relations-status,.page.local-health-status,.page.local-inbox-status,.page.local-memo-status,.page.local-subscriptions-status,.page.local-subscriptions-back,.page.local-cats-status,.page.local-cats-back { padding-block:0; }
 .local-tracker-app .login-page { min-height: 100dvh; padding-top: max(18px,env(safe-area-inset-top)); padding-bottom: max(18px,env(safe-area-inset-bottom)); }
+@media(max-width:720px){.local-tracker-app .login-page { align-items:start; padding-top:calc(var(--local-header-top) + var(--local-header-control-size) + 20px); }}
 .local-login-actions { margin-top: 20px; display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
 .local-login-actions button { min-height:44px; }
 .local-trackers { padding-top:max(24px,env(safe-area-inset-top)); padding-bottom:max(32px,env(safe-area-inset-bottom)); }

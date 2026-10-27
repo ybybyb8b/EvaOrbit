@@ -11,6 +11,7 @@ final class OrbitArtworkView: UIView {
     private var lastLayoutBounds = CGRect.zero
     private var quietLoopActive = false
     private var reduceMotionForLoop = false
+    private var planetOnlyLoop = false
 
     init(palette: LoadingThemePalette) {
         self.palette = palette
@@ -160,10 +161,11 @@ final class OrbitArtworkView: UIView {
         CATransaction.commit()
     }
 
-    func beginQuietLoop(reduceMotion: Bool) {
+    func beginQuietLoop(reduceMotion: Bool, planetOnly: Bool = false) {
         showCompleteArtwork()
         quietLoopActive = true
         reduceMotionForLoop = reduceMotion
+        planetOnlyLoop = planetOnly
         addQuietLoopAnimations(reduceMotion: reduceMotion)
     }
 
@@ -240,6 +242,7 @@ final class OrbitArtworkView: UIView {
         planetLayer.removeAnimation(forKey: "quietOrbit")
         planetLayer.removeAnimation(forKey: "quietOpacity")
         if reduceMotion {
+            if planetOnlyLoop { return }
             let opacity = CABasicAnimation(keyPath: "opacity")
             opacity.fromValue = 1
             opacity.toValue = 0.62
@@ -257,6 +260,7 @@ final class OrbitArtworkView: UIView {
         orbit.duration = 6.2
         orbit.repeatCount = .infinity
         planetLayer.add(orbit, forKey: "quietOrbit")
+        if planetOnlyLoop { return }
 
         let breathing = CABasicAnimation(keyPath: "transform.scale")
         breathing.fromValue = 1

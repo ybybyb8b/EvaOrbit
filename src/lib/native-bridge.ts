@@ -1,4 +1,5 @@
 import {nativeApiFetch} from "./native-api.ts";
+import {diagnosticMessage,requestFailure,requestOperation} from "./request-diagnostics.ts";
 import type { NativeNotificationSchedule, ScheduledNotification } from "./types";
 import { isManagedNativeNotification, nativeNotificationIdentifier as managedIdentifier, nativeReminderNotification } from "./native-notifications.ts";
 
@@ -54,9 +55,20 @@ export function captureNativeSessionGuard(){const session=nativeRequest;return()
 export function nativeCall<T>(method:string,params:Record<string,unknown>={}){return nativeRequest?nativeRequest.request<T>(method,params):rawNativeCall<T>(method,params);}
 export async function rawNativeCall<T>(method: string, params: Record<string, unknown> = {}) {
   const bridge = typeof window === "undefined" ? undefined : window.EvaOrbitNative;
-  if (!bridge) throw new Error("EvaOrbit Native Host is not available");
-  const response = await bridge.call<T>(method, params);
-  if (!response.ok) throw new NativeBridgeError(response.error.message,response.error.code);
+  const target=method==="native.invoke"&&typeof params.method==="string"?params.method:method;
+  let operation=/^[a-zA-Z0-9_.]{1,100}$/.test(target)?target:"Native operation";
+  const kind=method==="native.invoke"?(params.arguments as Record<string,unknown>|undefined)?.kind:params.kind;
+  if(kind==="calendar"||kind==="reminder")operation+=` (${kind==="calendar"?"Calendar":"Reminders"})`;
+  if(["native.api","business.request","settings.configuration","settings.aiConfiguration"].includes(method)&&typeof params.path==="string")operation+=` · ${requestOperation(params.path,typeof params.method==="string"?params.method:undefined)}`;
+  if (!bridge) throw new NativeBridgeError(diagnosticMessage("EvaOrbit Native Host is not available.","native_unavailable",operation),"native_unavailable");
+  let response:NativeBridgeResponse<T>;
+  try{response=await bridge.call<T>(method,params);}catch(error){throw requestFailure(error,`${operation} · bridge delivery`);}
+  if (!response||typeof response!=="object"||typeof response.ok!=="boolean")throw new NativeBridgeError(diagnosticMessage("The Native Host returned an invalid bridge response.","bridge_invalid_response",operation),"bridge_invalid_response");
+  if (!response.ok) {
+    const code=typeof response.error?.code==="string"&&/^[a-zA-Z0-9_.-]{1,80}$/.test(response.error.code)?response.error.code:"native_invalid_error";
+    const message=typeof response.error?.message==="string"&&response.error.message.trim()?response.error.message:"The Native Host did not provide an error description.";
+    throw new NativeBridgeError(diagnosticMessage(message,code,operation),code);
+  }
   return response.result;
 }
 

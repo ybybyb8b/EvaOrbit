@@ -103,7 +103,11 @@ actor TrackerLocalDatabase {
         if result == SQLITE_DONE { return NSNull() }
         guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
         let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0)))
-        return try JSONSerialization.jsonObject(with: data)
+        return try Self.decodeCachedJSON(data)
+    }
+    private static func decodeCachedJSON(_ data: Data) throws -> Any {
+        do { return try JSONSerialization.jsonObject(with: data) }
+        catch { throw NativeDiagnostics.capture(error, operation: "Local database · cached JSON") }
     }
     func commit(accountId: String, expectedRevision: Int, state: [String: Any], replica: Bool = false) throws -> Bool {
         let table = replica ? "tracker_replica_state" : "tracker_state"
@@ -138,7 +142,7 @@ actor TrackerLocalDatabase {
         let result = sqlite3_step(query)
         if result == SQLITE_DONE { return NSNull() }
         guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
 
     func requireReplicaMutations(accountId: String, mutations: [[String: Any]]) throws {
@@ -169,7 +173,7 @@ actor TrackerLocalDatabase {
         let result = sqlite3_step(query)
         if result == SQLITE_DONE { return NSNull() }
         guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveHomeReadOnlyCache(accountId: String, resource: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -201,7 +205,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveFoodReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -219,7 +223,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveChronicleReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -242,7 +246,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveMemoReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -272,7 +276,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveInboxReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -299,7 +303,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveHealthReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -335,7 +339,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveWorkspaceReadOnlyCache(accountId: String, kind: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -399,7 +403,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveMediaReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -448,7 +452,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveRelationsReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -487,7 +491,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveSubscriptionsReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -521,7 +525,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveCatsReadOnlyCache(accountId: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -570,7 +574,7 @@ actor TrackerLocalDatabase {
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
         guard step == SQLITE_ROW, let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveFoodResourceCache(accountId: String, resource: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
@@ -592,7 +596,7 @@ actor TrackerLocalDatabase {
         let query = try statement("SELECT response_json FROM online_business_cache WHERE account_id=? AND path=?", [accountId, path]); defer { sqlite3_finalize(query) }
         if sqlite3_step(query) == SQLITE_DONE { return NSNull() }
         guard let bytes = sqlite3_column_blob(query, 0) else { throw TrackerLocalError.storage }
-        return try JSONSerialization.jsonObject(with: Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
+        return try Self.decodeCachedJSON(Data(bytes: bytes, count: Int(sqlite3_column_bytes(query, 0))))
     }
     func saveOnlineCache(accountId: String, path: String, response: [String: Any]) throws {
         try requireAccount(accountId)

@@ -1,5 +1,13 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+错误细化覆盖 Native 共用出口与本地 React 请求层：显示实际操作/步骤、HTTP 或安全系统错误码，保留账户、只读、冲突及写入结果不明语义，不自动重放、不清理数据。Health 上传错误保留连接原因，现有重试调度不变。详见 [本地错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)；需新 IPA，Windows 检查不能替代 Swift 编译、XCTest 和真机验收。
+
+本地同步诊断：在线写请求未收到明确结果时，错误追加请求方法、去除查询参数的接口路径及网络错误码（如超时 -1001、离线 -1009），不包含请求内容或凭据；仍不自动重试，需先联网核对实际结果。此项增强诊断，尚未确认手机 Calendar／Reminders 的底层网络失败原因。须新 IPA 验证，Windows 未运行新增 Swift 测试。Tracker 图片缓存为空时在成功同步记录后补下载；资源失败保留已同步记录与全部待提交内容。
+
+Training Log 点击删除无反应的 Host 修复：补齐可信主框架的 JavaScript confirm 原生确认框，用户确认后才发出既有 DELETE；取消、导航或离开页面不继续。Apple Health 导入 Workout 仍由 Apple Health 删除。需重建覆盖安装，未打包/上机前不能宣称此问题已在手机恢复；原 Bridge、权限和签名链保持。
+
+本地加载层仅行星持续环绕，原图形直接完整显示，内容就绪后立即撤下，不等待固定时长或一圈结束，也不做淡入/淡出、描边或呼吸。保留已有首页内容就绪门槛、25秒失败/重试与系统减少动态效果；首页无缓存的页面内等待也显示环绕，有缓存则直接展示。登录页移除空导航行与外观入口的布局占位，手机卡片从安全区下的入口后开始排列。需新IPA后在iPhone验证加载快/慢、重进首页及键盘；本轮未打包或安装，不改变权限和签名链。
+
 独立开发版主屏幕显示名称为 `EO Dev`（workflow的`local_trackers=true`）；沿用 `com.evaorbit.nativehost.trackerspoc` 与原URL scheme，覆盖安装而非新建应用。正式在线Host仍显示`EvaOrbit`。改名需新IPA，不改变签名、权限或数据目录。
 
 本地 Host 的下拉刷新改用 Web 共享的页面内手势与提示，调用当前模块加载器，保留页面筛选及详情状态。仅本地关闭 `UIRefreshControl`、`bounces` 与 `alwaysBounceVertical`，网页背景使用当前主题，避免顶部回弹露出底层背景；普通在线 Host 不变。合成浏览器已验证刷新及弹层/横滑保护，黑边、顶部安全区与普通滚动仍待下一次 IPA 在 iPhone 16 Pro 验收，本轮不打包。

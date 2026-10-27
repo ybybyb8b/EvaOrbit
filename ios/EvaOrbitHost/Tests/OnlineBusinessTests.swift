@@ -2,6 +2,19 @@ import XCTest
 @testable import EvaOrbitHost
 
 final class OnlineBusinessTests: XCTestCase {
+    @MainActor func testUncertainSaveIncludesSafeNetworkDiagnosticWithoutQueryOrErrorPayload() {
+        let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, userInfo: [NSLocalizedDescriptionKey: "private payload"])
+        let diagnostic = NativeDiagnostics.capture(error, operation: "PUT /api/eventkit/links · connection", writeResultUnknown: true)
+        let message = diagnostic.message
+        XCTAssertTrue(message.contains("save result is unknown"))
+        XCTAssertTrue(message.contains("nothing retries automatically"))
+        XCTAssertTrue(message.contains("PUT /api/eventkit/links"))
+        XCTAssertEqual(diagnostic.code, "network_timeout")
+        XCTAssertFalse(message.contains("secret"))
+        XCTAssertFalse(message.contains("private payload"))
+        let offline = NativeDiagnostics.capture(URLError(.notConnectedToInternet), operation: "POST /api/eventkit/calendar-import", writeResultUnknown: true)
+        XCTAssertEqual(offline.code, "network_offline")
+    }
     @MainActor func testBundledRouteManifestRejectsPrivilegedAndEscapedPaths() throws {
         guard Bundle.main.url(forResource: "business-routes", withExtension: "json", subdirectory: "TrackerWeb") != nil else { throw XCTSkip("Local React bundle was not built for this Host variant") }
         XCTAssertTrue(NativeBridge.trackerMethods.contains("business.request"))

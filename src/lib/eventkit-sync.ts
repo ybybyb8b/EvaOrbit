@@ -1,4 +1,6 @@
 import {nativeApiFetch} from "./native-api.ts";
+import {apiResponseError} from "./response-error.ts";
+import {requestFailure,requestOperation} from "./request-diagnostics.ts";
 import { eventKitRead, EventKitReadTimeout } from "./eventkit-read.ts";
 import { dataChangedEvent, notifyDataChanged, type DataDomain } from "./data-changed.ts";
 import type { CalendarEvent,Reminder,Task } from "./types.ts";
@@ -28,9 +30,12 @@ export function eventKitSyncDiagnosticText(result:EventKitSyncResult){
   return [calendar?`Calendar：启用 ${calendar.selectedCalendars} 个日历，读取 ${calendar.readEvents} 条，新导入 ${calendar.newImports} 条，更新 ${calendar.updatedEvents} 条。读取范围 ${calendar.from} 至 ${calendar.to}。`:"",calendar?.selectedCalendars===0?"请将事件所在日历设为 Import only。":"",calendar?.recurringSkipped?`本轮读取中有 ${calendar.recurringSkipped} 条重复事件，当前规则不导入重复事件。`:"",reminder?`Reminders：读取 ${reminder.selectedLists} 个列表、${reminder.readReminders} 条提醒，从 Apple 同步到 EO ${reminder.imported} 条，写入 Apple ${reminder.exported} 条，双向合并 ${reminder.merged} 条，${reminder.conflicts} 个冲突需处理。`:"",reminder?.selectedLists===0?"尚未启用 Reminder 来源或设置 EO → Reminder List。":"",reminder?.excludedReminders?`读取的提醒中有 ${reminder.excludedReminders} 条标题包含“续火花”，已按规则排除。`:"",missing?`暂停 ${missing} 条旧关联：EO 原记录不存在，关联和 Apple 对象均保留。`:"",identity?`有 ${identity} 条关联无法唯一确认，相应导入或镜像创建已暂停。`:""].filter(Boolean).join(" ");
 }
 let activeEventKitSync:Promise<EventKitSyncResult>|null=null;
+export type EventKitSyncScope="all"|"calendar"|"reminder";
+let activeEventKitScope:EventKitSyncScope="all";
 
-export function runEventKitSyncSingleFlight(run:()=>Promise<EventKitSyncResult>){
-  if(activeEventKitSync)return activeEventKitSync;
+export function runEventKitSyncSingleFlight(run:()=>Promise<EventKitSyncResult>,scope:EventKitSyncScope="all"):Promise<EventKitSyncResult>{
+  if(activeEventKitSync)return activeEventKitScope===scope?activeEventKitSync:activeEventKitSync.catch(()=>{}).then(()=>runEventKitSyncSingleFlight(run,scope));
+  activeEventKitScope=scope;
   const current=run();activeEventKitSync=current;
   void current.then(()=>{if(activeEventKitSync===current)activeEventKitSync=null;},()=>{if(activeEventKitSync===current)activeEventKitSync=null;});
   return current;
@@ -69,8 +74,9 @@ async function json(url:string,init?:RequestInit,allowMissing=false){
     if(init?.method&&init.method!=="GET")headers.set("x-evaorbit-refresh-owner","eventkit");
     const response=await nativeApiFetch(url,{cache:"no-store",...init,headers});
     if(allowMissing&&response.status===404)return null;
-    if(!response.ok){const body=await response.json().catch(()=>({}));throw new EventKitRequestError(`${body.error??"Sync request failed"} (${init?.method??"GET"} ${url.split("?")[0]}, HTTP ${response.status})`,body.code);}
-    return response.status===204?null:response.json();
+    if(!response.ok){const body=await response.json().catch(()=>({}));throw new EventKitRequestError(apiResponseError(body,response.status,"Sync request failed",requestOperation(url,init?.method)),typeof body?.code==="string"?body.code:undefined);}
+    if(response.status===204)return null;
+    try{return await response.json();}catch(error){throw requestFailure(error,`${requestOperation(url,init?.method)} · response`);}
   })();
   return (init?.method??"GET")==="GET"?eventKitRead(request,`EO ${url.split("?")[0]}`):request;
 }
@@ -105,15 +111,26 @@ async function notifyCommittedChanges(domains:DataDomain[]){
     if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent(dataChangedEvent,{detail:{domains,source:"eventkit"}}));
   });
 }
-export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={}){const guardSession=captureNativeSessionGuard();return runEventKitSyncSingleFlight(async()=>{guardSession();checkSession=guardSession;const changed=new Set<DataDomain>();try{return await performEventKitSync(status,modes,routes,changed);}finally{try{guardSession();if(changed.size)await notifyCommittedChanges([...changed]);}finally{checkSession=undefined;}}});}
-async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},changed=new Set<DataDomain>()):Promise<EventKitSyncResult>{
+export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},scope:EventKitSyncScope="all"){
+  const guardSession=captureNativeSessionGuard();
+  return runEventKitSyncSingleFlight(async()=>{
+    guardSession();checkSession=guardSession;const changed=new Set<DataDomain>();
+    const sources=scope==="calendar"?status.calendars:status.reminderLists;
+    const scopedModes=scope==="all"?modes:Object.fromEntries(sources.map(source=>[source.identifier,modes[source.identifier]??"off"]));
+    try{
+      const result=await performEventKitSync(status,scopedModes,scope==="calendar"?{}:routes,changed,scope);
+      return {...result,calendarDiagnostics:scope==="reminder"?undefined:result.calendarDiagnostics,reminderDiagnostics:scope==="calendar"?undefined:result.reminderDiagnostics};
+    }finally{try{guardSession();if(changed.size)await notifyCommittedChanges([...changed]);}finally{checkSession=undefined;}}
+  },scope);
+}
+async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},changed=new Set<DataDomain>(),scope:EventKitSyncScope="all"):Promise<EventKitSyncResult>{
   // Track committed EO mutations only; reads and mapping-only writes never request a refresh.
   async function json(url:string,init?:RequestInit,allowMissing=false){const result=await eventKitJSON(url,init,allowMissing);if(init?.method&&init.method!=="GET"){if(url.startsWith("/api/calendar-events"))changed.add("calendar");else if(url.startsWith("/api/tasks")){changed.add("tasks");changed.add("reminders");}else if(url.startsWith("/api/reminders"))changed.add("reminders");}return result;}
   const effectiveModes={...modes};for(const identifier of Object.values(routes))if(identifier)effectiveModes[identifier]="two_way";
   const calendarModes = eventKitCalendarReadModes(status.calendars, effectiveModes);
-  const calendarIDs = status.calendars.filter(source => eventKitSourceEnabled(source.identifier, calendarModes)).map(source => source.identifier);
+  const calendarIDs = scope==="reminder"?[]:status.calendars.filter(source => eventKitSourceEnabled(source.identifier, calendarModes)).map(source => source.identifier);
   const syncCalendar = calendarIDs.length > 0;
-  const syncReminders = status.reminderLists.some(source => eventKitSourceEnabled(source.identifier, effectiveModes)) || Object.values(routes).some(Boolean);
+  const syncReminders = scope!=="calendar"&&(status.reminderLists.some(source => eventKitSourceEnabled(source.identifier, effectiveModes)) || Object.values(routes).some(Boolean));
   const kind = syncCalendar && syncReminders ? "" : syncCalendar ? "&kind=event" : "&kind=reminder";
   const allLinks = syncCalendar || syncReminders ? await json(`/api/eventkit/links?protocol=2&installationId=${encodeURIComponent(status.installationId)}${kind}`) as Link[] : [];
   // Old servers ignore kind. Keep the same safety boundary on the client as well.

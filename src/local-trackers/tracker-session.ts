@@ -4,6 +4,7 @@ import {parseNewTrackerEntry} from "@/lib/validation";
 import {validatedTrackerValues} from "@/lib/tracker-values";
 import {asField, belongs} from "./tracker-records";
 import {isPreviewAccount,type LocalAccount,type TrackerPlatform} from "./platform";
+import {requestFailure} from "@/lib/request-diagnostics";
 
 // One store per signed-in session: page and global capture share listeners and sync work.
 const sessions = new WeakMap<LocalAccount, WeakMap<TrackerPlatform, LocalTrackerStore>>();
@@ -38,6 +39,13 @@ export function synchronizeTrackerSession(account:LocalAccount,platform:TrackerP
       else try{await store.synchronize(platform.sync);}catch(reason){
         if(!store.getSnapshot().remoteRevision)try{await platform.refreshReadonly(account);await store.initialize();}catch{/* Failed downloads never discard local drafts. */}
         throw reason;
+      }
+      if(!readOnly){
+        const state=store.getSnapshot();
+        if(!state.readOnly&&state.records.some(row=>row.resourceType==="tracker"&&row.serverId&&row.payload.iconType==="image")){
+          try{await platform.refreshReadonly(account);await store.initialize();}
+          catch(reason){activity.update({error:`Tracker records synced, but icons could not be downloaded. Refresh when connected. ${requestFailure(reason,"Trackers · icon cache download").message}`});}
+        }
       }
       activity.update({lastSyncedAt:new Date().toISOString()});
     }catch(reason){activity.update({error:reason instanceof Error?reason.message:String(reason)});throw reason;}

@@ -1741,6 +1741,15 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .apple-health-metrics { margin-top:9px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }.apple-health-metrics>div { min-width:0;padding:12px 13px;border:1px solid rgb(var(--border-rgb) / .1);border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:12px; }.apple-health-metrics strong { font-size:10px; }.apple-health-metrics span { color:var(--muted);font-size:8px;text-align:right;text-transform:capitalize; }
 .eventkit-section > .apple-health-heading:not(:first-child) { margin-top:28px; }
 .eventkit-section .apple-health-heading h3 { margin:0;font:600 22px/1.2 var(--font-editorial-label); }
+.eventkit-sync-group { margin-top:28px;min-width:0; }
+.eventkit-preferences { margin-top:16px; }
+.eventkit-preferences > summary { min-height:48px;padding:12px 0;cursor:pointer;overflow-wrap:anywhere; }
+.eventkit-preferences > summary strong { font-size:13px;font-weight:500; }
+.eventkit-preferences > summary span { display:block;margin:6px 0 0 18px;color:var(--muted);font-size:12px;line-height:1.5; }
+.eventkit-preferences .apple-health-heading { margin-top:24px; }
+.eventkit-preferences .choice-capsules { flex-wrap:wrap;overflow-x:visible; }
+.eventkit-preferences .choice-capsules button { white-space:normal;overflow-wrap:anywhere; }
+@media(max-width:720px){.eventkit-preferences .eventkit-sources > .eventkit-source { grid-template-columns:minmax(0,1fr); }}
 .eventkit-sources > .eventkit-source { min-height:70px;display:grid;grid-template-columns:minmax(0,1fr) 132px;gap:14px; }
 .eventkit-source-copy { min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px; }
 .eventkit-sources .eventkit-source-copy strong { max-width:100%;font-size:12px;line-height:1.35;overflow-wrap:anywhere; }
