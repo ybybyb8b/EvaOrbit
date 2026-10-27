@@ -110,7 +110,7 @@ export async function syncConfiguredEventKit() {
   // Never treat a revoked permission as an empty Apple store (and delete EO records).
   if (status.calendars.some(source => modes[source.identifier] !== "off" && modes[source.identifier]) && !granted(status.calendarPermission)) return null;
   if ((Object.values(routes).some(Boolean) || status.reminderLists.some(source => modes[source.identifier] !== "off" && modes[source.identifier])) && !granted(status.reminderPermission)) return null;
-  const result = await synchronizeEventKit(status, modes, routes);
+  const result = await synchronizeEventKit(status, modes, routes,"all",true);
   localStorage.setItem(eventKitLastSyncKey, result.lastSync);
   window.dispatchEvent(new CustomEvent(eventKitSyncFinished, { detail: { result } }));
   return result;

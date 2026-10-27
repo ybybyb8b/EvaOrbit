@@ -237,6 +237,8 @@
 
 ## Native
 
+- **Apple 读取与续传**：[范围契约](APPLE_SYNC_SCOPE.md)、[JS 日期口径](../src/lib/apple-read-scope.ts)、[账户／安装隔离断点](../src/lib/eventkit-work-state.ts)。EventKit 近期优先、历史有限批次推进，完整身份索引用于防重；Native HealthKit 按统一日期下界读取，睡眠按醒来日期保留完整一晚。
+
 - **手机页面热更新**：[同网 HTTPS 开发配置](IOS_PHONE_PREVIEW.md) 复用已有 Debug 固定开发源；workflow 的 `tracker_development_url` 非空时仅允许本地 Debug 包，空值保持 Release/包内资源。Vite 显式配置证书后开放局域网 HTTPS/WSS，日用默认仍为 loopback。原 Bridge 白名单、Bundle ID、数据和签名安装链保留。
 - **本地主用版收尾候选**：[LocalNativeIntegrations](../src/local-trackers/native-integrations.tsx) 只注入原生调用与 [原生 API 适配](../src/lib/native-api.ts)，复用 EventKit/通知/健康协调规则；`native.invoke`/`native.api` 验证主账号，测试账号禁止系统写入。共享 [native-routes.json](../src/lib/native-routes.json) 控制配套接口，不使用全局 fetch 替换，也不增加业务离线写队列。设置直接复用原版控件；原生结果刷新本地页面，账户切换停止旧校准。服务端 session/主账号开关与 IPA 分别发布，实际结果见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 

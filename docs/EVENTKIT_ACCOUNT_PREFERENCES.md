@@ -1,5 +1,7 @@
 # EventKit 同步偏好与重装恢复
 
+Apple 读取统一以 2026-10-01 为下界，不设置永久截止日期。Calendar／Reminder 按近期优先、持久断点和有限批次推进；完整身份索引仍用于防重，未解决的恢复项不会被当作新记录导入。详细口径和执行限制见 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。Calendar 恢复每组最多4条并行，Reminder／pending 操作顺序执行；失败排空已启动的一组，不启动下一组。设置页区分本轮结果和待核对数量，不把局部完成显示为全量完成。
+
 设置页分别提供 `Sync Calendar`、`Sync Reminders`，保留 `Sync all`。单项执行只处理对应类型，不修改已保存的来源或路由；一键同步依次执行两项，错误和最近成功时间各自显示，一项失败仍检查另一项。共享同步锁按范围区分同次请求，不同范围等待当前操作结束，避免并发写入或把另一类型的结果当成本次结果。来源及 Reminder domain 路由默认折叠，摘要展示当前选择。权限请求继续分别进行，不由同步按钮代为申请。
 
 Supabase 模式将 Calendar / Reminder 的 Off、Import、EO route enabled 及每个 EO domain 的 Reminder List 路由保存到登录账户的 `eventkit_preferences`。本地 localStorage 仅作为恢复后的缓存；保存成功后才更新缓存，网络或认证失败不会写入空偏好或启动错误同步。

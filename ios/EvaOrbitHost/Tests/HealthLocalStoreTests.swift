@@ -4,6 +4,18 @@ import XCTest
 @testable import EvaOrbitHost
 
 final class HealthLocalStoreTests: XCTestCase {
+    func testReadScopeUpgradeRestartsOnlyCursorsAndPreservesPendingData() throws {
+        let start = AppleReadScope.start()
+        let sample = HealthEnergySample(uuid: "scope-sample", metric: .active, startDate: start, endDate: start.addingTimeInterval(60), kilocalories: 12)
+        try store.commitDelta(metric: .active, samples: [sample], deletedUUIDs: [], encodedAnchor: Data("before".utf8), totals: ["2026-10-01": 12], affectedDates: ["2026-10-01"])
+        let pending = store.pendingCount()
+        try store.prepareAppleReadScope()
+        XCTAssertNil(try store.anchor(for: .active))
+        XCTAssertEqual(store.pendingCount(), pending)
+        try store.commitDelta(metric: .active, samples: [sample], deletedUUIDs: [], encodedAnchor: Data("after".utf8), totals: ["2026-10-01": 12], affectedDates: ["2026-10-01"])
+        try store.prepareAppleReadScope()
+        XCTAssertEqual(try store.anchor(for: .active), Data("after".utf8), "The scope upgrade runs only once")
+    }
     func testWorkoutUsesDurableReadOutboxWithoutEnergyAggregation() throws {
         try store.setMetadata("readSyncMetrics", value: "sleep,workout")
         let sample = HealthReadSample(sampleId: "946e6cf1-96f2-4e47-9d45-b0fab32db24d", metric: .workout,
@@ -268,8 +280,8 @@ final class HealthLocalStoreTests: XCTestCase {
         XCTAssertEqual(healthKit.savedBodyMass, 64.2)
 
         let window = coordinator.initialWindow(now: noon)
-        XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.start), "2026-08-30T16:00:00.000Z")
-        XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.end), "2026-09-01T16:00:00.000Z")
+        XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.start), "2026-09-30T16:00:00.000Z")
+        XCTAssertEqual(HealthDateFormatter.iso8601.string(from: window.end), "2026-09-30T16:00:00.000Z")
     }
 }
 

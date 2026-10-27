@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+Apple 读取统一以 2026-10-01 为下界，不设置永久截止日期。Calendar／Reminder 按近期优先、持久断点和有限批次推进；完整身份索引仍用于防重，未解决的恢复项不会被当作新记录导入。详细口径和执行限制见 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。Calendar 恢复每组最多4条并行，Reminder／pending 操作顺序执行；失败排空已启动的一组，不启动下一组。设置页区分本轮结果和待核对数量，不把局部完成显示为全量完成。 同一次 native.api 内复用已验证的账户授权，仍检查账户、generation、在线开关和服务端认证，不跨请求缓存权限。需要新 IPA；Windows 验证不能代替 Swift 编译和真机验收。
+
 错误细化覆盖 Native 共用出口与本地 React 请求层：显示实际操作/步骤、HTTP 或安全系统错误码，保留账户、只读、冲突及写入结果不明语义，不自动重放、不清理数据。Health 上传错误保留连接原因，现有重试调度不变。详见 [本地错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)；需新 IPA，Windows 检查不能替代 Swift 编译、XCTest 和真机验收。
 
 本地同步诊断：在线写请求未收到明确结果时，错误追加请求方法、去除查询参数的接口路径及网络错误码（如超时 -1001、离线 -1009），不包含请求内容或凭据；仍不自动重试，需先联网核对实际结果。此项增强诊断，尚未确认手机 Calendar／Reminders 的底层网络失败原因。须新 IPA 验证，Windows 未运行新增 Swift 测试。Tracker 图片缓存为空时在成功同步记录后补下载；资源失败保留已同步记录与全部待提交内容。

@@ -5,7 +5,8 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice } from "@/components/action-toast";
 
-import { useCallback,useEffect,useRef,useState } from "react";
+import { useCallback,useEffect,useRef,useState,useSyncExternalStore } from "react";
+import {getEventKitSyncProgress,subscribeEventKitSyncProgress,eventKitSyncProgressText} from "@/lib/eventkit-sync-progress";
 import { eventKitSupported,getNativeHostInfo,hostSupports,nativeCall } from "@/lib/native-bridge";
 import { eventKitSyncDiagnosticText,synchronizeEventKit,type EventKitModes,type EventKitReminderDomain,type EventKitReminderRoutes,type EventKitSource,type EventKitStatus,type EventKitSyncMode,type EventKitSyncScope } from "@/lib/eventkit-sync";
 import { eventKitLastSyncKey as lastKey,eventKitConfigChanged,eventKitSyncFinished,loadEventKitAccountPreferences,saveEventKitAccountPreferences,eventKitPreferenceNotice } from "@/lib/eventkit-auto-sync";
@@ -16,22 +17,24 @@ type SyncFeedback={error?:string;diagnostic?:string;lastSync?:string};
 export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={}){
  const copyScope=useUiCopyScope<HTMLElement>();const[status,setStatus]=useState<EventKitStatus|null>(null),[modes,setModes]=useState<EventKitModes>({}),[routes,setRoutes]=useState<EventKitReminderRoutes>({}),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState(""),[lastSync,setLastSync]=useState<string|null>(null),[diagnostic,setDiagnostic]=useState(""),[preferenceNotice,setPreferenceNotice]=useState("");
  const syncingRef=useRef(false),[syncing,setSyncing]=useState<EventKitSyncScope|null>(null),[feedback,setFeedback]=useState<Partial<Record<Kind,SyncFeedback>>>({});
+ const progress=useSyncExternalStore(subscribeEventKitSyncProgress,getEventKitSyncProgress,()=>null);
   const refresh=useCallback(async()=>{try{const info=await getNativeHostInfo();if(!(readOnly?hostSupports(info,"eventkit.getStatus"):eventKitSupported(info))){setStatus(null);return;}const nextStatus=await nativeCall<EventKitStatus>("eventkit.getStatus");setStatus(nextStatus);if(readOnly)return;const restored=await loadEventKitAccountPreferences(nextStatus);setModes(restored.modes);setRoutes(restored.routes);setPreferenceNotice(eventKitPreferenceNotice());setLastSync(localStorage.getItem(lastKey));}catch(cause){setError(cause instanceof Error?cause.message:"同步偏好读取失败");}},[readOnly]);
   const sync=useCallback(async(scope:EventKitSyncScope)=>{
     if(!status||readOnly||syncingRef.current)return;
     syncingRef.current=true;setBusy(true);setSyncing(scope);setError("");setMessage("");setDiagnostic("");
-    const kinds:Kind[]=scope==="all"?["calendar","reminder"]:[scope];let completed:string|undefined,failed=false;
+    const kinds:Kind[]=scope==="all"?["calendar","reminder"]:[scope];let completed:string|undefined,failed=false,pending=false;
     try{
       for(const kind of kinds){
         setSyncing(kind);setFeedback(previous=>({...previous,[kind]:{...previous[kind],error:"",diagnostic:""}}));
         try{
           const restored=await loadEventKitAccountPreferences(status),result=await synchronizeEventKit(status,restored.modes,restored.routes,kind);
           completed=result.lastSync;
+          if(result.pendingRecovery&&(result.pendingRecovery.recent||result.pendingRecovery.history||result.pendingRecovery.discoveries))pending=true;
           const skipped=result.skippedEvents[0],details=eventKitSyncDiagnosticText(result)+(skipped?` 跳过 ${result.skippedEvents.length} 条时间异常事件：${skipped.calendarTitle} / ${skipped.title}（${skipped.startAt} → ${skipped.endAt}）`:"");
           setFeedback(previous=>({...previous,[kind]:{lastSync:result.lastSync,diagnostic:details}}));
         }catch(cause){failed=true;setFeedback(previous=>({...previous,[kind]:{...previous[kind],error:cause instanceof Error?cause.message:"同步失败"}}));}
       }
-      if(scope==="all"&&!failed&&completed){localStorage.setItem(lastKey,completed);setLastSync(completed);}
+      if(scope==="all"&&!failed&&!pending&&completed){localStorage.setItem(lastKey,completed);setLastSync(completed);}
     }finally{syncingRef.current=false;setSyncing(null);setBusy(false);}
   },[status,readOnly]);
   useEffect(()=>{const initial=window.setTimeout(()=>void refresh(),0),ready=()=>{if(document.visibilityState!=="hidden")void refresh();},finished=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.error)setError(detail.error);else{setError("");if(detail?.result)setDiagnostic(eventKitSyncDiagnosticText(detail.result));setLastSync(localStorage.getItem(lastKey));}};window.addEventListener("evaorbit:native-ready",ready);window.addEventListener("evaorbit:native-active",ready);document.addEventListener("visibilitychange",ready);window.addEventListener(eventKitSyncFinished,finished);return()=>{window.clearTimeout(initial);window.removeEventListener("evaorbit:native-ready",ready);window.removeEventListener("evaorbit:native-active",ready);document.removeEventListener("visibilitychange",ready);window.removeEventListener(eventKitSyncFinished,finished);};},[refresh]);
@@ -44,6 +47,7 @@ export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={})
   if(readOnly)return <section ref={copyScope} className="apple-health-section eventkit-section"><div className="apple-health-heading"><h2>Apple Integration</h2><span className="status-pill">Native Host</span></div>{([ ["Calendar",status.calendarPermission,status.calendars], ["Reminders",status.reminderPermission,status.reminderLists] ] as const).map(([title,permission,sources])=><div key={title}><h3>{title}</h3><p>Permission: {permission.replaceAll("_"," ")}</p><div className="apple-health-metrics eventkit-sources">{sources.map(source=><div className="eventkit-source" key={source.identifier}><div className="eventkit-source-copy"><strong>{source.title}</strong><span>{source.sourceTitle}</span></div></div>)}</div></div>)}</section>;
   return <section ref={copyScope} className="apple-health-section eventkit-section"><div className="apple-health-heading"><div><span className="eyebrow">EVENTKIT</span><h2>Apple Integration</h2><p>Off 只暂停同步并保留两侧数据。Calendar 从 2026-10-01 起只读 Apple 数据，EO 不会写入、修改或删除 Apple Event；Reminder routes 只把 EO domain 写入指定 List，不导入其中无 EO 关联的私人提醒。带明确时间的 Due 会创建普通到点通知。</p></div><span className="status-pill">Native Host</span></div>
     <p className="apple-health-fallback">已选来源会在启动、回到前台和 Apple 数据变化时自动同步；前台在线在每轮结束后等待 60 秒再补偿同步，无需停留在此页。标题包含“续火花”的 Reminder 不参与同步，已有数据保留。App 不运行时不保证即时同步。</p>
+    {progress&&eventKitSyncProgressText(progress)&&<p className="apple-health-fallback" role="status" aria-live="polite">{syncing&&progress.scope!==syncing?"Waiting for the current sync to finish. ":""}{eventKitSyncProgressText(progress)}</p>}
     {(["calendar","reminder"] as const).map(kind=>{
       const title=kind==="calendar"?"Calendar":"Reminders",items=kind==="calendar"?status.calendars:status.reminderLists,permission=kind==="calendar"?status.calendarPermission:status.reminderPermission;
       const selected=items.filter(source=>modes[source.identifier]&&modes[source.identifier]!=="off"),routeCount=kind==="reminder"?Object.values(routes).filter(Boolean).length:0,granted=["authorized","full_access"].includes(permission),current=feedback[kind];
@@ -56,7 +60,7 @@ export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={})
         </details>
       </div>;
     })}
-    {preferenceNotice&&<p className="apple-health-fallback" role="status">{preferenceNotice}</p>}{diagnostic&&<p className="apple-health-fallback" role="status">{diagnostic}</p>}{error&&<ErrorNotice>{error}</ErrorNotice>}{message&&<ToastNotice message={message} onShown={() => setMessage("")} />}<div className="apple-health-actions"><button className="button primary" disabled={busy} onClick={()=>void sync("all")}>{syncing?"Syncing…":"Sync all"}</button><small>{lastSync?`Last full sync ${new Date(lastSync).toLocaleString()}`:"Not fully synced yet"}</small></div>
+    {preferenceNotice&&<p className="apple-health-fallback" role="status">{preferenceNotice}</p>}{diagnostic&&<p className="apple-health-fallback" role="status">{diagnostic}</p>}{error&&<ErrorNotice>{error}</ErrorNotice>}{message&&<ToastNotice message={message} onShown={() => setMessage("")} />}<div className="apple-health-actions"><button className="button primary" disabled={busy} onClick={()=>void sync("all")}>{syncing?"Syncing…":"Sync all"}</button><small>{lastSync?`Last sync round ${new Date(lastSync).toLocaleString()}`:"No sync result yet"}</small></div>
   </section>;}
 function Permission({title,permission,disabled,onRequest}:{title:string;permission:string;disabled:boolean;onRequest:()=>void}){const granted=["authorized","full_access"].includes(permission);return <div className="apple-health-heading"><div><h3>{title}</h3><p>Permission: {permission.replaceAll("_"," ")}</p></div>{!granted&&<button className="button secondary" disabled={disabled||permission==="denied"||permission==="restricted"} onClick={onRequest}>Request access</button>}</div>;}
 function Sources({disabled,kind,items,modes,onMode}:{disabled:boolean;kind:"calendar"|"reminder";items:EventKitSource[];modes:EventKitModes;onMode:(source:EventKitSource,mode:EventKitSyncMode)=>void}){return <div className="apple-health-metrics eventkit-sources">{items.map(source=><div className="eventkit-source" key={source.identifier}><div className="eventkit-source-copy"><strong>{source.title}</strong><span>{source.sourceTitle} · {kind==="calendar"||!source.allowsContentModifications?"Read only":"Read/write"}</span></div><ChoiceSelect disabled={disabled} aria-label={`${source.title} sync mode`} value={modes[source.identifier]??"off"} onChange={event=>onMode(source,event.target.value as EventKitSyncMode)}><option value="off">Off</option><option value="import">{kind==="reminder"?"Import all":"Import only"}</option>{kind==="reminder"&&source.allowsContentModifications&&<option value="two_way">EO route enabled</option>}</ChoiceSelect></div>)}</div>;}

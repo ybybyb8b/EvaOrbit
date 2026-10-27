@@ -40,6 +40,7 @@ final class HealthKitCoordinator {
 
     func restoreAtLaunch() {
         guard healthKit.isAvailable else { return }
+        do { try store.prepareAppleReadScope() } catch { recordError(error); return }
         restoreReadObservers()
         for metric in HealthMetric.allCases {
             do {
@@ -89,6 +90,7 @@ final class HealthKitCoordinator {
     }
 
     func syncNow() async -> Bool {
+        do { try store.prepareAppleReadScope() } catch { recordError(error); return false }
         var success = true
         for metric in HealthMetric.allCases {
             let metricSuccess = await withCheckedContinuation { continuation in
@@ -297,12 +299,13 @@ final class HealthKitCoordinator {
         if metric == .bodyMass { return await performBodyMassSync() }
         do {
             let encodedAnchor = try store.anchor(for: metric)
-            let initialStart = encodedAnchor == nil ? initialWindow().start : nil
+            let initialStart = encodedAnchor == nil ? AppleReadScope.queryStart : nil
             let delta = try await healthKit.anchoredDelta(for: metric, encodedAnchor: encodedAnchor, initialStart: initialStart)
             let deletedLookup = try store.deletedDates(for: delta.deletedUUIDs, metric: metric)
             var samples = delta.added
             var affectedDates = deletedLookup.dates
             delta.added.forEach { affectedDates.formUnion($0.localDates(calendar: calendar)) }
+            affectedDates = Set(affectedDates.filter { $0 >= AppleReadScope.firstDay })
             var replacementWindow: HealthDateWindow?
 
             if deletedLookup.unknownCount > 0 {
@@ -338,7 +341,7 @@ final class HealthKitCoordinator {
     private func performBodyMassSync() async -> Bool {
         do {
             let encodedAnchor = try store.anchor(for: .bodyMass)
-            let delta = try await healthKit.anchoredBodyMassDelta(encodedAnchor: encodedAnchor, initialStart: nil)
+            let delta = try await healthKit.anchoredBodyMassDelta(encodedAnchor: encodedAnchor, initialStart: AppleReadScope.queryStart)
             try store.commitBodyMassDelta(samples: delta.added, deletedUUIDs: delta.deletedUUIDs, encodedAnchor: delta.encodedAnchor)
             HealthDiagnostics.log("metric=body_mass query=success added=\(delta.added.count) deleted=\(delta.deletedUUIDs.count) anchor-advanced=true pending=\(store.pendingCount())")
             return true
@@ -352,7 +355,7 @@ final class HealthKitCoordinator {
     private func performMenstrualFlowSync() async -> Bool {
         do {
             let anchor = try store.menstrualFlowAnchor()
-            let delta = try await healthKit.anchoredMenstrualFlowDelta(encodedAnchor: anchor, initialStart: nil)
+            let delta = try await healthKit.anchoredMenstrualFlowDelta(encodedAnchor: anchor, initialStart: AppleReadScope.queryStart)
             try store.commitMenstrualFlowDelta(samples: delta.added, deletedUUIDs: delta.deletedUUIDs, encodedAnchor: delta.encodedAnchor)
             HealthDiagnostics.log("metric=menstrual_flow query=success added=\(delta.added.count) deleted=\(delta.deletedUUIDs.count) anchor-advanced=true pending=\(store.pendingCount())")
             return true
@@ -365,8 +368,8 @@ final class HealthKitCoordinator {
 
     func initialWindow(now: Date = Date()) -> HealthDateWindow {
         let today = calendar.startOfDay(for: now)
-        let start = calendar.date(byAdding: .day, value: -initialLookbackDays, to: today) ?? today
-        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? now.addingTimeInterval(86_400)
+        let start = max(calendar.date(byAdding: .day, value: -initialLookbackDays, to: today) ?? today, AppleReadScope.start(in: calendar.timeZone))
+        let end = max(start, calendar.date(byAdding: .day, value: 1, to: today) ?? now.addingTimeInterval(86_400))
         return HealthDateWindow(start: start, end: end)
     }
 

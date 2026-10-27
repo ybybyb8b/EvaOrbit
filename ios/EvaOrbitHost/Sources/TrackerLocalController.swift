@@ -11,6 +11,11 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     private var nativeOperations = 0
     private var replicaSessions: [String: Int] = [:]
     private var acceptanceReceipts: [String: [String: Any]] = [:]
+    struct NativeOperationAuthorization {
+        fileprivate let accountId: String
+        fileprivate let generation: Int
+        fileprivate let identity: [String: Any]
+    }
     private var session: URLSession {
         if let activeSession { return activeSession }
         let configuration = URLSessionConfiguration.default
@@ -161,7 +166,8 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         nativeSettingsAccount = accountId
         return cookies.cookies(for: baseURL) ?? []
     }
-    func beginNativeOperation(accountId: String) async throws {
+    @discardableResult
+    func beginNativeOperation(accountId: String) async throws -> NativeOperationAuthorization {
         try await database.requireAccount(accountId)
         let expectedGeneration = generation
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close the online native settings panel first.") }
@@ -171,6 +177,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         try await database.requireAccount(accountId)
         guard generation == expectedGeneration, nativeSettingsAccount == nil else { throw TrackerLocalError.account }
         nativeOperations += 1
+        return NativeOperationAuthorization(accountId: accountId, generation: expectedGeneration, identity: identity)
     }
     func endNativeOperation() { nativeOperations = max(0, nativeOperations - 1) }
     static func nativeAccountAllowed(_ identity: [String: Any], accountId: String) -> Bool {
@@ -191,7 +198,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
     func endNativeSettings(accountId: String) { if nativeSettingsAccount == accountId { nativeSettingsAccount = nil } }
 
-    func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool, nativeIntegration: Bool = false) async throws -> Any {
+    func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool, nativeIntegration: Bool = false, authorization: NativeOperationAuthorization? = nil) async throws -> Any {
         guard (nativeIntegration ? Self.allowsNativeAPI(path: path, method: method) : Self.allowsBusinessRequest(path: path, method: method)), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
         try await database.requireAccount(accountId)
         let expectedGeneration = generation
@@ -201,7 +208,14 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
             guard expectedGeneration == generation else { throw TrackerLocalError.account }
             return cached
         }
-        guard let identity = try await request(path: "session", method: "GET") as? [String: Any], identity["authenticated"] as? Bool == true else { throw TrackerLocalError.sessionExpired }
+        let identity: [String: Any]
+        if nativeIntegration, let authorization {
+            guard authorization.accountId == accountId, authorization.generation == expectedGeneration, nativeOperations > 0 else { throw TrackerLocalError.account }
+            identity = authorization.identity
+        } else {
+            guard let current = try await request(path: "session", method: "GET") as? [String: Any], current["authenticated"] as? Bool == true else { throw TrackerLocalError.sessionExpired }
+            identity = current
+        }
         guard identity["accountId"] as? String == accountId else { throw TrackerLocalError.account }
         guard identity["onlineBusinessProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe online API must be published before saving. Downloaded data is preserved.") }
         guard identity["onlineBusinessTestAccount"] as? Bool == true || identity["onlineBusinessAccountAllowed"] as? Bool == true else { throw TrackerLocalError.network("Online saving is not enabled for this account. Downloaded data and Tracker sync are preserved.") }

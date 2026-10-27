@@ -55,6 +55,7 @@ final class EventKitSyncEngine {
               calendars.first?.source.sourceIdentifier == sourceIdentifier else { return ["status": "unavailable"] }
         func matchesKind(_ item: EKCalendarItem) -> Bool { kind == .event ? item is EKEvent : item is EKReminder }
         func found(_ item: EKCalendarItem) -> [String: Any] {
+            guard inReadScope(item) else { return ["status": "out_of_scope"] }
             if let event = item as? EKEvent { return ["status": "found", "item": eventDictionary(event)] }
             if let reminder = item as? EKReminder { return ["status": "found", "item": reminderDictionary(reminder)] }
             return ["status": "unavailable"]
@@ -77,7 +78,10 @@ final class EventKitSyncEngine {
     func fetchEvents(calendarIDs: [String], from: Date, to: Date) throws -> [[String: Any]] {
         let calendars = try readableCalendars(.event, identifiers: calendarIDs)
         guard !calendars.isEmpty else { return [] }
-        return store.events(matching: store.predicateForEvents(withStart: from, end: to, calendars: calendars)).map(eventDictionary)
+        let start = max(from, AppleReadScope.queryStart)
+        guard to > start else { return [] }
+        guard let end = Calendar(identifier: .gregorian).date(byAdding: .year, value: 4, to: start), to <= end else { throw EventKitSyncError.invalidInput }
+        return store.events(matching: store.predicateForEvents(withStart: max(from, AppleReadScope.queryStart), end: to, calendars: calendars)).filter { AppleReadScope.includes($0.startDate, timeZone: $0.timeZone ?? .current) }.map(eventDictionary)
     }
 
     /// Rebind an account link without relying on discovery windows or mutable content.
@@ -113,6 +117,7 @@ final class EventKitSyncEngine {
         if candidates.count > 1 { return ["status": "ambiguous"] }
         if let item = candidates.values.first {
             guard calendarIDs.contains(item.calendar.calendarIdentifier) else { return ["status": "unavailable"] }
+            guard inReadScope(item) else { return ["status": "out_of_scope"] }
             if let event = item as? EKEvent { return ["status": "found", "item": eventDictionary(event)] }
             if let reminder = item as? EKReminder { return ["status": "found", "item": reminderDictionary(reminder)] }
         }
@@ -143,9 +148,20 @@ final class EventKitSyncEngine {
         guard !calendars.isEmpty else { return [] }
         func fetch(_ predicate:NSPredicate) async throws -> [EKReminder] { try await withCheckedThrowingContinuation { continuation in store.fetchReminders(matching:predicate){items in if let items { continuation.resume(returning:items) } else { continuation.resume(throwing:EventKitSyncError.unavailable) }} } }
         let incomplete=try await fetch(store.predicateForIncompleteReminders(withDueDateStarting:nil,ending:nil,calendars:calendars))
-        let completed=try await fetch(store.predicateForCompletedReminders(withCompletionDateStarting:completedSince,ending:nil,calendars:calendars))
+        let completed=try await fetch(store.predicateForCompletedReminders(withCompletionDateStarting:AppleReadScope.queryStart,ending:nil,calendars:calendars))
         var seen = Set<String>()
-        return (incomplete + completed).filter { seen.insert($0.calendarItemIdentifier).inserted }.map(reminderDictionary)
+        return (incomplete + completed).filter { inReadScope($0) && seen.insert($0.calendarItemIdentifier).inserted }.map(reminderDictionary)
+    }
+    private func inReadScope(_ item: EKCalendarItem) -> Bool {
+        if let event = item as? EKEvent { return AppleReadScope.includes(event.startDate, timeZone: event.timeZone ?? .current) }
+        guard let reminder = item as? EKReminder else { return false }
+        if let completed = reminder.completionDate, AppleReadScope.includes(completed) { return true }
+        if let components = reminder.dueDateComponents {
+            var calendar = components.calendar ?? Calendar(identifier: .gregorian)
+            calendar.timeZone = components.timeZone ?? .current
+            return calendar.date(from: components).map { AppleReadScope.includes($0, timeZone: calendar.timeZone) } ?? false
+        }
+        return reminder.creationDate.map { AppleReadScope.includes($0) } ?? false
     }
 
     func saveEvent(_ value: [String: Any]) throws -> [String: Any] {
@@ -241,6 +257,7 @@ final class EventKitSyncEngine {
 
         return compact([
             "calendarItemIdentifier": reminder.calendarItemIdentifier,
+            "createdAt": reminder.creationDate.map(iso),
             "externalIdentifier": reminder.calendarItemExternalIdentifier,
             "calendarIdentifier": reminder.calendar.calendarIdentifier,
             "sourceIdentifier": reminder.calendar.source.sourceIdentifier,

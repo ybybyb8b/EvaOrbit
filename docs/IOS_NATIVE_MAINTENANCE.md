@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+Apple 读取统一以 2026-10-01 为下界，不设置永久截止日期。Calendar／Reminder 按近期优先、持久断点和有限批次推进；完整身份索引仍用于防重，未解决的恢复项不会被当作新记录导入。详细口径和执行限制见 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。Calendar 恢复每组最多4条并行，Reminder／pending 操作顺序执行；失败排空已启动的一组，不启动下一组。设置页区分本轮结果和待核对数量，不把局部完成显示为全量完成。 同一次 native.api 内复用已验证的账户授权，仍检查账户、generation、在线开关和服务端认证，不跨请求缓存权限。需要新 IPA；Windows 验证不能代替 Swift 编译和真机验收。
+
 原生共用错误出口使用 `NativeDiagnostics.swift`：网络、存储、响应解码、账户及 EventKit/HealthKit/通知错误分类，保留安全操作步骤并附 `[EO:code]`；不再把未识别的其他模块错误统称 Tracker 失败。在线请求分别标记连接、JSON 响应、协议及备份阶段；`session_expired` 继续触发原有保留草稿的重连。Health 上传只增强失败原因，不改退避/重试或队列。Bridge v1、成功响应、方法清单、权限、签名链与业务数据不变；无新日志存储。分类及隐私边界见 [本地错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。新增 Native XCTest 尚未在 Windows 运行，需新 IPA 验证。
 
 本地在线写请求结果不明时继续保留“不自动重试”提示，并附请求方法、不含查询参数的接口路径、网络原因及错误码；不展示请求体、凭据或系统原始错误详情，不延长超时或自动重放。用于区分 EventKit 等同步的实际失败步骤；不能据此认定底层连接问题已修复。新增 XCTest 尚待 macOS 执行。Tracker 编辑副本首次同步成功、存在图片图标且尚无独立快照缓存时补取图片；下载失败只报告资源下载问题，不撤销已确认同步或清理草稿/队列。
@@ -330,7 +332,7 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 - Task link 继续同步 title、notes、Due 与完成状态，但只为尚未完成的未关联 EO Task 新建 Apple Reminder；历史已完成 Task 不参与首次导出，已关联 Task 仍会把后续完成状态同步给 Apple。其他 domain reminder 以 EO 为 source of truth，只接受 Apple 侧的完成动作；改名、改期等 Apple-only 编辑会在下一次同步恢复为 EO 当前值。若 Apple 镜像缺失，则保留 EO 记录并重新创建镜像。
 - Web/Supabase 仍是 EO 业务 source of truth。Swift 只读写 EventKit，账户级逻辑关联存在 `eventkit_logical_links`；`eventkit_links` 是 installation binding，保留每次安装的本地 identifiers 与三方基线。EventKit installation ID 仍使用 UserDefaults，删除重装可变化；HealthKit Keychain identity 保持独立。
 - 发布 domain routes 前必须先应用 `supabase/migrations/202609300001_eventkit_reminder_domain_routes.sql`，使 `eventkit_links` 可以记录通用 EO Reminder 映射。
-- Calendar 的新事件发现使用设备本地时间 `2026-10-01 00:00` 到同步时刻未来 365 天的窗口；已有 mapping 的事件不受该窗口限制。EO Calendar 批量列表按 ID 游标分页，mapping 列表也完整分页；已关联 Calendar/Task 优先按 mapping 的 EO ID 直接读取，只有 HTTP 404 才表示 EO 记录不存在。
+- Calendar 的新事件发现以 `2026-10-01` 为日期下界，按季度分页向未来推进，不设置永久截止日期；已有 mapping 同样遵守读取日期范围，范围外只暂停并保留关联，不触发删除。EO Calendar 批量列表按 ID 游标分页，mapping 列表也完整分页；已关联 Calendar/Task 优先按 mapping 的 EO ID 直接读取，只有 HTTP 404 才表示 EO 记录不存在。
 - Reminders 批量发现使用未完成项和最近 30 天完成项。已关联 Apple 对象若不在批量结果中，先用 `eventkit.getItem` 按原 identifier 查询，并尝试 external identifier 恢复；返回 `found / missing / unavailable`。实时权限不足、原 Calendar/List 或 source 不可读、匹配有歧义时不能确认删除。来源 Off 时暂停；只有明确 `missing` 才删除对应 EO Calendar 或重建未完成 Task 镜像。Task 重建以当前 completed 为准，旧完成基线不会阻止 reopen；已完成 Task 不重建。
 - Calendar 新导入通过 `/api/eventkit/calendar-import` 和 `import_eventkit_calendar_event` RPC 原子识别/创建 EO event 与 mapping；事务失败不遗留 EO event，提交后的重试复用原 ID。发布 Web 前必须应用 `supabase/migrations/202610040001_eventkit_calendar_import.sql`。后续抗重装迁移 `202610050001_eventkit_logical_links.sql` 将幂等身份提升到账户级，跨 installation 重试复用原 EO ID；不清理历史重复记录。
 - 新 Host 在 bridge v1 增加 `eventkit.getItem`，批量读取权限/来源异常会报错，既有 Reminder identifier 保存时查找失败也报错而非隐式新建。Web 通过 `host.getInfo` 检测；旧 IPA 缺少 getItem 时保留批量未读到的关联，不删除/重建。窗口外已关联状态更新与明确删除检测需要新 IPA。部署顺序：应用迁移 → 部署兼容 Web → 按原签名/安装链构建并安装新 IPA；不新增 framework、权限或 entitlement。
@@ -349,7 +351,7 @@ Settings 中 Native Notifications 和 Browser push 是两个独立 channel。Nat
 
 EventKit 编排对单次只读步骤设置 30 秒等待上限，包括账户偏好、EO GET、Apple 批量读取/关联恢复与能力检测。超时报告具体步骤并结束该轮，不将超时当作空列表或删除依据；迟到的只读响应不会恢复该轮业务写入。已提交更改保持，完成通知超时则降级为本地数据刷新事件。写入与权限请求不使用此超时包装，不因超时重放写入；既有调度时机、身份校验及 Native 在途操作锁保留。此保护不能证明真机卡住的具体原因，需要更新本地包后依据报错步骤继续排查。
 
-EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。Web 复用本轮完整分页 Calendar 和 Tasks 的批量读取结果；窗口外或批次缺失的 EO 记录才按 ID 单独读取，只有明确 404 表示不存在。关联恢复安全屏障完成后先核对 Calendar，已提交的 Calendar 变化立即通过 bridge v1 的 `host.notifyDataChanged` 通知页面，再处理 Reminder 镜像；其余已提交的 `tasks / reminders` 变化在 single-flight 结束时通知。已成功通知的 Calendar domain 不重复发送，后续失败仍报告错误并保留已提交变化；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
+EventKit 完整同步仍由 Web 编排，Swift 只读写 Apple 对象。Web 复用本轮完整分页 Calendar 和 Tasks 的批量读取结果；窗口外或批次缺失的 EO 记录才按 ID 单独读取，只有明确 404 表示不存在。本轮选择的关联恢复安全屏障完成后先核对 Calendar，已提交的 Calendar 变化立即通过 bridge v1 的 `host.notifyDataChanged` 通知页面，再处理 Reminder 镜像；其余已提交的 `tasks / reminders` 变化在 single-flight 结束时通知。已成功通知的 Calendar domain 不重复发送，后续失败仍报告错误并保留已提交变化；Swift 经现有生产同源、main-frame 和方法白名单校验，向当前 WKWebView 发出 `eo:data-changed`，detail 为 `{ domains, source: "eventkit" }`。方法也接受 `health` domain 和 `healthkit` source，供后续 Native 同步复用，本轮不改变 HealthKit 同步流程。
 
 旧 IPA 未声明该方法或通知调用失败时，Web 本地发出相同事件；通知失败不撤销已提交的数据。无 EO 变化的同步不发通知；若同步后段失败但前段已提交 EO 变化，仍通知这些已提交的 domains。Homepage 的 client 日历缓存只 refetch 当前日期及可见月份，其他缓存失效，选中日期、展开状态和未保存日记保持；Tasks/Reminders 变化另用 `router.refresh()` 更新服务端 Due 卡片，不跳转、不整页 reload。新事件不是 EventKit scheduler 的触发源，刷新组件不启动同步，原启动/前台/store-change/定时等触发时机不变。
 

@@ -253,6 +253,19 @@ final class HealthLocalStore {
             try setMetadataUnlocked("readAuthorizationEpoch", value: UUID().uuidString)
         }
     }
+    func prepareAppleReadScope() throws {
+        try locked {
+            guard metadata("appleReadScope") != AppleReadScope.firstDay else { return }
+            try execute("BEGIN IMMEDIATE")
+            do {
+                // Restart only query cursors. Samples, cached records and every outbox are retained.
+                try execute("DELETE FROM anchors")
+                try setMetadataUnlocked("readAuthorizationEpoch", value: UUID().uuidString)
+                try setMetadataUnlocked("appleReadScope", value: AppleReadScope.firstDay)
+                try execute("COMMIT")
+            } catch { try? execute("ROLLBACK"); throw error }
+        }
+    }
 
     func commitReadDelta(metric: HealthReadMetric, delta: HealthReadDelta, authorizationEpoch: String? = nil, now: Date = Date()) throws {
         try locked {

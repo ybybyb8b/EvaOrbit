@@ -86,9 +86,8 @@ final class SystemHealthKitClient: HealthKitReading {
     func anchoredReadDelta(for metric: HealthReadMetric, encodedAnchor: Data?) async throws -> HealthReadDelta {
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
         return try await withCheckedThrowingContinuation { continuation in
-            // Overlap rather than strict start: retain the preceding night's stage fragments.
-            // Workout follows the existing October history boundary; never import all history.
-            let predicate = metric == .sleep ? HKQuery.predicateForSamples(withStart: HealthSleepSyncScope.queryStart, end: nil, options: []) : metric == .workout ? HKQuery.predicateForSamples(withStart: HealthWorkoutSyncScope.queryStart, end: nil, options: .strictStartDate) : nil
+            // Sleep keeps the complete preceding night and is filtered by wake date.
+            let predicate = metric == .sleep ? HKQuery.predicateForSamples(withStart: HealthSleepSyncScope.queryStart, end: nil, options: []) : HKQuery.predicateForSamples(withStart: AppleReadScope.queryStart, end: nil, options: .strictStartDate)
             let query = HKAnchoredObjectQuery(type: metric.sampleType, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
@@ -98,7 +97,7 @@ final class SystemHealthKitClient: HealthKitReading {
                     let added = (samples ?? []).compactMap { sample -> HealthReadSample? in
                         let recordedZone = (sample.metadata?[HKMetadataKeyTimeZone] as? String).flatMap(TimeZone.init(identifier:))
                         let zone = recordedZone ?? .current
-                        if metric == .workout && !HealthWorkoutSyncScope.includes(startAt: sample.startDate, timeZone: zone) { return nil }
+                        guard metric == .sleep || AppleReadScope.includes(sample.startDate, timeZone: zone) else { return nil }
                         var result = HealthReadSample(
                             sampleId: sample.uuid.uuidString.lowercased(), metric: metric,
                             startAt: formatter.string(from: sample.startDate), endAt: formatter.string(from: sample.endDate),
@@ -141,13 +140,13 @@ final class SystemHealthKitClient: HealthKitReading {
         precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
-        let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
+        let predicate = HKQuery.predicateForSamples(withStart: AppleReadScope.queryStart, end: nil, options: .strictStartDate)
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {
-                    let added = (samples as? [HKQuantitySample] ?? []).map { sample in
+                    let added = (samples as? [HKQuantitySample] ?? []).filter { Self.inReadScope($0) }.map { sample in
                         HealthEnergySample(
                             uuid: sample.uuid.uuidString.lowercased(),
                             metric: metric,
@@ -168,15 +167,20 @@ final class SystemHealthKitClient: HealthKitReading {
             store.execute(query)
         }
     }
+    private static func inReadScope(_ sample: HKSample) -> Bool {
+        let zone = (sample.metadata?[HKMetadataKeyTimeZone] as? String).flatMap(TimeZone.init(identifier:)) ?? .current
+        return AppleReadScope.includes(sample.startDate, timeZone: zone)
+    }
 
     func recentSamples(for metric: HealthMetric, window: HealthDateWindow) async throws -> [HealthEnergySample] {
+        guard window.end > AppleReadScope.start() else { return [] }
         precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
+        let predicate = HKQuery.predicateForSamples(withStart: max(window.start, AppleReadScope.start()), end: window.end, options: .strictStartDate)
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
                 if let error { continuation.resume(throwing: error); return }
-                let values = (samples as? [HKQuantitySample] ?? []).map { sample in
+                let values = (samples as? [HKQuantitySample] ?? []).filter { Self.inReadScope($0) }.map { sample in
                     HealthEnergySample(
                         uuid: sample.uuid.uuidString.lowercased(),
                         metric: metric,
@@ -192,9 +196,10 @@ final class SystemHealthKitClient: HealthKitReading {
     }
 
     func dailyCumulativeSum(for metric: HealthMetric, window: HealthDateWindow) async throws -> Double {
+        guard window.end > AppleReadScope.start() else { return 0 }
         precondition(metric.isEnergy)
         let type = try quantityType(for: metric)
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: [.strictStartDate, .strictEndDate])
+        let predicate = HKQuery.predicateForSamples(withStart: max(window.start, AppleReadScope.start()), end: window.end, options: [.strictStartDate, .strictEndDate])
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(quantityType: type, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, error in
                 if let error { continuation.resume(throwing: error); return }
@@ -207,13 +212,13 @@ final class SystemHealthKitClient: HealthKitReading {
     func anchoredBodyMassDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthBodyMassDelta {
         let type = try quantityType(for: .bodyMass)
         let anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
-        let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
+        let predicate = HKQuery.predicateForSamples(withStart: AppleReadScope.queryStart, end: nil, options: .strictStartDate)
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {
-                    let added = (samples as? [HKQuantitySample] ?? []).map { sample in
+                    let added = (samples as? [HKQuantitySample] ?? []).filter { Self.inReadScope($0) }.map { sample in
                         HealthBodyMassSample(
                             uuid: sample.uuid.uuidString.lowercased(),
                             occurredAt: sample.startDate,
@@ -261,13 +266,13 @@ final class SystemHealthKitClient: HealthKitReading {
 
     func anchoredMenstrualFlowDelta(encodedAnchor: Data?, initialStart: Date?) async throws -> HealthMenstrualFlowDelta {
         let type = try menstrualFlowType(), anchor = try encodedAnchor.map(HealthAnchorCodec.decode)
-        let predicate = anchor == nil ? initialStart.map { HKQuery.predicateForSamples(withStart: $0, end: nil, options: .strictStartDate) } : nil
+        let predicate = HKQuery.predicateForSamples(withStart: AppleReadScope.queryStart, end: nil, options: .strictStartDate)
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: HKObjectQueryNoLimit) { _, samples, deleted, newAnchor, error in
                 if let error { continuation.resume(throwing: error); return }
                 guard let newAnchor else { continuation.resume(throwing: HealthKitClientError.missingAnchor); return }
                 do {
-                    let added = (samples as? [HKCategorySample] ?? []).map { sample in
+                    let added = (samples as? [HKCategorySample] ?? []).filter { Self.inReadScope($0) }.map { sample in
                         let value = Self.flowValue(sample.value)
                         return HealthMenstrualFlowSample(uuid: sample.uuid.uuidString.lowercased(), startDate: sample.startDate, endDate: sample.endDate, flow: value, cycleStart: (sample.metadata?[HKMetadataKeyMenstrualCycleStart] as? NSNumber)?.boolValue ?? false, sourceBundle: sample.sourceRevision.source.bundleIdentifier, sourceName: sample.sourceRevision.source.name, syncIdentifier: sample.metadata?[HKMetadataKeySyncIdentifier] as? String, syncVersion: (sample.metadata?[HKMetadataKeySyncVersion] as? NSNumber)?.intValue)
                     }

@@ -1,6 +1,9 @@
 import {nativeApiFetch} from "./native-api.ts";
 import {apiResponseError} from "./response-error.ts";
 import {requestFailure,requestOperation} from "./request-diagnostics.ts";
+import {getEventKitSyncProgress,reportEventKitSyncProgress} from "./eventkit-sync-progress.ts";
+import {appleReadFirstDay,appleReadStart,appleDateInScope,appleItemInScope,calendarPriorityWindow,calendarReadPage} from "./apple-read-scope.ts";
+import {eventKitWorkState} from "./eventkit-work-state.ts";
 import { eventKitRead, EventKitReadTimeout } from "./eventkit-read.ts";
 import { dataChangedEvent, notifyDataChanged, type DataDomain } from "./data-changed.ts";
 import type { CalendarEvent,Reminder,Task } from "./types.ts";
@@ -22,12 +25,14 @@ export type EventKitSource={identifier:string;title:string;sourceIdentifier:stri
 export type EventKitStatus={available:boolean;installationId:string;calendarPermission:string;reminderPermission:string;calendars:EventKitSource[];reminderLists:EventKitSource[]};
 export type EventKitModes=Record<string,EventKitSyncMode>;
 type Item=Record<string,unknown>;
-type Link={id:number;entity_type:"task"|"reminder"|"calendar_event";eo_id:number;eventkit_entity_type:"reminder"|"event";calendar_item_identifier:string;external_identifier:string|null;calendar_identifier:string;source_identifier:string;last_synced_snapshot:Item;logical_link_id?:string;recovery_token?:string;binding_state?:"current"|"recovery"|"pending";identity_conflict?:boolean;eo_record_missing?:boolean;bindings?:Item[];external_identifiers?:string[]};
-export type EventKitSyncResult={imported:number;exported:number;merged:number;conflicts:Array<{entityType:string;eoId:number;fields:string[]}>;skippedEvents:Array<{title:string;calendarTitle:string;startAt:string;endAt:string}>;lastSync:string;calendarDiagnostics?:{selectedCalendars:number;readEvents:number;newImports:number;updatedEvents:number;recurringSkipped:number;from:string;to:string};reminderDiagnostics?:{selectedLists:number;readReminders:number;imported:number;exported:number;merged:number;conflicts:number;excludedReminders:number}};
+type Link={id:number;entity_type:"task"|"reminder"|"calendar_event";eo_id:number;eventkit_entity_type:"reminder"|"event";calendar_item_identifier:string;external_identifier:string|null;calendar_identifier:string;source_identifier:string;last_synced_snapshot:Item;last_synced_hash?:string;logical_link_id?:string;recovery_token?:string;binding_state?:"current"|"recovery"|"pending";identity_conflict?:boolean;eo_record_missing?:boolean;bindings?:Item[];external_identifiers?:string[]};
+export type EventKitSyncResult={imported:number;exported:number;merged:number;conflicts:Array<{entityType:string;eoId:number;fields:string[]}>;skippedEvents:Array<{title:string;calendarTitle:string;startAt:string;endAt:string}>;lastSync:string;pendingRecovery?:{recent:number;history:number;discoveries:number};calendarDiagnostics?:{selectedCalendars:number;readEvents:number;newImports:number;updatedEvents:number;recurringSkipped:number;from:string;to:string};reminderDiagnostics?:{selectedLists:number;readReminders:number;imported:number;exported:number;merged:number;conflicts:number;excludedReminders:number}};
 export function eventKitSyncDiagnosticText(result:EventKitSyncResult){
   const calendar=result.calendarDiagnostics,missing=result.conflicts.filter(conflict=>conflict.fields.includes("eo_missing")).length,identity=result.conflicts.filter(conflict=>conflict.fields.includes("identity")).length;
   const reminder=result.reminderDiagnostics;
-  return [calendar?`Calendar：启用 ${calendar.selectedCalendars} 个日历，读取 ${calendar.readEvents} 条，新导入 ${calendar.newImports} 条，更新 ${calendar.updatedEvents} 条。读取范围 ${calendar.from} 至 ${calendar.to}。`:"",calendar?.selectedCalendars===0?"请将事件所在日历设为 Import only。":"",calendar?.recurringSkipped?`本轮读取中有 ${calendar.recurringSkipped} 条重复事件，当前规则不导入重复事件。`:"",reminder?`Reminders：读取 ${reminder.selectedLists} 个列表、${reminder.readReminders} 条提醒，从 Apple 同步到 EO ${reminder.imported} 条，写入 Apple ${reminder.exported} 条，双向合并 ${reminder.merged} 条，${reminder.conflicts} 个冲突需处理。`:"",reminder?.selectedLists===0?"尚未启用 Reminder 来源或设置 EO → Reminder List。":"",reminder?.excludedReminders?`读取的提醒中有 ${reminder.excludedReminders} 条标题包含“续火花”，已按规则排除。`:"",missing?`暂停 ${missing} 条旧关联：EO 原记录不存在，关联和 Apple 对象均保留。`:"",identity?`有 ${identity} 条关联无法唯一确认，相应导入或镜像创建已暂停。`:""].filter(Boolean).join(" ");
+  const pending=result.pendingRecovery;
+  const continuation=pending&&(pending.recent||pending.history||pending.discoveries)?`本轮已保存：近期待处理 ${pending.recent} 条，历史待核对 ${pending.history} 条，新内容待处理 ${pending.discoveries} 条；App 打开期间分批继续。`:"";
+  return [calendar?`Calendar：启用 ${calendar.selectedCalendars} 个日历，读取 ${calendar.readEvents} 条，新导入 ${calendar.newImports} 条，更新 ${calendar.updatedEvents} 条。读取范围 ${calendar.from} 至 ${calendar.to}。`:"",calendar?.selectedCalendars===0?"请将事件所在日历设为 Import only。":"",calendar?.recurringSkipped?`本轮读取中有 ${calendar.recurringSkipped} 条重复事件，当前规则不导入重复事件。`:"",reminder?`Reminders：读取 ${reminder.selectedLists} 个列表、${reminder.readReminders} 条提醒，从 Apple 同步到 EO ${reminder.imported} 条，写入 Apple ${reminder.exported} 条，双向合并 ${reminder.merged} 条，${reminder.conflicts} 个冲突需处理。`:"",reminder?.selectedLists===0?"尚未启用 Reminder 来源或设置 EO → Reminder List。":"",reminder?.excludedReminders?`读取的提醒中有 ${reminder.excludedReminders} 条标题包含“续火花”，已按规则排除。`:"",missing?`暂停 ${missing} 条旧关联：EO 原记录不存在，关联和 Apple 对象均保留。`:"",identity?`有 ${identity} 条关联无法唯一确认，相应导入或镜像创建已暂停。`:"",continuation].filter(Boolean).join(" ");
 }
 let activeEventKitSync:Promise<EventKitSyncResult>|null=null;
 export type EventKitSyncScope="all"|"calendar"|"reminder";
@@ -80,12 +85,12 @@ async function json(url:string,init?:RequestInit,allowMissing=false){
   })();
   return (init?.method??"GET")==="GET"?eventKitRead(request,`EO ${url.split("?")[0]}`):request;
 }
-export async function eventKitCalendarRecords(from:Date,to:Date){const records:CalendarEvent[]=[];let afterId=0;for(;;){const page=await json(`/api/calendar-events?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}&limit=500&afterId=${afterId}`) as CalendarEvent[];if(!page.length)return records;const next=page[page.length-1].id;if(next<=afterId)throw new Error("Calendar pagination did not advance");records.push(...page);afterId=next;}}
+export async function eventKitCalendarRecords(from:Date,to?:Date){const records:CalendarEvent[]=[];let afterId=0;for(;;){const page=await json(`/api/calendar-events?from=${encodeURIComponent(from.toISOString())}${to?`&to=${encodeURIComponent(to.toISOString())}`:""}&limit=500&afterId=${afterId}`) as CalendarEvent[];if(!page.length)return records;const next=page[page.length-1].id;if(next<=afterId)throw new Error("Calendar pagination did not advance");records.push(...page);afterId=next;}}
 async function importCalendarEvent(status:EventKitStatus,apple:Item,snapshot:Item){return json("/api/eventkit/calendar-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({installationId:status.installationId,apple,snapshot})}) as Promise<{id:number}>;}
 export function eventKitNotificationOwner(item:Item):EventKitNotificationOwner{return Array.isArray(item.alarms)&&item.alarms.length>0?"apple":"eo";}
 export function eventKitSourceEnabled(calendarIdentifier:string,modes:EventKitModes){return Boolean(modes[calendarIdentifier]&&modes[calendarIdentifier]!=="off");}
 export function eventKitCalendarReadModes(calendars:Pick<EventKitSource,"identifier">[],modes:EventKitModes){const next={...modes};for(const calendar of calendars)if(next[calendar.identifier]==="two_way")next[calendar.identifier]="import";return next;}
-export function eventKitCalendarSyncRange(now=new Date()){const from=new Date(2026,9,1),to=new Date(now);to.setDate(to.getDate()+365);return{from,to};}
+export function eventKitCalendarSyncRange(_now=new Date()){void _now;return{from:appleReadStart(),to:undefined};}
 export function eventKitTaskNeedsAppleMirror(task:Pick<Task,"completed">){return !task.completed;}
 export function eventKitReminderExcluded(...items:Array<{title?:unknown}|null|undefined>){return items.some(item=>String(item?.title??"").includes("续火花"));}
 export function eventKitLinkScope<T extends{entity_type:string;calendar_identifier:string}>(links:T[],entityType:string,modes:EventKitModes){const all=links.filter(link=>link.entity_type===entityType);return{all,active:all.filter(link=>eventKitSourceEnabled(link.calendar_identifier,modes))};}
@@ -111,19 +116,22 @@ async function notifyCommittedChanges(domains:DataDomain[]){
     if(typeof window!=="undefined")window.dispatchEvent(new CustomEvent(dataChangedEvent,{detail:{domains,source:"eventkit"}}));
   });
 }
-export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},scope:EventKitSyncScope="all"){
+export function synchronizeEventKit(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},scope:EventKitSyncScope="all",maintenance=false){
   const guardSession=captureNativeSessionGuard();
   return runEventKitSyncSingleFlight(async()=>{
     guardSession();checkSession=guardSession;const changed=new Set<DataDomain>();
+    reportEventKitSyncProgress({scope,phase:"reading",completed:0,total:0});let failed=true,recentPending=0,historyPending=0,discoveriesPending=0;
     const sources=scope==="calendar"?status.calendars:status.reminderLists;
     const scopedModes=scope==="all"?modes:Object.fromEntries(sources.map(source=>[source.identifier,modes[source.identifier]??"off"]));
     try{
-      const result=await performEventKitSync(status,scopedModes,scope==="calendar"?{}:routes,changed,scope);
+      const result=await performEventKitSync(status,scopedModes,scope==="calendar"?{}:routes,changed,scope,maintenance);
+      recentPending=result.pendingRecovery?.recent??0;historyPending=result.pendingRecovery?.history??0;discoveriesPending=result.pendingRecovery?.discoveries??0;
+      failed=false;
       return {...result,calendarDiagnostics:scope==="reminder"?undefined:result.calendarDiagnostics,reminderDiagnostics:scope==="calendar"?undefined:result.reminderDiagnostics};
-    }finally{try{guardSession();if(changed.size)await notifyCommittedChanges([...changed]);}finally{checkSession=undefined;}}
+    }finally{try{guardSession();if(changed.size)await notifyCommittedChanges([...changed]);}catch(error){failed=true;throw error;}finally{checkSession=undefined;const previous=getEventKitSyncProgress();reportEventKitSyncProgress({scope,phase:failed?"failed":"complete",completed:previous?.completed??0,total:previous?.total??0,recentPending,historyPending,discoveriesPending});}}
   },scope);
 }
-async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},changed=new Set<DataDomain>(),scope:EventKitSyncScope="all"):Promise<EventKitSyncResult>{
+async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,routes:EventKitReminderRoutes={},changed=new Set<DataDomain>(),scope:EventKitSyncScope="all",maintenance=false):Promise<EventKitSyncResult>{
   // Track committed EO mutations only; reads and mapping-only writes never request a refresh.
   async function json(url:string,init?:RequestInit,allowMissing=false){const result=await eventKitJSON(url,init,allowMissing);if(init?.method&&init.method!=="GET"){if(url.startsWith("/api/calendar-events"))changed.add("calendar");else if(url.startsWith("/api/tasks")){changed.add("tasks");changed.add("reminders");}else if(url.startsWith("/api/reminders"))changed.add("reminders");}return result;}
   const effectiveModes={...modes};for(const identifier of Object.values(routes))if(identifier)effectiveModes[identifier]="two_way";
@@ -139,9 +147,13 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
   const linkedReminderIDs = Object.keys(routes).length ? links.filter(link => link.eventkit_entity_type === "reminder").map(link => link.calendar_identifier) : [];
   const reminderIDs = [...new Set([...status.reminderLists.filter(source => eventKitSourceEnabled(source.identifier, effectiveModes)).map(source => source.identifier), ...linkedReminderIDs])].filter(identifier => status.reminderLists.some(source => source.identifier === identifier));
   const { from, to } = eventKitCalendarSyncRange();
+  const work=eventKitWorkState(status.installationId,scope,[...calendarIDs,...reminderIDs]);
+  if(maintenance&&work.state.pending===0&&Date.now()>work.state.retryAt){work.state.checked=[];work.state.cursor=appleReadFirstDay;work.state.foregroundDone=false;work.state.retryAt=Date.now()+6*3600_000;}
+  const readingPage=maintenance&&work.state.foregroundDone;
+  const window=readingPage?calendarReadPage(new Date(`${work.state.cursor}T00:00:00`)):calendarPriorityWindow();
   const [appleEvents, appleReminders, tasks, reminders, events] = await Promise.all([
-    syncCalendar ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "calendar", calendarIdentifiers: calendarIDs, from: from.toISOString(), to: to.toISOString()}).then(value => value.items) : [] as Item[],
-    reminderIDs.length ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "reminder", calendarIdentifiers: reminderIDs, completedSince: new Date(Date.now() - 30 * 86400000).toISOString()}).then(value => value.items) : [] as Item[],
+    syncCalendar ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "calendar", calendarIdentifiers: calendarIDs, from: window.from.toISOString(), to: window.to.toISOString()}).then(value => value.items.filter(item=>appleItemInScope("calendar",item))) : [] as Item[],
+    reminderIDs.length ? nativeCall<{items: Item[]}>("eventkit.fetch", {kind: "reminder", calendarIdentifiers: reminderIDs, completedSince: from.toISOString()}).then(value => value.items.filter(item=>appleItemInScope("reminder",item))) : [] as Item[],
     syncReminders ? json("/api/tasks?status=all") as Promise<Task[]> : [],
     syncReminders ? json("/api/reminders") as Promise<Reminder[]> : [],
     syncCalendar ? eventKitCalendarRecords(from, to) : [],
@@ -154,24 +166,26 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
     const record=await json(entityType==="calendar_event"?`/api/calendar-events/${id}`:`/api/tasks/${id}`,undefined,true) as CalendarEvent|Task|null;
     records.set(id,record);return record;
   }
-  const calendarDiagnostics={selectedCalendars:calendarIDs.length,readEvents:appleEvents.length,newImports:0,updatedEvents:0,recurringSkipped:appleEvents.filter(item=>item.isRecurring).length,from:`${from.getFullYear()}-${String(from.getMonth()+1).padStart(2,"0")}-${String(from.getDate()).padStart(2,"0")}`,to:`${to.getFullYear()}-${String(to.getMonth()+1).padStart(2,"0")}-${String(to.getDate()).padStart(2,"0")}`};
+  const calendarDiagnostics={selectedCalendars:calendarIDs.length,readEvents:appleEvents.length,newImports:0,updatedEvents:0,recurringSkipped:appleEvents.filter(item=>item.isRecurring).length,from:appleReadFirstDay,to:"无固定截止日期（分段读取）"};
   let lookupCapability:Promise<boolean>|undefined;
-  async function lookupApple(link:Link):Promise<{status:"found";item:Item}|{status:"missing"|"unavailable"}>{
+  async function lookupApple(link:Link):Promise<{status:"found";item:Item}|{status:"missing"|"unavailable"|"out_of_scope"}>{
     const sources=link.eventkit_entity_type==="event"?status.calendars:status.reminderLists,permission=link.eventkit_entity_type==="event"?status.calendarPermission:status.reminderPermission,syncModes=link.eventkit_entity_type==="event"?calendarModes:effectiveModes;
     if(!["authorized","full_access"].includes(permission)||!eventKitSourceEnabled(link.calendar_identifier,syncModes)||!sources.some(source=>source.identifier===link.calendar_identifier&&source.sourceIdentifier===link.source_identifier))return{status:"unavailable"};
     if(link.logical_link_id){
       recoveryCapability??=getNativeHostInfo().then(info=>hostSupports(info,"eventkit.recover"));
       if(!await recoveryCapability)return{status:"unavailable"};
       const result=await nativeCall<{status:string;item?:Item}>("eventkit.recover",{kind:link.eventkit_entity_type==="event"?"calendar":"reminder",calendarIdentifiers:sources.filter(source=>eventKitSourceEnabled(source.identifier,syncModes)).map(source=>source.identifier),bindings:link.bindings??[link],externalIdentifiers:link.external_identifiers??[],recoveryToken:link.recovery_token});
-      return result.status==="found"&&result.item?{status:"found",item:result.item}:{status:result.status==="missing"?"missing":"unavailable"};
+      if(result.status==="found"&&result.item&&!appleItemInScope(link.eventkit_entity_type==="event"?"calendar":"reminder",result.item))return{status:"out_of_scope"};
+      return result.status==="found"&&result.item?{status:"found",item:result.item}:{status:result.status==="missing"?"missing":result.status==="out_of_scope"?"out_of_scope":"unavailable"};
     }
     lookupCapability??=getNativeHostInfo().then(info=>hostSupports(info,"eventkit.getItem"));
     if(!await lookupCapability)return{status:"unavailable"};
     const result=await nativeCall<{status:string;item?:Item}>("eventkit.getItem",{kind:link.eventkit_entity_type==="event"?"calendar":"reminder",calendarItemIdentifier:link.calendar_item_identifier,externalIdentifier:link.external_identifier,calendarIdentifier:link.calendar_identifier,sourceIdentifier:link.source_identifier});
+    if(result.status==="found"&&result.item&&!appleItemInScope(link.eventkit_entity_type==="event"?"calendar":"reminder",result.item))return{status:"out_of_scope"};
     if(result.status==="found"&&result.item)return{status:"found",item:result.item};
-    return{status:result.status==="missing"?"missing":"unavailable"};
+    return{status:result.status==="missing"?"missing":result.status==="out_of_scope"?"out_of_scope":"unavailable"};
   }
-  let imported=0,exported=0,merged=0;const conflicts:Array<{entityType:string;eoId:number;fields:string[]}>=[],skippedEvents:EventKitSyncResult["skippedEvents"]=[],paused=new Set<Link>(),blockedKinds=new Set<string>();
+  let imported=0,exported=0,merged=0;const conflicts:Array<{entityType:string;eoId:number;fields:string[]}>=[],skippedEvents:EventKitSyncResult["skippedEvents"]=[],paused=new Set<Link>(),outOfScope=new Set<Link>(),blockedKinds=new Set<string>();
   function pause(link:Link){paused.add(link);blockedKinds.add(link.eventkit_entity_type);conflicts.push({entityType:link.entity_type,eoId:link.eo_id,fields:["identity"]});}
   function pauseMissingEO(link:Link){
     paused.add(link);conflicts.push({entityType:link.entity_type,eoId:link.eo_id,fields:["eo_missing"]});
@@ -181,43 +195,105 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
   function matchesLink(apple:Item,link:Link){return apple.calendarItemIdentifier===link.calendar_item_identifier||Boolean(apple.externalIdentifier&&(apple.externalIdentifier===link.external_identifier||link.external_identifiers?.includes(String(apple.externalIdentifier))))||Boolean(link.recovery_token&&apple.url===eventKitRecoveryURL(link.recovery_token))||Boolean(link.bindings?.some(binding=>binding.calendar_item_identifier===apple.calendarItemIdentifier||(apple.externalIdentifier&&binding.external_identifier===apple.externalIdentifier)));}
   let recoveryCapability:Promise<boolean>|undefined;
   // Recovery is a barrier before any new import/export. A missed old link is never an unlinked object.
-  for(const link of links){
-    if(link.eo_record_missing){pauseMissingEO(link);continue;}
+  async function recoverLink(link:Link){
+    if(link.eo_record_missing){pauseMissingEO(link);return;}
     // Older servers omit the existence flag; recovery must still verify EO before binding.
     if(link.eo_record_missing===undefined&&link.binding_state&&link.binding_state!=="current"){
       const eo=link.entity_type==="reminder"?reminders.find(item=>item.id===link.eo_id):await readEO(link.entity_type,link.eo_id);
-      if(!eo){pauseMissingEO(link);continue;}
+      if(!eo){pauseMissingEO(link);outOfScope.add(link);return;}
     }
-    if(link.eventkit_entity_type==="reminder"&&eventKitReminderExcluded(link.last_synced_snapshot,link.entity_type==="task"?tasks.find(item=>item.id===link.eo_id):reminders.find(item=>item.id===link.eo_id))){paused.add(link);blockedKinds.add("reminder");continue;}
-    if(link.identity_conflict){pause(link);continue;}
-    if(!link.binding_state)continue;
+    if(link.eventkit_entity_type==="reminder"&&eventKitReminderExcluded(link.last_synced_snapshot,link.entity_type==="task"?tasks.find(item=>item.id===link.eo_id):reminders.find(item=>item.id===link.eo_id))){paused.add(link);blockedKinds.add("reminder");return;}
+    if(link.identity_conflict){pause(link);return;}
+    if(!link.binding_state)return;
     if(link.binding_state==="current"){
       const sources=link.eventkit_entity_type==="event"?status.calendars:status.reminderLists;
       if(!sources.some(source=>source.identifier===link.calendar_identifier&&source.sourceIdentifier===link.source_identifier))pause(link);
-      continue;
+      return;
     }
     const ids=link.eventkit_entity_type==="event"?calendarIDs:reminderIDs,permission=link.eventkit_entity_type==="event"?status.calendarPermission:status.reminderPermission;
-    if(!ids.length||!["authorized","full_access"].includes(permission)){pause(link);continue;}
+    if(!ids.length||!["authorized","full_access"].includes(permission)){pause(link);return;}
     recoveryCapability??=getNativeHostInfo().then(info=>hostSupports(info,"eventkit.recover"));
-    if(!await recoveryCapability){pause(link);continue;}
+    if(!await recoveryCapability){pause(link);return;}
     const recovered=await nativeCall<{status:string;item?:Item}>("eventkit.recover",{kind:link.eventkit_entity_type==="event"?"calendar":"reminder",calendarIdentifiers:ids,bindings:link.bindings??[],externalIdentifiers:link.external_identifiers??[],recoveryToken:link.recovery_token});
+    if(recovered.status==="out_of_scope"){paused.add(link);outOfScope.add(link);return;}
     if(recovered.status!=="found"||!recovered.item){
-      if(link.binding_state==="recovery"&&recovered.status==="missing")continue;
+      if(link.binding_state==="recovery"&&recovered.status==="missing")return;
       // Pending reservations have no old Apple identity; a complete marker scan can safely retry creation.
       if(link.binding_state==="pending"&&recovered.status==="missing"&&link.eventkit_entity_type==="reminder"){
         const eo=link.entity_type==="task"?tasks.find(item=>item.id===link.eo_id):reminders.find(item=>item.id===link.eo_id),domain=link.entity_type==="task"?"tasks":eo?eventKitReminderDomain(eo as Reminder):null,destination=domain?routes[domain]:null;
-        if(eo&&(link.entity_type==="task"?!eventKitTaskNeedsAppleMirror(eo as Task):!eventKitHasNextOccurrence(eo as Reminder))){paused.add(link);continue;}
-        if(eo&&destination&&(link.entity_type==="task"?eventKitTaskNeedsAppleMirror(eo as Task):eventKitHasNextOccurrence(eo as Reminder))){const snapshot=link.entity_type==="task"?taskSnapshot(eo as Task):reminderSnapshot(eo as Reminder),apple=await createReminderLink(status,link.entity_type as "task"|"reminder",link.eo_id,snapshot,destination);appleReminders.push(apple);link.calendar_item_identifier=String(apple.calendarItemIdentifier);link.calendar_identifier=String(apple.calendarIdentifier);link.source_identifier=String(apple.sourceIdentifier);link.external_identifier=String(apple.externalIdentifier??"")||null;link.last_synced_snapshot=snapshot;link.binding_state="current";exported++;continue;}
+        if(eo&&(link.entity_type==="task"?!eventKitTaskNeedsAppleMirror(eo as Task):!eventKitHasNextOccurrence(eo as Reminder))){paused.add(link);return;}
+        if(eo&&destination&&(link.entity_type==="task"?eventKitTaskNeedsAppleMirror(eo as Task):eventKitHasNextOccurrence(eo as Reminder))){const snapshot=link.entity_type==="task"?taskSnapshot(eo as Task):reminderSnapshot(eo as Reminder),apple=await createReminderLink(status,link.entity_type as "task"|"reminder",link.eo_id,snapshot,destination);appleReminders.push(apple);link.calendar_item_identifier=String(apple.calendarItemIdentifier);link.calendar_identifier=String(apple.calendarIdentifier);link.source_identifier=String(apple.sourceIdentifier);link.external_identifier=String(apple.externalIdentifier??"")||null;link.last_synced_snapshot=snapshot;link.binding_state="current";exported++;return;}
       }
-      pause(link);continue;
+      pause(link);return;
     }
     const apple=recovered.item;
-    if(link.eventkit_entity_type==="reminder"&&eventKitReminderExcluded(apple)){paused.add(link);blockedKinds.add("reminder");continue;}
-    let binding;try{binding=await saveLink(status,link.entity_type,link.eo_id,link.eventkit_entity_type,apple,link.last_synced_snapshot);}catch(error){if(error instanceof EventKitRequestError&&error.code==="eventkit_eo_missing"){pauseMissingEO(link);continue;}throw error;}
+    if(!appleItemInScope(link.eventkit_entity_type==="event"?"calendar":"reminder",apple)){paused.add(link);outOfScope.add(link);return;}
+    if(link.eventkit_entity_type==="reminder"&&eventKitReminderExcluded(apple)){paused.add(link);blockedKinds.add("reminder");return;}
+    let binding;try{binding=await saveLink(status,link.entity_type,link.eo_id,link.eventkit_entity_type,apple,link.last_synced_snapshot);}catch(error){if(error instanceof EventKitRequestError&&error.code==="eventkit_eo_missing"){pauseMissingEO(link);return;}throw error;}
     Object.assign(link,{id:Number(binding?.id??link.id),calendar_item_identifier:String(apple.calendarItemIdentifier),calendar_identifier:String(apple.calendarIdentifier),source_identifier:String(apple.sourceIdentifier),external_identifier:apple.externalIdentifier??null,binding_state:"current"});
     const items=link.eventkit_entity_type==="event"?appleEvents:appleReminders;if(!items.some(item=>item.calendarItemIdentifier===apple.calendarItemIdentifier))items.push(apple);
     if(link.eventkit_entity_type==="reminder")claimedReminderIDs.add(String(apple.calendarItemIdentifier));
   }
+  const priority=calendarPriorityWindow(),processed=new Set<Link>(),checked=new Set(work.state.checked),excluded=new Set(work.state.excluded);
+  const appleIndex=new Map<string,Item>();
+  for(const [kind,items] of [["event",appleEvents],["reminder",appleReminders]] as const)for(const item of items){
+    appleIndex.set(`${kind}:local:${item.calendarItemIdentifier}`,item);
+    if(item.externalIdentifier)appleIndex.set(`${kind}:external:${item.externalIdentifier}`,item);
+    if(typeof item.url==="string")appleIndex.set(`${kind}:url:${item.url}`,item);
+  }
+  // This index only prioritizes work; native recovery still checks every candidate for ambiguity.
+  function matchedApple(link:Link){
+    const kind=link.eventkit_entity_type;
+    for(const value of [link.calendar_item_identifier,...(link.bindings??[]).map(binding=>binding.calendar_item_identifier)]){const item=appleIndex.get(`${kind}:local:${value}`);if(item)return item;}
+    for(const value of [link.external_identifier,...(link.external_identifiers??[])]){const item=appleIndex.get(`${kind}:external:${value}`);if(item)return item;}
+    return link.recovery_token?appleIndex.get(`${kind}:url:${eventKitRecoveryURL(link.recovery_token)}`):undefined;
+  }
+  const linkKeys=new Map<Link,string>();
+  await Promise.all(links.map(async link=>{
+    const eo=link.entity_type==="calendar_event"?eoRecords.calendar_event.get(link.eo_id):link.entity_type==="task"?eoRecords.task.get(link.eo_id):reminders.find(item=>item.id===link.eo_id);
+    const apple=matchedApple(link);
+    linkKeys.set(link,await eventKitSnapshotHash({identity:link.logical_link_id??`${link.entity_type}:${link.eo_id}`,binding:link.calendar_item_identifier,baseline:eventKitCanonicalSnapshot(link.last_synced_snapshot),apple:apple?eventKitCanonicalSnapshot(apple):null,eo:eo?eventKitCanonicalSnapshot({...eo}):null}));
+  }));
+  const linkKey=(link:Link)=>linkKeys.get(link)!;
+  function urgent(link:Link){
+    const apple=matchedApple(link),snapshot=apple??link.last_synced_snapshot;
+    if(link.eventkit_entity_type==="reminder"&&!snapshot.completed)return true;
+    const date=snapshot.startAt??snapshot.dueDate??snapshot.completionDate;
+    const timestamp=typeof date==="string"?Date.parse(date):NaN;
+    return timestamp>=priority.from.getTime()&&timestamp<priority.to.getTime()||Boolean(apple&&(!maintenance||!work.state.foregroundDone));
+  }
+  const available=links.filter(link=>!link.eo_record_missing&&!excluded.has(linkKey(link))),recent=available.filter(urgent).sort((a,b)=>Number(a.binding_state==="current")-Number(b.binding_state==="current")||Number(checked.has(linkKey(a)))-Number(checked.has(linkKey(b)))),history=available.filter(link=>!urgent(link)&&!checked.has(linkKey(link))).sort((a,b)=>Number(a.binding_state==="current")-Number(b.binding_state==="current"));
+  const selected=[...recent.slice(0,32),...(maintenance&&work.state.foregroundDone?history.slice(0,16):[])],selectedSet=new Set(selected);
+  for(const link of links){
+    if(link.eo_record_missing){pauseMissingEO(link);continue;}
+    if(!selectedSet.has(link))paused.add(link);
+  }
+  let checkedLinks=0;
+  reportEventKitSyncProgress({scope,phase:"recovering",completed:0,total:selected.length});
+  async function checkLink(link:Link){await recoverLink(link);processed.add(link);reportEventKitSyncProgress({scope,phase:"recovering",completed:++checkedLinks,total:selected.length});}
+  let batch:Link[]=[];
+  async function finishBatch(){
+    const results=await Promise.allSettled(batch.map(checkLink));batch=[];
+    const failure=results.find(result=>result.status==="rejected");
+    if(failure?.status==="rejected")throw failure.reason;
+  }
+  const deadline=Date.now()+8000;
+  for(const link of selected){
+    if(processed.size&&Date.now()>=deadline)break;
+    // Only Calendar identity recovery and its independent binding writes overlap.
+    // Reminder creation/completion and the reconciliation barrier remain sequential.
+    if(link.eventkit_entity_type==="event"&&link.binding_state==="recovery"){
+      batch.push(link);if(batch.length===4)await finishBatch();
+    }else{await finishBatch();await checkLink(link);}
+  }
+  await finishBatch();
+  for(const link of available)if(!processed.has(link)){
+    paused.add(link);
+    // Retain the complete identity index. Unknown old objects are never "new".
+    if(link.binding_state==="recovery"||link.binding_state==="pending"||link.identity_conflict)blockedKinds.add(link.eventkit_entity_type);
+  }
+  reportEventKitSyncProgress({scope,phase:"reconciling",completed:0,total:0});
+  let discoveryBudget=maintenance?16:32,discoveriesPending=0;
   async function reconcile(kind:"reminder"|"event",entityType:"task"|"calendar_event",appleItems:Item[],eoItems:Array<Task|CalendarEvent>){
     const exportItems=kind==="reminder"?eoItems.filter(item=>!eventKitReminderExcluded(item)):eoItems;
     const syncModes=kind==="event"?calendarModes:effectiveModes,scope=eventKitLinkScope(links,entityType,syncModes),routed=kind==="reminder"?routes.tasks:null,destination=kind==="reminder"?status.reminderLists.find(source=>source.allowsContentModifications&&(routed?source.identifier===routed:syncModes[source.identifier]==="two_way")):undefined,active=entityType==="task"&&routed?scope.all:scope.active,linkedEO=new Set(scope.all.map(link=>link.eo_id)),linkedApple=new Set(scope.all.map(link=>link.calendar_item_identifier));
@@ -226,18 +302,20 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
       if(paused.has(link))continue;
       if(kind==="reminder"&&eventKitReminderExcluded(eoItems.find(item=>item.id===link.eo_id),link.last_synced_snapshot))continue;
       const mode=entityType==="task"&&routed?"two_way":syncModes[link.calendar_identifier],eo=await readEO(entityType,link.eo_id);
-      if(!eo){pauseMissingEO(link);continue;}
+      if(!eo){pauseMissingEO(link);outOfScope.add(link);continue;}
       const candidates=appleItems.filter(item=>item.calendarItemIdentifier===link.calendar_item_identifier||(item.externalIdentifier&&item.externalIdentifier===link.external_identifier));
       if(candidates.length>1){pause(link);continue;}
       let apple=candidates[0];
       if(kind==="reminder"&&eventKitReminderExcluded(eo,apple,link.last_synced_snapshot))continue;
-      if(!apple){const lookup=await lookupApple(link);if(lookup.status==="unavailable"){pause(link);continue;}if(lookup.status==="found")apple=lookup.item;}
+      if(!apple){const lookup=await lookupApple(link);if(lookup.status==="out_of_scope"){paused.add(link);outOfScope.add(link);continue;}if(lookup.status==="unavailable"){pause(link);continue;}if(lookup.status==="found")apple=lookup.item;}
       if(apple){linkedApple.add(String(apple.calendarItemIdentifier));if(kind==="reminder")claimedReminderIDs.add(String(apple.calendarItemIdentifier));}
       if(kind==="reminder"&&eventKitReminderExcluded(eo,apple,link.last_synced_snapshot))continue;
       if(kind==="event"&&apple?.isRecurring)continue;
       if(apple&&invalidEvent(apple))continue;
       if(kind==="event"&&apple&&!eventKitSourceEnabled(String(apple.calendarIdentifier),syncModes))continue;
       if(eo&&!apple){
+        const previousDate=kind==="event"?link.last_synced_snapshot.startAt:link.last_synced_snapshot.dueDate;
+        if(previousDate&&!appleDateInScope(previousDate,link.last_synced_snapshot.timezone)){paused.add(link);outOfScope.add(link);continue;}
         if(entityType==="task"&&!eventKitTaskNeedsAppleMirror(eo as Task))continue;
         if(eventKitMissingAppleAction(kind,mode)==="recreate"){const snapshot=taskSnapshot(eo as Task);await createReminderLink(status,"task",eo.id,snapshot,destination?.identifier??link.calendar_identifier);exported++;continue;}
         await json(entityType==="task"?`/api/tasks/${eo.id}`:`/api/calendar-events/${eo.id}`,{method:"DELETE"});await json("/api/eventkit/links",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:link.id})});imported++;continue;
@@ -264,6 +342,8 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
       if(!eventKitImportsUnlinked(kind,syncModes[String(apple.calendarIdentifier)]??"off"))continue;
       if(invalidEvent(apple))continue;
       if(scope.all.some(link=>matchesLink(apple,link)))continue;
+      if(discoveryBudget<=0){discoveriesPending++;continue;}
+      discoveryBudget--;
       if(kind==="event"){
         if(!apple.externalIdentifier&&scope.all.some(link=>!eventKitSourceEnabled(link.calendar_identifier,syncModes))){conflicts.push({entityType,eoId:0,fields:["identity"]});continue;}
         if(apple.externalIdentifier){
@@ -277,12 +357,12 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
       if(entityType==="task"){const base=await json("/api/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...snapshot,reminderMode:"none",tags:[]})}),created=await json(`/api/tasks/${base.id}/eventkit`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({task:{title:snapshot.title,notes:snapshot.notes,dueDate:snapshot.dueDate,dueTime:snapshot.dueTime,completed:snapshot.completed,completionDate:snapshot.completionDate}})});await saveLink(status,entityType,created.id,kind,apple,snapshot);}else try{await importCalendarEvent(status,apple,snapshot);changed.add("calendar");}catch(error){if(error instanceof EventKitRequestError&&["eventkit_eo_missing","eventkit_identity_conflict"].includes(error.code??"")){conflicts.push({entityType,eoId:0,fields:[error.code==="eventkit_eo_missing"?"eo_missing":"identity"]});continue;}throw error;}
       linkedApple.add(String(apple.calendarItemIdentifier));if(kind==="event")calendarDiagnostics.newImports++;imported++;
     }
-    if(destination&&!blockedKinds.has(kind))for(const eo of exportItems){if(linkedEO.has(eo.id)||!eventKitTaskNeedsAppleMirror(eo as Task))continue;const snapshot=taskSnapshot(eo as Task),candidates=appleItems.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedReminderIDs.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot]));if(candidates.length>1){conflicts.push({entityType:"task",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"task",eo.id,snapshot,existing);claimedReminderIDs.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"task",eo.id,snapshot,destination.identifier);exported++;}}
+    if(destination&&!blockedKinds.has(kind))for(const eo of exportItems){if(linkedEO.has(eo.id)||!eventKitTaskNeedsAppleMirror(eo as Task))continue;if(discoveryBudget<=0){discoveriesPending++;continue;}discoveryBudget--;const snapshot=taskSnapshot(eo as Task),candidates=appleItems.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedReminderIDs.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot]));if(candidates.length>1){conflicts.push({entityType:"task",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"task",eo.id,snapshot,existing);claimedReminderIDs.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"task",eo.id,snapshot,destination.identifier);exported++;}}
   async function reconcileDomainReminders(){const relevant=links.filter(link=>link.entity_type==="reminder"),linkedEO=new Set(relevant.map(link=>link.eo_id)),claimedApple=new Set(claimedReminderIDs);
     const excludedEO=new Set(reminders.filter(item=>eventKitReminderExcluded(item)).map(item=>item.id));
     for(const link of relevant){if(paused.has(link))continue;let eo=reminders.find(item=>item.id===link.eo_id);if(!eo)continue;const domain=eventKitReminderDomain(eo),destination=domain?status.reminderLists.find(source=>source.identifier===routes[domain]&&source.allowsContentModifications):null;if(!destination)continue;let apple=appleReminders.find(item=>item.calendarItemIdentifier===link.calendar_item_identifier);
       if(eventKitReminderExcluded(eo,apple,link.last_synced_snapshot))continue;
-      if(!apple){const lookup=await lookupApple(link);if(lookup.status==="unavailable"){pause(link);continue;}if(lookup.status==="found")apple=lookup.item;}
+      if(!apple){const lookup=await lookupApple(link);if(lookup.status==="out_of_scope"){paused.add(link);outOfScope.add(link);continue;}if(lookup.status==="unavailable"){pause(link);continue;}if(lookup.status==="found")apple=lookup.item;}
       if(eventKitReminderExcluded(eo,apple,link.last_synced_snapshot))continue;
       if(eo.status!=="completed"&&(!eo.isActive||!eo.nextDueAt)){await nativeCall("eventkit.delete",{kind:"reminder",calendarItemIdentifier:link.calendar_item_identifier});await json("/api/eventkit/links",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:link.id})});continue;}
       if(eventKitReminderCompletedSince(eo,link.last_synced_snapshot)){
@@ -296,7 +376,7 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
       let snapshot=eventKitCanonicalSnapshot(eo.status==="completed"?{...link.last_synced_snapshot,completed:true,completionDate:eo.lastCompletedAt}:reminderSnapshot(eo));if(!apple&&eo.status==="completed")continue;if(apple&&Boolean(apple.completed)&&!Boolean(link.last_synced_snapshot.completed)&&!Boolean(snapshot.completed)){eo=await json(`/api/reminders/${eo.id}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}) as Reminder;snapshot=eventKitCanonicalSnapshot(eo.status==="completed"?{...link.last_synced_snapshot,completed:true,completionDate:eo.lastCompletedAt}:reminderSnapshot(eo));imported++;if(eventKitHasNextOccurrence(eo)){await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone,true);exported++;continue;}}
       if(!apple)await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone);else if(link.calendar_item_identifier!==apple.calendarItemIdentifier||link.calendar_identifier!==destination.identifier||stable(snapshot)!==stable(link.last_synced_snapshot)||stable(appleReminderSnapshot(apple))!==stable(appleReminderSnapshot(snapshot))||reminderNeedsDueAlarm(snapshot,apple)||(link.recovery_token&&!apple.url)){const saved=await nativeCall<{item:Item}>("eventkit.save",{kind:"reminder",item:{...appleReminderPayload(snapshot,destination.identifier,String(apple.calendarItemIdentifier),apple,eo.timezone),recoveryToken:link.recovery_token}});await saveLink(status,"reminder",eo.id,"reminder",saved.item,snapshot);}else continue;exported++;
     }
-    for(const eo of reminders){if(blockedKinds.has("reminder"))continue;if(excludedEO.has(eo.id)||linkedEO.has(eo.id)||!eo.isActive||!eo.nextDueAt)continue;const domain=eventKitReminderDomain(eo),destination=domain?status.reminderLists.find(source=>source.identifier===routes[domain]&&source.allowsContentModifications):null;if(!destination)continue;const snapshot=reminderSnapshot(eo),legacy=eo.note===snapshot.notes?snapshot:{...snapshot,notes:eo.note},candidates=appleReminders.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedApple.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot,legacy]));if(candidates.length>1){conflicts.push({entityType:"reminder",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"reminder",eo.id,snapshot,existing,eo.timezone);claimedApple.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone);exported++;}}
+    for(const eo of reminders){if(blockedKinds.has("reminder"))continue;if(excludedEO.has(eo.id)||linkedEO.has(eo.id)||!eo.isActive||!eo.nextDueAt)continue;const domain=eventKitReminderDomain(eo),destination=domain?status.reminderLists.find(source=>source.identifier===routes[domain]&&source.allowsContentModifications):null;if(!destination)continue;if(discoveryBudget<=0){discoveriesPending++;continue;}discoveryBudget--;const snapshot=reminderSnapshot(eo),legacy=eo.note===snapshot.notes?snapshot:{...snapshot,notes:eo.note},candidates=appleReminders.filter(item=>item.calendarIdentifier===destination.identifier&&!claimedApple.has(String(item.calendarItemIdentifier))&&!links.some(link=>matchesLink(item,link))&&eventKitReminderMatches(item,[snapshot,legacy]));if(candidates.length>1){conflicts.push({entityType:"reminder",eoId:eo.id,fields:["identity"]});continue;}const existing=candidates[0];if(existing){await adoptReminderLink(status,"reminder",eo.id,snapshot,existing,eo.timezone);claimedApple.add(String(existing.calendarItemIdentifier));continue;}await createReminderLink(status,"reminder",eo.id,snapshot,destination.identifier,eo.timezone);exported++;}}
   // Publish committed Calendar changes before processing Reminder mirrors.
   let failed=false,firstError:unknown;
   try{if(syncCalendar)await reconcile("event","calendar_event",appleEvents,events);}catch(error){if(error instanceof EventKitReadTimeout)throw error;failed=true;firstError=error;}
@@ -305,4 +385,17 @@ async function performEventKitSync(status:EventKitStatus,modes:EventKitModes,rou
   try{if(syncReminders){await reconcile("reminder","task",appleReminders,tasks);await reconcileDomainReminders();}}catch(error){if(!failed){failed=true;firstError=error;}}
   if(failed)throw firstError;
   const reminderDiagnostics={selectedLists:reminderIDs.length,readReminders:appleReminders.length,imported:imported-calendarCounts.imported,exported:exported-calendarCounts.exported,merged:merged-calendarCounts.merged,conflicts:conflicts.filter(conflict=>conflict.entityType!=="calendar_event").length,excludedReminders:appleReminders.filter(item=>eventKitReminderExcluded(item)).length};
-  return{imported,exported,merged,conflicts,skippedEvents,calendarDiagnostics,reminderDiagnostics,lastSync:new Date().toISOString()};}
+  for(const link of processed)checked.add(linkKey(link));
+  for(const link of outOfScope)excluded.add(linkKey(link));
+  const liveKeys=new Set(links.map(linkKey));
+  const remaining=available.filter(link=>!outOfScope.has(link)&&(!checked.has(linkKey(link))||link.binding_state==="recovery"||link.binding_state==="pending"));
+  const pendingRecovery={recent:remaining.filter(urgent).length,history:remaining.filter(link=>!urgent(link)).length,discoveries:discoveriesPending};
+  work.state.pending=pendingRecovery.recent+pendingRecovery.history+pendingRecovery.discoveries;
+  work.state.foregroundDone=pendingRecovery.recent===0;
+  if(readingPage&&work.state.foregroundDone&&!pendingRecovery.history&&!pendingRecovery.discoveries&&syncCalendar){
+    const next=window.to;
+    work.state.cursor=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,"0")}-${String(next.getDate()).padStart(2,"0")}`;
+  }
+  work.state.checked=[...checked].filter(key=>liveKeys.has(key));work.state.excluded=[...excluded].filter(key=>liveKeys.has(key));
+  checkSession?.();work.save();
+  return{imported,exported,merged,conflicts,skippedEvents,calendarDiagnostics,reminderDiagnostics,pendingRecovery,lastSync:new Date().toISOString()};}

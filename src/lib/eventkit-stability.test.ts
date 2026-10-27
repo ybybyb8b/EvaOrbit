@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test,{mock} from "node:test";
 import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
 import { dataChangedEvent, type DataChangedDetail } from "./data-changed.ts";
 import { reminderSnapshot } from "./eventkit-sync.ts";
 import type { Reminder } from "./types.ts";
+import {getEventKitSyncProgress,subscribeEventKitSyncProgress} from "./eventkit-sync-progress.ts";
+import {eventKitWorkState} from "./eventkit-work-state.ts";
 
 type Item = Record<string, unknown>;
 const calendarBase = { title: "Visit", notes: "", startAt: "2026-10-06T02:00:00.000Z", endAt: "2026-10-06T03:00:00.000Z", isAllDay: false, timezone: "Asia/Shanghai", location: "", status: "confirmed" };
@@ -107,17 +109,125 @@ function fixture() {
       }
       throw new Error(`Unexpected request ${method} ${path}`);
     },
-    run(modes: EventKitModes = { calendar: "import" as const, list: "two_way" as const }, info = status) { return synchronizeEventKit(info, modes, { tasks: "list" }); },
+    run(modes: EventKitModes = { calendar: "import" as const, list: "two_way" as const }, info = status) { return synchronizeEventKit(info, modes, { tasks: "list" },"all",true); },
     writes() { return calls.filter(call => ["POST", "PUT", "PATCH", "DELETE", "eventkit.save", "eventkit.delete"].includes(call.method)); },
   };
   return f;
 }
 async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>) {
-  const oldWindow = globalThis.window, oldFetch = globalThis.fetch, f = fixture();
+  // The fixture's baseline events are October 6, so priority windows must use a stable clock.
+  mock.timers.enable({apis:["Date"],now:new Date(2026,9,6)});
+  const oldWindow = globalThis.window, oldFetch = globalThis.fetch, oldStorage=globalThis.localStorage, f = fixture();
+  const values=new Map([["evaorbit.eventkit.account.v1","10000000-0000-4000-8000-000000000001"]]);
+  globalThis.localStorage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);}} as Storage;
   globalThis.window = Object.assign(new EventTarget(), { EvaOrbitNative: { version: 1, call: async (method: string, body: Item = {}) => ({ ok: true, result: await f.native(method, body) }) } }) as unknown as Window & typeof globalThis;
   globalThis.fetch = f.fetch;
-  try { await run(f); } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch; }
+  try { await run(f); } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch;globalThis.localStorage=oldStorage;mock.timers.reset(); }
 }
+
+function respectCalendarWindow(f:ReturnType<typeof fixture>){
+ const original=f.native;
+ f.native=async(method,body)=>{
+  const result=await original(method,body);
+  if(method==="eventkit.fetch"&&body.kind==="calendar")return{items:(result as {items:Item[]}).items.filter(item=>Date.parse(String(item.startAt))>=Date.parse(String(body.from))&&Date.parse(String(item.startAt))<Date.parse(String(body.to)))};
+  return result;
+ };
+}
+
+test("recent Calendar changes finish before historical recovery, which resumes in bounded rounds",async()=>withFixture(async f=>{
+ for(let id=1;id<=40;id++){
+  f.linkEvent(id);const snapshot={...calendarBase,startAt:"2026-10-01T02:00:00Z",endAt:"2026-10-01T03:00:00Z"};
+  f.events.set(id,{id,...snapshot});f.apple.set(`event-${id}`,{...f.apple.get(`event-${id}`),...snapshot});f.links.set(id,{...f.links.get(id),last_synced_snapshot:snapshot});
+ }
+ f.linkEvent(100);f.reinstall();f.apple.set("event-100",{...f.apple.get("event-100"),title:"New today"});respectCalendarWindow(f);
+ const first=await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+ assert.equal(f.events.get(100)?.title,"New today");assert.equal(first.pendingRecovery?.recent,0);assert.equal(first.pendingRecovery?.history,40);
+ assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,1);
+ const counts=[];
+ for(let round=0;round<3;round++){const result=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);counts.push(result.pendingRecovery?.history);}
+ assert.deepEqual(counts,[24,8,0]);assert.equal(f.events.size,41);assert.equal(f.links.size,41);
+ const checkpoint=eventKitWorkState(status.installationId,"calendar",["calendar"]).state;
+ assert.ok(checkpoint.checked.every(key=>/^[a-f0-9]{64}$/.test(key)));assert.doesNotMatch(JSON.stringify(checkpoint),/New today/);
+}));
+
+test("finishing the priority window never skips unlinked events between October 1 and the recent window",async()=>withFixture(async f=>{
+ f.apple.set("event-early",{...calendarBase,title:"Early October",startAt:"2026-10-01T02:00:00Z",endAt:"2026-10-01T03:00:00Z",calendarItemIdentifier:"event-early",externalIdentifier:"early-external",calendarIdentifier:"calendar",sourceIdentifier:"source"});respectCalendarWindow(f);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(f.events.size,0);
+ assert.equal(eventKitWorkState(status.installationId,"calendar",["calendar"]).state.cursor,"2026-10-01");
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(f.events.size,1);assert.equal([...f.events.values()][0].title,"Early October");
+}));
+
+test("Calendar discovery pages keep moving beyond one year without duplicating distant events",async()=>withFixture(async f=>{
+ f.apple.set("event-far",{...calendarBase,title:"Far future",startAt:"2028-10-15T02:00:00Z",endAt:"2028-10-15T03:00:00Z",calendarItemIdentifier:"event-far",externalIdentifier:"far-external",calendarIdentifier:"calendar",sourceIdentifier:"source"});respectCalendarWindow(f);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+ for(let round=0;round<12;round++)await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(f.events.size,1);assert.equal([...f.events.values()][0].title,"Far future");
+ assert.equal(f.calls.filter(call=>call.target==="/api/eventkit/calendar-import").length,1);
+ assert.ok(f.calls.some(call=>call.method==="eventkit.fetch"&&Date.parse(String(call.body.from))>=Date.parse("2028-10-01T00:00:00Z")));
+}));
+
+test("out-of-scope Calendar objects preserve existing records and links instead of being treated as deleted",async()=>withFixture(async f=>{
+ f.linkEvent(1);const snapshot={...calendarBase,startAt:"2026-09-30T02:00:00Z",endAt:"2026-09-30T03:00:00Z"};
+ f.events.set(1,{id:1,...snapshot});f.links.set(1,{...f.links.get(1),last_synced_snapshot:snapshot});f.apple.delete("event-1");f.reinstall();respectCalendarWindow(f);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(f.events.size,1);assert.equal(f.links.size,1);assert.equal(f.writes().length,0);
+}));
+
+test("a slow recovery batch yields before starting another batch and keeps recent work pending",async()=>withFixture(async f=>{
+ for(let id=1;id<=40;id++)f.linkEvent(id);f.reinstall();
+ const original=f.native;let advanced=false;
+ f.native=async(method,body)=>{const result=await original(method,body);if(method==="eventkit.recover"&&!advanced){advanced=true;mock.timers.tick(9000);}return result;};
+ const result=await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+ assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,4);assert.equal(result.pendingRecovery?.recent,36);
+ assert.equal(f.events.size,40);
+}));
+
+test("Calendar recovery overlaps at most four independent bindings and reports actual progress",async()=>withFixture(async f=>{
+ for(let id=1;id<=9;id++)f.linkEvent(id);f.reinstall();
+ const original=f.native;let active=0,maximum=0;
+ const seen:Array<{phase:string;completed:number;total:number}>=[];
+ const stop=subscribeEventKitSyncProgress(()=>{const progress=getEventKitSyncProgress();if(progress)seen.push({...progress});});
+ f.native=async(method,body)=>{
+  if(method!=="eventkit.recover")return original(method,body);
+  active++;maximum=Math.max(maximum,active);
+  try{await new Promise(resolve=>setImmediate(resolve));return await original(method,body);}finally{active--;}
+ };
+ try{
+  await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+  assert.equal(maximum,4);assert.equal(active,0);
+  assert.equal(f.calls.filter(call=>call.method==="PUT"&&call.target==="/api/eventkit/links").length,9);
+  assert.equal(f.events.size,9);assert.equal(f.links.size,9);assert.equal(f.calls.some(call=>call.method==="eventkit.save"||call.method==="eventkit.delete"),false);
+  assert.deepEqual(seen.filter(value=>value.phase==="recovering").map(value=>value.completed),Array.from({length:10},(_,index)=>index));
+  assert.equal(getEventKitSyncProgress()?.phase,"complete");
+ }finally{stop();}
+}));
+
+test("a failed Calendar recovery batch drains started bindings and stops before the next batch or imports",async()=>withFixture(async f=>{
+ for(let id=1;id<=9;id++)f.linkEvent(id);f.reinstall();
+ const original=f.fetch;let started=0,release!:()=>void,ready!:()=>void,settled=false;
+ const gate=new Promise<void>(resolve=>{release=resolve;}),allStarted=new Promise<void>(resolve=>{ready=resolve;});
+ f.fetch=async(input,init)=>{
+  if(String(input)==="/api/eventkit/links"&&init?.method==="PUT"){
+   started++;if(started===4)ready();
+   if(started===1)return Response.json({error:"binding failed"},{status:500});
+   await gate;
+  }
+  return original(input,init);
+ };
+ globalThis.fetch=f.fetch;
+ const work=synchronizeEventKit(status,{calendar:"import"},{},"calendar");
+ const checked=assert.rejects(work,/binding failed/).then(()=>{settled=true;});
+ try{
+  await allStarted;await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false,"Do not report a failure while another binding is still committing");
+  release();await checked;assert.equal(started,4);
+  assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,4);
+  assert.equal(f.calls.some(call=>call.target==="/api/eventkit/calendar-import"),false);
+  assert.equal(f.events.size,9);assert.equal(getEventKitSyncProgress()?.phase,"failed");
+ }finally{release();await checked;}
+}));
 
 for(const legacy of [false,true]) test(`EO cross-midnight routine completion closes the old Apple occurrence (legacy=${legacy})`,async()=>withFixture(async f=>{
   const routine={id:27,title:"上药",note:"",targetType:"cat",sourceType:"cat_routine",isActive:true,status:"scheduled",nextDueAt:"2026-10-23T15:00:00Z",snoozedUntil:null,timezone:"Asia/Shanghai",dueHasExplicitTime:true,lastCompletedAt:null} as Reminder;
@@ -149,11 +259,11 @@ test("610 Calendar mappings paginate every EO record and updates keep the origin
   for (let id = 1; id <= 610; id++) f.linkEvent(id);
   f.reinstall();
   f.apple.set("event-610", { ...f.apple.get("event-610"), title: "Updated", notes: "New notes", location: "Clinic", isAllDay: true, startAt: "2026-10-07", endAt: "2026-10-08" });
-  await f.run(); await f.run();
+  let rounds=0;for(;rounds<40;){rounds++;const result=await f.run();if(!result.pendingRecovery?.recent&&!result.pendingRecovery?.history)break;}
   assert.equal(f.events.size, 610); assert.equal(f.links.size, 610);
   assert.equal(f.events.get(610)?.title, "Updated"); assert.equal(f.events.get(610)?.isAllDay, true);
   assert.equal(f.calls.filter(call => call.method === "POST").length, 0);
-  assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/calendar-events").length, 6);
+  assert.equal(f.calls.filter(call => call.method === "GET" && call.target === "/api/calendar-events").length, rounds*3);
   assert.equal(f.calls.filter(call => call.method === "GET" && /^\/api\/calendar-events\/\d+$/.test(call.target)).length, 0);
 }));
 test("EventKit completion announces Calendar changes once and an unchanged retry stays quiet", async () => withFixture(async f => {
@@ -221,9 +331,14 @@ for (const recovery of [false, true]) for (const flags of [false, true]) {
     if (recovery) f.reinstall();
     const oldLinks = structuredClone([...f.links.values()]);
     f.apple.set("event-new", { ...calendarBase, title: "New appointment", calendarItemIdentifier: "event-new", externalIdentifier: "external-new", calendarIdentifier: "calendar", sourceIdentifier: "source" });
-    const result = await f.run(); await f.run();
+    let imported=0;const missing=new Set<number>();
+    for(let round=0;round<50;round++){
+      const result=await f.run();imported+=result.imported;
+      result.conflicts.filter(conflict=>conflict.fields.includes("eo_missing")).forEach(conflict=>missing.add(conflict.eoId));
+      if(f.events.size===1&&missing.size===611)break;
+    }
     assert.equal(f.events.size, 1); assert.equal([...f.events.values()][0].title, "New appointment");
-    assert.equal(result.imported, 1); assert.equal(result.conflicts.filter(conflict => conflict.fields.includes("eo_missing")).length, 611);
+    assert.equal(imported, 1); assert.equal(missing.size,611);
     assert.deepEqual([...f.links.values()].slice(0, 611), oldLinks);
     assert.equal(f.apple.size, 612); assert.equal(f.calls.filter(call => call.method === "eventkit.delete").length, 0);
     assert.equal(f.calls.filter(call => call.target === "/api/eventkit/calendar-import").length, 1);
@@ -290,7 +405,7 @@ test("Reminders diagnostics report their own conflicts and excluded reminders", 
   f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Apple title" });
   f.events.set(2, { ...f.events.get(2), title: "EO Calendar title" });
   f.apple.set("event-2", { ...f.apple.get("event-2"), title: "Apple Calendar title" });
-  f.apple.set("excluded", { title: "续火花", calendarItemIdentifier: "excluded", calendarIdentifier: "list" });
+  f.apple.set("excluded", { title: "续火花", calendarItemIdentifier: "excluded", calendarIdentifier: "list",dueDate:"2026-10-06" });
   const result = await f.run();
   assert.equal(result.conflicts.length, 2);
   assert.equal(result.reminderDiagnostics?.conflicts, 1);
