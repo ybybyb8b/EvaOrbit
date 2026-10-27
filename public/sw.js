@@ -1,6 +1,6 @@
-const CACHE = "eva-orbit-static-v9";
+const CACHE = "eva-orbit-static-v10";
 const ICON_NAMES = [
-  "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
+  "food-drink", "food-library", "food-places", "tasks", "insights", "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
 ];
 const NAV_ICON_NAMES = ["home", "lucius", "settings"];
 const iconAssets = (base = "/icons") => ICON_NAMES.flatMap((name) => [
@@ -10,12 +10,9 @@ const iconAssets = (base = "/icons") => ICON_NAMES.flatMap((name) => [
   `${base}/nav/${name}.png`,
   `${base}/nav/${name}-dark.png`,
 ]));
-const THEMED_ICON_ASSETS = ["rosewood", "powderblue"].flatMap((theme) => iconAssets(`/icons/themes/${theme}`));
-const INSIGHTS_ICON_ASSETS = ["/icons", ...["rosewood", "powderblue", "mistviolet"].map((theme) => `/icons/themes/${theme}`)]
-  .flatMap((base) => [`${base}/features/insights.png`, `${base}/features/insights-dark.png`]);
+const THEMED_ICON_ASSETS = ["editorial", "rosewood", "powderblue", "mistviolet"].flatMap((theme) => iconAssets(`/icons/themes/${theme}`));
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
-  ...INSIGHTS_ICON_ASSETS,
   "/icons/app-icon-192.png",
   "/icons/app-icon-512.png",
   "/apple-touch-icon.png",

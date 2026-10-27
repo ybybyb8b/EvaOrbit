@@ -1,4 +1,4 @@
-import { access, mkdir, readdir } from "node:fs/promises";
+import { access, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -9,6 +9,7 @@ const navNames = ["home", "lucius", "settings"];
 
 const palettes = {
   editorial: {
+    light: { ink: [36, 66, 53], secondary: [137, 160, 147], surface: [245, 248, 246] },
     dark: { ink: [184, 206, 193], secondary: [111, 139, 126], surface: [29, 39, 35], accent: [220, 171, 82], accentSoft: [119, 83, 31] },
   },
   rosewood: {
@@ -27,48 +28,6 @@ const palettes = {
 
 const mix = (from, to, amount) => from.map((value, index) => Math.round(value + (to[index] - value) * amount));
 
-function isBrandGreen(red, green, blue) {
-  return green - red > 5 && green - blue > 4;
-}
-
-const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-
-function rgbToHsl(red, green, blue) {
-  const r = red / 255;
-  const g = green / 255;
-  const b = blue / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const lightness = (max + min) / 2;
-  const delta = max - min;
-  if (delta === 0) return [0, 0, lightness];
-  const saturation = delta / (1 - Math.abs(2 * lightness - 1));
-  let hue = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
-  hue = ((hue * 60) + 360) % 360;
-  return [hue, saturation, lightness];
-}
-
-function hslToRgb(hue, saturation, lightness) {
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-  const section = hue / 60;
-  const x = chroma * (1 - Math.abs((section % 2) - 1));
-  const [r, g, b] = section < 1 ? [chroma, x, 0] : section < 2 ? [x, chroma, 0] : section < 3 ? [0, chroma, x] : section < 4 ? [0, x, chroma] : section < 5 ? [x, 0, chroma] : [chroma, 0, x];
-  const offset = lightness - chroma / 2;
-  return [r, g, b].map((value) => Math.round((value + offset) * 255));
-}
-
-function preserveHueForDark(red, green, blue) {
-  const [hue, saturation, lightness] = rgbToHsl(red, green, blue);
-  const darkLightness = 0.78 - lightness * 0.52;
-  const darkSaturation = saturation < 0.05 ? 0 : clamp(saturation * 0.82, 0.14, 0.7);
-  return hslToRgb(hue, darkSaturation, darkLightness);
-}
-
-function isLargeWarmFill(red, green, blue) {
-  const [hue, saturation, lightness] = rgbToHsl(red, green, blue);
-  return hue >= 18 && hue <= 80 && saturation > 0.08 && lightness > 0.58;
-}
-
 function mapTone(luminance, palette, dark) {
   if (dark) {
     if (luminance < 0.52) return mix(palette.ink, palette.secondary, luminance / 0.52);
@@ -78,7 +37,7 @@ function mapTone(luminance, palette, dark) {
   return mix(palette.secondary, palette.surface, (luminance - 0.5) / 0.5);
 }
 
-function recolor(buffer, palette, dark, harmonizeWarm = false) {
+function recolor(buffer, palette, dark) {
   for (let index = 0; index < buffer.length; index += 4) {
     const red = buffer[index];
     const green = buffer[index + 1];
@@ -90,11 +49,8 @@ function recolor(buffer, palette, dark, harmonizeWarm = false) {
     }
 
     const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-    const [hue, saturation] = rgbToHsl(red, green, blue);
-    const warm = harmonizeWarm && hue >= 18 && hue <= 80 && saturation > 0.08;
-    const target = isBrandGreen(red, green, blue) || warm || (dark && isLargeWarmFill(red, green, blue))
-      ? mapTone(luminance, palette, dark)
-      : dark ? preserveHueForDark(red, green, blue) : [red, green, blue];
+    // Apply one palette to outlines, warm fills and decorative accents alike.
+    const target = mapTone(luminance, palette, dark);
     buffer[index] = target[0];
     buffer[index + 1] = target[1];
     buffer[index + 2] = target[2];
@@ -108,7 +64,8 @@ async function normalizedSource(file) {
 
 async function writePng(data, info, destination) {
   await mkdir(path.dirname(destination), { recursive: true });
-  await sharp(data, { raw: info }).png({ compressionLevel: 9, adaptiveFiltering: true, palette: true, colours: 128, dither: 0.35 }).toFile(destination);
+  const png = await sharp(data, { raw: info }).png({ compressionLevel: 9, adaptiveFiltering: true, palette: true, colours: 128, dither: 0.35 }).toBuffer();
+  await writeFile(destination, png);
 }
 
 const selectedTheme = process.argv.find((argument) => argument.startsWith("--theme="))?.slice(8);
@@ -123,9 +80,9 @@ for (const filename of sourceFiles) {
   for (const [theme, modes] of Object.entries(selectedPalettes)) {
     for (const [mode, palette] of Object.entries(modes)) {
       const data = Buffer.from(source);
-      recolor(data, palette, mode === "dark", theme === "mistviolet");
+      recolor(data, palette, mode === "dark");
       const suffix = mode === "dark" ? "-dark.png" : ".png";
-      const base = theme === "editorial" ? path.join(root, "public/icons") : path.join(root, `public/icons/themes/${theme}`);
+      const base = path.join(root, `public/icons/themes/${theme}`);
       await writePng(data, info, path.join(base, "features", `${name}${suffix}`));
     }
   }
@@ -140,9 +97,9 @@ for (const name of selectedFile ? [] : navNames) {
   for (const [theme, modes] of Object.entries(selectedPalettes)) {
     for (const [mode, palette] of Object.entries(modes)) {
       const data = Buffer.from(source);
-      recolor(data, palette, mode === "dark", theme === "mistviolet");
+      recolor(data, palette, mode === "dark");
       const suffix = mode === "dark" ? "-dark.png" : ".png";
-      const base = theme === "editorial" ? path.join(root, "public/icons") : path.join(root, `public/icons/themes/${theme}`);
+      const base = path.join(root, `public/icons/themes/${theme}`);
       await writePng(data, info, path.join(base, "nav", `${name}${suffix}`));
     }
   }

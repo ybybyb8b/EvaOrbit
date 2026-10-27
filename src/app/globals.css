@@ -440,11 +440,10 @@ button { color: inherit; }
 .icon { width: 20px; height: 20px; flex: none; }
 /* Feature PNGs use a transparent 512px canvas; scale the image box so their visible artwork matches the SVG weight. */
 .feature-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; transform: scale(var(--feature-icon-scale)); transform-origin: center; }
-.feature-icon.icon-tasks { --feature-icon-scale:1.58; filter:saturate(.72); }
+.feature-icon.icon-tasks { --feature-icon-scale:1.58; }
 .nav-icon { display: inline-block; background-image: var(--icon-source); background-position: center; background-repeat: no-repeat; background-size: contain; }
 html[data-mode="dark"] .feature-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
 html[data-mode="dark"] .nav-icon { background-image: var(--icon-source-dark, var(--icon-source)); }
-html[data-mode="dark"] .feature-icon.icon-tasks { filter:saturate(.56) brightness(.98); }
 html[data-theme="rosewood"] .feature-icon,html[data-theme="rosewood"] .nav-icon { background-image:var(--icon-source-rosewood,var(--icon-source)); }
 html[data-theme="rosewood"][data-mode="dark"] .feature-icon,html[data-theme="rosewood"][data-mode="dark"] .nav-icon { background-image:var(--icon-source-rosewood-dark,var(--icon-source-rosewood,var(--icon-source))); }
 html[data-theme="powderblue"] .feature-icon,html[data-theme="powderblue"] .nav-icon { background-image:var(--icon-source-powderblue,var(--icon-source)); }

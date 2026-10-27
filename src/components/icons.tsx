@@ -40,8 +40,8 @@ function iconSourceStyle(source: string) {
   const darkSource = source.replace(/\.png$/, "-dark.png");
   const themedSource = (theme: "rosewood" | "powderblue" | "mistviolet", value: string) => value.replace("/icons/", `/icons/themes/${theme}/`);
   return {
-    "--icon-source": `url("${source}")`,
-    "--icon-source-dark": `url("${darkSource}")`,
+    "--icon-source": `url("${source.replace("/icons/", "/icons/themes/editorial/")}")`,
+    "--icon-source-dark": `url("${darkSource.replace("/icons/", "/icons/themes/editorial/")}")`,
     "--icon-source-rosewood": `url("${themedSource("rosewood", source)}")`,
     "--icon-source-rosewood-dark": `url("${themedSource("rosewood", darkSource ?? source)}")`,
     "--icon-source-powderblue": `url("${themedSource("powderblue", source)}")`,
