@@ -1,6 +1,6 @@
 # Data backup and local restore
 
-Current backup version is 13 (`202610260001_manual_subscription_memberships`). Manual memberships retain mode/expiry in `subscriptions` and purchase keys, paid/bonus durations and resulting expiry in `subscription_payments`; spending is not duplicated in a second purchase table. Versions 1–12 remain readable. The manual membership regression test exports, restores and reopens these records with their reminder links.
+Current backup version is 15 (`202610270003_insight_deletion`). Insights retains deletion markers and hidden-version floors alongside semantic reading pointers and execution generations. Retained immutable snapshots and cross-report references are included; restoring a backup preserves deletion visibility and does not automatically recreate deleted reports. Versions 1–14 remain readable. Manual memberships retain mode/expiry in `subscriptions` and purchase keys, paid/bonus durations and resulting expiry in `subscription_payments`; spending is not duplicated in a second purchase table.  The manual membership regression test exports, restores and reopens these records with their reminder links.
 
 EvaOrbit exports one JSON document from the authenticated production Supabase account. The export endpoint is read-only and relies on the same account allowlist and row-level security as the rest of the app.
 

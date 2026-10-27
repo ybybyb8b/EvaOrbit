@@ -1,5 +1,6 @@
 // Data dependencies, not every URL: writes also invalidate derived summaries.
 const dependencies: Record<string, string[]> = {
+  insights: ["insights", "food", "drinks", "health", "trackers", "tasks"],
   home: ["food", "drinks", "trackers", "health", "calendar", "tasks", "cats", "relations", "subscriptions", "journal", "notifications"],
   "food-drink": ["food", "drinks", "calendar"],
   food: ["food", "calendar"], drinks: ["drinks", "food"], nutrition: ["food", "drinks", "health"],

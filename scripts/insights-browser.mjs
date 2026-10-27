@@ -3,95 +3,54 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
+import { pathToFileURL } from "node:url";
 import { dateInEvaOrbit, shiftDate } from "../src/lib/time.ts";
 
-const { chromium }=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||"playwright");
-const port=3107,origin=`http://127.0.0.1:${port}`;
-// Refuse a listener owned by another task before starting the isolated preview.
+const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||"playwright"),port=3107,origin=`http://127.0.0.1:${port}`;
 await new Promise((resolve,reject)=>{const probe=createServer();probe.once("error",reject);probe.listen(port,"127.0.0.1",()=>probe.close(resolve));});
-await fs.mkdir("tmp",{recursive:true});
-const directory=await fs.mkdtemp(path.resolve("tmp/insights-browser-"));
-const server=spawn(process.execPath,["node_modules/next/dist/bin/next","dev","--hostname","127.0.0.1","--port",String(port)],{env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"preview.db"),VERCEL:"",NEXT_TELEMETRY_DISABLED:"1"},stdio:["ignore","pipe","pipe"],windowsHide:true});
-console.log(JSON.stringify({serverPid:server.pid,port,database:path.join(directory,"preview.db")}));
-let output="",context;const errors=[];
+await fs.mkdir("tmp",{recursive:true});const directory=await fs.mkdtemp(path.resolve("tmp/insights-review-browser-")),database=path.join(directory,"preview.db");
+const env={...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:database,VERCEL:"",NEXT_TELEMETRY_DISABLED:"1"};
+const server=spawn(process.execPath,["node_modules/next/dist/bin/next","dev","--hostname","127.0.0.1","--port",String(port)],{env,stdio:["ignore","pipe","pipe"],windowsHide:true});
+console.log(JSON.stringify({serverPid:server.pid,port,database}));let output="",context;const errors=[];
 server.stdout.on("data",chunk=>{output=(output+chunk).slice(-12000);});server.stderr.on("data",chunk=>{output=(output+chunk).slice(-12000);});
+const target=shiftDate(dateInEvaOrbit(),-1),loader=pathToFileURL(path.resolve("scripts/typescript-test-loader.mjs")).href;
+function agent(program){const code=`import{randomUUID}from'node:crypto';import{getRepository}from'./src/lib/repositories/index.ts';import{getInsightContext}from'./src/lib/services/insight-context.ts';import{startInsightRun,completeInsightRun}from'./src/lib/services/insight-runs.ts';import{prepareRuleInsightSnapshot}from'./src/lib/services/insight-reports.ts';const date=${JSON.stringify(target)},id='day/'+date,repo=await getRepository();${program}`;
+ const result=spawnSync(process.execPath,["--experimental-loader",loader,"--input-type=module","--eval",code],{encoding:"utf8",env,timeout:30000,windowsHide:true});assert.equal(result.status,0,result.stderr||result.stdout);return result.stdout.trim()?JSON.parse(result.stdout.trim().split("\n").at(-1)):null;}
+async function add(mealType,title,estimatedKcal,hour){const response=await fetch(`${origin}/api/food/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,mealType,estimatedKcal,occurredAt:`${target}T${hour}:00:00+08:00`,occurredHasExplicitTime:false,scene:"home"})});assert(response.ok,await response.text());}
 try{
-  for(let attempt=0;;attempt++){
-    if(server.exitCode!==null)throw new Error(output);
-    try{if((await fetch(`${origin}/api/insights`)).ok)break;}catch{}
-    if(attempt>180)throw new Error(`Preview did not start: ${output}`);
-    await new Promise(resolve=>setTimeout(resolve,500));
-  }
-  const preferences=await fetch(`${origin}/api/preferences/appearance`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appearanceMode:"light",colorTheme:"editorial",uiLanguage:"zh-CN",chineseFont:"canger",englishFont:"zen"})});
-  assert(preferences.ok,await preferences.text());
-  context=await chromium.launchPersistentContext(path.join(directory,"browser"),{channel:process.env.EVAORBIT_BROWSER_CHANNEL||"chrome",headless:true,viewport:{width:402,height:874},deviceScaleFactor:1,isMobile:true,hasTouch:true});
-  await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","zh-CN");localStorage.setItem("evaorbit.appearanceMode","light");});
-  const page=context.pages()[0];page.on("pageerror",error=>errors.push(error.message));
-  await page.goto(`${origin}/insights`,{waitUntil:"networkidle"});
-  await page.getByRole("heading",{name:/^(Insights|洞察)$/}).waitFor();
-  await page.getByText("这个周期还没有保存的报告。",{exact:true}).waitFor();
-  await page.getByRole("button",{name:"日报",exact:true}).click();
-  assert(await page.getByRole("button",{name:"分析并保存日报",exact:true}).isEnabled());
-  await page.screenshot({path:"tmp/insights-empty-mobile.png",fullPage:true});
-  const target=shiftDate(dateInEvaOrbit(),-1);
-  for(const offset of [0,1,2,3,4]){
-    const response=await fetch(`${origin}/api/food/logs`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:"面条",occurredAt:`${shiftDate(target,-offset)}T12:00:00+08:00`,occurredHasExplicitTime:false,mealType:"lunch",scene:"home"})});
-    assert(response.ok,`Seed failed (${response.status}): ${(await response.text()).slice(0,300)}`);
-  }
-  await page.getByRole("button",{name:"分析并保存日报",exact:true}).click();
-  await page.getByRole("heading",{name:target,exact:true}).waitFor();
-  await page.getByRole("heading",{name:"「面条」最近吃了好几次",exact:true}).waitFor();
-  await page.locator('a[href="#evidence-food-drink-window"]').first().click();
-  assert(await page.locator("#evidence-food-drink-window").isVisible());
-  await page.getByRole("button",{name:"查看原始记录",exact:true}).first().click();
-  await page.getByText("当前记录内容 · 可能已在分析后修改",{exact:true}).first().waitFor();
-  await page.locator('details').filter({has:page.locator('#evidence-food-drink-window')}).first().evaluate(element=>element.open=false);
-  await page.getByLabel("修订说明（可选）",{exact:true}).fill("补齐记录后重新分析");
-  await page.getByRole("button",{name:"分析并保存日报",exact:true}).click();
-  await page.getByText("修订说明：补齐记录后重新分析",{exact:true}).waitFor();
-  await page.getByText("历史版本 · 2",{exact:true}).click();
-  await page.getByRole("button",{name:/^v1 ·/}).click();
-  await page.getByText(/v1 \/ 当前 v2/).waitFor();
-  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth);
-  assert.equal(overflow,false,"Mobile page overflows the viewport");
-  await page.evaluate(()=>window.scrollTo(0,0));
-  await page.screenshot({path:"tmp/insights-history-mobile.png",fullPage:true});
-  // An executed POST with a lost response must replay the same request, not create v4.
-  await page.getByLabel("修订说明（可选）",{exact:true}).fill("网络重试验证");
-  let dropped=false;const payloads=[];
-  await page.route("**/api/insights",async route=>{
-    if(route.request().method()!=="POST")return route.continue();
-    payloads.push(route.request().postDataJSON());
-    if(!dropped){dropped=true;await route.fetch();return route.abort("failed");}
-    return route.continue();
-  });
-  await page.getByRole("button",{name:"分析并保存日报",exact:true}).click();
-  await page.getByRole("button",{name:"分析并保存日报",exact:true}).waitFor({state:"visible"});
-  await page.getByRole("button",{name:"分析并保存日报",exact:true}).click();
-  await page.getByText("修订说明：网络重试验证",{exact:true}).waitFor();
-  assert.equal(payloads.length,2);assert.deepEqual(payloads[0],payloads[1]);
-  const reports=await(await fetch(`${origin}/api/insights`)).json();assert.equal(reports.items[0].currentVersion,3);
-  await page.setViewportSize({width:1440,height:1000});
-  await page.evaluate(()=>window.scrollTo(0,0));
-  await page.screenshot({path:"tmp/insights-desktop.png",fullPage:true});
-  await page.evaluate(()=>{document.documentElement.dataset.mode="dark";document.documentElement.style.colorScheme="dark";});
-  await page.screenshot({path:"tmp/insights-desktop-dark.png",fullPage:true});
-  await page.getByRole("button",{name:"月报",exact:true}).click();
-  await page.getByText("这个周期还没有保存的报告。",{exact:true}).waitFor();
-  assert.equal(await page.getByRole("button",{name:"分析并保存日报",exact:true}).count(),0);
-  await page.goto(`${origin}/food-drink`,{waitUntil:"networkidle"});
-  assert.equal(await page.locator('#insights-title').count(),0);
-  await page.locator('#limits-title').waitFor();
-  assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,viewport:"402x874 and 1440x1000",versions:3,errors,screenshots:["tmp/insights-empty-mobile.png","tmp/insights-history-mobile.png","tmp/insights-desktop.png","tmp/insights-desktop-dark.png"]}));
-}catch(error){await context?.pages()[0]?.screenshot({path:"tmp/insights-browser-failure.png",fullPage:true}).catch(()=>{});console.error(error);console.error(output);throw error;}
-finally{
-  await context?.close();
-  const stopped=process.platform==="win32"?spawnSync("taskkill",["/PID",String(server.pid),"/T","/F"],{encoding:"utf8",windowsHide:true}):null;
-  if(process.platform!=="win32")server.kill("SIGTERM");
-  server.stdout.destroy();server.stderr.destroy();server.unref();
-  if(stopped&&stopped.status!==0)console.warn(JSON.stringify({cleanupRequired:server.pid,reason:stopped.stderr?.trim()||stopped.error?.message}));
-  console.log(JSON.stringify({previewFiles:directory,serverStopped:stopped?stopped.status===0:true}));
-}
-// End the preview runner after its browser and server close; dev compiler pipes can otherwise hold Node open.
+ for(let attempt=0;;attempt++){if(server.exitCode!==null)throw new Error(output);try{if((await fetch(`${origin}/api/insights`)).ok)break;}catch{}if(attempt>180)throw new Error(output);await new Promise(resolve=>setTimeout(resolve,500));}
+ await fetch(`${origin}/api/preferences/appearance`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appearanceMode:"light",colorTheme:"editorial",uiLanguage:"zh-CN",chineseFont:"canger",englishFont:"zen"})});
+ await add("lunch","午餐",500,"12");await add("late_night","凌晨水果",472,"01");
+ context=await chromium.launchPersistentContext(path.join(directory,"browser"),{channel:process.env.EVAORBIT_BROWSER_CHANNEL||"chrome",headless:true,viewport:{width:402,height:874},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ await context.addInitScript(()=>{localStorage.setItem("evaorbit.uiLanguage","zh-CN");localStorage.setItem("evaorbit.appearanceMode","light");});
+ const page=context.pages()[0];page.on("pageerror",error=>errors.push(error.message));await page.goto(`${origin}/insights`,{waitUntil:"networkidle"});
+ await page.getByText(/晚餐尚未记录，是否忘记补录/).waitFor();assert.equal(await page.getByRole("button",{name:"请求当天复盘",exact:true}).count(),0);assert.equal(await page.getByText("已记录摄入 · 估算",{exact:true}).count(),0);assert.equal(await page.getByRole("button",{name:"月报",exact:true}).count(),0);assert.equal(await page.locator("pre").count(),0);
+ await page.screenshot({path:"tmp/insights-review-missing-mobile.png",fullPage:true});
+ await add("dinner","晚餐",520,"19");await page.getByRole("button",{name:"重新检查记录",exact:true}).click();await page.getByText("记录已就绪，等待生成当天回顾。",{exact:true}).waitFor();await page.locator("dd").filter({hasText:"1,492"}).waitFor();
+ let dropped=false;await page.route("**/api/insights/runs",async route=>{if(route.request().method()!=="POST")return route.continue();if(!dropped){dropped=true;await route.fetch();return route.abort("failed");}return route.continue();});
+ await page.getByRole("button",{name:"请求当天复盘",exact:true}).click();await page.getByText("网络连接中断，请重试。",{exact:true}).waitFor();await page.getByRole("button",{name:"请求当天复盘",exact:true}).click();await page.getByText("已提交，自动复盘完成后会在这里显示。",{exact:true}).waitFor();
+ const first=agent(`const context=await getInsightContext(id),lease=await startInsightRun(id,randomUUID(),context.snapshotFingerprint);const saved=await completeInsightRun(id,lease.attemptId,{summary:'午餐和晚餐都已记录，凌晨还记下了一份水果。\\n\\n已记录的摄入约 1492 kcal，仅为这些食物的估算。',findings:[]});const ctx=await getInsightContext(id),rule=await prepareRuleInsightSnapshot(ctx,{date,revisionNote:'统计更新'});await repo.saveInsightReport({date,periodEnd:${JSON.stringify(shiftDate(target,1))},expectedVersion:saved.version,requestKey:randomUUID(),requestHash:'a'.repeat(64),revisionNote:'统计更新',snapshot:rule});console.log(JSON.stringify({reportId:saved.report.id,version:saved.version}));`);
+ await page.getByRole("button",{name:"重新检查记录",exact:true}).click();await page.getByText("已完成",{exact:true}).waitFor();await page.getByRole("heading",{name:"当天回顾",exact:true}).waitFor();assert.equal(await page.getByRole("heading",{name:"值得注意",exact:true}).count(),0);assert.equal((await(await fetch(`${origin}/api/insights/${first.reportId}`)).json()).version.version,1);
+ await add("snack","下午水果",200,"16");await page.getByRole("button",{name:"重新检查记录",exact:true}).click();await page.getByText("数据已更新，需要重新分析。",{exact:true}).waitFor();await page.locator("dd").filter({hasText:"1,692"}).waitFor();await page.getByRole("button",{name:"请求重新分析",exact:true}).click();await page.getByText("已提交，自动复盘完成后会在这里显示。",{exact:true}).waitFor();
+ const newer=agent(`const context=await getInsightContext(id),lease=await startInsightRun(id,randomUUID(),context.snapshotFingerprint);const saved=await completeInsightRun(id,lease.attemptId,{summary:'午餐、晚餐与水果记录已经补齐。\\n\\n补录后，已记录摄入估算为 1692 kcal；这些数字只描述保存的食物，不能代表全天实际摄入。',findings:[{id:'ai-food',title:'补录带来了更完整的回顾',body:'新增了下午的水果记录，已记录摄入随之更新。',domain:'food',importance:'normal',kind:'fact',evidenceIds:['window-food'],revises:[]}]});console.log(JSON.stringify({version:saved.version}));`);assert.equal(newer.version,3);
+ await page.getByRole("button",{name:"重新检查记录",exact:true}).click();await page.getByText("已完成",{exact:true}).waitFor();await page.getByRole("heading",{name:"补录带来了更完整的回顾",exact:true}).waitFor();assert.equal(await page.locator("pre").count(),0);
+ for(const width of [320,402]){await page.setViewportSize({width,height:874});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,"Narrow viewport overflow");await page.locator("summary").filter({hasText:"更多信息"}).click();await page.getByText("历史版本 · 3",{exact:true}).click();await page.getByRole("button",{name:/当天回顾 · 第 1 版/}).click();await page.getByText("正在阅读历史版本。",{exact:false}).waitFor();await page.getByRole("button",{name:"返回当前复盘",exact:true}).click();await page.getByText("已完成",{exact:true}).waitFor();}
+ await page.setViewportSize({width:402,height:874});await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
+ const footerBounds=await page.evaluate(()=>({content:document.querySelector('article[aria-label="每日复盘"]>details>summary').getBoundingClientRect().bottom,bar:document.querySelector('.mobile-nav').getBoundingClientRect().top}));assert(footerBounds.content<footerBounds.bar,'Fixed navigation permanently covers final content');
+ await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:"tmp/insights-review-mobile-light.png",fullPage:true});await page.evaluate(()=>{document.documentElement.dataset.mode="dark";document.documentElement.style.colorScheme="dark";});await page.screenshot({path:"tmp/insights-review-mobile-dark.png",fullPage:true});
+ await page.setViewportSize({width:1280,height:900});await page.screenshot({path:"tmp/insights-review-desktop.png",fullPage:true});assert.deepEqual(errors,[]);const overview=await(await fetch(`${origin}/api/insights/review?date=${target}`)).json();assert.equal(overview.detail.version.version,3);assert.equal(overview.status,"completed");
+
+ await page.setViewportSize({width:402,height:874});const more=page.locator('article[aria-label="每日复盘"]>details');if(!await more.evaluate(el=>el.open))await more.locator(':scope>summary').click();
+ const deleteButton=page.getByRole('button',{name:'删除这份日报',exact:true});await deleteButton.scrollIntoViewIfNeeded();
+ page.once('dialog',dialog=>dialog.dismiss());await deleteButton.click();assert.equal((await(await fetch(origin+'/api/insights/'+first.reportId)).json()).version.version,3);
+ page.once('dialog',dialog=>dialog.accept());await deleteButton.click();await page.getByText('这份日报已删除，自动复盘不会重新创建。',{exact:true}).waitFor();
+ assert.equal((await fetch(origin+'/api/insights/'+first.reportId)).status,404);assert.equal((await(await fetch(origin+'/api/insights/review?date='+target)).json()).overview.foodCount,4);
+ assert.equal((await fetch(origin+'/api/insights/'+first.reportId+'?version=3&generation=2',{method:'DELETE'})).status,200);
+ await page.screenshot({path:'tmp/insights-deletion-mobile.png',fullPage:true});await page.getByRole('button',{name:'重新生成日报',exact:true}).click();await page.getByText('已提交，自动复盘完成后会在这里显示。',{exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'当天回顾',exact:true}).count(),0);
+ const rebuilt=agent("const context=await getInsightContext(id),lease=await startInsightRun(id,randomUUID(),context.snapshotFingerprint);const saved=await completeInsightRun(id,lease.attemptId,{summary:'这是删除后手动重新生成的回顾。',findings:[]});console.log(JSON.stringify({version:saved.version}));");assert.equal(rebuilt.version,4);
+ await page.getByRole('button',{name:'重新检查记录',exact:true}).click();await page.getByText('这是删除后手动重新生成的回顾。',{exact:true}).waitFor();assert.equal((await fetch(origin+'/api/insights/'+first.reportId+'?version=1')).status,404);
+ await page.goto(`${origin}/insights?date=not-a-date`,{waitUntil:"networkidle"});await page.getByText("日期格式不正确",{exact:true}).waitFor();assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,missingMeals:true,reanalysis:true,preferredAiVersion:3,history:true,deletion:true,explicitRebuild:true,lostQueueResponse:true,viewports:[320,402,1280],errors}));
+}catch(error){await context?.pages()[0]?.screenshot({path:"tmp/insights-review-browser-failure.png",fullPage:true}).catch(()=>{});console.error(error);console.error(output);throw error;}
+finally{await context?.close();const stopped=process.platform==="win32"?spawnSync("taskkill",["/PID",String(server.pid),"/T","/F"],{encoding:"utf8",windowsHide:true}):null;if(process.platform!=="win32")server.kill("SIGTERM");server.stdout.destroy();server.stderr.destroy();server.unref();if(stopped&&stopped.status!==0)console.warn(JSON.stringify({cleanupRequired:server.pid,reason:stopped.stderr?.trim()||stopped.error?.message}));console.log(JSON.stringify({previewFiles:directory,serverStopped:stopped?stopped.status===0:true}));}
 process.exit(0);

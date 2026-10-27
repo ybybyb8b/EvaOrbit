@@ -57,6 +57,8 @@ test("SQLite report service preserves source tables, versions, references, histo
       import{parseInsightSnapshot}from'./src/lib/insight-reports.ts';
       import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow,parseBackupDocument}from'./src/lib/data-backup.ts';
       const repository=await getRepository(),db=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
+      const {createFoodLog}=await import('./src/lib/services/food.ts'),{parseNewFoodLog}=await import('./src/lib/validation.ts');
+      for(const mealType of ['lunch','dinner'])await createFoodLog(parseNewFoodLog({title:mealType,mealType,occurredAt:'2026-01-01T12:00:00+08:00',occurredHasExplicitTime:false}));
       const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('insight_reports','insight_report_versions')").all().map(row=>row.name);
       const original=()=>JSON.stringify(tables.map(name=>[name,db.prepare('SELECT * FROM "'+name+'"').all()]));const before=original();
       for(const name of tables)for(const op of ['INSERT','UPDATE','DELETE'])db.exec('CREATE TRIGGER "block_'+op+name+'" BEFORE '+op+' ON "'+name+'" BEGIN SELECT RAISE(ABORT,\'Report wrote business data\'); END;');
@@ -64,7 +66,7 @@ test("SQLite report service preserves source tables, versions, references, histo
       const first=await generateRuleInsightReport(command);assert.equal(first.report.status,'no_findings');assert.equal(first.version.version,1);
       const replay=await generateRuleInsightReport(command);assert.equal(replay.version.id,first.version.id);assert.equal(replay.version.snapshot.input.capturedAt,first.version.snapshot.input.capturedAt);
       await assert.rejects(generateRuleInsightReport({...command,revisionNote:'Changed'}),/请求标识/);
-      await assert.rejects(generateRuleInsightReport({...command,requestKey:randomUUID()}),/新版本/);
+      assert.equal((await generateRuleInsightReport({...command,requestKey:randomUUID()})).version.version,1);
       const snapshot={...first.version.snapshot,method:'ai',agent:'test-agent',summary:'An observed change',findings:[{id:'a',title:'Observed',body:'Recorded change',domain:'food',importance:'normal',kind:'hypothesis',method:'ai',evidenceIds:['food-drink-window'],revises:[]}]};
       const second=await publishInsightReport({...command,expectedVersion:1,requestKey:randomUUID()},snapshot);assert.equal(second.report.id,first.report.id);assert.equal(second.version.version,2);
       const third=await publishInsightReport({...command,expectedVersion:2,requestKey:randomUUID()},{...snapshot,revisionNote:'Refined',findings:[{...snapshot.findings[0],revises:[{reportId:first.report.id,version:2,findingId:'a'}]}]});assert.equal(third.version.version,3);

@@ -1,5 +1,7 @@
 # Insights 报告与版本 · Phase 2
 
+> 当前每日复盘的餐次检查、过期识别、默认阅读版本和执行轮次以 [Insights 整体优化](INSIGHTS_REVIEW.md) 为准。以下保留原阶段契约与历史验证。
+
 本篇保留 Phase 2 的实现与验收范围；现已增加 [Phase 3 外部 Agent 后台](INSIGHTS_AGENT.md)，定时任务由用户自行配置。
 
 ## 当前能力

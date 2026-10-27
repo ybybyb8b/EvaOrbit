@@ -99,3 +99,9 @@ Invoke-RestMethod http://localhost:3000/api/mcp -Method Post -Headers $headers -
 ```
 
 For ChatGPT, select OAuth and enter `https://eva-orbit.vercel.app/api/mcp`. For MCP Inspector, choose Streamable HTTP, enter the endpoint URL, complete OAuth, and use the issued access token.
+
+## Insights Daily review v2
+
+`insight_context` adds `recording`, `overview`, `analysis_guidance` and `fingerprint_version`. Missing lunch/dinner blocks new analysis without consuming a Run attempt. `insight_run` keeps start/complete/fail, adds generations and `needs_reanalysis`; use `can_start`, rather than unconditionally skipping succeeded days. Updated source inputs can safely open a new generation with a fresh three-attempt budget; repeated inputs cannot reset exhausted retries. Rule candidates are frozen analysis material, not mandatory final findings. Default `insight_report` reads the latest AI version; UUID/v/N remains immutable. See [Daily review contract](docs/INSIGHTS_REVIEW.md) and [task prompt](docs/INSIGHTS_DAILY_TASK.md).
+
+Deleted Daily reports return `analysis_status=deleted`, `can_start=false`, and are excluded from due searches. Skip them without reminders or automatic recreation. Only an explicit user request in the Web UI starts a fresh generation; previously deleted versions remain unavailable. MCP `insight_report` remains read only.

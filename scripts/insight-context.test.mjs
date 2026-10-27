@@ -55,6 +55,7 @@ test("Daily context validates Shanghai boundaries, baselines, deterministic snap
   const second=await buildInsightContext(reader,period,'2026-03-02T00:00:00Z');
   assert.equal(first.snapshotFingerprint,second.snapshotFingerprint);
   assert.deepEqual(first.metrics,second.metrics);
+  assert.equal(first.snapshotFingerprint,(await buildInsightContext(reader,period,now.toISOString(),[{id:"10000000-0000-4000-8000-000000000001",periodStart:"2026-02-28",currentVersion:9}])).snapshotFingerprint);
   weight=61;
   assert.notEqual(first.snapshotFingerprint,(await buildInsightContext(reader,period,now.toISOString())).snapshotFingerprint);
   capped=true;

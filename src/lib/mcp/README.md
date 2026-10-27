@@ -92,3 +92,7 @@ the purchase/bonus duration and resulting `valid_until`; callers must retain a
 stable `purchase_key` for retries. Expiry-only PATCH and expiry reminder
 complete/skip never create payments. Queries return mode and derived
 `membership_state`; expired is not a new persisted lifecycle status.
+
+Insights v2 checks lunch/dinner before writes, tracks source freshness separately from report outputs, and retains a stable Run with bounded generations for reanalysis. Default reading uses `reading_version` (latest AI), while `current_version` remains the optimistic write counter. Rule candidates stay in frozen input metrics; external AI selects the final findings. See [review contract](../../../docs/INSIGHTS_REVIEW.md).
+
+Deleted Daily reports return `analysis_status=deleted`, `can_start=false`, and are excluded from due searches. Skip them without reminders or automatic recreation. Only an explicit user request in the Web UI starts a fresh generation; previously deleted versions remain unavailable. MCP `insight_report` remains read only.

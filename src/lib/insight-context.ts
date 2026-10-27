@@ -4,6 +4,7 @@ import { ValidationError } from "./validation.ts";
 import { buildFoodDrinkInsights } from "./food-drink-insights.ts";
 import { buildTrackerInsights } from "./tracker-insights.ts";
 import { calculateDailyNutrition } from "./nutrition.ts";
+import { checkInsightMeals, INSIGHT_FINGERPRINT_VERSION } from "./insight-review.ts";
 import type { EvaOrbitRepository } from "./repositories/types.ts";
 
 export const insightReadMethods = ["listFoodLogs", "listDrinkLogs", "listTrainingLogs", "listHealthRecords", "listWeightRecords", "listMenstrualFlowRecords", "listTrackerEntries", "listTrackers", "listTrackerFields", "listTasks", "getNutritionSettings"] as const;
@@ -61,6 +62,12 @@ export async function buildInsightContext(reader: InsightReader, period: Insight
   const [tasksRaw, trackersRaw, energy] = await Promise.all([reader.listTasks("all"), reader.listTrackers(), reader.getNutritionSettings(period.date)]);
   const tasks = ordered(tasksRaw), trackers = ordered(trackersRaw);
   const target = days.at(-1)!, baseline = days.slice(0, -1);
+  const recording = checkInsightMeals(period.date, target.rows.food, target.capped.includes("food"));
+  const unknownCalories = [...target.rows.food, ...target.rows.drink].filter(row => row.estimatedKcal === null && row.kcalMin === null && row.kcalMax === null).length;
+  const nutrition = calculateDailyNutrition(period.date, target.rows.food, target.rows.drink, energy);
+  // Recorded intake is partial by definition; it cannot establish an actual caloric deficit.
+  nutrition.energyBalance = nutrition.energyBalanceMin = nutrition.energyBalanceMax = null;
+  if (energy.restingEnergyKcal === null || energy.activeEnergyKcal === null) nutrition.totalExpenditureKcal = null;
   const coverage = Object.fromEntries(sources.map(source => [source, {
     status: days.some(day => day.capped.includes(source)) ? "possibly_truncated" : "within_query_limits",
     sampleCount: days.reduce((sum, day) => sum + day.rows[source].length, 0),
@@ -85,6 +92,8 @@ export async function buildInsightContext(reader: InsightReader, period: Insight
     ...("occurredHasExplicitTime" in row ? { hasExplicitTime: row.occurredHasExplicitTime } : {}),
     ...("source" in row ? { provenance: row.source } : {}),
     ...("title" in row ? { title: row.title } : {}),
+    ...("name" in row ? { name: row.name } : {}),
+    ...("mealType" in row ? { mealType: row.mealType } : {}),
     ...("summary" in row ? { summary: row.summary } : {}),
     ...("trainingType" in row ? { trainingType: row.trainingType, durationMinutes: row.durationMinutes } : {}),
     ...("weightKg" in row ? { weightKg: row.weightKg } : {}),
@@ -113,11 +122,18 @@ export async function buildInsightContext(reader: InsightReader, period: Insight
   const taskEvidence = [...new Map([...due, ...completed].map(task => [task.id, { source: "task", resource: "task", id: task.id, href: "/tasks", title: task.title, dueDate: task.dueDate, completed: task.completed, completedAt: task.completedAt }])).values()];
   const mean = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
   const baselineReferences = baseline.flatMap(day => sources.flatMap(source => day.rows[source].map(row => ({ source, table: tables[source], resource: resources[source], resourceId: "trackerId" in row ? row.trackerId : resources[source] ? row.id : null, id: row.id, occurredAt: row.occurredAt }))));
-  const input = { period, days, tasks, trackers, energy, fieldSnapshots, relatedReports };
+  // Reports are outputs, never source data: another report must not invalidate this day's analysis.
+  const input = { fingerprintVersion: INSIGHT_FINGERPRINT_VERSION, period, days, tasks, trackers, energy, fieldSnapshots };
   return {
-    schemaVersion: 1, period, capturedAt, relatedReports,
+    analysisGuidance: ["先检查 recording.complete；缺午餐或晚餐时仅提示补录，不领取租约。", "summary 用自然中文分段回顾当天已记录的生活，不罗列技术字段。", "规则候选只供筛选和核对，不要逐条拼接。没有显著变化时 findings 可以为空；只选最多三条有实际信息价值的发现。", "不得把没有记录解释为没有活动或没有吃饭；已记录热量只是估算，不推断真实摄入或热量缺口。"],
+    schemaVersion: 2, fingerprintVersion: INSIGHT_FINGERPRINT_VERSION, period, capturedAt, relatedReports, recording,
+    overview: { foodCount: target.rows.food.length, drinkCount: target.rows.drink.length,
+      recordedIntakeKcal: target.rows.food.length + target.rows.drink.length > unknownCalories ? nutrition.estimatedIntakeKcal : null, unknownCalories,
+      trainingCount: target.rows.training.length, trainingMinutes: target.rows.training.reduce((sum, row) => sum + (row.durationMinutes ?? 0), 0),
+      trackerCount: target.rows.tracker.length, completedTasks: completed.length,
+      events: [...target.rows.food.map(row => ({ label: row.title, kind: row.mealType })), ...target.rows.drink.map(row => ({ label: row.name, kind: "drink" })), ...target.rows.training.map(row => ({ label: row.trainingType, kind: "training" }))].slice(0, 20) },
     snapshotFingerprint: createHash("sha256").update(canonical(input)).digest("hex"),
-    consistency: "Independent read queries; concurrent edits may require recapture. Fingerprint excludes capture time; covers all loaded inputs, not omitted or capped data.",
+    consistency: "Independent read queries; concurrent edits may require recapture. Fingerprint excludes capture time and report references; covers loaded source inputs, not omitted or capped data.",
     coverage, metrics, trackerStatistics,
     metadataCoverage: { tasksPossiblyTruncated: tasks.length >= 1000, trackersPossiblyTruncated: trackers.length >= 1000, trackerFieldsPossiblyTruncated: fieldSnapshots.filter(item => item.fields.length >= 1000).map(item => item.id) },
     domainMetrics: {
@@ -126,10 +142,10 @@ export async function buildInsightContext(reader: InsightReader, period: Insight
       health: Object.fromEntries([...new Set(target.rows.health.map(row => row.type))].sort().map(type => [type, target.rows.health.filter(row => row.type === type).length])),
     },
     tasks: { dueCount: due.length, completedCount: completed.length, complete: tasks.length < 1000, missingCompletionTime: tasks.filter(task => task.completed && !task.completedAt).length, semantics: "dueDate is date-only; completion uses completedAt; current status does not reconstruct historical status" },
-    nutrition: { summary: foodComplete ? calculateDailyNutrition(period.date, target.rows.food, target.rows.drink, energy) : null,
+    nutrition: { summary: foodComplete ? nutrition : null,
       scope: "Recorded Food/Drink estimates and manual energy only; unknown calories may contribute zero. Not an actual intake measurement or effective nutrition_daily energy summary.",
       healthKitEnergy: "unavailable_in_repository_context", manualEnergy: energy },
-    findings: foodComplete ? buildFoodDrinkInsights(allFood, allDrink, period.date, true).map(finding => ({ ...finding, method: "rule", kind: "interpretation", evidenceWindow: { from: dateRange(shiftDate(period.date, -29)).from, to: period.to }, evidenceSources: ["food_log", "drink_log"] })) : [],
+    findings: foodComplete ? buildFoodDrinkInsights(allFood, allDrink, period.date, true).filter(finding => finding.id.startsWith("change-") || finding.id.startsWith("preference-") && finding.body.includes("此前")).map(finding => ({ ...finding, method: "rule", kind: "interpretation", evidenceWindow: { from: dateRange(shiftDate(period.date, -29)).from, to: period.to }, evidenceSources: ["food_log", "drink_log"] })) : [],
     evidence: [...evidence, ...taskEvidence].slice(0, 100),
     evidenceCoverage: { total: evidence.length + taskEvidence.length, returned: Math.min(100, evidence.length + taskEvidence.length), truncated: evidence.length + taskEvidence.length > 100, scope: "target day only; findings reference the full Food/Drink window by source and range" },
     baselineReferences: baselineReferences.slice(0, 30),

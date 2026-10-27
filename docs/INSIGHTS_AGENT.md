@@ -1,5 +1,7 @@
 # Insights 单 Agent 后台 · Phase 3
 
+> 当前每日复盘的餐次检查、过期识别、默认阅读版本和执行轮次以 [Insights 整体优化](INSIGHTS_REVIEW.md) 为准。以下保留原阶段契约与历史验证。
+
 ## 范围
 
 执行方由用户选择为 ChatGPT 云端 Scheduled Task，且用户自行创建任务。EO 仅提供账户隔离的 MCP 协议、输入冻结、执行追踪、原子写回及有条件的重要通知，不调用 App Provider/Model，不配置本地自动化，不引入 Agent API Key、管理员令牌或独立 cron 认证通道。

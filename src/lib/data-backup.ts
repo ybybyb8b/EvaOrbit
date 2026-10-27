@@ -1,6 +1,6 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
-export const BACKUP_VERSION = 13 as const;
-export const BACKUP_SCHEMA_VERSION = "202610270001_healthkit_workouts";
+export const BACKUP_VERSION = 15 as const;
+export const BACKUP_SCHEMA_VERSION = "202610270003_insight_deletion";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -97,7 +97,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -167,7 +167,7 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== BACKUP_VERSION) {
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== 13 && document.backup_version !== 14 && document.backup_version !== BACKUP_VERSION) {
     throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 至 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {

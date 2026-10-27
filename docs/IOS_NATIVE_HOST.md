@@ -488,3 +488,7 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 本地 React 通过 `workspaces.readOnlySnapshot` 请求三种账户隔离快照，Native SQLite `workspace_readonly_cache` 与旧业务队列分离。`settings.aiConfiguration` 是仅限在线 Provider/模型管理的独立能力：固定路径/方法白名单、服务端协议与账户绑定、临时无缓存 HTTP 请求，无离线密钥或请求重放。原 Web Host 不公开这些本地专用方法；原权限、签名、HealthKit/EventKit/通知链不变。验收与回退见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.
+
+## Insights 双端发布
+
+本地 React 新增 Insights 入口，复用 Web 的每日简报与既有 business.request 账户通道。安装包 business-routes.json 增加 Insights GET 列表/餐次状态/运行、POST 排队及 UUID 报告 GET/DELETE；Swift 动态读取原有清单，无新增方法、权限、framework、entitlement、数据库队列或签名链变更。断网不显示旧的分析结论或提交写入，联网后重新读取。Web/MCP 与两项 Insights 数据迁移先发布，本地包以 local_trackers=true 按原链路构建。Windows 已通过打包前浏览器模拟 Bridge 与生产前端构建；macOS 编译和真机验收不得据此记为通过。

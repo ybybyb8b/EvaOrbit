@@ -488,3 +488,7 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 附加 SQLite `online_business_cache` 保存账户隔离的访问结果（128 项/64 MiB，单项 8 MiB），不改旧数据/队列。Settings 分派保留 bridge method 与 HTTP verb 的区别。无权限、framework、entitlement、签名或安装链变化。必须先核验并获准发布配套业务 API、测试账户配置和必要 migration，再安装集中验收 IPA；未运行新 macOS CI/XCTest 或真实账户验收前不得声称已完成。详见 [在线业务层](LOCAL_ONLINE_BUSINESS.md)。
 
 Vercel resource optimization: EventKit reads only enabled domains. Optional mapping GET `kind=event|reminder` limits links and existence checks, while omitted kind preserves old clients. Committed business changes publish refreshes; mapping maintenance does not refresh Calendar. The 60-second foreground compensation, Native bridge, permissions and IPA remain unchanged. Calendar/Health local replacement is deferred.
+
+## Insights 双端发布
+
+本地 React 新增 Insights 入口，复用 Web 的每日简报与既有 business.request 账户通道。安装包 business-routes.json 增加 Insights GET 列表/餐次状态/运行、POST 排队及 UUID 报告 GET/DELETE；Swift 动态读取原有清单，无新增方法、权限、framework、entitlement、数据库队列或签名链变更。断网不显示旧的分析结论或提交写入，联网后重新读取。Web/MCP 与两项 Insights 数据迁移先发布，本地包以 local_trackers=true 按原链路构建。Windows 已通过打包前浏览器模拟 Bridge 与生产前端构建；macOS 编译和真机验收不得据此记为通过。

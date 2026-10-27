@@ -41,14 +41,16 @@ test("common home reflects independent record and limit mutations without losing
       assert.equal(home.window.from, shiftDate(date, -29));
       assert.equal(home.brief.drinkCount, 1);
       assert.deepEqual(home.insights, []);
+      const checkedMeals=[];for(const mealType of ['lunch','dinner'])checkedMeals.push(await food.createFoodLog(parseNewFoodLog({title:mealType,mealType,occurredAt:shiftDate(date,-1)+'T12:00:00+08:00',occurredHasExplicitTime:false})));
       const report=await generateRuleInsightReport({date:shiftDate(date,-1),expectedVersion:0,requestKey:randomUUID()});
-      assert.match(report.version.snapshot.findings.find(row=>row.id==="common-drink").body,/近 30 天 6 杯/);
+      assert.deepEqual(report.version.snapshot.findings,[]);
       const reference=report.version.snapshot.evidence.find(row=>row.resource==="drink_log"&&history.includes(Number(row.recordId)));
       assert(reference);
       assert.equal((await getInsightSourceEvidence(report.report.id,1,reference.id)).record.name,"桂花茶");
       for (const id of history) await drink.deleteDrinkLog(id);
       await assert.rejects(getInsightSourceEvidence(report.report.id,1,reference.id),/已删除/);
-      assert.match((await getInsightReportDetail(report.report.id,1)).version.snapshot.findings.find(row=>row.id==="common-drink").body,/近 30 天 6 杯/);
+      assert.deepEqual((await getInsightReportDetail(report.report.id,1)).version.snapshot.findings,[]);
+      for(const checked of checkedMeals)await food.deleteFoodLog(checked.id);
       await drink.deleteDrinkLog(cup.id);
       home = await getFoodDrinkHome(); assert.equal(home.brief.drinkCount, 0); assert.equal(home.brief.latest.kind, "food"); assert.equal(home.brief.latest.record.occurredHasExplicitTime, false);
       await food.updateFoodLog(meal.id, { title: "更新后的午餐" });

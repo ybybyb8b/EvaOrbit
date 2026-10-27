@@ -13,12 +13,14 @@ export function stableInsightJson(value:unknown):string {
 }
 export type InsightRunStatus = "running" | "succeeded" | "waiting_data" | "waiting_retry" | "failed";
 export interface InsightRun {
-  id: string; date: string; status: InsightRunStatus; attemptCount: number; currentAttemptId: string;
+  generation: number; inputFingerprint: string | null;
+  id: string; date: string; status: InsightRunStatus; attemptCount: number; currentAttemptId: string | null;
   nextRetryAt: string | null; reportId: string | null; reportVersion: number | null; lastError: string | null;
   leaseUntil: string | null;
   createdAt: string; updatedAt: string;
 }
 export interface InsightRunAttempt {
+  generation: number;
   id: string; runId: string; number: number; requestKey: string; status: "running" | "succeeded" | "failed" | "expired" | "waiting_data";
   base: InsightSnapshot; expectedVersion: number; leaseUntil: string; startedAt: string; finishedAt: string | null; error: string | null; outputHash: string | null;
 }
@@ -83,12 +85,14 @@ export function insightOutputFromMcp(value:unknown) {
   return result;
 }
 export function insightRunFromRow(row:Record<string,unknown>):InsightRun {
-  return{id:String(row.id),date:String(row.date),status:row.status as InsightRunStatus,attemptCount:Number(row.attempt_count),currentAttemptId:String(row.current_attempt_id),
+  return{id:String(row.id),date:String(row.date),status:row.status as InsightRunStatus,attemptCount:Number(row.attempt_count),currentAttemptId:row.current_attempt_id == null ? null : String(row.current_attempt_id),
+    generation:Number(row.generation??1),inputFingerprint:row.input_fingerprint == null ? null : String(row.input_fingerprint),
     nextRetryAt:row.next_retry_at?String(row.next_retry_at):null,leaseUntil:row.lease_until?String(row.lease_until):null,reportId:row.report_id?String(row.report_id):null,reportVersion:row.report_version===null?null:Number(row.report_version),
     lastError:row.last_error?String(row.last_error):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};
 }
 export function insightAttemptSummaryFromRow(row:Record<string,unknown>):InsightAttemptSummary {
   return{id:String(row.id),runId:String(row.run_id),number:Number(row.attempt_number),requestKey:String(row.request_key),status:row.status as InsightRunAttempt["status"],
+    generation:Number(row.generation??1),
     expectedVersion:Number(row.expected_version),
     leaseUntil:String(row.lease_until),startedAt:String(row.started_at),finishedAt:row.finished_at?String(row.finished_at):null,error:row.error?String(row.error):null,outputHash:row.output_hash?String(row.output_hash):null};
 }

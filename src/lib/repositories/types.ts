@@ -157,6 +157,10 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  deleteInsightReport(id: string, expectedVersion: number, expectedGeneration: number): Promise<void>;
+  getInsightVersionForRequest(requestKey: string): Promise<import("../insight-reports").InsightVersion | null>;
+  getInsightRunAttempt(input: { id: string } | { requestKey: string }): Promise<import("../insight-runs").InsightRunAttempt | null>;
+  queueInsightRun(date: string, fingerprint: string, expectedGeneration: number): Promise<import("../insight-runs").InsightRun>;
   getInsightRun(date: string): Promise<import("../insight-runs").InsightRunClaim | null>;
   listInsightRuns(): Promise<import("../insight-runs").InsightRun[]>;
   listInsightRunAttempts(runId: string): Promise<import("../insight-runs").InsightAttemptSummary[]>;

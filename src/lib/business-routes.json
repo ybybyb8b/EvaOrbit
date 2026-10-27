@@ -687,7 +687,9 @@
   },
   {
     "pattern": "^/api/subscriptions/[1-9][0-9]*/purchases/[1-9][0-9]*$",
-    "methods": ["PATCH"]
+    "methods": [
+      "PATCH"
+    ]
   },
   {
     "pattern": "^/api/subscriptions/[1-9][0-9]*/(?:payments|purchases)$",
@@ -717,15 +719,25 @@
   },
   {
     "pattern": "^/api/subscriptions/library$",
-    "methods": ["GET", "POST"]
+    "methods": [
+      "GET",
+      "POST"
+    ]
   },
   {
     "pattern": "^/api/subscriptions/library/[1-9][0-9]*$",
-    "methods": ["PATCH", "DELETE"]
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ]
   },
   {
     "pattern": "^/api/subscriptions/library/[1-9][0-9]*/icon$",
-    "methods": ["GET", "POST", "DELETE"]
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ]
   },
   {
     "pattern": "^/api/tasks/[1-9][0-9]*$",
@@ -791,6 +803,32 @@
     "methods": [
       "GET",
       "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/insights$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/insights/review$",
+    "methods": [
+      "GET"
+    ]
+  },
+  {
+    "pattern": "^/api/insights/runs$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/insights/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    "methods": [
+      "GET",
+      "DELETE"
     ]
   }
 ]

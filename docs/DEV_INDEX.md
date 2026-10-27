@@ -223,7 +223,9 @@
 
 - **职责与入口**：[报告页](../src/app/insights/)、[报告服务](../src/lib/services/insight-reports.ts)、[报告类型与校验](../src/lib/insight-reports.ts)、[Context service](../src/lib/services/insight-context.ts)。MCP `insight_context` 仅支持 get，ID 为 `yesterday`、`day/YYYY-MM-DD`，限已经结束的上海自然日。
 - **数据与边界**：`insight_reports` 按账户/周期/起点保持稳定身份，`insight_report_versions` 保存不可变快照；`/api/insights` 与详情接口管理规则/AI 报告、证据与版本。`insight_runs` / `insight_run_attempts` 保存外部 Agent 的冻结输入、30 分钟租约、三次执行及结果引用，`/api/insights/runs` 提供只读状态查询。Postgres 仅授予账户 SELECT，受控 RPC 原子完成报告与运行；SQLite 保持对应事务及备份恢复。报告写入、执行控制与 Context 只读白名单分开。
-- **依赖与决定**：复用 Food 行为规则、Tracker 字段统计与营养估算；Context 按日读取前 30 天基线，并附最多 50 个既往日报版本引用。公开覆盖限制，不调用订阅补记或独立 Web 身份 HealthKit 能量读取。Food 旧行为展示已迁移，Tracker 图表与统计保留。外部 AI 通过 MCP `insight_run` start/complete/fail 受控执行，`insight_report` 只读历史；用户选择自行配置 ChatGPT 云端 Scheduled Task，不调用 App 内模型。长期周期计算及独立本地 Host 适配未开启。
+- **依赖与决定**：复用 Food 行为规则、Tracker 字段统计与营养估算；Context 按日读取前 30 天基线，并附最多 50 个既往日报版本引用。公开覆盖限制，不调用订阅补记或独立 Web 身份 HealthKit 能量读取。Food 旧行为展示已迁移，Tracker 图表与统计保留。外部 AI 通过 MCP `insight_run` start/complete/fail 受控执行，`insight_report` 只读历史；用户选择自行配置 ChatGPT 云端 Scheduled Task，不调用 App 内模型。长期周期计算未开启；本地 App 通过既有在线业务通道复用同一 InsightsView，需联网检查最新数据。
+- **每日复盘**：先按上海自然日核对午餐/晚餐，再显示已记录概览与统一 AI 正文；`/api/insights/review` 返回待补录、待分析、已完成或数据已更新。`reading_version` 保持 AI 阅读优先，`current_version` 负责并发；Run 的 generation 为每次输入更新保留独立三次重试与旧历史。手动请求仅排队外部 AI，规则作为冻结候选，不覆盖正文。详见 [整体优化](INSIGHTS_REVIEW.md)。
+- **删除边界**：日报更多信息提供整份逻辑删除，隐藏旧版本、终止活跃分析并阻止自动重建；保留内部快照与修订引用。用户明确重新生成才开启新轮次，旧版本仍隐藏；原始生活记录不受影响。MCP 报告仍只读，备份保存删除状态。
 - **详文**：[Context 口径](INSIGHTS_CONTEXT.md)、[报告与 Phase 2](INSIGHTS_REPORTS.md)、[Agent 后台与 Phase 3](INSIGHTS_AGENT.md)、[用户定时任务正文](INSIGHTS_DAILY_TASK.md)。
 
 ## MCP

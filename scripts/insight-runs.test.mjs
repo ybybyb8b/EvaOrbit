@@ -81,16 +81,12 @@ test("real SQLite + MCP Agent cycle binds evidence, replays writes, tracks delay
       import{insightOutputSchemaJson,importantInsightNotification}from'./src/lib/insight-runs.ts';
       import{parseNewFoodLog}from'./src/lib/validation.ts';import{createFoodLog}from'./src/lib/services/food.ts';
       import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow,emptyBackupResources,parseBackupDocument}from'./src/lib/data-backup.ts';
-      await getRepository();for(const date of ['2026-01-02','2026-01-03','2026-01-04'])await createFoodLog(parseNewFoodLog({title:'面条',occurredAt:date+'T12:00:00+08:00',occurredHasExplicitTime:false}));
+      await getRepository();for(const date of ['2026-01-02','2026-01-03','2026-01-04','2026-01-08'])for(const mealType of ['lunch','dinner'])await createFoodLog(parseNewFoodLog({title:'面条',mealType,occurredAt:date+'T12:00:00+08:00',occurredHasExplicitTime:false}));
       const sql=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       const tables=sql.prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not in ('insight_reports','insight_report_versions','insight_runs','insight_run_attempts')").all().map(row=>row.name);
       const original=()=>JSON.stringify(tables.map(name=>[name,sql.prepare('SELECT * FROM "'+name+'"').all()]));const before=original();
       for(const name of tables)for(const op of ['INSERT','UPDATE','DELETE'])sql.exec('CREATE TRIGGER "block_'+op+name+'" BEFORE '+op+' ON "'+name+'" BEGIN SELECT RAISE(ABORT,\'Agent modified source data\'); END;');
-      const context1=await getInsightContext('day/2026-01-01');const delayed=await startInsightRun('day/2026-01-01',randomUUID(),context1.snapshotFingerprint);assert.equal(delayed.run.status,'waiting_data');assert.equal(delayed.ready,false);
-      assert.equal((await startInsightRun('day/2026-01-01',randomUUID(),context1.snapshotFingerprint)).ready,false);
-      sql.exec("UPDATE insight_runs SET next_retry_at='2000-01-01T00:00:00Z' WHERE date='2026-01-01'");
-      const empty=await startInsightRun('day/2026-01-01',randomUUID(),context1.snapshotFingerprint);assert.equal(empty.ready,true);
-      const noFindings=await completeInsightRun('day/2026-01-01',empty.attemptId,{summary:'本期暂无值得特别关注的发现。',findings:[]});assert.equal(noFindings.report.status,'no_findings');
+      const context1=await getInsightContext('day/2026-01-01');const blocked=await startInsightRun('day/2026-01-01',randomUUID(),context1.snapshotFingerprint);assert.equal(blocked.analysisStatus,'waiting_records');assert.equal(blocked.ready,false);assert.equal(blocked.run,null);
       const context2=await getInsightContext('day/2026-01-02');await assert.rejects(startInsightRun('day/2026-01-02',randomUUID(),'b'.repeat(64)),/上下文已变化/);
       const requestKey=randomUUID();
       const mcp=action=>withMcpRequestRepository({userId:'local',accessToken:'test'},action);
@@ -116,8 +112,8 @@ test("real SQLite + MCP Agent cycle binds evidence, replays writes, tracks delay
       assert.equal((await startInsightRun('day/2026-01-03',randomUUID(),(await getInsightContext('day/2026-01-03')).snapshotFingerprint)).ready,false);
       assert.equal((await getInsightRunStatus('day/2026-01-03')).attempts.length,3);
       const jan4=await getInsightContext('day/2026-01-04');let expiry=await startInsightRun('day/2026-01-04',randomUUID(),jan4.snapshotFingerprint);
-      assert(expiry.baseSnapshot.findings.length>0);
-      await assert.rejects((await getRepository()).finishInsightRun(expiry.attemptId,{...expiry.baseSnapshot,findings:[]},'c'.repeat(64)),/锁定/);
+      assert.equal(expiry.baseSnapshot.findings.length,0);
+      await assert.rejects((await getRepository()).finishInsightRun(expiry.attemptId,{...expiry.baseSnapshot,input:{...expiry.baseSnapshot.input,fingerprint:'d'.repeat(64)}},'c'.repeat(64)),/锁定/);
       const staleId=expiry.attemptId;
       for(let attempt=1;attempt<=3;attempt++){
         const expiredShanghai=new Date(Date.now()+8*3600000-60000).toISOString().replace('Z','+08:00');
@@ -138,7 +134,7 @@ test("real SQLite + MCP Agent cycle binds evidence, replays writes, tracks delay
       assert.equal(JSON.parse(insightOutputSchemaJson).additionalProperties,false);assert(Array.isArray(await listInsightRunStatus(true)));
       const jan8=await getInsightContext('day/2026-01-08');await startInsightRun('day/2026-01-08',randomUUID(),jan8.snapshotFingerprint);
       sql.exec("UPDATE insight_runs SET next_retry_at='2000-01-01T00:00:00Z' WHERE date='2026-01-08'");
-      assert.equal((await startInsightRun('day/2026-01-08',randomUUID(),jan8.snapshotFingerprint)).ready,true);
+      assert.equal((await startInsightRun('day/2026-01-08',randomUUID(),jan8.snapshotFingerprint)).ready,false);
       const resourcesToRestore=Object.fromEntries(BACKUP_TABLES.map(table=>[table,sql.prepare('SELECT * FROM "'+table+'"').all().map(row=>sanitizeExportRow(table,row))]));
       const reversed=value=>Array.isArray(value)?value.map(reversed):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([key,item])=>[key,reversed(item)])):value;
       for(const row of resourcesToRestore.insight_run_attempts)row.base_snapshot=reversed(JSON.parse(row.base_snapshot));
