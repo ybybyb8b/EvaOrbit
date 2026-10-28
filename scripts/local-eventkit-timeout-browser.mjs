@@ -46,7 +46,7 @@ try{
  await page.screenshot({path:path.join(directory,'sync-timeout.png'),fullPage:true});
  await page.evaluate(()=>{window.stall=false;window.releaseRead({items:[]});});
  await section.getByRole('button',{name:'Sync Reminders',exact:true}).click();
- await page.waitForFunction(()=>document.querySelectorAll('.eventkit-sync-group small')[1]?.textContent?.startsWith('Last sync'));
+ await page.waitForFunction(()=>document.querySelectorAll('.eventkit-sync-group small')[1]?.textContent?.startsWith('Last round'));
  assert.equal(await page.evaluate(()=>window.calls.some(c=>c.method==='native.api'&&c.params.method!=='GET'||c.method==='native.invoke'&&['eventkit.save','eventkit.delete'].includes(c.params.method))),false);
  assert.deepEqual(direct,[]);await context.close();
  console.log(JSON.stringify({passed:true,checks:'Packaged manual Sync; stalled Reminders read; concrete timeout banner; busy cleared; late reply ignored; explicit retry completes; no writes',evidence:directory}));

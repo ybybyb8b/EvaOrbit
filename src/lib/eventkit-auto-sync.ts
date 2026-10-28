@@ -3,7 +3,7 @@ import {eventKitRead} from "./eventkit-read.ts";
 import {requestFailure,requestOperation} from "./request-diagnostics.ts";
 import {responseError} from "./response-error.ts";
 import { eventKitSupported, getNativeHostInfo, nativeCall } from "./native-bridge.ts";
-import { eventKitCalendarReadModes, synchronizeEventKit, type EventKitModes, type EventKitReminderRoutes, type EventKitSource, type EventKitStatus } from "./eventkit-sync.ts";
+import { eventKitCalendarReadModes, synchronizeEventKitScopes, type EventKitModes, type EventKitReminderRoutes, type EventKitSource, type EventKitStatus } from "./eventkit-sync.ts";
 import { captureEventKitPreferences, parseEventKitPreferences, resolveEventKitPreferences, type EventKitPreferences } from "./eventkit-preferences.ts";
 
 export const eventKitSourcesKey = "evaorbit.eventkit.sources.v1";
@@ -107,11 +107,8 @@ export async function syncConfiguredEventKit() {
   if (!granted(status.calendarPermission) && !granted(status.reminderPermission)) return null;
   const { modes, routes } = await loadEventKitAccountPreferences(status);
   if (!Object.values(modes).some(mode => mode !== "off") && !Object.values(routes).some(Boolean)) return null;
-  // Never treat a revoked permission as an empty Apple store (and delete EO records).
-  if (status.calendars.some(source => modes[source.identifier] !== "off" && modes[source.identifier]) && !granted(status.calendarPermission)) return null;
-  if ((Object.values(routes).some(Boolean) || status.reminderLists.some(source => modes[source.identifier] !== "off" && modes[source.identifier])) && !granted(status.reminderPermission)) return null;
-  const result = await synchronizeEventKit(status, modes, routes,"all",true);
-  localStorage.setItem(eventKitLastSyncKey, result.lastSync);
+  const result = await synchronizeEventKitScopes(status,modes,routes,true);
+  if(Object.keys(result.scopeOutcomes??{}).length&&Object.values(result.scopeOutcomes??{}).every(outcome=>outcome.state==="complete"))localStorage.setItem(eventKitLastSyncKey,result.lastSync);
   window.dispatchEvent(new CustomEvent(eventKitSyncFinished, { detail: { result } }));
   return result;
 }

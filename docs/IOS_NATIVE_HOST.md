@@ -1,6 +1,8 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
-Apple 读取统一以 2026-10-01 为下界，不设置永久截止日期。Calendar／Reminder 按近期优先、持久断点和有限批次推进；完整身份索引仍用于防重，未解决的恢复项不会被当作新记录导入。详细口径和执行限制见 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。Calendar 恢复每组最多4条并行，Reminder／pending 操作顺序执行；失败排空已启动的一组，不启动下一组。设置页区分本轮结果和待核对数量，不把局部完成显示为全量完成。 同一次 native.api 内复用已验证的账户授权，仍检查账户、generation、在线开关和服务端认证，不跨请求缓存权限。需要新 IPA；Windows 验证不能代替 Swift 编译和真机验收。
+Supabase 隔离验证任务固定使用 `ubuntu-24.04` 和 `supabase/setup-cli@v3.0.1`，CLI 本身仍为 `2.121.0`，消除旧 Action runtime 与浮动系统镜像提醒。打包和签名步骤不变；新配置尚待后续 CI 实跑，无需为此重新生成已有 IPA。
+
+EventKit 自动同步和手动 Sync all 共用分项编排：Calendar／Reminders 的权限、错误与结果分别处理，账户失效或切换才共同中止；本地 Health 待写回和通知校准也独立收集错误。近期发现每轮执行，历史按季度与有限关联批次继续；完成断点只记录已解决项，未解决项以 30 秒至 10 分钟退避重新核对，手动可重试。执行断点版本升级仅重建元数据，不清业务数据或队列。Reminder Import all 改走原子导入，Tasks／Reminders 使用专用 ID 分页读取。新 API／数据库函数须先发布，本地包与恢复索引优化须重建 IPA；Windows 检查不等于原生实测。 日期下界与身份防重规则继续遵循 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。
 
 错误细化覆盖 Native 共用出口与本地 React 请求层：显示实际操作/步骤、HTTP 或安全系统错误码，保留账户、只读、冲突及写入结果不明语义，不自动重放、不清理数据。Health 上传错误保留连接原因，现有重试调度不变。详见 [本地错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)；需新 IPA，Windows 检查不能替代 Swift 编译、XCTest 和真机验收。
 

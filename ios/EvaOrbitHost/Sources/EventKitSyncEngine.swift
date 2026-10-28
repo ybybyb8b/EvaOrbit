@@ -4,6 +4,9 @@ import Foundation
 final class EventKitSyncEngine {
     private let store = EKEventStore()
     private var changeWork: DispatchWorkItem?
+    private let recoveryCacheLock = NSLock()
+    private var recoveryCache: (batch: String, generation: Int, expires: Date, index: [String: [EKReminder]])?
+    private var recoveryGeneration = 0
     private let installationID: String
     var onStoreChanged: (() -> Void)?
 
@@ -17,6 +20,7 @@ final class EventKitSyncEngine {
     deinit { NotificationCenter.default.removeObserver(self) }
 
     @objc private func storeChanged() {
+        invalidateRecoveryCache()
         changeWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.onStoreChanged?() }
         changeWork = work
@@ -85,7 +89,7 @@ final class EventKitSyncEngine {
     }
 
     /// Rebind an account link without relying on discovery windows or mutable content.
-    func recover(kind: EKEntityType, calendarIDs: [String], bindings: [[String: Any]], externalIdentifiers: [String], recoveryToken: String?) async throws -> [String: Any] {
+    func recover(kind: EKEntityType, calendarIDs: [String], bindings: [[String: Any]], externalIdentifiers: [String], recoveryToken: String?, recoveryBatch: String? = nil) async throws -> [String: Any] {
         _ = try readableCalendars(kind, identifiers: calendarIDs)
         var candidates: [String: EKCalendarItem] = [:]
         func add(_ item: EKCalendarItem) {
@@ -105,13 +109,7 @@ final class EventKitSyncEngine {
         if kind == .reminder, let recoveryToken {
             // Scan all readable lists, including old completed mirrors and moved mirrors.
             // An object outside the selected lists pauses the link instead of causing recreation.
-            let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
-                store.fetchReminders(matching: store.predicateForReminders(in: nil)) { items in
-                    if let items { continuation.resume(returning: items) }
-                    else { continuation.resume(throwing: EventKitSyncError.unavailable) }
-                }
-            }
-            reminders.filter { Self.recoveryToken(in: $0.url) == recoveryToken.lowercased() }.forEach(add)
+            try await recoveryCandidates(token: recoveryToken, batch: recoveryBatch).forEach(add)
         }
         _ = try readableCalendars(kind, identifiers: calendarIDs)
         if candidates.count > 1 { return ["status": "ambiguous"] }
@@ -130,6 +128,29 @@ final class EventKitSyncEngine {
         }
         if bindings.isEmpty && kind == .reminder && recoveryToken != nil { return ["status": "missing"] }
         return ["status": originalScopeReadable ? "missing" : "unavailable"]
+    }
+
+    private func invalidateRecoveryCache() {
+        recoveryCacheLock.withLock { recoveryGeneration += 1; recoveryCache = nil }
+    }
+    private func recoveryCandidates(token: String, batch: String?) async throws -> [EKReminder] {
+        let (generation, cached) = recoveryCacheLock.withLock { (recoveryGeneration, recoveryCache) }
+        if let batch, let cached, cached.batch == batch, cached.generation == generation, cached.expires > Date() { return cached.index[token.lowercased()] ?? [] }
+        let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
+            store.fetchReminders(matching: store.predicateForReminders(in: nil)) { items in
+                if let items { continuation.resume(returning: items) } else { continuation.resume(throwing: EventKitSyncError.unavailable) }
+            }
+        }
+        var index: [String: [EKReminder]] = [:]
+        for reminder in reminders { if let marker = Self.recoveryToken(in: reminder.url) { index[marker, default: []].append(reminder) } }
+        if let batch {
+            recoveryCacheLock.withLock { if recoveryGeneration == generation { recoveryCache = (batch, generation, Date().addingTimeInterval(60), index) } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+                guard let self else { return }
+                self.recoveryCacheLock.withLock { if let cached = self.recoveryCache, cached.expires <= Date() { self.recoveryCache = nil } }
+            }
+        }
+        return index[token.lowercased()] ?? []
     }
 
     static func recoveryToken(in url: URL?) -> String? {
@@ -220,10 +241,12 @@ final class EventKitSyncEngine {
             return nil
         }
         try store.save(reminder, commit: true)
+        invalidateRecoveryCache()
         return reminderDictionary(reminder)
     }
 
     func delete(kind: EKEntityType, identifier: String) throws {
+        defer { invalidateRecoveryCache() }
         guard let item = store.calendarItem(withIdentifier: identifier) else { return }
         if kind == .event, let event=item as? EKEvent { try store.remove(event, span:.thisEvent, commit:true) }
         else if kind == .reminder, let reminder=item as? EKReminder { try store.remove(reminder, commit:true) }

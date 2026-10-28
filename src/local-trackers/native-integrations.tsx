@@ -1,3 +1,4 @@
+import {runNativeForegroundTasks} from "@/lib/native-foreground-tasks";
 import {createContext,useContext,useEffect,useLayoutEffect,useMemo,useState,type ReactNode} from "react";
 import {installNativeRequest,rawNativeCall,type NativeHostInfo,type HealthKitStatus,NativeBridgeError} from "@/lib/native-bridge";
 import {installNativeApiRequest} from "@/lib/native-api";
@@ -54,10 +55,11 @@ export function LocalNativeIntegrations({account,native,children}:{account:Local
 function NativeLifecycle(){
  useEffect(()=>{
   const stop=startEventKitAutoSync(async()=>{
-   await syncConfiguredEventKit();
-   const health=await rawNativeCall<HealthKitStatus>("healthkit.getStatus");
-   if(health.credentialConfigured&&health.authorizationRequested)await flushPendingMenstrualFlowToHealthKit();
-   await reconcileNativeNotifications();
+   await runNativeForegroundTasks([
+    {name:"Calendar / Reminders",run:()=>syncConfiguredEventKit()},
+    {name:"Apple Health",run:async()=>{const health=await rawNativeCall<HealthKitStatus>("healthkit.getStatus");if(health.credentialConfigured&&health.authorizationRequested)await flushPendingMenstrualFlowToHealthKit();}},
+    {name:"Notifications",run:()=>reconcileNativeNotifications()}
+   ]);
   });
   const saved=(event:Event)=>{if((event as CustomEvent).detail?.path)window.dispatchEvent(new Event(eventKitConfigChanged));};
   window.addEventListener(onlineBusinessChanged,saved);

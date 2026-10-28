@@ -101,8 +101,8 @@ test("EventKit reads only enabled domains and ignores inactive links from old se
   try {
     await synchronizeEventKit(status, { list: "import" });
     assert.ok(requests[0].endsWith("&kind=reminder"));
-    assert.ok(requests.includes("/api/tasks?status=all"));
-    assert.ok(requests.includes("/api/reminders"));
+    assert.ok(requests.some(path=>path.includes("/api/eventkit/records?kind=task")));
+    assert.ok(requests.some(path=>path.includes("/api/eventkit/records?kind=reminder")));
     assert.ok(requests.every(url => !url.startsWith("/api/calendar-events")));
     assert.deepEqual(nativeKinds, ["reminder"]);
     requests.length = 0; nativeKinds.length = 0; inactiveKind = "reminder";
@@ -116,9 +116,9 @@ test("EventKit reads only enabled domains and ignores inactive links from old se
 test("configured auto sync migrates legacy routes, records success, and never fetches after permission revocation", async () => {
   const oldWindow = globalThis.window, oldStorage = globalThis.localStorage, oldFetch = globalThis.fetch;
   const values = new Map([["evaorbit.eventkit.sources.v1", JSON.stringify({ list: "two_way" })]]);
-  const calls: string[] = []; let permission = "full_access", finishes = 0;
+  const calls: string[] = []; let permission = "full_access", finishes = 0,failReads=false;
   const win = Object.assign(new EventTarget(), { EvaOrbitNative: { version: 1, call: async (method: string) => {
-    calls.push(method);
+    calls.push(method);if(method==="eventkit.fetch"&&failReads)throw new Error("Read offline");
     const result = method === "host.getInfo" ? { methods: ["eventkit.getStatus", "eventkit.requestAccess", "eventkit.fetch", "eventkit.save", "eventkit.delete"] } : method === "eventkit.getStatus" ? { available: true, installationId: "test", calendarPermission: "denied", reminderPermission: permission, calendars: [], reminderLists: [{ identifier: "list", allowsContentModifications: true }] } : { items: [] };
     return { ok: true, result };
   } } });
@@ -130,9 +130,11 @@ test("configured auto sync migrates legacy routes, records success, and never fe
     assert.ok(await syncConfiguredEventKit());
     assert.equal(values.get("evaorbit.eventkit.routes.v1"), JSON.stringify({ tasks: "list" }));
     assert.ok(values.get("evaorbit.eventkit.last-sync.v1")); assert.equal(finishes, 1);
+    const successfulTime=values.get("evaorbit.eventkit.last-sync.v1");failReads=true;
+    const failed=await syncConfiguredEventKit();assert.equal(failed?.scopeOutcomes?.reminder?.state,"failed");assert.equal(values.get("evaorbit.eventkit.last-sync.v1"),successfulTime);assert.equal(finishes,2);failReads=false;
     permission = "denied"; calls.length = 0;
     assert.equal(await syncConfiguredEventKit(), null);
     assert.deepEqual(calls, ["host.getInfo", "eventkit.getStatus"]);
-    assert.equal(finishes, 1);
+    assert.equal(finishes, 2);
   } finally { globalThis.window = oldWindow; globalThis.localStorage = oldStorage; globalThis.fetch = oldFetch; }
 });

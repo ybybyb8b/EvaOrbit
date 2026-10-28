@@ -240,7 +240,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             replyHandler(failure(id: id, code: "invalid_eventkit_recovery", message: "EventKit recovery parameters are invalid."), nil); return
         }
         Task {
-            do { let result = try await eventKitSyncEngine.recover(kind: kind, calendarIDs: calendars, bindings: bindings, externalIdentifiers: externalIdentifiers, recoveryToken: token); replyOnMain(replyHandler, value: success(id: id, result: result)) }
+            do { let result = try await eventKitSyncEngine.recover(kind: kind, calendarIDs: calendars, bindings: bindings, externalIdentifiers: externalIdentifiers, recoveryToken: token, recoveryBatch: (parameters["recoveryBatch"] as? String).flatMap { UUID(uuidString: $0)?.uuidString }); replyOnMain(replyHandler, value: success(id: id, result: result)) }
             catch { replyOnMain(replyHandler, value: success(id: id, result: ["status": "unavailable"])) }
         }
     }

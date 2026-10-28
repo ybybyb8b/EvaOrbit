@@ -8,7 +8,7 @@ import { ToastNotice } from "@/components/action-toast";
 import { useCallback,useEffect,useRef,useState,useSyncExternalStore } from "react";
 import {getEventKitSyncProgress,subscribeEventKitSyncProgress,eventKitSyncProgressText} from "@/lib/eventkit-sync-progress";
 import { eventKitSupported,getNativeHostInfo,hostSupports,nativeCall } from "@/lib/native-bridge";
-import { eventKitSyncDiagnosticText,synchronizeEventKit,type EventKitModes,type EventKitReminderDomain,type EventKitReminderRoutes,type EventKitSource,type EventKitStatus,type EventKitSyncMode,type EventKitSyncScope } from "@/lib/eventkit-sync";
+import { eventKitSyncDiagnosticText,synchronizeEventKitScopes,type EventKitModes,type EventKitReminderDomain,type EventKitReminderRoutes,type EventKitSource,type EventKitStatus,type EventKitSyncMode,type EventKitSyncScope } from "@/lib/eventkit-sync";
 import { eventKitLastSyncKey as lastKey,eventKitConfigChanged,eventKitSyncFinished,loadEventKitAccountPreferences,saveEventKitAccountPreferences,eventKitPreferenceNotice } from "@/lib/eventkit-auto-sync";
 
 const domains:Array<[EventKitReminderDomain,string]>=[["tasks","Tasks"],["cats","Cats"],["cat_household","Cats · Household"],["trackers","Trackers"],["health","Health"],["subscriptions","Subscriptions"]];
@@ -22,22 +22,16 @@ export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={})
   const sync=useCallback(async(scope:EventKitSyncScope)=>{
     if(!status||readOnly||syncingRef.current)return;
     syncingRef.current=true;setBusy(true);setSyncing(scope);setError("");setMessage("");setDiagnostic("");
-    const kinds:Kind[]=scope==="all"?["calendar","reminder"]:[scope];let completed:string|undefined,failed=false,pending=false;
     try{
-      for(const kind of kinds){
-        setSyncing(kind);setFeedback(previous=>({...previous,[kind]:{...previous[kind],error:"",diagnostic:""}}));
-        try{
-          const restored=await loadEventKitAccountPreferences(status),result=await synchronizeEventKit(status,restored.modes,restored.routes,kind);
-          completed=result.lastSync;
-          if(result.pendingRecovery&&(result.pendingRecovery.recent||result.pendingRecovery.history||result.pendingRecovery.discoveries))pending=true;
-          const skipped=result.skippedEvents[0],details=eventKitSyncDiagnosticText(result)+(skipped?` 跳过 ${result.skippedEvents.length} 条时间异常事件：${skipped.calendarTitle} / ${skipped.title}（${skipped.startAt} → ${skipped.endAt}）`:"");
-          setFeedback(previous=>({...previous,[kind]:{lastSync:result.lastSync,diagnostic:details}}));
-        }catch(cause){failed=true;setFeedback(previous=>({...previous,[kind]:{...previous[kind],error:cause instanceof Error?cause.message:"同步失败"}}));}
-      }
-      if(scope==="all"&&!failed&&!pending&&completed){localStorage.setItem(lastKey,completed);setLastSync(completed);}
+      const restored=await loadEventKitAccountPreferences(status);
+      const result=await synchronizeEventKitScopes(status,restored.modes,restored.routes,false,scope,(kind,outcome)=>{
+        setFeedback(previous=>({...previous,[kind]:{error:outcome?.error??outcome?.result?.recoveryErrors?.join("；"),diagnostic:outcome?.result?eventKitSyncDiagnosticText(outcome.result):"",lastSync:outcome?.result?.lastSync??previous[kind]?.lastSync}}));
+      },setSyncing);
+      if(scope==="all"&&Object.keys(result.scopeOutcomes??{}).length&&Object.values(result.scopeOutcomes??{}).every(outcome=>outcome.state==="complete")){localStorage.setItem(lastKey,result.lastSync);setLastSync(result.lastSync);}
+    }catch(cause){setError(cause instanceof Error?cause.message:"同步失败");
     }finally{syncingRef.current=false;setSyncing(null);setBusy(false);}
   },[status,readOnly]);
-  useEffect(()=>{const initial=window.setTimeout(()=>void refresh(),0),ready=()=>{if(document.visibilityState!=="hidden")void refresh();},finished=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.error)setError(detail.error);else{setError("");if(detail?.result)setDiagnostic(eventKitSyncDiagnosticText(detail.result));setLastSync(localStorage.getItem(lastKey));}};window.addEventListener("evaorbit:native-ready",ready);window.addEventListener("evaorbit:native-active",ready);document.addEventListener("visibilitychange",ready);window.addEventListener(eventKitSyncFinished,finished);return()=>{window.clearTimeout(initial);window.removeEventListener("evaorbit:native-ready",ready);window.removeEventListener("evaorbit:native-active",ready);document.removeEventListener("visibilitychange",ready);window.removeEventListener(eventKitSyncFinished,finished);};},[refresh]);
+  useEffect(()=>{const initial=window.setTimeout(()=>void refresh(),0),ready=()=>{if(document.visibilityState!=="hidden")void refresh();},finished=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.error)setError(detail.error);else{setError("");if(detail?.result){setDiagnostic(eventKitSyncDiagnosticText(detail.result));if(detail.result.scopeOutcomes)setFeedback(previous=>({...previous,...Object.fromEntries(Object.entries(detail.result.scopeOutcomes as NonNullable<import("@/lib/eventkit-sync").EventKitSyncResult["scopeOutcomes"]>).map(([kind,outcome])=>[kind,{error:outcome.error??outcome.result?.recoveryErrors?.join("；"),diagnostic:outcome.result?eventKitSyncDiagnosticText(outcome.result):"",lastSync:outcome.result?.lastSync??previous[kind as Kind]?.lastSync}]))}));}setLastSync(localStorage.getItem(lastKey));}};window.addEventListener("evaorbit:native-ready",ready);window.addEventListener("evaorbit:native-active",ready);document.addEventListener("visibilitychange",ready);window.addEventListener(eventKitSyncFinished,finished);return()=>{window.clearTimeout(initial);window.removeEventListener("evaorbit:native-ready",ready);window.removeEventListener("evaorbit:native-active",ready);document.removeEventListener("visibilitychange",ready);window.removeEventListener(eventKitSyncFinished,finished);};},[refresh]);
   useEffect(()=>{if(!readOnly)window.dispatchEvent(new Event(eventKitConfigChanged));},[modes,routes,status,readOnly]);
   async function save(nextModes:EventKitModes,nextRoutes:EventKitReminderRoutes,changedSources:string[]=[]){if(!status||readOnly)return;setBusy(true);setError("");try{const saved=await saveEventKitAccountPreferences(status,nextModes,nextRoutes,changedSources);setModes(saved.modes);setRoutes(saved.routes);setPreferenceNotice(eventKitPreferenceNotice());}catch(cause){setError(cause instanceof Error?cause.message:"同步偏好保存失败");}finally{setBusy(false);}}
   function setMode(kind:"calendar"|"reminder",source:EventKitSource,mode:EventKitSyncMode){const value=kind==="calendar"?mode==="off"?"off":"import":source.allowsContentModifications?mode:mode==="two_way"?"import":mode,next={...modes,[source.identifier]:value},nextRoutes=value==="two_way"?routes:Object.fromEntries(Object.entries(routes).filter(([,identifier])=>identifier!==source.identifier)) as EventKitReminderRoutes;void save(next,nextRoutes,[source.identifier]);}
@@ -53,7 +47,7 @@ export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={})
       const selected=items.filter(source=>modes[source.identifier]&&modes[source.identifier]!=="off"),routeCount=kind==="reminder"?Object.values(routes).filter(Boolean).length:0,granted=["authorized","full_access"].includes(permission),current=feedback[kind];
       return <div className="eventkit-sync-group" key={kind}>
         <Permission title={title} permission={permission} disabled={busy} onRequest={()=>void request(kind)}/>
-        <div className="apple-health-actions"><button className="button secondary" disabled={busy||!granted||(!selected.length&&!routeCount)} onClick={()=>void sync(kind)}>{syncing===kind?"Syncing…":`Sync ${title}`}</button><small>{current?.lastSync?`Last sync ${new Date(current.lastSync).toLocaleString()}`:!selected.length&&!routeCount?"Choose sync sources to begin":"Ready to sync"}</small></div>
+        <div className="apple-health-actions"><button className="button secondary" disabled={busy||!granted||(!selected.length&&!routeCount)} onClick={()=>void sync(kind)}>{syncing===kind?"Syncing…":`Sync ${title}`}</button><small>{current?.lastSync?`Last round ${new Date(current.lastSync).toLocaleString()}`:!selected.length&&!routeCount?"Choose sync sources to begin":"Ready to sync"}</small></div>
         {current?.error&&<ErrorNotice inline>{`${title}：${current.error}`}</ErrorNotice>}{current?.diagnostic&&<p className="apple-health-fallback" role="status">{current.diagnostic}</p>}
         <details className="eventkit-preferences"><summary><strong>{title} sync settings</strong><span>{selected.length?selected.map(source=>source.title).join(" · "):"No sources selected"}{routeCount?` · ${routeCount} EO routes`:""}</span></summary>
           <Sources disabled={busy} kind={kind} items={items} modes={modes} onMode={(source,mode)=>setMode(kind,source,mode)}/>{kind==="reminder"&&<DomainRoutes disabled={busy} items={status.reminderLists} routes={routes} onRoute={setRoute}/>}

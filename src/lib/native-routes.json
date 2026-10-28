@@ -13,5 +13,7 @@
   {"pattern":"^/api/reminders/[1-9][0-9]*/complete$","methods":["POST"]},
   {"pattern":"^/api/health/menstrual-flow$","methods":["GET"]},
   {"pattern":"^/api/health/menstrual-flow/[1-9][0-9]*$","methods":["DELETE"]},
-  {"pattern":"^/api/health/weight$","methods":["GET"]}
+  {"pattern":"^/api/health/weight$","methods":["GET"]},
+  {"pattern":"^/api/eventkit/records$","methods":["GET"]},
+  {"pattern":"^/api/eventkit/reminder-import$","methods":["POST"]}
 ]

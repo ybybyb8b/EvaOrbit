@@ -34,7 +34,7 @@ for (const stalled of ["calendar", "reminder", "eo"]) test(`a stalled ${stalled}
   };
   t.mock.timers.enable({apis:["setTimeout"]});
   try {
-    const run=()=>synchronizeEventKit(status,{source:"import"});
+    const run=()=>synchronizeEventKit(status,{source:"import"},{},stalled==="reminder"?"reminder":"calendar");
     const first=run(),overlapping=run();assert.equal(first,overlapping);
     const rejected=assert.rejects(first,EventKitReadTimeout);
     await new Promise(resolve=>setImmediate(resolve));t.mock.timers.tick(30_000);await rejected;

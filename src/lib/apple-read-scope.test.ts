@@ -37,3 +37,9 @@ test("work checkpoints resume per account, source and installation and reject st
   assert.throws(()=>a.save(),/Account changed/);
  }finally{globalThis.localStorage=previous;}
 });
+
+test("legacy checked checkpoints cannot suppress unresolved links after upgrade",()=>{
+ const old=globalThis.localStorage,values=new Map([["evaorbit.eventkit.account.v1","account-A"],["unrelated-data","keep"]]);
+ globalThis.localStorage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{values.set(key,value);}} as Storage;
+ try{const key="evaorbit.eventkit.work.v1:account-A:install:calendar:source";values.set(key,JSON.stringify({version:1,cursor:"2030-01-01",checked:["old-unresolved"],pending:1}));const work=eventKitWorkState("install","calendar",["source"]);assert.equal(work.state.version,2);assert.deepEqual(work.state.checked,[]);assert.equal(work.state.cursor,"2026-10-01");work.save();assert.equal(values.get("unrelated-data"),"keep");}finally{globalThis.localStorage=old;}
+});

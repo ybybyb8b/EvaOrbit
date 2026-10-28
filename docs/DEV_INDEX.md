@@ -153,7 +153,7 @@
 
 - **职责与入口**：[calendar-event 服务](../src/lib/services/calendar-event.ts)、[timeline 服务](../src/lib/services/timeline.ts)、[日历解释设置](../src/app/settings/calendar-interpretation/)、[eventkit-sync.ts](../src/lib/eventkit-sync.ts)。主要 UI 在 Home。
 - **数据与接口**：`calendar_events`、`eventkit_links`、`eventkit_logical_links`、`eventkit_preferences`；解释规则通过 Repository 偏好接口保存；`/api/calendar-events`、`/api/calendar-interpretation`、`/api/eventkit/*`、`/api/timeline`，MCP `calendar_event`。
-- **依赖与决定**：Apple Calendar 单向导入 EO，MCP Calendar 写入只改 EO；不要套用 Apple Reminders 的同步方向。解释规则供 Sleep Window、餐次和时间线分类复用，餐次匹配结果仅派生。账户偏好和安装关联分层，重装后有歧义的列表暂停同步，不猜选。
+- **依赖与决定**：Apple Calendar 单向导入 EO，MCP Calendar 写入只改 EO；不要套用 Apple Reminders 的同步方向。解释规则供 Sleep Window、餐次和时间线分类复用，餐次匹配结果仅派生。账户偏好和安装关联分层，重装后有歧义的列表暂停同步，不猜选。EventKit 共用分项编排、近期发现与历史重试；专用 records 接口完整分页业务记录，Reminder 原子导入依赖配套迁移，见 [同步范围与执行](APPLE_SYNC_SCOPE.md)。
 - **详文**：[EventKit 偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)、[Native 维护契约](IOS_NATIVE_MAINTENANCE.md)、[Sleep Window](HEALTHKIT_SLEEP.md)。
 
 ## Notifications

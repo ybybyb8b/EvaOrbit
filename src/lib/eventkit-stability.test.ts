@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test,{mock} from "node:test";
-import { eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
+import { eventKitEORecords,eventKitCanonicalSnapshot, eventKitRecoveryURL, eventKitSnapshotHash, eventKitSyncDiagnosticText, mergeEventKitSnapshots, synchronizeEventKit, type EventKitStatus, type EventKitModes } from "./eventkit-sync.ts";
 import { dataChangedEvent, type DataChangedDetail } from "./data-changed.ts";
 import { reminderSnapshot } from "./eventkit-sync.ts";
 import type { Reminder } from "./types.ts";
@@ -35,7 +35,7 @@ function fixture() {
     async native(method: string, body: Item) {
       calls.push({ method, target: method, body });
       if (method === "host.getInfo") return { methods: f.lookupAvailable ? ["eventkit.getItem", "eventkit.recover"] : [] };
-      if (method === "eventkit.fetch") return { items: [...apple.values()].filter(item => item.calendarIdentifier === (body.kind === "calendar" ? "calendar" : "list") && !batchMissing.has(String(item.calendarItemIdentifier))) };
+      if (method === "eventkit.fetch") return { items: [...apple.values()].filter(item => item.calendarIdentifier === (body.kind === "calendar" ? "calendar" : "list") && !batchMissing.has(String(item.calendarItemIdentifier)) && (body.kind!=="calendar"||Date.parse(String(item.startAt))>=Date.parse(String(body.from))&&Date.parse(String(item.startAt))<Date.parse(String(body.to)))) };
       if (method === "eventkit.getItem") {
         const item = apple.get(String(body.calendarItemIdentifier));
         return f.lookupResult ? { status: f.lookupResult } : item ? { status: "found", item } : { status: "missing" };
@@ -77,6 +77,13 @@ function fixture() {
         const key = existing ? [...links.entries()].find(([,link]) => link === existing)![0] : id;
         links.set(key, { id: key, logical_link_id: reserved?.recovery_token, recovery_token: reserved?.recovery_token, binding_state: "current", entity_type: body.entityType, eo_id: body.eoId, eventkit_entity_type: body.eventkitEntityType, calendar_item_identifier: body.calendarItemIdentifier, external_identifier: body.externalIdentifier, calendar_identifier: body.calendarIdentifier, source_identifier: body.sourceIdentifier, last_synced_snapshot: body.lastSyncedSnapshot });
         return Response.json(links.get(key));
+      }
+      if(path==="/api/eventkit/records"){const records=url.searchParams.get("kind")==="task"?tasks:reminders,after=Number(url.searchParams.get("afterId")??0),limit=Number(url.searchParams.get("limit")??500);return Response.json([...records.values()].filter(row=>Number(row.id)>after).sort((a,b)=>Number(a.id)-Number(b.id)).slice(0,limit));}
+      if(path==="/api/eventkit/reminder-import"){
+        if(f.failBinding){f.failBinding=false;return Response.json({error:"binding failed"},{status:500});}
+        const item=body.apple as Item,existing=[...links.values()].find(link=>link.calendar_item_identifier===item.calendarItemIdentifier||link.external_identifier===item.externalIdentifier);
+        const id=Number(existing?.eo_id??++nextEvent);if(!tasks.has(id))tasks.set(id,{id,...body.snapshot as Item,reminders:[]});
+        links.set(id,{id,entity_type:"task",eo_id:id,eventkit_entity_type:"reminder",calendar_item_identifier:item.calendarItemIdentifier,external_identifier:item.externalIdentifier,calendar_identifier:item.calendarIdentifier,source_identifier:item.sourceIdentifier,last_synced_snapshot:body.snapshot});return Response.json({id});
       }
       if (path === "/api/tasks") return Response.json([...tasks.values()]);
       if (path === "/api/tasks/1" && method === "GET") return tasks.has(1) ? Response.json(tasks.get(1)) : Response.json({ error: "not found" }, { status: 404 });
@@ -125,6 +132,7 @@ async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>
   try { await run(f); } finally { globalThis.window = oldWindow; globalThis.fetch = oldFetch;globalThis.localStorage=oldStorage;mock.timers.reset(); }
 }
 
+async function scopeFailure(work:ReturnType<typeof synchronizeEventKit>,kind:"calendar"|"reminder",pattern:RegExp){const result=await work;assert.equal(result.scopeOutcomes?.[kind]?.state,"failed");assert.match(result.scopeOutcomes?.[kind]?.error??"",pattern);return result;}
 function respectCalendarWindow(f:ReturnType<typeof fixture>){
  const original=f.native;
  f.native=async(method,body)=>{
@@ -141,11 +149,11 @@ test("recent Calendar changes finish before historical recovery, which resumes i
  }
  f.linkEvent(100);f.reinstall();f.apple.set("event-100",{...f.apple.get("event-100"),title:"New today"});respectCalendarWindow(f);
  const first=await synchronizeEventKit(status,{calendar:"import"},{},"calendar");
- assert.equal(f.events.get(100)?.title,"New today");assert.equal(first.pendingRecovery?.recent,0);assert.equal(first.pendingRecovery?.history,40);
- assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,1);
+ assert.equal(f.events.get(100)?.title,"New today");assert.equal(first.pendingRecovery?.recent,0);assert.equal(first.pendingRecovery?.history,32);
+ assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,9);
  const counts=[];
  for(let round=0;round<3;round++){const result=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);counts.push(result.pendingRecovery?.history);}
- assert.deepEqual(counts,[24,8,0]);assert.equal(f.events.size,41);assert.equal(f.links.size,41);
+ assert.deepEqual(counts,[16,0,0]);assert.equal(f.events.size,41);assert.equal(f.links.size,41);
  const checkpoint=eventKitWorkState(status.installationId,"calendar",["calendar"]).state;
  assert.ok(checkpoint.checked.every(key=>/^[a-f0-9]{64}$/.test(key)));assert.doesNotMatch(JSON.stringify(checkpoint),/New today/);
 }));
@@ -153,8 +161,8 @@ test("recent Calendar changes finish before historical recovery, which resumes i
 test("finishing the priority window never skips unlinked events between October 1 and the recent window",async()=>withFixture(async f=>{
  f.apple.set("event-early",{...calendarBase,title:"Early October",startAt:"2026-10-01T02:00:00Z",endAt:"2026-10-01T03:00:00Z",calendarItemIdentifier:"event-early",externalIdentifier:"early-external",calendarIdentifier:"calendar",sourceIdentifier:"source"});respectCalendarWindow(f);
  await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
- assert.equal(f.events.size,0);
- assert.equal(eventKitWorkState(status.installationId,"calendar",["calendar"]).state.cursor,"2026-10-01");
+ assert.equal(f.events.size,1);
+ assert.equal(eventKitWorkState(status.installationId,"calendar",["calendar"]).state.cursor,"2027-01-01");
  await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
  assert.equal(f.events.size,1);assert.equal([...f.events.values()][0].title,"Early October");
 }));
@@ -205,7 +213,7 @@ test("Calendar recovery overlaps at most four independent bindings and reports a
  }finally{stop();}
 }));
 
-test("a failed Calendar recovery batch drains started bindings and stops before the next batch or imports",async()=>withFixture(async f=>{
+test("a failed Calendar binding drains started work, keeps the item pending and allows other bindings",async()=>withFixture(async f=>{
  for(let id=1;id<=9;id++)f.linkEvent(id);f.reinstall();
  const original=f.fetch;let started=0,release!:()=>void,ready!:()=>void,settled=false;
  const gate=new Promise<void>(resolve=>{release=resolve;}),allStarted=new Promise<void>(resolve=>{ready=resolve;});
@@ -219,13 +227,13 @@ test("a failed Calendar recovery batch drains started bindings and stops before 
  };
  globalThis.fetch=f.fetch;
  const work=synchronizeEventKit(status,{calendar:"import"},{},"calendar");
- const checked=assert.rejects(work,/binding failed/).then(()=>{settled=true;});
+ const checked=work.then(result=>{settled=true;assert.match(result.recoveryErrors?.join(" ")??"",/binding failed/);assert.equal(result.pendingRecovery?.recent,1);});
  try{
   await allStarted;await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false,"Do not report a failure while another binding is still committing");
-  release();await checked;assert.equal(started,4);
-  assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,4);
+  release();await checked;assert.equal(started,9);
+  assert.equal(f.calls.filter(call=>call.method==="eventkit.recover").length,9);
   assert.equal(f.calls.some(call=>call.target==="/api/eventkit/calendar-import"),false);
-  assert.equal(f.events.size,9);assert.equal(getEventKitSyncProgress()?.phase,"failed");
+  assert.equal(f.events.size,9);assert.equal(getEventKitSyncProgress()?.phase,"complete");
  }finally{release();await checked;}
 }));
 
@@ -249,7 +257,7 @@ for(const legacy of [false,true]) test(`EO cross-midnight routine completion clo
   assert.equal(f.apple.size,2);assert.equal(f.apple.get(next)?.completed,false);
   // An early completion also creates a distinct occurrence with the new watermark.
   f.reminders.set(27,{...f.reminders.get(27),lastCompletedAt:"2026-10-25T12:00:00Z",nextDueAt:"2026-10-26T15:00:00Z"});
-  f.failBinding=true;await assert.rejects(run(),/binding failed/);
+  f.failBinding=true;await scopeFailure(run(),"reminder",/binding failed/);
   assert.equal(f.apple.get(next)?.completed,true);
   await run();await run();assert.equal(f.apple.size,3);
   assert.equal(f.calls.filter(call=>call.target==="/api/reminders/27/complete").length,0);
@@ -305,7 +313,7 @@ test("Calendar is visible before a slow Reminder write finishes; batch reads avo
 test("Changes committed before a later failure still notify Web consumers", async () => withFixture(async f => {
   const notifications: DataChangedDetail[] = []; window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
   f.linkTask(); f.linkEvent(2); f.listMissing.add(2); f.apple.set("reminder-1", { ...f.apple.get("reminder-1"), title: "Committed title" }); f.failEORead = true;
-  await assert.rejects(f.run(), /database unavailable/);
+  await scopeFailure(f.run(),"calendar",/database unavailable/);
   assert.equal(f.tasks.get(1)?.title, "Committed title"); assert.deepEqual(notifications.map(item => item.domains), [["tasks", "reminders"]]);
 }));
 
@@ -317,7 +325,7 @@ test("A Reminder failure preserves Calendar progress and its early notification"
   window.addEventListener(dataChangedEvent, event => notifications.push((event as CustomEvent).detail));
   const fetch = globalThis.fetch;
   globalThis.fetch = (url, init) => String(url) === "/api/tasks/1/eventkit" ? Promise.resolve(Response.json({ error: "Reminder unavailable" }, { status: 503 })) : fetch(url, init);
-  await assert.rejects(f.run(), /Reminder unavailable/);
+  await scopeFailure(f.run(),"reminder",/Reminder unavailable/);
   assert.equal(f.events.get(2)?.title, "Committed Calendar");
   assert.equal(f.tasks.get(1)?.title, taskBase.title);
   assert.deepEqual(notifications.map(item => item.domains), [["calendar"]]);
@@ -439,12 +447,12 @@ for (const reason of ["unavailable", "legacy-host", "paused", "revoked", "source
   }));
 }
 test("EO direct-read errors never unlink or reimport a mapped Calendar event", async () => withFixture(async f => {
-  f.linkEvent(1); f.listMissing.add(1); f.failEORead = true; await assert.rejects(f.run(), /database unavailable/); assert.equal(f.writes().length, 0);
+  f.linkEvent(1); f.listMissing.add(1); f.failEORead = true; await scopeFailure(f.run(),"calendar",/database unavailable/); assert.equal(f.writes().length, 0);
 }));
 for (const failure of ["before-commit", "after-commit"]) {
   test(`Calendar import retry reuses one EO record after failure ${failure}`, async () => withFixture(async f => {
     f.linkEvent(1); f.links.clear(); f.events.clear(); f.failImport = failure;
-    await assert.rejects(f.run(), /mapping insert failed|response lost/);
+    await scopeFailure(f.run(),"calendar",/mapping insert failed|response lost/);
     assert.equal(f.events.size, failure === "before-commit" ? 0 : 1);
     const committedID = [...f.events.keys()][0];
     await f.run(); await f.run(); assert.equal(f.events.size, 1); assert.equal(f.links.size, 1);
@@ -492,7 +500,7 @@ test("Reinstallation reattaches a changed Reminder and writes back to the origin
 }));
 test("A server-reserved Reminder marker survives a failed binding and reinstall retry", async () => withFixture(async f => {
   f.tasks.set(1, { id: 1, ...taskBase, completedAt: null, reminders: [] }); f.failBinding = true;
-  await assert.rejects(f.run(), /binding failed/); assert.equal(f.apple.size, 1); assert.equal(f.links.get(1)?.binding_state, "pending");
+  await scopeFailure(f.run(),"reminder",/binding failed/); assert.equal(f.apple.size, 1); assert.equal(f.links.get(1)?.binding_state, "pending");
   const original = [...f.apple.keys()][0]; f.apple.set(original, { ...f.apple.get(original), title: "Changed while unbound" });
   await f.run(); await f.run(); assert.equal(f.apple.size, 1); assert.equal(f.tasks.size, 1); assert.equal(f.tasks.get(1)?.title, "Changed while unbound");
   assert.equal(f.links.get(1)?.calendar_item_identifier, original);
@@ -532,8 +540,65 @@ test("Moving a recovered Task mirror to a new routed list preserves controlled A
 }));
 test("A completed pending Task does not recreate a mirror or block other Tasks", async () => withFixture(async f => {
   f.tasks.set(1, { id: 1, ...taskBase, completedAt: null, reminders: [] }); f.failBinding = true;
-  await assert.rejects(f.run(), /binding failed/); f.apple.clear();
+  await scopeFailure(f.run(),"reminder",/binding failed/); f.apple.clear();
   f.tasks.set(1, { ...f.tasks.get(1), completed: true, completedAt: "2026-10-05T00:00:00Z" });
   f.tasks.set(9, { id: 9, ...taskBase, title: "Other Task", completedAt: null, reminders: [] });
   await f.run(); assert.equal(f.apple.size, 1); assert.equal([...f.apple.values()][0].title, "Other Task"); assert.equal(f.links.get(1)?.binding_state, "pending");
+}));
+
+test("new recent Calendar events remain discoverable while the historical cursor moves forward",async()=>withFixture(async f=>{
+ for(let i=0;i<3;i++)await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ f.apple.set("event-today",{...calendarBase,calendarItemIdentifier:"event-today",externalIdentifier:"today",calendarIdentifier:"calendar",sourceIdentifier:"source"});
+ const result=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(result.imported,1);assert.equal(f.events.size,1);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(f.events.size,1);
+}));
+test("an unresolved historical association retries after backoff and never becomes a completed checkpoint",async()=>withFixture(async f=>{
+ f.linkEvent(1);const old={...calendarBase,startAt:"2026-10-01T02:00:00Z",endAt:"2026-10-01T03:00:00Z"};
+ f.events.set(1,{id:1,...old});f.apple.set("event-1",{...f.apple.get("event-1"),...old});f.links.set(1,{...f.links.get(1),last_synced_snapshot:old});f.reinstall();f.lookupResult="unavailable";
+ const first=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(first.pendingRecovery?.history,1);
+ const count=()=>f.calls.filter(call=>call.method==="eventkit.recover").length;
+ assert.equal(count(),1);await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(count(),1,"Backoff prevents a hot retry loop");
+ mock.timers.tick(31_000);f.lookupResult="";
+ const recovered=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(recovered.pendingRecovery?.history,0);assert.equal(count(),2);assert.equal(f.events.size,1);
+}));
+test("one unresolved recent association does not prevent historical recovery in the same round",async()=>withFixture(async f=>{
+ f.linkEvent(1);f.linkEvent(2);const old={...calendarBase,startAt:"2026-10-01T02:00:00Z",endAt:"2026-10-01T03:00:00Z"};f.events.set(2,{id:2,...old});f.apple.set("event-2",{...f.apple.get("event-2"),...old});f.links.set(2,{...f.links.get(2),last_synced_snapshot:old});f.reinstall();
+ const original=f.native;f.native=async(method,body)=>method==="eventkit.recover"&&(body.bindings as Item[])?.some(binding=>binding.external_identifier==="external-1")?{status:"unavailable"}:original(method,body);
+ const result=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(result.pendingRecovery?.recent,1);assert.equal(result.pendingRecovery?.history,0);assert.equal(f.links.get(2)?.binding_state,"current");
+}));
+test("Reminder Import all uses only the atomic import and does not leave a Task after binding failure",async()=>withFixture(async f=>{
+ f.linkTask();f.tasks.clear();f.links.clear();f.failBinding=true;
+ await assert.rejects(synchronizeEventKit(status,{list:"import"},{},"reminder"),/binding failed/);assert.equal(f.tasks.size,0);
+ await synchronizeEventKit(status,{list:"import"},{},"reminder");await synchronizeEventKit(status,{list:"import"},{},"reminder");
+ assert.equal(f.tasks.size,1);assert.equal(f.links.size,1);assert.equal(f.calls.some(call=>call.method==="POST"&&call.target==="/api/tasks"),false);
+}));
+
+test("EventKit Task and Reminder records paginate past a server page limit",async()=>withFixture(async f=>{
+ for(let id=1;id<=1203;id++){f.tasks.set(id,{id,...taskBase,completed:true});f.reminders.set(id,{id,title:"Routine",isActive:false});}
+ assert.equal((await eventKitEORecords("task")).length,1203);assert.equal((await eventKitEORecords("reminder")).length,1203);
+ const calls=f.calls.filter(call=>call.target==="/api/eventkit/records");assert.equal(calls.length,8);
+}));
+
+test("slow committed updates yield and later rounds finish remaining linked records without replaying the first update",async()=>withFixture(async f=>{
+ for(let id=1;id<=3;id++){f.linkEvent(id);f.apple.set(`event-${id}`,{...f.apple.get(`event-${id}`),title:`Updated ${id}`});}
+ const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{const result=await original(input,init);if(init?.method==="PATCH")mock.timers.tick(5000);return result;};
+ const first=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(first.imported,1);assert.equal(first.pendingRecovery?.recent,2);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ for(let id=1;id<=3;id++)assert.equal(f.events.get(id)?.title,`Updated ${id}`);
+ assert.equal(f.calls.filter(call=>call.method==="PATCH"&&call.target==="/api/calendar-events/1").length,1);
+}));
+test("slow new imports keep a discovery backlog and resume without duplicates",async()=>withFixture(async f=>{
+ for(let id=1;id<=3;id++)f.linkEvent(id);f.links.clear();f.events.clear();
+ const original=globalThis.fetch;globalThis.fetch=async(input,init)=>{const result=await original(input,init);if(String(input)==="/api/eventkit/calendar-import")mock.timers.tick(5000);return result;};
+ const first=await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);assert.equal(first.imported,1);assert.equal(first.pendingRecovery?.discoveries,2);
+ await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);await synchronizeEventKit(status,{calendar:"import"},{},"calendar",true);
+ assert.equal(f.events.size,3);assert.equal(f.calls.filter(call=>call.target==="/api/eventkit/calendar-import").length,3);
+}));
+test("unchanged domain mirrors finish their checkpoint and routing changes invalidate only execution exclusions",async()=>withFixture(async f=>{
+ const routine={id:27,title:"Care",note:"",targetType:"cat",sourceType:"cat_routine",isActive:true,status:"scheduled",nextDueAt:"2026-10-06T15:00:00Z",timezone:"Asia/Shanghai",dueHasExplicitTime:true,lastCompletedAt:null} as Reminder;f.reminders.set(27,{...routine});
+ for(let round=0;round<3;round++){const result=await synchronizeEventKit(status,{}, {cats:"list"},"reminder",true);assert.equal(result.pendingRecovery?.recent,0);assert.equal(result.pendingRecovery?.history,0);}
+ await synchronizeEventKit(status,{}, {cat_household:"list"},"reminder",true);assert.equal(eventKitWorkState(status.installationId,"reminder",["list"]).state.excluded.length,1);
+ await synchronizeEventKit(status,{}, {cats:"list"},"reminder",true);assert.equal(eventKitWorkState(status.installationId,"reminder",["list"]).state.excluded.length,0);assert.equal(f.apple.size,1);
 }));
