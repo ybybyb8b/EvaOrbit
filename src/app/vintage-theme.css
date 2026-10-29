@@ -76,3 +76,5 @@ html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid
 html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid button.active { background:var(--surface-accent-soft);color:var(--accent-primary);box-shadow:inset 0 0 0 1px rgb(var(--accent-rgb) / .32); }
 html[data-design-theme="vintage"] :is(.appearance-mode-preview.light i,.appearance-mode-preview.system i:first-child) { background:#f2f3f5; }
 html[data-design-theme="vintage"] :is(.appearance-mode-preview.dark i,.appearance-mode-preview.system i:last-child) { background:#202124; }
+html[data-design-theme="vintage"] .sidebar :is(.main-nav,.sidebar-bottom) .vintage-reicon { width:16px;height:16px; }
+html[data-design-theme="vintage"] .space-drawer section a .vintage-reicon { width:26px;height:26px; }
