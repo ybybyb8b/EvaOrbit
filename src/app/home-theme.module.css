@@ -1,4 +1,4 @@
-/* Home-only palette trial. Font preferences and all record semantics stay shared. */
+/* Approved rosewood Home layout, also reused by Vintage. Other Classic colors use the original Home. */
 :global(html):has(.home) {
   --home-focus: #244a3a;
   --home-focus-ink: #fff8e9;
@@ -11,33 +11,9 @@
   --home-log-ink: var(--log-accent-ink, var(--accent-on));
   --home-log-hover: var(--log-accent-hover, var(--accent-strong));
 }
-:global(html:not([data-design-theme="vintage"]):not([data-theme="rosewood"])):has(.home) {
-  --surface-canvas: #eeeadd;
-  --surface-card: #fffdf6;
-  --surface-raised: #fffef9;
-  --text-secondary: #5a665b;
-  --text-tertiary: #6d786b;
-}
-:global(html[data-theme="powderblue"]):has(.home) {
-  --home-focus: #194b66;
-  --home-focus-muted: #cce0ea;
-  --home-highlight: #efd29b;
-  --surface-canvas: #eee9dc;
-  --surface-card: #fffcf3;
-  --surface-raised: #fffef8;
-  --text-secondary: #4b6574;
-  --text-tertiary: #627988;
-}
-:global(html[data-theme="mistviolet"]):has(.home) {
-  --home-focus: #4f3b68;
-  --home-focus-muted: #dfd3ed;
-  --home-highlight: #edc3bc;
-  --surface-canvas: #e8e4ec;
-  --surface-card: #fcfaff;
-  --surface-raised: #fffdfd;
-  --text-secondary: #65576f;
-  --text-tertiary: #776982;
-}
+
+
+
 :global(html[data-mode="dark"]:not([data-design-theme="vintage"])):has(.home) {
   --home-focus: #35373a;
   --home-focus-ink: #f3ead7;
@@ -45,13 +21,7 @@
   --home-highlight: #d4b584;
   --text-tertiary: #aea89e;
 }
-:global(html[data-mode="dark"]:not([data-design-theme="vintage"]):not([data-theme="rosewood"])):has(.home) {
-  --surface-canvas: #202124;
-  --surface-card: #2b2d30;
-  --surface-raised: #35373a;
-  --text-primary: #f3ead7;
-  --text-secondary: #c7c1b6;
-}
+
 
 
 :global(html[data-theme="rosewood"]):has(.home) {
@@ -63,22 +33,8 @@
   --home-action-hover: var(--action-primary-hover);
   --home-action-ink: var(--action-primary-ink);
 }
-:global(html[data-theme="powderblue"]):has(.home) { --home-focus: #0e71ac; }
 
 
-/* Log follows the theme accent; the cream/pink trial keeps its accepted sage accent. */
-:global(html[data-theme]):has(.home) :global(.app-shell .home-quick-log-trigger) {
-  background: var(--home-log-surface);
-  color: var(--home-log-ink);
-  box-shadow: 0 3px 7px rgb(var(--shadow-rgb) / .1), 0 9px 22px rgb(var(--shadow-rgb) / .12);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-@media (hover: hover) and (pointer: fine) {
-  :global(html[data-theme]):has(.home) :global(.app-shell .home-quick-log-trigger:hover:not(:disabled)) { background: var(--home-log-hover); }
-}
-:global(html[data-theme]):has(.home) :global(.app-shell .home-quick-log-trigger:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-:global(html[data-theme][data-mode="dark"]):has(.home) :global(.app-shell .home-quick-log-trigger:focus-visible) { outline-color: var(--home-log-surface); }
 
 .home :global(.home-masthead) { padding-bottom: 26px; }
 .home :global(.home-masthead h1) { color: var(--home-focus); }

@@ -57,8 +57,6 @@ html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
 html[data-design-theme="vintage"] body { background:var(--surface-canvas); }
 html[data-design-theme="vintage"] :is(input,textarea,[contenteditable="true"],.user-content,button,select) { font-family:var(--font-ui); }
 html[data-design-theme="vintage"] :is(h1,h2,h3,h4) { font-family:var(--font-editorial);font-weight:500; }
-html[data-design-theme="vintage"] :is(.feature-icon,.nav-icon) { background-image:var(--icon-source-rosewood,var(--icon-source)); }
-html[data-design-theme="vintage"][data-mode="dark"] :is(.feature-icon,.nav-icon) { background-image:var(--icon-source-rosewood-dark,var(--icon-source-rosewood,var(--icon-source))); }
 .appearance-option-grid.design-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .appearance-classic-colors { margin-top:18px; }
 .appearance-classic-colors > strong { display:block;margin-bottom:10px;color:var(--text-secondary);font-size:13px;font-weight:500; }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ComponentType } from "react";
+import { ReiconGlyph } from "./reicon-icons";
 import { Checklist } from "reicon-react";
 import type { HomeLinkProps } from "./home-calendar-timeline";
 import type { HomeDayOverview } from "@/lib/home-day";
@@ -55,7 +56,7 @@ export function HomeTasksSummary({tasks,reminders,remindersAvailable=true,date,r
       return <li key={row.key} data-due={due} data-completed={task?.completed&&!row.reminders.length||undefined}>
         <div className="vintage-task-title">{!row.reminders.length&&task?<label className="vintage-task-check"><input type="checkbox" aria-label={english?`Complete ${task.title}`:`完成 ${task.title}`} checked={task.completed} disabled={readOnly||taskBusy!==null} onChange={event=>void toggle(task.id,event.target.checked)}/></label>:row.reminders.length===1?<button type="button" className="vintage-quick-complete" disabled={readOnly||busy!==null} aria-label={`${row.reminders[0].targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")} ${row.reminders[0].title}`} onClick={()=>void action(row.reminders[0].id,"complete")}><span/></button>:<span className="vintage-due-mark" aria-hidden="true"/>}
           <strong>{task?<Link href={`/tasks?taskId=${task.id}`}>{task.title}</Link>:title}</strong>
-          {row.reminders.length>0&&<button type="button" className="vintage-more" aria-label={`${english?"Actions for":"操作"} ${title}`} aria-expanded={openActions===row.key} onClick={()=>{setOpenActions(openActions===row.key?null:row.key);setSnoozing(null);}}><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>}{row.reminders.length===0&&task&&<Link className="vintage-more" href={`/tasks?taskId=${task.id}`}><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><span className="sr-only">{english?"Task details":"任务详情"}</span></Link>}
+          {row.reminders.length>0&&<button type="button" className="vintage-more" aria-label={`${english?"Actions for":"操作"} ${title}`} aria-expanded={openActions===row.key} onClick={()=>{setOpenActions(openActions===row.key?null:row.key);setSnoozing(null);}}><ReiconGlyph name="more" className="icon"/></button>}{row.reminders.length===0&&task&&<Link className="vintage-more" href={`/tasks?taskId=${task.id}`}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"Task details":"任务详情"}</span></Link>}
         </div>
         {row.reminders.length?row.reminders.map(item=><div className="vintage-reminder" key={item.id}>
           <div className="vintage-task-meta"><span className="vintage-overdue">{overdue(item,english)}</span><time>{reminderDate(item,english)}</time>{row.reminders.length>1&&<span>{item.title}</span>}</div>

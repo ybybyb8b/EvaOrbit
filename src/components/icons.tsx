@@ -1,3 +1,4 @@
+import { ReiconGlyph } from "./reicon-icons";
 import { Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
 export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "insights" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
@@ -80,18 +81,22 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   health: <><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M7 13h3l1.5-3 2.2 6 1.3-3h2"/></>,
 };
 
-export function Icon({ name, variant = "feature" }: IconProps) {
-  if (name === "edit") return <Edit2 className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "history") return <History className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "chevronDown") return <ChevronDown className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "catFood") return <Pet className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "catFoodDry") return <Bone className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "catFoodWet") return <FoodTray className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "catFoodTreat") return <Cookie className="icon" weight="Outline" aria-hidden="true" />;
-  if (name === "catFoodSupplement") return <PillJar className="icon" weight="Outline" aria-hidden="true" />;
+function ClassicIcon({ name, variant = "feature" }: IconProps) {
+  if (name === "edit") return <Edit2 className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "history") return <History className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "chevronDown") return <ChevronDown className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "catFood") return <Pet className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "catFoodDry") return <Bone className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "catFoodWet") return <FoodTray className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "catFoodTreat") return <Cookie className="icon classic-icon" weight="Outline" aria-hidden="true" />;
+  if (name === "catFoodSupplement") return <PillJar className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   const featureSource = featureIconSources[name];
   const navSource = navIconSources[name];
-  if (navSource && variant === "nav") return <span className="icon nav-icon" style={iconSourceStyle(navSource)} aria-hidden="true" />;
-  if (featureSource && variant === "feature") return <span className={`icon feature-icon icon-${name}`} style={iconSourceStyle(featureSource)} aria-hidden="true" />;
-  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+  if (navSource && variant === "nav") return <span className="icon nav-icon classic-icon" style={iconSourceStyle(navSource)} aria-hidden="true" />;
+  if (featureSource && variant === "feature") return <span className={`icon feature-icon classic-icon icon-${name}`} style={iconSourceStyle(featureSource)} aria-hidden="true" />;
+  return <svg className="icon classic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+}
+
+export function Icon(props: IconProps) {
+  return <><ClassicIcon {...props}/><ReiconGlyph name={props.name}/></>;
 }

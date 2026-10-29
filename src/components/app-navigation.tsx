@@ -1,6 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState,type ComponentType,type ComponentProps,type ReactNode} from "react";
 import { Activity, Book, Calendar, ChatRoundDots, ClipboardCheck, CupPaper, DirectInbox, Film, Folder, FoodTray, Heart, Home, Menu4, NoteText, Pet, Settings, Sparkles, Users } from "reicon-react";
+import {ReiconGlyph} from "./reicon-icons";
 import {Icon} from "./icons";
 import {useLocale} from "./locale-controller";
 import {isFoodDrinkPath} from "@/lib/page-navigation";
@@ -44,7 +45,7 @@ const SPACES_DRAWER_CLOSE_FALLBACK_MS = 240;
 
 function visibleGroups(allowedPaths?:ReadonlySet<string>){return navigationGroups.map(group=>({...group,items:group.items.filter(item=>!allowedPaths||allowedPaths.has(item.href))})).filter(group=>group.items.length);}
 export function AppSidebar({pathname,LinkComponent:Link,allowedPaths,brandImage,footer}:{brandImage:ReactNode;footer?:ReactNode}&NavigationProps){
- const {english}=useLocale();const groups=visibleGroups(allowedPaths);
+ const {english,designTheme}=useLocale();const groups=visibleGroups(allowedPaths);
  return (
       <aside className="sidebar">
         <Link href="/" className="brand" aria-label={english ? "EvaOrbit Home" : "EvaOrbit 首页"}>
@@ -55,11 +56,11 @@ export function AppSidebar({pathname,LinkComponent:Link,allowedPaths,brandImage,
           {groups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
             const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const SidebarIcon = item.icon === "insights" ? null : sidebarIcons[item.icon];
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active?"page":undefined} aria-label={english?item.label:item.zh??item.label}>{SidebarIcon ? <SidebarIcon className="icon" weight="Outline" aria-hidden="true" /> : <Icon name="insights" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active?"page":undefined} aria-label={english?item.label:item.zh??item.label}>{designTheme==="vintage"?<ReiconGlyph name={item.href==="/subscriptions"?"subscriptions":item.icon}/>:SidebarIcon ? <SidebarIcon className="icon" weight="Outline" aria-hidden="true" /> : <Icon name="insights" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">
-          <Link aria-label={english?"Settings":"设置"} href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}><Settings className="icon" weight="Outline" aria-hidden="true" /><span>{english ? "Settings" : "设置"}</span></Link>
+          <Link aria-label={english?"Settings":"设置"} href="/settings" className={pathname.startsWith("/settings") ? "active" : ""}>{designTheme==="vintage"?<ReiconGlyph name="settings"/>:<Settings className="icon" weight="Outline" aria-hidden="true" />}<span>{english ? "Settings" : "设置"}</span></Link>
           {footer}
         </div>
       </aside>
@@ -67,7 +68,7 @@ export function AppSidebar({pathname,LinkComponent:Link,allowedPaths,brandImage,
 }
 
 export function SpacesNavigation({pathname,LinkComponent:Link,allowedPaths,renderTrigger,onOpenChange}:NavigationProps&{renderTrigger?:(trigger:ReactNode)=>ReactNode;onOpenChange?:(open:boolean)=>void}){
- const {english}=useLocale();const groups=visibleGroups(allowedPaths);
+ const {english,designTheme}=useLocale();const groups=visibleGroups(allowedPaths);
   const [spacesDrawerPhase, setSpacesDrawerPhase] = useState<SpacesDrawerPhase>("closed");
   const spacesTriggerRef = useRef<HTMLButtonElement>(null);
   const spacesLayerRef = useRef<HTMLDivElement>(null);
@@ -160,7 +161,7 @@ export function SpacesNavigation({pathname,LinkComponent:Link,allowedPaths,rende
               <span>{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>
               {group.items.filter((item) => item.href !== "/").map((item) => {
                 const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : pathname.startsWith(item.href);
-                return <Link href={item.href} className={active ? "active" : ""} onClick={closeSpacesDrawer} aria-current={active?"page":undefined} key={item.href}><Icon name={item.icon} /><strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
+                return <Link href={item.href} className={active ? "active" : ""} onClick={closeSpacesDrawer} aria-current={active?"page":undefined} key={item.href}>{designTheme==="vintage"?<ReiconGlyph name={item.href==="/subscriptions"?"subscriptions":item.icon}/>:<Icon name={item.icon} />}<strong>{english ? item.label : item.zh ?? item.label}</strong></Link>;
               })}
             </section>)}
           </nav>

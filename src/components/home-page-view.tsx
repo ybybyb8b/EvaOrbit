@@ -1,4 +1,5 @@
 "use client";
+import {useLocale} from "./locale-controller";
 import {useHomeStyle} from "@/lib/home-style";
 import vintageStyles from "@/app/home-vintage.module.css";
 import type {ReactNode} from "react";
@@ -23,4 +24,4 @@ function greeting(english: boolean) {
 }
 
 
-export function HomePageView({language,due,children}:{language:UiLanguage;due:ReactNode;children:ReactNode}){const variant=useHomeStyle();const english=language==="en";return <div className={`page home-page ${themeStyles.home} ${variant==="vintage"?vintageStyles.vintage:""}`}><header className="home-masthead"><span className={styles.date}>{dateLabel(english)}</span><h1>{greeting(english)}</h1></header>{variant!=="vintage"&&due}<section className={`home-overview ${styles.overview}`}>{children}</section></div>;}
+export function HomePageView({language,due,children}:{language:UiLanguage;due:ReactNode;children:ReactNode}){const variant=useHomeStyle();const {colorTheme}=useLocale();const english=language==="en";return <div className={`page home-page ${variant==="vintage"?`${themeStyles.home} ${vintageStyles.vintage}`:colorTheme==="rosewood"?themeStyles.home:""}`}><header className="home-masthead"><span className={styles.date}>{dateLabel(english)}</span><h1>{greeting(english)}</h1></header>{variant!=="vintage"&&due}<section className={`home-overview ${styles.overview}`}>{children}</section></div>;}

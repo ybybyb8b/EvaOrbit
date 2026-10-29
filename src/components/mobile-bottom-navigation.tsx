@@ -8,7 +8,7 @@ export function MobileBottomNavigation({pathname,LinkComponent:Link}:{pathname:s
   const {english}=useLocale();
   return <nav className="mobile-nav" data-active-tab={pathname==="/"?0:pathname.startsWith("/settings")?1:undefined} aria-label={english?"Mobile navigation":"移动端导航"}>
     <VintageNavGlass/>
-    <Link href="/" className={pathname==="/"?"active":""} aria-current={pathname==="/"?"page":undefined}><Icon name="home" variant="nav"/><span className="vintage-nav-line-icon"><Icon name="home" variant="stroke"/></span><span>{english?"Home":"首页"}</span></Link>
-    <Link href="/settings" className={pathname.startsWith("/settings")?"active":""} aria-current={pathname.startsWith("/settings")?"page":undefined}><Icon name="settings" variant="nav"/><span className="vintage-nav-line-icon"><Icon name="settings" variant="stroke"/></span><span>{english?"Settings":"设置"}</span></Link>
+    <Link href="/" className={pathname==="/"?"active":""} aria-current={pathname==="/"?"page":undefined}><Icon name="home" variant="nav"/><span>{english?"Home":"首页"}</span></Link>
+    <Link href="/settings" className={pathname.startsWith("/settings")?"active":""} aria-current={pathname.startsWith("/settings")?"page":undefined}><Icon name="settings" variant="nav"/><span>{english?"Settings":"设置"}</span></Link>
   </nav>;
 }

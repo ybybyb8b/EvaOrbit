@@ -81,3 +81,15 @@ Recorded-time summary is a flat, background-free statistics section in Vintage o
 ## Web release candidate · 2026-10-29
 
 User authorized publishing all theme/Home refinements and Web deployment, explicitly skipping IPA packaging. Removed the empty brand-mark container from the shared login surface; Classic/Vintage × light/dark × 320/402/1440 browser checks passed. Release is based on production main 8ad92ec; only the additive design-theme migration is pending. Unrelated combobox/suggested-input edits are excluded. The iOS workflow path filters do not match this release, and no workflow dispatch is requested.
+
+## Approved Classic palettes and Reicon refinement · 2026-10-29
+
+- User explicitly retained the approved rosewood trial: cream #faf5ef, pink #e6c1c8 / #f0dfe2 and sage Log #d6e2cb; dark canvas remains #202124. These roles apply globally, including forms and reminder actions.
+- Green, blue and violet Classic Home no longer mount the trial stylesheet. Their light/dark canvas, surfaces, text and accent roles were compared against pre-trial 8ad92ec and matched.
+- Classic and Vintage share the continuous central-rise floating navigation, with concentric Log rim and disc, while retaining design/palette-specific type, icons and color roles. Classic rosewood retains the sage disc.
+- Vintage's shared Icon, sidebar, space drawer and bottom links use Reicon Outline. Module identities are distinct (e.g. Checklist / Folder / Lightbulb / WalletMoney / Notebook / NoteText); Classic imagery remains intact. Logo and business images are not replaced.
+- The four Classic palettes passed light/dark × 320/402/1440 browser checks, including centered Log, overflow and selected states. Vintage real Home actions/Log and sidebar/drawer identity checks passed. 24 focused tests, TypeScript, lint and Web/local builds passed. No commit, push, deployment or IPA in this refinement.
+
+## Classic / Reicon Web release authorization · 2026-10-29
+
+User approved publishing this refinement: restore pre-trial green/blue/violet Classic styling, retain the approved rosewood palette globally, share centered raised Log geometry and use Reicon for Vintage module/navigation icons. Web release only; IPA packaging remains skipped. No schema migration is required. Unrelated suggested-input/combobox changes remain excluded.
