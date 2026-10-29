@@ -87,7 +87,10 @@ test("actual SQLite and service reads reject writes, preserve subscriptions and 
       for(const name of tables)for(const op of ['INSERT','UPDATE','DELETE'])connection.exec('CREATE TRIGGER "readonly_'+op+'_'+name+'" BEFORE '+op+' ON "'+name+'" BEGIN SELECT RAISE(ABORT,\'Insights attempted write\'); END;');
       await assert.rejects(withInsightsReadOnlyRepository(async()=>{const repo=await getRepository();return repo.createTask({title:'Forbidden'});}),/refused/);
       await assert.rejects(withInsightsReadOnlyRepository(async()=>{const repo=await getRepository();return repo.listSubscriptions();}),/refused/);
+      await assert.rejects(withInsightsReadOnlyRepository(async()=>{const repo=await getRepository();return repo.listInsightReports({periodType:'daily'});}),/refused/);
+      assert(!resourceRegistry.resources().some(resource=>['insight_run','insight_report'].includes(resource.resource)));
       const internal=await getInsightContext('day/2026-01-01');
+      assert.deepEqual(internal.relatedReports,[]);
       const external=await withMcpRequestRepository({userId:'local',accessToken:'test'},()=>resourceRegistry.get('insight_context','day/2026-01-01'));
       assert.equal(external.snapshot_fingerprint,internal.snapshotFingerprint);
       assert.equal(external.period.from,internal.period.from);

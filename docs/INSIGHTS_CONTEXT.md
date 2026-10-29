@@ -1,8 +1,8 @@
 # Insights Context · Phase 1
 
-> 当前每日复盘的餐次检查、过期识别、默认阅读版本和执行轮次以 [Insights 整体优化](INSIGHTS_REVIEW.md) 为准。以下保留原阶段契约与历史验证。
+> 2026-10-29：Insight 报告功能已移除，本文描述保留的只读 Context 能力。旧报告页面、API 和生产 MCP 的 `insight_run`／`insight_report` 已停用。
 
-本篇保留 Phase 1 的原始审查结论。Phase 2 已增加报告存储及页面，见 [报告与版本](INSIGHTS_REPORTS.md)；Context 现在额外只读获取最多 50 个目标日前的 Daily 报告身份/当前版本引用，这些引用参与指纹。对应只读白名单从 11 个方法扩展到 12 个，另有独立的原始证据 GET 白名单；其余范围、基线和来源限制不变。
+Context 不再读取报告表；`related_reports` 为兼容而保留并固定为空数组，报告不参与输入指纹。独立只读白名单仅允许原始业务查询。历史报告存储实现仅供旧 schema／备份兼容，不能作为当前开放功能。
 
 ## 接口与边界
 

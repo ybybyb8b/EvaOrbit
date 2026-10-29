@@ -24,7 +24,7 @@
 | [Lucius](#lucius) | `/lucius`：状态、动态、评论、日记与 Case |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
 | [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
-| [Insights](#insights) | `/insights`：报告、证据、不可变版本与只读分析上下文 |
+| [Insights](#insights) | MCP `insight_context`：只读分析上下文，无独立页面 |
 | [Inbox](#inbox) | `/inbox`：捕获、处理与转换 |
 | [Tasks](#tasks) | `/tasks`：待办及其提醒规则 |
 | [Trackers](#trackers) | `/trackers`：自定义观测、属性、记录与目标 |
@@ -62,6 +62,8 @@
 
 ## Home
 
+- **完成事项汇总**：Home 按实际完成日期读取普通 Tasks 与 Reminder occurrence，复用 Timeline 中的护理、家务、订阅付款和用药事实。`home-completions.ts` 按来源身份去重，完成项与当前待处理提醒分开，跳过／稍后不计完成；Web 与本地快照共享 DTO，旧快照缺少 `completedItems` 时兼容为空。
+
 - **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 使用账户隔离快照，表单复用在线业务请求，跨模块链接由 [本地路由](../src/local-trackers/routes.tsx) 转入已迁移模块。
 - **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。只读接口独立于 Tracker 同步协议及迁移；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
 - **职责与入口**：[page.tsx](../src/app/page.tsx)、[home-calendar-timeline.tsx](../src/app/home-calendar-timeline.tsx)、[home-day 服务](../src/lib/services/home-day.ts)、[timeline 服务](../src/lib/services/timeline.ts)。
@@ -95,7 +97,7 @@
 
 - **职责与入口**：[training-section.tsx](../src/app/health/training-section.tsx)、[计划编辑器](../src/app/health/training-plan-editor.tsx)、[training 服务](../src/lib/services/training.ts)、[training-plan.ts](../src/lib/training-plan.ts)。页面属于 Health，没有独立 `/training` 路由。
 - **数据与接口**：`training_logs`、`training_plans`；`/api/health/training`、`/api/health/training/plan`、`/api/health/training/plan/complete`；MCP `training_log` 只对应记录。
-- **依赖与决定**：每账户一份循环计划，按训练日顺序推进，不按日历自动跳日；完成操作原子保存记录并推进，带版本冲突检查和请求幂等键。普通记录 CRUD 不承担计划推进；训练记录进入 Health 与 Timeline。
+- **依赖与决定**：每账户一份循环计划，按训练日顺序推进，不按日历自动跳日；完成操作原子保存记录并推进，带版本冲突检查和请求幂等键。普通记录 CRUD 不承担计划推进；Complete & Log 可复用当天尚未用于完成计划的 Apple Workout，以同一事务补充原记录并推进，单条自动带入、多条显式选择。训练记录进入 Health 与 Timeline。
 - **填写与自主训练**：日志按老师、课程、动作名称分别提供历史候选，不再应用整组 Recent & Common 预设。训练日 JSON 可带轻量动作清单（名称、可选目标组数、次数/时长文本）；日志的可选 `session_details` 保存当次计划参考、动作组数进度与视频完成状态的独立快照。课程与备注记录实际情况；无动作库、逐组重量或热量推算。Web 与本地 Health 共用表单与在线业务请求，MCP `training_log` 保持原字段兼容并可选读写 `session_details`。
 - **依据**：无单独专题文档；查 [计划迁移及事务](../supabase/migrations/202610150001_training_plans.sql)、[计划单测](../src/lib/training-plan.test.ts)、[SQLite 集成测试](../scripts/training-plan-sqlite.test.mjs)。
 
@@ -221,12 +223,9 @@
 
 ## Insights
 
-- **职责与入口**：[报告页](../src/app/insights/)、[报告服务](../src/lib/services/insight-reports.ts)、[报告类型与校验](../src/lib/insight-reports.ts)、[Context service](../src/lib/services/insight-context.ts)。MCP `insight_context` 仅支持 get，ID 为 `yesterday`、`day/YYYY-MM-DD`，限已经结束的上海自然日。
-- **数据与边界**：`insight_reports` 按账户/周期/起点保持稳定身份，`insight_report_versions` 保存不可变快照；`/api/insights` 与详情接口管理规则/AI 报告、证据与版本。`insight_runs` / `insight_run_attempts` 保存外部 Agent 的冻结输入、30 分钟租约、三次执行及结果引用，`/api/insights/runs` 提供只读状态查询。Postgres 仅授予账户 SELECT，受控 RPC 原子完成报告与运行；SQLite 保持对应事务及备份恢复。报告写入、执行控制与 Context 只读白名单分开。
-- **依赖与决定**：复用 Food 行为规则、Tracker 字段统计与营养估算；Context 按日读取前 30 天基线，并附最多 50 个既往日报版本引用。公开覆盖限制，不调用订阅补记或独立 Web 身份 HealthKit 能量读取。Food 旧行为展示已迁移，Tracker 图表与统计保留。外部 AI 通过 MCP `insight_run` start/complete/fail 受控执行，`insight_report` 只读历史；用户选择自行配置 ChatGPT 云端 Scheduled Task，不调用 App 内模型。长期周期计算未开启；本地 App 通过既有在线业务通道复用同一 InsightsView，需联网检查最新数据。
-- **每日复盘**：先按上海自然日核对午餐/晚餐，再显示已记录概览与统一 AI 正文；`/api/insights/review` 返回待补录、待分析、已完成或数据已更新。`reading_version` 保持 AI 阅读优先，`current_version` 负责并发；Run 的 generation 为每次输入更新保留独立三次重试与旧历史。手动请求仅排队外部 AI，规则作为冻结候选，不覆盖正文。详见 [整体优化](INSIGHTS_REVIEW.md)。
-- **删除边界**：日报更多信息提供整份逻辑删除，隐藏旧版本、终止活跃分析并阻止自动重建；保留内部快照与修订引用。用户明确重新生成才开启新轮次，旧版本仍隐藏；原始生活记录不受影响。MCP 报告仍只读，备份保存删除状态。
-- **详文**：[Context 口径](INSIGHTS_CONTEXT.md)、[报告与 Phase 2](INSIGHTS_REPORTS.md)、[Agent 后台与 Phase 3](INSIGHTS_AGENT.md)、[用户定时任务正文](INSIGHTS_DAILY_TASK.md)。
+- **唯一入口**：MCP `insight_context` 仅支持 get，ID 为 `yesterday`、`day/YYYY-MM-DD`，限已经结束的上海自然日。[Context service](../src/lib/services/insight-context.ts) 经独立只读 Repository 白名单读取原始业务记录；保留 7/30 天基线、证据、覆盖限制、Tracker 统计与营养估算，不执行补账、同步或写入。
+- **移除范围**：Web／本地版报告页面、侧栏／空间菜单入口、展示组件与 `/api/insights` 系列接口已移除，生产 MCP 不再注册 `insight_run`、`insight_report`。Context 不再查询报告表；兼容字段 `related_reports` 为空数组。Tracker 自身的 Insights 图表保留。
+- **兼容与清理**：旧表、Repository 和内部报告服务仅保留迁移／备份兼容及历史契约测试；[停用迁移](../supabase/migrations/202610290001_insight_retirement.sql) 撤销旧报告 RPC 的客户端执行权，阻止旧客户端和 Agent 重建报告。旧数据通过 [账户限定清理](../scripts/purge-insight-reports.sql) 删除，不在通用迁移中跨账户清空。详见 [Context 口径](INSIGHTS_CONTEXT.md)。
 
 ## MCP
 

@@ -75,12 +75,13 @@ test("real SQLite + MCP Agent cycle binds evidence, replays writes, tracks delay
     const code=String.raw`
       import assert from 'node:assert/strict';import fs from 'node:fs';import{randomUUID}from'node:crypto';import{DatabaseSync}from'node:sqlite';
       import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';
-      import{resourceRegistry as registry}from'./src/lib/mcp/resource-registry.server.ts';
+      import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';import{getInsightReportDetail}from'./src/lib/services/insight-reports.ts';
       import{getInsightContext}from'./src/lib/services/insight-context.ts';
       import{getInsightRunStatus,startInsightRun,completeInsightRun,failInsightRun,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';
       import{insightOutputSchemaJson,importantInsightNotification}from'./src/lib/insight-runs.ts';
       import{parseNewFoodLog}from'./src/lib/validation.ts';import{createFoodLog}from'./src/lib/services/food.ts';
       import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow,emptyBackupResources,parseBackupDocument}from'./src/lib/data-backup.ts';
+      const registry=createResourceRegistry({insightReport:{get:getInsightReportDetail},insightRun:{get:getInsightRunStatus,search:listInsightRunStatus,start:startInsightRun,complete:completeInsightRun,fail:failInsightRun}});
       await getRepository();for(const date of ['2026-01-02','2026-01-03','2026-01-04','2026-01-08'])for(const mealType of ['lunch','dinner'])await createFoodLog(parseNewFoodLog({title:'面条',mealType,occurredAt:date+'T12:00:00+08:00',occurredHasExplicitTime:false}));
       const sql=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       const tables=sql.prepare("select name from sqlite_master where type='table' and name not like 'sqlite_%' and name not in ('insight_reports','insight_report_versions','insight_runs','insight_run_attempts')").all().map(row=>row.name);

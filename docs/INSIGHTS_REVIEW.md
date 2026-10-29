@@ -1,5 +1,7 @@
 # Insights：每日生活复盘
 
+> 历史文档：2026-10-29 已移除 Insight 报告功能；本文的报告页面、API、运行和发布步骤不再适用。保留的只读能力见 [INSIGHTS_CONTEXT.md](INSIGHTS_CONTEXT.md)。
+
 本轮以既有只读 Context、不可变 Version、受控 Run 和 EvaOrbit 视觉系统为基础优化，不重建记录功能或接入新的模型服务。本文记录实现契约；生产迁移与部署需另行执行，不将本地验证称为线上验收。
 
 ## 产品与阅读顺序

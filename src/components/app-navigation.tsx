@@ -16,7 +16,6 @@ const navigationGroups = [
     { href: "/cats", label: "Cats", zh: "咪子", icon: "cats" as const },
   ] },
   { label: "ARCHIVE", items: [
-    { href: "/insights", label: "Insights", zh: "洞察", icon: "insights" as const },
     { href: "/chronicle", label: "Chronicle", zh: "纪事", icon: "chronicle" as const },
     { href: "/relations", label: "Relations", zh: "她们", icon: "people" as const },
     { href: "/media", label: "Media", zh: "展架", icon: "media" as const },
@@ -55,8 +54,8 @@ export function AppSidebar({pathname,LinkComponent:Link,allowedPaths,brandImage,
         <nav className="main-nav" aria-label={english ? "Main navigation" : "主导航"}>
           {groups.map((group) => <div className="nav-group" key={group.label}><span className="nav-group-label">{english ? group.label : group.label === "SPACE" ? "空间" : group.label === "LIFE" ? "生活" : "档案"}</span>{group.items.map((item) => {
             const active = item.href === "/food-drink" ? isFoodDrinkPath(pathname) : item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            const SidebarIcon = item.icon === "insights" ? null : sidebarIcons[item.icon];
-            return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active?"page":undefined} aria-label={english?item.label:item.zh??item.label}>{designTheme==="vintage"?<ReiconGlyph name={item.href==="/subscriptions"?"subscriptions":item.icon}/>:SidebarIcon ? <SidebarIcon className="icon" weight="Outline" aria-hidden="true" /> : <Icon name="insights" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
+            const SidebarIcon = sidebarIcons[item.icon];
+            return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-current={active?"page":undefined} aria-label={english?item.label:item.zh??item.label}>{designTheme==="vintage"?<ReiconGlyph name={item.href==="/subscriptions"?"subscriptions":item.icon}/>:<SidebarIcon className="icon" weight="Outline" aria-hidden="true" />}<span>{english ? item.label : item.zh ?? item.label}</span></Link>;
           })}</div>)}
         </nav>
         <div className="sidebar-bottom">

@@ -14,19 +14,20 @@ export function SelectDropdown({ anchor, onClose, children, id, label, className
     const element = panel.current;
     const field = anchor.current;
     if (!element || !field) return;
+    const sheetBody = field.closest(".form-sheet-body");
     function position() {
       if (!element || !field) return;
       const rect = field.getBoundingClientRect();
       const viewport = window.visualViewport;
       const left = viewport?.offsetLeft ?? 0;
       const viewportTop = viewport?.offsetTop ?? 0;
-      const sheetBody = field.closest(".form-sheet-body")?.getBoundingClientRect();
-      const top = Math.max(viewportTop, sheetBody?.top ?? viewportTop);
-      const bottom = Math.min(viewportTop + (viewport?.height ?? window.innerHeight), sheetBody?.bottom ?? Infinity);
+      const bodyBounds = sheetBody?.getBoundingClientRect();
+      const top = Math.max(viewportTop, bodyBounds?.top ?? viewportTop);
+      const bottom = Math.min(viewportTop + (viewport?.height ?? window.innerHeight), bodyBounds?.bottom ?? Infinity);
       const width = viewport?.width ?? window.innerWidth;
       const desiredWidth = Math.max(rect.width, minWidth ?? 0);
       const layout = selectDropdownLayout({ left: rect.right - desiredWidth, top: rect.top, bottom: rect.bottom, width: desiredWidth }, { left, top, width, height: Math.max(0, bottom - top) }, element.scrollHeight);
-      element.style.visibility = rect.bottom > bottom || rect.top < top || layout.maxHeight < 44 ? "hidden" : "visible";
+      element.style.visibility = rect.bottom <= top || rect.top >= bottom || layout.maxHeight < 44 ? "hidden" : "visible";
       element.style.width = `${layout.width}px`;
       element.style.left = `${layout.left}px`;
       element.style.maxHeight = `${layout.maxHeight}px`;
@@ -34,25 +35,33 @@ export function SelectDropdown({ anchor, onClose, children, id, label, className
     }
     element.showPopover();
     position();
-    const resize = new ResizeObserver(position);
+    let frame = 0;
+    // Sheet layout can settle after the keyboard's visualViewport event.
+    const schedulePosition = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(position);
+    };
+    const resize = new ResizeObserver(schedulePosition);
     resize.observe(field);
     resize.observe(element);
+    if (sheetBody) resize.observe(sheetBody);
     const outside = (event: PointerEvent) => {
       if (!element.contains(event.target as Node) && !field.contains(event.target as Node)) close.current();
     };
     document.addEventListener("pointerdown", outside);
-    window.addEventListener("scroll", position, true);
-    window.addEventListener("resize", position);
-    window.visualViewport?.addEventListener("resize", position);
-    window.visualViewport?.addEventListener("scroll", position);
+    window.addEventListener("scroll", schedulePosition, true);
+    window.addEventListener("resize", schedulePosition);
+    window.visualViewport?.addEventListener("resize", schedulePosition);
+    window.visualViewport?.addEventListener("scroll", schedulePosition);
     return () => {
       element.hidePopover();
+      window.cancelAnimationFrame(frame);
       resize.disconnect();
       document.removeEventListener("pointerdown", outside);
-      window.removeEventListener("scroll", position, true);
-      window.removeEventListener("resize", position);
-      window.visualViewport?.removeEventListener("resize", position);
-      window.visualViewport?.removeEventListener("scroll", position);
+      window.removeEventListener("scroll", schedulePosition, true);
+      window.removeEventListener("resize", schedulePosition);
+      window.visualViewport?.removeEventListener("resize", schedulePosition);
+      window.visualViewport?.removeEventListener("scroll", schedulePosition);
     };
   }, [anchor, minWidth]);
   return <div ref={panel} popover="manual" id={id} className={`eo-select-dropdown ${className}`} aria-label={label} onKeyDown={event => {

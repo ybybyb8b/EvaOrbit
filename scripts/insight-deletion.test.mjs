@@ -43,7 +43,7 @@ test('SQLite/Web service deletion hides all versions, keeps cross-report referen
    import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';import{createFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
    import{getInsightContext}from'./src/lib/services/insight-context.ts';import{startInsightRun,completeInsightRun,requestInsightAnalysis,getInsightRunStatus,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';
    import{generateRuleInsightReport,deleteInsightReport,getInsightReportDetail,getInsightDayReview,listInsightReports,publishInsightReport}from'./src/lib/services/insight-reports.ts';
-   import{resourceRegistry}from'./src/lib/mcp/resource-registry.server.ts';import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow}from'./src/lib/data-backup.ts';
+   import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';const resourceRegistry=createResourceRegistry({insightReport:{get:getInsightReportDetail}});import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow}from'./src/lib/data-backup.ts';
    const repo=await getRepository(),db=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH),date='2026-01-01',day='day/'+date;
    for(const d of [date,'2026-01-02'])for(const mealType of ['lunch','dinner'])await createFoodLog(parseNewFoodLog({title:mealType,mealType,occurredAt:d+'T12:00:00+08:00',occurredHasExplicitTime:false}));
    const command={date,expectedVersion:0,requestKey:randomUUID()};await generateRuleInsightReport(command);

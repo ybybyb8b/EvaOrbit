@@ -19,7 +19,7 @@ test("online business routes allow explicit operations and Tracker settings, nev
   for(const [path,method] of [["/api/subscriptions/library","POST"],["/api/subscriptions/library/1","PATCH"],["/api/subscriptions/library/1/icon","POST"],["/api/subscriptions/library/1/icon","DELETE"]])assert(allowsBusinessRequest(path,method));
   for(const path of ["/api/subscriptions/library/0","/api/subscriptions/library/-1","/api/subscriptions/library/1/export"])assert(!allowsBusinessRequest(path,"POST"));
   const insight='/api/insights/10000000-0000-4000-8000-000000000001';
-  for(const [path,method] of [['/api/insights?period=daily','GET'],['/api/insights/review?date=2026-10-26','GET'],['/api/insights/runs','POST'],[insight+'?version=3&generation=2','DELETE'],[insight+'?version=1','GET']])assert(allowsBusinessRequest(path,method));
+  for(const [path,method] of [['/api/insights?period=daily','GET'],['/api/insights/review?date=2026-10-26','GET'],['/api/insights/runs','POST'],[insight+'?version=3&generation=2','DELETE'],[insight+'?version=1','GET']])assert(!allowsBusinessRequest(path,method));
   for(const [path,method] of [['/api/insights','POST'],['/api/insights/review','DELETE'],['/api/insights/runs','DELETE'],[insight,'PATCH'],['/api/insights/bad-id','DELETE']])assert(!allowsBusinessRequest(path,method));
   const manifest=JSON.parse(readFileSync(new URL("business-routes.json",import.meta.url),"utf8")) as Array<{pattern:string;methods:string[]}>;
   assert(manifest.length>90);assert(manifest.every(route=>route.methods.length>0));

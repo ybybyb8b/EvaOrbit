@@ -42,3 +42,15 @@ Health 账户隔离快照新增可选 `pendingTraining`（最多 100 条，整�
 仍需 macOS CI 的 XcodeGen、Simulator build/test、iphoneos ad-hoc build 与 IPA entitlement 断言。iPhone 16 Pro 须验收首次/更新授权、拒绝读取及恢复、Watch 来源、锁屏后台交付、杀进程后队列恢复、断网重试、两台设备刷新与删除同步，以及 WKWebView safe area、键盘、长列表与中文/深色。Windows Chrome 与合成数据测试不代表上述真机行为已通过。
 
 本轮实际验证：Workout PGlite/SQLite、训练计划定向回归 8 项通过；Chrome 手机/桌面端到端通过；TypeScript、修改源码 ESLint、Impeccable 检测与 diff 空白检查通过。Next 生产构建在 Windows 沙箱内两次遇到 prerender 目录 `EPERM`，随后在相同隔离构建目录、合成 SQLite 配置下沙箱外完成；本地 React/Vite 构建通过，保留原有大 chunk 提示。全量 `npm test` 714 项：700 通过、13 个可选数据库环境项跳过、1 个既有 Cats 合成头像 rename 因沙箱 `EPERM` 失败，随后该文件沙箱外定向复验 2 项通过。未重复运行全量回归。全量 `npm run lint` 扫入已有 `.next-verify` 产物而失败，改用修改源码的定向 ESLint，未更改项目 lint 配置或清理其他任务产物。浏览器测试使用的 PID 18960/34868、端口 11697/6248 均在结束后关闭并核验无监听。
+
+## Complete & Log 关联 Workout
+
+计划完成流程通过 `workoutLogId` 引用已同步记录；单条当天未完成计划的 Workout 自动带入，多条时显式选择。表单保留已有补充信息，缺省动作从当前训练日带入；保存统一使用 `POST /api/health/training/plan/complete`，而不是普通详情 PATCH。
+
+`202610300001_training_workout_completion.sql` 增加五参数 `complete_training_plan`：锁定账户计划和该 Workout，在同一事务中保存补充信息、计划快照和完成键并推进当前日。源运动数据保持不变；删除、跨账户、已用于其他完成、版本冲突和失败回滚均受保护。旧四参数接口继续支持手动完成。DTO 的可选 `planCompleted` 从已有完成键派生，无新表或数据回填；旧本地快照仍可读取。
+
+部署时先应用新迁移，再更新 Web/API 和本地 UI。迁移仅替换/增加函数，不修改现有计划或历史训练，不补推进过去的记录。`scripts/training-workout-completion.test.mjs` 覆盖真实 PostgreSQL 语义的 PGlite 迁移、幂等、所有权、回滚、旧接口和源数据保护；SQLite 与手机端浏览器用例覆盖复用原记录、即时显示下一日、重复提交、已完成排除、多条选择及取消。
+
+本次修复验证：完整回归 793 项，779 通过、14 项因对应数据库/集成环境未启用而跳过，0 失败；修改文件 ESLint、TypeScript、Next 生产构建和本地 Vite 构建通过。Chrome 402×874 中文深色与桌面流程通过，覆盖原 Workout 补充信息保留、同记录完成后即时显示 Day 2、重复提交、多条选择、已完成排除和取消不推进。浏览器测试监听 14312（PID 52844）已在结束时关闭并由用例验证不可访问。本次未应用生产迁移、部署或重打 IPA，未在 iPhone 真机验证。
+
+2026-10-30 发布准备：`202610300001_training_workout_completion.sql` 已在生产库完成事务预演回滚并正式应用，训练记录与计划指纹一致，PostgREST schema 已刷新。未回填或推进历史训练；Insights 维护清理脚本未在本任务执行。工作区源码随此次用户授权统一推送，本地版 IPA 通过既有 `local_trackers=true` 手动流水线构建；CI 结果按维护约定由用户在 Actions 查看，真机验收待完成。

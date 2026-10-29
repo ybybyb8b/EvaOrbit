@@ -125,7 +125,7 @@ export async function buildInsightContext(reader: InsightReader, period: Insight
   // Reports are outputs, never source data: another report must not invalidate this day's analysis.
   const input = { fingerprintVersion: INSIGHT_FINGERPRINT_VERSION, period, days, tasks, trackers, energy, fieldSnapshots };
   return {
-    analysisGuidance: ["先检查 recording.complete；缺午餐或晚餐时仅提示补录，不领取租约。", "summary 用自然中文分段回顾当天已记录的生活，不罗列技术字段。", "规则候选只供筛选和核对，不要逐条拼接。没有显著变化时 findings 可以为空；只选最多三条有实际信息价值的发现。", "不得把没有记录解释为没有活动或没有吃饭；已记录热量只是估算，不推断真实摄入或热量缺口。"],
+    analysisGuidance: ["先检查 recording.complete；缺午餐或晚餐时仅提示补录。", "summary 用自然中文分段回顾当天已记录的生活，不罗列技术字段。", "规则候选只供筛选和核对，不要逐条拼接。没有显著变化时 findings 可以为空；只选最多三条有实际信息价值的发现。", "不得把没有记录解释为没有活动或没有吃饭；已记录热量只是估算，不推断真实摄入或热量缺口。"],
     schemaVersion: 2, fingerprintVersion: INSIGHT_FINGERPRINT_VERSION, period, capturedAt, relatedReports, recording,
     overview: { foodCount: target.rows.food.length, drinkCount: target.rows.drink.length,
       recordedIntakeKcal: target.rows.food.length + target.rows.drink.length > unknownCalories ? nutrition.estimatedIntakeKcal : null, unknownCalories,

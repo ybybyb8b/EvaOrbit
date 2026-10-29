@@ -1,5 +1,7 @@
 # ChatGPT Scheduled Task：Daily Insights
 
+> 历史文档：2026-10-29 已移除 Insight 报告功能；本文的报告页面、API、运行和发布步骤不再适用。保留的只读能力见 [INSIGHTS_CONTEXT.md](INSIGHTS_CONTEXT.md)。
+
 定时任务由用户在 ChatGPT 中创建。EO 后台不运行 App 内模型、不保存新的模型 API Key，也不创建本地 Codex 自动化。
 
 沿用用户现有的上海时间早间任务；本轮不修改任务或通知设置。后续触发只处理到期重试、数据变更和用户已请求的重新分析，同一输入成功后不重复生成。

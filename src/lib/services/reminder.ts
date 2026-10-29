@@ -12,7 +12,7 @@ import { catchUpAutomaticSubscriptionPayments, disableSubscriptionReminder, reco
 import { completeTaskFromReminder, disableTaskReminder } from "./task";
 import { getRecurrenceCompletionDate } from "./life-day";
 
-async function subjectLabel(reminder: Reminder) {
+export async function subjectLabel(reminder: Reminder) {
   if (reminder.targetType === "cat_household") return "Household";
   if (reminder.targetType === "cat" && reminder.targetId) return (await (await getRepository()).getPet(reminder.targetId))?.name ?? "Cat";
   if (reminder.targetType === "cat_food" && reminder.targetId) return (await (await getRepository()).getCatFoodItem(reminder.targetId))?.name ?? "Cat food";
@@ -128,7 +128,7 @@ export async function completeReminder(id: number, actedAt = new Date()) {
   const source = reminderSourceDefinition(reminder.sourceType);
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt); return repository.getReminder(id); }
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "completed", actedAt);
-  if(source.projectionOwner==="subscription"&&reminder.sourceId){await recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);return repository.getReminder(id);}
+  if(source.projectionOwner==="subscription"&&reminder.sourceId){await recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});return repository.getReminder(id);}
   if (source.projectionOwner === "task" && reminder.sourceId) {
     await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});
     await completeTaskFromReminder(reminder.sourceId);

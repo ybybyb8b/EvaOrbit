@@ -8,77 +8,41 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# EvaOrbit development rules
+# EvaOrbit 项目约定
 
-## Development navigation
+## 开发导航与标题
 
-- Start each task with the relevant module in [docs/DEV_INDEX.md](docs/DEV_INDEX.md), then inspect its current implementation.
-- Read only task-relevant detailed documents; do not load all documentation by default.
-- Update the index when architecture, module responsibilities, or important cross-module dependencies change. Ordinary bug fixes and small UI adjustments do not require index updates.
-- Keep the index structural and durable. Track current work in the existing Project system, not in the index.
+- 从 [docs/DEV_INDEX.md](docs/DEV_INDEX.md) 定位相关模块，再检查当前实现和必要的详细文档，不默认通读全部文档。
+- 架构、模块职责或重要依赖变化时更新索引；普通修复和 UI 调整无需更新。索引记录长期结构，当前进度由 Project 管理。
+- 新对话标题使用 `模块｜具体任务`，覆盖公共标题格式。模块名沿用 DEV_INDEX，跨模块用 Core 或 Architecture；其余命名规则沿用公共约定。
 
-## New chat titles
+## 界面与移动端
 
-- Before the first reply in a new Codex chat ends, use the available title tool to name the current chat `模块｜具体任务`, then verify the returned title. If the tool is unavailable or fails, report that truthfully.
-- Prefer the canonical module names in [docs/DEV_INDEX.md](docs/DEV_INDEX.md); use Core or Architecture for cross-module work. Keep the task concise and specific, e.g. `Home｜日历胶囊预览`, `Food｜Places版式与归属地`, `Memory｜Graph架构升级`.
-- Do not require a date prefix or 开发／设计／审阅 category. If the topic is unclear, retain the current title. Preserve historical chat titles; only rename other or archived chats when explicitly requested.
+- 沿用现有视觉语言、组件和交互约定，主动修正本次任务中的明显不协调；不为局部改动引入新的 UI 框架或设计系统。
+- 优先用留白、表面色、分组和克制的层次表达边界，不默认用细线分割内容；边框用于控件或确有意义的分隔。
+- 移动端以 iPhone 16 Pro 为主要真机目标，按改动检查视口、安全区、Safari/PWA 和键盘交互。保持响应式，不靠设备专属宽度或偏移修补布局；未做真机验证时明确说明。
 
-## Working principles
+## 日期与数据
 
-- Before editing, inspect the current code, data model, services, APIs, and tests. Do not rely on old discussions, prompts, or assumed structure.
-- Prefer the smallest low-risk change that satisfies the request. Do not refactor unrelated or stable modules for cleanup.
-- Ask only when a decision changes product semantics, the data model, existing data, or important architecture. Resolve ordinary implementation details using established EvaOrbit patterns.
-- Preserve the existing visual language, component system, and interaction conventions. Do not introduce a new UI framework or design system for a local change.
-- Do not use fine hairlines as the default way to express visual boundaries. Prefer spacing, surface tone, grouping, and restrained elevation; reserve borders for controls or genuinely semantic separation.
-
-## Date and time semantics
-
-- Records allow date-only values by default. Time is explicit only when the user enters it; never use a fabricated `00:00` for an unknown time.
-- When storage requires a datetime, use the existing date-only anchor and persist the explicit-time flag with it.
-- For date-related changes, keep create, edit, history, Timeline, MCP, and statistics behavior consistent.
-
-## Mobile validation
-
-- The primary real-device target is iPhone 16 Pro. For mobile UI changes, check its viewport, safe areas, Safari/PWA layout, and keyboard behavior.
-- Keep layouts responsive. Do not hard-code a page width, device-specific offset, or magic number for iPhone 16 Pro.
+- 默认允许仅日期记录；只有用户明确输入时间时才视为有时间，不能用虚构的 `00:00` 代替未知时间。
+- 存储需要 datetime 时，沿用现有日期锚点并保存显式时间标记。日期相关改动保持受影响的创建、编辑、历史、Timeline、MCP 和统计口径一致。
+- 数据迁移须兼容现有 schema，避免重复对象和数据丢失；只有实际应用后才能声称真实环境已完成迁移。
 
 ## iOS Native Host
 
-- Before changing `ios/EvaOrbitHost`, iOS permissions or capabilities, the JS↔Swift bridge, IPA packaging/signing, patched xtool, or Windows/WSL device installation, read `docs/IOS_NATIVE_MAINTENANCE.md` completely.
-- Preserve the verified macOS CI ad-hoc IPA → audited patched xtool → free Personal Team re-signing → Windows usbmuxd/WSL installation chain unless the task explicitly authorizes a migration and the replacement is fully verified on device.
-- Do not add an entitlement without checking Personal Team support, xtool preservation, packaged entitlements, and the real-device result. Local notifications do not require APNs capability.
+- 修改 `ios/EvaOrbitHost`、iOS 权限或 capabilities、JS↔Swift bridge、IPA 打包签名、patched xtool 或 Windows/WSL 安装流程前，完整阅读 [docs/IOS_NATIVE_MAINTENANCE.md](docs/IOS_NATIVE_MAINTENANCE.md)。
+- 保留已验证的 macOS CI ad-hoc IPA → audited patched xtool → 免费 Personal Team 重签 → Windows usbmuxd/WSL 安装链；迁移须有明确授权，替代链路须经真机验证。
+- 新增 entitlement 前核对 Personal Team 支持、xtool 保留行为及打包结果，并验证真机表现。本地通知不需要 APNs capability。
 
-## Local development servers
+## 项目验证与 Git
 
-- If the task starts a dev server, record the exact process and close that server and its listening process before finishing. Verify that no new `localhost:3000`, `3001`, `3002`, or other test listener remains.
-- Stop only processes started by the current task. Never broadly kill all Node processes or affect another project.
+- 文档改动检查 diff 和 `git diff --check`，无需应用测试或构建。样式、文案和动画改动检查相关页面或组件，并运行适用的构建或原生测试；单模块逻辑改动运行相关测试，覆盖受影响的共享组件调用方，按需运行 lint、类型检查和构建。
+- 同步、认证、共享数据层改动和正式发布，在改动就绪后进行一次完整回归；仅在后续改动或新证据影响覆盖范围时重跑。
+- 默认不提交、不推送，保留工作区改动供审阅；用户明确要求时执行。不改动无关 Git 历史或分支。
 
-## Validation
+## Project 进度写回（试行）
 
-- Run validation proportional to the change; do not default to running the full test suite for every edit.
-- Documentation-only changes need a diff review and `git diff --check`; no application tests or builds are required.
-- Style, copy, and animation changes need relevant page/component checks and the applicable build or native tests, rather than unrelated module tests.
-- Single-module changes need that module's tests and regression checks for affected shared-component callers. Run lint, typecheck, and builds as relevant to the changed files.
-- Sync, authentication, shared data-layer changes, and formal releases need one final full regression run after the changes are ready.
-- Once checks pass, rerun only checks affected by subsequent edits. Repeat the full suite only when new changes, failures, or unresolved cross-module risks justify it; explain the reason before doing so.
-- Report any skipped or failed check and its reason; never report an unrun check as passing.
-- For database migrations, verify safe application to the existing schema, avoid duplicate objects and data loss, and only claim real-environment completion after a required migration has actually been applied.
-
-## Git
-
-- Do not create commits or push by default. Unless the current task explicitly requests otherwise, leave completed changes in the working tree and report them.
-- Do not alter unrelated Git history or branches.
-
-## Project progress write-back (trial)
-
-- After completing an EvaOrbit project task and receiving the user's approval of its result, write its progress back to EvaOrbit Project through the connected tools without asking for approval again. This is a trial rule; stop applying it if the user cancels it.
-- Prefer a known Project Item ID. Otherwise search the owning project with focused task keywords, inspecting only relevant matches; reuse a matching Item and avoid duplicates. If no suitable Item exists, create one with the actual request, appropriate module/type, and a concise outcome. Ask only if the owning project or matching Item remains ambiguous.
-- Distinguish approval from acceptance testing: implementation approved but actual usage unverified means `done`; explicit user confirmation that the result works as intended means `verified`. For approved partial progress, retain `doing` and record the remaining work; do not complete a broader Item for a smaller subtask.
-- Keep write-backs short: status, outcome, necessary validation/limitations, and remaining next steps. Reuse existing module names and preserve unrelated content, existing data, and server-managed lifecycle timestamps.
-- Track independent tasks, not every edit, test, or commit. Do not create Items for ordinary questions, unadopted proposals, or casual discussion. Avoid full Project scans, lengthy conversation copies, and repeated writes when progress has not changed.
-- Verify the returned record before reporting success. If the connector is unavailable or the write fails, report that progress was not saved and identify the pending update; never claim a successful write.
-
-## Scope discipline
-
-- Stay strictly within the current task. Report adjacent findings, but do not implement them unless they block the requested work.
-- Do not refactor stable business modules merely to make the code look cleaner.
+- EvaOrbit 项目任务的结果获得用户认可后，通过连接工具写回 Project，不再重复询问。普通问答、未采纳建议和零散编辑不单独建项；用户取消试行后停止。
+- 优先使用已知 Item ID，否则按任务关键词查找并复用匹配事项；确无匹配时创建，沿用既有模块和类型。仅在所属项目或事项仍有歧义时询问，避免全量扫描和重复记录。
+- 实现获认可但尚未实际验收记为 `done`；用户明确确认实际效果符合预期记为 `verified`；部分完成保留 `doing` 并记录剩余工作，不因子任务完成而结束更大的事项。
+- 写回简要记录状态、结果、必要验证或限制及下一步，保留无关内容和服务端生命周期时间。核验返回记录，失败时明确说明尚未保存及待写回内容。

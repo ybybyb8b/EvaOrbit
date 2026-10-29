@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import test from 'node:test';
+import {PGlite} from '@electric-sql/pglite';
+import {trainingTemplate,trainingDayDraft,parseTrainingPlanCompletion} from '../src/lib/training-plan.ts';
+
+test('Workout plan completion is atomic, owner scoped, source preserving and exactly once; legacy completion still works',async()=>{
+  const db=new PGlite();
+  try{
+    await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key);
+      create function auth.uid() returns uuid language sql as $$select current_setting('request.jwt.claim.sub',true)::uuid$$;
+      grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;
+      create function public.set_updated_at() returns trigger language plpgsql as $$begin new.updated_at=now();return new;end$$;`);
+    for(const migration of ['202608310002_training_logs','202609010001_healthkit_energy','202610050002_healthkit_sleep_read_samples','202610150001_training_plans','202610260003_training_session_details','202610270001_healthkit_workouts','202610300001_training_workout_completion'])await db.exec(readFileSync(`supabase/migrations/${migration}.sql`,'utf8'));
+    await db.exec(readFileSync('supabase/migrations/202610300001_training_workout_completion.sql','utf8'));
+    const owner=randomUUID(),other=randomUUID();await db.query('insert into auth.users values($1),($2)',[owner,other]);
+    const workout={metric:'workout',operation:'upsert',sampleId:randomUUID(),streamId:randomUUID(),revision:1,startAt:'2026-10-30T06:00:00.123Z',endAt:'2026-10-30T07:00:00.456Z',timeZone:'Asia/Shanghai',timeZoneSource:'metadata',sourceName:'Synthetic Watch',sourceBundle:'test.workout',workout:{activityType:50,activityName:'traditionalStrengthTraining',durationSeconds:3540.333,activeEnergyKcal:234.567}};
+    const ingest=async changes=>(await db.query('select ingest_healthkit_read_changes($1::uuid,$2::uuid,$3::jsonb,$4::text[]) result',[owner,randomUUID(),JSON.stringify(changes),['workout']])).rows[0].result;
+    await ingest([workout]);
+    const row=async id=>(await db.query('select * from training_logs where id=$1',[id])).rows[0];
+    const original=(await db.query('select * from training_logs')).rows[0];
+    await db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[owner]);await db.exec('set role authenticated');
+    const template=trainingTemplate();await db.query('select save_training_plan(0,$1,$2::jsonb,$3)',[template.name,JSON.stringify(template.days),template.currentDayId]);
+    const plan=async()=>(await db.query('select * from training_plans where user_id=auth.uid()')).rows[0];
+    const log={bodyParts:['背','核心'],teacher:'Teacher',course:'Course',notes:'Good session',trainingContent:'Rows 3 × 12',sessionDetails:{plan:null,exercises:[],videos:[]}};
+    const complete=async(version,day,key,id=original.id,details=log)=>(await db.query('select complete_training_plan($1,$2,$3::uuid,$4::jsonb,$5) result',[version,day,key,JSON.stringify(details),id])).rows[0].result;
+    const key=randomUUID(),done=await complete(1,'day-1',key);
+    assert.equal(done.log.id,original.id);assert.equal(done.plan.current_day_id,'day-2');assert.equal(done.plan.version,2);
+    assert.equal(new Date(done.log.occurred_at).getTime(),new Date(original.occurred_at).getTime());
+    assert.equal(done.log.training_content,log.trainingContent);assert.equal(done.log.session_details.plan.dayNumber,1);assert(done.log.details_completed_at);
+    for(const column of ['workout_sample_id','workout','occurred_has_explicit_time','duration_minutes','training_type'])assert.deepEqual(done.log[column],original[column],column);
+    assert.equal((await db.query('select count(*)::int n from training_logs')).rows[0].n,1);
+    assert.equal((await complete(1,'day-1',key)).log.id,original.id,'lost response retry returns the same result');
+    await assert.rejects(complete(2,'day-2',randomUUID()),/ALREADY_COMPLETED/);
+    await assert.rejects(complete(1,'day-1',key,original.id+999),/CONFLICT/);
+    await db.query(`update training_logs set notes='History edit' where id=$1`,[original.id]);assert.equal((await plan()).version,2);
+    await db.exec('reset role');
+    const second={...workout,sampleId:randomUUID(),streamId:randomUUID()};await ingest([second]);
+    const next=(await db.query('select * from training_logs where workout_sample_id=$1',[second.sampleId])).rows[0];
+    await db.exec('set role authenticated');
+    await assert.rejects(complete(1,'day-1',randomUUID(),next.id),/CONFLICT/);
+    await assert.rejects(complete(2,'day-2',randomUUID(),next.id,{...log,durationMinutes:99}),/read only/);
+    await db.exec('reset role');
+    await db.exec(`create function fail_advance() returns trigger language plpgsql as $$begin raise exception 'test rollback';end$$;create trigger fail_advance before update on training_plans for each row execute function fail_advance();set role authenticated;`);
+    await assert.rejects(complete(2,'day-2',randomUUID(),next.id),/test rollback/);
+    assert.equal((await row(next.id)).plan_completion_key,null);assert.equal((await row(next.id)).training_content,'');assert.equal((await plan()).version,2);
+    await db.exec('reset role;drop trigger fail_advance on training_plans');
+    await db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[other]);await db.exec('set role authenticated');
+    await db.query('select save_training_plan(0,$1,$2::jsonb,$3)',[template.name,JSON.stringify(template.days),template.currentDayId]);
+    await assert.rejects(complete(1,'day-1',randomUUID(),next.id),/NOT_AVAILABLE/);assert.equal((await plan()).version,1);
+    await db.exec('reset role');await db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[owner]);await db.exec('set role authenticated');
+    const manual={occurredAt:'2026-10-30T04:00:00Z',occurredHasExplicitTime:false,...trainingDayDraft({...template,version:2,currentDayId:'day-2',updatedAt:''})};
+    const legacy=(await db.query('select complete_training_plan(2,$1,$2::uuid,$3::jsonb) result',['day-2',randomUUID(),JSON.stringify(manual)])).rows[0].result;
+    assert.equal(legacy.plan.current_day_id,'day-3');assert.notEqual(legacy.log.id,original.id);
+    const races=await Promise.allSettled([complete(3,'day-3',randomUUID(),next.id),complete(3,'day-3',randomUUID(),next.id)]);
+    assert.equal(races.filter(x=>x.status==='fulfilled').length,1);assert.equal((await plan()).current_day_id,'day-4');
+    await db.exec('reset role');await ingest([{...second,revision:2,workout:{...second.workout,activeEnergyKcal:250.888}}]);
+    assert.equal((await row(next.id)).training_content,log.trainingContent);assert.equal((await row(next.id)).workout.workout.activeEnergyKcal,250.888);assert.equal((await plan()).version,4);
+    const third={...workout,sampleId:randomUUID()};await ingest([third]);const deleted=(await db.query('select id from training_logs where workout_sample_id=$1',[third.sampleId])).rows[0];
+    await ingest([{metric:'workout',operation:'delete',sampleId:third.sampleId,streamId:third.streamId,revision:2}]);await db.exec('set role authenticated');
+    await assert.rejects(complete(4,'day-4',randomUUID(),deleted.id),/NOT_AVAILABLE/);assert.equal((await plan()).version,4);
+    assert.equal((await db.query('select count(*)::int n from healthkit_daily_energy')).rows[0].n,0);
+  }finally{await db.close();}
+});
+
+test('completion input accepts details-only Workout references and rejects source mutation or invalid identities',()=>{
+  const valid={expectedVersion:1,dayId:'day-1',requestKey:randomUUID(),workoutLogId:31,log:{bodyParts:['背'],teacher:'Eva',notes:'',sessionDetails:null}};
+  assert.equal(parseTrainingPlanCompletion(valid).workoutLogId,31);
+  for(const id of [null,0,-1,1.5,'31'])assert.throws(()=>parseTrainingPlanCompletion({...valid,workoutLogId:id}));
+  for(const key of ['occurredAt','occurredHasExplicitTime','trainingType','durationMinutes'])assert.throws(()=>parseTrainingPlanCompletion({...valid,log:{...valid.log,[key]:null}}));
+  assert.throws(()=>parseTrainingPlanCompletion({...valid,log:{...valid.log,bodyParts:[]}}));
+});

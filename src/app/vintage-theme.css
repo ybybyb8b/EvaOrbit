@@ -78,3 +78,17 @@ html[data-design-theme="vintage"] :is(.appearance-mode-preview.light i,.appearan
 html[data-design-theme="vintage"] :is(.appearance-mode-preview.dark i,.appearance-mode-preview.system i:last-child) { background:#202124; }
 html[data-design-theme="vintage"] .sidebar :is(.main-nav,.sidebar-bottom) .vintage-reicon { width:16px;height:16px; }
 html[data-design-theme="vintage"] .space-drawer section a .vintage-reicon { width:26px;height:26px; }
+
+/* A sheet owns one continuous surface; its chrome and nested editor do not add cards. */
+html[data-design-theme="vintage"][data-theme][data-mode] .form-sheet-panel {
+  background:var(--surface-card);backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+html[data-design-theme="vintage"][data-theme][data-mode] :is(.form-sheet-header,.form-sheet-body,.form-sheet-footer),
+html[data-design-theme="vintage"][data-theme][data-mode] .form-sheet-body > .editor-card {
+  background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;
+}
+
+/* Dark recesses need a faint light-facing edge as well as an occluded upper edge. */
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] .form-sheet-panel {
+  --sheet-control-depth:inset 0 3px 6px rgb(0 0 0 / .46),inset 0 -1px 1px rgb(255 255 255 / .08),0 1px 0 rgb(255 255 255 / .04);
+}

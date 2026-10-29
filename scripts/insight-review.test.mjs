@@ -61,7 +61,7 @@ test("review follows meal types, detects record edits, queues safe reanalysis an
  import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';import{createFoodLog,updateFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
  import{getInsightDayReview,getInsightReportDetail,generateRuleInsightReport,publishInsightReport}from'./src/lib/services/insight-reports.ts';import{getInsightContext}from'./src/lib/services/insight-context.ts';
  import{startInsightRun,completeInsightRun,requestInsightAnalysis,getInsightRunStatus,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';import{readableInsightFindings}from'./src/lib/insight-review.ts';
- import{resourceRegistry}from'./src/lib/mcp/resource-registry.server.ts';
+ import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';const resourceRegistry=createResourceRegistry({insightReport:{get:getInsightReportDetail}});
  const date='2026-01-01',id='day/'+date,repo=await getRepository(),db=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
  const add=(mealType,title,estimatedKcal,hour)=>createFoodLog(parseNewFoodLog({mealType,title,estimatedKcal,occurredAt:date+'T'+hour+':00:00+08:00',occurredHasExplicitTime:false}));
  await add('lunch','午餐',500,'12');await add('late_night','凌晨水果',472,'01');

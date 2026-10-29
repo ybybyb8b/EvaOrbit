@@ -45,7 +45,9 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
   const canCreate = newValue.length > 0 && (!props.maxLength || newValue.length <= props.maxLength) && !suggestions.some(option => option.toLocaleLowerCase() === newValue.toLocaleLowerCase()) && !committed.some(tag => tag.toLocaleLowerCase() === newValue.toLocaleLowerCase());
 
   function pick(option: string) {
-    if (composing.current || props.disabled || props.readOnly) return;
+    if (props.disabled || props.readOnly) return;
+    // A deliberate choice must also commit while a Chinese IME is still composing.
+    if (composing.current) { input.current?.blur(); composing.current = false; }
     setUndo(value);
     onValueChange(tags ? parseInputTags([...committed, option].join(", ")).join(", ") : option);
     setQuery("");

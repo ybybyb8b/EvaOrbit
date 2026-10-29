@@ -22,6 +22,7 @@ export function validateHealthSnapshot(value:HealthReadonlySnapshot,accountId:st
   for(const row of value.records)if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!bool(row.startedHasExplicitTime)||!bool(row.endedHasExplicitTime)||!["symptom","medication","visit","test","condition","treatment","measurement","note"].includes(row.type)||!["active","resolved"].includes(row.status)||!text(row.title)||!text(row.summary)||!row.details||typeof row.details!=="object"||Array.isArray(row.details)||(row.startedAt!==null&&!stamp(row.startedAt))||(row.endedAt!==null&&!stamp(row.endedAt)))fail();
   for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]])if(!stamp(row.occurredAt)||!bool(row.occurredHasExplicitTime)||!["cardio","strength","mixed"].includes(row.trainingType)||!Array.isArray(row.bodyParts)||row.bodyParts.some(part=>!["胸","背","腿","肩","手臂","核心","全身","其他"].includes(part))||!text(row.teacher)||!text(row.course)||!text(row.notes)||!nullableNumber(row.durationMinutes))fail();
   for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]]) {
+    if(row.planCompleted!==undefined&&!bool(row.planCompleted))fail();
     if(row.trainingContent!==undefined&&(!text(row.trainingContent)||row.trainingContent.length>5000))fail();
     if(row.workout){const parsed=parseHealthKitReadChanges([row.workout]);if(parsed[0].metric!=="workout"||parsed[0].operation!=="upsert"||!bool(row.workoutDeleted)||(row.detailsCompletedAt!==null&&!stamp(row.detailsCompletedAt)))fail();}
   }

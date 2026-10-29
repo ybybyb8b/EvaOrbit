@@ -804,31 +804,5 @@
       "GET",
       "POST"
     ]
-  },
-  {
-    "pattern": "^/api/insights$",
-    "methods": [
-      "GET"
-    ]
-  },
-  {
-    "pattern": "^/api/insights/review$",
-    "methods": [
-      "GET"
-    ]
-  },
-  {
-    "pattern": "^/api/insights/runs$",
-    "methods": [
-      "GET",
-      "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/insights/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-    "methods": [
-      "GET",
-      "DELETE"
-    ]
   }
 ]

@@ -16,6 +16,7 @@ import type { TrainingPlan } from "@/lib/types";
 import { workoutActivityLabel, workoutStatus } from "@/lib/training-workout";
 import { trainingSessionTitle } from "@/lib/training-session";
 import { TrainingPlanEditor } from "./training-plan-editor";
+import { FormSheet } from "@/components/form-sheet";
 
 function trainingMeta(log: TrainingLog, english: boolean) { return [log.occurredHasExplicitTime ? compactDateTimeValue(log.occurredAt, true).slice(11) : "", log.course || trainingSessionTitle(log.sessionDetails) || log.trainingContent, log.teacher, log.durationMinutes ? english ? `${log.durationMinutes} min` : `${log.durationMinutes} 分钟` : ""].filter(Boolean).join(" · "); }
 
@@ -34,6 +35,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   const [plan, setPlan] = useServerDataState(initialPlan);
   const [planEditing, setPlanEditing] = useState(false);
   const [planCompletion, setPlanCompletion] = useState<{ plan: TrainingPlan; requestKey: string }>();
+  const [workoutChoices, setWorkoutChoices] = useState<TrainingLog[] | null>(null);
   const [planError, setPlanError] = useState("");
   const [switching, setSwitching] = useState(false);
   const switchLock = useRef(false);
@@ -74,10 +76,18 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   const typeLabel = (type: TrainingType) => trainingTypeLabels[type][english ? "en" : "zh"];
   const bodyPartLabel = (part: TrainingBodyPart) => trainingBodyPartLabels[part][english ? "en" : "zh"];
 
-  function openCreate() { setEditing(undefined); setOpen(true); }
-  function openEdit(log: TrainingLog) { setEditing(log); setOpen(true); }
+  function openCreate() { setPlanCompletion(undefined); setWorkoutChoices(null); setEditing(undefined); setOpen(true); }
+  function openEdit(log: TrainingLog) { setPlanCompletion(undefined); setWorkoutChoices(null); setEditing(log); setOpen(true); }
+  function completeAndLog() {
+    if (!plan) return;
+    const workouts = logs.filter(log => log.workout && !log.workoutDeleted && !log.planCompleted && dateInEvaOrbit(new Date(log.occurredAt)) === today);
+    setPlanCompletion({ plan, requestKey: crypto.randomUUID() });
+    setEditing(workouts.length === 1 ? workouts[0] : undefined);
+    setWorkoutChoices(workouts.length > 1 ? workouts : null);
+    setOpen(true);
+  }
   function close() {
-    setOpen(false); setEditing(undefined); setPlanCompletion(undefined);
+    setOpen(false); setEditing(undefined); setPlanCompletion(undefined); setWorkoutChoices(null);
     const url = new URL(window.location.href);
     if (url.searchParams.has("training")) {
       url.searchParams.delete("training");
@@ -97,7 +107,11 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   }
 
   return <section className="health-section training-section">
-    {open && <TrainingLogEditor record={editing} initialDate={today} planCompletion={planCompletion} suggestions={suggestions} onClose={close} onSaved={reload} onDeleted={reload} />}
+    {open && (workoutChoices ? <FormSheet title={english ? "Choose this session's workout" : "选择本次训练记录"} onClose={close}>
+      <p className="training-plan-hint">{english ? "More than one Apple Health workout was recorded today. Choose the one to complete this training day." : "今天有多条 Apple Health 运动记录，请选择用于完成当前训练日的一条。"}</p>
+      <div className="training-log-list">{workoutChoices.map(log => <button type="button" className="training-log-main" key={log.id} onClick={() => { setEditing(log); setWorkoutChoices(null); }}><span><strong>{workoutActivityLabel(log, english)}</strong><small>{trainingMeta(log, english)}</small></span><span>Apple Health</span></button>)}</div>
+      <button type="button" className="text-button" onClick={() => { setEditing(undefined); setWorkoutChoices(null); }}>{english ? "Log a separate session" : "手动记录独立训练"}</button>
+    </FormSheet> : <TrainingLogEditor record={editing} initialDate={today} planCompletion={planCompletion} suggestions={suggestions} onClose={close} onSaved={reload} onDeleted={reload} />)}
     {planEditing && <TrainingPlanEditor plan={plan} exerciseSuggestions={suggestions.exercises ?? []} onSaved={acceptPlan} onClose={() => setPlanEditing(false)} />}
     <article className="training-plan-card" aria-label={english ? "Current training plan" : "当前训练计划"}>
       <div className="training-plan-heading"><h2>{plan?.name ?? (english ? "Current training plan" : "当前训练计划")}</h2><button type="button" className="text-button" disabled={switching} onClick={() => setPlanEditing(true)}>{plan ? english ? "Edit plan" : "编辑计划" : english ? "Set up plan" : "创建计划"}</button></div>
@@ -108,7 +122,7 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
         {(displayedDay.exercises ?? []).length > 0 && <ul className="training-plan-exercise-summary">{displayedDay.exercises!.map(exercise => <li key={exercise.id}><strong>{exercise.name}</strong><span>{[exercise.sets ? `${exercise.sets} ${english ? "sets" : "组"}` : "", exercise.target].filter(Boolean).join(" × ")}</span></li>)}</ul>}
         {displayedDay.content && <p className="training-plan-content">{displayedDay.content}</p>}
         {displayedDay.videoUrls.length > 0 && <ul className="training-plan-videos">{displayedDay.videoUrls.map((url, index) => <li key={`${index}:${url}`}><a href={url} target="_blank" rel="noopener noreferrer">{english ? `Video ${index + 1}` : `视频 ${index + 1}`} · {new URL(url).hostname}<Icon name="arrow" /></a></li>)}</ul>}
-        <div className="training-plan-footer"><p>{previewing ? english ? `Preview · Up next: Day ${plan!.days.indexOf(currentDay!) + 1}` : `预览中 · 待练仍为 Day ${plan!.days.indexOf(currentDay!) + 1}` : english ? "Up next · Rest days keep your place" : "Up next · 休息日不影响进度"}</p>{previewing ? <button type="button" className="button secondary" disabled={switching||preview} onClick={() => void switchDay(displayedDay.id)}>{english ? "Set as up next" : "设为待练"}</button> : <button type="button" className="button primary" disabled={switching} onClick={() => { setEditing(undefined); setPlanCompletion({ plan: plan!, requestKey: crypto.randomUUID() }); setOpen(true); }}>{displayedDay.exercises?.length ? english ? "Train & log" : "训练并记录" : english ? "Complete & log" : "完成并记录"}</button>}</div>
+        <div className="training-plan-footer"><p>{previewing ? english ? `Preview · Up next: Day ${plan!.days.indexOf(currentDay!) + 1}` : `预览中 · 待练仍为 Day ${plan!.days.indexOf(currentDay!) + 1}` : english ? "Up next · Rest days keep your place" : "Up next · 休息日不影响进度"}</p>{previewing ? <button type="button" className="button secondary" disabled={switching||preview} onClick={() => void switchDay(displayedDay.id)}>{english ? "Set as up next" : "设为待练"}</button> : <button type="button" className="button primary" disabled={switching} onClick={completeAndLog}>{displayedDay.exercises?.length ? english ? "Train & log" : "训练并记录" : english ? "Complete & log" : "完成并记录"}</button>}</div>
       </> : <p className="training-plan-hint">{plan ? english ? "No training days. Edit your plan to add one." : "暂无训练日，编辑计划即可添加。" : english ? "Start with the four-day template and make it yours." : "从四日模板开始，可自由修改训练日和顺序。"}</p>}
       {planError && <ErrorNotice role="alert">{planError}</ErrorNotice>}
     </article>

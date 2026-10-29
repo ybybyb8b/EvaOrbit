@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {spawn} from 'node:child_process';
+import {trainingTemplate} from '../src/lib/training-plan.ts';
 import {freeLocalPort} from './local-navigation-browser.mjs';
 const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||'playwright');
 const directory=await fs.mkdtemp(path.resolve('tmp/workout-browser-')),databasePath=path.join(directory,'qa.db');
@@ -90,8 +91,37 @@ try{
   await page.locator('.training-exercises').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(directory,'mobile-dark-exercises.png'),fullPage:true});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Chinese dark mobile overflow');
   assert.equal(await api('/api/health/training/plan'),null);
+  await api('/api/health/training/plan','PUT',{...trainingTemplate(),expectedVersion:0});
+  await page.goto(base+'/health?view=training');
+  await page.getByRole('button',{name:'完成并记录',exact:true}).click();
+  await page.locator('#training-log-form').waitFor();
+  assert.equal(await page.locator('.training-workout-summary').count(),1,'Complete & Log reuses the sole eligible Apple Workout');
+  assert.equal(await page.locator('.training-exercise input[aria-label="动作 1"]').inputValue(),'Dumbbell row','previously supplemented exercise is preserved');
+  let completion;
+  page.on('request',request=>{if(request.url().endsWith('/api/health/training/plan/complete')&&request.method()==='POST')completion=JSON.parse(request.postData());});
+  await page.locator('button[form="training-log-form"]').click();
+  await page.locator('#training-log-form').waitFor({state:'detached'});
+  await page.locator('.training-plan-progress button[aria-current="step"]').filter({hasText:'Day 2'}).waitFor();
+  let advanced=await api('/api/health/training/plan');assert.equal(advanced.currentDayId,'day-2');assert.equal(advanced.version,2);
+  assert.equal((await api('/api/health/training')).length,2,'completion never duplicates the imported Workout');
+  const linked=await api('/api/health/training/'+log.id);assert.equal(linked.planCompleted,true);assert.deepEqual(linked.workout,workout);assert.equal(linked.sessionDetails.plan.dayNumber,1);assert.equal(linked.teacher,'Eva');
+  assert.equal(completion.workoutLogId,log.id);assert.equal(completion.log.occurredAt,undefined,'source timestamps are never reconstructed');
+  await api('/api/health/training/plan/complete','POST',completion);assert.equal((await api('/api/health/training/plan')).version,2,'response-loss retry advances exactly once');
+  await page.screenshot({path:path.join(directory,'mobile-plan-advanced.png'),fullPage:true});
+  await page.getByRole('button',{name:'完成并记录',exact:true}).click();await page.locator('#training-log-form').waitFor();
+  assert.equal(await page.locator('.training-workout-summary').count(),0,'a completed Workout cannot fulfill another plan day');
+  await page.getByRole('button',{name:'取消',exact:true}).click();await page.locator('#training-log-form').waitFor({state:'detached'});
+  for(let i=0;i<2;i++){
+    const extra=await api('/api/health/training','POST',{occurredAt:day+'T08:00:00.123Z',occurredHasExplicitTime:true,trainingType:'strength',bodyParts:['背'],teacher:'',course:'',durationMinutes:30,notes:''});
+    const fixture={...workout,sampleId:crypto.randomUUID(),startAt:extra.occurredAt};const seed=new DatabaseSync(databasePath);seed.prepare('update training_logs set workout=? where id=?').run(JSON.stringify(fixture),extra.id);seed.close();
+  }
+  await page.goto(base+'/health?view=training');await page.getByRole('button',{name:'完成并记录',exact:true}).click();
+  const picker=page.getByRole('dialog',{name:'选择本次训练记录',exact:true});await picker.waitFor();assert.equal(await picker.locator('.training-log-main').count(),2);
+  await picker.locator('.training-log-main').first().click();await page.locator('#training-log-form').waitFor();assert.equal(await page.locator('.training-workout-summary').count(),1);
+  await page.getByRole('button',{name:'取消',exact:true}).click();assert.equal((await api('/api/health/training/plan')).version,2,'opening and cancelling never advances the plan');
+
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({result:'PASS picker, supplement, re-edit, immutable facts, no duplicates, manual log, desktop/mobile overflow',artifacts:directory,serverPid:server.pid,port}));
+  console.log(JSON.stringify({result:'PASS picker, supplement, re-edit, immutable facts, no duplicates, manual log, desktop/mobile overflow, linked Workout plan advance/retry/selection',artifacts:directory,serverPid:server.pid,port}));
 }finally{
   if(browser)await browser.close();
   server.kill();await new Promise(resolve=>server.exitCode!==null?resolve():server.once('exit',resolve));

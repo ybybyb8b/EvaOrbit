@@ -8,7 +8,7 @@ import { insightReportFromRow, insightVersionFromRow, type InsightReportWrite, t
 import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow, stableInsightJson, type InsightRunClaimInput, type InsightRunClaim } from "./insight-runs";
 import type { InsightSnapshot } from "./insight-reports";
 import { libraryEntryFromRow, type LibraryInput } from "./software-library";
-import { parseTrainingPlanWrite, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
+import { parseTrainingPlanWrite, trainingDayDraft, type TrainingPlanWrite, type TrainingPlanCompletion } from "./training-plan";
 import type { TrainingPlan } from "./types";
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration";
 import fs from "node:fs";
@@ -1976,14 +1976,27 @@ export function completeTrainingPlan(input: TrainingPlanCompletion): { plan: Tra
     const plan = getTrainingPlan();
     if (!plan) throw new ConflictError("训练计划不存在，请刷新后重试。");
     const existing = database.prepare("SELECT id FROM training_logs WHERE user_id='local' AND plan_completion_key=?").get(input.requestKey);
-    if (existing) { database.exec("COMMIT"); return { plan, log: getTrainingLog(Number(existing.id))! }; }
+    if (existing) {
+      const log = getTrainingLog(Number(existing.id))!;
+      if (input.workoutLogId !== undefined ? log.id !== input.workoutLogId : Boolean(log.workout)) throw new ConflictError("完成请求标识已用于另一条训练记录。");
+      database.exec("COMMIT"); return { plan, log };
+    }
     if (plan.version !== input.expectedVersion || !plan.currentDayId || plan.currentDayId !== input.dayId) throw new ConflictError("训练计划或进度已更新，请刷新后重试；已填写的内容会保留。");
-    const log = createTrainingLog(input.log);
+    const planned = trainingDayDraft(plan).sessionDetails;
+    const sessionDetails = { ...(input.log.sessionDetails ?? { exercises: [], videos: [] }), plan: planned.plan };
+    let log: TrainingLog;
+    if (input.workoutLogId !== undefined) {
+      const workout = getTrainingLog(input.workoutLogId);
+      if (!workout?.workout || workout.workoutDeleted) throw new ConflictError("Workout 已删除或不可用，请刷新后重试。");
+      if (workout.planCompleted) throw new ConflictError("这条 Workout 已用于完成训练计划，请刷新后选择另一条。");
+      const { bodyParts, teacher, course, notes, trainingContent } = input.log;
+      log = updateTrainingLog(workout.id, { bodyParts, teacher, course, notes, trainingContent, sessionDetails })!;
+    } else log = createTrainingLog({ ...input.log, sessionDetails });
     database.prepare("UPDATE training_logs SET plan_completion_key=? WHERE id=?").run(input.requestKey,log.id);
     const index = plan.days.findIndex(day => day.id === plan.currentDayId);
     database.prepare("UPDATE training_plans SET current_day_id=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE user_id='local'").run(plan.days[(index+1)%plan.days.length].id);
     const next = getTrainingPlan()!;
-    database.exec("COMMIT"); return { plan: next, log };
+    database.exec("COMMIT"); return { plan: next, log: getTrainingLog(log.id)! };
   } catch (error) { database.exec("ROLLBACK"); throw error; }
 }
 
@@ -2046,10 +2059,10 @@ function aiProviderFromRow(row: AiProviderRow, models: AiModelConfig[] = []): Ai
   return { id: row.id, name: row.name, providerType: row.provider_type, baseUrl: row.base_url, enabled: Boolean(row.enabled), hasApiKey: Boolean(apiKey), maskedApiKey: maskApiKey(apiKey), models, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
-export function listTasks(filter: "all" | "open" | "done" = "all", dueDate?: string) {
-  const conditions = [filter === "open" ? "completed = 0" : filter === "done" ? "completed = 1" : "", dueDate ? "due_date = ?" : ""].filter(Boolean);
+export function listTasks(filter: "all" | "open" | "done" = "all", dueDate?: string, completedRange?: { from: string; to: string }) {
+  const conditions = [filter === "open" ? "completed = 0" : filter === "done" ? "completed = 1" : "", dueDate ? completedRange ? "(due_date = ? OR (completed = 1 AND completed_at >= ? AND completed_at < ?))" : "due_date = ?" : ""].filter(Boolean);
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate] : [])) as TaskRow[]).map(taskFromRow);
+  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate, ...(completedRange ? [completedRange.from, completedRange.to] : [])] : [])) as TaskRow[]).map(taskFromRow);
 }
 
 export function getTask(id: number) {
@@ -2500,7 +2513,7 @@ export function createHealthRecord(input:NewHealthRecord){const result=database.
 export function updateHealthRecord(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",occurredHasExplicitTime:"occurred_has_explicit_time",type:"type",title:"title",summary:"summary",status:"status",startedAt:"started_at",startedHasExplicitTime:"started_has_explicit_time",endedAt:"ended_at",endedHasExplicitTime:"ended_has_explicit_time",details:"details"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getHealthRecord(id);const value=(key:string)=>key==="details"?JSON.stringify(input[key]):key.endsWith("HasExplicitTime")?Number(input[key]):input[key] as string|null;const result=database.prepare(`UPDATE health_records SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>value(key)),id);return result.changes?getHealthRecord(id):null;}
 export function deleteHealthRecord(id:number){return database.prepare("DELETE FROM health_records WHERE id=? AND user_id='local'").run(id).changes>0;}
 
-function trainingLogFromRow(row:Record<string,unknown>):TrainingLog{let bodyParts:unknown=[];try{bodyParts=JSON.parse(String(row.body_parts??"[]"));}catch{}return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),trainingType:row.training_type as TrainingLog["trainingType"],bodyParts:Array.isArray(bodyParts)?bodyParts.map(String) as TrainingLog["bodyParts"]:[],teacher:String(row.teacher??""),course:String(row.course??""),durationMinutes:row.duration_minutes===null?null:Number(row.duration_minutes),notes:String(row.notes??""),...(row.session_details?{sessionDetails:JSON.parse(String(row.session_details))}:{}),trainingContent:String(row.training_content??""),workout:row.workout?JSON.parse(String(row.workout)):null,workoutDeleted:Boolean(row.workout_deleted),detailsCompletedAt:row.details_completed_at?String(row.details_completed_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function trainingLogFromRow(row:Record<string,unknown>):TrainingLog{let bodyParts:unknown=[];try{bodyParts=JSON.parse(String(row.body_parts??"[]"));}catch{}return{id:Number(row.id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),trainingType:row.training_type as TrainingLog["trainingType"],bodyParts:Array.isArray(bodyParts)?bodyParts.map(String) as TrainingLog["bodyParts"]:[],teacher:String(row.teacher??""),course:String(row.course??""),durationMinutes:row.duration_minutes===null?null:Number(row.duration_minutes),notes:String(row.notes??""),planCompleted:Boolean(row.plan_completion_key),...(row.session_details?{sessionDetails:JSON.parse(String(row.session_details))}:{}),trainingContent:String(row.training_content??""),workout:row.workout?JSON.parse(String(row.workout)):null,workoutDeleted:Boolean(row.workout_deleted),detailsCompletedAt:row.details_completed_at?String(row.details_completed_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 export function listTrainingLogs(input:TrainingLogListInput={}){const conditions:string[]=["user_id='local'","workout_deleted=0"],values:Array<string|number>=[];if(input.pendingDetails)conditions.push("workout IS NOT NULL AND details_completed_at IS NULL");if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}const limit=Math.min(Math.max(input.limit??100,1),100);return(database.prepare(`SELECT * FROM training_logs WHERE ${conditions.join(" AND ")} ORDER BY occurred_at DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(trainingLogFromRow);}
 export function getTrainingLog(id:number){const row=database.prepare("SELECT * FROM training_logs WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?trainingLogFromRow(row):null;}
 export function createTrainingLog(input:NewTrainingLog){const result=database.prepare("INSERT INTO training_logs(user_id,occurred_at,occurred_has_explicit_time,training_type,body_parts,teacher,course,duration_minutes,notes,session_details,training_content) VALUES('local',?,?,?,?,?,?,?,?,?,?)").run(input.occurredAt,Number(input.occurredHasExplicitTime),input.trainingType,JSON.stringify(input.bodyParts),input.teacher,input.course,input.durationMinutes,input.notes,input.sessionDetails?JSON.stringify(input.sessionDetails):null,input.trainingContent??"");return getTrainingLog(Number(result.lastInsertRowid))!;}
@@ -2769,6 +2782,9 @@ export function getReminder(id:number){const row=database.prepare("SELECT * FROM
 export function createReminder(input:Omit<Reminder,"id"|"overdueAfter"|"lastCompletedAt"|"snoozedUntil"|"lastNotifiedAt"|"sentAt"|"cancelledAt"|"createdAt"|"updatedAt">&{overdueAfter?:string|null}){const r=database.prepare("INSERT INTO reminders(title,target_type,target_id,source_type,source_id,schedule_type,starts_at,next_due_at,overdue_after,due_has_explicit_time,interval_value,interval_unit,times_of_day,ends_at,timezone,note,lead_time_minutes,repeat_while_overdue,delivery_channel,status,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.title,input.targetType,input.targetId,input.sourceType,input.sourceId,input.scheduleType,input.startsAt,input.nextDueAt,input.overdueAfter??null,Number(input.dueHasExplicitTime),input.intervalValue,input.intervalUnit,JSON.stringify(input.timesOfDay),input.endsAt,input.timezone,input.note,input.leadTimeMinutes,Number(input.repeatWhileOverdue),input.deliveryChannel??"pwa",input.status,Number(input.isActive));return getReminder(Number(r.lastInsertRowid))!;}
 export function updateReminder(id:number,input:Record<string,unknown>){updateCatsRow("reminders",id,input,{title:"title",targetType:"target_type",targetId:"target_id",sourceType:"source_type",sourceId:"source_id",scheduleType:"schedule_type",startsAt:"starts_at",nextDueAt:"next_due_at",overdueAfter:"overdue_after",dueHasExplicitTime:"due_has_explicit_time",intervalValue:"interval_value",intervalUnit:"interval_unit",timesOfDay:"times_of_day",endsAt:"ends_at",timezone:"timezone",note:"note",leadTimeMinutes:"lead_time_minutes",repeatWhileOverdue:"repeat_while_overdue",deliveryChannel:"delivery_channel",status:"status",sentAt:"sent_at",cancelledAt:"cancelled_at",isActive:"is_active",lastCompletedAt:"last_completed_at",snoozedUntil:"snoozed_until",lastNotifiedAt:"last_notified_at"},["timesOfDay"],["isActive","dueHasExplicitTime","repeatWhileOverdue"]);return getReminder(id);}
 export function deleteReminder(id:number){return database.prepare("DELETE FROM reminders WHERE id=?").run(id).changes>0;}
+export function listReminderOccurrences(range: { from: string; to: string }) {
+  return (database.prepare("SELECT * FROM reminder_occurrences WHERE action = 'completed' AND acted_at >= ? AND acted_at < ? ORDER BY acted_at, id").all(range.from, range.to) as Record<string, unknown>[]).map(reminderOccurrenceFromRow);
+}
 export function createReminderOccurrence(input:Omit<ReminderOccurrence,"id"|"createdAt">){const r=database.prepare("INSERT INTO reminder_occurrences(reminder_id,action,scheduled_for,acted_at,created_event_id) VALUES(?,?,?,?,?)").run(input.reminderId,input.action,input.scheduledFor,input.actedAt,input.createdEventId);return reminderOccurrenceFromRow(database.prepare("SELECT * FROM reminder_occurrences WHERE id=?").get(Number(r.lastInsertRowid)) as Record<string,unknown>);}
 
 function relationPersonFromRow(row:Record<string,unknown>):RelationPerson{return{id:Number(row.id),name:String(row.name),nickname:row.nickname?String(row.nickname):null,relationLabel:row.relation_label?String(row.relation_label):null,closenessRank:row.closeness_rank===null||row.closeness_rank===undefined?null:Number(row.closeness_rank) as RelationPerson["closenessRank"],relationshipStatus:(row.relationship_status??"active") as RelationPerson["relationshipStatus"],photoPath:row.photo_path?String(row.photo_path):null,birthday:row.birthday?String(row.birthday):null,likes:row.likes?String(row.likes):null,avoid:row.avoid?String(row.avoid):null,note:row.note?String(row.note):null,archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}

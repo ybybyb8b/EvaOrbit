@@ -7,6 +7,27 @@ import {spawnSync} from "node:child_process";
 import {pathToFileURL} from "node:url";
 import {readSubscriptionsSnapshot,validateSubscriptionsSnapshot} from "../src/lib/subscriptions-readonly.ts";
 const empty=()=>({format:"eo-subscriptions-readonly-v1",accountId:"a",capturedAt:"2026-10-20T00:00:00Z",today:"2026-10-20",items:[],iconSources:{}});
+test("Native JSON key order cannot invalidate the latest payment; real mismatches still reject the snapshot",()=>{
+  const payment={id:2,subscriptionId:1,purchaseKey:null,validUntil:null,purchasedValue:null,purchasedUnit:null,bonusValue:null,bonusUnit:null,scheduledFor:"2026-10-01",paidOn:"2026-10-02",amountMinor:1000,currency:"CNY",note:"Private note",createdAt:"2026-10-02T00:00:00Z"};
+  const older={...payment,id:1,paidOn:"2026-10-01"};
+  const item={id:1,name:"Private name",mode:"recurring",currentAmountMinor:1000,currency:"CNY",billingIntervalValue:1,billingIntervalUnit:"month",startedOn:"2026-10-01",nextRenewalOn:"2026-11-01",status:"active",autoRenew:true,reminderEnabled:false,iconPath:"",payments:[older,payment],priceChanges:[],latestPayment:Object.fromEntries(Object.entries(payment).reverse()),paymentCount:2,totalSpentMinor:2000,spendByCurrency:{CNY:2000}};
+  const value={...empty(),items:[item]},before=JSON.stringify(value);
+  assert.equal(validateSubscriptionsSnapshot(value,"a"),value);
+  assert.equal(JSON.stringify(value),before,"validation must not rewrite cached data");
+  for(const change of [p=>({...p,id:1}),p=>({...p,amountMinor:1001}),p=>({...p,currency:"USD"}),p=>({...p,paidOn:"2026-10-01"}),p=>({...p,note:"Changed"}),p=>({...p,purchaseKey:"different-key"}),p=>{delete p.bonusUnit;return p;},p=>({...p,extra:true}),()=>null,()=>[]]){
+    const broken=structuredClone(value);broken.items[0].latestPayment=change({...payment});
+    assert.throws(()=>validateSubscriptionsSnapshot(broken,"a"),/subscription #1: latest payment does not match payment history.*previous cache preserved/);
+  }
+  const legacy=structuredClone(value);delete legacy.items[0].latestPayment;validateSubscriptionsSnapshot(legacy,"a");
+  const noPayments=structuredClone(value);Object.assign(noPayments.items[0],{payments:[],latestPayment:null,paymentCount:0,totalSpentMinor:0,spendByCurrency:{}});validateSubscriptionsSnapshot(noPayments,"a");
+  noPayments.items[0].latestPayment=payment;assert.throws(()=>validateSubscriptionsSnapshot(noPayments,"a"),/latest payment/);
+  const wrongCount=structuredClone(value);wrongCount.items[0].paymentCount=3;assert.throws(()=>validateSubscriptionsSnapshot(wrongCount,"a"),/payment count/);
+  const wrongTotal=structuredClone(value);wrongTotal.items[0].totalSpentMinor=1;assert.throws(()=>validateSubscriptionsSnapshot(wrongTotal,"a"),/spending totals/);
+  const wrongOwner=structuredClone(value);wrongOwner.items[0].payments[0].subscriptionId=9;assert.throws(()=>validateSubscriptionsSnapshot(wrongOwner,"a"),/payment #1: subscription reference mismatch/);
+  const missing=structuredClone(value);missing.items[0]=null;assert.throws(()=>validateSubscriptionsSnapshot(missing,"a"),/invalid or duplicate subscription ID/);
+  assert.throws(()=>validateSubscriptionsSnapshot(value,"b"),/account mismatch/);
+});
+
 test("Subscription snapshots reject account, date, size and unlisted read/write paths",async()=>{
   const value=empty();assert.equal(validateSubscriptionsSnapshot(value,"a"),value);
   assert.throws(()=>validateSubscriptionsSnapshot(value,"b"));

@@ -632,6 +632,7 @@ export interface TrainingLog {
   workout?: import("./healthkit-read").HealthKitReadChange | null;
   workoutDeleted?: boolean;
   detailsCompletedAt?: string | null;
+  planCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
 }

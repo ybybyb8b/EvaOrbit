@@ -31,7 +31,16 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
 
   const { english } = useLocale();
   const [draft, setDraft] = useState<Draft>(() => {
-    if (record) return draftFromLog(record);
+    if (record) {
+      const saved = draftFromLog(record);
+      if (!planCompletion) return saved;
+      const planned = trainingDayDraft(planCompletion.plan);
+      return { ...saved, bodyParts: saved.bodyParts.length ? saved.bodyParts : planned.bodyParts, sessionDetails: {
+        plan: planned.sessionDetails.plan,
+        exercises: saved.sessionDetails.exercises.length ? saved.sessionDetails.exercises : planned.sessionDetails.exercises,
+        videos: saved.sessionDetails.videos.length ? saved.sessionDetails.videos : planned.sessionDetails.videos,
+      } };
+    }
     const empty = emptyDraft(initialDate);
     if (!planCompletion) return empty;
     const fields = trainingDayDraft(planCompletion.plan);
@@ -52,14 +61,14 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
       if (record?.workout) {
         for (const key of ["occurredAt", "occurredHasExplicitTime", "trainingType", "durationMinutes"] as const) Reflect.deleteProperty(log, key);
       }
-      const payload = planCompletion ? { expectedVersion: planCompletion.plan.version, dayId: planCompletion.plan.currentDayId, requestKey: planCompletion.requestKey, log } : log;
-      const response = await read(record ? `/api/health/training/${record.id}` : planCompletion ? "/api/health/training/plan/complete" : "/api/health/training", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const payload = planCompletion ? { expectedVersion: planCompletion.plan.version, dayId: planCompletion.plan.currentDayId, requestKey: planCompletion.requestKey, ...(record?.workout ? { workoutLogId: record.id } : {}), log } : log;
+      const response = await read(planCompletion ? "/api/health/training/plan/complete" : record ? `/api/health/training/${record.id}` : "/api/health/training", { method: planCompletion || !record ? "POST" : "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json().catch(() => null); if (!response.ok) { setError(getError(result, "Could not save training")); return; }
       invalidateCachedJson("/api/health/training/suggestions"); await onSaved(planCompletion ? result.plan : undefined); onClose();
     } catch { setError("Could not save training"); } finally { savingRef.current = false; setSaving(false); }
   }
   async function remove() { if(preview)return; if (!record || !onDeleted || !confirm("Delete this training log?")) return; setSaving(true); setError(""); try { const response = await read(`/api/health/training/${record.id}`, { method: "DELETE" }); if (!response.ok) { setError("Could not delete training"); return; } invalidateCachedJson("/api/health/training/suggestions"); await onDeleted(); showActionToast(english ? "Training log deleted" : "训练记录已删除", "deleted"); onClose(); } catch { setError("Could not delete training"); } finally { setSaving(false); } }
-  return <FormSheet title={record ? english ? "Edit training" : "编辑训练" : planCompletion ? english ? "Training session" : "本次训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={record ? english ? "Save changes" : "保存修改" : planCompletion ? english ? "Complete & log" : "完成并记录" : english ? "Log training" : "记录训练"} busy={saving} submitDisabled={preview || record?.workoutDeleted}>
+  return <FormSheet title={planCompletion ? english ? "Training session" : "本次训练" : record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={planCompletion ? english ? "Complete & log" : "完成并记录" : record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving} submitDisabled={preview || record?.workoutDeleted}>
     <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>{preview&&<FormPreviewNotice/>}
       {planCompletion && <p className="training-plan-hint">{english ? "Your plan advances only after this record is saved. Cancel to keep your place." : "保存这条记录后才进入下一个训练日；取消不会改变进度。"}</p>}
       {draft.sessionDetails.plan && <details className="training-session-reference"><summary>{english ? "Plan reference" : "计划参考"} · {draft.sessionDetails.plan.name} · Day {draft.sessionDetails.plan.dayNumber}｜{draft.sessionDetails.plan.dayName}</summary>{draft.sessionDetails.plan.content && <p>{draft.sessionDetails.plan.content}</p>}</details>}

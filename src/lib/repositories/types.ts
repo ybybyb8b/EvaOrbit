@@ -77,7 +77,7 @@ export type FoodDishSearchOptions = { kind?: "food" | "drink"; foodPlaceId?: num
 export type FoodObjectRemoval = { id: number; action: "deleted" | "archived" };
 export type NewHealthRecord = Omit<HealthRecord, "id" | "createdAt" | "updatedAt">;
 export type HealthRecordListInput = { status?: HealthRecordStatus; type?: HealthRecordType; from?: string; to?: string; limit?: number };
-export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt" | "workout" | "workoutDeleted" | "detailsCompletedAt">;
+export type NewTrainingLog = Omit<TrainingLog, "id" | "createdAt" | "updatedAt" | "workout" | "workoutDeleted" | "detailsCompletedAt" | "planCompleted">;
 export type TrainingLogPatch = Partial<NewTrainingLog>;
 export type TrainingLogListInput = { from?: string; to?: string; limit?: number; pendingDetails?: boolean };
 export type NewWeightRecord = Pick<WeightRecord, "occurredAt" | "occurredHasExplicitTime" | "weightKg">;
@@ -212,7 +212,7 @@ export interface EvaOrbitRepository {
   createPersonMemoryNote(personId: number, content: string): Promise<PersonMemoryNote>;
   updatePersonMemoryNote(id: number, content: string): Promise<PersonMemoryNote | null>;
   deletePersonMemoryNote(id: number): Promise<boolean>;
-  listTasks(filter?: TaskFilter, dueDate?: string): Promise<Task[]>;
+  listTasks(filter?: TaskFilter, dueDate?: string, completedRange?: { from: string; to: string }): Promise<Task[]>;
   getTask(id: number): Promise<Task | null>;
   createTask(input: NewTask): Promise<Task>;
   updateTask(id: number, input: Record<string, unknown>): Promise<Task | null>;
@@ -510,6 +510,7 @@ export interface EvaOrbitRepository {
   createReminder(input: NewReminder): Promise<Reminder>;
   updateReminder(id: number, input: Record<string, unknown>): Promise<Reminder | null>;
   deleteReminder(id: number): Promise<boolean>;
+  listReminderOccurrences(range: { from: string; to: string }): Promise<ReminderOccurrence[]>;
   createReminderOccurrence(input: Omit<ReminderOccurrence, "id" | "createdAt">): Promise<ReminderOccurrence>;
   listNotificationDeliveries(limit?: number): Promise<NotificationDelivery[]>;
   createNotificationDelivery(input: Omit<NotificationDelivery, "id" | "createdAt">): Promise<NotificationDelivery>;

@@ -1,5 +1,7 @@
 # Insights 报告与版本 · Phase 2
 
+> 历史文档：2026-10-29 已移除 Insight 报告功能；本文的报告页面、API、运行和发布步骤不再适用。保留的只读能力见 [INSIGHTS_CONTEXT.md](INSIGHTS_CONTEXT.md)。
+
 > 当前每日复盘的餐次检查、过期识别、默认阅读版本和执行轮次以 [Insights 整体优化](INSIGHTS_REVIEW.md) 为准。以下保留原阶段契约与历史验证。
 
 本篇保留 Phase 2 的实现与验收范围；现已增加 [Phase 3 外部 Agent 后台](INSIGHTS_AGENT.md)，定时任务由用户自行配置。

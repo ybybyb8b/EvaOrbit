@@ -109,6 +109,22 @@ test("free text without history never opens an empty suggestion popup", () => {
   assert.equal(h.nodes().some(node => node.type === "dropdown"), false);
 });
 
+test("a deliberate suggestion tap commits during IME composition without selecting on Enter", () => {
+  let value = "王", blurred = 0;
+  const h = harness("src/components/suggested-input.tsx", "SuggestedInput", { value, suggestions: ["王老师"], suggestionLabel: "老师", onValueChange: next => { value = next; h.setProps({ value }); } });
+  h.render();
+  h.slots[0].current = { blur() { blurred++; h.input().props.onCompositionEnd({ currentTarget: { value } }); }, focus() {} };
+  h.input().props.onFocus({}); h.render();
+  h.input().props.onChange({ target: { value } }); h.render();
+  h.input().props.onCompositionStart();
+  h.input().props.onKeyDown({ key: "Enter", nativeEvent: { isComposing: true }, preventDefault() { assert.fail("IME Enter must remain available to the input method"); } });
+  assert.equal(value, "王");
+  h.nodes().find(node => node.props?.role === "option" && node.props.children[0].props.children === "王老师").props.onClick(); h.render();
+  assert.equal(value, "王老师");
+  assert.equal(blurred, 1);
+  assert.equal(h.input().props["aria-expanded"], false);
+});
+
 test("medication keeps end date optional and saves a date-only course without a reminder", async () => {
   let payload;
   const h = harness("src/app/cats/cat-record-editor.tsx", "CatRecordEditor", { pets: [{ id: 1, name: "Luna" }], initialPetId: 1, initialKind: "medication", initialDate: "2026-10-19", onSaved() {} }, { english: true, fetch: async (url, options) => {

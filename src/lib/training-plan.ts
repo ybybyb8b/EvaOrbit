@@ -1,8 +1,12 @@
 import type { TrainingPlan, TrainingPlanDay } from "./types.ts";
-import { parseNewTrainingLog, parseTrainingExercises, ValidationError } from "./validation.ts";
+import { parseNewTrainingLog, parseTrainingLogPatch, parseTrainingExercises, ValidationError } from "./validation.ts";
+import type { NewTrainingLog } from "./repositories/types";
 
 export type TrainingPlanWrite = Pick<TrainingPlan, "name" | "days" | "currentDayId"> & { expectedVersion: number };
-export type TrainingPlanCompletion = { expectedVersion: number; dayId: string; requestKey: string; log: import("./repositories/types").NewTrainingLog };
+export type TrainingWorkoutDetails = Pick<NewTrainingLog, "bodyParts" | "teacher" | "course" | "notes" | "trainingContent" | "sessionDetails">;
+export type TrainingPlanCompletion = { expectedVersion: number; dayId: string; requestKey: string } & (
+  { workoutLogId?: never; log: NewTrainingLog } | { workoutLogId: number; log: TrainingWorkoutDetails }
+);
 
 export function trainingTemplate(): Pick<TrainingPlan, "name" | "days" | "currentDayId"> {
   const days: TrainingPlanDay[] = [
@@ -77,7 +81,16 @@ export function parseTrainingPlanCompletion(value: unknown): TrainingPlanComplet
   const input = object(value);
   const requestKey = text(input.requestKey, 36);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestKey)) throw new ValidationError("完成请求标识不正确");
+  const completion = { expectedVersion: version(input.expectedVersion), dayId: text(input.dayId, 64), requestKey };
+  if (input.workoutLogId !== undefined) {
+    if (typeof input.workoutLogId !== "number" || !Number.isSafeInteger(input.workoutLogId) || input.workoutLogId < 1) throw new ValidationError("Workout 记录标识不正确");
+    const body = object(input.log);
+    if (["occurredAt", "occurredHasExplicitTime", "trainingType", "durationMinutes"].some(key => key in body)) throw new ValidationError("Workout 原始运动数据不可修改");
+    const log = parseTrainingLogPatch(body);
+    if (!log.bodyParts?.length) throw new ValidationError("请至少选择一个训练部位");
+    return { ...completion, workoutLogId: input.workoutLogId, log: { bodyParts: log.bodyParts, teacher: log.teacher ?? "", course: log.course ?? "", notes: log.notes ?? "", trainingContent: log.trainingContent ?? "", sessionDetails: log.sessionDetails } };
+  }
   const log = parseNewTrainingLog(input.log);
   if (log.durationMinutes !== null && !Number.isInteger(log.durationMinutes)) throw new ValidationError("训练时长须为整数分钟");
-  return { expectedVersion: version(input.expectedVersion), dayId: text(input.dayId, 64), requestKey, log };
+  return { ...completion, log };
 }

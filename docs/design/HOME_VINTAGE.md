@@ -93,3 +93,9 @@ User authorized publishing all theme/Home refinements and Web deployment, explic
 ## Classic / Reicon Web release authorization · 2026-10-29
 
 User approved publishing this refinement: restore pre-trial green/blue/violet Classic styling, retain the approved rosewood palette globally, share centered raised Log geometry and use Reicon for Vintage module/navigation icons. Web release only; IPA packaging remains skipped. No schema migration is required. Unrelated suggested-input/combobox changes remain excluded.
+
+## Navigation text transmission · 2026-10-29
+
+The user requested recognisable blurred lettering behind the bar. Real scrolling checks showed that 18px blur still erased the 13px task text; backdrop sampling itself was working. The shared bar now uses 3px blur and lighter separate light/dark fills, retaining the continuous outline, edge highlight and concentric Log glass ring. Vintage light opacity is .36→.30, dark .34→.42; Classic uses palette-based .40→.34 and .42→.48. Normal navigation text remains sharp. Ring material remains independently layered with a radial cutout to preserve the solid action disc.
+
+Real Home browser checks passed at 320/402/1440 in both modes with actual task rows behind the bar, plus Classic rosewood, fixed geometry and the Log picker. New captures: tmp/transmitted-glass-*.png. Uncommitted and not deployed.

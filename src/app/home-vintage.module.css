@@ -159,3 +159,5 @@
   :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.home-time-summary-copy) { grid-template-columns:minmax(0,1fr);gap:6px; }
   :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.home-time-summary-part) { justify-content:flex-start; }
 }
+
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-completed-check) { flex:none;color:var(--accent-primary); }

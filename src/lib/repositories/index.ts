@@ -10,7 +10,7 @@ const repositoryContext = new AsyncLocalStorage<EvaOrbitRepository>();
 
 export async function withInsightsReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
   const repository = await getRepository();
-  const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrainingLogs", "listHealthRecords", "listWeightRecords", "listMenstrualFlowRecords", "listTrackerEntries", "listTrackers", "listTrackerFields", "listTasks", "getNutritionSettings", "listInsightReports"]);
+  const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrainingLogs", "listHealthRecords", "listWeightRecords", "listMenstrualFlowRecords", "listTrackerEntries", "listTrackers", "listTrackerFields", "listTasks", "getNutritionSettings"]);
   return repositoryContext.run(new Proxy(repository, { get(target, key) {
     if (key === "then") return undefined;
     if (typeof key !== "string" || !allowed.has(key)) throw new Error("Insights read-only aggregation refused a repository operation");
@@ -56,7 +56,7 @@ export async function withMcpRepository<T>(action: () => Promise<T>): Promise<T>
 // Audited Home aggregation reads. No command method can escape through a nested service.
 export async function withHomeReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
   const repository = await getRepository();
-  const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrackerEntries", "listTrackers", "listHealthRecords", "listRelationEvents", "listRelationPeople", "listTrainingLogs", "listWeightRecords", "listMenstrualFlowRecords", "listMedicationDoseEvents", "listCalendarEvents", "listSubscriptions", "listSubscriptionPayments", "getCalendarInterpretation", "getNutritionSettings", "listCatEvents", "listCatSymptoms", "listCatVetVisits", "listCatMedications", "listCatMeasurements", "listMenstrualPeriods", "listTasks", "listDailyJournalEntries", "listSleepSamples", "listReminders", "getPet", "getCatFoodItem", "getTracker", "getSubscription", "getTrackerReminder"]);
+  const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrackerEntries", "listTrackers", "listHealthRecords", "listRelationEvents", "listRelationPeople", "listTrainingLogs", "listWeightRecords", "listMenstrualFlowRecords", "listMedicationDoseEvents", "listCalendarEvents", "listSubscriptions", "listSubscriptionPayments", "getCalendarInterpretation", "getNutritionSettings", "listCatEvents", "listCatSymptoms", "listCatVetVisits", "listCatMedications", "listCatMeasurements", "listMenstrualPeriods", "listTasks", "listDailyJournalEntries", "listSleepSamples", "listReminders", "listReminderOccurrences", "getReminder", "listPets", "getPet", "getCatFoodItem", "getTracker", "getSubscription", "getTrackerReminder"]);
   const guarded = new Proxy(repository, { get(target, key) {
     // Await probes `then` when an async service returns this plain repository.
     if (key === "then") return undefined;

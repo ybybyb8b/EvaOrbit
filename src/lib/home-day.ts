@@ -59,10 +59,13 @@ export interface HomeSleepSummary {
   records: Array<{ id: number; title: string; startAt: string; endAt: string; durationMinutes: number; notes: string }>;
 }
 
+export type HomeCompletedItem = { key: string; title: string; href: string; completedAt: string; hasExplicitTime: boolean };
+
 export interface HomeDayOverview {
   date: string;
   events: TimelineEvent[];
-  tasks: Array<{ id: number; title: string; completed: boolean; dueTime: string | null; priority: string }>;
+  tasks: Array<{ id: number; title: string; completed: boolean; completedAt?: string | null; dueTime: string | null; priority: string }>;
+  completedItems?: HomeCompletedItem[];
   meals: Array<{ mealType: string; title: string; detail: string | null }>;
   journal: DailyJournalEntry[];
   sleep: HomeSleepSummary | null;
