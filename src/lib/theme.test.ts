@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   APPEARANCE_MODES,
   COLOR_THEMES,
+  DESIGN_THEMES,
+  normalizeDesignTheme,
   NATIVE_LOADING_THEME,
   normalizeAppearanceMode,
   normalizeColorTheme,
@@ -27,4 +29,11 @@ test("appearance preference normalization falls back safely", () => {
 
 test("native loading uses one theme identifier so web colors cannot block appearance mode", () => {
   assert.equal(NATIVE_LOADING_THEME, "editorial");
+});
+
+test("design identity is independent of Classic palette",()=>{
+ assert.deepEqual(DESIGN_THEMES,["classic","vintage"]);
+ assert.equal(normalizeDesignTheme("vintage"),"vintage");
+ assert.equal(normalizeDesignTheme("rosewood"),"classic");
+ assert.equal(normalizeColorTheme("vintage"),"editorial");
 });

@@ -1,0 +1,80 @@
+/* Independent Vintage design. Classic palettes stay intact. */
+html[data-design-theme="vintage"][data-theme][data-mode] {
+  --surface-canvas:#f2f3f5;--surface-card:#fcfcfd;--surface-raised:#fff;
+  --surface-soft:#e9e9ee;--surface-tint:#e6e1e7;--surface-warm:#e9e3e9;
+  --surface-accent-soft:#eae0e8;--text-primary:#29252b;--text-secondary:#625b66;
+  --text-tertiary:#706774;--text-editorial:#29252b;--text-overline:#6c6370;
+  --accent-primary:#5f3e54;--accent-strong:#4f3045;--accent-on:#fff9fc;
+  --accent-rgb:95 62 84;--surface-card-rgb:252 252 253;--surface-raised-rgb:255 255 255;
+  --surface-shell-rgb:242 243 245;--surface-header-rgb:242 243 245;
+  --surface-tint-rgb:230 225 231;--shadow-rgb:49 40 53;--border-rgb:103 94 110;
+  --border-default:#dad6dd;--border-control:#b9afbd;--focus-ring:#5f3e54;
+  --vintage-glass:rgb(204 212 223 / .49);--vintage-glass-edge:rgb(255 255 255 / .58);
+  --vintage-disc:#f5f3f7;--vintage-disc-ink:#514755;--vintage-disc-selected:#5f3e54;
+  --vintage-due:#f1e8ef;--vintage-due-ink:#69435b;--vintage-nav:rgb(216 215 226 / .74);
+  --home-log-surface:#5f3e54;--home-log-hover:#4f3045;--home-log-ink:#fff9fc;
+  --log-accent-surface:#5f3e54;--log-accent-ink:#fff9fc;--log-accent-hover:#4f3045;
+}
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
+  --surface-canvas:#202124;--surface-card:#2c2d32;--surface-raised:#37383f;
+  --surface-soft:#34343c;--surface-tint:#39343d;--surface-warm:#39343d;
+  --surface-accent-soft:#443542;--text-primary:#edeaf0;--text-secondary:#c7c1cc;
+  --text-tertiary:#b6adb9;--text-editorial:#edeaf0;--text-overline:#bcb2c2;
+  --accent-primary:#dcc3d5;--accent-strong:#eed9e7;--accent-on:#2c2029;
+  --accent-rgb:220 195 213;--surface-card-rgb:44 45 50;--surface-raised-rgb:55 56 63;
+  --surface-shell-rgb:32 33 36;--surface-header-rgb:32 33 36;--surface-tint-rgb:57 52 61;
+  --shadow-rgb:0 0 0;--border-rgb:203 195 210;--border-default:#514b56;
+  --border-control:#817287;--focus-ring:#dcc3d5;
+  --vintage-glass:rgb(111 115 130 / .23);--vintage-glass-edge:rgb(226 219 237 / .17);
+  --vintage-disc:#3c3a43;--vintage-disc-ink:#e5dfe9;--vintage-disc-selected:#69465e;
+  --vintage-due:#3e303c;--vintage-due-ink:#e0bed4;--vintage-nav:rgb(92 91 103 / .53);
+  --home-log-surface:#69465e;--home-log-hover:#80536f;--home-log-ink:#fff6fc;
+  --log-accent-surface:#69465e;--log-accent-ink:#fff6fc;--log-accent-hover:#80536f;
+}
+
+html[data-design-theme="vintage"][data-theme][data-mode] {
+  --font-ui:var(--font-canger-huaxin),sans-serif;--font-body:var(--font-ui);
+  --text-action:var(--text-secondary);--text-label:var(--text-secondary);--text-icon:var(--text-secondary);
+  --surface-list:var(--surface-soft);--surface-segmented:var(--surface-soft);
+  --surface-note:var(--surface-warm);--surface-note-alt:var(--surface-lavender);--surface-note-green:var(--surface-tint);
+  --border-subtle:var(--border-default);--border-icon:var(--border-default);
+  --surface-warm-rgb:233 227 233;--surface-chat-rgb:242 243 245;
+  --calendar-ribbon-rgb:95 62 84;--backdrop-rgb:30 27 32;
+  --state-danger:#9a4756;--state-success:#52695d;--state-warning:#876b37;
+  --surface-danger:#f3e5e9;--accent-gold:#846b4e;
+  --surface-due:var(--vintage-due);--surface-brand:var(--surface-accent-soft);
+  --surface-lavender:#e8e4ec;--accent-soft:var(--surface-accent-soft);
+  --action-primary:#5f3e54;--action-primary-hover:#4f3045;--action-primary-ink:#fff9fc;
+  --border-strong:#b9afbd;--text-on-accent:#fff9fc;
+  --shadow-card:0 4px 14px rgb(var(--shadow-rgb) / .045);
+}
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
+  --surface-warm-rgb:57 52 61;--surface-chat-rgb:37 38 43;--calendar-ribbon-rgb:220 195 213;
+  --state-danger:#e3a1ae;--state-success:#a4c3b1;--state-warning:#d7bc85;--surface-danger:#47343b;--accent-gold:#d3bc96;
+  --surface-lavender:#383540;--border-strong:#817287;
+  --action-primary:#69465e;--action-primary-hover:#80536f;--action-primary-ink:#fff6fc;
+}
+html[data-design-theme="vintage"] body { background:var(--surface-canvas); }
+html[data-design-theme="vintage"] :is(input,textarea,[contenteditable="true"],.user-content,button,select) { font-family:var(--font-ui); }
+html[data-design-theme="vintage"] :is(h1,h2,h3,h4) { font-family:var(--font-editorial);font-weight:500; }
+html[data-design-theme="vintage"] :is(.feature-icon,.nav-icon) { background-image:var(--icon-source-rosewood,var(--icon-source)); }
+html[data-design-theme="vintage"][data-mode="dark"] :is(.feature-icon,.nav-icon) { background-image:var(--icon-source-rosewood-dark,var(--icon-source-rosewood,var(--icon-source))); }
+.appearance-option-grid.design-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.appearance-classic-colors { margin-top:18px; }
+.appearance-classic-colors > strong { display:block;margin-bottom:10px;color:var(--text-secondary);font-size:13px;font-weight:500; }
+.appearance-theme-detail { margin:12px 0 0;color:var(--text-secondary);font-size:13px; }
+.appearance-theme-preview.classic { background:#f5f2e9; }
+.appearance-theme-preview.classic i { background:#a1aa92; }
+.appearance-theme-preview.vintage { background:#f2f3f5; }
+.appearance-theme-preview.vintage i:nth-child(1) { background:#5f3e54; }
+.appearance-theme-preview.vintage i:nth-child(2) { background:#dbe1e6; }
+.appearance-theme-preview.vintage i:nth-child(3) { background:#d8d0d7; }
+
+/* Flat editorial content; translucent material is reserved for floating chrome. */
+html[data-design-theme="vintage"][data-theme][data-mode] :is(.editor-card,.provider-card,.ai-providers-panel,.tracker-card,.tracker-insight-card,.module-intro-card,.module-preview-card,.health-detail-card,.daily-energy-card,.health-record-card,.capture-card,.inbox-row,.settings-directory-item,.notification-rules > article,.notification-history > article,.pet-profile-view,.apple-health-section,.subscription-card,.subscription-summary) {
+  background:var(--surface-card);box-shadow:none;
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid button { background:var(--surface-soft);box-shadow:none; }
+html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid button.active { background:var(--surface-accent-soft);color:var(--accent-primary);box-shadow:inset 0 0 0 1px rgb(var(--accent-rgb) / .32); }
+html[data-design-theme="vintage"] :is(.appearance-mode-preview.light i,.appearance-mode-preview.system i:first-child) { background:#f2f3f5; }
+html[data-design-theme="vintage"] :is(.appearance-mode-preview.dark i,.appearance-mode-preview.system i:last-child) { background:#202124; }

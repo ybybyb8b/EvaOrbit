@@ -1,7 +1,11 @@
+"use client";
+import {useHomeStyle} from "@/lib/home-style";
+import vintageStyles from "@/app/home-vintage.module.css";
 import type {ReactNode} from "react";
 import type {UiLanguage} from "@/lib/locale";
 import {EVAORBIT_TIME_ZONE} from "@/lib/time";
 import styles from "@/app/home.module.css";
+import themeStyles from "@/app/home-theme.module.css";
 function dateLabel(english: boolean) {
   if (english) return new Intl.DateTimeFormat("en", { year: "numeric", month: "long", day: "numeric", weekday: "long", timeZone: EVAORBIT_TIME_ZONE }).format(new Date());
   const parts = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "numeric", day: "numeric", weekday: "long", timeZone: EVAORBIT_TIME_ZONE }).formatToParts(new Date());
@@ -19,4 +23,4 @@ function greeting(english: boolean) {
 }
 
 
-export function HomePageView({language,due,children}:{language:UiLanguage;due:ReactNode;children:ReactNode}){const english=language==="en";return <div className="page home-page"><header className="home-masthead"><span className={styles.date}>{dateLabel(english)}</span><h1>{greeting(english)}</h1></header>{due}<section className={`home-overview ${styles.overview}`}>{children}</section></div>;}
+export function HomePageView({language,due,children}:{language:UiLanguage;due:ReactNode;children:ReactNode}){const variant=useHomeStyle();const english=language==="en";return <div className={`page home-page ${themeStyles.home} ${variant==="vintage"?vintageStyles.vintage:""}`}><header className="home-masthead"><span className={styles.date}>{dateLabel(english)}</span><h1>{greeting(english)}</h1></header>{variant!=="vintage"&&due}<section className={`home-overview ${styles.overview}`}>{children}</section></div>;}

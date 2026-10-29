@@ -1,4 +1,4 @@
-const CACHE = "eva-orbit-static-v10";
+const CACHE = "eva-orbit-static-v11";
 const ICON_NAMES = [
   "food-drink", "food-library", "food-places", "tasks", "insights", "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
 ];

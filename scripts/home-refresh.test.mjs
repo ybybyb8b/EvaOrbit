@@ -17,6 +17,7 @@ function fixture(local = true) {
   };
   const jsx = (type, props) => ({ type, props });
   const imports = {
+    "@/lib/home-style": { useHomeStyle: () => "classic" },
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/components/business-request-context": {useBusinessRequest:()=>async()=>{throw new TypeError("Form write failed");}},
     "@/components/form-sheet": { FormSheet: "sheet" },

@@ -19,6 +19,7 @@ function fixture(readOnly = false) {
   };
   const jsx = (type, props) => ({ type, props });
   const imports = {
+    "@/lib/home-style":{useHomeStyle:()=>"classic"},
     react, "react/jsx-runtime": { jsx, jsxs: jsx },
     "@/components/business-request-context": {useBusinessRequest:()=>async(url,options)=>{requests.push({url,...options});return {ok:!fail};}},
     "@/components/form-sheet": { FormSheet: "sheet" },

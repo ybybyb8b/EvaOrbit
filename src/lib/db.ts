@@ -18,7 +18,7 @@ import { ConflictError } from "./errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation, type CalendarInterpretation } from "./calendar-interpretation";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
-import { normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
+import { normalizeDesignTheme, normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
 import { normalizeUiLanguage, type UiLanguage } from "./locale";
 import { normalizeChineseFont, normalizeEnglishFont, type ChineseFont, type EnglishFont } from "./font-preferences";
 import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, DashboardSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, InboxItem, LuciusCase, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaSeries, MediaViewing, Memo, Memory, MemoryEntity, MemoryFact, MemoryFactCandidate, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, WeightRecord, WeightSettings } from "./types";
@@ -1951,6 +1951,11 @@ if(!hasV91)database.exec(`BEGIN;
  CREATE TRIGGER insight_deleted_attempt_guard BEFORE INSERT ON insight_run_attempts WHEN NEW.status='running' AND EXISTS(SELECT 1 FROM insight_runs r JOIN insight_reports report ON report.period_start=r.date AND report.period_type='daily' AND report.user_id=r.user_id WHERE r.id=NEW.run_id AND report.deleted_at IS NOT NULL) BEGIN SELECT RAISE(ABORT,'Insight report deleted');END;
  INSERT INTO migrations(version) VALUES(91);COMMIT;`);
 
+const hasV92 = database.prepare("SELECT 1 FROM migrations WHERE version=92").get();
+if (!hasV92) database.exec(`BEGIN;
+ ALTER TABLE ui_preferences ADD COLUMN design_theme TEXT NOT NULL DEFAULT 'classic' CHECK(design_theme IN ('classic','vintage'));
+ INSERT INTO migrations(version) VALUES(92); COMMIT;`);
+
 export function getTrainingPlan(): TrainingPlan | null {
   const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();
   return row ? { name: String(row.name), days: JSON.parse(String(row.days)), currentDayId: row.current_day_id === null ? null : String(row.current_day_id), version: Number(row.version), updatedAt: String(row.updated_at) } : null;
@@ -2151,10 +2156,10 @@ export function getDashboardSummary(): DashboardSummary {
 }
 
 export function getUiPreferences() {
-  const row = database.prepare("SELECT home_module_order, appearance_mode, color_theme, ui_language, chinese_font, english_font, updated_at FROM ui_preferences WHERE id=1").get() as { home_module_order: string; appearance_mode: string; color_theme: string; ui_language: string; chinese_font: string; english_font: string; updated_at: string };
+  const row = database.prepare("SELECT design_theme, home_module_order, appearance_mode, color_theme, ui_language, chinese_font, english_font, updated_at FROM ui_preferences WHERE id=1").get() as { design_theme: string; home_module_order: string; appearance_mode: string; color_theme: string; ui_language: string; chinese_font: string; english_font: string; updated_at: string };
   let order: unknown = [];
   try { order = JSON.parse(row.home_module_order); } catch { order = []; }
-  return { homeModuleOrder: normalizeHomeModuleOrder(order), appearanceMode: normalizeAppearanceMode(row.appearance_mode), colorTheme: normalizeColorTheme(row.color_theme), uiLanguage: normalizeUiLanguage(row.ui_language), chineseFont: normalizeChineseFont(row.chinese_font), englishFont: normalizeEnglishFont(row.english_font), updatedAt: row.updated_at };
+  return { designTheme: normalizeDesignTheme(row.design_theme), homeModuleOrder: normalizeHomeModuleOrder(order), appearanceMode: normalizeAppearanceMode(row.appearance_mode), colorTheme: normalizeColorTheme(row.color_theme), uiLanguage: normalizeUiLanguage(row.ui_language), chineseFont: normalizeChineseFont(row.chinese_font), englishFont: normalizeEnglishFont(row.english_font), updatedAt: row.updated_at };
 }
 
 export function updateHomeModuleOrder(order: HomeModuleId[]) {
@@ -2162,8 +2167,8 @@ export function updateHomeModuleOrder(order: HomeModuleId[]) {
   return getUiPreferences();
 }
 
-export function updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }) {
-  database.prepare("UPDATE ui_preferences SET appearance_mode=?, color_theme=?, ui_language=?, chinese_font=?, english_font=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(input.appearanceMode, input.colorTheme, input.uiLanguage, input.chineseFont, input.englishFont);
+export function updateAppearancePreferences(input: { designTheme?: import("./theme").DesignTheme; appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }) {
+  database.prepare("UPDATE ui_preferences SET design_theme=COALESCE(?,design_theme), appearance_mode=?, color_theme=?, ui_language=?, chinese_font=?, english_font=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(input.designTheme ?? null, input.appearanceMode, input.colorTheme, input.uiLanguage, input.chineseFont, input.englishFont);
   return getUiPreferences();
 }
 

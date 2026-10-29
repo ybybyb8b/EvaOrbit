@@ -2,6 +2,7 @@
   try {
     const modes = new Set(["system", "light", "dark"]);
     const themes = new Set(["editorial", "rosewood", "powderblue", "mistviolet"]);
+    const designTheme = (localStorage.getItem("evaorbit.designTheme") ?? localStorage.getItem("evaorbit.homeStyle")) === "vintage" ? "vintage" : "classic";
     const preferredMode = localStorage.getItem("evaorbit.appearanceMode");
     const preferredTheme = localStorage.getItem("evaorbit.colorTheme");
     const preferredLanguage = localStorage.getItem("evaorbit.uiLanguage");
@@ -15,7 +16,10 @@
     const root = document.documentElement;
     root.dataset.appearance = appearance;
     root.dataset.mode = mode;
-    root.dataset.theme = theme;
+    root.dataset.designTheme = designTheme;
+    root.dataset.homeStyle = designTheme;
+    root.dataset.classicColorTheme = theme;
+    root.dataset.theme = designTheme === "vintage" ? "vintage" : theme;
     root.dataset.locale = language;
     root.lang = language;
     root.dataset.chineseFont = ["canger", "lxgw", "alimama", "ibm"].includes(preferredChineseFont) ? preferredChineseFont : "canger";

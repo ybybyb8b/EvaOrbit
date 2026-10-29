@@ -12,7 +12,7 @@ import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
 import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
 import { ConflictError, HttpError } from "../errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation } from "../calendar-interpretation";
-import { normalizeAppearanceMode, normalizeColorTheme } from "../theme";
+import { normalizeDesignTheme, normalizeAppearanceMode, normalizeColorTheme } from "../theme";
 import { normalizeUiLanguage } from "../locale";
 import { normalizeChineseFont, normalizeEnglishFont } from "../font-preferences";
 import { subscriptionSpendByCurrency } from "../subscriptions";
@@ -438,9 +438,9 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       };
     },
     async getUiPreferences() {
-      const { data, error } = await client.from("ui_preferences").select("home_module_order,appearance_mode,color_theme,ui_language,chinese_font,english_font,updated_at").maybeSingle();
+      const { data, error } = await client.from("ui_preferences").select("*").maybeSingle();
       fail(error, "Read UI preferences");
-      return { homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), appearanceMode: normalizeAppearanceMode(data?.appearance_mode), colorTheme: normalizeColorTheme(data?.color_theme), uiLanguage: normalizeUiLanguage(data?.ui_language), chineseFont: normalizeChineseFont(data?.chinese_font), englishFont: normalizeEnglishFont(data?.english_font), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
+      return { designTheme: normalizeDesignTheme(data?.design_theme), homeModuleOrder: normalizeHomeModuleOrder(data?.home_module_order), appearanceMode: normalizeAppearanceMode(data?.appearance_mode), colorTheme: normalizeColorTheme(data?.color_theme), uiLanguage: normalizeUiLanguage(data?.ui_language), chineseFont: normalizeChineseFont(data?.chinese_font), englishFont: normalizeEnglishFont(data?.english_font), updatedAt: data?.updated_at ? String(data.updated_at) : "" };
     },
     async getLifeDayStart() {
       const { data, error } = await client.from("ui_preferences").select("life_day_start").eq("user_id", userId).maybeSingle();
@@ -485,17 +485,17 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       return parseCalendarInterpretation(data.calendar_interpretation);
     },
     async updateHomeModuleOrder(order: HomeModuleId[]) {
-      const { data, error } = await client.from("ui_preferences").upsert({ user_id: userId, home_module_order: normalizeHomeModuleOrder(order) }, { onConflict: "user_id" }).select("home_module_order,appearance_mode,color_theme,ui_language,chinese_font,english_font,updated_at").single();
+      const { data, error } = await client.from("ui_preferences").upsert({ user_id: userId, home_module_order: normalizeHomeModuleOrder(order) }, { onConflict: "user_id" }).select("*").single();
       fail(error, "Save home module order");
       if (!data) throw new Error("Save home module order failed");
-      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), uiLanguage: normalizeUiLanguage(data.ui_language), chineseFont: normalizeChineseFont(data.chinese_font), englishFont: normalizeEnglishFont(data.english_font), updatedAt: String(data.updated_at) };
+      return { designTheme: normalizeDesignTheme(data.design_theme), homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), uiLanguage: normalizeUiLanguage(data.ui_language), chineseFont: normalizeChineseFont(data.chinese_font), englishFont: normalizeEnglishFont(data.english_font), updatedAt: String(data.updated_at) };
     },
     async updateAppearancePreferences(input) {
-      const values = { user_id: userId, appearance_mode: input.appearanceMode, color_theme: input.colorTheme, ui_language: input.uiLanguage, chinese_font: input.chineseFont, english_font: input.englishFont };
-      const { data, error } = await client.from("ui_preferences").upsert(values, { onConflict: "user_id" }).select("home_module_order,appearance_mode,color_theme,ui_language,chinese_font,english_font,updated_at").single();
+      const values = { user_id: userId, ...(input.designTheme === undefined ? {} : { design_theme: input.designTheme }), appearance_mode: input.appearanceMode, color_theme: input.colorTheme, ui_language: input.uiLanguage, chinese_font: input.chineseFont, english_font: input.englishFont };
+      const { data, error } = await client.from("ui_preferences").upsert(values, { onConflict: "user_id" }).select("*").single();
       fail(error, "Save appearance preferences");
       if (!data) throw new Error("Save appearance preferences failed");
-      return { homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), uiLanguage: normalizeUiLanguage(data.ui_language), chineseFont: normalizeChineseFont(data.chinese_font), englishFont: normalizeEnglishFont(data.english_font), updatedAt: String(data.updated_at) };
+      return { designTheme: normalizeDesignTheme(data.design_theme), homeModuleOrder: normalizeHomeModuleOrder(data.home_module_order), appearanceMode: normalizeAppearanceMode(data.appearance_mode), colorTheme: normalizeColorTheme(data.color_theme), uiLanguage: normalizeUiLanguage(data.ui_language), chineseFont: normalizeChineseFont(data.chinese_font), englishFont: normalizeEnglishFont(data.english_font), updatedAt: String(data.updated_at) };
     },
     async getAiSettings() {
       return runtimeSettings();

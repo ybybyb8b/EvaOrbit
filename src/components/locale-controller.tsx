@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { installUiCopyBridge } from "@/lib/locale-runtime";
+import { DESIGN_THEME_STORAGE_KEY, LEGACY_HOME_STYLE_STORAGE_KEY } from "@/lib/theme-runtime";
 import type { UiLanguage } from "@/lib/locale";
 import type { ChineseFont, EnglishFont } from "@/lib/font-preferences";
 import { applyAppearancePreferences, normalizeAppearancePreferences, storedAppearancePreferences, type AppearancePreferences } from "@/lib/appearance-preferences";
@@ -23,6 +24,8 @@ export function LocaleController({ children, localOnly = false, defaults }: { ch
   useEffect(() => {
     let alive = true;
     const local = storedAppearancePreferences(defaults);
+    let migrateLegacyVintage = false;
+    try { migrateLegacyVintage = localStorage.getItem(DESIGN_THEME_STORAGE_KEY) !== "classic" && localStorage.getItem(LEGACY_HOME_STYLE_STORAGE_KEY) === "vintage"; } catch { /* Storage is optional. */ }
     applyAppearancePreferences(local, false);
     const expectedRevision = revision.current;
     queueMicrotask(() => { if (alive && revision.current === expectedRevision) setState(local); });
@@ -30,7 +33,7 @@ export function LocaleController({ children, localOnly = false, defaults }: { ch
       .then(async response => { if (!response.ok) throw new Error("Preferences unavailable"); return response.json(); })
       .then(value => {
         if (!value || !alive || revision.current !== expectedRevision) return;
-        const next = normalizeAppearancePreferences(value);
+        const next = normalizeAppearancePreferences({ ...value, ...(migrateLegacyVintage ? { designTheme: local.designTheme } : {}) });
         setState(next);
         try { applyAppearancePreferences(next); } catch { /* Cloud preferences remain usable without browser persistence. */ }
       }).catch(() => { if (alive && revision.current === expectedRevision) setLoadFailed(true); });
@@ -44,6 +47,7 @@ export function LocaleController({ children, localOnly = false, defaults }: { ch
       setLoadFailed(false);
       setState(next);
       applyAppearancePreferences(next);
+      try { localStorage.removeItem(LEGACY_HOME_STYLE_STORAGE_KEY); } catch { /* Storage is optional. */ }
     };
     return { ...preferences, language: preferences.uiLanguage, english: preferences.uiLanguage === "en", loadFailed, setPreferences,
       setLanguage: uiLanguage => setPreferences({ ...preferences, uiLanguage }),

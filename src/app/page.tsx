@@ -30,5 +30,5 @@ async function loadHomeData() {
 
 export default async function HomePage() {
   const [preferences, [today, monthSummary, due], cacheScope] = await Promise.all([getUiPreferences(), loadHomeData(), getHomeCacheScope()]);
-  return <HomePageView language={preferences.uiLanguage} due={<DueReminders items={due} compact/>}><HomeCalendarTimeline key={cacheScope} cacheScope={cacheScope} initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage}/></HomePageView>;
+  return <HomePageView language={preferences.uiLanguage} due={<DueReminders items={due} compact/>}><HomeCalendarTimeline key={cacheScope} cacheScope={cacheScope} dueItems={due} initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage}/></HomePageView>;
 }

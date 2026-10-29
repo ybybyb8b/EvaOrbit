@@ -101,6 +101,7 @@ export interface ApiError {
 }
 
 export interface UiPreferences {
+  designTheme: import("./theme").DesignTheme;
   homeModuleOrder: import("./home-modules").HomeModuleId[];
   appearanceMode: import("./theme").AppearanceMode;
   colorTheme: import("./theme").ColorTheme;

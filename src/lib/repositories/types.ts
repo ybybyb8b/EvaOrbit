@@ -242,7 +242,7 @@ export interface EvaOrbitRepository {
   getCalendarInterpretation(): Promise<CalendarInterpretation>;
   updateCalendarInterpretation(input: CalendarInterpretation): Promise<CalendarInterpretation>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
-  updateAppearancePreferences(input: { appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
+  updateAppearancePreferences(input: { designTheme?: import("../theme").DesignTheme; appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;

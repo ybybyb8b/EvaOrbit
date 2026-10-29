@@ -13,8 +13,8 @@ const palettes = {
     dark: { ink: [184, 206, 193], secondary: [111, 139, 126], surface: [29, 39, 35], accent: [220, 171, 82], accentSoft: [119, 83, 31] },
   },
   rosewood: {
-    light: { ink: [111, 72, 77], secondary: [172, 137, 140], surface: [249, 240, 236], accent: [190, 126, 117], accentSoft: [239, 202, 190] },
-    dark: { ink: [213, 166, 170], secondary: [160, 119, 124], surface: [43, 31, 34], accent: [229, 170, 157], accentSoft: [116, 73, 68] },
+    light: { ink: [142, 100, 116], secondary: [198, 164, 178], surface: [255, 250, 252] },
+    dark: { ink: [230, 193, 200], secondary: [164, 127, 140], surface: [48, 43, 45] },
   },
   powderblue: {
     light: { ink: [79, 115, 139], secondary: [139, 170, 189], surface: [244, 249, 252], accent: [111, 159, 190], accentSoft: [205, 228, 241] },
