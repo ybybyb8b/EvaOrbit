@@ -135,7 +135,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
     static func allowsSettingsConfiguration(path: String, method: String) -> Bool {
         if path == "/api/preferences/life-day" { return ["GET", "PATCH"].contains(method) }
-        return path == "/api/calendar-interpretation" && ["GET", "PUT"].contains(method)
+        return ["/api/calendar-interpretation", "/api/timeline-association"].contains(path) && ["GET", "PUT"].contains(method)
     }
     // The bundle and TypeScript use the very same explicit route/method manifest.
     static func allowsBusinessRequest(path: String, method: String) -> Bool {

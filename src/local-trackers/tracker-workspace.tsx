@@ -39,7 +39,9 @@ import {trackerSession,saveLocalTrackerEntry,synchronizeTrackerSession} from "./
 
 export function TrackerWorkspace({ account, platform }: { account: LocalAccount; platform: TrackerPlatform }) {
   const initialPath=useLocalInitialPath("/trackers");
-  const requestedTracker=useRef(Number(initialPath.split("/")[2])||null);
+  const requestedUrl=new URL(initialPath,"https://local.invalid");
+  const requestedTracker=useRef(Number(requestedUrl.pathname.split("/")[2])||null);
+  const requestedEntry=useRef(Number(requestedUrl.searchParams.get("entry"))||null);
   const {english}=useLocale();
   const request=useBusinessRequest();
   const [deleteTrackerOpen,setDeleteTrackerOpen]=useState(false),[showArchived,setShowArchived]=useState(false);
@@ -50,6 +52,12 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   const [selectedId, setSelectedId] = useState<string | null>(null), [create, setCreate] = useState(false), [capture, setCapture] = useState(false);
   useEffect(()=>{if(!requestedTracker.current)return;const row=state.records.find(row=>row.resourceType==="tracker"&&row.serverId===requestedTracker.current);if(row){setSelectedId(row.id);requestedTracker.current=null;}},[state.records]);
   const [editing, setEditing] = useState<LocalTrackerRecord | undefined>(), [deleting, setDeleting] = useState<LocalTrackerRecord | null>(null);
+  useEffect(()=>{
+    if(!requestedEntry.current||!selectedId)return;
+    const tracker=state.records.find(row=>row.id===selectedId),entry=state.records.find(row=>row.resourceType==="tracker_entry"&&row.serverId===requestedEntry.current&&tracker&&belongs(row,tracker));
+    if(entry&&!state.outbox.some(item=>item.operation==="delete"&&item.localId===entry.id)){setEditing(entry);setCapture(true);requestedEntry.current=null;setError("");}
+    else if(ready)setError(english?"This original record is not available in the local copy. Connect and sync, or view it on Web.":"本机副本中没有这条原始记录，请联网同步，或在 Web 查看。");
+  },[state.records,state.outbox,selectedId,ready,english]);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"timeline" | "insights" | "settings">("timeline");
   const swipeRootRef=useRef<HTMLElement>(null),swipeTabsRef=useRef<HTMLElement>(null);

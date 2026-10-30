@@ -8,6 +8,9 @@ import { AppearanceSettings } from "@/components/appearance-settings";
 import { AiProvidersSettings } from "@/app/settings/ai-providers-settings";
 import { LifeDaySettings } from "@/app/settings/life-day-settings";
 import { CalendarInterpretationView } from "@/app/settings/calendar-interpretation/view";
+import { TimelineAssociationView } from "@/app/settings/timeline-association/view";
+import type { TimelineAssociationSettings } from "@/lib/timeline-association";
+import type { Tracker } from "@/lib/types";
 import { AppleIntegrationSection } from "@/app/settings/apple-integration/section";
 import { AppleHealthSection } from "@/app/health/apple-health-section";
 import { NativeNotificationControl } from "@/components/native-notification-control";
@@ -52,12 +55,28 @@ export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { 
   if (section === "/settings/life-day") return <>{back}<LifeDaySettings request={request} embedded /></>;
   if (section === "/settings/ai-connection") return detail(english ? "AI & Connection" : "AI 与连接", <AiProvidersSettings request={aiRequest} onlineOnly />);
   if (section === "/settings/calendar-interpretation") return <>{back}<LocalCalendarSettings request={request} onAppleIntegration={() => navigate("/settings/apple-integration")} /></>;
+  if (section === "/settings/timeline-association") return <>{back}<LocalTimelineAssociationSettings key={account.accountId} request={request} onSaved={() => { try { localStorage.setItem(`eo:timeline-association-saved:${account.accountId}`, String(Date.now())); } catch { /* Home still refreshes on entry. */ } window.dispatchEvent(new Event("eo:online-business-changed")); }} /></>;
   if (section === "/settings/health-native") return detail(english ? "Health & Native" : "健康与原生能力", <><AppleHealthSection readOnly={!nativeEnabled} />{nativeNote}</>);
   if (section === "/settings/apple-integration") return detail(english ? "Apple Integration" : "Apple 日历与提醒事项", <><AppleIntegrationSection readOnly={!nativeEnabled} />{nativeNote}</>);
   if (section === "/settings/notifications") return detail(english ? "Notifications" : "通知", <><div className="notification-channels"><NativeNotificationControl readOnly={!nativeEnabled} /></div><section className="notification-channel"><h2>{english ? "Reminder rules & delivery" : "提醒规则与投递"}</h2><p>{english ? "Manage Bark, browser push, reminder rules and delivery history with your online account." : "Bark、网页推送、提醒规则与投递历史由在线账户管理。"}</p>{web("/settings/notifications")}</section>{nativeNote}</>);
   if (section === "/settings/data-backup") return detail(english ? "Data & Backup" : "数据与备份", <><AccountSettings email={account.email} onSwitch={onSignIn} onSignOut={async()=>{await platform.signOut();onSignOut();}}/>{error&&<ErrorNotice>{error}</ErrorNotice>}<div className="settings-summary"><section><span>{english ? "Cloud data" : "云端数据"}</span><strong>Supabase Postgres</strong></section><section><span>{english ? "On this device" : "本机存储"}</span><strong>{platform.native ? "SQLite" : "IndexedDB"}</strong></section><section><span>{english ? "Access" : "访问方式"}</span><strong>{english ? "Private account · RLS" : "私人账户 · RLS"}</strong></section></div><button type="button" className="button secondary" onClick={()=>navigate("/settings/data-sync")}>{english?"Manage data & sync":"管理数据与同步"}</button><BackupExportCard onExport={exportLocal} /><section className="legacy-data-settings"><div><h2>{english ? "Cloud backup & preserved data" : "云端备份与保留数据"}</h2><p>{english ? "Export full cloud business data or access legacy Memory on Web. Local unsynced drafts are included only in the local Tracker export above." : "前往网页版导出完整云端业务数据或访问旧 Memory。未同步本机草稿仅包含在上方的本机 Tracker 导出中。"}</p></div>{web("/settings/data-backup")}</section></>);
 
   return <>{back}<SettingsDirectory onNavigate={navigate} /></>;
+}
+
+function LocalTimelineAssociationSettings({ request, onSaved }: { request: typeof fetch; onSaved: () => void }) {
+  const { english } = useLocale();
+  const [data, setData] = useState<{ settings: TimelineAssociationSettings; trackers: Tracker[] } | null>(null), [error, setError] = useState(""), [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    request("/api/timeline-association", { cache: "no-store" }).then(async response => {
+      if (!response.ok) throw new Error(await responseError(response, english ? "Could not load Timeline rules." : "无法读取 Timeline 关联规则。"));
+      const value = await response.json(); if (active) { setData(value); setError(""); }
+    }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+    return () => { active = false; };
+  }, [request, retry, english]);
+  if (data) return <TimelineAssociationView {...data} request={request} embedded onSaved={onSaved} />;
+  return <div className="page settings-detail-page">{error ? <><ErrorNotice>{error}</ErrorNotice><button type="button" className="button secondary" onClick={() => setRetry(value => value + 1)}>{english ? "Retry" : "重试"}</button></> : <PageLoading title="Timeline 关联规则" englishTitle="Timeline association rules" />}</div>;
 }
 
 function LocalCalendarSettings({ request, onAppleIntegration }: { request: typeof fetch; onAppleIntegration: () => void }) {

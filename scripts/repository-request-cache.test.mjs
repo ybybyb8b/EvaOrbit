@@ -13,7 +13,7 @@ test('server renders share repository identity and reads only within the current
     const createSupabaseRepository = async () => {
       factories++;
       const user = owner;
-      return { owner:user, getCalendarInterpretation:async()=>{reads++;return {user};}, getUiPreferences:async()=>({user}), listTrackers:async()=>[user] };
+      return { owner:user, getCalendarInterpretation:async()=>{reads++;return {user};}, getTimelineAssociation:async()=>({user}), getUiPreferences:async()=>({user}), listTrackers:async()=>[user] };
     };
     const require = name => {
       if(name==='server-only')return {};
@@ -41,6 +41,8 @@ test('server renders share repository identity and reads only within the current
       owner='bob';startRender();
       const next=await exports.getRepository();assert.notEqual(next,a);assert.equal(factories,2);
       assert.equal((await next.getCalendarInterpretation()).user,'bob');assert.equal(reads,2);
+      assert.equal((await a.getTimelineAssociation()).user,'alice');
+      assert.equal((await next.getTimelineAssociation()).user,'bob');
       await exports.withMcpRequestRepository({accessToken:'test-token',userId:'mcp-user'},async()=>{
         assert.equal((await exports.getRepository()).owner,'mcp-user');
       });

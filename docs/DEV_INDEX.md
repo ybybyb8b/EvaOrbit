@@ -62,6 +62,8 @@
 
 ## Home
 
+- **Timeline 关联规则**：`/settings/timeline-association` 管理账户偏好 `ui_preferences.timeline_association`；[匹配与投影](../src/lib/timeline-association.ts) 由 [读取服务](../src/lib/services/timeline-association.ts) 接入 Home 日/月及 Timeline。首期仅 Calendar ↔ 指定 Tracker；完整 ID 分页、双向唯一匹配、跨日投影，仅影响展示。餐次算法保持独立，原始记录和统计不变。Web／本地共享设置与详情，未同步 Tracker 不参与服务端投影。契约与发布顺序见 [Timeline 关联规则](TIMELINE_ASSOCIATION.md)。
+
 - **完成事项汇总**：Home 按实际完成日期读取普通 Tasks 与 Reminder occurrence，复用 Timeline 中的护理、家务、订阅付款和用药事实。`home-completions.ts` 按来源身份去重，完成项与当前待处理提醒分开，跳过／稍后不计完成；Web 与本地快照共享 DTO，旧快照缺少 `completedItems` 时兼容为空。
 
 - **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 使用账户隔离快照，表单复用在线业务请求，跨模块链接由 [本地路由](../src/local-trackers/routes.tsx) 转入已迁移模块。

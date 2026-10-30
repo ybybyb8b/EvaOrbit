@@ -28,7 +28,12 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
     const token=`${account.accountId}:${kind}:${key}:${refresh}`;
     const pending=active.current.get(token);
     if(pending)return pending;
-    const request=platform.homeResource(account,kind,key,refresh).then(value=>{if(value?.icons)setAssets(current=>Object.entries(value.icons!).every(([name,url])=>current[name]===url)?current:{...current,...value.icons});return value;}).finally(()=>active.current.delete(token));
+    const request=platform.homeResource(account,kind,key,refresh).then(async value=>{
+      let rulesSavedAt=0;
+      try { rulesSavedAt=Number(localStorage.getItem(`eo:timeline-association-saved:${account.accountId}`))||0; } catch { /* Snapshot transport owns fallback. */ }
+      if(!refresh&&value&&navigator.onLine&&Date.parse(value.capturedAt)<rulesSavedAt)value=await platform.homeResource(account,kind,key,true);
+      if(value?.icons)setAssets(current=>Object.entries(value.icons!).every(([name,url])=>current[name]===url)?current:{...current,...value.icons});return value;
+    }).finally(()=>active.current.delete(token));
     active.current.set(token,request);return request;
   },[account,platform]);
   const dataSource=useMemo<HomeTimelineProps["dataSource"]>(()=>({

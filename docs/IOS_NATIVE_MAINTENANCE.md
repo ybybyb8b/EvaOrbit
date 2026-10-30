@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+Timeline 关联规则第一阶段仅为既有 `settings.configuration` 增加精确 GET/PUT `/api/timeline-association` 白名单及对应测试，不新增 Bridge 方法、协议主版本、framework、Info.plist、权限或 entitlement。匹配由 Web/API 负责，本地 Home 下载服务端投影，未同步 Tracker 不参与。旧 IPA 拒绝新管理路径。确认后先迁移／发布 Web，再按原链路重建本地 IPA；Windows 未运行 XCTest／真机。详见 [关联规则契约](TIMELINE_ASSOCIATION.md)。
+
 Supabase 隔离验证任务固定使用 `ubuntu-24.04` 和 `supabase/setup-cli@v3.0.1`，CLI 本身继续固定为 `2.121.0`；替换旧 Node 20 Action 并避免 `ubuntu-latest` 自动迁移。签名、IPA、权限与测试范围不变；配置检查通过不代表新组合已在 CI 实跑。
 
 EventKit 自动同步和手动 Sync all 共用分项编排：Calendar／Reminders 的权限、错误与结果分别处理，账户失效或切换才共同中止；本地 Health 待写回和通知校准也独立收集错误。近期发现每轮执行，历史按季度与有限关联批次继续；完成断点只记录已解决项，未解决项以 30 秒至 10 分钟退避重新核对，手动可重试。执行断点版本升级仅重建元数据，不清业务数据或队列。Reminder Import all 改走原子导入，Tasks／Reminders 使用专用 ID 分页读取。新 API／数据库函数须先发布，本地包与恢复索引优化须重建 IPA；Windows 检查不等于原生实测。 日期下界与身份防重规则继续遵循 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。

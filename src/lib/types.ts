@@ -221,6 +221,7 @@ export interface InboxItem {
 export type TimelineSourceType = "food" | "drink" | "tracker" | "cat" | "health" | "training" | "person" | "subscription" | "media" | "chronicle" | "calendar";
 
 export interface TimelineEvent {
+  association?: import("./timeline-association").TimelineAssociation;
   id: string;
   eventType: string;
   sourceType: TimelineSourceType;

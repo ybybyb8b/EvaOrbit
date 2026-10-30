@@ -40,14 +40,14 @@ const emptyGoal = { operator:"<=" as TrackerGoalOperator, targetValue:"", period
 type SettingsConfirmation = { title: string; message: string; label: string; destructive: boolean; action: () => Promise<unknown> };
 const emptyReminder = { reminderMode:"missing" as TrackerReminderMode, periodDays:"1", configuredTime:"20:00", anchorDate:new Date().toLocaleDateString("en-CA") };
 
-type DetailProps={initial:TrackerDetailData;trackerId:number;openDetailedRecord?:boolean;settingsOnly?:boolean;navigation:{push:(path:string)=>void;refresh:()=>void};transport?:BusinessRequest;LinkComponent:ComponentType<{href:string;className?:string;children:ReactNode}>;Picture?:ComponentType<{tracker:Tracker;size?:number}>;reconcileNotifications?:boolean};
+type DetailProps={initial:TrackerDetailData;trackerId:number;initialEntry?:TrackerEntry;openDetailedRecord?:boolean;settingsOnly?:boolean;navigation:{push:(path:string)=>void;refresh:()=>void};transport?:BusinessRequest;LinkComponent:ComponentType<{href:string;className?:string;children:ReactNode}>;Picture?:ComponentType<{tracker:Tracker;size?:number}>;reconcileNotifications?:boolean};
 const webRequest:BusinessRequest=(path,init)=>fetch(path,init);
 function PlainPicture({tracker,size}:{tracker:Tracker;size?:number}){return <TrackerPicture icon={tracker.icon} size={size}/>;}
-export function TrackerDetailContent({initial,trackerId,openDetailedRecord=false,settingsOnly=false,navigation:router,transport=webRequest,LinkComponent:Link,Picture:TrackerIcon=PlainPicture,reconcileNotifications=true}:DetailProps) {
+export function TrackerDetailContent({initial,trackerId,initialEntry,openDetailedRecord=false,settingsOnly=false,navigation:router,transport=webRequest,LinkComponent:Link,Picture:TrackerIcon=PlainPicture,reconcileNotifications=true}:DetailProps) {
   const {english}=useLocale();
   const swipeRootRef=useRef<HTMLDivElement>(null),swipeTabsRef=useRef<HTMLElement>(null);
   const [detail,setDetail]=useServerDataState<TrackerDetailData|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useRememberedState("TrackerDetailView:query", ""),[tab,setTab]=useRememberedState<Tab>("TrackerDetailView:tab", "timeline");
-  const [showEntry,setShowEntry]=useState(openDetailedRecord),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
+  const [showEntry,setShowEntry]=useState(openDetailedRecord || Boolean(initialEntry)),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
   const [trackerGroup,setTrackerGroup]=useState(""),[trackerQuick,setTrackerQuick]=useState(true),[editingFieldId,setEditingFieldId]=useState<number|null>(null);
   const [periodFilter,setPeriodFilter]=useState<TimelinePeriod>("all"),[fieldFilter,setFieldFilter]=useRememberedState("TrackerDetailView:fieldFilter", ""),[fieldValueFilter,setFieldValueFilter]=useState("");
@@ -56,7 +56,7 @@ export function TrackerDetailContent({initial,trackerId,openDetailedRecord=false
   const [confirmation,setConfirmation]=useState<SettingsConfirmation|null>(null);
   const [insightPeriod,setInsightPeriod]=useState<TrackerInsightPeriod>("month");
   const [chartFilter,setChartFilter]=useState<{kind:"monthly"|"weekdays"|"dayParts";key:string;label:string}|null>(null);
-  const [editingEntry,setEditingEntry]=useState<TrackerEntry|undefined>();
+  const [editingEntry,setEditingEntry]=useState<TrackerEntry|undefined>(initialEntry);
   const [pendingDeletion,setPendingDeletion]=useState<TrackerEntry|null>(null);
   useSectionSwipe({active:tab,sections:trackerTabs,rootRef:swipeRootRef,feedbackRef:swipeTabsRef,onChange:setTab,enabled:!settingsOnly&&Boolean(detail),ignoreSelector:".tracker-bars, .tracker-heatmap-calendar, .tracker-entry-actions, .tracker-sort-grip"});
   const commitDeletion=useEffectEvent(async()=>{

@@ -31,6 +31,8 @@ export const sqliteRepository: EvaOrbitRepository = {
   async updateSoftwareLibraryEntry(id,input){return sqlite.updateSoftwareLibraryEntry(id,input);},
   async deleteSoftwareLibraryEntry(id){return sqlite.deleteSoftwareLibraryEntry(id);},
   async getCalendarInterpretation() { return sqlite.getCalendarInterpretation(); },
+  async getTimelineAssociation() { return sqlite.getTimelineAssociation(); },
+  async updateTimelineAssociation(input) { return sqlite.updateTimelineAssociation(input); },
   async updateCalendarInterpretation(input) { return sqlite.updateCalendarInterpretation(input); },
   async listMemoryEntities(input){return sqlite.listMemoryEntities(input);},async getMemoryEntity(id){return sqlite.getMemoryEntity(id);},async createMemoryEntity(input){return sqlite.createMemoryEntity(input);},async updateMemoryEntity(id,input){return sqlite.updateMemoryEntity(id,input);},async setMemoryEntityArchived(id,archived){return sqlite.setMemoryEntityArchived(id,archived);},async mergeMemoryEntities(sourceId,targetId){return sqlite.mergeMemoryEntities(sourceId,targetId);},
   async listMemoryFacts(input){return sqlite.listMemoryFacts(input);},async getMemoryFact(id){return sqlite.getMemoryFact(id);},async createMemoryFact(input){return sqlite.createMemoryFact(input);},async createMemoryFactWithSources(input,sources){return sqlite.createMemoryFactWithSources(input,sources);},async supersedeMemoryFact(oldFactId,input,sources){return sqlite.supersedeMemoryFact(oldFactId,input,sources);},async updateMemoryFact(id,input){return sqlite.updateMemoryFact(id,input);},async invalidateMemoryFact(id,reason){return sqlite.invalidateMemoryFact(id,reason);},async restoreMemoryFact(id){return sqlite.restoreMemoryFact(id);},

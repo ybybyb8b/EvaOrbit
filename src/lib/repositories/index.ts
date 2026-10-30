@@ -33,6 +33,7 @@ const requestSupabaseRepository = cache(async () => {
   return {
     ...repository,
     getCalendarInterpretation: cache(repository.getCalendarInterpretation.bind(repository)),
+    getTimelineAssociation: cache(repository.getTimelineAssociation.bind(repository)),
     getUiPreferences: cache(repository.getUiPreferences.bind(repository)),
     listTrackers: cache(repository.listTrackers.bind(repository)),
   };
@@ -57,6 +58,7 @@ export async function withMcpRepository<T>(action: () => Promise<T>): Promise<T>
 export async function withHomeReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
   const repository = await getRepository();
   const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrackerEntries", "listTrackers", "listHealthRecords", "listRelationEvents", "listRelationPeople", "listTrainingLogs", "listWeightRecords", "listMenstrualFlowRecords", "listMedicationDoseEvents", "listCalendarEvents", "listSubscriptions", "listSubscriptionPayments", "getCalendarInterpretation", "getNutritionSettings", "listCatEvents", "listCatSymptoms", "listCatVetVisits", "listCatMedications", "listCatMeasurements", "listMenstrualPeriods", "listTasks", "listDailyJournalEntries", "listSleepSamples", "listReminders", "listReminderOccurrences", "getReminder", "listPets", "getPet", "getCatFoodItem", "getTracker", "getSubscription", "getTrackerReminder"]);
+  allowed.add("getTimelineAssociation");
   const guarded = new Proxy(repository, { get(target, key) {
     // Await probes `then` when an async service returns this plain repository.
     if (key === "then") return undefined;

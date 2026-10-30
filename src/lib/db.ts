@@ -16,6 +16,7 @@ import path from "node:path";
 import { encryptAiApiKey, resolveAiApiKey } from "./ai-secret";
 import { ConflictError } from "./errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation, type CalendarInterpretation } from "./calendar-interpretation";
+import { defaultTimelineAssociation, parseTimelineAssociation, type TimelineAssociationSettings } from "./timeline-association";
 import { maskApiKey } from "./ai-provider";
 import { HOME_MODULE_IDS, normalizeHomeModuleOrder, type HomeModuleId } from "./home-modules";
 import { normalizeDesignTheme, normalizeAppearanceMode, normalizeColorTheme, type AppearanceMode, type ColorTheme } from "./theme";
@@ -1956,6 +1957,22 @@ if (!hasV92) database.exec(`BEGIN;
  ALTER TABLE ui_preferences ADD COLUMN design_theme TEXT NOT NULL DEFAULT 'classic' CHECK(design_theme IN ('classic','vintage'));
  INSERT INTO migrations(version) VALUES(92); COMMIT;`);
 
+const hasV93 = database.prepare("SELECT 1 FROM migrations WHERE version=93").get();
+if (!hasV93) database.exec(`BEGIN;
+ ALTER TABLE ui_preferences ADD COLUMN timeline_association TEXT NOT NULL DEFAULT '${JSON.stringify(defaultTimelineAssociation())}' CHECK(json_valid(timeline_association) AND json_type(timeline_association)='object');
+ INSERT INTO migrations(version) VALUES(93); COMMIT;`);
+
+export function getTimelineAssociation(): TimelineAssociationSettings {
+  const row = database.prepare("SELECT timeline_association FROM ui_preferences WHERE id=1").get() as { timeline_association: string };
+  return parseTimelineAssociation(JSON.parse(row.timeline_association));
+}
+export function updateTimelineAssociation(input: TimelineAssociationSettings) {
+  const next = { ...parseTimelineAssociation(input), revision: input.revision + 1 };
+  const result = database.prepare("UPDATE ui_preferences SET timeline_association=?,updated_at=CURRENT_TIMESTAMP WHERE id=1 AND json_extract(timeline_association,'$.revision')=?").run(JSON.stringify(next), input.revision);
+  if (!result.changes) throw new ConflictError("关联规则已在其他页面更新，请刷新后重试");
+  return next;
+}
+
 export function getTrainingPlan(): TrainingPlan | null {
   const row = database.prepare("SELECT * FROM training_plans WHERE user_id='local'").get();
   return row ? { name: String(row.name), days: JSON.parse(String(row.days)), currentDayId: row.current_day_id === null ? null : String(row.current_day_id), version: Number(row.version), updatedAt: String(row.updated_at) } : null;
@@ -2694,7 +2711,17 @@ export function purgeTrackerField(id:number) {
 export function deleteTrackerField(id:number){return database.prepare("UPDATE tracker_fields SET archived_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=? AND archived_at IS NULL").run(id).changes>0;}
 
 function trackerEntryFromRow(row:Record<string,unknown>):TrackerEntry{return{id:Number(row.id),trackerId:Number(row.tracker_id),occurredAt:String(row.occurred_at),endAt:row.end_at?String(row.end_at):null,values:jsonValue(row.values_json,{}),note:String(row.note),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-export function listTrackerEntries(trackerId?:number,input:{from?:string;to?:string;query?:string}={}){const conditions:string[]=[],values:Array<string|number>=[];if(trackerId!==undefined){conditions.push("tracker_id=?");values.push(trackerId);}if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}if(input.to){conditions.push("occurred_at<?");values.push(input.to);}if(input.query){conditions.push("(note LIKE ? OR values_json LIKE ?)");values.push(`%${input.query}%`,`%${input.query}%`);}const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"";return(database.prepare(`SELECT * FROM tracker_entries ${where} ORDER BY occurred_at DESC,id DESC`).all(...values) as Record<string,unknown>[]).map(trackerEntryFromRow);}
+export function listTrackerEntries(trackerId?:number,input:{from?:string;to?:string;query?:string;afterId?:number;limit?:number}={}) {
+  const conditions:string[]=[],values:Array<string|number>=[];
+  if(trackerId!==undefined){conditions.push("tracker_id=?");values.push(trackerId);}
+  if(input.from){conditions.push("occurred_at>=?");values.push(input.from);}
+  if(input.to){conditions.push("occurred_at<?");values.push(input.to);}
+  if(input.query){conditions.push("(note LIKE ? OR values_json LIKE ?)");values.push(`%${input.query}%`,`%${input.query}%`);}
+  if(input.afterId!==undefined){conditions.push("id>?");values.push(input.afterId);}
+  const where=conditions.length?`WHERE ${conditions.join(" AND ")}`:"",order=input.afterId===undefined?"occurred_at DESC,id DESC":"id";
+  if(input.limit!==undefined)values.push(Math.min(Math.max(input.limit,1),200));
+  return(database.prepare(`SELECT * FROM tracker_entries ${where} ORDER BY ${order}${input.limit===undefined?"":" LIMIT ?"}`).all(...values) as Record<string,unknown>[]).map(trackerEntryFromRow);
+}
 export function getTrackerEntry(id:number){const row=database.prepare("SELECT * FROM tracker_entries WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?trackerEntryFromRow(row):null;}
 export function createTrackerEntry(input:Omit<TrackerEntry,"id"|"createdAt"|"updatedAt">){const result=database.prepare("INSERT INTO tracker_entries(tracker_id,occurred_at,end_at,values_json,note) VALUES(?,?,?,?,?)").run(input.trackerId,input.occurredAt,input.endAt,JSON.stringify(input.values),input.note);return getTrackerEntry(Number(result.lastInsertRowid))!;}
 export function updateTrackerEntry(id:number,input:Record<string,unknown>){const map:Record<string,string>={occurredAt:"occurred_at",endAt:"end_at",values:"values_json",note:"note"};const entries=Object.entries(map).filter(([key])=>input[key]!==undefined);if(!entries.length)return getTrackerEntry(id);database.prepare(`UPDATE tracker_entries SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(...entries.map(([key])=>key==="values"?JSON.stringify(input[key]):input[key] as string|null),id);return getTrackerEntry(id);}

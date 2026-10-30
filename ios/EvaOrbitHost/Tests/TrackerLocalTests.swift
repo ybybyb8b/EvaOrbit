@@ -678,7 +678,7 @@ final class TrackerLocalTests: XCTestCase {
     }
 
     @MainActor func testSettingsConfigurationDoesNotGrantBusinessOrNativeWrites() {
-        let rules: [(String, Set<String>)] = [("/api/preferences/life-day", ["GET", "PATCH"]), ("/api/calendar-interpretation", ["GET", "PUT"])]
+        let rules: [(String, Set<String>)] = [("/api/preferences/life-day", ["GET", "PATCH"]), ("/api/calendar-interpretation", ["GET", "PUT"]), ("/api/timeline-association", ["GET", "PUT"])]
         for (path, methods) in rules {
             for method in ["GET", "POST", "PUT", "PATCH", "DELETE"] { XCTAssertEqual(TrackerLocalController.allowsSettingsConfiguration(path: path, method: method), methods.contains(method)) }
             for suffix in ["/", "?account=other", "#fragment", "/../ai/providers"] { XCTAssertFalse(TrackerLocalController.allowsSettingsConfiguration(path: path + suffix, method: "GET")) }

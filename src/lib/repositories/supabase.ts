@@ -12,6 +12,7 @@ import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
 import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
 import { ConflictError, HttpError } from "../errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation } from "../calendar-interpretation";
+import { defaultTimelineAssociation, parseTimelineAssociation } from "../timeline-association";
 import { normalizeDesignTheme, normalizeAppearanceMode, normalizeColorTheme } from "../theme";
 import { normalizeUiLanguage } from "../locale";
 import { normalizeChineseFont, normalizeEnglishFont } from "../font-preferences";
@@ -474,6 +475,20 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       const { error } = await client.from("ui_preferences").upsert({ user_id: userId, life_day_start: time }, { onConflict: "user_id" });
       fail(error, "保存生活日设置");
     },
+    async getTimelineAssociation() {
+      const { data, error } = await client.from("ui_preferences").select("timeline_association").eq("user_id", userId).maybeSingle();
+      fail(error, "读取 Timeline 关联规则");
+      return data ? parseTimelineAssociation(data.timeline_association) : defaultTimelineAssociation();
+    },
+    async updateTimelineAssociation(input) {
+      const next = { ...parseTimelineAssociation(input), revision: input.revision + 1 };
+      const initialized = await client.from("ui_preferences").upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true });
+      fail(initialized.error, "初始化 Timeline 关联规则");
+      const { data, error } = await client.from("ui_preferences").update({ timeline_association: next }).eq("user_id", userId).eq("timeline_association->>revision", String(input.revision)).select("timeline_association").maybeSingle();
+      fail(error, "保存 Timeline 关联规则");
+      if (!data) throw new ConflictError("关联规则已在其他页面更新，请刷新后重试");
+      return parseTimelineAssociation(data.timeline_association);
+    },
     async getCalendarInterpretation() {
       const { data, error } = await client.from("ui_preferences").select("calendar_interpretation").eq("user_id", userId).maybeSingle();
       fail(error, "读取日历解读");
@@ -787,7 +802,20 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async updateTrackerField(id,input){const patch=mappedPatch(input,{name:'name',required:'required',includeInStats:'include_in_stats',archivedAt:'archived_at'});const{data,error}=await client.from('tracker_fields').update(patch).eq('id',id).select().maybeSingle();fail(error,'更新 Tracker 属性');return data?trackerFieldFromRow(data):null;},
     async purgeTrackerField(id){const{data,error}=await client.rpc('delete_tracker_field_permanently',{p_field_id:id});fail(error,'永久删除 Tracker 属性');return Boolean(data);},
     async deleteTrackerField(id){const{data,error}=await client.from("tracker_fields").update({archived_at:new Date().toISOString()}).eq("id",id).is("archived_at",null).select("id").maybeSingle();fail(error,"归档 Tracker 字段");return Boolean(data);},
-    async listTrackerEntries(trackerId,input={}){let request=client.from("tracker_entries").select("*");if(trackerId!==undefined)request=request.eq("tracker_id",trackerId);if(input.from)request=request.gte("occurred_at",input.from);if(input.to)request=request.lt("occurred_at",input.to);const{data,error}=await request.order("occurred_at",{ascending:false}).order("id",{ascending:false});fail(error,"读取 Tracker 记录");const entries=(data as Row[]).map(trackerEntryFromRow);if(!input.query)return entries;const query=input.query.toLocaleLowerCase();return entries.filter((entry)=>`${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(query));},
+    async listTrackerEntries(trackerId,input={}) {
+      let request=client.from("tracker_entries").select("*");
+      if(trackerId!==undefined)request=request.eq("tracker_id",trackerId);
+      if(input.from)request=request.gte("occurred_at",input.from);
+      if(input.to)request=request.lt("occurred_at",input.to);
+      if(input.afterId!==undefined)request=request.gt("id",input.afterId).order("id");
+      else request=request.order("occurred_at",{ascending:false}).order("id",{ascending:false});
+      if(input.limit!==undefined)request=request.limit(Math.min(Math.max(input.limit,1),200));
+      const{data,error}=await request;fail(error,"读取 Tracker 记录");
+      const entries=(data as Row[]).map(trackerEntryFromRow);
+      if(!input.query)return entries;
+      const query=input.query.toLocaleLowerCase();
+      return entries.filter(entry=>`${entry.note} ${JSON.stringify(entry.values)}`.toLocaleLowerCase().includes(query));
+    },
     async getTrackerEntry(id){const{data,error}=await client.from("tracker_entries").select("*").eq("id",id).maybeSingle();fail(error,"读取 Tracker 记录");return data?trackerEntryFromRow(data):null;},
     async createTrackerEntry(input){const{data,error}=await client.from("tracker_entries").insert({user_id:userId,tracker_id:input.trackerId,occurred_at:input.occurredAt,end_at:input.endAt,values_json:input.values,note:input.note}).select().single();fail(error,"创建 Tracker 记录");return trackerEntryFromRow(data);},
     async updateTrackerEntry(id,input){const patch=mappedPatch(input,{occurredAt:"occurred_at",endAt:"end_at",values:"values_json",note:"note"});if(!Object.keys(patch).length)return repository.getTrackerEntry(id);const{data,error}=await client.from("tracker_entries").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Tracker 记录");return data?trackerEntryFromRow(data):null;},

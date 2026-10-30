@@ -240,6 +240,8 @@ export interface EvaOrbitRepository {
   listSleepSamples(range: { from: string; to: string }): Promise<SleepSample[]>;
   updateLifeDayStart(time: string): Promise<void>;
   getCalendarInterpretation(): Promise<CalendarInterpretation>;
+  getTimelineAssociation(): Promise<import("../timeline-association").TimelineAssociationSettings>;
+  updateTimelineAssociation(input: import("../timeline-association").TimelineAssociationSettings): Promise<import("../timeline-association").TimelineAssociationSettings>;
   updateCalendarInterpretation(input: CalendarInterpretation): Promise<CalendarInterpretation>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
   updateAppearancePreferences(input: { designTheme?: import("../theme").DesignTheme; appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
@@ -443,7 +445,7 @@ export interface EvaOrbitRepository {
   updateTrackerField(id: number, input: Record<string, unknown>): Promise<TrackerField | null>;
   purgeTrackerField(id: number): Promise<boolean>;
   deleteTrackerField(id: number): Promise<boolean>;
-  listTrackerEntries(trackerId?: number, input?: { from?: string; to?: string; query?: string }): Promise<TrackerEntry[]>;
+  listTrackerEntries(trackerId?: number, input?: { from?: string; to?: string; query?: string; afterId?: number; limit?: number }): Promise<TrackerEntry[]>;
   getTrackerEntry(id: number): Promise<TrackerEntry | null>;
   createTrackerEntry(input: NewTrackerEntry): Promise<TrackerEntry>;
   updateTrackerEntry(id: number, input: Record<string, unknown>): Promise<TrackerEntry | null>;
