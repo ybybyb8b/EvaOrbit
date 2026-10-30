@@ -1,6 +1,7 @@
 import "server-only";
 import { resolveAiApiKey } from "../ai-secret";
 import { sendBark } from "./bark";
+import { createDeliveryFetch } from "./delivery-fetch";
 
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -18,7 +19,10 @@ import { reminderSourceAllows, reminderSourceDefinition } from "../reminder-sour
 
 type Row = Record<string, unknown>;
 function createDeliveryClient(url: string, secret: string) {
-  return createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient(url, secret, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: createDeliveryFetch(url) },
+  });
 }
 type DeliveryClient = ReturnType<typeof createDeliveryClient>;
 
