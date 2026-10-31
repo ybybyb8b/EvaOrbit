@@ -8,7 +8,6 @@ import type { HomeLinkProps } from "./home-calendar-timeline";
 const PlainLink=(props:HomeLinkProps)=><a {...props}/>;
 import { ArrowDown5 } from "reicon-react";
 import { useEffect, useState } from "react";
-import { subscribeDataChanged } from "@/lib/data-changed";
 import type { DueReminder } from "@/lib/types";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { useLocale } from "./locale-controller";
@@ -16,18 +15,28 @@ import { playNativeHaptic } from "@/lib/native-haptics";
 
 function dueLabel(item:DueReminder){if(item.overdueMs<60_000)return"Now";const days=Math.floor(item.overdueMs/86_400_000);if(days>0)return`${days} ${days===1?"day":"days"} overdue`;return"Today";}
 
+const occurrenceKey=(item:DueReminder)=>`${item.id}:${Date.parse(item.dueAt)}`;
+
 export function useDueReminderActions(items:DueReminder[],readOnly:boolean,onChanged?:()=>void){
   const businessFetch=useBusinessRequest();
   const [error,setError]=useState("");
-  const [busy,setBusy]=useState<number|null>(null);const [snoozing,setSnoozing]=useState<number|null>(null);const [dismissed,setDismissed]=useState<number[]>([]);const [promoted,setPromoted]=useState<number|null>(null);const remaining=items.filter(item=>!dismissed.includes(item.id));
-  useEffect(() => subscribeDataChanged(["tasks", "reminders"], () => setDismissed([])), []);
+  const [busy,setBusy]=useState<number|null>(null);const [snoozing,setSnoozing]=useState<number|null>(null);const [dismissed,setDismissed]=useState<string[]>([]);const [promoted,setPromoted]=useState<number|null>(null);const remaining=items.filter(item=>!dismissed.includes(occurrenceKey(item)));
+
+
+  // A fresh snapshot acknowledges removals; unrelated data events cannot resurrect stale rows.
+  useEffect(()=>{
+    const present=new Set(items.map(occurrenceKey));
+    let active=true;
+    queueMicrotask(()=>{if(active)setDismissed(current=>{const next=current.filter(key=>present.has(key));return next.length===current.length?current:next;});});
+    return()=>{active=false;};
+  },[items]);
 
   async function action(id:number,name:"complete"|"skip"|"snooze",body?:unknown){
-    if(readOnly||busy!==null)return;setBusy(id);setError("");
+    const item=remaining.find(value=>value.id===id);if(readOnly||busy!==null||!item)return false;setBusy(id);setError("");
     try{const response=await businessFetch(`/api/reminders/${id}/${name}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body??{})});
       if(!response.ok)throw new Error(await responseError(response,"Could not update reminder."));
-      playNativeHaptic(name==="complete"?"success":"selection");setSnoozing(null);if(id===remaining[0]?.id)setPromoted(remaining.find(item=>item.id!==id)?.id??null);setDismissed(current=>[...current,id]);onChanged?.();try{await reconcileNativeNotifications();}catch{/* Web delivery remains active. */}
-    }catch(reason){setError(reason instanceof Error?reason.message:"Could not update reminder.");playNativeHaptic("error");}finally{setBusy(null);}
+      playNativeHaptic(name==="complete"?"success":"selection");setSnoozing(null);if(id===remaining[0]?.id)setPromoted(remaining.find(item=>item.id!==id)?.id??null);setDismissed(current=>[...current,occurrenceKey(item)]);onChanged?.();try{await reconcileNativeNotifications();}catch{/* Web delivery remains active. */}return true;
+    }catch(reason){setError(reason instanceof Error?reason.message:"Could not update reminder.");playNativeHaptic("error");return false;}finally{setBusy(null);}
   }
   return {error,busy,snoozing,setSnoozing,remaining,promoted,action};
 }

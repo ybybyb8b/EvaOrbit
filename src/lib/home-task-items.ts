@@ -1,7 +1,15 @@
-import type { HomeDayOverview } from "./home-day";
+import type { HomeDayOverview, HomeCompletedItem } from "./home-day";
 import type { DueReminder } from "./types";
 
 export type HomeTaskItem = { key: string; task?: HomeDayOverview["tasks"][number]; reminders: DueReminder[] };
+
+/** Match the exact occurrence, never its title or the next occurrence of a routine. */
+export function homeReminderCompletionMatches(reminder: DueReminder, completion: HomeCompletedItem) {
+  const identity = reminder.sourceType && reminder.sourceId != null ? `source:${reminder.sourceType}:${reminder.sourceId}` : `reminder:${reminder.id}`;
+  if (!completion.key.startsWith(identity + ":")) return false;
+  const scheduled = Date.parse(completion.key.slice(identity.length + 1));
+  return Number.isFinite(scheduled) && [reminder.nextDueAt ?? reminder.startsAt, reminder.dueAt].some(date => Date.parse(date) === scheduled);
+}
 
 export function homeReminderTitle(item: Pick<DueReminder,"targetType"|"subjectLabel"|"title">) {
   const name=item.subjectLabel.trim(),title=item.title.trim();

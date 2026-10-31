@@ -86,7 +86,7 @@
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-count) { margin-left:auto;color:var(--vintage-due-ink);background:var(--vintage-due);padding:4px 8px;border-radius:9px;font-size:11px; }
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-live-label) { margin:0 0 12px;color:var(--text-secondary);font-size:12px; }
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list) { margin:0;padding:0;list-style:none;display:grid;gap:2px; }
-:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list > li) { min-width:0;padding:8px 10px;border-radius:6px;background:transparent; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list > li) { min-width:0;padding:8px 10px;border-top:1px solid transparent;border-radius:6px;background:transparent; }
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list > li[data-due="true"]) { background:var(--vintage-due); }
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list > li:not([data-due="true"]) + li:not([data-due="true"])) { border-top:1px solid rgb(var(--border-rgb) / .12);border-radius:0; }
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-title) { display:grid;grid-template-columns:20px minmax(0,1fr) 24px;align-items:start;gap:8px;min-width:0; }
@@ -161,3 +161,23 @@
 }
 
 :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-completed-check) { flex:none;color:var(--accent-primary); }
+
+/* Completion stays in place; only the check and text emphasis transition. */
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-title > strong) { transition:opacity 180ms var(--motion-ease-out); }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-list [data-completed="true"] .vintage-task-title strong) { opacity:.82; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check) { position:relative; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check input[type="checkbox"]) { position:absolute;inset:0;width:44px;height:44px;opacity:0;z-index:1; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check > span) { width:19px;height:19px;border:1.5px solid currentColor;border-radius:4px;display:grid;place-items:center; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-quick-complete > span) { display:grid;place-items:center; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check > span .icon),
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-quick-complete > span .icon) { width:14px;height:14px;opacity:0;transform:scale(.9);transition:opacity 150ms var(--motion-ease-out),transform 150ms var(--motion-ease-out); }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check input:checked + span),
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-quick-complete[aria-pressed="true"] > span) { color:var(--accent-primary); }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check input:checked + span .icon),
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-quick-complete[aria-pressed="true"] > span .icon) { opacity:1;transform:scale(1); }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check input:focus-visible + span) { outline:2px solid var(--accent-primary);outline-offset:4px; }
+:global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-meta) { min-height:14px; }
+@media (prefers-reduced-motion:reduce) {
+  :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check > span .icon),
+  :global(html[data-home-style="vintage"][data-theme][data-mode]) .vintage :global(.vintage-quick-complete > span .icon) { transform:none !important;transition:opacity var(--motion-fast) var(--motion-ease-out); }
+}

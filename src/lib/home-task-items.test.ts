@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { homeReminderTitle, homeTaskItems } from "./home-task-items.ts";
+import { homeReminderTitle, homeTaskItems, homeReminderCompletionMatches } from "./home-task-items.ts";
 import type { DueReminder } from "./types.ts";
 
 const task=(id:number,title="Same title")=>({id,title,completed:false,dueTime:null,priority:"medium"});
@@ -41,4 +41,13 @@ test("keeps completed tasks, future times, empty states and all rows beyond four
   assert.equal(rows[1].task?.completed,true);
   assert.equal(rows[2].task?.dueTime,"23:30");
   assert.equal(rows[0].task?.dueTime,null);
+});
+
+test("completion reconciliation matches the same occurrence across time zones, not a title or next recurrence",()=>{
+  const due={...reminder(1,"cat",4),sourceType:"cat_routine",sourceId:11,startsAt:"2026-11-01T08:00:00+08:00",nextDueAt:"2026-11-01T08:00:00+08:00",dueAt:"2026-11-01T09:00:00+08:00"};
+  const completed={key:"source:cat_routine:11:2026-11-01T00:00:00.000Z",title:"Same title",href:"/cats",completedAt:"2026-11-01T02:00:00Z",hasExplicitTime:true};
+  assert(homeReminderCompletionMatches(due,completed));
+  assert(!homeReminderCompletionMatches(due,{...completed,key:"source:cat_routine:12:2026-11-01T00:00:00.000Z"}));
+  assert(!homeReminderCompletionMatches(due,{...completed,key:"source:cat_routine:11:2026-11-02T00:00:00.000Z"}));
+  assert(!homeReminderCompletionMatches(due,{...completed,key:"source:cat_routine:11:invalid"}));
 });
