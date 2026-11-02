@@ -61,7 +61,7 @@ function TrainingQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEdito
   const { english } = useLocale();
   const pending = useRemoteJson<TrainingLog[]>("/api/health/training?pendingDetails=true");
   const [selection, setSelection] = useState<TrainingLog | "new" | null>(null);
-  if (selection) return <TrainingLogEditor record={selection === "new" ? undefined : selection} initialDate={initialDate} suggestions={request.data ?? { teachers: [], courses: [], presets: [] }} onClose={onClose} onSaved={onSaved} />;
+  if (selection) return <TrainingLogEditor record={selection === "new" ? undefined : selection} initialDate={initialDate} suggestions={request.data ?? { teachers: [], courses: [], presets: [] }} onSuggestionsChanged={request.retry} onClose={onClose} onSaved={onSaved} />;
   return <FormSheet title={english ? "Training" : "训练"} onClose={onClose}>
     <div className="training-workout-picker">
       <button type="button" className="button primary" onClick={() => setSelection("new")}>{english ? "Log new training" : "记录新训练"}</button>

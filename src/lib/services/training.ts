@@ -8,6 +8,7 @@ import { dateRange } from "../time";
 import { buildTrainingPresets } from "../training-presets";
 import { trainingExerciseSuggestions } from "../training-session";
 import type { TrainingPlanWrite, TrainingPlanCompletion } from "../training-plan";
+import { filterTrainingSuggestions, parseTrainingSuggestionChange } from "../training-suggestions";
 
 export async function getTrainingPlan() { return (await getRepository()).getTrainingPlan(); }
 export async function saveTrainingPlan(input: TrainingPlanWrite) { return (await getRepository()).saveTrainingPlan(input); }
@@ -44,12 +45,19 @@ export async function deleteTrainingLog(id: number) {
 }
 
 export async function getTrainingInputSuggestions() {
-  const logs = await (await getRepository()).listTrainingLogs({ limit: 100 });
-  return {
+  const repository = await getRepository();
+  const [logs, exclusions] = await Promise.all([repository.listTrainingLogs({ limit: 100 }), repository.listTrainingSuggestionExclusions()]);
+  return filterTrainingSuggestions({
     teachers: buildHistorySuggestions(logs, (log) => log.teacher, (log) => log.occurredAt),
     courses: buildHistorySuggestions(logs, (log) => log.course, (log) => log.occurredAt),
     presets: buildTrainingPresets(logs),
     exercises: buildHistorySuggestions(logs.flatMap(log => (log.sessionDetails?.exercises ?? []).map(exercise => ({ name: exercise.name, at: log.occurredAt }))), item => item.name, item => item.at),
     ...trainingExerciseSuggestions(logs),
-  };
+  }, exclusions);
+}
+
+export async function changeTrainingSuggestion(input: unknown) {
+  const { kind, value, hidden } = parseTrainingSuggestionChange(input);
+  await (await getRepository()).setTrainingSuggestionExcluded({ kind, value }, hidden);
+  return getTrainingInputSuggestions();
 }

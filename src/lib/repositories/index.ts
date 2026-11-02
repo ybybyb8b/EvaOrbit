@@ -108,7 +108,7 @@ export async function withSubscriptionsReadOnlyRepository<T>(action:()=>Promise<
 
 // Health snapshots may read existing reminders but must never reconcile or write them.
 export async function withHealthReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
-  const repository=await getRepository(),allowed=new Set(["listHealthRecords","listSleepSamples","listCalendarEvents","getCalendarInterpretation","listFoodLogs","listDrinkLogs","getNutritionSettings","listNutritionSettings","listTrainingLogs","getTrainingPlan","listWeightRecords","getWeightSettings","listMenstrualPeriods","listMenstrualFlowRecords","listMedicationPresets","listMedicationDoseEvents","listReminders","getTaskReminder","getTrackerReminder","listTrackerEntries","getPet","getCatFoodItem","getTracker","getSubscription"]);
+  const repository=await getRepository(),allowed=new Set(["listHealthRecords","listSleepSamples","listCalendarEvents","getCalendarInterpretation","listFoodLogs","listDrinkLogs","getNutritionSettings","listNutritionSettings","listTrainingLogs","listTrainingSuggestionExclusions","getTrainingPlan","listWeightRecords","getWeightSettings","listMenstrualPeriods","listMenstrualFlowRecords","listMedicationPresets","listMedicationDoseEvents","listReminders","getTaskReminder","getTrackerReminder","listTrackerEntries","getPet","getCatFoodItem","getTracker","getSubscription"]);
   return repositoryContext.run(new Proxy(repository,{get(target,key){
     if(key==="then")return undefined;
     if(typeof key!=="string"||!allowed.has(key))throw new Error("Health read-only aggregation refused a repository operation");

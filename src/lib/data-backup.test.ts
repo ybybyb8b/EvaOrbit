@@ -13,6 +13,7 @@ import {
 } from "./data-backup.ts";
 
 test("backup allowlist excludes credentials and HealthKit energy infrastructure", () => {
+  assert.ok(BACKUP_TABLES.includes("training_suggestion_exclusions"));
   assert.ok(BACKUP_TABLES.includes("software_library"));
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
@@ -31,6 +32,12 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("healthkit_daily_energy"));
+});
+
+test("version 15 backups remain readable without training exclusions", () => {
+  const resources = { ...emptyBackupResources() };
+  delete (resources as Partial<typeof resources>).training_suggestion_exclusions;
+  assert.deepEqual(parseBackupDocument({ backup_version: 15, exported_at: "2026-11-02T04:00:00Z", schema: { supabase_migration: "old" }, source: { backend: "supabase" }, resources }).resources.training_suggestion_exclusions, []);
 });
 
 test("software backups preserve date-only absence and accept previous version 9",()=>{

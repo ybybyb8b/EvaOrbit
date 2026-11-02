@@ -8,13 +8,15 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
-import { TRAINING_BODY_PARTS, type TrainingPlan, type TrainingPlanDay, type TrainingType } from "@/lib/types";
+import { TRAINING_BODY_PARTS, type TrainingInputSuggestions, type TrainingPlan, type TrainingPlanDay, type TrainingType } from "@/lib/types";
 import { parseTrainingPlanWrite, retainedTrainingDay, trainingTemplate } from "@/lib/training-plan";
 import { trainingBodyPartLabels, trainingTypeLabels } from "./training-log-editor";
 import { TrainingExercises } from "./training-exercises";
 import { TrainingVideoField } from "./training-video-field";
+import { TrainingSuggestionsManager, useTrainingSuggestions } from "./training-suggestions-manager";
+import { suggestionValue } from "@/lib/training-suggestions";
 
-export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, onClose }: { plan: TrainingPlan | null; exerciseSuggestions?: string[]; onSaved: (plan: TrainingPlan) => void; onClose: () => void }) {
+export function TrainingPlanEditor({ plan, exerciseSuggestions = [], suggestions, onSuggestionsChanged, onSaved, onClose }: { plan: TrainingPlan | null; exerciseSuggestions?: string[]; suggestions?: TrainingInputSuggestions; onSuggestionsChanged?: (data: TrainingInputSuggestions) => void; onSaved: (plan: TrainingPlan) => void; onClose: () => void }) {
   const preview=useFormPreview();
 
   const {read}=useHealthData();
@@ -22,6 +24,8 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, on
   const { english } = useLocale();
   const t = (en: string, zh: string) => english ? en : zh;
   const [draft, setDraft] = useState(() => plan ?? { ...trainingTemplate(), version: 0, updatedAt: "" });
+  const [fallbackSuggestions] = useState<TrainingInputSuggestions>(() => ({ teachers: [], courses: [], presets: [], exercises: exerciseSuggestions }));
+  const candidates = useTrainingSuggestions(suggestions ?? fallbackSuggestions, onSuggestionsChanged);
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState("");
@@ -78,6 +82,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, on
       requestAnimationFrame(() => { field.focus(); field.scrollIntoView({ block: "nearest" }); });
     }}>
       <label className="field"><span>{t("Plan name", "计划名称")}</span><input required maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
+      <TrainingSuggestionsManager controller={candidates} exercisesOnly extraExercises={draft.days.flatMap(day => (day.exercises ?? []).map(item => item.name))} />
       <div className="training-plan-list-heading"><strong>{t(`${draft.days.length} training days`, `${draft.days.length} 个训练日`)}</strong><span>{t("In order · No fixed dates", "按顺序循环 · 不限日期")}</span></div>
       {error && !errorDayId && <ErrorNotice role="alert">{error}</ErrorNotice>}
       <div className="training-plan-days">{draft.days.map((day, index) => <details className="training-plan-day" key={day.id} id={`training-day-${day.id}`} open={expandedDayId === day.id} onToggle={event => {
@@ -95,7 +100,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, on
           <label className="field"><span>{t("Training type", "训练类型")}</span><ChoiceSelect value={day.trainingType} onChange={event => updateDay(day.id, { trainingType: event.target.value as TrainingType })}>{Object.entries(trainingTypeLabels).map(([value, labels]) => <option key={value} value={value}>{labels[english ? "en" : "zh"]}</option>)}</ChoiceSelect></label>
           <fieldset className="training-body-field"><legend>{t("Training areas", "训练部位")}</legend><div className="training-body-parts">{TRAINING_BODY_PARTS.map(part => <button type="button" key={part} className={day.bodyParts.includes(part) ? "active" : ""} aria-pressed={day.bodyParts.includes(part)} data-form-change onClick={() => updateDay(day.id, { bodyParts: day.bodyParts.includes(part) ? day.bodyParts.filter(item => item !== part) : [...day.bodyParts, part] })}>{trainingBodyPartLabels[part][english ? "en" : "zh"]}</button>)}</div></fieldset>
           <label className="field"><span>{t("Training content", "训练内容")}</span><textarea rows={3} maxLength={2500} value={day.content} onChange={event => updateDay(day.id, { content: event.target.value })} /></label>
-          <TrainingExercises items={(day.exercises ?? []).map(exercise => ({ ...exercise, completedSets: 0, completed: false }))} suggestions={[...new Set([...exerciseSuggestions, ...draft.days.flatMap(item => (item.exercises ?? []).map(exercise => exercise.name)).filter(Boolean)])]} onChange={items => updateDay(day.id, { exercises: items.map(({ id, name, sets, target, phase }) => ({ id, name, sets, target, ...(phase === undefined ? {} : { phase }) })) })} />
+          <TrainingExercises items={(day.exercises ?? []).map(exercise => ({ ...exercise, completedSets: 0, completed: false }))} suggestions={[...new Set([...(candidates.data.exercises ?? []), ...draft.days.flatMap(item => (item.exercises ?? []).map(exercise => exercise.name)).filter(name => name.trim() && !candidates.excludedExercises.has(suggestionValue(name)))])]} onChange={items => updateDay(day.id, { exercises: items.map(({ id, name, sets, target, phase }) => ({ id, name, sets, target, ...(phase === undefined ? {} : { phase }) })) })} />
           <div className="field training-plan-links"><div className="training-plan-links-heading"><span>{t("Video links", "视频链接")} <small>{t("Optional", "可选")}</small></span>{day.videoUrls.length > 0 && <small>{day.videoUrls.length}/8</small>}</div>
             {day.videoUrls.map((url, videoIndex) => <div className="training-plan-link-row" key={videoIndex}><TrainingVideoField url={url} title={day.videoTitles?.[url]} label={`${t("Video link", "视频链接")} ${videoIndex + 1}`} onChange={(value, title) => setDraft(current => ({ ...current, days: current.days.map(item => item.id === day.id ? { ...item, videoUrls: item.videoUrls.map((previous, i) => i === videoIndex ? value : previous), videoTitles: { ...item.videoTitles, [value]: title ?? "" } } : item) }))} onResolved={(source, title) => setDraft(current => ({ ...current, days: current.days.map(item => item.id === day.id && item.videoUrls.includes(source) ? { ...item, videoTitles: { ...item.videoTitles, [source]: title } } : item) }))} /><button type="button" className="icon-button subtle" aria-label={`${t("Remove video link", "删除视频链接")} ${videoIndex + 1}`} data-form-change onClick={() => updateDay(day.id, { videoUrls: day.videoUrls.filter((_, i) => i !== videoIndex) })}><Icon name="close" /></button></div>)}
             <button type="button" className="text-button training-plan-add-link" disabled={day.videoUrls.length >= 8} data-form-change onClick={() => updateDay(day.id, { videoUrls: [...day.videoUrls, ""] })}><Icon name="plus" />{t("Add video link", "添加视频链接")}</button>

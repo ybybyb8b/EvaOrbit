@@ -121,6 +121,8 @@ export const sqliteRepository: EvaOrbitRepository = {
   async deleteHealthRecord(id) { return sqlite.deleteHealthRecord(id); },
   async listTrainingLogs(input) { return sqlite.listTrainingLogs(input); },
   async getTrainingPlan() { return sqlite.getTrainingPlan(); },
+  async listTrainingSuggestionExclusions() { return sqlite.listTrainingSuggestionExclusions(); },
+  async setTrainingSuggestionExcluded(input, hidden) { sqlite.setTrainingSuggestionExcluded(input, hidden); },
   async saveTrainingPlan(input) { return sqlite.saveTrainingPlan(input); },
   async completeTrainingPlan(input) { return sqlite.completeTrainingPlan(input); },
   async getTrainingLog(id) { return sqlite.getTrainingLog(id); },

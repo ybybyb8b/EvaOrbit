@@ -2077,6 +2077,16 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .training-plan-exercise-summary li strong { font-weight:500;overflow-wrap:anywhere; }
 .training-plan-exercise-summary li span { color:var(--text-secondary);font-size:13px;text-align:right;overflow-wrap:anywhere; }
 .training-exercises { display:grid;gap:14px;min-width:0; }
+.training-suggestions-manager { min-width:0;color:var(--text-secondary);font-size:12px; }
+.training-suggestions-manager summary { min-height:44px;align-content:center;cursor:pointer; }
+.training-suggestions-manager p { margin:4px 0 12px;line-height:1.6; }
+.training-suggestions-manager section { margin:12px 0; }
+.training-suggestions-manager h4 { margin:0;font-size:12px;font-weight:500; }
+.training-suggestions-manager ul { margin:4px 0;padding:0;list-style:none; }
+.training-suggestions-manager li { display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px; }
+.training-suggestions-manager li > span { min-width:0;overflow-wrap:anywhere;color:var(--text-primary); }
+.training-suggestions-manager li small { margin-right:8px;color:var(--text-secondary); }
+.training-suggestions-manager li button { flex-shrink:0;min-width:44px;min-height:44px; }
 .training-exercise-group { display:grid;gap:12px;min-width:0; }
 .training-exercise-group > h4 { margin:0;color:var(--text-secondary);font-size:12px;font-weight:500;line-height:1.6; }
 .training-exercise-add-actions { display:flex;flex-wrap:wrap;gap:8px; }

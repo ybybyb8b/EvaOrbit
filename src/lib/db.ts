@@ -1962,6 +1962,20 @@ if (!hasV93) database.exec(`BEGIN;
  ALTER TABLE ui_preferences ADD COLUMN timeline_association TEXT NOT NULL DEFAULT '${JSON.stringify(defaultTimelineAssociation())}' CHECK(json_valid(timeline_association) AND json_type(timeline_association)='object');
  INSERT INTO migrations(version) VALUES(93); COMMIT;`);
 
+const hasV94 = database.prepare("SELECT 1 FROM migrations WHERE version=94").get();
+if (!hasV94) database.exec(`BEGIN;
+ CREATE TABLE training_suggestion_exclusions(user_id TEXT NOT NULL DEFAULT 'local',kind TEXT NOT NULL CHECK(kind IN ('teacher','course','exercise')),value TEXT NOT NULL CHECK(length(trim(value)) BETWEEN 1 AND 160),PRIMARY KEY(user_id,kind,value));
+ INSERT INTO migrations(version) VALUES(94); COMMIT;`);
+
+export function listTrainingSuggestionExclusions(): import("./types").TrainingSuggestionExclusion[] {
+  const rows = database.prepare("SELECT kind,value FROM training_suggestion_exclusions WHERE user_id='local' ORDER BY kind,value").all() as import("./types").TrainingSuggestionExclusion[];
+  return rows.map(row => ({ kind: row.kind, value: row.value }));
+}
+export function setTrainingSuggestionExcluded(input: import("./types").TrainingSuggestionExclusion, hidden: boolean) {
+  if (hidden) database.prepare("INSERT OR IGNORE INTO training_suggestion_exclusions(user_id,kind,value) VALUES('local',?,?)").run(input.kind,input.value);
+  else database.prepare("DELETE FROM training_suggestion_exclusions WHERE user_id='local' AND kind=? AND value=?").run(input.kind,input.value);
+}
+
 export function getTimelineAssociation(): TimelineAssociationSettings {
   const row = database.prepare("SELECT timeline_association FROM ui_preferences WHERE id=1").get() as { timeline_association: string };
   return parseTimelineAssociation(JSON.parse(row.timeline_association));

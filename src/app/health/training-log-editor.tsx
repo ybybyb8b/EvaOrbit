@@ -15,6 +15,7 @@ import { TRAINING_BODY_PARTS, type TrainingBodyPart, type TrainingInputSuggestio
 import type { TrainingPlan, TrainingSessionDetails } from "@/lib/types";
 import { TrainingWorkoutSummary } from "./training-workout-summary";
 import { TrainingExercises } from "./training-exercises";
+import { TrainingSuggestionsManager, useTrainingSuggestions } from "./training-suggestions-manager";
 import { trainingDayDraft } from "@/lib/training-plan";
 
 export const trainingTypeLabels: Record<TrainingType, { zh: string; en: string }> = { cardio: { zh: "有氧", en: "Cardio" }, strength: { zh: "无氧", en: "Strength" }, mixed: { zh: "混合", en: "Mixed" } };
@@ -24,12 +25,14 @@ function emptyDraft(initialDate?: string): Draft { return { occurredAt: initialD
 function draftFromLog(log: TrainingLog): Draft { return { occurredAt: compactDateTimeValue(log.occurredAt, log.occurredHasExplicitTime), trainingType: log.trainingType, bodyParts: log.bodyParts, teacher: log.teacher, course: log.course, durationMinutes: log.durationMinutes === null ? "" : String(log.durationMinutes), notes: log.notes, trainingContent: log.trainingContent ?? "", sessionDetails: structuredClone(log.sessionDetails ?? { plan: null, exercises: [], videos: [] }) }; }
 function getError(result: unknown, fallback: string) { return result && typeof result === "object" && "error" in result && typeof result.error === "string" ? result.error : fallback; }
 
-export function TrainingLogEditor({ record, initialDate, suggestions, planCompletion, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+export function TrainingLogEditor({ record, initialDate, suggestions: initialSuggestions, onSuggestionsChanged, planCompletion, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; onSuggestionsChanged?: (data: TrainingInputSuggestions) => void; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
   const preview=useFormPreview();
 
   const {read}=useHealthData();
 
   const { english } = useLocale();
+  const candidates = useTrainingSuggestions(initialSuggestions, onSuggestionsChanged);
+  const suggestions = candidates.data;
   const [draft, setDraft] = useState<Draft>(() => {
     if (record) {
       const saved = draftFromLog(record);
@@ -76,6 +79,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions, planComple
       {!record?.workout && <><DateTimeField label={english ? "Date" : "日期"} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={(value) => setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : "") })} />
       <label className="field"><span>{english ? "Training type" : "训练类型"}</span><ChoiceSelect value={draft.trainingType} onChange={(event) => setDraft({ ...draft, trainingType: event.target.value as TrainingType })}>{Object.keys(trainingTypeLabels).map((value) => <option value={value} key={value}>{typeLabel(value as TrainingType)}</option>)}</ChoiceSelect></label></>}
       <fieldset className="training-body-field"><legend>{english ? "Training areas" : "训练部位"}</legend><div className="training-body-parts">{TRAINING_BODY_PARTS.map((bodyPart) => <button type="button" key={bodyPart} className={draft.bodyParts.includes(bodyPart) ? "active" : ""} aria-pressed={draft.bodyParts.includes(bodyPart)} data-form-change onClick={() => toggleBodyPart(bodyPart)}>{bodyPartLabel(bodyPart)}</button>)}</div></fieldset>
+      <TrainingSuggestionsManager controller={candidates} />
       <div className="form-grid training-form-grid"><div className="field"><span>{english ? "Teacher" : "老师"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel={english ? "Teacher" : "老师"} suggestions={suggestions.teachers} maxLength={120} value={draft.teacher} onValueChange={nextValue => setDraft({ ...draft, teacher: nextValue })} /></div><div className="field"><span>{english ? "Course" : "课程"} <small>{english ? "Optional" : "可选"}</small></span><SuggestedInput suggestionLabel={english ? "Course" : "课程"} suggestions={suggestions.courses} maxLength={160} value={draft.course} onValueChange={nextValue => setDraft({ ...draft, course: nextValue })} /></div>{!record?.workout && <label className="field"><span>{english ? "Duration (min)" : "时长（分钟）"} <small>{english ? "Optional" : "可选"}</small></span><input type="number" min="1" max="1440" step="1" value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: event.target.value })} /></label>}</div>
       <TrainingExercises title={english ? "Training content" : "训练内容"} items={draft.sessionDetails.exercises} recording suggestions={suggestions.exercises ?? []} presets={suggestions.exercisePresets ?? []} previous={suggestions.previousExercises ?? []} onChange={exercises => setDraft(current => ({ ...current, sessionDetails: { ...current.sessionDetails, exercises } }))}>
       {draft.sessionDetails.videos.length > 0 && <section className="training-session-videos"><div className="training-plan-links-heading"><span>{english ? "Video practice" : "视频跟练"}</span></div>{draft.sessionDetails.videos.map((video, index) => <div className="training-session-video" key={index}><label className="training-exercise-check"><input type="checkbox" checked={video.completed} onChange={event => setDraft(current => ({ ...current, sessionDetails: { ...current.sessionDetails, videos: current.sessionDetails.videos.map((item, i) => i === index ? { ...item, completed: event.target.checked } : item) } }))} />{video.title || `${english ? 'Video ' : '视频 '}${index + 1}`} · {english ? 'Completed' : '已完成'}</label><a href={video.url} target="_blank" rel="noopener noreferrer">{english ? 'Open video' : '打开视频'}</a></div>)}</section>}

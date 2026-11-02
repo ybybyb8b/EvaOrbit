@@ -35,6 +35,7 @@ export function validateHealthSnapshot(value:HealthReadonlySnapshot,accountId:st
   const settings=value.weightSettings;
   if(!settings||!nullableNumber(settings.targetWeightKg)||!bool(settings.reminderEnabled)||!/^\d{2}:\d{2}$/.test(settings.reminderTime))fail();
   const suggestions=value.suggestions;
+  if(suggestions?.exclusions!==undefined&&(!Array.isArray(suggestions.exclusions)||suggestions.exclusions.some(item=>!item||!["teacher","course","exercise"].includes(item.kind)||!text(item.value)||!item.value.trim()||item.value.length>160)))fail();
   for(const row of [...value.training,...value.recentTraining,...value.pendingTraining??[]])if(row.sessionDetails!==undefined)parseTrainingSessionDetails(row.sessionDetails);
   if(suggestions?.exercises!==undefined&&(!Array.isArray(suggestions.exercises)||suggestions.exercises.some(name=>!text(name))))fail();
   for(const presets of [suggestions?.exercisePresets,suggestions?.previousExercises])if(presets!==undefined){if(!Array.isArray(presets))fail();parseTrainingExercises(presets.map((preset,index)=>({...preset,id:String(index)})));}

@@ -640,6 +640,7 @@ export interface TrainingLog {
   updatedAt: string;
 }
 export interface TrainingInputSuggestions {
+  exclusions?: TrainingSuggestionExclusion[];
   teachers: string[];
   courses: string[];
   presets: TrainingPreset[];
@@ -647,6 +648,8 @@ export interface TrainingInputSuggestions {
   exercisePresets?: TrainingExercisePreset[];
   previousExercises?: TrainingExercisePreset[];
 }
+export type TrainingSuggestionKind = "teacher" | "course" | "exercise";
+export type TrainingSuggestionExclusion = { kind: TrainingSuggestionKind; value: string };
 export interface TrainingPreset {
   trainingType: TrainingType;
   bodyParts: TrainingBodyPart[];

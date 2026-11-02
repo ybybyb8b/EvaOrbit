@@ -28,6 +28,11 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       const ordinary = await r.createTrainingLog(log);
       assert.equal(await r.getTrainingPlan(), null, "ordinary and MCP writes never create a plan");
       let plan = await r.saveTrainingPlan(parseTrainingPlanWrite({ ...template, expectedVersion: 0 }));
+      await r.setTrainingSuggestionExcluded({ kind: "exercise", value: "划船" }, true);
+      await r.setTrainingSuggestionExcluded({ kind: "exercise", value: "划船" }, true);
+      assert.deepEqual(await r.listTrainingSuggestionExclusions(), [{ kind: "exercise", value: "划船" }]);
+      assert.deepEqual((await r.getTrainingLog(ordinary.id)).sessionDetails, log.sessionDetails);
+      assert.equal((await r.getTrainingPlan()).version, plan.version, "removing a candidate never advances or edits the plan");
       await assert.rejects(r.saveTrainingPlan({ ...trainingTemplate(), expectedVersion: 0 }), /更新/);
       const initial = structuredClone(plan);
       const firstRequest = { expectedVersion: plan.version, dayId: plan.currentDayId, requestKey: randomUUID(), log };
@@ -83,6 +88,9 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       assert.equal(restored.status,0,restored.stderr || restored.stdout);
       assert.deepEqual(await r.getTrainingPlan(),plan,'backup restore preserves the current plan, cursor and version');
       assert.deepEqual((await r.getTrainingLog(ordinary.id)).sessionDetails,log.sessionDetails,'backup restore preserves actual sets and video completion');
+      assert.deepEqual(await r.listTrainingSuggestionExclusions(), [{ kind: "exercise", value: "划船" }]);
+      await r.setTrainingSuggestionExcluded({ kind: "exercise", value: "划船" }, false);
+      assert.deepEqual(await r.listTrainingSuggestionExclusions(), []);
       db.close();
       console.log("PASS completion, rollback, full loop, retry, stale device, reorder, current deletion, empty plan, independent logs");
     `;

@@ -303,6 +303,8 @@ export interface EvaOrbitRepository {
 
   listTrainingLogs(input?: TrainingLogListInput): Promise<TrainingLog[]>;
   getTrainingPlan(): Promise<import("../types").TrainingPlan | null>;
+  listTrainingSuggestionExclusions(): Promise<import("../types").TrainingSuggestionExclusion[]>;
+  setTrainingSuggestionExcluded(input: import("../types").TrainingSuggestionExclusion, hidden: boolean): Promise<void>;
   saveTrainingPlan(input: import("../training-plan").TrainingPlanWrite): Promise<import("../types").TrainingPlan>;
   completeTrainingPlan(input: import("../training-plan").TrainingPlanCompletion): Promise<{ plan: import("../types").TrainingPlan; log: TrainingLog }>;
   getTrainingLog(id: number): Promise<TrainingLog | null>;
