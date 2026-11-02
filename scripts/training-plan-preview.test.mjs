@@ -23,7 +23,8 @@ test("Day capsules only preview; switching requires an explicit action and confi
   };
   const code = ts.transpileModule(readFileSync("src/app/health/training-section.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = {};
-  const request=async(url, options)=>{requests.push({url,...options});const payload=JSON.parse(options.body);return {ok:true,json:async()=>({...plan,currentDayId:payload.currentDayId,version:2})};};
+  const earlierWorkout = { id: 99, occurredAt: "2026-10-14T15:50:00Z", bodyParts: ["背"], teacher: "", course: "", durationMinutes: 25, workout: { workout: { activityType: 50, activityName: "traditionalStrengthTraining" } } };
+  const request=async(url, options)=>{requests.push({url,...options});if(!options?.method)return {ok:true,json:async()=>[earlierWorkout,{...earlierWorkout,id:100,planCompleted:true}]};const payload=JSON.parse(options.body);return {ok:true,json:async()=>({...plan,currentDayId:payload.currentDayId,version:2})};};
   new Function("require", "exports", "window", "fetch", code)(name => {
     if (name === "react") return react;
     if(name.endsWith("form-preview"))return {useFormPreview:()=>false};
@@ -76,4 +77,12 @@ test("Day capsules only preview; switching requires an explicit action and confi
   button(tree, "完成并记录").props.onClick(); tree = render();
   assert.equal(tree.find(node => node.type === editor).props.planCompletion.plan.currentDayId, "day-3");
   assert.equal(requests.length, 1, "opening the log editor also leaves progress unchanged");
+  tree.find(node => node.type === editor).props.onChooseWorkout(); tree = render();
+  await tree.find(node => node.type === "input" && node.props.type === "date").props.onChange({ target: { value: "2026-10-14" } });
+  await new Promise(resolve => setImmediate(resolve)); tree = render();
+  assert.equal(requests.at(-1).url, "/api/health/training?date=2026-10-14");
+  const choices = tree.filter(node => node.type === "button" && node.props.className === "training-log-main");
+  assert.equal(choices.length, 1); choices[0].props.onClick(); tree = render();
+  assert.equal(tree.find(node => node.type === editor).props.record.id, 99);
+  assert.equal(requests.filter(request => request.method === "PUT" || request.method === "POST").length, 1, "choosing a previous date only reads; progress waits for save");
 });

@@ -25,7 +25,7 @@ function emptyDraft(initialDate?: string): Draft { return { occurredAt: initialD
 function draftFromLog(log: TrainingLog): Draft { return { occurredAt: compactDateTimeValue(log.occurredAt, log.occurredHasExplicitTime), trainingType: log.trainingType, bodyParts: log.bodyParts, teacher: log.teacher, course: log.course, durationMinutes: log.durationMinutes === null ? "" : String(log.durationMinutes), notes: log.notes, trainingContent: log.trainingContent ?? "", sessionDetails: structuredClone(log.sessionDetails ?? { plan: null, exercises: [], videos: [] }) }; }
 function getError(result: unknown, fallback: string) { return result && typeof result === "object" && "error" in result && typeof result.error === "string" ? result.error : fallback; }
 
-export function TrainingLogEditor({ record, initialDate, suggestions: initialSuggestions, onSuggestionsChanged, planCompletion, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; onSuggestionsChanged?: (data: TrainingInputSuggestions) => void; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
+export function TrainingLogEditor({ record, initialDate, suggestions: initialSuggestions, onSuggestionsChanged, planCompletion, onChooseWorkout, onClose, onSaved, onDeleted }: { record?: TrainingLog; initialDate?: string; suggestions: TrainingInputSuggestions; onSuggestionsChanged?: (data: TrainingInputSuggestions) => void; onChooseWorkout?: () => void; planCompletion?: { plan: TrainingPlan; requestKey: string }; onClose: () => void; onSaved: (plan?: TrainingPlan) => Promise<void> | void; onDeleted?: () => Promise<void> | void }) {
   const preview=useFormPreview();
 
   const {read}=useHealthData();
@@ -50,6 +50,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions: initialSug
     return { ...empty, ...fields, durationMinutes: fields.durationMinutes === null ? "" : String(fields.durationMinutes) };
   });
   const savingRef = useRef(false);
+  const initialDraft = useRef(draft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const typeLabel = (type: TrainingType) => trainingTypeLabels[type][english ? "en" : "zh"];
@@ -74,6 +75,7 @@ export function TrainingLogEditor({ record, initialDate, suggestions: initialSug
   return <FormSheet title={planCompletion ? english ? "Training session" : "本次训练" : record ? english ? "Edit training" : "编辑训练" : english ? "Log training" : "记录训练"} onClose={onClose} formId="training-log-form" submitLabel={planCompletion ? english ? "Complete & log" : "完成并记录" : record ? english ? "Save changes" : "保存修改" : english ? "Log training" : "记录训练"} busy={saving} submitDisabled={preview || record?.workoutDeleted}>
     <form id="training-log-form" className="training-form" onSubmit={(event) => void submit(event)}>{preview&&<FormPreviewNotice/>}
       {planCompletion && <p className="training-plan-hint">{english ? "Your plan advances only after this record is saved. Cancel to keep your place." : "保存这条记录后才进入下一个训练日；取消不会改变进度。"}</p>}
+      {planCompletion && onChooseWorkout && <button type="button" className="text-button" onClick={() => { if (JSON.stringify(draft) === JSON.stringify(initialDraft.current) || confirm(english ? "Change workout and discard these unsaved edits?" : "更换训练记录并放弃当前未保存的修改？")) onChooseWorkout(); }}>{english ? "Choose another workout / date" : "选择其他训练记录／日期"}</button>}
       {draft.sessionDetails.plan && <details className="training-session-reference"><summary>{english ? "Plan reference" : "计划参考"} · {draft.sessionDetails.plan.name} · Day {draft.sessionDetails.plan.dayNumber}｜{draft.sessionDetails.plan.dayName}</summary>{draft.sessionDetails.plan.content && <p>{draft.sessionDetails.plan.content}</p>}</details>}
       {record?.workout && <TrainingWorkoutSummary record={record} />}
       {!record?.workout && <><DateTimeField label={english ? "Date" : "日期"} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={(value) => setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : "") })} />

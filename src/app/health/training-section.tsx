@@ -36,6 +36,9 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   const [planEditing, setPlanEditing] = useState(false);
   const [planCompletion, setPlanCompletion] = useState<{ plan: TrainingPlan; requestKey: string }>();
   const [workoutChoices, setWorkoutChoices] = useState<TrainingLog[] | null>(null);
+  const [workoutDate, setWorkoutDate] = useState(today);
+  const [workoutLoading, setWorkoutLoading] = useState(false);
+  const workoutRequest = useRef(0);
   const [planError, setPlanError] = useState("");
   const [switching, setSwitching] = useState(false);
   const switchLock = useRef(false);
@@ -81,12 +84,31 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
   function completeAndLog() {
     if (!plan) return;
     const workouts = logs.filter(log => log.workout && !log.workoutDeleted && !log.planCompleted && dateInEvaOrbit(new Date(log.occurredAt)) === today);
+    workoutRequest.current++; setWorkoutDate(today); setWorkoutLoading(false); setPlanError("");
     setPlanCompletion({ plan, requestKey: crypto.randomUUID() });
     setEditing(workouts.length === 1 ? workouts[0] : undefined);
     setWorkoutChoices(workouts.length > 1 ? workouts : null);
     setOpen(true);
   }
+  async function chooseWorkoutDate(date: string) {
+    const request = ++workoutRequest.current;
+    setWorkoutDate(date); setWorkoutChoices([]); setPlanError(""); setWorkoutLoading(Boolean(date));
+    if (!date) return;
+    try {
+      const response = await read(`/api/health/training?date=${encodeURIComponent(date)}`);
+      if (!response.ok) throw new Error();
+      const rows: TrainingLog[] = await response.json();
+      if (request === workoutRequest.current) setWorkoutChoices(rows.filter(log => log.workout && !log.workoutDeleted && !log.planCompleted));
+    } catch { if (request === workoutRequest.current) setPlanError(english ? "Could not load workouts. Choose the date to retry." : "未能加载训练，请重新选择日期重试。"); }
+    finally { if (request === workoutRequest.current) setWorkoutLoading(false); }
+  }
+  function chooseOtherWorkout() {
+    workoutRequest.current++; setWorkoutDate(today); setWorkoutLoading(false); setPlanError("");
+    setWorkoutChoices(logs.filter(log => log.workout && !log.workoutDeleted && !log.planCompleted));
+  }
+  function selectWorkout(log?: TrainingLog) { workoutRequest.current++; setWorkoutLoading(false); setEditing(log); setWorkoutChoices(null); }
   function close() {
+    workoutRequest.current++;
     setOpen(false); setEditing(undefined); setPlanCompletion(undefined); setWorkoutChoices(null);
     const url = new URL(window.location.href);
     if (url.searchParams.has("training")) {
@@ -108,10 +130,14 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
 
   return <section className="health-section training-section">
     {open && (workoutChoices ? <FormSheet title={english ? "Choose this session's workout" : "选择本次训练记录"} onClose={close}>
-      <p className="training-plan-hint">{english ? "More than one Apple Health workout was recorded today. Choose the one to complete this training day." : "今天有多条 Apple Health 运动记录，请选择用于完成当前训练日的一条。"}</p>
-      <div className="training-log-list">{workoutChoices.map(log => <button type="button" className="training-log-main" key={log.id} onClick={() => { setEditing(log); setWorkoutChoices(null); }}><span><strong>{workoutActivityLabel(log, english)}</strong><small>{trainingMeta(log, english)}</small></span><span>Apple Health</span></button>)}</div>
-      <button type="button" className="text-button" onClick={() => { setEditing(undefined); setWorkoutChoices(null); }}>{english ? "Log a separate session" : "手动记录独立训练"}</button>
-    </FormSheet> : <TrainingLogEditor record={editing} initialDate={today} planCompletion={planCompletion} suggestions={suggestions} onSuggestionsChanged={setSuggestions} onClose={close} onSaved={reload} onDeleted={reload} />)}
+      <p className="training-plan-hint">{english ? "Choose an Apple Health workout to complete this training day. Earlier dates are available." : "选择用于完成当前训练日的 Apple Health 记录，也可选择之前的日期。"}</p>
+      <label className="field"><span>{english ? "Workout date" : "训练日期"}</span><input type="date" value={workoutDate} onChange={event => void chooseWorkoutDate(event.target.value)} /></label>
+      {workoutLoading && <p role="status">{english ? "Loading workouts…" : "正在加载训练…"}</p>}
+      {planError && <ErrorNotice inline>{planError}</ErrorNotice>}
+      {!workoutLoading && !planError && !workoutChoices.length && <p className="training-plan-hint">{english ? "No available Apple Health workouts on this date." : "该日期暂无可关联的 Apple Health 训练。"}</p>}
+      <div className="training-log-list">{workoutChoices.map(log => <button type="button" className="training-log-main" key={log.id} onClick={() => selectWorkout(log)}><span><strong>{workoutActivityLabel(log, english)}</strong><small>{workoutDate} · {trainingMeta(log, english)}</small></span><span>Apple Health</span></button>)}</div>
+      <button type="button" className="text-button" onClick={() => selectWorkout()}>{english ? "Log a separate session" : "手动记录独立训练"}</button>
+    </FormSheet> : <TrainingLogEditor record={editing} initialDate={planCompletion ? workoutDate || today : today} planCompletion={planCompletion} suggestions={suggestions} onSuggestionsChanged={setSuggestions} onChooseWorkout={chooseOtherWorkout} onClose={close} onSaved={reload} onDeleted={reload} />)}
     {planEditing && <TrainingPlanEditor plan={plan} exerciseSuggestions={suggestions.exercises ?? []} suggestions={suggestions} onSuggestionsChanged={setSuggestions} onSaved={acceptPlan} onClose={() => setPlanEditing(false)} />}
     <article className="training-plan-card" aria-label={english ? "Current training plan" : "当前训练计划"}>
       <div className="training-plan-heading"><h2>{plan?.name ?? (english ? "Current training plan" : "当前训练计划")}</h2><button type="button" className="text-button" disabled={switching} onClick={() => setPlanEditing(true)}>{plan ? english ? "Edit plan" : "编辑计划" : english ? "Set up plan" : "创建计划"}</button></div>
