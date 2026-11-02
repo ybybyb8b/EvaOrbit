@@ -8,7 +8,7 @@ import { PageLoading } from "@/components/page-loading";
 
 import type { ComponentType, ReactNode } from "react";
 import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { Add, ArrowDown5, ArrowLeft2, ArrowRight2, CheckCircle, Checklist, Edit2, ForkKnife, MoonSleep, Note, RecordCircle, Trash } from "reicon-react";
+import { Add, ArrowDown5, ArrowLeft2, ArrowRight2, CheckCircle, Checklist, Edit2, ForkKnife, MoonSleep, Note, RecordCircle, Trash2 } from "reicon-react";
 import { ReiconSymbol } from "@/components/reicon-symbol";
 import { FormSheet, scrollFormSheetField } from "@/components/form-sheet";
 
@@ -315,7 +315,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
             </details>
           </div>
           <label className="home-journal-full-diary-field" title={english ? "Your full diary can be written elsewhere. This does not create a Chronicle." : "完整日记可以写在别处，不会自动生成纪事。"}><input type="checkbox" checked={journalFullDiary} onChange={(event) => setJournalFullDiary(event.target.checked)} disabled={readOnly || savingJournal} /><span>{english ? "Full diary written for this day" : selected === today ? "今日有完整日记" : "这一天有完整日记"}</span></label>
-          {editingJournalId !== null && <button className="button secondary" type="button" disabled={readOnly || savingJournal} onClick={() => requestJournalDelete(editingJournalId)}><Trash size={18} weight="Outline" aria-hidden="true" />{english ? "Delete note" : "删除这条短记"}</button>}
+          {editingJournalId !== null && <button className="button secondary" type="button" disabled={readOnly || savingJournal} onClick={() => requestJournalDelete(editingJournalId)}><Trash2 size={18} weight="Outline" aria-hidden="true" />{english ? "Delete note" : "删除这条短记"}</button>}
         </fieldset></form>}
       </div>
     </FormSheet>}

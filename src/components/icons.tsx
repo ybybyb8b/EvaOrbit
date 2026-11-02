@@ -1,5 +1,5 @@
 import { ReiconGlyph } from "./reicon-icons";
-import { Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
+import { Trash2, Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
 export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "insights" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
@@ -62,7 +62,6 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
   plus: <path d="M12 5v14M5 12h14"/>,
   search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></>,
-  trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
   check: <path d="m5 12 4 4L19 6"/>,
   spark: <><path d="m12 2 1.4 5.1L18 9l-4.6 1.9L12 16l-1.4-5.1L6 9l4.6-1.9z"/><path d="m19 15 .6 2.4L22 18l-2.4.6L19 21l-.6-2.4L16 18l2.4-.6z"/></>,
   history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></>,
@@ -82,6 +81,7 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
 };
 
 function ClassicIcon({ name, variant = "feature" }: IconProps) {
+  if (name === "trash") return <Trash2 className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   if (name === "edit") return <Edit2 className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   if (name === "history") return <History className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   if (name === "chevronDown") return <ChevronDown className="icon classic-icon" weight="Outline" aria-hidden="true" />;
