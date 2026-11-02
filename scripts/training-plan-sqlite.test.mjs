@@ -20,7 +20,7 @@ test("SQLite training completion is atomic, idempotent, version-safe and preserv
       import { parseTrainingPlanWrite, trainingTemplate, trainingDayDraft, retainedTrainingDay } from "./src/lib/training-plan.ts";
       const r = await getRepository();
       const template = trainingTemplate();
-      template.days[0].exercises = [{ id: "row", name: "划船", sets: 3, target: "12 次" }];
+      template.days[0].exercises = [{ id: "row", name: "划船", phase: "warmup", sets: 3, target: "12 次" }];
       template.days[0].videoUrls = ["https://example.com/training"];
       const log = { occurredAt: "2026-10-15T04:00:00.000Z", occurredHasExplicitTime: false, ...trainingDayDraft({ ...template, version: 1, updatedAt: "" }) };
       log.sessionDetails.exercises[0].completedSets = 2;

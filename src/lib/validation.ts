@@ -1065,7 +1065,8 @@ export function parseTrainingExercises(value: unknown): import("./types").Traini
     if (!/^[a-zA-Z0-9-]+$/.test(id)) throw new ValidationError("动作标识不正确");
     const sets = optionalNumber(exercise.sets, "目标组数", 1, 50);
     if (sets !== null && !Number.isInteger(sets)) throw new ValidationError("组数须为整数");
-    return { id, name: text(exercise.name, "动作名称", 120)!, sets, target: text(exercise.target ?? "", "次数或时长", 120, false) ?? "" };
+    if (exercise.phase !== undefined && exercise.phase !== "warmup" && exercise.phase !== "training") throw new ValidationError("动作分组不正确");
+    return { id, name: text(exercise.name, "动作名称", 120)!, sets, target: text(exercise.target ?? "", "次数或时长", 120, false) ?? "", ...(exercise.phase === undefined ? {} : { phase: exercise.phase as "warmup" | "training" }) };
   });
   if (new Set(exercises.map(item => item.id)).size !== exercises.length) throw new ValidationError("动作标识不能重复");
   return exercises;

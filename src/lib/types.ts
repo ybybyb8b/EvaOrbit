@@ -599,10 +599,11 @@ export interface TrainingPlanDay {
 export interface TrainingExercise {
   id: string;
   name: string;
+  phase?: "warmup" | "training";
   sets: number | null;
   target: string;
 }
-export type TrainingExercisePreset = Pick<TrainingExercise, "name" | "sets" | "target">;
+export type TrainingExercisePreset = Pick<TrainingExercise, "name" | "sets" | "target" | "phase">;
 export interface TrainingExerciseLog extends TrainingExercise {
   completedSets: number;
   completed: boolean;

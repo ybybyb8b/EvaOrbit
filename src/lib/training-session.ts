@@ -1,6 +1,9 @@
 import type { TrainingExerciseLog, TrainingExercisePreset, TrainingLog, TrainingSessionDetails } from "./types.ts";
 
 export type ExerciseSide = "unspecified" | "single" | "both";
+export function trainingExerciseKey(item: TrainingExercisePreset): string {
+  return `${item.phase ?? "training"}:${item.name.trim().toLocaleLowerCase()}`;
+}
 // Keep side and reps in the existing target text so older clients and saved plans remain compatible.
 export function exerciseTargetParts(target: string): { side: ExerciseSide; reps: string } {
   const match = /^(单侧|双侧) ·(?: (.*))?$/.exec(target);
@@ -13,23 +16,23 @@ export function exerciseTarget(side: ExerciseSide, reps: string): string {
 export function trainingExerciseSuggestions(logs: TrainingLog[]) {
   const sessions = [...logs].filter(log => log.sessionDetails?.exercises.some(item => item.name.trim()))
     .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt) || b.id - a.id);
-  const preset = ({ name, sets, target }: TrainingExercisePreset): TrainingExercisePreset => ({ name, sets, target });
+  const preset = ({ name, sets, target, phase }: TrainingExercisePreset): TrainingExercisePreset => ({ name, sets, target, ...(phase === undefined ? {} : { phase }) });
   const previousExercises = (sessions[0]?.sessionDetails?.exercises ?? []).filter(item => item.name.trim()).map(preset);
   const byName = new Map<string, TrainingExercisePreset>();
   for (const log of sessions) for (const exercise of log.sessionDetails!.exercises) {
-    const name = exercise.name.trim().toLocaleLowerCase();
-    if (name && !byName.has(name)) byName.set(name, preset(exercise));
+    const key = trainingExerciseKey(exercise);
+    if (exercise.name.trim() && !byName.has(key)) byName.set(key, preset(exercise));
   }
   return { exercisePresets: [...byName.values()].slice(0, 30), previousExercises };
 }
 
 export function reuseTrainingExercises(items: TrainingExerciseLog[], presets: TrainingExercisePreset[]): TrainingExerciseLog[] {
-  const names = new Set(items.map(item => item.name.trim().toLocaleLowerCase()));
+  const names = new Set(items.map(trainingExerciseKey));
   const added: TrainingExerciseLog[] = [];
   for (const preset of presets) {
-    const name = preset.name.trim().toLocaleLowerCase();
-    if (!name || names.has(name) || items.length + added.length >= 30) continue;
-    names.add(name);
+    const key = trainingExerciseKey(preset);
+    if (!preset.name.trim() || names.has(key) || items.length + added.length >= 30) continue;
+    names.add(key);
     added.push({ ...preset, id: crypto.randomUUID(), completedSets: 0, completed: false });
   }
   return [...items, ...added];
@@ -42,5 +45,5 @@ export function adjustTrainingExercise(item: TrainingExerciseLog, patch: Partial
 }
 
 export function trainingSessionTitle(session: TrainingSessionDetails | null | undefined): string {
-  return session?.plan ? `Day ${session.plan.dayNumber}｜${session.plan.dayName}` : session?.exercises[0]?.name ?? "";
+  return session?.plan ? `Day ${session.plan.dayNumber}｜${session.plan.dayName}` : session?.exercises.find(exercise => exercise.phase !== "warmup")?.name ?? session?.exercises[0]?.name ?? "";
 }

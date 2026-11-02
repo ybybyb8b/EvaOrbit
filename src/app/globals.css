@@ -2077,6 +2077,11 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .training-plan-exercise-summary li strong { font-weight:500;overflow-wrap:anywhere; }
 .training-plan-exercise-summary li span { color:var(--text-secondary);font-size:13px;text-align:right;overflow-wrap:anywhere; }
 .training-exercises { display:grid;gap:14px;min-width:0; }
+.training-exercise-group { display:grid;gap:12px;min-width:0; }
+.training-exercise-group > h4 { margin:0;color:var(--text-secondary);font-size:12px;font-weight:500;line-height:1.6; }
+.training-exercise-add-actions { display:flex;flex-wrap:wrap;gap:8px; }
+.training-exercise-add-actions > .training-plan-add-link { flex:1;justify-content:center;min-width:140px;padding:10px 12px;border-radius:12px;background:rgb(var(--surface-tint-rgb) / .42); }
+.training-exercise-move { justify-self:start;min-height:44px;color:var(--text-secondary);font-size:12px; }
 .training-exercises > .training-plan-hint { margin:0; }
 .training-exercise { min-width:0;border:0;margin:0;padding:16px;display:grid;gap:12px;border-radius:16px;background:rgb(var(--surface-tint-rgb) / .38); }
 .training-exercise + .training-exercise { margin-top:0; }
@@ -2113,7 +2118,6 @@ html[data-mode="dark"] .field select, html[data-mode="dark"] .eventkit-source se
 .training-exercise-completion summary,.training-content-description summary { min-height:44px;align-content:center;cursor:pointer; }
 .training-exercise-completion { margin-top:0; }
 .training-exercise-completion summary { font-size:12px; }
-.training-exercises > .training-plan-add-link { width:100%;justify-self:stretch;justify-content:center;min-height:44px;margin:0;padding:10px 14px;border-radius:12px;background:rgb(var(--surface-tint-rgb) / .42);font-size:13px; }
 .training-exercise-completion > .text-button { min-height:44px; }
 .training-content-description .field { margin-top:8px; }
 html[data-mode="dark"] .training-exercise { background:rgb(255 255 255 / .035); }

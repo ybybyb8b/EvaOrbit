@@ -9,6 +9,29 @@ import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/r
 
 const movement = { id: "row", name: "划船", sets: 3, target: "12 次" };
 
+test("warm-up groups survive plans, logs and history; renaming preserves parameters and progress", () => {
+  const warmup = { ...movement, id: "warmup", phase: "warmup" as const, completedSets: 2, completed: false };
+  const training = { ...movement, completedSets: 1, completed: false };
+  const template = trainingTemplate();
+  template.days[0].exercises = [warmup, training];
+  const plan = parseTrainingPlanWrite({ ...template, expectedVersion: 0 });
+  const draft = trainingDayDraft({ ...plan, version: 1, updatedAt: "" });
+  assert.equal(draft.sessionDetails.exercises[0].phase, "warmup");
+  assert.equal(draft.sessionDetails.exercises[1].phase, undefined, "legacy actions remain main training");
+  const changed = adjustTrainingExercise(warmup, { name: "划船热身" });
+  assert.deepEqual(changed, { ...warmup, name: "划船热身" });
+  assert.equal(adjustTrainingExercise(changed, { phase: "training" }).completedSets, 2);
+  const details = { plan: null, videos: [], exercises: [warmup, training] };
+  assert.deepEqual(parseTrainingSessionDetails(details), details);
+  assert.deepEqual(parseTrainingLogPatch({ sessionDetails: details }).sessionDetails, details);
+  assert.equal(reuseTrainingExercises([training], [warmup]).length, 2, "same action may be in both phases");
+  const history = trainingExerciseSuggestions([{ id: 1, occurredAt: "2026-11-02T04:00:00Z", occurredHasExplicitTime: false, trainingType: "strength", bodyParts: ["背"], teacher: "", course: "", durationMinutes: null, notes: "", createdAt: "", updatedAt: "", sessionDetails: details }]);
+  assert.equal(history.exercisePresets.length, 2);
+  assert.equal(history.previousExercises[0].phase, "warmup");
+  assert.throws(() => parseTrainingExercises([{ ...movement, phase: "other" }]));
+  assert.equal(trainingSessionTitle({ ...details, exercises: [{ ...warmup, name: "热身" }, training] }), "划船");
+});
+
 test("side selection keeps legacy targets and round trips through the existing session schema", () => {
   assert.deepEqual(exerciseTargetParts("12 次 / 30 秒"), { side: "unspecified", reps: "12 次 / 30 秒" });
   assert.deepEqual(exerciseTargetParts("每侧 12 次"), { side: "unspecified", reps: "每侧 12 次" });
