@@ -26,6 +26,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name.endsWith("business-request-context")) return {useBusinessRequest:()=>environment.fetch??globalThis.fetch};
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "react-dom") return { createPortal: node => node };
+      if (name === "reicon-react") return { Trash2: "minimal-trash" };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false }) };
       if (name.endsWith("cats-data-context")) return {useCatsData:()=>({read:environment.fetch??globalThis.fetch,local:false})};
       if (name.endsWith("form-preview")) return {useFormPreview:()=>environment.previewOnly??false,FormPreviewNotice:"form-preview-notice"};

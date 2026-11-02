@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useId, useRef, useState, type InputHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
+import { Trash2 } from "reicon-react";
 import { useLocale } from "./locale-controller";
 import { matchInputValues, parseInputTags } from "@/lib/form-input";
 import { Icon } from "./icons";
@@ -104,7 +105,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
     </span>
     {expanded && searchable && !props.disabled && !props.readOnly && <SelectDropdown anchor={field} className={suggestionActions ? "input-managed-options" : ""} onClose={() => { if (container.current?.querySelector('.eo-select-dropdown')?.contains(document.activeElement)) skipFocusOpen.current = true; setExpanded(false); }} id={id} label={suggestionLabel}>
       <div className="eo-select-results" role="listbox" aria-label={suggestionLabel}>
-        {matches.map(option => { const choice = <button type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={tags ? selected.includes(option) : value === option} key={option} onPointerDown={event => event.preventDefault()} onClick={() => pick(option)}><span>{option}</span><span className="eo-select-check" aria-hidden="true">{value === option ? "✓" : ""}</span></button>; return suggestionActions ? <div className="input-option-row" role="presentation" key={option}>{choice}<button type="button" className="input-option-remove icon-button subtle" disabled={suggestionActions.busy} aria-label={english ? `Remove option “${option}”` : `删除选项「${option}」`} onPointerDown={event => event.preventDefault()} onClick={() => { keepInputFocus(); suggestionActions.remove(option); }}><Icon name="trash" /></button></div> : choice; })}
+        {matches.map(option => { const choice = <button type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={tags ? selected.includes(option) : value === option} key={option} onPointerDown={event => event.preventDefault()} onClick={() => pick(option)}><span>{option}</span><span className="eo-select-check" aria-hidden="true">{value === option ? "✓" : ""}</span></button>; return suggestionActions ? <div className="input-option-row" role="presentation" key={option}>{choice}<button type="button" className="input-option-remove icon-button subtle" disabled={suggestionActions.busy} aria-label={english ? `Remove option “${option}”` : `删除选项「${option}」`} onPointerDown={event => event.preventDefault()} onClick={() => { keepInputFocus(); suggestionActions.remove(option); }}><Trash2 className="icon" weight="Outline" aria-hidden="true" /></button></div> : choice; })}
         {canCreate && <button type="button" data-form-change className="eo-select-option eo-select-create user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => create(newValue)}><span>{english ? `Create “${newValue}”` : `创建「${newValue}」`}</span><span aria-hidden="true">＋</span></button>}
         {!matches.length && !canCreate && <small className="eo-select-empty">{english ? "Type to search or create a value" : "输入以搜索或创建新值"}</small>}
       </div>
