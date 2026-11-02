@@ -36,7 +36,7 @@ export function trainingDayDraft(plan: TrainingPlan) {
   return { trainingType: day.trainingType, bodyParts: [...day.bodyParts], teacher: "", course: "", durationMinutes: day.durationMinutes, notes: "", sessionDetails: {
     plan: { name: plan.name, dayName: day.name, dayNumber: index + 1, content: day.content },
     exercises: (day.exercises ?? []).map(exercise => ({ ...exercise, completedSets: 0, completed: false })),
-    videos: day.videoUrls.map(url => ({ url, completed: false })),
+    videos: day.videoUrls.map(url => ({ url, ...(day.videoTitles?.[url] ? { title: day.videoTitles[url] } : {}), completed: false })),
   } };
 }
 
@@ -69,7 +69,9 @@ export function parseTrainingPlanWrite(value: unknown): TrainingPlanWrite {
       catch { throw new ValidationError("视频链接须为完整的 http 或 https 地址"); }
       return url;
     });
-    return { id, name: text(day.name, 120), trainingType: fields.trainingType, bodyParts: fields.bodyParts, durationMinutes: fields.durationMinutes, content: text(day.content, 2500, false), videoUrls, ...(day.exercises === undefined ? {} : { exercises: parseTrainingExercises(day.exercises) }) };
+    const titles = day.videoTitles === undefined ? undefined : object(day.videoTitles);
+    const videoTitles = titles && Object.fromEntries(videoUrls.filter(url => titles[url] !== undefined).map(url => [url, text(titles[url], 300)]));
+    return { id, name: text(day.name, 120), trainingType: fields.trainingType, bodyParts: fields.bodyParts, durationMinutes: fields.durationMinutes, content: text(day.content, 2500, false), videoUrls, ...(videoTitles ? { videoTitles } : {}), ...(day.exercises === undefined ? {} : { exercises: parseTrainingExercises(day.exercises) }) };
   });
   if (new Set(days.map(day => day.id)).size !== days.length) throw new ValidationError("训练日 ID 不能重复");
   const currentDayId = input.currentDayId === null ? null : text(input.currentDayId, 64);

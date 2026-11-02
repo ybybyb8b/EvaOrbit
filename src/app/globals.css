@@ -2157,6 +2157,13 @@ html[data-mode="dark"] .training-exercise { background:rgb(255 255 255 / .035); 
 .training-plan-links-heading > span > small { margin-left:3px; }
 .training-plan-link-row { display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;gap:6px; }
 .training-plan-link-row .icon-button { width:44px;height:44px; }
+.training-video-field { min-width:0;display:grid;gap:6px; }
+.training-video-field input { width:100%;min-width:0;box-sizing:border-box; }
+.training-video-caption { overflow-wrap:anywhere;color:var(--text-secondary);line-height:1.5; }
+.training-video-caption:empty { display:none; }
+.training-video-caption .text-button { min-height:44px;color:var(--accent-primary); }
+.training-plan-link-row > .icon-button { align-self:start; }
+.training-plan-videos a,.training-session-video label { overflow-wrap:anywhere;min-width:0; }
 .training-plan-add-link { display:inline-flex;align-items:center;justify-self:start;gap:6px;min-height:44px;color:var(--accent-primary);font-size:13px; }
 .training-plan-add-link > .icon { width:15px;height:15px; }
 .training-plan-day-actions { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap; }

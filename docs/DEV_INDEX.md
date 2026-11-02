@@ -101,6 +101,7 @@
 - **数据与接口**：`training_logs`、`training_plans`；`/api/health/training`、`/api/health/training/plan`、`/api/health/training/plan/complete`；MCP `training_log` 只对应记录。
 - **依赖与决定**：每账户一份循环计划，按训练日顺序推进，不按日历自动跳日；完成操作原子保存记录并推进，带版本冲突检查和请求幂等键。普通记录 CRUD 不承担计划推进；Complete & Log 可复用当天尚未用于完成计划的 Apple Workout，以同一事务补充原记录并推进，单条自动带入、多条显式选择。训练记录进入 Health 与 Timeline。
 - **填写与自主训练**：日志按老师、课程、动作名称分别提供历史候选，不再应用整组 Recent & Common 预设。训练日 JSON 可带轻量动作清单（名称、可选目标组数、次数/时长文本）；日志的可选 `session_details` 保存当次计划参考、动作组数进度与视频完成状态的独立快照。课程与备注记录实际情况；无动作库、逐组重量或热量推算。Web 与本地 Health 共用表单与在线业务请求，MCP `training_log` 保持原字段兼容并可选读写 `session_details`。
+- **视频标题**：[training-video.ts](../src/lib/training-video.ts) 提取 B 站分享文本标题，纯链接经 `/api/health/training/video` 查询视频信息；短链逐跳校验站点，保留分 P。标题可选、可修改，保存在训练日 JSON 的 `videoTitles` 与日志视频快照的 `title`，旧 URL 数组兼容，不新增课程表；失败可重试或手填，不阻断保存。
 - **依据**：无单独专题文档；查 [计划迁移及事务](../supabase/migrations/202610150001_training_plans.sql)、[计划单测](../src/lib/training-plan.test.ts)、[SQLite 集成测试](../scripts/training-plan-sqlite.test.mjs)。
 
 ## Lucius

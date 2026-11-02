@@ -1089,7 +1089,7 @@ export function parseTrainingSessionDetails(value: unknown): import("./types").T
     const url = text(video.url, "视频链接", 250)!;
     try { if (!["http:", "https:"].includes(new URL(url).protocol)) throw new Error(); }
     catch { throw new ValidationError("视频链接须为完整的 http 或 https 地址"); }
-    return { url, completed: booleanValue(video.completed, "视频完成状态", false) };
+    return { url, ...(video.title === undefined ? {} : { title: text(video.title, "视频标题", 300)! }), completed: booleanValue(video.completed, "视频完成状态", false) };
   });
   const source = session.plan === null ? null : objectValue(session.plan);
   const dayNumber = source?.dayNumber;

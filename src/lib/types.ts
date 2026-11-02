@@ -593,6 +593,7 @@ export interface TrainingPlanDay {
   durationMinutes: number | null;
   content: string;
   videoUrls: string[];
+  videoTitles?: Record<string, string>;
   exercises?: TrainingExercise[];
 }
 export interface TrainingExercise {
@@ -609,7 +610,7 @@ export interface TrainingExerciseLog extends TrainingExercise {
 export interface TrainingSessionDetails {
   plan: { name: string; dayName: string; dayNumber: number; content: string } | null;
   exercises: TrainingExerciseLog[];
-  videos: { url: string; completed: boolean }[];
+  videos: { url: string; title?: string; completed: boolean }[];
 }
 export interface TrainingPlan {
   name: string;

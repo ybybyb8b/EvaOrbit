@@ -371,7 +371,7 @@
     ]
   },
   {
-    "pattern": "^/api/health/training/suggestions$",
+    "pattern": "^/api/health/training/(?:suggestions|video)$",
     "methods": [
       "GET"
     ]

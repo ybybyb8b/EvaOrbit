@@ -12,6 +12,7 @@ import { TRAINING_BODY_PARTS, type TrainingPlan, type TrainingPlanDay, type Trai
 import { parseTrainingPlanWrite, retainedTrainingDay, trainingTemplate } from "@/lib/training-plan";
 import { trainingBodyPartLabels, trainingTypeLabels } from "./training-log-editor";
 import { TrainingExercises } from "./training-exercises";
+import { TrainingVideoField } from "./training-video-field";
 
 export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, onClose }: { plan: TrainingPlan | null; exerciseSuggestions?: string[]; onSaved: (plan: TrainingPlan) => void; onClose: () => void }) {
   const preview=useFormPreview();
@@ -48,7 +49,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, on
     try {
       const days = draft.days.map((day, index) => {
         try {
-          return parseTrainingPlanWrite({ name: draft.name.trim() || "Plan", days: [{ ...day, videoUrls: day.videoUrls.map(url => url.trim()).filter(Boolean) }], currentDayId: day.id, expectedVersion: draft.version }).days[0];
+          return parseTrainingPlanWrite({ name: draft.name.trim() || "Plan", days: [{ ...day, videoUrls: day.videoUrls.map(url => url.trim()).filter(Boolean), videoTitles: Object.fromEntries(Object.entries(day.videoTitles ?? {}).filter(([, title]) => title.trim())) }], currentDayId: day.id, expectedVersion: draft.version }).days[0];
         } catch (error) {
           setExpandedDayId(day.id); setErrorDayId(day.id);
           requestAnimationFrame(() => document.getElementById(`training-day-${day.id}`)?.scrollIntoView({ block: "nearest" }));
@@ -96,7 +97,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], onSaved, on
           <label className="field"><span>{t("Training content", "训练内容")}</span><textarea rows={3} maxLength={2500} value={day.content} onChange={event => updateDay(day.id, { content: event.target.value })} /></label>
           <TrainingExercises items={(day.exercises ?? []).map(exercise => ({ ...exercise, completedSets: 0, completed: false }))} suggestions={[...new Set([...exerciseSuggestions, ...draft.days.flatMap(item => (item.exercises ?? []).map(exercise => exercise.name)).filter(Boolean)])]} onChange={items => updateDay(day.id, { exercises: items.map(({ id, name, sets, target }) => ({ id, name, sets, target })) })} />
           <div className="field training-plan-links"><div className="training-plan-links-heading"><span>{t("Video links", "视频链接")} <small>{t("Optional", "可选")}</small></span>{day.videoUrls.length > 0 && <small>{day.videoUrls.length}/8</small>}</div>
-            {day.videoUrls.map((url, videoIndex) => <div className="training-plan-link-row" key={videoIndex}><input type="url" inputMode="url" autoCapitalize="none" spellCheck={false} maxLength={250} aria-label={`${t("Video link", "视频链接")} ${videoIndex + 1}`} placeholder="https://" value={url} onChange={event => updateDay(day.id, { videoUrls: day.videoUrls.map((value, i) => i === videoIndex ? event.target.value : value) })} /><button type="button" className="icon-button subtle" aria-label={`${t("Remove video link", "删除视频链接")} ${videoIndex + 1}`} data-form-change onClick={() => updateDay(day.id, { videoUrls: day.videoUrls.filter((_, i) => i !== videoIndex) })}><Icon name="close" /></button></div>)}
+            {day.videoUrls.map((url, videoIndex) => <div className="training-plan-link-row" key={videoIndex}><TrainingVideoField url={url} title={day.videoTitles?.[url]} label={`${t("Video link", "视频链接")} ${videoIndex + 1}`} onChange={(value, title) => setDraft(current => ({ ...current, days: current.days.map(item => item.id === day.id ? { ...item, videoUrls: item.videoUrls.map((previous, i) => i === videoIndex ? value : previous), videoTitles: { ...item.videoTitles, [value]: title ?? "" } } : item) }))} onResolved={(source, title) => setDraft(current => ({ ...current, days: current.days.map(item => item.id === day.id && item.videoUrls.includes(source) ? { ...item, videoTitles: { ...item.videoTitles, [source]: title } } : item) }))} /><button type="button" className="icon-button subtle" aria-label={`${t("Remove video link", "删除视频链接")} ${videoIndex + 1}`} data-form-change onClick={() => updateDay(day.id, { videoUrls: day.videoUrls.filter((_, i) => i !== videoIndex) })}><Icon name="close" /></button></div>)}
             <button type="button" className="text-button training-plan-add-link" disabled={day.videoUrls.length >= 8} data-form-change onClick={() => updateDay(day.id, { videoUrls: [...day.videoUrls, ""] })}><Icon name="plus" />{t("Add video link", "添加视频链接")}</button>
           </div>
           <div className="training-plan-day-actions"><div>
