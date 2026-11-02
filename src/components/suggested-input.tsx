@@ -9,16 +9,19 @@ import { SelectDropdown } from "./select-dropdown";
 
 export const SheetSuggestionTarget = createContext<HTMLElement | null>(null);
 
+export type SuggestionActions = { remove: (value: string) => void; create: (value: string) => void; busy: boolean; error: string };
+
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "list"> & {
   value: string;
   onValueChange: (value: string) => void;
   suggestions: readonly string[];
   suggestionLabel: string;
+  suggestionActions?: SuggestionActions;
   tags?: boolean;
   recommendationStyle?: "list" | "chips" | "search";
 };
 
-export function SuggestedInput({ value, onValueChange, suggestions, suggestionLabel, tags = false, recommendationStyle = "search", ...props }: Props) {
+export function SuggestedInput({ value, onValueChange, suggestions, suggestionLabel, suggestionActions, tags = false, recommendationStyle = "search", ...props }: Props) {
   const { english } = useLocale();
   const target = useContext(SheetSuggestionTarget);
   const input = useRef<HTMLInputElement>(null);
@@ -38,11 +41,17 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
   const matches = matchInputValues(suggestions, expanded ? searchQuery : tags ? query : value).filter(option => !tags || !committed.some(tag => tag.toLocaleLowerCase() === option.toLocaleLowerCase()));
   const effectiveStyle = recommendationStyle === "chips" && suggestions.length > 5 ? "search" : recommendationStyle;
   const chipsOnly = effectiveStyle === "chips";
-  const searchable = suggestions.length > 0 && !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
+  const searchable = (suggestions.length > 0 || Boolean(suggestionActions)) && !chipsOnly && (!props.type || props.type === "text" || props.type === "search");
   const searchOnly = effectiveStyle === "search" && searchable;
   const candidates = tags ? matches : matchInputValues(suggestions, chipsOnly ? value : "");
   const newValue = searchQuery.trim();
   const canCreate = newValue.length > 0 && (!props.maxLength || newValue.length <= props.maxLength) && !suggestions.some(option => option.toLocaleLowerCase() === newValue.toLocaleLowerCase()) && !committed.some(tag => tag.toLocaleLowerCase() === newValue.toLocaleLowerCase());
+
+  function keepInputFocus() {
+    if (document.activeElement !== input.current) { skipFocusOpen.current = true; input.current?.focus({ preventScroll: true }); }
+  }
+
+  function create(option: string) { suggestionActions?.create(option); pick(option); }
 
   function pick(option: string) {
     if (props.disabled || props.readOnly) return;
@@ -87,18 +96,19 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
         if (event.key === "Escape" && expanded) { event.preventDefault(); event.stopPropagation(); setExpanded(false); }
         if ((event.key === "ArrowDown" || event.key === "ArrowUp") && searchable && !props.disabled && !props.readOnly) { event.preventDefault(); if (expanded) { const options = container.current?.querySelectorAll<HTMLButtonElement>('.eo-select-option'); const option = event.key === "ArrowDown" ? options?.[0] : options?.[options.length - 1]; option?.focus({ preventScroll: true }); option?.scrollIntoView({ block: "nearest" }); } else { setSearchQuery(tags ? query : value); setExpanded(true); } }
         if (tags && event.key === "Enter") { event.preventDefault(); onValueChange(parseInputTags(value).join(", ")); setQuery(""); }
-        else if (event.key === "Enter" && searchable && expanded) { event.preventDefault(); const exact = matches.find(option => option.toLocaleLowerCase() === value.trim().toLocaleLowerCase()); if (exact) pick(exact); else if (canCreate) pick(newValue); else setExpanded(false); }
+        else if (event.key === "Enter" && searchable && expanded) { event.preventDefault(); const exact = matches.find(option => option.toLocaleLowerCase() === value.trim().toLocaleLowerCase()); if (exact) pick(exact); else if (canCreate) create(newValue); else setExpanded(false); }
         props.onKeyDown?.(event);
       }} />
       {searchable && value && !props.readOnly && <button type="button" data-form-change className="input-value-clear" aria-label={`${english ? "Clear" : "清空"} ${suggestionLabel}`} disabled={props.disabled} onPointerDown={event => event.preventDefault()} onClick={() => { onValueChange(""); setQuery(""); setSearchQuery(""); input.current?.focus({ preventScroll: true }); setExpanded(true); }}>×</button>}
       {searchable && <span className="input-candidates-toggle" data-expanded={expanded} aria-hidden="true"><Icon name="chevronDown"/></span>}
     </span>
-    {expanded && searchable && !props.disabled && !props.readOnly && <SelectDropdown anchor={field} onClose={() => { if (container.current?.querySelector('.eo-select-dropdown')?.contains(document.activeElement)) skipFocusOpen.current = true; setExpanded(false); }} id={id} label={suggestionLabel}>
+    {expanded && searchable && !props.disabled && !props.readOnly && <SelectDropdown anchor={field} className={suggestionActions ? "input-managed-options" : ""} onClose={() => { if (container.current?.querySelector('.eo-select-dropdown')?.contains(document.activeElement)) skipFocusOpen.current = true; setExpanded(false); }} id={id} label={suggestionLabel}>
       <div className="eo-select-results" role="listbox" aria-label={suggestionLabel}>
-        {matches.map(option => <button type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={tags ? selected.includes(option) : value === option} key={option} onPointerDown={event => event.preventDefault()} onClick={() => pick(option)}><span>{option}</span><span className="eo-select-check" aria-hidden="true">{value === option ? "✓" : ""}</span></button>)}
-        {canCreate && <button type="button" data-form-change className="eo-select-option eo-select-create user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => pick(newValue)}><span>{english ? `Create “${newValue}”` : `创建「${newValue}」`}</span><span aria-hidden="true">＋</span></button>}
+        {matches.map(option => { const choice = <button type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={tags ? selected.includes(option) : value === option} key={option} onPointerDown={event => event.preventDefault()} onClick={() => pick(option)}><span>{option}</span><span className="eo-select-check" aria-hidden="true">{value === option ? "✓" : ""}</span></button>; return suggestionActions ? <div className="input-option-row" role="presentation" key={option}>{choice}<button type="button" className="input-option-remove icon-button subtle" disabled={suggestionActions.busy} aria-label={english ? `Remove option “${option}”` : `删除选项「${option}」`} onPointerDown={event => event.preventDefault()} onClick={() => { keepInputFocus(); suggestionActions.remove(option); }}><Icon name="trash" /></button></div> : choice; })}
+        {canCreate && <button type="button" data-form-change className="eo-select-option eo-select-create user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => create(newValue)}><span>{english ? `Create “${newValue}”` : `创建「${newValue}」`}</span><span aria-hidden="true">＋</span></button>}
         {!matches.length && !canCreate && <small className="eo-select-empty">{english ? "Type to search or create a value" : "输入以搜索或创建新值"}</small>}
       </div>
+      {suggestionActions?.error && <small className="input-option-error" role="alert">{suggestionActions.error}</small>}
     </SelectDropdown>}
     {!searchOnly && focused && (candidates.length > 0 || undo !== null) && !props.disabled && !props.readOnly && (target ? createPortal(quick, target) : quick)}
   </span>;

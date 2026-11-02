@@ -13,7 +13,7 @@ function fixture({accepted=false,ok=true,preview=false,workout=false}={}){
   if(name==="react/jsx-runtime")return{jsx,jsxs:jsx};
   if(name.endsWith("health-data-context"))return{useHealthData:()=>({read:async(path,init)=>{requests.push({path,...init});return{ok};}})};
   if(name.endsWith("form-preview"))return{useFormPreview:()=>preview,FormPreviewNotice:"preview"};
-  if(name.endsWith("training-suggestions-manager"))return{useTrainingSuggestions:data=>({data}),TrainingSuggestionsManager:"suggestions-manager"};
+  if(name.endsWith("use-training-suggestions"))return{useTrainingSuggestions:data=>({data,actions:()=>undefined})};
   if(name.endsWith("locale-controller"))return{useLocale:()=>({english:true})};
   if(name.endsWith("date-time-field"))return{compactDateTimeValue:()=>"2026-10-27T14:00",DateTimeField:"date"};
   if(name.endsWith("client-json-cache"))return{invalidateCachedJson:path=>events.push(["invalidate",path])};

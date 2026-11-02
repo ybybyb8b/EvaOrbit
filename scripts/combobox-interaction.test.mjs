@@ -66,6 +66,21 @@ function harness(file, exportName, initialProps, environment = {}) {
   return { render, nodes, input, setProps: next => { props = { ...props, ...next }; }, slots };
 }
 
+test("deleting the last candidate preserves the current value and allows explicit recreation", () => {
+  const deleted = [];
+  const actions = { busy: false, error: "", remove(value) { deleted.push(value); h.setProps({ suggestions: [] }); }, create(value) { h.setProps({ suggestions: [value] }); } };
+  const h = harness("src/components/suggested-input.tsx", "SuggestedInput", { value: "Alpha", suggestions: ["Alpha"], suggestionLabel: "动作", suggestionActions: actions, onValueChange() {} });
+  h.render(); h.input().props.onFocus({}); h.render();
+  h.nodes().find(node => node.props?.["aria-label"] === "删除选项「Alpha」").props.onClick(); h.render();
+  assert.equal(h.input().props.value, "Alpha"); assert.equal(h.input().props["aria-expanded"], true);
+  assert.deepEqual(deleted, ["Alpha"]);
+  assert.equal(h.nodes().some(node => node.props?.className === "input-removed-options"), false);
+  h.input().props.onChange({ target: { value: "Alpha" } }); h.render();
+  h.nodes().find(node => node.props?.className?.includes("eo-select-create")).props.onClick(); h.render();
+  h.input().props.onFocus({}); h.render();
+  assert.ok(h.nodes().some(node => node.props?.["aria-label"] === "删除选项「Alpha」"));
+});
+
 test("shared creatable input opens, filters, selects, closes, reopens and preserves free input", () => {
   let value = "";
   const h = harness("src/components/suggested-input.tsx", "SuggestedInput", { value, suggestions: ["Alpha", "Beta"], suggestionLabel: "品牌", onValueChange: next => { value = next; h.setProps({ value }); } });
