@@ -5,7 +5,7 @@ export const projectItemTypeLabels: Record<ProjectItemType, string> = {
   research: "Research", tech_debt: "Tech debt", other: "Other",
 };
 export const projectItemStatusLabels: Record<ProjectItemStatus, string> = {
-  to_solve: "To Solve", doing: "Doing", blocked: "Blocked", done: "Done", verified: "Verified", dropped: "Dropped",
+  idea: "Ideas", to_solve: "To Solve", doing: "Doing", blocked: "Blocked", done: "Done", verified: "Verified", dropped: "Dropped",
 };
 
 export function splitProjectModule(value: string | null) {

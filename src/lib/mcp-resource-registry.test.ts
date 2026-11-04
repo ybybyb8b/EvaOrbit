@@ -297,7 +297,7 @@ function fakeOperations() {
     project: {
       async search({ query, status, limit = 20 }) { return projects.filter((item) => (!query || item.name.includes(query)) && (!status || item.status === status)).slice(0, limit); },
       async get(id) { return projects.find((item) => item.id === id) ?? null; },
-      async create(input) { const item:Project={...input,id:++nextProject,doingCount:0,toSolveCount:0,createdAt,updatedAt:createdAt};projects.push(item);return item; },
+      async create(input) { const item:Project={...input,id:++nextProject,doingCount:0,toSolveCount:0,ideaCount:0,createdAt,updatedAt:createdAt};projects.push(item);return item; },
       async update(id,patch){const item=projects.find((entry)=>entry.id===id);if(!item)return null;Object.assign(item,patch,{updatedAt:"2026-08-30T00:00:00Z"});return item;},
     },
     projectItem: {
@@ -486,6 +486,11 @@ test("project items remain durable and Done stays distinct from Verified", async
   const project=await registry.create("project",{name:"EvaOrbit"});
   const issue=await registry.create("project_item",{project_id:project.id,title:"Compact Projects",type:"feature"});
   assert.equal(issue.status,"to_solve");
+  const idea=await registry.create("project_item",{project_id:project.id,title:"Future possibility",status:"idea"});
+  assert.equal(idea.priority,null);assert.equal(idea.next_step,null);assert.equal(idea.started_at,null);
+  assert.deepEqual((await registry.search("project_item",{filters:{status:"idea"},limit:20})).items.map(item=>item.id),[idea.id]);
+  assert.equal((await registry.update("project_item",idea.id as number,{status:"to_solve"})).status,"to_solve");
+  assert.equal((await registry.update("project_item",idea.id as number,{status:"idea"})).status,"idea");
   const done=await registry.update("project_item",issue.id as number,{status:"done",resolution:"Implemented"});
   assert.equal(done.status,"done");assert.equal(done.verified_at,null);assert.ok(done.completed_at);
   const verified=await registry.update("project_item",issue.id as number,{status:"verified"});

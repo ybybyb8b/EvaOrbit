@@ -20,9 +20,9 @@ export function validateWorkspaceSnapshot(value:WorkspaceReadonlySnapshot,accoun
   }
  }else if(value.kind==="projects"){
   rows(value.data.projects,200);rows(value.data.items,5000);const parents=new Map(value.data.projects.map(p=>[p.id,p]));
-  for(const p of value.data.projects)if(typeof p.name!=="string"||!nullableText(p.description)||!["active","paused","archived"].includes(p.status)||![p.doingCount,p.toSolveCount].every(n=>Number.isSafeInteger(n)&&n>=0))fail();
-  for(const item of value.data.items){if(!parents.has(item.projectId)||typeof item.title!=="string"||!["feature","bug","ui","migration","research","tech_debt","other"].includes(item.type)||!["to_solve","doing","blocked","done","verified","dropped"].includes(item.status))fail();for(const k of ["description","module","priority","nextStep","resolution"] as const)if(!nullableText(item[k]))fail();for(const k of ["startedAt","completedAt","verifiedAt"] as const)if(item[k]!==null&&!stamp(item[k]))fail();}
-  if(value.data.complete)for(const p of value.data.projects){const own=value.data.items.filter(i=>i.projectId===p.id);if(own.filter(i=>i.status==="doing").length!==p.doingCount||own.filter(i=>i.status==="to_solve").length!==p.toSolveCount)fail();}
+  for(const p of value.data.projects)if(typeof p.name!=="string"||!nullableText(p.description)||!["active","paused","archived"].includes(p.status)||![p.doingCount,p.toSolveCount,p.ideaCount??0].every(n=>Number.isSafeInteger(n)&&n>=0))fail();
+  for(const item of value.data.items){if(!parents.has(item.projectId)||typeof item.title!=="string"||!["feature","bug","ui","migration","research","tech_debt","other"].includes(item.type)||!["idea","to_solve","doing","blocked","done","verified","dropped"].includes(item.status))fail();for(const k of ["description","module","priority","nextStep","resolution"] as const)if(!nullableText(item[k]))fail();for(const k of ["startedAt","completedAt","verifiedAt"] as const)if(item[k]!==null&&!stamp(item[k]))fail();}
+  if(value.data.complete)for(const p of value.data.projects){const own=value.data.items.filter(i=>i.projectId===p.id);if(own.filter(i=>i.status==="doing").length!==p.doingCount||own.filter(i=>i.status==="to_solve").length!==p.toSolveCount||own.filter(i=>i.status==="idea").length!==(p.ideaCount??0))fail();}
  }else{
   const d=value.data;if(typeof d.state?.status!=="string"||typeof d.state?.mood!=="string"||(d.state.updatedAt!==null&&!stamp(d.state.updatedAt)))fail();
   rows(d.posts,50);rows(d.comments,500);rows(d.diary,100);rows(d.cases,100);const posts=new Set(d.posts.map(p=>p.id));
@@ -32,6 +32,7 @@ export function validateWorkspaceSnapshot(value:WorkspaceReadonlySnapshot,accoun
   for(const c of d.cases){if(!["naming","memory_omission","factual","tool_misuse","expression","other"].includes(c.errorType)||!["minor","moderate","serious","habitual"].includes(c.severity)||!["serving","probation","temporary_release","permanent_record"].includes(c.status)||!strings(c.triggerScenes)||!day(c.firstOccurredDate)||!day(c.latestOccurredDate)||c.firstOccurredDate>c.latestOccurredDate||!Number.isSafeInteger(c.occurrenceCount)||c.occurrenceCount<1||!Number.isSafeInteger(c.consecutiveCorrectCount)||c.consecutiveCorrectCount<0||!Number.isSafeInteger(c.resetThreshold)||c.resetThreshold<1||typeof c.isRecurrence!=="boolean"||(c.nextCheck!==null&&!day(c.nextCheck))||(c.recurrenceIntervalDays!==null&&(!id(c.recurrenceIntervalDays))))fail();for(const key of ["title","errorQuote","cause","correctBehavior","mandatoryRule","punishment"] as const)if(typeof c[key]!=="string")fail();}
  }
  if(new TextEncoder().encode(JSON.stringify(value)).length>8*1024*1024)throw new Error("Workspace download exceeds 8 MiB; previous cache preserved");
+ if(value.kind==="projects")return {...value,data:{...value.data,projects:value.data.projects.map(p=>({...p,ideaCount:p.ideaCount??0}))}};
  return value;
 }
 export function readWorkspaceSnapshot(snapshot:WorkspaceReadonlySnapshot,path:string,init?:RequestInit){

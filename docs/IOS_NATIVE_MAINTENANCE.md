@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+Project Ideas 使用既有 `project_items.status=idea`；`TrackerLocalDatabase` 的 Workspace 缓存白名单接受该状态，并单独校验 `ideaCount`，旧缓存缺少该字段时按零兼容。没有新增 Bridge 方法、协议、权限、framework、entitlement 或业务队列。先应用 Project 状态约束迁移并发布 Web/API，再按原链路重建本地 IPA；旧 IPA 遇到含 Ideas 的新快照会拒绝并保留此前缓存。Windows 的 Node/浏览器回归不替代 Swift XCTest 和 iPhone 16 Pro 验收。
+
 Timeline 关联规则第一阶段仅为既有 `settings.configuration` 增加精确 GET/PUT `/api/timeline-association` 白名单及对应测试，不新增 Bridge 方法、协议主版本、framework、Info.plist、权限或 entitlement。匹配由 Web/API 负责，本地 Home 下载服务端投影，未同步 Tracker 不参与。旧 IPA 拒绝新管理路径。确认后先迁移／发布 Web，再按原链路重建本地 IPA；Windows 未运行 XCTest／真机。详见 [关联规则契约](TIMELINE_ASSOCIATION.md)。
 
 Supabase 隔离验证任务固定使用 `ubuntu-24.04` 和 `supabase/setup-cli@v3.0.1`，CLI 本身继续固定为 `2.121.0`；替换旧 Node 20 Action 并避免 `ubuntu-latest` 自动迁移。签名、IPA、权限与测试范围不变；配置检查通过不代表新组合已在 CI 实跑。

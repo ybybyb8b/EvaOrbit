@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+Project Ideas 发布顺序：先应用 `202611040001_project_item_ideas.sql` 并部署 Web/API，再按本文原链路重建、重签和覆盖安装本地 IPA。原生 Workspace 缓存需接受 `idea` 和独立 `ideaCount`；旧 IPA 对含 Ideas 的新快照会拒绝并保留旧缓存。没有新增 Bridge、权限、framework、entitlement 或签名链变化；本轮不发布、不打包，Swift XCTest／真机尚未执行。
+
 Timeline 关联规则为既有 `settings.configuration` 增加精确 GET/PUT `/api/timeline-association` 白名单。确认发布后，先应用配套迁移与 Web/API，再依照本文原链路重建、重签和覆盖安装本地 IPA；旧 IPA 可在 Web 管理规则，原 Home 快照通道仍可展示服务端关联。无新 Bridge 方法、权限、framework、entitlement 或签名链变化；新增 XCTest 仍待 macOS／真机。详见 [关联规则契约](TIMELINE_ASSOCIATION.md)。
 
 Supabase 隔离验证任务固定使用 `ubuntu-24.04` 和 `supabase/setup-cli@v3.0.1`，CLI 本身仍为 `2.121.0`，消除旧 Action runtime 与浮动系统镜像提醒。打包和签名步骤不变；新配置尚待后续 CI 实跑，无需为此重新生成已有 IPA。

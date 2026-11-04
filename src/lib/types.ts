@@ -833,12 +833,13 @@ export interface Project {
   status: ProjectStatus;
   doingCount: number;
   toSolveCount: number;
+  ideaCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export type ProjectItemType = "feature" | "bug" | "ui" | "migration" | "research" | "tech_debt" | "other";
-export type ProjectItemStatus = "to_solve" | "doing" | "blocked" | "done" | "verified" | "dropped";
+export type ProjectItemStatus = "idea" | "to_solve" | "doing" | "blocked" | "done" | "verified" | "dropped";
 
 export type SubscriptionStatus = "active" | "paused" | "ended";
 export type SubscriptionIntervalUnit = "day" | "week" | "month" | "year";

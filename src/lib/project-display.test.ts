@@ -10,6 +10,7 @@ const items: ProjectItem[] = [
   { id: 110, module: "Subscriptions", type: "bug", status: "to_solve" },
   { id: 111, module: null, type: "bug", status: "blocked" },
   { id: 112, module: "Weather", type: "research", status: "dropped" },
+  { id: 113, module: "Subscriptions", type: "bug", status: "idea" },
 ] as ProjectItem[];
 
 test("module catalog reuses normalized names and retains legacy values without writing records", () => {
@@ -27,14 +28,15 @@ test("module catalog reuses normalized names and retains legacy values without w
 
 test("module groups keep mixed statuses and derive counts from combined filters", () => {
   const group = groupProjectItems(items).find(group => group.name === "Subscriptions")!;
-  assert.equal(group.items.length, 4);
+  assert.equal(group.items.length, 5);
   assert.deepEqual(group.categories.find(category => category.name === "UI")?.items.map(item => item.id), [104, 105]);
-  assert.deepEqual(new Set(group.items.map(item => item.status)), new Set(["doing", "done", "verified", "to_solve"]));
+  assert.deepEqual(new Set(group.items.map(item => item.status)), new Set(["doing", "done", "verified", "to_solve", "idea"]));
   const unfinishedBugs = filterProjectItems(items, "unfinished", "bug");
   assert.deepEqual(unfinishedBugs.map(item => item.id), [110, 111]);
   assert.deepEqual(groupProjectItems(unfinishedBugs).map(group => [group.name, group.items.length]), [["Subscriptions", 1], ["", 1]]);
   assert.deepEqual(filterProjectItems(items, "done", "bug").map(item => item.id), [104]);
   assert.equal(filterProjectItems(items, "verified", "bug").length, 0);
   assert.deepEqual(filterProjectItems(items, "unfinished", "bug", "Subscriptions").map(item => item.id), [110]);
+  assert.deepEqual(filterProjectItems(items, "idea", "bug", "Subscriptions").map(item => item.id), [113]);
   assert.equal(projectItemTypeLabels.bug, "Bug Fix");
 });

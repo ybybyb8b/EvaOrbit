@@ -367,15 +367,19 @@ actor TrackerLocalDatabase {
         } else if kind == "projects" {
             let projects = try rows("projects", 200), items = try rows("items", 5000), parentIds = Set(projects.compactMap { $0["id"] as? Int })
             for item in items {
-                guard let project = item["projectId"] as? Int, parentIds.contains(project), item["title"] is String, let type = item["type"] as? String, ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"].contains(type), let status = item["status"] as? String, ["to_solve", "doing", "blocked", "done", "verified", "dropped"].contains(status) else { throw TrackerLocalError.invalid }
+                guard let project = item["projectId"] as? Int, parentIds.contains(project), item["title"] is String, let type = item["type"] as? String, ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"].contains(type), let status = item["status"] as? String, ["idea", "to_solve", "doing", "blocked", "done", "verified", "dropped"].contains(status) else { throw TrackerLocalError.invalid }
                 for key in ["description", "module", "priority", "nextStep", "resolution"] { guard item[key] is NSNull || item[key] is String else { throw TrackerLocalError.invalid } }
                 for key in ["startedAt", "completedAt", "verifiedAt"] { guard item[key] is NSNull || timestamp(item[key]) else { throw TrackerLocalError.invalid } }
             }
             for project in projects {
                 guard project["name"] is String, project["description"] is NSNull || project["description"] is String, let status = project["status"] as? String, ["active", "paused", "archived"].contains(status), let doing = project["doingCount"] as? Int, doing >= 0, let open = project["toSolveCount"] as? Int, open >= 0 else { throw TrackerLocalError.invalid }
+                // Older snapshots have no Ideas count.
+                guard project["ideaCount"] == nil || project["ideaCount"] is Int else { throw TrackerLocalError.invalid }
+                let ideas = project["ideaCount"] as? Int ?? 0
+                guard ideas >= 0 else { throw TrackerLocalError.invalid }
                 if data["complete"] as? Bool == true {
                     let own = items.filter { $0["projectId"] as? Int == project["id"] as? Int }
-                    guard own.filter({ $0["status"] as? String == "doing" }).count == doing, own.filter({ $0["status"] as? String == "to_solve" }).count == open else { throw TrackerLocalError.invalid }
+                    guard own.filter({ $0["status"] as? String == "doing" }).count == doing, own.filter({ $0["status"] as? String == "to_solve" }).count == open, own.filter({ $0["status"] as? String == "idea" }).count == ideas else { throw TrackerLocalError.invalid }
                 }
             }
         } else {

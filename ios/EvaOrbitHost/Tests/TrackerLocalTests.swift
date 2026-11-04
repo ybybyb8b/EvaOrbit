@@ -603,7 +603,9 @@ final class TrackerLocalTests: XCTestCase {
         let committed = try await database.commit(accountId: account, expectedRevision: 0, state: original)
         XCTAssertTrue(committed)
         let task: [String: Any] = ["id": 1, "title": "Date only", "notes": "", "completed": false, "tags": [], "priority": "medium", "dueDate": "2026-10-20", "dueTime": NSNull(), "completedAt": NSNull(), "reminders": [], "createdAt": stamp, "updatedAt": stamp]
-        let data: [String: [String: Any]] = ["tasks": ["tasks": [task], "complete": true], "projects": ["projects": [], "items": [], "complete": true], "lucius": ["state": ["status": "Quiet", "mood": "composed", "updatedAt": stamp], "posts": [], "comments": [], "diary": [], "cases": [], "complete": true]]
+        let project: [String: Any] = ["id": 1, "name": "Ideas", "description": NSNull(), "status": "active", "doingCount": 0, "toSolveCount": 0, "ideaCount": 1, "createdAt": stamp, "updatedAt": stamp]
+        let idea: [String: Any] = ["id": 1, "projectId": 1, "title": "Possibility", "type": "feature", "status": "idea", "description": NSNull(), "module": NSNull(), "priority": NSNull(), "nextStep": NSNull(), "resolution": NSNull(), "startedAt": NSNull(), "completedAt": NSNull(), "verifiedAt": NSNull(), "createdAt": stamp, "updatedAt": stamp]
+        let data: [String: [String: Any]] = ["tasks": ["tasks": [task], "complete": true], "projects": ["projects": [project], "items": [idea], "complete": true], "lucius": ["state": ["status": "Quiet", "mood": "composed", "updatedAt": stamp], "posts": [], "comments": [], "diary": [], "cases": [], "complete": true]]
         let reopened = try TrackerLocalDatabase(path: path)
         for kind in ["tasks", "projects", "lucius"] {
             let snapshot: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": kind, "capturedAt": stamp, "data": data[kind]!]
@@ -617,6 +619,12 @@ final class TrackerLocalTests: XCTestCase {
             let cached = try await reopened.workspaceReadOnlyCache(accountId: account, kind: kind) as? NSDictionary
             XCTAssertEqual(cached, snapshot as NSDictionary)
         }
+        var wrongCount = project; wrongCount["ideaCount"] = 2
+        let badCount: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": "projects", "capturedAt": stamp, "data": ["projects": [wrongCount], "items": [idea], "complete": true]]
+        do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: "projects", snapshot: badCount); XCTFail("Ideas count mismatch") } catch TrackerLocalError.invalid {}
+        var oldProject = project; oldProject.removeValue(forKey: "ideaCount")
+        let oldSnapshot: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": "projects", "capturedAt": stamp, "data": ["projects": [oldProject], "items": [], "complete": true]]
+        try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: "projects", snapshot: oldSnapshot)
         var invalidTask = task; invalidTask["dueDate"] = "2026-02-30"
         let bad: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": "tasks", "capturedAt": stamp, "data": ["complete": true, "tasks": [invalidTask]]]
         do { try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: "tasks", snapshot: bad); XCTFail("Invalid date") } catch TrackerLocalError.invalid {}

@@ -201,7 +201,7 @@ export function parseDailyJournalEntryPatch(value: unknown) {
 
 const projectStatuses = ["active", "paused", "archived"] as const satisfies readonly ProjectStatus[];
 const projectItemTypes = ["feature", "bug", "ui", "migration", "research", "tech_debt", "other"] as const satisfies readonly ProjectItemType[];
-const projectItemStatuses = ["to_solve", "doing", "blocked", "done", "verified", "dropped"] as const satisfies readonly ProjectItemStatus[];
+export const projectItemStatuses = ["idea","to_solve", "doing", "blocked", "done", "verified", "dropped"] as const satisfies readonly ProjectItemStatus[];
 
 function nullableProjectText(value: unknown, field: string, max: number): string | null;
 function nullableProjectText(value: unknown, field: string, max: number, optional: true): string | null | undefined;
