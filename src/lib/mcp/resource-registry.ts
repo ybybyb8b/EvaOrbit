@@ -1,3 +1,4 @@
+import {filterLibrary,type LibraryEntry} from "../software-library.ts";
 import {membershipState} from "../subscriptions.ts";
 import {dateInEvaOrbit} from "../time.ts";
 import {parseSubscriptionPurchase} from "../validation.ts";
@@ -178,7 +179,8 @@ export type ResourceRegistryOperations = {
   catRecord?: { search(petId?:number|null):Promise<CatTimelineEntry[]>; get(kind:CatRecordKind,id:number):Promise<object|null>; create(kind:CatRecordKind,input:ReturnType<typeof parseCatRecord>["record"]):Promise<object>; update(kind:CatRecordKind,id:number,input:Record<string,unknown>):Promise<object|null>; delete(kind:CatRecordKind,id:number):Promise<boolean> };
   catRoutine?: { search(input:{scope?:string;petId?:number|null;enabledOnly?:boolean}):Promise<CatRoutine[]>; get(id:number):Promise<CatRoutine|null>; create(input:ReturnType<typeof parseCatRoutine>):Promise<CatRoutine>; update(id:number,input:Record<string,unknown>):Promise<CatRoutine|null>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; archive(id:number):Promise<boolean>; delete(id:number):Promise<boolean> };
   reminder?: { search(input:{targetType?:string;targetId?:number|null;activeOnly?:boolean}):Promise<Reminder[]>; create(input:ReturnType<typeof parseReminder>):Promise<Reminder>; update(id:number,input:Record<string,unknown>):Promise<Reminder|null>; delete(id:number):Promise<boolean>; complete(id:number,actedAt?:Date):Promise<unknown>; skip(id:number,actedAt?:Date):Promise<unknown>; snooze(id:number,choice:"later_today"|"tomorrow"|"custom",custom?:string):Promise<Reminder|null> };
-  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; recordPurchase?(id:number,input:ReturnType<typeof parseSubscriptionPurchase>):Promise<SubscriptionPayment>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
+  softwareLibrary?: {search():Promise<LibraryEntry[]>;get(id:number):Promise<LibraryEntry|null>;create(input:unknown):Promise<LibraryEntry>;update(id:number,input:unknown):Promise<LibraryEntry|null>};
+  subscription?: { search(input:{query?:string;status?:Subscription["status"];limit?:number}):Promise<Subscription[]>; get(id:number):Promise<SubscriptionDetail|null>; create(input:ReturnType<typeof parseNewSubscription>):Promise<Subscription>; update(id:number,input:ReturnType<typeof parseSubscriptionPatch>):Promise<Subscription|null>; setStatus(id:number,status:Subscription["status"],nextRenewalOn?:string):Promise<Subscription|null>; updatePaymentDate?(id:number,paymentId:number,paidOn:string,expectedPaidOn:string):Promise<SubscriptionPayment>; recordPurchase?(id:number,input:ReturnType<typeof parseSubscriptionPurchase>):Promise<SubscriptionPayment>; recordPayment(id:number,input:ReturnType<typeof parseSubscriptionPayment>):Promise<SubscriptionPayment> };
   foodPlace?: {getLibraryItems?(id:number):Promise<{item:FoodLibraryItem;recordCount:number;lastRecordedAt:string|null}[]>;search(query?:string,options?:{kind?:FoodPlace["kind"];scope?:FoodPlace["scope"];status?:FoodPlace["status"];category?:string;purpose?:"food"|"drink";limit?:number}):Promise<FoodPlace[]>;get(id:number):Promise<FoodPlace|null>;create(input:ReturnType<typeof parseFoodPlace>):Promise<FoodPlace>;update(id:number,input:ReturnType<typeof parseFoodPlacePatch>):Promise<FoodPlace|null>;delete(id:number):Promise<{id:number;action:"deleted"|"archived"}|null>};
   foodDish?: {search(query?:string,options?:{foodPlaceId?:number;kind?:"food"|"drink";recommended?:boolean;rating?:FoodDish["rating"];limit?:number}):Promise<FoodDish[]>;get(id:number):Promise<FoodDish|null>;create(input:ReturnType<typeof parseFoodDish>):Promise<FoodDish>;update(id:number,input:ReturnType<typeof parseFoodDishPatch>):Promise<FoodDish|null>;delete(id:number):Promise<boolean>};
 };
@@ -811,6 +813,20 @@ function reminderResource(operations:NonNullable<ResourceRegistryOperations["rem
 }
 
 const subscriptionMap={mode:"mode",expires_on:"expiresOn",name:"name",amount:"amount",currency:"currency",billing_interval_value:"billingIntervalValue",billing_interval_unit:"billingIntervalUnit",started_on:"startedOn",next_renewal_on:"nextRenewalOn",auto_renew:"autoRenew",reminder_enabled:"reminderEnabled",reminder_days_before:"reminderDaysBefore",reminder_time:"reminderTime",notes:"notes"};
+
+function softwareLibraryResource(operations:NonNullable<ResourceRegistryOperations["softwareLibrary"]>):RegisteredResource {
+ const map={name:"name",category:"category",platforms:"platforms",license:"license",version:"version",acquisition:"acquisition",acquired_on:"acquiredOn",website:"website",notes:"notes",purchase_amount:"purchaseAmount",purchase_currency:"purchaseCurrency"};
+ const writable=Object.keys(map);
+ return {schema:{resource:"software_library",description:"Owned software and one-time acquisition costs, independent of subscription billing.",fields:{
+  id:{type:"integer",read_only:true,description:"Software ID."},name:{type:"string",description:"Software name."},category:{type:"string",description:"Optional collection category."},platforms:{type:"array",items:{type:"string",enum:["macOS","iOS","Windows","Android","Web"]},description:"One or more platforms."},license:{type:"string",enum:["perpetual","version"],description:"Licence scope."},version:{type:"string",description:"Required for version licence."},acquisition:{type:"string",enum:["paid","giveaway","gift"],description:"How the software was acquired; does not imply a price."},acquired_on:{type:"string",format:"date",nullable:true,description:"Optional acquisition/purchase date."},website:{type:"string",description:"Optional http(s) link."},notes:{type:"string",description:"Personal notes."},purchase_amount:{type:"number",nullable:true,write_only:true,description:"Actual one-time price in major currency units. null clears; zero is explicitly free."},purchase_amount_minor:{type:"integer",nullable:true,read_only:true,description:"Stored actual price in minor units; null means unknown."},purchase_currency:{type:"string",nullable:true,description:"Three-letter currency required for a recorded amount."}
+ },required_fields:["name","platforms","license","acquisition"],writable_fields:writable,searchable_fields:["name","category","version","notes","platforms"],supported_actions:[],validation_rules:["PATCH preserves omitted fields and costs. Explicit null purchase_amount clears amount and currency.","Costs remain grouped by currency, including explicit zero; unknown costs excluded.","No recurring subscription, payment, renewal, or reminder is created."]},
+ async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["category","platform","acquisition"],"software_library filters");rejectCursor(cursor,"Software library");return {items:filterLibrary(await operations.search(),query??"",filterEnum(filters.acquisition,["paid","giveaway","gift"] as const,"acquisition")??"all",filterText(filters.category,"category")??"",filterEnum(filters.platform,["macOS","iOS","Windows","Android","Web"] as const,"platform")??"").slice(0,limit).map(snakeRecord),next_cursor:null};},
+ async get(value){const item=await operations.get(numericId(value,"Software"));if(!item)throw new ConflictError("Software not found.");return snakeRecord(item);},
+ async create(data){assertOnlyKeys(data,writable,"software_library create");return snakeRecord(await operations.create(mappedInput(data,map)));},
+ async update(value,data){assertOnlyKeys(data,writable,"software_library update");const id=numericId(value,"Software"),current=await operations.get(id);if(!current)throw new ConflictError("Software not found.");const item=await operations.update(id,{...current,purchaseAmount:current.purchaseAmountMinor==null?null:(current.purchaseAmountMinor/100).toFixed(2),...mappedInput(data,map)});if(!item)throw new ConflictError("Software not found.");return snakeRecord(item);}
+ };
+}
+
 function subscriptionResource(operations:NonNullable<ResourceRegistryOperations["subscription"]>):RegisteredResource {
   const writable=Object.keys(subscriptionMap);
   return {
@@ -849,7 +865,7 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
       field_variants:{recurring:{fields:Object.keys(subscriptionMap).filter(key=>key!=="expires_on"),required_fields:["name","amount","currency","billing_interval_value","billing_interval_unit","started_on","next_renewal_on"]},manual:{fields:["mode","name","expires_on","notes","currency","reminder_enabled","reminder_days_before","reminder_time"],required_fields:["mode","name","expires_on"]}},
       writable_fields:writable,
       searchable_fields:["name","status"],
-      supported_actions:["pause","resume","end","record_payment","record_purchase"],
+      supported_actions:["pause","resume","end","record_payment","record_purchase","update_payment_date"],
       validation_rules:[
         "amount inputs use major currency units and outputs use integer minor units",
         "cumulative spending sums actual payments only and remains grouped by currency",
@@ -889,6 +905,11 @@ function subscriptionResource(operations:NonNullable<ResourceRegistryOperations[
         assertOnlyKeys(data,Object.keys(map),"subscription record_purchase");
         if(!operations.recordPurchase)throw new ValidationError("record_purchase is unavailable");
         return snakeRecord(await operations.recordPurchase(subscriptionId,parseSubscriptionPurchase(mappedInput(data,map))));
+      }
+      if(action==="update_payment_date") {
+        assertOnlyKeys(data,["payment_id","paid_on","expected_paid_on"],"subscription update_payment_date");
+        if(!operations.updatePaymentDate)throw new ValidationError("update_payment_date is unavailable");
+        return snakeRecord(await operations.updatePaymentDate(subscriptionId,numericId(data.payment_id as ResourceId,"Payment"),dateOnly(data.paid_on,"paid_on"),dateOnly(data.expected_paid_on,"expected_paid_on")));
       }
       if(action==="record_payment") {
         assertOnlyKeys(data,["scheduled_for","paid_on","amount","currency","note","update_current_price"],"subscription record_payment");
@@ -1217,6 +1238,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
   if(operations.catRoutine)resources.push(catRoutineResource(operations.catRoutine));
   if(operations.reminder)resources.push(reminderResource(operations.reminder));
   if(operations.subscription)resources.push(subscriptionResource(operations.subscription));
+  if(operations.softwareLibrary)resources.push(softwareLibraryResource(operations.softwareLibrary));
   if(operations.foodPlace)resources.push(foodPlaceResource(operations.foodPlace));
   if(operations.foodDish)resources.push(foodDishResource(operations.foodDish));
   if(operations.foodLog)resources.push(foodLogResource(operations.foodLog));

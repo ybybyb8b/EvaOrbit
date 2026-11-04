@@ -14,7 +14,7 @@ import { ErrorNotice } from "@/components/error-notice";
 import { PageLogAction } from "@/components/bottom-log-core";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { responseError } from "@/lib/response-error";
-import { libraryPlatforms, libraryWebsite, filterLibrary, type LibraryEntry, type LibraryAcquisition } from "@/lib/software-library";
+import { libraryPlatforms, libraryWebsite, filterLibrary, librarySpend, type LibraryEntry, type LibraryAcquisition } from "@/lib/software-library";
 import { SubscriptionIconField } from "../subscription-icon-field";
 import { useIconColors } from "../preview/use-icon-colors";
 import styles from "./library.module.css";
@@ -34,6 +34,9 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
   const {transparent,colors,neutralFilter}=useIconColors(sources);
   const storeEntry=(saved:LibraryEntry)=>setEntries(current=>(current.some(entry=>entry.id===saved.id)?current.map(entry=>entry.id===saved.id?saved:entry):[...current,saved]).sort((a,b)=>a.name.localeCompare(b.name)||a.id-b.id));
   const formId = useId();
+  const [purchaseAmount,setPurchaseAmount]=useState("");
+  const spend=librarySpend(entries);
+  const cost=(minor:number,currency:string)=>new Intl.NumberFormat(english?"en":"zh-CN",{style:"currency",currency,currencyDisplay:"code"}).format(minor/100);
   useDataRefresh("/subscriptions", async () => { const response = await read("/api/subscriptions/library", { cache: "no-store" }); if (response.ok) setEntries(await response.json() as LibraryEntry[]); });
   const platformId = useId(), platformAnchor = useRef<HTMLDivElement>(null), platformButton = useRef<HTMLButtonElement>(null);
   const [platformOpen, setPlatformOpen] = useState(false);
@@ -51,7 +54,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
   const licenseLabel = (entry: LibraryEntry) => entry.license === "perpetual" ? t("Perpetual licence", "永久授权") : t(`${entry.version} licence`, `${entry.version} 版本授权`);
   const categoryLabel = (value: string) => english ? ({ "创作": "Creative", "效率": "Productivity", "工具": "Utilities" }[value] ?? value) : value;
   function resetFilters() { setQuery(""); setAcquisition("all"); setCategory(""); setPlatform(""); }
-  function add() { resetFilters(); setError(""); setIconFile(null);setRemoveIcon(false);setEditing(emptyEntry()); }
+  function add() { setPurchaseAmount("");resetFilters(); setError(""); setIconFile(null);setRemoveIcon(false);setEditing(emptyEntry()); }
   async function save(event: FormEvent) {
     event.preventDefault(); if (previewOnly || !editing || busy) return;
     if (!editing.name.trim()) { setError(t("Give this software a name.", "请填写软件名称。")); return; }
@@ -61,7 +64,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
     if (website === null) { setError(t("Use a complete http or https link.", "请填写完整的 http 或 https 链接。")); return; }
     setBusy(true); setError("");
     try {
-      const response = await businessFetch(`/api/subscriptions/library${editing.id ? `/${editing.id}` : ""}`, { method: editing.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editing, name: editing.name.trim(), category: editing.category.trim(), version: editing.license === "version" ? editing.version.trim() : "", website }) });
+      const response = await businessFetch(`/api/subscriptions/library${editing.id ? `/${editing.id}` : ""}`, { method: editing.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editing,purchaseAmount:purchaseAmount.trim()||null,purchaseCurrency:editing.purchaseCurrency||"CNY",name: editing.name.trim(), category: editing.category.trim(), version: editing.license === "version" ? editing.version.trim() : "", website }) });
       if (!response.ok) { setError(await responseError(response, t("Couldn’t save. Try again.", "保存失败，请重试。"))); return; }
       let saved = await response.json() as LibraryEntry;
       storeEntry(saved);setEditing(saved);
@@ -95,6 +98,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
 
     <SubscriptionSections active="library"/>
     <div className={styles.summary}><span><strong>{entries.length.toString().padStart(2, "0")}</strong>{t("software", "件软件")}</span><span>{entries.filter(entry => entry.acquisition === "giveaway").length} {t("giveaways", "项限免")}</span><span>{platformCount} {t("platforms", "个平台")}</span></div>
+    <section className={styles.costSummary} aria-label={t("Recorded software spending","软件已记录花费")}><div><span>{t("Recorded spending","已记录花费")}</span><small>{t(`${spend.recorded} of ${entries.length} software · unknown costs excluded`,`${spend.recorded} / ${entries.length} 件软件已记录金额 · 未知费用不计入`)}</small></div><div>{Object.entries(spend.totals).length?Object.entries(spend.totals).sort(([a],[b])=>a.localeCompare(b)).map(([currency,total])=><strong key={currency}>{cost(total,currency)}</strong>):<strong>—</strong>}</div></section>
     <div className={styles.workspace}>
       <nav className={styles.categories} aria-label={t("Software categories", "软件分类")}>
         <h2>{t("Collections", "分类收藏")}</h2>
@@ -117,14 +121,14 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
         </div>
         <div className={styles.listHeading}><h2>{category ? categoryLabel(category) : t("Your collection", "我的收藏")}<span>{visible.length}</span></h2><div className={styles.filters} role="group" aria-label={t("Acquisition type", "获取方式筛选")}>{(["all", "giveaway", "paid", "gift"] as const).map(value => <button key={value} aria-pressed={acquisition === value} onClick={() => setAcquisition(value)}>{value === "all" ? t("All", "全部") : value === "gift" ? t("Gift", "赠送") : acquisitionLabel(value)}</button>)}</div></div>
         {visible.length ? <ul className={styles.list} data-subscription-swipe-surface>{visible.map(entry => <li key={entry.id}><button className={styles.entry} onClick={() => setSelected(entry)}>
-          {mark(entry)}<span className={styles.entryCopy}><strong>{entry.name}</strong></span>
+          {mark(entry)}<span className={styles.entryCopy} data-priced={entry.purchaseAmountMinor!=null&&Boolean(entry.purchaseCurrency)}><strong title={entry.name}>{entry.name}</strong>{entry.purchaseAmountMinor!=null&&entry.purchaseCurrency&&<small className={styles.entryPrice} title={cost(entry.purchaseAmountMinor,entry.purchaseCurrency)}>{entry.purchaseAmountMinor===0?t("Free","免费"):cost(entry.purchaseAmountMinor,entry.purchaseCurrency)}</small>}</span>
         </button></li>)}</ul> : <div className={styles.empty}><Icon name={entries.length ? "search" : "projects"} /><h3>{entries.length ? t("No matching software", "没有找到匹配的软件") : t("A place for what you own", "给拥有的软件，留一个位置")}</h3><p>{entries.length ? t("Try another name, category, or platform.", "换个关键词，或调整分类与平台。") : t("Keep its name, platform, licence, and the link to find it again.", "记下名称、平台、授权和链接，下次需要时就能找到。")}</p><button className="button secondary" onClick={entries.length ? resetFilters : add}>{entries.length ? t("Clear filters", "清除筛选") : t("Add your first software", "添加第一件软件")}</button></div>}
       </section>
     </div>
 
     {selected && <FormSheet title={selected.name} onClose={() => { setSelected(null); setError(""); }} busy={busy}><article className={styles.detail}>
-      <div className={styles.detailHead}>{mark(selected)}<div><span>{selected.platforms.join(" · ")}</span><strong>{licenseLabel(selected)}</strong></div><button className="text-button" onClick={() => { setIconFile(null);setRemoveIcon(false);setEditing(selected); setSelected(null); setError(""); }}>{t("Edit", "编辑资料")}</button></div>
-      <dl><div><dt>{t("Acquisition", "如何获得")}</dt><dd>{acquisitionLabel(selected.acquisition)}</dd></div><div><dt>{t("Acquired on", "获取日期")}</dt><dd>{selected.acquiredOn || t("Not recorded", "未记录")}</dd></div><div><dt>{t("Category", "分类")}</dt><dd>{selected.category ? categoryLabel(selected.category) : t("Uncategorised", "未分类")}</dd></div><div><dt>{t("Licence", "授权范围")}</dt><dd>{licenseLabel(selected)}</dd></div></dl>
+      <div className={styles.detailHead}>{mark(selected)}<div><span>{selected.platforms.join(" · ")}</span><strong>{licenseLabel(selected)}</strong></div><button className="text-button" onClick={() => { setIconFile(null);setRemoveIcon(false);setPurchaseAmount(selected.purchaseAmountMinor==null?"":(selected.purchaseAmountMinor/100).toFixed(2));setEditing(selected); setSelected(null); setError(""); }}>{t("Edit", "编辑资料")}</button></div>
+      <dl><div><dt>{t("Purchase price","实际购买金额")}</dt><dd>{selected.purchaseAmountMinor!=null&&selected.purchaseCurrency?cost(selected.purchaseAmountMinor,selected.purchaseCurrency):t("Not recorded","未记录")}</dd></div><div><dt>{t("Acquisition", "如何获得")}</dt><dd>{acquisitionLabel(selected.acquisition)}</dd></div><div><dt>{t("Acquired on", "获取日期")}</dt><dd>{selected.acquiredOn || t("Not recorded", "未记录")}</dd></div><div><dt>{t("Category", "分类")}</dt><dd>{selected.category ? categoryLabel(selected.category) : t("Uncategorised", "未分类")}</dd></div><div><dt>{t("Licence", "授权范围")}</dt><dd>{licenseLabel(selected)}</dd></div></dl>
       <section><h3>{t("A note to remember", "留给自己的备注")}</h3><p>{selected.notes || t("No notes yet.", "尚未添加备注。")}</p></section>
       {selected.website ? <a className={`button secondary ${styles.website}`} href={selected.website} target="_blank" rel="noopener noreferrer">{t("Open website / store", "前往官网／商店")}<Icon name="arrow" /><small>{new URL(selected.website).hostname}</small></a> : <p>{t("No link saved. Add one in Edit.", "尚未保存链接，可在编辑中补充。")}</p>}
       <button className="text-button danger" disabled={previewOnly||busy} onClick={() => void remove()}>{t("Remove software", "移除软件")}</button>{error && <ErrorNotice>{error}</ErrorNotice>}
@@ -137,6 +141,9 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
         <label className="field"><span>{t("Acquisition", "获取方式")}</span><ChoiceSelect value={editing.acquisition} onChange={event => setEditing({ ...editing, acquisition: event.target.value as LibraryAcquisition })}>{(["paid", "giveaway", "gift"] as const).map(value => <option key={value} value={value}>{acquisitionLabel(value)}</option>)}</ChoiceSelect></label>
         <label className="field"><span>{t("Licence", "授权方式")}</span><ChoiceSelect value={editing.license} onChange={event => setEditing({ ...editing, license: event.target.value as LibraryEntry["license"] })}><option value="perpetual">{t("Perpetual", "永久授权")}</option><option value="version">{t("Specific version", "指定版本买断")}</option></ChoiceSelect></label>
         {editing.license === "version" && <label className="field wide"><span>{t("Licensed version", "授权版本")}</span><input required maxLength={40} placeholder={t("For example, V2", "例如 V2")} value={editing.version} onChange={event => setEditing({ ...editing, version: event.target.value })} /></label>}
+        <label className="field"><span>{t("Purchase price · optional","实付金额 · 选填")}</span><input inputMode="decimal" value={purchaseAmount} placeholder={t("Unknown","未知")} onChange={event=>setPurchaseAmount(event.target.value)}/></label>
+        <label className="field"><span>{t("Purchase currency","购买币种")}</span><input maxLength={3} pattern="[A-Za-z]{3}" required={Boolean(purchaseAmount.trim())} value={editing.purchaseCurrency??"CNY"} onChange={event=>setEditing({...editing,purchaseCurrency:event.target.value.toUpperCase()})}/></label>
+        <p className="date-only-note wide">{t("Leave the price blank if unknown; enter 0 for a free acquisition. Uses the acquired date below.","金额留空表示未知，免费获取请填 0；购买日期沿用下方获取日期。")}</p>
         <label className="field"><span>{t("Category · optional", "分类 · 选填")}</span><input maxLength={24} value={editing.category} placeholder={t("Creative, productivity…", "创作、效率、工具…")} onChange={event => setEditing({ ...editing, category: event.target.value })} /></label>
         <label className="field"><span>{t("Acquired on · optional", "获取日期 · 选填")}</span><input type="date" value={editing.acquiredOn ?? ""} onChange={event => setEditing({ ...editing, acquiredOn: event.target.value || null })} /></label>
         <label className="field wide"><span>{t("Website / store link", "官网／商店链接")}</span><input type="url" inputMode="url" maxLength={2000} placeholder="https://" value={editing.website} onChange={event => setEditing({ ...editing, website: event.target.value })} /></label>

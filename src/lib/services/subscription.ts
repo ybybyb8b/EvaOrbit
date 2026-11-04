@@ -1,4 +1,5 @@
 import "server-only";
+import {parseSubscriptionPurchase} from "../validation";
 
 import {isManualSubscription,subscriptionDate} from "../subscriptions";
 import type {NewSubscriptionPurchase} from "../repositories/types";
@@ -99,6 +100,22 @@ export async function updateSubscriptionPurchase(id:number,paymentId:number,inpu
   if(input.purchaseKey!==original.purchaseKey)throw new ConflictError("不能更改购买请求标识");
   const payment=await(await getRepository()).updateSubscriptionPurchase(id,paymentId,input,original);
   await reconcileSubscriptionReminder(id);return payment;
+}
+export async function updateSubscriptionPaymentDate(id:number,paymentId:number,paidOn:string,expectedPaidOn:string){
+  if(paidOn>dateInEvaOrbit())throw new ConflictError("实际付款日期不能晚于今天");
+  const repository=await getRepository(),payment=(await repository.listSubscriptionPayments(id)).find(p=>p.id===paymentId);
+  if(!payment)throw new ConflictError("付款记录不存在");
+  const manual=Boolean(payment.purchaseKey)&&(await repository.getSubscription(id))?.mode==="manual";
+  if(payment.purchaseKey&&payment.validUntil!<paidOn)throw new ConflictError("实际付款日期不能晚于购买后有效期");
+  if(payment.paidOn===paidOn){if(manual)await reconcileSubscriptionReminder(id);return payment;}
+  if(payment.paidOn!==expectedPaidOn)throw new ConflictError("付款日期已被修改，请刷新后重试");
+  if(manual){
+    // Manual purchases retain their atomic chronological expiry/reminder rules.
+    const original=parseSubscriptionPurchase({...payment,amount:(payment.amountMinor/100).toFixed(2)});
+    return updateSubscriptionPurchase(id,paymentId,{...original,paidOn},original);
+  }
+  // No catch-up, schedule advance, price change or reminder mutation for a date correction.
+  return repository.updateSubscriptionPaymentDate(id,paymentId,paidOn,expectedPaidOn);
 }
 export async function recordSubscriptionPayment(id:number,input:NewSubscriptionPayment){const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription||subscription.status!=="active")throw new ConflictError("订阅不存在或未启用");if(isManualSubscription(subscription))throw new ConflictError("手动续期会员请使用记录购买");const nextRenewalOn=nextSubscriptionRenewal(subscription.nextRenewalOn,subscription.billingIntervalValue,subscription.billingIntervalUnit);const payment=await repository.recordSubscriptionPayment(id,input,nextRenewalOn);await reconcileSubscriptionReminder(id);return payment;}
 export async function recordSubscriptionPaymentFromReminder(id:number,actedAt=new Date()){const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription)throw new ConflictError("订阅不存在");if(isManualSubscription(subscription)){if(subscription.reminderId)await repository.updateReminder(subscription.reminderId,{isActive:false,status:"completed",nextDueAt:null,lastCompletedAt:actedAt.toISOString()});return subscription.reminderId?repository.getReminder(subscription.reminderId):null;}if(subscription.autoRenew){await catchUpAutomaticSubscriptionPayments(actedAt,id);const current=await repository.getSubscription(id);if(current?.nextRenewalOn===subscription.nextRenewalOn&&subscription.reminderId)return repository.updateReminder(subscription.reminderId,{isActive:false,status:"completed",nextDueAt:null,lastCompletedAt:actedAt.toISOString()});return current?.reminderId?repository.getReminder(current.reminderId):null;}await recordSubscriptionPayment(id,{scheduledFor:subscription.nextRenewalOn,paidOn:dateInEvaOrbit(actedAt),amountMinor:subscription.currentAmountMinor,currency:subscription.currency,note:"",updateCurrentPrice:false});return subscription.reminderId?repository.getReminder(subscription.reminderId):null;}

@@ -1,6 +1,6 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
 export const BACKUP_VERSION = 16 as const;
-export const BACKUP_SCHEMA_VERSION = "202611020001_training_suggestion_exclusions";
+export const BACKUP_SCHEMA_VERSION = "202611040002_software_library_cost";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new

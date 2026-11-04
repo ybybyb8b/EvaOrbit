@@ -203,12 +203,12 @@
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
 - **手动续期会员**：`mode=manual` 以 `expires_on` 管理权益，购买元数据与幂等标识存入原付款表，通过 `/api/subscriptions/:id/purchases`／MCP `record_purchase` 幂等、原子记录实际付款与有效期；不进入自动补账、固定周期推进或未来确定支出。截止日含当天，已到期为派生状态，生命周期仍保留 Active／Paused／Ended。Web／本地共享表单和展示；详见 [手动续期会员](SUBSCRIPTIONS_MANUAL_MEMBERSHIP.md)。
 - **续费时间线**：总览保留品牌卡片，补充未来 30 天及未处理计划、已记录付款；日期调整复用订阅 PATCH，不补记被调整的旧计划，提醒跟随新日期，已有付款不改写。
-- **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
-- **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。
+- **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
+- **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。历史实际付款日可通过 `/api/subscriptions/:id/payments/:paymentId` PATCH／MCP `subscription.update_payment_date` 修正，保留账期归属、金额、币种、备注，不推进固定续费日；Web／本地共享日期表单。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
 - **续费时间线（Web）**：总览展示未来30天、未处理计划及已有付款；时间线与详情页可调整下次续费日期，沿用订阅PATCH和提醒投影，不补记被调整的旧计划，不改写付款历史。
-- **软件库（Web／本地共享界面）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份，不参与续费／支出。共享 `SubscriptionsDataProvider` 与账户请求上下文默认保持 Web 行为，本地分支注入导航、快照及在线写入。`/api/native/subscriptions-readonly` 可选增加 `library`／`libraryIconSources`，兼容旧缓存，最多 500 个软件，全部快照合计仍限 8 MiB；旧预览地址重定向至正式页。本地新界面需后续更新前端包。
+- **软件库（Web／本地共享界面）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。共享 `SubscriptionsDataProvider` 与账户请求上下文默认保持 Web 行为，本地分支注入导航、快照及在线写入。`/api/native/subscriptions-readonly` 可选增加 `library`／`libraryIconSources`，兼容旧缓存，最多 500 个软件，全部快照合计仍限 8 MiB；旧预览地址重定向至正式页。本地新界面需后续更新前端包。
 
 ## Projects
 

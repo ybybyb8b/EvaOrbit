@@ -1,8 +1,12 @@
-import { dateOnly, ValidationError } from "./validation.ts";
+import { dateOnly, moneyMinor, ValidationError } from "./validation.ts";
 import { libraryPlatforms, libraryWebsite, type LibraryInput } from "./software-library.ts";
 export function parseSoftwareLibraryInput(value: unknown): LibraryInput {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new ValidationError("软件资料格式不正确");
   const body = value as Record<string, unknown>;
+  const raw=body.purchaseAmount;
+  const purchaseAmountMinor=raw===undefined||raw===null||typeof raw==="string"&&!raw.trim()?null:moneyMinor(raw,"实际购买金额");
+  const purchaseCurrency=purchaseAmountMinor===null?null:typeof body.purchaseCurrency==="string"?body.purchaseCurrency.trim().toUpperCase():"";
+  if(purchaseAmountMinor!==null&&!/^[A-Z]{3}$/.test(purchaseCurrency!))throw new ValidationError("请填写三字母币种代码");
   const text = (key: string, label: string, max: number, required = false) => {
     const raw = body[key] ?? "";
     if (typeof raw !== "string" || raw.trim().length > max || required && !raw.trim()) throw new ValidationError(`${label}格式不正确`);
@@ -15,6 +19,6 @@ export function parseSoftwareLibraryInput(value: unknown): LibraryInput {
   const version = body.license === "version" ? text("version", "授权版本", 40, true) : "";
   const website = libraryWebsite(text("website", "官网链接", 2000));
   if (website === null) throw new ValidationError("官网链接需要完整的 http 或 https 地址");
-  return { name, category, platforms: [...new Set(body.platforms)], license: body.license, acquisition: body.acquisition, version,
+  return { name, category, platforms: [...new Set(body.platforms)], license: body.license, acquisition: body.acquisition, version,purchaseAmountMinor,purchaseCurrency,
     acquiredOn: body.acquiredOn === null || body.acquiredOn === undefined || body.acquiredOn === "" ? null : dateOnly(body.acquiredOn, "获取日期"), website, notes: text("notes", "备注", 2000) };
 }

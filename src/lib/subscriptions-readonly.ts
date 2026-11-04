@@ -67,7 +67,9 @@ export function validateSubscriptionsSnapshot(value:SubscriptionsReadonlySnapsho
       if(!item||!validId(item.id)||libraryIds.has(item.id))fail("invalid or duplicate software ID");
       const label=`software #${item.id}`;
       if(typeof item.iconPath!=="string"||!Number.isFinite(Date.parse(item.createdAt))||!Number.isFinite(Date.parse(item.updatedAt)))fail(`${label}: invalid icon path or timestamps`);
-      try{parseSoftwareLibraryInput(item);}catch{fail(`${label}: invalid software metadata`);}
+      if(item.purchaseAmountMinor!=null&&(!money(item.purchaseAmountMinor)||typeof item.purchaseCurrency!=="string"||!/^[A-Z]{3}$/.test(item.purchaseCurrency)))fail(`${label}: invalid purchase cost`);
+      if(item.purchaseAmountMinor==null&&item.purchaseCurrency!=null)fail(`${label}: currency without a purchase cost`);
+      try{parseSoftwareLibraryInput({...item,purchaseAmount:item.purchaseAmountMinor==null?null:(item.purchaseAmountMinor/100).toFixed(2)});}catch{fail(`${label}: invalid software metadata`);}
       if(item.iconPath&&(!validSubscriptionIconKey(item.iconPath)||!value.libraryIconSources[item.id]))fail(`${label}: invalid icon path or missing icon data`);
       libraryIds.add(item.id);
     }

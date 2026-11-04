@@ -1132,7 +1132,7 @@ export function parseTrainingLogPatch(value: unknown) {
   return result;
 }
 
-function moneyMinor(value: unknown, field: string) {
+export function moneyMinor(value: unknown, field: string) {
   const textValue = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
   if (!/^\d{1,10}(\.\d{1,2})?$/.test(textValue)) throw new ValidationError(`${field}格式不正确`);
   const [whole, fraction = ""] = textValue.split(".");

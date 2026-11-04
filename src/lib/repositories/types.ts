@@ -395,6 +395,7 @@ export interface EvaOrbitRepository {
   recordSubscriptionPurchase(subscriptionId: number, input: NewSubscriptionPurchase): Promise<SubscriptionPayment>;
   updateSubscriptionPurchase(subscriptionId: number, paymentId: number, input: NewSubscriptionPurchase, original: NewSubscriptionPurchase): Promise<SubscriptionPayment>;
   recordSubscriptionPayment(subscriptionId: number, input: NewSubscriptionPayment, nextRenewalOn: string): Promise<SubscriptionPayment>;
+  updateSubscriptionPaymentDate(subscriptionId: number, paymentId: number, paidOn: string, expectedPaidOn: string): Promise<SubscriptionPayment>;
 
   listMemos(input?: MemoListInput): Promise<Memo[]>;
   getMemo(id: number): Promise<Memo | null>;
