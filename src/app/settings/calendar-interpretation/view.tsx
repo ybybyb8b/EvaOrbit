@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowRight2, Plus } from "reicon-react";
 import { PageHeading as PageHeader } from "@/components/page-heading";
 import { useLocale } from "@/components/locale-controller";
+import { useBottomLogAction } from "@/components/bottom-log-core";
 import { CalendarRuleSheet, CalendarRuleSheetContent, CalendarRuleSummary } from "@/components/calendar-rule-sheet";
 import type { CalendarInterpretation, CalendarRule } from "@/lib/calendar-interpretation";
 import type { CalendarEvent } from "@/lib/types";
@@ -12,6 +13,7 @@ import type { CalendarEvent } from "@/lib/types";
 export function CalendarInterpretationView({ initialSettings, records, request = fetch, embedded = false, onAppleIntegration }: { initialSettings: CalendarInterpretation; records: CalendarEvent[]; request?: typeof fetch; embedded?: boolean; onAppleIntegration?: () => void }) {
   const { english } = useLocale(), [settings, setSettings] = useServerDataState(initialSettings), [editor, setEditor] = useState<{ rule?: CalendarRule } | null>(null);
   const RuleSheet = embedded ? CalendarRuleSheetContent : CalendarRuleSheet;
+  useBottomLogAction({label:english ? "Add interpretation rule" : "添加解读规则",onClick:()=>setEditor({})});
   return <div className="page settings-detail-page calendar-interpretation-page">
     <PageHeader eyebrow={english ? "CALENDAR" : "日历"} title={english ? "Calendar interpretation" : "日历解读"} description={english ? "Give title prefixes a meaning in EO. Multiple prefixes can share a category." : "为标题前缀定义 EO 含义。多个前缀可以归入同一分类。"} action={embedded ? undefined : <Link className="settings-back-link" href="/settings">{english ? "All settings" : "全部设置"}</Link>} />
     <section className="calendar-rule-directory">

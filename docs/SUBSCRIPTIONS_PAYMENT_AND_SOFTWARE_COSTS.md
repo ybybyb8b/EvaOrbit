@@ -29,3 +29,11 @@ SQLite v96 及 Supabase 202611040002_software_library_cost.sql 为原表添加�
 Web 与本地 Vite 最终构建、TypeScript、相关 ESLint、git diff --check 通过；Vite 仍有现有 chunk 大小提示。Impeccable 对变更界面机械检查无发现。Chromium／WebKit 在隔离 SQLite 和合成原生桥接下，验证 Web／本地共享界面的日期修正、费用新增／编辑／清空、原获取日期保留、深浅主题和 375／402／1280 宽度；截图和日志保存于 tmp/items-211-212-* 及 tmp/subscription-improvements-*。所有测试服务均在 finally 关闭并核验监听释放。没有 iPhone 16 Pro 真机验收。
 
 发布副本最终验证：完整回归 820 项，805 通过、15 项原有环境检查跳过、0 失败；Web／本地前端构建和 WebKit 的 Web／本地共享界面流程通过。发布只包含 #211、#212 与网格价格，不包含工作区其他视觉探索。
+
+## 另一语言名称与 iOS 选区（后续工作区改动，尚未部署）
+
+software_library 增加 alternate_name（默认空字符串）与 ios_regions（默认空数组）。原 name 保持主要显示；另一语言名称选填、详情展示并参与界面／MCP 查询。iOS 可多选 CN 国区／US 美区，也可不选；移除 iOS 平台时清空选区。两个字段均可清空，旧客户端省略更新字段时保留。MCP 对应 alternate_name / ios_regions。
+
+SQLite v97 与 202611040003_software_library_names_regions.sql 为原表添加字段和有效值约束，不推断旧条目的名称或地区。原表随备份导出恢复，旧快照缺字段仍可读取；新快照拒绝非法地区或非 iOS 条目携带选区。此迁移尚未应用生产，不改变此前已完成的购买费用迁移状态。
+
+另一语言名称／选区实际验证：完整回归 821 项，806 通过、15 项原有环境检查跳过、0 失败；额外以云端 JSON 数组格式恢复选区的备份检查通过。Web／本地构建、TypeScript、相关 ESLint 通过。WebKit 通过创建双语名称、搜索别名、选择 CN+US、取消 iOS 后清空选区、编辑回填和本地共享界面保存；375／402／1280 宽度及深浅模式无横向溢出。截图日志见 tmp/subscription-improvements-NesZCb/ 和 tmp/library-names-regions-*。测试服务已关闭，未做真机验收或生产迁移／部署。

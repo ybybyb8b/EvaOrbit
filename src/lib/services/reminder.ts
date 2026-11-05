@@ -6,7 +6,7 @@ import { reminderSourceDefinition, reminderSourceLabel } from "../reminder-sourc
 import { getRepository } from "../repositories";
 import type { NewReminder } from "../repositories/types";
 import type { DueReminder, Reminder, ScheduledNotification } from "../types";
-import { completeCatRoutine, skipCatRoutineOccurrence } from "./cat-routine";
+import { completeCatRoutine, skipCatRoutineOccurrence, type RoutineCompletionExpectation } from "./cat-routine";
 import { periodMedicationSnoozeDeadline, reconcilePeriodMedicationReminder, reconcilePeriodMedicationReminders } from "./period-medication-reminder";
 import { catchUpAutomaticSubscriptionPayments, disableSubscriptionReminder, recordSubscriptionPaymentFromReminder, skipSubscriptionRenewal } from "./subscription";
 import { completeTaskFromReminder, disableTaskReminder } from "./task";
@@ -121,12 +121,12 @@ async function advanceTrackerReminder(reminder: Reminder, action: "completed" | 
   return repository.updateReminder(reminder.id, { nextDueAt, status: "scheduled", snoozedUntil: null, lastNotifiedAt: null, sentAt: null, ...(action === "completed" ? { lastCompletedAt: actedAt.toISOString() } : {}) });
 }
 
-export async function completeReminder(id: number, actedAt = new Date()) {
+export async function completeReminder(id: number, actedAt = new Date(), expected: RoutineCompletionExpectation = {}) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (reminder?.scheduleType === "one_time" && reminder.status === "completed" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) return reminder;
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
   const source = reminderSourceDefinition(reminder.sourceType);
-  if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt); return repository.getReminder(id); }
+  if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt, expected); return repository.getReminder(id); }
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "completed", actedAt);
   if(source.projectionOwner==="subscription"&&reminder.sourceId){await recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});return repository.getReminder(id);}
   if (source.projectionOwner === "task" && reminder.sourceId) {

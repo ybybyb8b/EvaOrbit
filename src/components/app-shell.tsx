@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {AppSidebar,SpacesNavigation} from "./app-navigation";
 import { Icon } from "./icons";
-import { EvaWakePanel } from "./eva-wake-panel";
 import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
 import { EventKitReconciler } from "./eventkit-reconciler";
@@ -20,6 +19,7 @@ import {MobileBottomNavigation} from "./mobile-bottom-navigation";
 import bottomNav from "./bottom-navigation.module.css";
 import { BottomLogProvider } from "./bottom-log";
 import { HomeQuickLog } from "@/app/home-quick-log";
+import { SettingsQuickActions } from "./settings-quick-actions";
 import { configureClientCache } from "@/lib/client-data-cache";
 import { clearPrivateSnapshots } from "@/lib/home-cache";
 import { clearClientJsonCache } from "@/lib/client-json-cache";
@@ -37,10 +37,10 @@ export function AppShell({ children, cloudMode, cacheScope }: { children: React.
 function AppShellContent({ children, cloudMode, cacheScope }: { children: React.ReactNode; cloudMode: boolean; cacheScope: string | null }) {
   const { english } = useLocale();
   const pathname = usePathname();
+  const router = useRouter();
   const hasPageBack = pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/") && !pathname.startsWith("/lucius");
   const hasGlobalHeader = pathname !== "/login" && !pathname.startsWith("/lucius");
   const previousUrlRef = useRef<string | null>(null);
-  const [evaOpen, setEvaOpen] = useState(false);
   const globalHeaderRef = useRef<HTMLElement>(null);
   const [spacesDrawerMounted,setSpacesDrawerMounted]=useState(false);
   useEffect(() => {
@@ -81,7 +81,7 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
       <NativeNotificationReconciler />
       <EventKitReconciler />
       <Suspense fallback={null}><DataChangeReconciler cacheScope={cacheScope} /></Suspense>
-      <PullToRefresh enabled={!spacesDrawerMounted && !evaOpen} />
+      <PullToRefresh enabled={!spacesDrawerMounted} />
       <AppSidebar pathname={pathname} LinkComponent={Link} brandImage={<Image src="/icons/app-icon-192.png" alt="" width={68} height={68} priority />} footer={<>
         <div className="local-status"><span className="status-dot"/><span><strong>{english?cloudMode?"Private cloud":"Local mode":cloudMode?"私人云端":"本地模式"}</strong><small>{english?cloudMode?"Account and RLS enabled":"SQLite development fallback":cloudMode?"登录与行级权限已开启":"SQLite 开发后备"}</small></span></div>
         {cloudMode&&<form action={logout}><button className="sidebar-logout" type="submit">{english?"Sign out":"退出登录"}</button></form>}
@@ -91,10 +91,9 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
         {children}
       </main>
       <SpacesNavigation pathname={pathname} LinkComponent={Link} onOpenChange={setSpacesDrawerMounted} renderTrigger={trigger=>hasGlobalHeader?<header ref={globalHeaderRef} className="mobile-global-header">{hasPageBack&&<PageBackButton/>}{trigger}</header>:trigger}/>
-      {pathname !== "/ai" && <button className="eva-wake-desktop" onClick={() => setEvaOpen(true)} aria-label="Wake Eva"><Icon name="ai" /><span>Eva</span></button>}
+      {pathname !== "/ai" && <Link className="eva-wake-desktop" href="/ai" aria-label="Eva"><Icon name="ai" /><span>Eva</span></Link>}
       <MobileBottomNavigation pathname={pathname} LinkComponent={Link} />
-      <HomeQuickLog key={pathname} />
-      <EvaWakePanel open={evaOpen} onClose={() => setEvaOpen(false)} />
+      {pathname === "/settings" || pathname.startsWith("/settings/") ? <SettingsQuickActions key={pathname} onNavigate={path=>router.push(path)} /> : <HomeQuickLog key={pathname} />}
     </div>
   );
 }

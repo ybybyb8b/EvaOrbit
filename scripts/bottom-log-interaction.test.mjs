@@ -44,7 +44,7 @@ test("bottom Log scopes follow the route, use the latest page action and release
     context.value = api.BottomLogProvider({ children: null,pathname }).props.value;
   }
   renderProvider();
-  assert.equal(api.useBottomLog(), null); // Settings and other unregistered pages use universal capture.
+  assert.equal(api.useBottomLog(), null); // The shell chooses the fallback for pages without an action.
   const first = { pathname: "/food", label: "Food", onClick() {} };
   const releaseFirst = context.value.register(first);
   renderProvider();

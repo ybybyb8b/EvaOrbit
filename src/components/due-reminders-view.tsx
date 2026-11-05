@@ -33,7 +33,7 @@ export function useDueReminderActions(items:DueReminder[],readOnly:boolean,onCha
 
   async function action(id:number,name:"complete"|"skip"|"snooze",body?:unknown){
     const item=remaining.find(value=>value.id===id);if(readOnly||busy!==null||!item)return false;setBusy(id);setError("");
-    try{const response=await businessFetch(`/api/reminders/${id}/${name}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body??{})});
+    try{const response=await businessFetch(`/api/reminders/${id}/${name}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(name==="complete"&&item.sourceType==="cat_routine"?{expectedNextDueAt:item.nextDueAt,expectedLastCompletedAt:item.lastCompletedAt}:body??{})});
       if(!response.ok)throw new Error(await responseError(response,"Could not update reminder."));
       playNativeHaptic(name==="complete"?"success":"selection");setSnoozing(null);if(id===remaining[0]?.id)setPromoted(remaining.find(item=>item.id!==id)?.id??null);setDismissed(current=>[...current,occurrenceKey(item)]);onChanged?.();try{await reconcileNativeNotifications();}catch{/* Web delivery remains active. */}return true;
     }catch(reason){setError(reason instanceof Error?reason.message:"Could not update reminder.");playNativeHaptic("error");return false;}finally{setBusy(null);}

@@ -317,7 +317,7 @@ final class WebViewController: UIViewController {
 
     private func loadEvaOrbit() {
         let initial = hostConfiguration.localTrackers ? hostConfiguration.trackerDevelopmentURL ?? TrackerAssetHandler.entryURL : hostConfiguration.baseURL
-        webView.load(URLRequest(url: launchURL ?? initial, cachePolicy: .reloadRevalidatingCacheData))
+        webView.load(URLRequest(url: hostConfiguration.localTrackers ? initial : launchURL ?? initial, cachePolicy: .reloadRevalidatingCacheData))
     }
 
     @discardableResult
@@ -325,10 +325,25 @@ final class WebViewController: UIViewController {
         guard let target = hostConfiguration.navigationURL(for: deepLink) else { return false }
         launchURL = target
         if isViewLoaded {
+            if hostConfiguration.localTrackers {
+                deliverLocalDeepLink()
+                return true
+            }
             loadingCoordinator.beginRecovery()
             webView.load(URLRequest(url: target, cachePolicy: .reloadRevalidatingCacheData))
         }
         return true
+    }
+
+    private func deliverLocalDeepLink() {
+        guard hostConfiguration.localTrackers, let target = launchURL,
+              let current = webView.url, hostConfiguration.allowsTrackerUI(current),
+              let components = URLComponents(url: target, resolvingAgainstBaseURL: false) else { return }
+        let path = components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? "") + (components.percentEncodedFragment.map { "#" + $0 } ?? "")
+        // Keep the pending route in memory until React has restored its account.
+        webView.callAsyncJavaScript("window.__evaorbitPendingPath = path; window.dispatchEvent(new Event('evaorbit:open-path')); return true;", arguments: ["path": path], in: nil, in: .page) { [weak self] result in
+            if case .success = result, self?.launchURL == target { self?.launchURL = nil }
+        }
     }
 
     @objc private func refresh() {
@@ -422,6 +437,7 @@ extension WebViewController: WKNavigationDelegate {
             loadingCoordinator.webViewDidBecomeReady()
             return
         }
+        deliverLocalDeepLink()
         let attempt = navigationAttempt
         webView.callAsyncJavaScript(Self.localContentReadyScript, arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self, self.navigationAttempt == attempt, self.awaitingLocalContent else { return }

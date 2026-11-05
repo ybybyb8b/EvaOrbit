@@ -8,6 +8,7 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  eva: sqlite.evaStore,
   async deleteInsightReport(id,version,generation){sqlite.deleteInsightReport(id,version,generation);},
   async getInsightVersionForRequest(key){return sqlite.getInsightVersionForRequest(key);},
   async getInsightRunAttempt(input){return sqlite.getInsightRunAttempt(input);},
@@ -254,6 +255,7 @@ export const sqliteRepository: EvaOrbitRepository = {
   async listCatMedications(petId) { return sqlite.listCatMedications(petId); }, async getCatMedication(id) { return sqlite.getCatMedication(id); }, async createCatMedication(input) { return sqlite.createCatMedication(input); }, async updateCatMedication(id,input) { return sqlite.updateCatMedication(id,input); }, async deleteCatMedication(id) { return sqlite.deleteCatMedication(id); },
   async listCatMeasurements(petId) { return sqlite.listCatMeasurements(petId); }, async getCatMeasurement(id) { return sqlite.getCatMeasurement(id); }, async createCatMeasurement(input) { return sqlite.createCatMeasurement(input); }, async updateCatMeasurement(id,input) { return sqlite.updateCatMeasurement(id,input); }, async deleteCatMeasurement(id) { return sqlite.deleteCatMeasurement(id); },
   async listCatRoutines(input) { return sqlite.listCatRoutines(input); }, async getCatRoutine(id) { return sqlite.getCatRoutine(id); }, async createCatRoutine(input) { return sqlite.createCatRoutine(input); }, async updateCatRoutine(id,input) { return sqlite.updateCatRoutine(id,input); }, async archiveCatRoutine(id) { return sqlite.archiveCatRoutine(id); }, async deleteCatRoutine(id) { return sqlite.deleteCatRoutine(id); },
+  async completeCatRoutineOccurrence(id,expected,completion) { return sqlite.completeCatRoutineOccurrence(id,expected,completion); },
   async listReminders(input) { return sqlite.listReminders(input); }, async getReminder(id) { return sqlite.getReminder(id); }, async createReminder(input) { return sqlite.createReminder(input); }, async updateReminder(id,input) { return sqlite.updateReminder(id,input); }, async deleteReminder(id) { return sqlite.deleteReminder(id); }, async listReminderOccurrences(range) { return sqlite.listReminderOccurrences(range); }, async createReminderOccurrence(input) { return sqlite.createReminderOccurrence(input); },
   async listNotificationDeliveries(limit) { return sqlite.listNotificationDeliveries(limit); }, async createNotificationDelivery(input) { return sqlite.createNotificationDelivery(input); },
   async listMealReminderRules() { return sqlite.listMealReminderRules(); }, async updateMealReminderRules(input) { return sqlite.updateMealReminderRules(input); },

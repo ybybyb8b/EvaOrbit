@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+Eva 纸条后台在本地 React 复用 Web 表单与工作台；安装包 `business-routes.json` 增加精确 GET／POST `/api/eva`，通过既有账户绑定 `business.request` 在线保存和读取。AI 只在服务器执行，不增加设备后台能力、离线队列、Bridge 方法、权限、framework、entitlement 或改变签名链。旧 IPA 不支持新路径；先迁移／发布 API，再更新本地包。Windows 合成账户和模拟 Provider 不替代真实模型与 iPhone 验收。详见 [Eva 后台](EVA_WORKBENCH.md)。
+
 Project Ideas 使用既有 `project_items.status=idea`；`TrackerLocalDatabase` 的 Workspace 缓存白名单接受该状态，并单独校验 `ideaCount`，旧缓存缺少该字段时按零兼容。没有新增 Bridge 方法、协议、权限、framework、entitlement 或业务队列。先应用 Project 状态约束迁移并发布 Web/API，再按原链路重建本地 IPA；旧 IPA 遇到含 Ideas 的新快照会拒绝并保留此前缓存。Windows 的 Node/浏览器回归不替代 Swift XCTest 和 iPhone 16 Pro 验收。
 
 Timeline 关联规则第一阶段仅为既有 `settings.configuration` 增加精确 GET/PUT `/api/timeline-association` 白名单及对应测试，不新增 Bridge 方法、协议主版本、framework、Info.plist、权限或 entitlement。匹配由 Web/API 负责，本地 Home 下载服务端投影，未同步 Tracker 不参与。旧 IPA 拒绝新管理路径。确认后先迁移／发布 Web，再按原链路重建本地 IPA；Windows 未运行 XCTest／真机。详见 [关联规则契约](TIMELINE_ASSOCIATION.md)。
@@ -506,3 +508,10 @@ Vercel resource optimization: EventKit reads only enabled domains. Optional mapp
 ## Insights 双端发布
 
 本地 React 新增 Insights 入口，复用 Web 的每日简报与既有 business.request 账户通道。安装包 business-routes.json 增加 Insights GET 列表/餐次状态/运行、POST 排队及 UUID 报告 GET/DELETE；Swift 动态读取原有清单，无新增方法、权限、framework、entitlement、数据库队列或签名链变更。断网不显示旧的分析结论或提交写入，联网后重新读取。Web/MCP 与两项 Insights 数据迁移先发布，本地包以 local_trackers=true 按原链路构建。Windows 已通过打包前浏览器模拟 Bridge 与生产前端构建；macOS 编译和真机验收不得据此记为通过。
+
+
+## 本地版 Bark 跳转发布（2026-11-05）
+
+Bark 的「打开 Host」现在发送 `evaorbit-trackers-poc://open/<页面路径>`，明确唤起本地版，避免和旧 Web Host 的 `evaorbit://` 争抢。设备 Key 与 open_in_host 偏好不变，无需重新绑定 Bark；已发出的旧通知仍保留原链接。新链接须安装本次新版 IPA 后使用，旧本地 IPA 虽注册该 scheme 但尚无对应路由接收。
+
+本地版继续使用 `com.evaorbit.nativehost.trackerspoc` 和原 scheme，显示名称改为 EvaOrbit；按原链路覆盖安装保留 SQLite／队列。Swift 验证允许的路径后只向可信本地页面投递内存中的 `evaorbit:open-path` 事件，React 在账户恢复／登录完成后消费一次，保留 query／fragment；冷启动仍加载包内页面，不切换到线上 Web。网页 Host 继续使用原协议。没有新增 Bridge 方法、权限、framework 或 entitlement；需要 Web 部署和新 IPA，真实 Bark 点按／冷启动留待手机验收。

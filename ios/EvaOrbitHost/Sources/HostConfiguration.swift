@@ -50,7 +50,7 @@ struct HostConfiguration: Equatable {
 
     func navigationURL(for deepLink: URL) -> URL? {
         guard let incoming = URLComponents(url: deepLink, resolvingAgainstBaseURL: false),
-              incoming.scheme?.lowercased() == "evaorbit", incoming.host?.lowercased() == "open",
+              (incoming.scheme?.lowercased() == "evaorbit" || localTrackers && incoming.scheme?.lowercased() == "evaorbit-trackers-poc"), incoming.host?.lowercased() == "open",
               incoming.user == nil, incoming.password == nil, incoming.port == nil,
               !incoming.path.contains("\\"), !incoming.path.hasPrefix("//"),
               !incoming.path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }),

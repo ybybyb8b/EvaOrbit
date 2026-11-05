@@ -4,7 +4,7 @@ import { completeCatRoutine } from "@/lib/services/cat-routine";
 
 export const runtime = "nodejs";
 type Context = { params: Promise<{ id: string }> };
-export async function POST(_: Request, { params }: Context) {
-  try { return NextResponse.json(await completeCatRoutine(parseId((await params).id))); }
+export async function POST(request: Request, { params }: Context) {
+  try { const body = await request.json().catch(() => ({})); return NextResponse.json(await completeCatRoutine(parseId((await params).id), new Date(), body)); }
   catch (error) { return apiError(error); }
 }

@@ -25,6 +25,17 @@ final class HostConfigurationTests: XCTestCase {
         }
     }
 
+    func testLocalNotificationLinksUseTheLocalSchemeAndKeepQueryAndFragment() throws {
+        let local = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app")!, localTrackers: true))
+        let link = URL(string: "evaorbit-trackers-poc://open/tasks?taskId=123#details")!
+        XCTAssertEqual(local.navigationURL(for: link)?.absoluteString, "https://eva-orbit.vercel.app/tasks?taskId=123#details")
+        let online = try XCTUnwrap(HostConfiguration(validating: local.baseURL))
+        XCTAssertNil(online.navigationURL(for: link))
+        for raw in ["evaorbit-trackers-poc://user@open/tasks", "evaorbit-trackers-poc://open:443/tasks", "evaorbit-trackers-poc://open/tasks/%2e%2e/api/tasks", "evaorbit-trackers-poc://open/eventkit/token"] {
+            XCTAssertNil(local.navigationURL(for: URL(string: raw)!), raw)
+        }
+    }
+
     func testBridgeBootstrapExposesVersionedCallSurface() {
         XCTAssertTrue(NativeBridge.bootstrapScript.contains("EvaOrbitNative"))
         XCTAssertTrue(NativeBridge.bootstrapScript.contains("version: 1"))

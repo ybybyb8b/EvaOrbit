@@ -21,3 +21,10 @@ Apple 提醒事项已经负责的首次提醒保持原有归属；开启「逾�
 Host 将链接映射为配置中的 EO HTTPS 源，仅接收 Tasks、通知设置、Food、Health、Lucius 和 Memo 页面，拒绝凭据、外部主机、非页面路径和目录穿越。不通过链接自动完成任务或请求系统权限。冷启动和已运行时均处理该入口。只添加 Info.plist URL Types，不新增 framework、entitlement、APNs 或 bridge 方法。
 
 修改 Host 后需要按既有 macOS CI → ad-hoc IPA → patched xtool → WSL 安装链构建并重装；网页部署与原生安装分别验证。睡眠分界和循环任务日期语义保持原有行为。
+
+
+## 本地版 Bark 跳转发布（2026-11-05）
+
+Bark 的「打开 Host」现在发送 `evaorbit-trackers-poc://open/<页面路径>`，明确唤起本地版，避免和旧 Web Host 的 `evaorbit://` 争抢。设备 Key 与 open_in_host 偏好不变，无需重新绑定 Bark；已发出的旧通知仍保留原链接。新链接须安装本次新版 IPA 后使用，旧本地 IPA 虽注册该 scheme 但尚无对应路由接收。
+
+本地版继续使用 `com.evaorbit.nativehost.trackerspoc` 和原 scheme，显示名称改为 EvaOrbit；按原链路覆盖安装保留 SQLite／队列。Swift 验证允许的路径后只向可信本地页面投递内存中的 `evaorbit:open-path` 事件，React 在账户恢复／登录完成后消费一次，保留 query／fragment；冷启动仍加载包内页面，不切换到线上 Web。网页 Host 继续使用原协议。没有新增 Bridge 方法、权限、framework 或 entitlement；需要 Web 部署和新 IPA，真实 Bark 点按／冷启动留待手机验收。

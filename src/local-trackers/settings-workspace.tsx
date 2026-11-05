@@ -31,7 +31,7 @@ import { browserTrackerExport, type LocalAccount, type TrackerPlatform } from ".
 export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
   const { english } = useLocale();
   const nativeEnabled=useLocalNativeEnabled();
-  const [section, setSection] = useState(useLocalInitialPath("/settings").replace(/^\/settings$/, "")), [error, setError] = useState("");
+  const [section, setSection] = useState(useLocalInitialPath("/settings").split(/[?#]/, 1)[0].replace(/^\/settings$/, "")), [error, setError] = useState("");
   const request = useCallback((path: RequestInfo | URL, init?: RequestInit) => {
     if (typeof path !== "string") return Promise.reject(new Error("Unsupported settings request"));
     return platform.settingsConfiguration(account, path, init);

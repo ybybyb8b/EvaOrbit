@@ -10,11 +10,12 @@ import { useLocale } from "@/components/locale-controller";
 type Statuses = { nativeHost: boolean; health: boolean; nativeNotifications: boolean; webNotifications: string };
 const initial: Statuses = { nativeHost: false, health: false, nativeNotifications: false, webNotifications: "检查中" };
 
-export function SettingsDirectory({ onNavigate }: { onNavigate?: (path: string) => void } = {}) {
+export function SettingsDirectory({ onNavigate, compact = false, localMode }: { onNavigate?: (path: string) => void; compact?: boolean; localMode?: boolean } = {}) {
   const { english } = useLocale();
-  const local = Boolean(onNavigate);
+  const local = localMode ?? Boolean(onNavigate);
   const [status, setStatus] = useState(initial);
   useEffect(() => {
+    if (compact) return;
     const refresh = async () => {
       const info = await getNativeHostInfo();
       setStatus({
@@ -27,19 +28,19 @@ export function SettingsDirectory({ onNavigate }: { onNavigate?: (path: string) 
     void refresh();
     window.addEventListener("evaorbit:native-ready", refresh);
     return () => window.removeEventListener("evaorbit:native-ready", refresh);
-  }, [local]);
+  }, [local, compact]);
 
-  return <div className="page settings-directory-page">
-    <PageHeader eyebrow={english ? "PREFERENCES & CONNECTIONS" : "偏好与连接"} title={english ? "Settings" : "设置"} />
+  return <div className={compact ? undefined : "page settings-directory-page"}>
+    {!compact && <><PageHeader eyebrow={english ? "PREFERENCES & CONNECTIONS" : "偏好与连接"} title={english ? "Settings" : "设置"} />
     <div className="settings-context-strip">
       <span><i className={status.nativeHost ? "online" : ""} />{english ? status.nativeHost ? "Native Host connected" : "Browser session" : status.nativeHost ? "Native Host 已连接" : "浏览器会话"}</span>
-    </div>
+    </div></>}
     <nav className="settings-directory" aria-label="Settings sections">
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/app-appearance") : undefined} href="/settings/app-appearance" icon={Palette} title={english ? "App & Appearance" : "应用与外观"} meta={english ? "Language, type and theme" : "语言、字体与主题"} />
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/life-day") : undefined} href="/settings/life-day" icon={Sunrise} title={english ? "Life day" : "生活日"} meta={english ? "Sleep boundaries and recurring tasks" : "睡眠分界与循环任务归期"} />
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/ai-connection") : undefined} href="/settings/ai-connection" icon={Cpu} title={english ? "AI & Connection" : "AI 与连接"} meta={english ? "Provider, endpoint and model" : "服务商、地址与模型"} />
-      <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/notifications") : undefined} href="/settings/notifications" icon={NotificationIcon} title={english ? "Notifications" : "通知"} meta={english ? status.nativeNotifications ? "Native notifications available" : "Web notifications" : status.nativeNotifications ? "原生通知可用" : `网页通知${status.webNotifications}`} />
-      <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/health-native") : undefined} href="/settings/health-native" icon={Health} title={english ? "Health & Native" : "健康与原生能力"} meta={english ? status.health ? "Apple Health available" : status.nativeHost ? "HealthKit unavailable" : "Connect through the iOS Host" : status.health ? "Apple Health 可用" : status.nativeHost ? "HealthKit 不可用" : "请在 iOS Host 中连接"} />
+      <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/notifications") : undefined} href="/settings/notifications" icon={NotificationIcon} title={english ? "Notifications" : "通知"} meta={compact ? (english ? "Channels and reminder rules" : "通知渠道与提醒规则") : english ? status.nativeNotifications ? "Native notifications available" : "Web notifications" : status.nativeNotifications ? "原生通知可用" : `网页通知${status.webNotifications}`} />
+      <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/health-native") : undefined} href="/settings/health-native" icon={Health} title={english ? "Health & Native" : "健康与原生能力"} meta={compact ? (english ? "Apple Health and native access" : "Apple Health 与原生权限") : english ? status.health ? "Apple Health available" : status.nativeHost ? "HealthKit unavailable" : "Connect through the iOS Host" : status.health ? "Apple Health 可用" : status.nativeHost ? "HealthKit 不可用" : "请在 iOS Host 中连接"} />
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/apple-integration") : undefined} href="/settings/apple-integration" icon={Link2} title={english ? "Apple Integration" : "Apple 日历与提醒事项"} meta={local ? english ? "Calendar and Reminders access" : "日历与提醒事项访问状态" : english ? "Calendar and Reminders sync" : "选择来源并双向同步"} />
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/calendar-interpretation") : undefined} href="/settings/calendar-interpretation" icon={Calendar} title={english ? "Calendar interpretation" : "日历解读"} meta={english ? "Title prefixes, categories and daily summaries" : "标题前缀、分类与每日总结"} />
       <DirectoryItem onClick={onNavigate ? () => onNavigate("/settings/timeline-association") : undefined} href="/settings/timeline-association" icon={Link2} title={english ? "Timeline association rules" : "Timeline 关联规则"} meta={english ? "Combine Calendar and Tracker activities" : "合并展示日历与 Tracker 活动"} />

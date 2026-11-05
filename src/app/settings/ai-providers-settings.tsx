@@ -147,7 +147,7 @@ export function AiProvidersSettings({request = webRequest, onlineOnly = false}: 
       const response = await send(`/api/ai/model-configs/${model.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelId: values.modelId ?? model.modelId, displayName: values.displayName ?? model.displayName, enabled: values.enabled ?? model.enabled, isDefault: values.isDefault ?? model.isDefault, capabilities: model.capabilities }) });
       const result = await response.json() as AiModelConfig & ApiError;
       if (!response.ok) throw new Error(result.error);
-      await load(selected?.id); setNotice(values.isDefault ? "全局默认模型已更新。新对话会使用它。" : "模型设置已更新。");
+      await load(selected?.id); setNotice(values.isDefault ? "默认模型已更新。后续 Eva 整理会使用它。" : "模型设置已更新。");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "更新模型失败"); }
     finally { if(onlineOnly)setDraft(value=>({...value,apiKey:""})); setWorking(false); }
   }
@@ -193,7 +193,7 @@ export function AiProvidersSettings({request = webRequest, onlineOnly = false}: 
           <div className="provider-actions">{selected?.hasApiKey && <button type="button" className="text-button danger-text" onClick={() => setDraft({ ...draft, clearApiKey: !draft.clearApiKey, apiKey: "" })}>{draft.clearApiKey ? "取消移除 Key" : "移除 Key"}</button>}{selected && <button type="button" className="text-button danger-text" onClick={() => void removeProvider()}>删除 Provider</button>}<button type="button" className="button secondary" disabled={working} onClick={() => void testConnection()}>测试连接 / 获取模型</button><button className="button primary" disabled={working} type="submit">保存连接</button></div>
         </form>
 
-        {selected && <section className="provider-models"><div className="provider-models-head"><div><strong>模型</strong><small>默认模型只影响新对话；对话内切换不会改它。</small></div></div>
+        {selected && <section className="provider-models"><div className="provider-models-head"><div><strong>模型</strong><small>后续 Eva 整理使用默认模型。</small></div></div>
           <form className="model-add-form" onSubmit={addModel}><div className="field"><span>Model ID</span><SuggestedInput suggestionLabel="Model ID" suggestions={discovered} required  maxLength={200} value={modelId} onValueChange={nextValue => { setModelId(nextValue); if (!displayName) setDisplayName(nextValue); }} /></div><label className="field"><span>显示名称</span><input required maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label><button className="button secondary" disabled={working} type="submit">添加模型</button></form>
           <div className="provider-model-list">{selected.models.map((model) => <ModelRow key={model.id} model={model} working={working} onUpdate={updateModel} onDelete={removeModel} />)}{!selected.models.length && <p>还没有模型。可以手动填写，或先测试连接读取列表。</p>}</div>
         </section>}

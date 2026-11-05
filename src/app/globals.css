@@ -3733,9 +3733,9 @@ html[data-mode="dark"] body:has(.lucius-profile-page) .main-nav a.active { backg
 .home-quick-log-trigger:active { transform:scale(.96); }
 .home-quick-log-trigger:focus-visible { outline:3px solid rgb(var(--accent-rgb) / .24);outline-offset:3px; }
 .home-quick-log-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px; }
-.home-quick-log-grid>button { min-width:0;min-height:54px;padding:8px 12px;border:0;border-radius:12px;display:flex;align-items:center;justify-content:flex-start;gap:8px;background:rgb(var(--surface-card-rgb) / .76);color:var(--text-primary);text-align:left;cursor:pointer;box-shadow:none;transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease),color 150ms var(--motion-ease); }
+.home-quick-log-grid>button { min-width:0;min-height:54px;padding:8px 12px;border:0;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:8px;background:rgb(var(--surface-card-rgb) / .76);color:var(--text-primary);text-align:center;cursor:pointer;box-shadow:none;transition:transform 110ms var(--motion-ease-out),background-color 150ms var(--motion-ease),color 150ms var(--motion-ease); }
 .home-quick-log-grid>button .home-quick-log-icon { width:20px;height:20px;flex:none;color:var(--text-secondary); }
-.home-quick-log-grid>button strong { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:650 12px/1.2 var(--font-ui); }
+.home-quick-log-grid>button strong { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:650 13px/1.2 var(--font-ui); }
 .home-quick-log-grid>button:focus-visible { outline:0;box-shadow:0 0 0 3px rgb(var(--accent-rgb) / .14); }
 .home-quick-log-grid>button:active,.home-quick-tracker-list>button:active { transform:scale(.98); }
 .home-quick-tracker-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px; }

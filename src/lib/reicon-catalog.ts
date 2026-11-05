@@ -10,10 +10,14 @@ export function reiconNames() {
 
 export async function reiconSvg(name: string) {
   if (!(await reiconNames()).includes(name)) return null;
-  const source = await readFile(path.join(directory, `${name}.js`), "utf8");
+  // More's Filled variant adds a solid tile; MoreH provides the standalone solid dots.
+  const solidDots = name === "More" || name === "MoreH";
+  const source = await readFile(path.join(directory, `${solidDots ? "MoreH" : name}.js`), "utf8");
   // Reicon 1.2.x ships literal O/F SVG markup. Read the installed asset, never eval it.
   // The catalog test checks every asset so a library format change fails before shipping.
-  const markup = source.match(/\bO:\s*`([^`]*)`/)?.[1] ?? source.match(/\bF:\s*`([^`]*)`/)?.[1];
+  const outline = source.match(/\bO:\s*`([^`]*)`/)?.[1];
+  const filled = source.match(/\bF:\s*`([^`]*)`/)?.[1];
+  const markup = solidDots ? filled ?? outline : outline ?? filled;
   if (!markup || /\$\{|\\/.test(markup)) throw new Error("Reicon asset format changed");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">${markup}</svg>`;
 }

@@ -16,7 +16,7 @@ export function barkPayload(key: string, payload: EvaPushPayload, openInHost = f
   if(!payload.url.startsWith("/")||payload.url.startsWith("//"))throw new Error("Notification link must be an EO path");
   const url = new URL(payload.url,"https://eva-orbit.vercel.app");
   if (url.origin !== "https://eva-orbit.vercel.app") throw new Error("Notification link must stay within EO");
-  return { device_key:key,title:payload.title,body:payload.body,url:openInHost ? `evaorbit://open${url.pathname}${url.search}${url.hash}` : url.href,group:"EvaOrbit" };
+  return { device_key:key,title:payload.title,body:payload.body,url:openInHost ? `evaorbit-trackers-poc://open${url.pathname}${url.search}${url.hash}` : url.href,group:"EvaOrbit" };
 }
 
 export async function sendBark(key: string, payload: EvaPushPayload, request: typeof fetch = fetch, openInHost = false) {

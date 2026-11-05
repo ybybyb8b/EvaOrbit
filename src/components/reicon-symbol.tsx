@@ -7,6 +7,7 @@ export const ReiconAssetContext = createContext<Record<string,string> | null>(nu
 export function ReiconSymbol({ name, size = 20 }: { name: string; size?: number }) {
   const assets = useContext(ReiconAssetContext);
   if (assets && !assets[name]) return <Icon name="calendar" />;
-  const url = `url("${assets?.[name] ?? `/api/reicon/${encodeURIComponent(name)}`}")`;
+  const solidDots = name === "More" || name === "MoreH";
+  const url = `url("${assets?.[name] ?? `/api/reicon/${encodeURIComponent(name)}${solidDots ? "?weight=filled" : ""}`}")`;
   return <span aria-hidden="true" className="reicon-symbol" style={{ width: size, height: size, maskImage: url, WebkitMaskImage: url } as CSSProperties} />;
 }

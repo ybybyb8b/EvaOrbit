@@ -13,6 +13,9 @@ import {
 } from "./data-backup.ts";
 
 test("backup allowlist excludes credentials and HealthKit energy infrastructure", () => {
+  assert.ok(BACKUP_TABLES.includes("eva_jobs"));
+  assert.ok(BACKUP_TABLES.includes("eva_calls"));
+  assert.ok(EXCLUDED_BACKUP_TABLES.includes("eva_settings"));
   assert.ok(BACKUP_TABLES.includes("training_suggestion_exclusions"));
   assert.ok(BACKUP_TABLES.includes("software_library"));
   assert.ok(BACKUP_TABLES.includes("food_logs"));
@@ -32,6 +35,14 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("push_subscriptions"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("native_devices"));
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("healthkit_daily_energy"));
+});
+
+test("paper backups retain audit and usage but never resume an interrupted worker on restore", () => {
+  const resources = { ...emptyBackupResources() };
+  delete (resources as Partial<typeof resources>).eva_jobs;
+  delete (resources as Partial<typeof resources>).eva_calls;
+  assert.deepEqual(parseBackupDocument({ backup_version: 16, exported_at: "2026-11-04T04:00:00Z", schema: { supabase_migration: "old" }, source: { backend: "supabase" }, resources }).resources.eva_jobs, []);
+  assert.deepEqual(normalizeBackupRowForSqlite("eva_jobs", { id: "paper", user_id: "owner", status: "running", lease: "old", lease_until: "old" }), { id: "paper", status: "held", lease: null, lease_until: null });
 });
 
 test("version 15 backups remain readable without training exclusions", () => {

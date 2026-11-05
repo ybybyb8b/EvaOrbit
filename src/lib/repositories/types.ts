@@ -157,6 +157,7 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  eva: import("../eva").EvaStore;
   deleteInsightReport(id: string, expectedVersion: number, expectedGeneration: number): Promise<void>;
   getInsightVersionForRequest(requestKey: string): Promise<import("../insight-reports").InsightVersion | null>;
   getInsightRunAttempt(input: { id: string } | { requestKey: string }): Promise<import("../insight-runs").InsightRunAttempt | null>;
@@ -507,6 +508,7 @@ export interface EvaOrbitRepository {
   getCatRoutine(id: number): Promise<CatRoutine | null>;
   createCatRoutine(input: NewCatRoutine): Promise<CatRoutine>;
   updateCatRoutine(id: number, input: Record<string, unknown>): Promise<CatRoutine | null>;
+  completeCatRoutineOccurrence(id: number, expected: Pick<CatRoutine, "nextDueAt" | "lastCompletedAt">, completion: Pick<CatRoutine, "lastCompletedAt" | "anchorDate" | "nextDueDate" | "nextDueAt">): Promise<{ routine: CatRoutine; event: CatEvent } | null>;
   archiveCatRoutine(id: number): Promise<boolean>;
   deleteCatRoutine(id: number): Promise<boolean>;
 

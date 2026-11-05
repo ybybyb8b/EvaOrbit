@@ -1,4 +1,5 @@
 import "server-only";
+import { createSupabaseEvaStore } from "./eva-supabase";
 import { insightReportFromRow, insightVersionFromRow } from "../insight-reports";
 import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow } from "../insight-runs";
 import { libraryEntryFromRow, libraryEntryToRow } from "../software-library";
@@ -274,6 +275,7 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     return logs.map(log=>({...log,foodPlaces:(log.foodPlaceIds??[]).flatMap(id=>places.has(id)?[places.get(id)!]:[]),foodDishes:(log.foodDishIds??[]).flatMap(id=>{const row=dishes.get(id);return row?[{id,name:String(row.name),...(row.food_place_id!=null?{foodPlaceId:Number(row.food_place_id)}:{}),...(row.food_library_id!=null?{foodLibraryId:Number(row.food_library_id)}:{})}]:[];})}));
   }
   const repository: EvaOrbitRepository = {
+    eva: createSupabaseEvaStore(client),
     async deleteInsightReport(id,version,generation){const{error}=await client.rpc('delete_insight_report',{p_report_id:id,p_expected_version:version,p_expected_generation:generation});if(error?.message.includes('INSIGHT_'))throw new ConflictError('日报已更新或不存在，请刷新后再删除。');fail(error,'删除日报');},
     async getInsightVersionForRequest(key){const{data,error}=await client.from('insight_report_versions').select('*').eq('user_id',userId).eq('request_key',key).maybeSingle();fail(error,'读取复盘请求结果');return data?insightVersionFromRow(data):null;},
     async getInsightRunAttempt(input){const{data,error}=await client.from('insight_run_attempts').select('*').eq('user_id',userId).eq('id' in input?'id':'request_key','id' in input?input.id:input.requestKey).maybeSingle();fail(error,'读取复盘执行尝试');return data?insightAttemptFromRow(data):null;},
@@ -898,6 +900,12 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async listReminderOccurrences(range) {
       const {data,error}=await client.from("reminder_occurrences").select("*").eq("user_id",userId).eq("action","completed").gte("acted_at",range.from).lt("acted_at",range.to).order("acted_at").order("id");
       fail(error,"读取提醒完成记录");return (data as Row[]).map(reminderOccurrenceFromRow);
+    },
+    async completeCatRoutineOccurrence(id,expected,completion){
+      const {data,error}=await client.rpc("complete_cat_routine_occurrence",{p_id:id,p_expected_due_at:expected.nextDueAt,p_expected_completed_at:expected.lastCompletedAt,p_completed_at:completion.lastCompletedAt,p_anchor_date:completion.anchorDate,p_next_due_date:completion.nextDueDate,p_next_due_at:completion.nextDueAt});
+      if(error && ["42883","PGRST202"].includes(error.code)) throw new HttpError("护理完成服务尚未升级，请先应用数据库迁移后重试。",503);
+      fail(error,"完成猫咪护理");
+      return data ? {routine:catRoutineFromRow(data.routine),event:catEventFromRow(data.event)} : null;
     },
     async createReminderOccurrence(input){const{data,error}=await client.from("reminder_occurrences").insert({user_id:userId,reminder_id:input.reminderId,action:input.action,scheduled_for:input.scheduledFor,acted_at:input.actedAt,created_event_id:input.createdEventId}).select().single();fail(error,"保存提醒操作");return reminderOccurrenceFromRow(data);},
     async listNotificationDeliveries(limit=100){const{data,error}=await client.from("notification_deliveries").select("*").order("created_at",{ascending:false}).order("id",{ascending:false}).limit(limit);fail(error,"读取通知历史");return(data as Row[]).map(notificationDeliveryFromRow);},

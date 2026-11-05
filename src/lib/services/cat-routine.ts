@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ConflictError } from "../errors";
+import { ConflictError, HttpError } from "../errors";
 import { catRoutineCompletionPatch, catRoutineSkipPatch } from "../reminder-engine";
 import { getRepository } from "../repositories";
 import type { NewCatRoutine } from "../repositories/types";
@@ -104,29 +104,27 @@ export async function updateCatRoutine(id: number, input: Record<string, unknown
   return repository.getCatRoutine(id);
 }
 
-export async function completeCatRoutine(id: number, actedAt = new Date()) {
+export type RoutineCompletionExpectation = { expectedNextDueAt?: string; expectedLastCompletedAt?: string | null };
+export async function completeCatRoutine(id: number, actedAt = new Date(), expected: RoutineCompletionExpectation = {}) {
+  if (!expected || typeof expected !== "object" || Array.isArray(expected)) throw new HttpError("Invalid completion request.", 400);
+  for (const key of ["expectedNextDueAt", "expectedLastCompletedAt"] as const) {
+    const value = expected[key];
+    if (value !== undefined && !(key === "expectedLastCompletedAt" && value === null) && (typeof value !== "string" || !Number.isFinite(Date.parse(value)))) throw new HttpError("Invalid completion occurrence.", 400);
+  }
+  if (!Number.isFinite(actedAt.getTime())) throw new HttpError("Invalid completion time.", 400);
   const { repository, routine } = await requireRoutine(id);
   if (!routine.enabled) throw new ConflictError("Routine is disabled.");
-  if (routine.lastCompletedAt && actedAt.getTime() - new Date(routine.lastCompletedAt).getTime() < 30_000) throw new ConflictError("Routine was just completed.");
+  const sameInstant = (a: string | null, b: string | null) => a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
+  if ((expected.expectedNextDueAt !== undefined && !sameInstant(expected.expectedNextDueAt, routine.nextDueAt))
+    || (expected.expectedLastCompletedAt !== undefined && !sameInstant(expected.expectedLastCompletedAt, routine.lastCompletedAt))) return { routine, event: null, alreadyCompleted: true };
   const completionDate = await getRecurrenceCompletionDate(actedAt, routine.nextDueAt, routine.timezone);
-  const completion = catRoutineCompletionPatch(routine, actedAt, completionDate);
-  const event = await repository.createCatEvent({
-    petId: routine.scope === "cat" ? routine.petId : null,
-    eventType: routine.scope === "cat" ? "care" : "cleaning",
-    occurredAt: actedAt.toISOString(),
-    occurredHasExplicitTime: true,
-    title: routine.title,
-    note: routine.notes,
-    sourceType: "cat_routine",
-    sourceId: routine.id,
-  });
-  const nextDueAt = completion.nextDueAt;
-  const updated = await repository.updateCatRoutine(id, completion);
-  if (routine.reminderId) {
-    await repository.createReminderOccurrence({ reminderId: routine.reminderId, action: "completed", scheduledFor: routine.nextDueAt, actedAt: actedAt.toISOString(), createdEventId: event.id });
-    await repository.updateReminder(routine.reminderId, { nextDueAt, lastCompletedAt: actedAt.toISOString(), ...RESET_NOTIFICATION, isActive: true });
+  if (routine.lastCompletedAt) {
+    const previousDate = await getRecurrenceCompletionDate(new Date(routine.lastCompletedAt), routine.nextDueAt, routine.timezone);
+    if (completionDate <= previousDate) return { routine, event: null, alreadyCompleted: true };
   }
-  return { routine: updated, event };
+  const completion = catRoutineCompletionPatch(routine, actedAt, completionDate);
+  const saved = await repository.completeCatRoutineOccurrence(id, routine, completion);
+  return saved ?? { routine: await repository.getCatRoutine(id), event: null, alreadyCompleted: true };
 }
 
 export async function skipCatRoutineOccurrence(id: number, actedAt = new Date()) {

@@ -1,4 +1,5 @@
 "use client";
+import { useBottomLogAction } from "@/components/bottom-log-core";
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
@@ -45,6 +46,7 @@ export function TimelineAssociationView({ settings: initialSettings, trackers, r
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(false); }
   }
+  useBottomLogAction({label:english ? "Add association rule" : "添加关联规则",disabled:busy,onClick:()=>{setError("");setEditor({});}});
   const feedback = <>{error && <ErrorNotice>{error}</ErrorNotice>}{conflict && <button type="button" className="button secondary" disabled={busy} onClick={() => void reload()}>{english ? "Reload rules, keep draft" : "刷新规则，保留草稿"}</button>}</>;
   return <div className="page settings-detail-page calendar-interpretation-page">
     <PageHeading eyebrow="" title={english ? "Timeline association rules" : "Timeline 关联规则"} description={english ? "Show Calendar and Tracker records of one activity together. Original records and statistics stay unchanged." : "将同一次活动的 Calendar 与 Tracker 记录合并展示，保留原始记录与统计。"} action={embedded ? undefined : <Link className="settings-back-link" href="/settings">{english ? "All settings" : "全部设置"}</Link>} />

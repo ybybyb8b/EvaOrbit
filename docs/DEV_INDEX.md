@@ -10,7 +10,7 @@
 
 本地缺图仅退化到占位图，不得阻断业务快照；认证失败、损坏图片及容量越界仍拒绝。表单首次打开优先使用已下载数据，不等待在线候选请求。Tracker 的记录增删改继续使用独立副本；整个 Tracker 的永久删除单独走测试账号在线白名单 DELETE，确认后先同步并检查该 Tracker 自身待提交操作，不重放其他模块队列。修复与验收边界见 [本地版集中验收修复](LOCAL_ACCEPTANCE_FIXES.md)。
 
-下方各模块的“只读阶段”说明保留其 GET 快照、缓存容量与原始迁移边界；当前真实账户的交互写入以本节为准。Home 跨模块链接经本地路由适配；系统权限写入、Eva/Graph 和 Tracker 高级设置仍未因此开放。
+下方各模块的“只读阶段”说明保留其 GET 快照、缓存容量与原始迁移边界；当前真实账户的交互写入以本节为准。Home 跨模块链接经本地路由适配；系统权限写入、Graph 和 Tracker 高级设置仍未因此开放；Eva 纸条后台通过下文独立接口接入。
 
 ## 模块速查
 
@@ -126,6 +126,8 @@
 
 ## AI
 
+- **Eva 纸条后台**：原 `/ai` 页面改为共享 [EvaWorkbench](../src/components/eva-workbench.tsx)，Web／本地 Home 通用 Log 顶部复用 [EvaPaperCapture](../src/components/eva-paper.tsx)。仅存 Inbox 不用 AI，显式交给 Eva 才排队；默认关闭且不扫描其他记录。固定小提示词、单纸条上下文与结构校验在 [eva.ts](../src/lib/eva.ts)，[处理服务](../src/lib/services/eva.ts) 经 Next `after` 执行一次受限模型调用，Repository 原子保存现有 Task／提醒和审计引用。新增 `eva_settings`／`eva_jobs`／独立 `eva_calls` 用量账本，按日/月及模型统计，价格未知保持未知。详见 [后台契约与发布](EVA_WORKBENCH.md)；快捷指令仍后续单独接入。
+
 - **开发版 AI 配置**：开发版设置直接复用 [AiProvidersSettings](../src/app/settings/ai-providers-settings.tsx)，通过 `settings.aiConfiguration` 在线管理 Provider 和模型；不包含 Eva 聊天。白名单、账户绑定与服务端协议检查由 [AI 请求契约](../src/lib/ai-configuration-request.ts)、Native Controller、认证 proxy 共同执行。密钥仅临时驻留表单，请求不缓存、不进入业务 outbox；断网清除未提交密钥。旧服务端缺少账户安全协议时拒绝操作。
 
 - **职责与入口**：[ai/](../src/app/ai/)、[chat API](../src/app/api/ai/chat/route.ts)、[persona.ts](../src/lib/persona.ts)、[ai-tools.ts](../src/lib/ai-tools.ts)、[Provider 设置](../src/app/settings/ai-providers-settings.tsx)。
@@ -176,6 +178,7 @@
 
 - **职责与入口**：[cats/](../src/app/cats/)、[cats 服务](../src/lib/services/cats.ts)、[cat-routine.ts](../src/lib/services/cat-routine.ts)、[cat-food.ts](../src/lib/services/cat-food.ts)。
 - **数据与接口**：`pets`、`cat_events`、`cat_symptoms`、`vet_visits`、`cat_medications`、`cat_measurements`、`cat_routines`、`cat_food_items`、`cat_food_purchases`；`/api/cats/*`；MCP `cat_pet`、`cat_record`、`cat_routine`。
+- **周期完成一致性**：Routine 按生活日去重；页面及 Apple 回写携带到期与完成水位，旧请求不能消费下一期。Repository 原子完成同时写入护理、执行记录、周期和提醒；Supabase 依赖 `complete_cat_routine_occurrence` RPC。
 - **依赖与决定**：Routine 通过 Reminder 周期执行，归档与永久删除不同；保留已生成护理记录与投递快照。猫咪删除兼容入口实际为归档。猫食品库存独立于人的 Food Library，不能合并；护理/健康事件进入 Timeline。
 - **详文**：[MCP 生命周期与按 kind 字段](../src/lib/mcp/README.md)、[提醒契约](../MCP.md)。
 
@@ -203,12 +206,12 @@
 - **职责与入口**：[subscriptions/](../src/app/subscriptions/)、[subscription 服务](../src/lib/services/subscription.ts)；`subscriptions`、`subscription_payments`、`subscription_price_changes`；`/api/subscriptions/*`，MCP `subscription`。
 - **手动续期会员**：`mode=manual` 以 `expires_on` 管理权益，购买元数据与幂等标识存入原付款表，通过 `/api/subscriptions/:id/purchases`／MCP `record_purchase` 幂等、原子记录实际付款与有效期；不进入自动补账、固定周期推进或未来确定支出。截止日含当天，已到期为派生状态，生命周期仍保留 Active／Paused／Ended。Web／本地共享表单和展示；详见 [手动续期会员](SUBSCRIPTIONS_MANUAL_MEMBERSHIP.md)。
 - **续费时间线**：总览保留品牌卡片，补充未来 30 天及未处理计划、已记录付款；日期调整复用订阅 PATCH，不补记被调整的旧计划，提醒跟随新日期，已有付款不改写。
-- **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
+- **软件库（Web／本地）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与共享详情表单；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选另一语言名称参与搜索，iOS 支持 CN／US 多选，兼容旧缓存；可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。本地快照通过可选 `library`／`libraryIconSources` 扩展兼容旧缓存，最多 500 个软件，与订阅合计不超过 8 MiB；写入及图标上传复用 `business.request`。旧预览地址重定向至正式页。
 - **依赖与决定**：自动续费的读取可补记付款并推进续费日，不视为纯无副作用查询；手工付款、跳过与启停走业务服务。提醒投影由订阅服务维护，付款参与 Timeline。历史实际付款日可通过 `/api/subscriptions/:id/payments/:paymentId` PATCH／MCP `subscription.update_payment_date` 修正，保留账期归属、金额、币种、备注，不推进固定续费日；Web／本地共享日期表单。
 - **详文**：[MCP 读取副作用](../src/lib/mcp/README.md)、[通知通道](BARK_NOTIFICATIONS.md)。
 
 - **续费时间线（Web）**：总览展示未来30天、未处理计划及已有付款；时间线与详情页可调整下次续费日期，沿用订阅PATCH和提醒投影，不补记被调整的旧计划，不改写付款历史。
-- **软件库（Web／本地共享界面）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。共享 `SubscriptionsDataProvider` 与账户请求上下文默认保持 Web 行为，本地分支注入导航、快照及在线写入。`/api/native/subscriptions-readonly` 可选增加 `library`／`libraryIconSources`，兼容旧缓存，最多 500 个软件，全部快照合计仍限 8 MiB；旧预览地址重定向至正式页。本地新界面需后续更新前端包。
+- **软件库（Web／本地共享界面）**：`/subscriptions/library` 使用独立 `software_library` 表记录软件、自定义图标、平台、授权／获取方式及来源链接，手机四列图标网格与详情表单，Overview／Trends／Library 分区导航；`/api/subscriptions/library/*` 走账户隔离 Repository，纳入备份。可选另一语言名称参与搜索，iOS 支持 CN／US 多选，兼容旧缓存；可选实际购买金额／币种复用获取日期，独立按币种汇总一次性费用（未知与零元分开），不进入订阅付款、续费或预测；MCP `software_library` 复用同一服务。共享 `SubscriptionsDataProvider` 与账户请求上下文默认保持 Web 行为，本地分支注入导航、快照及在线写入。`/api/native/subscriptions-readonly` 可选增加 `library`／`libraryIconSources`，兼容旧缓存，最多 500 个软件，全部快照合计仍限 8 MiB；旧预览地址重定向至正式页。本地新界面需后续更新前端包。
 
 ## Projects
 

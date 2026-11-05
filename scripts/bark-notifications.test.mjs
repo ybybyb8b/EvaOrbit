@@ -51,7 +51,7 @@ test("scheduled Bark reminders deduplicate, repeat daily, stop after completion 
     let sent=0,webReads=0,accept=true;
     globalThis.fetch=async(input,options={})=>{
       const url=new URL(typeof input==="string"?input:input.url??String(input));
-      if(url.hostname==="api.day.app"){sent++;const body=JSON.parse(options.body);assert.equal(body.device_key,"abcdefgh12345678");assert.equal(body.url,"evaorbit://open/settings/notifications?reminderId=42");return Response.json({code:accept?200:500});}
+      if(url.hostname==="api.day.app"){sent++;const body=JSON.parse(options.body);assert.equal(body.device_key,"abcdefgh12345678");assert.equal(body.url,"evaorbit-trackers-poc://open/settings/notifications?reminderId=42");return Response.json({code:accept?200:500});}
       const table=url.pathname.split("/").at(-1);if(table==="push_subscriptions")webReads++;
       const rows=tables[table]??[];
       const match=row=>[...url.searchParams].every(([key,value])=>!value.startsWith("eq.")||String(row[key])===value.slice(3));
@@ -100,8 +100,8 @@ test("Bark settings encrypt keys, keep public responses secret-free and route ex
       assert.equal(sent.length,2);assert.equal(webSent,0);
       assert.deepEqual(await getBarkStatus(),{configured:true,enabled:true,openInHost:false});
       await saveBarkConnection({enabled:true,openInHost:true});
-      await testBarkConnection();assert.equal(sent.at(-1).url,"evaorbit://open/settings/notifications");
-      await notifyLuciusActivity(sqliteRepository);assert.equal(sent.at(-1).url,"evaorbit://open/lucius");
+      await testBarkConnection();assert.equal(sent.at(-1).url,"evaorbit-trackers-poc://open/settings/notifications");
+      await notifyLuciusActivity(sqliteRepository);assert.equal(sent.at(-1).url,"evaorbit-trackers-poc://open/lucius");
       await assert.rejects(saveBarkConnection({enabled:true,openInHost:"yes"}));
       globalThis.fetch=async()=>Response.json({code:500},{status:500});
       await notifyLuciusActivity(sqliteRepository);assert.equal(webSent,0);

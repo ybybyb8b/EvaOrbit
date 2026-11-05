@@ -16,7 +16,7 @@ Training Log 点击删除无反应的 Host 修复：补齐可信主框架的 Jav
 
 本地加载层仅行星持续环绕，原图形直接完整显示，内容就绪后立即撤下，不等待固定时长或一圈结束，也不做淡入/淡出、描边或呼吸。保留已有首页内容就绪门槛、25秒失败/重试与系统减少动态效果；首页无缓存的页面内等待也显示环绕，有缓存则直接展示。登录页移除空导航行与外观入口的布局占位，手机卡片从安全区下的入口后开始排列。需新IPA后在iPhone验证加载快/慢、重进首页及键盘；本轮未打包或安装，不改变权限和签名链。
 
-独立开发版主屏幕显示名称为 `EO Dev`（workflow的`local_trackers=true`）；沿用 `com.evaorbit.nativehost.trackerspoc` 与原URL scheme，覆盖安装而非新建应用。正式在线Host仍显示`EvaOrbit`。改名需新IPA，不改变签名、权限或数据目录。
+本地主用版主屏幕显示名称为 `EvaOrbit`（此前为 `EO Dev`）（workflow的`local_trackers=true`）；沿用 `com.evaorbit.nativehost.trackerspoc` 与原URL scheme，覆盖安装而非新建应用。正式在线Host仍显示`EvaOrbit`。改名需新IPA，不改变签名、权限或数据目录。
 
 本地 Host 的下拉刷新改用 Web 共享的页面内手势与提示，调用当前模块加载器，保留页面筛选及详情状态。仅本地关闭 `UIRefreshControl`、`bounces` 与 `alwaysBounceVertical`，网页背景使用当前主题，避免顶部回弹露出底层背景；普通在线 Host 不变。合成浏览器已验证刷新及弹层/横滑保护，黑边、顶部安全区与普通滚动仍待下一次 IPA 在 iPhone 16 Pro 验收，本轮不打包。
 
@@ -508,3 +508,10 @@ Vercel resource optimization: EventKit reads only enabled domains. Optional mapp
 ## Insights 双端发布
 
 本地 React 新增 Insights 入口，复用 Web 的每日简报与既有 business.request 账户通道。安装包 business-routes.json 增加 Insights GET 列表/餐次状态/运行、POST 排队及 UUID 报告 GET/DELETE；Swift 动态读取原有清单，无新增方法、权限、framework、entitlement、数据库队列或签名链变更。断网不显示旧的分析结论或提交写入，联网后重新读取。Web/MCP 与两项 Insights 数据迁移先发布，本地包以 local_trackers=true 按原链路构建。Windows 已通过打包前浏览器模拟 Bridge 与生产前端构建；macOS 编译和真机验收不得据此记为通过。
+
+
+## 本地版 Bark 跳转发布（2026-11-05）
+
+Bark 的「打开 Host」现在发送 `evaorbit-trackers-poc://open/<页面路径>`，明确唤起本地版，避免和旧 Web Host 的 `evaorbit://` 争抢。设备 Key 与 open_in_host 偏好不变，无需重新绑定 Bark；已发出的旧通知仍保留原链接。新链接须安装本次新版 IPA 后使用，旧本地 IPA 虽注册该 scheme 但尚无对应路由接收。
+
+本地版继续使用 `com.evaorbit.nativehost.trackerspoc` 和原 scheme，显示名称改为 EvaOrbit；按原链路覆盖安装保留 SQLite／队列。Swift 验证允许的路径后只向可信本地页面投递内存中的 `evaorbit:open-path` 事件，React 在账户恢复／登录完成后消费一次，保留 query／fragment；冷启动仍加载包内页面，不切换到线上 Web。网页 Host 继续使用原协议。没有新增 Bridge 方法、权限、framework 或 entitlement；需要 Web 部署和新 IPA，真实 Bark 点按／冷启动留待手机验收。

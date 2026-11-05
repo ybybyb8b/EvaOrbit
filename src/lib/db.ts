@@ -2,6 +2,7 @@ import {sameSubscriptionPurchase} from "./subscription-purchase";
 import type {NewSubscriptionPurchase} from "./repositories/types";
 import { mergePlaceAddress } from "./place-menu";
 import { DatabaseSync } from "node:sqlite";
+import { createSqliteEvaStore } from "./repositories/eva-sqlite";
 import { randomUUID } from "node:crypto";
 import { shiftDate } from "./time";
 import { insightReportFromRow, insightVersionFromRow, type InsightReportWrite, type InsightPeriodType } from "./insight-reports";
@@ -127,6 +128,7 @@ const dbPath = process.env.EVAORBIT_SQLITE_PATH
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 const database = new DatabaseSync(dbPath);
+export const evaStore = createSqliteEvaStore(database);
 database.exec("PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
 database.exec("PRAGMA journal_mode = WAL;");
 
@@ -1689,8 +1691,8 @@ if(!hasV84)database.exec("BEGIN; ALTER TABLE software_library ADD COLUMN icon_pa
 export function setSoftwareLibraryIcon(id:number,iconPath:string){database.prepare("UPDATE software_library SET icon_path=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(iconPath,id);return getSoftwareLibraryEntry(id);}
 export function listSoftwareLibrary(){return database.prepare("SELECT * FROM software_library ORDER BY name COLLATE NOCASE,id").all().map(libraryEntryFromRow);}
 export function getSoftwareLibraryEntry(id:number){const row=database.prepare("SELECT * FROM software_library WHERE id=?").get(id);return row?libraryEntryFromRow(row):null;}
-export function createSoftwareLibraryEntry(input:LibraryInput){const result=database.prepare("INSERT INTO software_library(name,category,platforms,license,version,acquisition,acquired_on,website,notes,purchase_amount_minor,purchase_currency) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,input.purchaseAmountMinor??null,input.purchaseCurrency??null);return getSoftwareLibraryEntry(Number(result.lastInsertRowid))!;}
-export function updateSoftwareLibraryEntry(id:number,input:LibraryInput){const result=database.prepare("UPDATE software_library SET name=?,category=?,platforms=?,license=?,version=?,acquisition=?,acquired_on=?,website=?,notes=?,purchase_amount_minor=?,purchase_currency=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,input.purchaseAmountMinor??null,input.purchaseCurrency??null,id);return result.changes?getSoftwareLibraryEntry(id):null;}
+export function createSoftwareLibraryEntry(input:LibraryInput){const result=database.prepare("INSERT INTO software_library(name,category,platforms,license,version,acquisition,acquired_on,website,notes,purchase_amount_minor,purchase_currency,alternate_name,ios_regions) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,input.purchaseAmountMinor??null,input.purchaseCurrency??null,input.alternateName??"",JSON.stringify(input.iosRegions??[]));return getSoftwareLibraryEntry(Number(result.lastInsertRowid))!;}
+export function updateSoftwareLibraryEntry(id:number,input:LibraryInput){const result=database.prepare("UPDATE software_library SET name=?,category=?,platforms=?,license=?,version=?,acquisition=?,acquired_on=?,website=?,notes=?,purchase_amount_minor=?,purchase_currency=?,alternate_name=?,ios_regions=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(input.name,input.category,JSON.stringify(input.platforms),input.license,input.version,input.acquisition,input.acquiredOn,input.website,input.notes,input.purchaseAmountMinor??null,input.purchaseCurrency??null,input.alternateName??"",JSON.stringify(input.iosRegions??[]),id);return result.changes?getSoftwareLibraryEntry(id):null;}
 export function deleteSoftwareLibraryEntry(id:number){return database.prepare("DELETE FROM software_library WHERE id=?").run(id).changes>0;}
 
 const hasV85=database.prepare("SELECT 1 FROM migrations WHERE version=85").get();
@@ -1990,6 +1992,12 @@ if(!hasV96)database.exec(`BEGIN;
  ALTER TABLE software_library ADD COLUMN purchase_amount_minor INTEGER CHECK(purchase_amount_minor IS NULL OR (typeof(purchase_amount_minor)='integer' AND purchase_amount_minor>=0 AND purchase_amount_minor<=999999999999));
  ALTER TABLE software_library ADD COLUMN purchase_currency TEXT CHECK((purchase_amount_minor IS NULL AND purchase_currency IS NULL) OR (purchase_amount_minor IS NOT NULL AND purchase_currency IS NOT NULL AND length(purchase_currency)=3 AND purchase_currency NOT GLOB '*[^A-Z]*'));
  INSERT INTO migrations(version) VALUES(96); COMMIT;`);
+
+const hasV97=database.prepare("SELECT 1 FROM migrations WHERE version=97").get();
+if(!hasV97)database.exec(`BEGIN;
+ ALTER TABLE software_library ADD COLUMN alternate_name TEXT NOT NULL DEFAULT '' CHECK(length(alternate_name)<=80);
+ ALTER TABLE software_library ADD COLUMN ios_regions TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(ios_regions) AND json_type(ios_regions)='array' AND json_array_length(ios_regions)<=2 AND (json_array_length(ios_regions)=0 OR json_extract(platforms,'$') LIKE '%"iOS"%') AND (json_array_length(ios_regions)<1 OR coalesce(json_extract(ios_regions,'$[0]') IN ('CN','US'),0)) AND (json_array_length(ios_regions)<2 OR coalesce(json_extract(ios_regions,'$[1]') IN ('CN','US'),0)) AND (json_array_length(ios_regions)<2 OR json_extract(ios_regions,'$[0]')<>json_extract(ios_regions,'$[1]')));
+ INSERT INTO migrations(version) VALUES(97); COMMIT;`);
 
 export function listTrainingSuggestionExclusions(): import("./types").TrainingSuggestionExclusion[] {
   const rows = database.prepare("SELECT kind,value FROM training_suggestion_exclusions WHERE user_id='local' ORDER BY kind,value").all() as import("./types").TrainingSuggestionExclusion[];
@@ -2837,6 +2845,20 @@ export function deleteCatMeasurement(id:number){return database.prepare("DELETE 
 
 export function listCatRoutines(input:{scope?:string;petId?:number|null;enabledOnly?:boolean}={}){const c:string[]=[],v:Array<string|number>=[];if(input.scope){c.push("scope=?");v.push(input.scope);}if(input.petId===null)c.push("pet_id IS NULL");else if(typeof input.petId==="number"){c.push("pet_id=?");v.push(input.petId);}if(input.enabledOnly)c.push("enabled=1");return(database.prepare(`SELECT * FROM cat_routines ${c.length?`WHERE ${c.join(" AND ")}`:""} ORDER BY enabled DESC,next_due_at,id`).all(...v) as Record<string,unknown>[]).map(catRoutineFromRow);}
 export function getCatRoutine(id:number){const row=database.prepare("SELECT * FROM cat_routines WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?catRoutineFromRow(row):null;}
+export function completeCatRoutineOccurrence(id:number, expected:Pick<CatRoutine,"nextDueAt"|"lastCompletedAt">, completion:Pick<CatRoutine,"lastCompletedAt"|"anchorDate"|"nextDueDate"|"nextDueAt">){
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const routine=getCatRoutine(id);
+    if(!routine?.enabled || routine.nextDueAt!==expected.nextDueAt || routine.lastCompletedAt!==expected.lastCompletedAt){database.exec("ROLLBACK");return null;}
+    const event=createCatEvent({petId:routine.scope==="cat"?routine.petId:null,eventType:routine.scope==="cat"?"care":"cleaning",occurredAt:completion.lastCompletedAt!,occurredHasExplicitTime:true,title:routine.title,note:routine.notes,sourceType:"cat_routine",sourceId:id});
+    const updated=updateCatRoutine(id,completion)!;
+    if(routine.reminderId){
+      createReminderOccurrence({reminderId:routine.reminderId,action:"completed",scheduledFor:routine.nextDueAt,actedAt:completion.lastCompletedAt!,createdEventId:event.id});
+      if(!updateReminder(routine.reminderId,{nextDueAt:completion.nextDueAt,lastCompletedAt:completion.lastCompletedAt,status:"scheduled",sentAt:null,cancelledAt:null,snoozedUntil:null,lastNotifiedAt:null,isActive:true})) throw new Error("Routine reminder not found");
+    }
+    database.exec("COMMIT");return {routine:updated,event};
+  }catch(error){database.exec("ROLLBACK");throw error;}
+}
 export function createCatRoutine(input:Omit<CatRoutine,"id"|"lastCompletedAt"|"createdAt"|"updatedAt">){const r=database.prepare("INSERT INTO cat_routines(scope,pet_id,title,interval_value,interval_unit,recurrence_mode,anchor_date,first_due_date,next_due_date,configured_reminder_time,timezone,first_due_at,next_due_at,reminder_lead_minutes,repeat_while_overdue,notes,enabled,reminder_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.scope,input.petId,input.title,input.intervalValue,input.intervalUnit,input.recurrenceMode,input.anchorDate,input.firstDueDate,input.nextDueDate,input.configuredReminderTime,input.timezone,input.firstDueAt,input.nextDueAt,input.reminderLeadMinutes,Number(input.repeatWhileOverdue),input.notes,Number(input.enabled),input.reminderId);return getCatRoutine(Number(r.lastInsertRowid))!;}
 export function updateCatRoutine(id:number,input:Record<string,unknown>){updateCatsRow("cat_routines",id,input,{scope:"scope",petId:"pet_id",title:"title",intervalValue:"interval_value",intervalUnit:"interval_unit",recurrenceMode:"recurrence_mode",anchorDate:"anchor_date",firstDueDate:"first_due_date",nextDueDate:"next_due_date",configuredReminderTime:"configured_reminder_time",timezone:"timezone",firstDueAt:"first_due_at",lastCompletedAt:"last_completed_at",nextDueAt:"next_due_at",reminderLeadMinutes:"reminder_lead_minutes",repeatWhileOverdue:"repeat_while_overdue",notes:"notes",enabled:"enabled",reminderId:"reminder_id"},[],["enabled","repeatWhileOverdue"]);return getCatRoutine(id);}
 export function deleteCatRoutine(id:number){return database.prepare("DELETE FROM cat_routines WHERE id=?").run(id).changes>0;}
