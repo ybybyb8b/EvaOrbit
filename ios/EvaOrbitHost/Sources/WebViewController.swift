@@ -337,7 +337,7 @@ final class WebViewController: UIViewController {
 
     private func deliverLocalDeepLink() {
         guard hostConfiguration.localTrackers, let target = launchURL,
-              let current = webView.url, hostConfiguration.allowsTrackerUI(current),
+              !webView.isLoading, let current = webView.url, hostConfiguration.allowsTrackerUI(current),
               let components = URLComponents(url: target, resolvingAgainstBaseURL: false) else { return }
         let path = components.percentEncodedPath + (components.percentEncodedQuery.map { "?" + $0 } ?? "") + (components.percentEncodedFragment.map { "#" + $0 } ?? "")
         // Keep the pending route in memory until React has restored its account.
