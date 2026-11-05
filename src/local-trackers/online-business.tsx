@@ -21,8 +21,9 @@ export function OnlineBusinessProvider({account,platform,children}:{account:Loca
       const response=await platform.businessRequest(account,path,init);
       if(!alive)throw new Error("Account changed. Check the cloud before submitting again.");
       if(response.ok&&(init?.method??"GET").toUpperCase()!=="GET"){
-        clearClientJsonCache();
         const domain=path.split("/")[2];
+        if(domain==="hermes")return response;
+        clearClientJsonCache();
         const resource=domain==="food"||domain==="drinks"?"food":domain==="project-items"?"projects":domain==="nutrition"||domain==="preferences"?"health":domain;
         let snapshotUpdated=false;
         const refresh=domain==="trackers"?async()=>{}:domain==="food"||domain==="drinks"?()=>platform.foodSnapshot(account,true):domain==="tasks"||domain==="projects"||domain==="project-items"||domain==="lucius"?()=>platform.workspaceSnapshot(account,domain==="project-items"?"projects":domain,true):domain==="health"||domain==="nutrition"||domain==="preferences"?()=>platform.healthSnapshot(account,true):domain==="cats"?()=>platform.catsSnapshot(account,true):domain==="relations"?()=>platform.relationsSnapshot(account,true):domain==="media"?()=>platform.mediaSnapshot(account,true):domain==="subscriptions"?()=>platform.subscriptionsSnapshot(account,true):domain==="chronicle"?()=>platform.chronicleSnapshot(account,true):domain==="memos"?()=>platform.memoSnapshot(account,true):domain==="inbox"?()=>platform.inboxSnapshot(account,true):()=>platform.homeResource(account,"day",dateInEvaOrbit(),true);

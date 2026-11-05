@@ -1,7 +1,6 @@
 "use client";
 
 import {QuickLogPicker,QuickLogTrigger} from "@/components/quick-log-picker";
-import { EvaPaperCapture } from "@/components/eva-paper";
 import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,7 +38,6 @@ export function HomeQuickLog() {
   const router = useRouter();
   const [active, setActive] = useState<QuickKind | null>(null);
   const [loading, setLoading] = useState(false);
-  const [paperDirty, setPaperDirty] = useState(false);
   const [error, setError] = useState("");
   const [catKind, setCatKind] = useState<CatRecordKind|null>(null);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -54,7 +52,7 @@ export function HomeQuickLog() {
     const id = window.setTimeout(warm, 800);
     return () => window.clearTimeout(id);
   }, []);
-  const close = () => { setPaperDirty(false); setActive(null); setCatKind(null); setError(""); setSelectedTracker(undefined); };
+  const close = () => { setActive(null); setCatKind(null); setError(""); setSelectedTracker(undefined); };
   async function saved() {
     if (active === "training") invalidateCachedJson(quickLogUrls.training);
     if (active === "weight") invalidateCachedJson("/api/health/weight?limit=1");
@@ -64,8 +62,6 @@ export function HomeQuickLog() {
     if (active === "tracker") showActionToast(english ? "Record saved." : "记录已保存。");
   }
   async function choose(kind: QuickEntryKind) {
-    if (paperDirty && !window.confirm(english ? "Discard this unsaved paper and open another form?" : "放弃尚未保存的纸条，打开其他记录？")) return;
-    setPaperDirty(false);
     playNativeHaptic("selection"); setError("");
     if (kind === "food" || kind === "inbox" || getHealthQuickLog(kind)) { setActive(kind); return; }
     if (kind === "drink") {
@@ -96,7 +92,7 @@ export function HomeQuickLog() {
   const HealthQuickLogEditor = healthQuickLog?.Editor;
   return <>
     <QuickLogTrigger label={action?.label} disabled={action?.disabled||loading} onClick={()=>{ playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}/>
-    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close} busy={loading}>{!action?.picker && <EvaPaperCapture compact onDirtyChange={setPaperDirty} onBusyChange={setLoading} onSaved={async()=>{close();await saved();}} />}<QuickLogPicker options={visibleOptions} disabled={loading} onChoose={kind=>void choose(kind)}/>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
+    {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close} busy={loading}><QuickLogPicker options={visibleOptions} disabled={loading} onChoose={kind=>void choose(kind)}/>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}

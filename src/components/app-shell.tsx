@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {AppSidebar,SpacesNavigation} from "./app-navigation";
-import { Icon } from "./icons";
+import { HermesActivity } from "./hermes-activity";
 import { logout } from "@/app/login/actions";
 import { NativeNotificationReconciler } from "./native-notification-reconciler";
 import { EventKitReconciler } from "./eventkit-reconciler";
@@ -91,7 +91,7 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
         {children}
       </main>
       <SpacesNavigation pathname={pathname} LinkComponent={Link} onOpenChange={setSpacesDrawerMounted} renderTrigger={trigger=>hasGlobalHeader?<header ref={globalHeaderRef} className="mobile-global-header">{hasPageBack&&<PageBackButton/>}{trigger}</header>:trigger}/>
-      {pathname !== "/ai" && <Link className="eva-wake-desktop" href="/ai" aria-label="Eva"><Icon name="ai" /><span>Eva</span></Link>}
+      {cacheScope && <HermesActivity key={cacheScope} scope={cacheScope} inConversation={pathname === "/ai" || pathname.startsWith("/ai/")} onNavigate={path => router.push(path)} />}
       <MobileBottomNavigation pathname={pathname} LinkComponent={Link} />
       {pathname === "/settings" || pathname.startsWith("/settings/") ? <SettingsQuickActions key={pathname} onNavigate={path=>router.push(path)} /> : <HomeQuickLog key={pathname} />}
     </div>

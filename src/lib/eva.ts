@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EvaRunFeedback } from "./eva-feedback.ts";
 
 export const EVA_PROMPT_VERSION = "paper-1";
 // Keep this prefix stable. Dates, personal content and corrections belong in user messages.
@@ -21,11 +22,11 @@ export const evaResultSchema = z.object({ summary: z.string().min(1).max(600), r
 export type EvaTask = z.infer<typeof evaTaskSchema>;
 export type EvaResult = z.infer<typeof evaResultSchema>;
 export type EvaStatus = "held" | "queued" | "running" | "review" | "done" | "failed";
-export type EvaJob = { id: string; inboxId: number; content: string; status: EvaStatus; result: EvaResult | null; taskIds: number[]; context: string[]; error: string | null; lease: string | null; leaseUntil: string | null; attempts: number; createdAt: string; updatedAt: string };
+export type EvaJob = { id: string; inboxId: number; content: string; status: EvaStatus; result: EvaResult | null; taskIds: number[]; context: string[]; error: string | null; lease: string | null; leaseUntil: string | null; attempts: number; createdAt: string; updatedAt: string; feedback?: EvaRunFeedback };
 export const evaPricingSchema = z.object({ model: z.string().trim().min(1).max(200), currency: z.enum(["CNY", "USD"]), input: z.number().min(0).max(10000), output: z.number().min(0).max(10000), cachedInput: z.number().min(0).max(10000), version: z.string().min(1).max(100) }).strict();
 export type EvaPricing = z.infer<typeof evaPricingSchema>;
 export type EvaSettings = { enabled: boolean; pricing: EvaPricing | null };
-export type EvaUsage = { input: number | null; output: number | null; cached: number | null; cost: number | null; currency: string | null; model: string; pricing: EvaPricing | null; promptVersion: string; error?: string };
+export type EvaUsage = { input: number | null; output: number | null; cached: number | null; cost: number | null; currency: string | null; model: string; pricing: EvaPricing | null; promptVersion: string; error?: string; feedback?: EvaRunFeedback };
 export type EvaCall = EvaUsage & { id: string; jobId: string; createdAt: string };
 export type EvaStore = {
   settings(patch?: Partial<EvaSettings>): Promise<EvaSettings>;
@@ -35,6 +36,7 @@ export type EvaStore = {
   claim(id: string, lease: string): Promise<EvaJob | null>;
   usage(id: string, usage: EvaUsage): Promise<void>;
   calls(): Promise<EvaCall[]>;
+  latestCall(jobId: string): Promise<EvaCall | null>;
   finish(id: string, lease: string, result: EvaResult): Promise<EvaJob>;
   fail(id: string, lease: string): Promise<void>;
   decide(id: string, action: "retry" | "keep" | "approve" | "revise", instruction?: string): Promise<EvaJob>;

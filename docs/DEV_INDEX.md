@@ -23,7 +23,7 @@
 | [Training](#training) | `/health?view=training`：训练记录与循环计划 |
 | [Lucius](#lucius) | `/lucius`：状态、动态、评论、日记与 Case |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
-| [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
+| [AI](#ai) | `/ai`：Hermes 消息、便利贴与运行状态 |
 | [Insights](#insights) | MCP `insight_context`：只读分析上下文，无独立页面 |
 | [Inbox](#inbox) | `/inbox`：捕获、处理与转换 |
 | [Tasks](#tasks) | `/tasks`：待办及其提醒规则 |
@@ -261,3 +261,5 @@
 - **数据与接口**：`native_devices`、`tracker_sync_receipts`、`tracker_sync_heads` 与 Tracker 行版本，以及 HealthKit / EventKit 各自样本、回执与映射表；`/api/native/sync` 使用原子 RPC，`/api/native/*-readonly` 使用各模块只读 Repository 白名单；旧 `native_sync_mutations` 保留。在线配置会话声明及账户头保护见 [main 整合说明](NATIVE_API_MAIN_RELEASE.md)。
 - **依赖与决定**：Web 主体仍部署在 Vercel，Host 用 WKWebView 提供原生能力；设备本地 outbox/幂等与账户数据隔离。HealthKit、EventKit、原生通知分别遵循各自授权及同步契约，网页缓存不能替代设备状态。保留已验证的 macOS CI ad-hoc IPA → patched xtool → Personal Team 重签 → Windows/WSL 安装链。
 - **详文**：涉及本节改动先完整阅读 [维护契约](IOS_NATIVE_MAINTENANCE.md)，再按需看 [Host Runbook](IOS_NATIVE_HOST.md)、[安装简版](IOS_IPA_INSTALL_QUICKSTART.md)、[Sleep](HEALTHKIT_SLEEP.md)、[体重合并](HEALTHKIT_WEIGHT_MERGE.md)、[EventKit 偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)。
+
+Hermes 消息通道与本地插件：共享 `HermesChat`、`HermesActivity` 和 `/api/hermes`，沿用账户隔离在线业务请求；命令目录由实际 Hermes 注册表同步，EO 不执行 Agent。详见 [Hermes 通道](HERMES_CHANNEL.md)。
