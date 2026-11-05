@@ -15,7 +15,7 @@ import {FormPreview} from "@/components/form-preview";
 import {ErrorNotice} from "@/components/error-notice";
 import {showActionToast} from "@/components/action-toast";
 import {useLocale} from "@/components/locale-controller";
-import {Icon} from "@/components/icons";
+import {TrackerQuickLogButton} from "@/components/tracker-quick-log-button";
 import {TrackerEntryEditor} from "@/app/trackers/tracker-entry-editor";
 import {dateInEvaOrbit} from "@/lib/time";
 import {canEditTrackerRecord} from "@/lib/tracker-replica";
@@ -111,7 +111,7 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
     {(active==="food"||active==="drink")&&<FoodPreviewEditor date={date} editor={{kind:active}} onClose={close}/>}
     {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={async()=>close()}/></OnlineForms></HealthDataProvider>}
     {active==="cats"&&cats&&<CatsDataProvider read={readCats} Link={PreviewLink}><OnlineForms><FormSheet title={english?"New cat record":"新增猫咪记录"} onClose={close} submitLabel={english?"Save record":"保存记录"} submitDisabled={!onlineBusiness}><CatRecordEditor pets={cats.dashboard.pets.map(item=>item.pet)} initialDate={date} onCancel={close} onSaved={close}/></FormSheet></OnlineForms></CatsDataProvider>}
-    {active==="tracker"&&!selected&&<FormSheet title={english?"Choose Tracker":"选择观测"} onClose={close} busy={loading}><div className="home-quick-tracker-list">{trackers.map(row=><button type="button" key={row.id} aria-label={row.payload.quickCaptureEnabled?(english?"Quick record ":"快速记录 ")+String(row.payload.name):String(row.payload.name)} disabled={loading} onClick={()=>void selectTracker(row.id)}><LocalTrackerPicture row={row} state={state} size={38}/><span><strong>{String(row.payload.name)}</strong><small>{String(row.payload.groupName??"")}{row.payload.quickCaptureEnabled?(english?" · Quick":" · 快速"):""}</small></span><Icon name={row.payload.quickCaptureEnabled?"plus":"arrow"} variant="stroke"/></button>)}</div>{!trackers.length&&<p>{english?"No downloaded Trackers.":"暂无已下载的观测。"}</p>}</FormSheet>}
+    {active==="tracker"&&!selected&&<FormSheet title={english?"Choose Tracker":"选择观测"} onClose={close} busy={loading}><div className="home-quick-log-grid home-quick-tracker-list">{trackers.map(row=><TrackerQuickLogButton key={row.id} name={String(row.payload.name)} groupName={String(row.payload.groupName??"")} quickCapture={Boolean(row.payload.quickCaptureEnabled)&&!readOnly&&canEditTrackerRecord(row)} disabled={loading} onClick={()=>void selectTracker(row.id)} icon={<LocalTrackerPicture row={row} state={state} size={20}/>}/>)}</div>{!trackers.length&&<p>{english?"No downloaded Trackers.":"暂无已下载的观测。"}</p>}</FormSheet>}
     {active==="tracker"&&selected&&(readOnly||!canEditTrackerRecord(selected)?<FormPreview>{trackerEditor}</FormPreview>:trackerEditor)}
   </>;
 }

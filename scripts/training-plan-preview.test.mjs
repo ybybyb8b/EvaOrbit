@@ -77,12 +77,17 @@ test("Day capsules only preview; switching requires an explicit action and confi
   button(tree, "完成并记录").props.onClick(); tree = render();
   assert.equal(tree.find(node => node.type === editor).props.planCompletion.plan.currentDayId, "day-3");
   assert.equal(requests.length, 1, "opening the log editor also leaves progress unchanged");
-  tree.find(node => node.type === editor).props.onChooseWorkout(); tree = render();
+  const originalEditor = tree.find(node => node.type === editor);
+  const sessionDraft = { occurredAt: "2026-10-15", notes: "Keep these notes", sessionDetails: { exercises: [{ id: "bridge", completedSets: 2 }], videos: [{ completed: true }] } };
+  originalEditor.props.onChooseWorkout(sessionDraft, true); tree = render();
   await tree.find(node => node.type === "input" && node.props.type === "date").props.onChange({ target: { value: "2026-10-14" } });
   await new Promise(resolve => setImmediate(resolve)); tree = render();
   assert.equal(requests.at(-1).url, "/api/health/training?date=2026-10-14");
   const choices = tree.filter(node => node.type === "button" && node.props.className === "training-log-main");
   assert.equal(choices.length, 1); choices[0].props.onClick(); tree = render();
   assert.equal(tree.find(node => node.type === editor).props.record.id, 99);
+  assert.equal(tree.find(node => node.type === editor).props.resumeDraft, sessionDraft, "changing Workout preserves the session draft");
+  assert.equal(tree.find(node => node.type === editor).props.resumeDirty, true, "closing after changing Workout still protects unsaved work");
+  assert.equal(tree.find(node => node.type === editor).props.planCompletion.requestKey, originalEditor.props.planCompletion.requestKey, "changing dates keeps the same completion request");
   assert.equal(requests.filter(request => request.method === "PUT" || request.method === "POST").length, 1, "choosing a previous date only reads; progress waits for save");
 });
