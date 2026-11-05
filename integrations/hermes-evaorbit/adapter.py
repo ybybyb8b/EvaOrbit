@@ -91,6 +91,7 @@ class EvaOrbitAdapter(BasePlatformAdapter):
                         self.prompts.pop(prompt_id, None)
                 async with self.lock:
                     await self.outbox.flush(self.transport)
+                    await self.outbox.flush_notifications(self.transport)
             except BridgeError as error:
                 logger.warning("EvaOrbit heartbeat: %s", error)
 
@@ -102,6 +103,7 @@ class EvaOrbitAdapter(BasePlatformAdapter):
                     continue
                 async with self.lock:
                     await self.outbox.flush(self.transport)
+                    await self.outbox.flush_notifications(self.transport)
                 message = await self.transport.rpc("claim")
                 if message:
                     if message["user_id"] != self.owner:
@@ -236,6 +238,7 @@ async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_f
     try:
         outbox.put(key, "deliver", payload)
         discarded = await outbox.flush(transport)
+        await outbox.flush_notifications(transport)
         return {"error": "Conversation cleared"} if key in discarded else {"success": True, "message_id": key}
     except BridgeError as error:
         return {"error": str(error)}

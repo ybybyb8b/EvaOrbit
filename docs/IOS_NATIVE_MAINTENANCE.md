@@ -1,5 +1,7 @@
 # EvaOrbit iOS Native Host 维护契约
 
+Hermes Bark 点击通过既有深链解析器，精确新增 `/ai` 页面白名单并保留对话 UUID 查询参数；不新增 Bridge、权限、framework 或 entitlement，原安装签名链不变。需重建本地 Host；Windows SQL、Node 与插件检查不替代 Swift XCTest 和真机推送点击验收。
+
 Hermes 仅增加精确 GET/POST `/api/hermes` 在线业务白名单并复用共享 React 消息界面；电脑执行 Agent，无新 Swift Bridge、权限、framework 或 entitlement。本地包须重建；签名和覆盖安装链保持。详见 [Hermes 通道](HERMES_CHANNEL.md)。
 
 Eva 纸条后台在本地 React 复用 Web 表单与工作台；安装包 `business-routes.json` 增加精确 GET／POST `/api/eva`，通过既有账户绑定 `business.request` 在线保存和读取。AI 只在服务器执行，不增加设备后台能力、离线队列、Bridge 方法、权限、framework、entitlement 或改变签名链。旧 IPA 不支持新路径；先迁移／发布 API，再更新本地包。Windows 合成账户和模拟 Provider 不替代真实模型与 iPhone 验收。详见 [Eva 后台](EVA_WORKBENCH.md)。

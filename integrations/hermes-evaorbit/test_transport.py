@@ -56,6 +56,24 @@ class OutboxTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             transport.Transport("http://untrusted.invalid", "public-key", "secret")
 
+    async def test_notification_failure_is_durable_and_does_not_replay_the_reply(self):
+        class Fake:
+            def __init__(self): self.sent = 0; self.offline = True
+            async def rpc(self, action, data): self.sent += 1
+            async def notify(self, message_id):
+                if self.offline: raise transport.BridgeError("notification offline")
+                return {"accepted": True}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "outbox.db"
+            box = transport.Outbox(path); fake = Fake()
+            box.put("reply", "send", {"id": "reply"})
+            await box.flush(fake); await box.flush_notifications(fake)
+            self.assertFalse(box.contains("reply")); self.assertEqual(fake.sent, 1)
+            box.close(); box = transport.Outbox(path); fake.offline = False
+            await box.flush(fake); await box.flush_notifications(fake)
+            self.assertEqual(fake.sent, 1); self.assertEqual(box.db.execute("select count(*) from notifications").fetchone()[0], 0)
+            box.close()
+
 
 if __name__ == "__main__":
     unittest.main()

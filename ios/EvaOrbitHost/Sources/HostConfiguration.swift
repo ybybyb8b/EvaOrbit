@@ -57,7 +57,7 @@ struct HostConfiguration: Equatable {
               let root = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         else { return nil }
         let path = incoming.path.isEmpty ? "/" : incoming.path
-        let routes = ["/tasks", "/settings/notifications", "/food", "/health", "/lucius", "/memo"]
+        let routes = ["/tasks", "/settings/notifications", "/food", "/health", "/lucius", "/memo", "/ai"]
         guard path == "/" || routes.contains(where: { path == $0 || path.hasPrefix($0 + "/") }) else { return nil }
         var target = root
         target.percentEncodedPath = incoming.percentEncodedPath.isEmpty ? "/" : incoming.percentEncodedPath

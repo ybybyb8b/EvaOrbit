@@ -1,6 +1,7 @@
 """Bounded HTTPS RPC and a durable local outbox. No model calls or chat-history injection."""
 import asyncio
 import json
+import logging
 import re
 import sqlite3
 import urllib.error
@@ -29,8 +30,13 @@ class Transport:
         self.instance = instance or str(uuid.uuid4())
 
     def _request(self, action, data):
-        payload = json.dumps({"p_token": self.token, "p_instance": self.instance, "p_action": action, "p_data": data}).encode()
-        request = urllib.request.Request(self.url, data=payload, headers={"apikey": self.key, "Content-Type": "application/json"})
+        if action == "_notify":
+            # The EO server reads the stored message and existing encrypted Bark settings.
+            # No device key or notification body is sent from the agent.
+            request = urllib.request.Request("https://eva-orbit.vercel.app/api/hermes/notify", data=json.dumps(data).encode(), headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"})
+        else:
+            payload = json.dumps({"p_token": self.token, "p_instance": self.instance, "p_action": action, "p_data": data}).encode()
+            request = urllib.request.Request(self.url, data=payload, headers={"apikey": self.key, "Content-Type": "application/json"})
         try:
             with urllib.request.build_opener(NoRedirect).open(request, timeout=15) as response:
                 body = response.read(1048577)
@@ -50,12 +56,16 @@ class Transport:
     async def rpc(self, action, data=None):
         return await asyncio.to_thread(self._request, action, data or {})
 
+    async def notify(self, message_id):
+        return await asyncio.to_thread(self._request, "_notify", {"id": message_id})
+
 
 class Outbox:
     def __init__(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
         self.db.execute("create table if not exists outbox(seq integer primary key, key text unique, action text, payload text)")
+        self.db.execute("create table if not exists notifications(id text primary key)")
 
     def put(self, key, action, payload):
         with self.db:
@@ -65,16 +75,31 @@ class Outbox:
         discarded = set()
         # Serialized by the adapter lock. A lost HTTP acknowledgement reuses the same key.
         for seq, key, action, payload in self.db.execute("select seq,key,action,payload from outbox order by seq").fetchall():
+            data = json.loads(payload)
             try:
-                await transport.rpc(action, json.loads(payload))
+                await transport.rpc(action, data)
             except BridgeError as error:
                 if str(error) not in {"HERMES_ATTEMPT", "HERMES_NOT_FOUND"}:
                     raise
                 discarded.add(key)
                 # Explicit retry/clear superseded this attempt. Do not attach its reply elsewhere.
             with self.db:
+                if key not in discarded and action in {"send", "deliver", "complete"}:
+                    self.db.execute("insert or ignore into notifications(id) values(?)", (data["id"],))
                 self.db.execute("delete from outbox where seq=?", (seq,))
         return discarded
+
+    async def flush_notifications(self, transport):
+        # Separate durable queue: a failed Bark wake-up never fails/replays an agent reply.
+        for (message_id,) in self.db.execute("select id from notifications limit 5").fetchall():
+            try:
+                result = await transport.notify(message_id)
+            except BridgeError as error:
+                logging.getLogger(__name__).warning("EvaOrbit notification retry retained: %s", error)
+                break
+            if not result.get("pending"):
+                with self.db:
+                    self.db.execute("delete from notifications where id=?", (message_id,))
 
     def contains(self, key):
         return self.db.execute("select 1 from outbox where key=?", (key,)).fetchone() is not None

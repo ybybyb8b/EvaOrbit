@@ -69,3 +69,10 @@ Hermes 提供的本地化 reasoning 消息封套在适配器发送前拆成独�
 已验证：隔离发布目录完整 Node 回归共 835 项（820 通过、15 可选跳过；临时目录缺失项补齐后定向重跑）、TypeScript、ESLint、本地 React 构建、手机／桌面合成浏览器与真实 Hermes 库生命周期、SQLite outbox 三项恢复测试。正式 Web 构建及部署收据保存在忽略的 tmp/eva-qa；仅在实际成功后据收据确认发布结果。没有执行 Native XCTest 或 iPhone 真机验收。手机连接由用户稍后提供，本轮先触发原签名链的 local_trackers=true 打包，不卸载现有 App、不改权限与 entitlement。
 
 灰色气泡、弧形尾巴、同角色分组、独立便利贴与常驻入口保持用户认可样式。输入框取消聚焦外圈；对话、菜单、思考和代码滚动区使用透明轨道与低对比细滑块。iOS 系统滚动指示器仍受 WKWebView 控制，最终观感需真机确认。
+
+
+Hermes Bark 通知复用已保存的加密设置；电脑仅带配对令牌和消息 UUID 唤醒精确 `/api/hermes/notify`，该接口自校验令牌、无浏览器 Cookie 依赖。服务端从真实消息生成摘要，SQL 投递租约和按轮次去重回执限制重复；已读普通回复不推送，提问即时推送，普通回复等本轮完成再合并，失败另行提醒。通知发送失败只保留本机 UUID 重试队列，与聊天回执独立；最多五次实际 Bark 投递尝试，失败原因保留于账户隔离回执。Bark 的外部收件确认不等于手机已展示，网络确认丢失仍可能重复。
+
+增量迁移 `202611060005_hermes_bark.sql` 不导入历史消息，不修改现有配对或 Bark 凭据。Host 仅在既有深链白名单补 `/ai`，保留 conversation 查询参数；本地 React 已能按该参数打开对话。不新增系统权限、Bridge、framework 或 entitlement，沿用原签名安装链；Swift XCTest 与 iPhone 通知点击仍待 macOS／真机验证。
+
+Bark 补充验证：隔离版本完整 Node 回归 837 项（822 通过、15 可选跳过），TypeScript／ESLint／Web 生产构建通过；Python 持久消息与通知重试 4 项及真实 Hermes 库隔离检查通过。通知迁移 005 已实际应用生产并核对原消息、纸条与配对摘要不变。旧 iOS run 42093697518 已取消，补齐真实 Bark 验证后再手动触发新包。
