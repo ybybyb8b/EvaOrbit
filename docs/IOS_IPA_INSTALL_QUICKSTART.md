@@ -15,16 +15,10 @@ Windows 上连接 iPhone
 
 ## 1. 准备 IPA
 
-在 GitHub Actions 的 `iOS Native Host` workflow 下载最新 artifact，并解压到 Windows 文件夹。至少保留：
-
-- `EvaOrbitHost-ad-hoc.ipa`
-- `SHA256SUMS`
-- `EvaOrbitHost-ad-hoc-entitlements.plist`
-
-在 WSL 中进入解压目录，先校验 IPA：
+在 GitHub Actions 的 `iOS Native Host` workflow 中直接下载 `EvaOrbitHost-ad-hoc.ipa`。在 WSL 中进入下载目录，计算 IPA 的 SHA-256，并与同一次运行摘要中的值核对。
 
 ```bash
-sha256sum -c SHA256SUMS
+sha256sum EvaOrbitHost-ad-hoc.ipa
 ```
 
 不要使用旧的完全 unsigned device 包。

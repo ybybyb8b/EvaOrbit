@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Menu4 } from "reicon-react";
 import { useBusinessRequest } from "./business-request-context";
 import { useLocale } from "./locale-controller";
@@ -21,6 +21,28 @@ import { hermesNotice, hermesPending, hermesStatusText, mergeHermesMessages, typ
 import styles from "./hermes-chat.module.css";
 
 const noticeGraphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const nativeActive = "evaorbit:native-active";
+
+function interruptedRequest(reason: unknown) {
+  return reason instanceof Error && (
+    ["TypeError", "AbortError", "TimeoutError", "SyntaxError"].includes(reason.name) ||
+    /\[EO:(?:network_[\w-]+|request_failed|operation_cancelled|json_decode_failed)\]|\(HTTP 50[24]\)/.test(reason.message)
+  );
+}
+
+function waitForForeground(signal: AbortSignal) {
+  if (!document.hidden || signal.aborted) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    const finish = () => {
+      document.removeEventListener("visibilitychange", resume);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const resume = () => { if (!document.hidden) finish(); };
+    document.addEventListener("visibilitychange", resume);
+    signal.addEventListener("abort", finish, { once: true });
+  });
+}
 
 export function HermesChat({ initialConversationId, scope, back }: { initialConversationId?: string; scope: string | null; back: ReactNode }) {
   const request = useBusinessRequest(), { english } = useLocale();
@@ -31,6 +53,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   const [draft, setDraft] = useHermesDraft(scope, active, "chat");
   const [noteDraft, setNoteDraft] = useHermesDraft(scope, active, "note");
   const [error, setError] = useState(""), [sending, setSending] = useState(false), [busy, setBusy] = useState(false);
+  const [confirmingDelivery, setConfirmingDelivery] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadErrorDismissed, setLoadErrorDismissed] = useState(false);
   const [stopping, setStopping] = useState(false), [stopError, setStopError] = useState("");
@@ -48,6 +71,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   const input = useRef<HTMLTextAreaElement>(null);
   const messageRef = useRef<HermesMessage[]>([]), activeRef = useRef(active), newChat = useRef(false), mounted = useRef(true);
   const requestKey = useRef<{ id: string; conversationId: string; content: string; note?: boolean; responseTo?: string } | null>(null), sendLock = useRef(false);
+  const sendRecovery = useRef<AbortController | null>(null);
   const stopRequest = useRef<{ id: string; conversationId: string; targetAttempt: string } | null>(null), stopLock = useRef(false);
   const refresh = useRef<() => Promise<void>>(async () => {}), scroll = useRef<HTMLDivElement>(null), followBottom = useRef(true);
   const readingAnchor = useRef<{ element: HTMLElement; top: number } | null>(null);
@@ -67,49 +91,63 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const next = replace ? incoming : mergeHermesMessages(messageRef.current, incoming);
     messageRef.current = next; setMessages(next);
   }, []);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; sendRecovery.current?.abort(); }; }, []);
   useLayoutEffect(() => {
+    const element = container.current;
+    const surface = element?.parentElement;
+    if (!element || !surface) return;
     let fullHeight = window.visualViewport?.height ?? window.innerHeight;
     let layoutWidth = window.innerWidth;
+    let keyboardOpen = false;
+    let frame = 0;
     const fit = () => {
-      const element = container.current; if (!element) return;
+      frame = 0;
       const viewport = window.visualViewport;
       const visibleHeight = viewport?.height ?? window.innerHeight;
+      const visibleTop = viewport?.offsetTop ?? 0;
       const focused = document.activeElement === input.current;
       if (layoutWidth !== window.innerWidth) {
         layoutWidth = window.innerWidth;
         fullHeight = window.innerHeight;
       }
-      const wasOpen = element.dataset.keyboardOpen === "true";
-      const keyboardOpen = Boolean(viewport && Math.abs(viewport.scale - 1) < .05
-        && window.matchMedia("(any-pointer: coarse)").matches
-        && (focused || wasOpen)
-        && Math.max(fullHeight, window.innerHeight) - visibleHeight > (wasOpen ? 70 : 150));
+      const keyboardInset = (focused || keyboardOpen) && window.matchMedia("(any-pointer: coarse)").matches
+        && Math.abs((viewport?.scale ?? 1) - 1) < .05 ? Math.max(0, fullHeight - visibleHeight) : 0;
+      keyboardOpen = keyboardInset > (keyboardOpen ? 2 : 100);
       if (!keyboardOpen && !focused) fullHeight = visibleHeight;
       element.dataset.keyboardOpen = String(keyboardOpen);
 
       const top = element.getBoundingClientRect().top;
-      const bottomEdge = visibleHeight + (viewport?.offsetTop ?? 0);
-      element.style.setProperty("--hermes-chat-height", `${Math.max(keyboardOpen ? 0 : 200, bottomEdge - top)}px`);
+      // Keep the wallpaper crop tied to the resting viewport, even when WebKit pans it to reveal the input.
+      const wallpaperOffset = keyboardInset > 0 ? visibleTop - surface.getBoundingClientRect().top : 0;
+      surface.style.setProperty("--hermes-wallpaper-height", `${Math.max(fullHeight, visibleHeight)}px`);
+      surface.style.setProperty("--hermes-wallpaper-offset", `${wallpaperOffset}px`);
+      element.style.setProperty("--hermes-chat-height", `${Math.max(0, visibleTop + visibleHeight - top)}px`);
+      element.style.setProperty("--hermes-keyboard-inset", `${keyboardInset}px`);
+      element.style.setProperty("--hermes-header-offset", `${keyboardInset > 0 ? Math.max(0, visibleTop - top) : 0}px`);
       element.style.setProperty("--hermes-composer-height", `${(composerArea.current?.offsetHeight ?? 130) + 32}px`);
       if (followBottom.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
     };
-    const observer = new ResizeObserver(fit);
+    const scheduleFit = () => { if (!frame) frame = requestAnimationFrame(fit); };
+    const observer = new ResizeObserver(scheduleFit);
     if (composerArea.current) observer.observe(composerArea.current);
-    const frame = requestAnimationFrame(fit);
-    window.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("scroll", fit);
+    fit();
+    window.addEventListener("resize", scheduleFit);
+    window.addEventListener("scroll", scheduleFit, { passive: true });
+    window.visualViewport?.addEventListener("resize", scheduleFit);
+    window.visualViewport?.addEventListener("scroll", scheduleFit);
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", scheduleFit);
+      window.removeEventListener("scroll", scheduleFit);
+      window.visualViewport?.removeEventListener("resize", scheduleFit);
+      window.visualViewport?.removeEventListener("scroll", scheduleFit);
+      surface.style.removeProperty("--hermes-wallpaper-height");
+      surface.style.removeProperty("--hermes-wallpaper-offset");
     };
   }, []);
   useEffect(() => {
-    const abort = new AbortController(); let inFlight = false;
+    const abort = new AbortController(); let inFlight = false, refreshAgain = false, resuming = false;
     const load = async () => {
       if (inFlight || document.visibilityState === "hidden") return;
       inFlight = true;
@@ -123,7 +161,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           const pending = current.filter(hermesPending).map(m => m.id).slice(-100);
           if (pending.length) params.set("pending", pending.join(","));
         }
-        const r = await request(`/api/hermes?${params}`, { signal: abort.signal, cache: "no-store" });
+        const r = await request(`/api/hermes?${params}`, { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(12000)]), cache: "no-store" });
         if (!r.ok) throw new Error(await responseError(r, t("Could not load messages.", "暂时无法读取消息。")));
         const next = await r.json() as HermesData;
         if (abort.signal.aborted) return;
@@ -136,15 +174,27 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           activeRef.current = next.conversations[0].id; setActive(next.conversations[0].id);
         }
         else { if (!current.length) setHasOlder(next.hasMore); merge(next.messages); }
-      } catch (reason) { if (!abort.signal.aborted) setLoadError(reason instanceof Error ? reason.message : t("Message connection failed.", "消息连接失败。")); }
-      finally { inFlight = false; }
+      } catch (reason) {
+        if (!abort.signal.aborted && !document.hidden && !(resuming && interruptedRequest(reason))) {
+          setLoadError(reason instanceof Error ? reason.message : t("Message connection failed.", "消息连接失败。"));
+        }
+      } finally {
+        inFlight = false; resuming = false;
+        if (refreshAgain && !abort.signal.aborted) { refreshAgain = false; void load(); }
+      }
     };
     refresh.current = load;
     const initial = setTimeout(() => void load(), 0);
     // Small metadata/incremental updates only. No per-token writes or idle model calls.
     const interval = setInterval(() => void load(), 5000);
-    const resume = () => void load(); window.addEventListener("focus", resume); window.addEventListener("online", resume); document.addEventListener("visibilitychange", resume);
-    return () => { abort.abort(); clearTimeout(initial); clearInterval(interval); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); document.removeEventListener("visibilitychange", resume); };
+    const resume = () => {
+      resuming = true;
+      if (document.hidden) return;
+      if (inFlight) refreshAgain = true;
+      else void load();
+    };
+    window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener(nativeActive, resume); document.addEventListener("visibilitychange", resume);
+    return () => { abort.abort(); clearTimeout(initial); clearInterval(interval); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); window.removeEventListener(nativeActive, resume); document.removeEventListener("visibilitychange", resume); };
   }, [active, request, english, merge, scope]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const pane = scroll.current, anchor = readingAnchor.current;
@@ -207,10 +257,27 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     pane.scrollTop = pane.scrollHeight;
     updateReadingPosition();
   }
-  async function post(body: object) {
-    const r = await request("/api/hermes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  async function post(body: object, signal?: AbortSignal) {
+    const r = await request("/api/hermes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     if (!r.ok) throw new Error(await responseError(r, t("Could not complete this action.", "操作未完成。")));
     return r.json();
+  }
+  async function confirmDelivery(submission: { id: string; conversationId: string }, signal: AbortSignal) {
+    const params = new URLSearchParams({ conversationId: submission.conversationId, after: String(Number.MAX_SAFE_INTEGER), pending: submission.id });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await waitForForeground(signal);
+      if (signal.aborted) return;
+      try {
+        const response = await request(`/api/hermes?${params}`, { cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]) });
+        if (response.ok) {
+          const data = await response.json() as HermesData;
+          const receipt = data.messages.find(message => message.id === submission.id && message.role === "user");
+          if (receipt) return receipt;
+        }
+      } catch { /* Keep the original send diagnostic if confirmation is also unavailable. */ }
+      if (attempt === 0 && !signal.aborted && !document.hidden) await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    await waitForForeground(signal);
   }
   async function send(event?: FormEvent, choice?: { message: HermesMessage; content: string }, stickyContent?: string): Promise<boolean> {
     event?.preventDefault(); const content = stickyContent ?? choice?.content ?? draft; if (!content.trim() || sendLock.current) return false;
@@ -219,12 +286,25 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     sendLock.current = true; setSending(true);
     const previous = requestKey.current;
     const submission = previous?.content === content && previous.note === asNote && previous.responseTo === responseTo && (!active || previous.conversationId === active) ? previous : { id: crypto.randomUUID(), conversationId: active ?? crypto.randomUUID(), content, note: asNote, responseTo };
-    if (submission === previous) setError("");
+    setError("");
     requestKey.current = submission;
     setCommandOpen(false);
     notifyHermesActivity({ state: "sending", id: submission.id, conversationId: submission.conversationId });
     try {
-      const message = await post({ action: "send", ...submission }) as HermesMessage;
+      let message: HermesMessage;
+      try {
+        message = await post({ action: "send", ...submission }, AbortSignal.timeout(20000)) as HermesMessage;
+      } catch (reason) {
+        if (!interruptedRequest(reason) || !mounted.current) throw reason;
+        const recovery = new AbortController();
+        sendRecovery.current = recovery;
+        setConfirmingDelivery(true);
+        notifyHermesActivity({ state: "confirming", id: submission.id, conversationId: submission.conversationId });
+        const receipt = await confirmDelivery(submission, recovery.signal);
+        if (recovery.signal.aborted) return false;
+        if (!receipt) throw new Error(`[EO:hermes_delivery_unconfirmed] ${reason instanceof Error ? reason.message : String(reason)}`);
+        message = receipt;
+      }
       notifyHermesActivity({ state: "saved", id: submission.id, conversationId: submission.conversationId });
       if (asNote) setNoteDraft("", active, content); else if (!choice) setDraft("", active, content);
       if (!active) {
@@ -239,7 +319,10 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       merge([message]); void refresh.current();
       return true;
     } catch (reason) { notifyHermesActivity({ state: "uncertain", id: submission.id, conversationId: submission.conversationId, error: reason instanceof Error ? reason.message : String(reason) }); if (mounted.current) setError(`${reason instanceof Error ? reason.message : t("Send failed.", "发送失败。")}${choice ? t(" Selection unconfirmed; you can retry.", " 选择尚未确认，可以重试。") : t(" Your text is kept; retrying uses the same message ID.", " 文字仍在，重试会复用消息 ID，避免重复提交。")}`); return false; }
-    finally { sendLock.current = false; if (mounted.current) setSending(false); }
+    finally {
+      sendRecovery.current = null; sendLock.current = false;
+      if (mounted.current) { setSending(false); setConfirmingDelivery(false); }
+    }
   }
   async function stopConversation() {
     if (!active || !stopTarget || online !== true || stopLock.current || stopPending) return;
@@ -333,7 +416,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   const noticeError = error || stopError || visibleLoadError;
   const question = messages.find(message => message.id === choiceId) ?? messages.findLast(message => message.role === "assistant" && message.presentation?.state === "pending");
   const commands = filterHermesCommands(connection?.commands?.length ? connection.commands : [{ name:"help",description:"Show available commands",argsHint:"",aliases:[] }], draft);
-  function chooseCommand(command: HermesCommand) { setDraft(`/${command.name}${command.argsHint ? " " : ""}`);setCommandOpen(false);setCommandIndex(0);input.current?.focus(); }
+  function chooseCommand(command: HermesCommand) { setDraft(`/${command.name}${command.argsHint ? " " : ""}`);setCommandOpen(false);setCommandIndex(0);input.current?.focus({ preventScroll: true }); }
   return <>
   {appearance.images.wallpaper && <div className={styles.wallpaper} data-hermes-wallpaper aria-hidden="true" style={{ backgroundImage: `url("${appearance.images.wallpaper}")` }} />}
   <section ref={container} className={styles.chat} aria-label="Hermes" data-hermes-chat data-wallpaper={Boolean(appearance.images.wallpaper) || undefined}>
@@ -341,9 +424,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       <div className={styles.back}>{back}</div>
       <div className={styles.identity}><h1>Hermes</h1><button className={styles.connection} onClick={() => setSetup(true)}><span data-online={online} data-error={Boolean(loadError)} />{statusLabel}</button></div>
       <nav aria-label={t("Conversations", "对话操作")}>
-        <button className="icon-button" aria-label={t("Conversation history", "历史对话")} disabled={sending || stopping || busy} onClick={() => setHistory(true)}><Icon name="history" /></button>
-        <button className="icon-button" aria-label={t("New conversation", "新对话")} disabled={sending || stopping || busy} onClick={() => select()}><Icon name="plus" /></button>
-        <button className="icon-button" disabled={sending} aria-label={t("Note history", "便利贴记录")} title={t("Note history", "便利贴记录")} aria-haspopup="dialog" onClick={() => setNotes(true)}><Icon name="memory" /></button>
+        <button type="button" aria-label={t("Conversation history", "历史对话")} disabled={sending || stopping || busy} onClick={() => setHistory(true)}><Icon name="history" /></button>
+        <button type="button" aria-label={t("New conversation", "新对话")} disabled={sending || stopping || busy} onClick={() => select()}><Icon name="plus" /></button>
+        <button type="button" disabled={sending} aria-label={t("Note history", "便利贴记录")} title={t("Note history", "便利贴记录")} aria-haspopup="dialog" onClick={() => setNotes(true)}><Icon name="memory" /></button>
       </nav>
     </header>
     <div className={styles.scroll} ref={scroll} onScroll={updateReadingPosition}>
@@ -363,7 +446,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
         const next = messages[index + 1];
         const lastInGroup = !next || next.role !== message.role || hermesNotice(next);
         const avatar = appearance.images[message.role];
-        return <article key={message.id} id={`hermes-${message.id}`} className={styles.message} data-hermes-message data-role={message.role} data-group-end={lastInGroup} data-avatar={Boolean(avatar)}>
+        return <Fragment key={message.id}><article id={`hermes-${message.id}`} className={styles.message} data-hermes-message data-role={message.role} data-group-end={lastInGroup} data-avatar={Boolean(avatar)}>
         {avatar && lastInGroup && (
           // eslint-disable-next-line @next/next/no-img-element -- The resized image is a device-local blob.
           <img className={styles.messageAvatar} data-hermes-avatar src={avatar} alt="" width={28} height={28} />
@@ -374,12 +457,12 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           {message.role === "user" && <span data-state={message.status}>{hermesStatusText(message, online, english)}</span>}
           {["failed", "interrupted"].includes(message.status) && message.presentation?.kind !== "response" && <button className="text-button" disabled={busy} onClick={() => void act({ action: "retry", id: message.id })}>{t("Retry", "重新处理")}</button>}
         </footer>}
-        <HermesToolActivity message={message} english={english} />
         {message.error && <HermesErrorNotice inline className={styles.diagnostic} error={message.error} fallback={t("Hermes could not finish.", "Hermes 处理未完成。")} />}
-      </article>; })}</div>
+      </article><HermesToolActivity message={message} english={english} /></Fragment>; })}</div>
       {waiting && <p className={styles.activity} role="status"><i/><i/><i/>{t("Hermes is working", "Hermes 正在处理")}</p>}
     </div>
     <div ref={composerArea} className={styles.composerArea}>
+      {confirmingDelivery && <div className={styles.notice} role="status">{t("Checking delivery…", "正在确认送达…")}</div>}
       {commandOpen && <HermesCommandMenu id={commandId} commands={commands} selected={Math.min(commandIndex,Math.max(0,commands.length-1))} english={english} onChoose={chooseCommand} />}
       {awayFromLatest && !commandOpen && <button className={styles.latestButton} type="button" onClick={jumpToLatest}>
         <Icon name="chevronDown" />{newReply ? t("New messages", "有新消息") : t("Back to latest", "回到最新")}
@@ -393,7 +476,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           else setLoadErrorDismissed(true);
         }}>{t("Dismiss notice", "关闭提示")}</button>
       </div>}
-      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus();}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button><button type="button" disabled={sending || !data} aria-haspopup="dialog" onClick={() => { setCommandOpen(false); setNoteOpen(true); }}><Icon name="memory" />{t("Sticky note", "便利贴")}</button>
+      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus({ preventScroll: true });}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button><button type="button" disabled={sending || !data} aria-haspopup="dialog" onClick={() => { setCommandOpen(false); setNoteOpen(true); }}><Icon name="memory" />{t("Sticky note", "便利贴")}</button>
         {scope && <button type="button" aria-label={t("Chat appearance", "聊天外观")} title={t("Chat appearance", "聊天外观")} aria-haspopup="dialog" disabled={sending} onClick={() => { setCommandOpen(false); setAppearanceOpen(true); }}><Icon name="settings" /></button>}
         {(stopTarget && connection?.commands?.some(command => command.name === "stop") || stopPending || stopping) && <button type="button" className={styles.stopButton} disabled={online !== true || stopping || stopPending}
           onClick={() => void stopConversation()}>{stopping ? t("Requesting stop…", "正在请求停止…") : stopPending ? t("Stop requested", "已请求停止") : t("Stop", "停止")}</button>}

@@ -15,7 +15,7 @@ test("build workflows use Node 24 actions without insecure runtime overrides", (
   for (const name of ["ios-native-host", "xtool-patched"]) {
     const workflow = readWorkflow(name);
     assert.match(workflow, /uses: actions\/checkout@v5\b/);
-    assert.match(workflow, /uses: actions\/upload-artifact@v6\b/);
+    assert.match(workflow, /uses: actions\/upload-artifact@v[67]\b/);
     assert.doesNotMatch(workflow, /actions\/(?:checkout|upload-artifact)@v4\b|ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION/);
   }
 });
@@ -38,6 +38,7 @@ test("IPA packaging omits Simulator execution and retains build validation", () 
   assert.match(workflow, /-sdk iphoneos/);
   assert.match(workflow, /-destination 'generic\/platform=iOS'/);
   assert.match(workflow, /name: Verify entitlements and package IPA/);
+  assert.match(workflow, /uses: actions\/upload-artifact@v7\s+with:\s+path: \$\{\{ runner\.temp \}\}\/EvaOrbitHost-Artifact\/EvaOrbitHost-ad-hoc\.ipa\s+archive: false/);
   assert.match(workflow, /name: Isolated Supabase Tracker integration/);
   assert.doesNotMatch(workflow, /continue-on-error/);
 });

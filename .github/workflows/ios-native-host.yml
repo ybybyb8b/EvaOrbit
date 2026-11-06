@@ -80,18 +80,21 @@ jobs:
       - name: Verify entitlements and package IPA
         run: |
           app="$RUNNER_TEMP/EvaOrbitHost-Device/Build/Products/Release-iphoneos/EvaOrbitHost.app"
-          bash scripts/ios/package-ad-hoc-ipa.sh "$app" "$RUNNER_TEMP/EvaOrbitHost-Artifact"
-          dsym="$RUNNER_TEMP/EvaOrbitHost-Device/Build/Products/Release-iphoneos/EvaOrbitHost.app.dSYM"
-          if [[ -d "$dsym" ]]; then
-            ditto "$dsym" "$RUNNER_TEMP/EvaOrbitHost-Artifact/EvaOrbitHost.app.dSYM"
-          fi
-          xcodebuild -version > "$RUNNER_TEMP/EvaOrbitHost-Artifact/XCODE_VERSION.txt"
-          printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/EvaOrbitHost-Artifact/GIT_SHA.txt"
+          output="$RUNNER_TEMP/EvaOrbitHost-Artifact"
+          bash scripts/ios/package-ad-hoc-ipa.sh "$app" "$output"
+          {
+            echo '### EvaOrbitHost-ad-hoc.ipa'
+            printf '\n- Git commit `%s`\n' "$GITHUB_SHA"
+            printf -- '- IPA SHA-256 `%s`\n' "$(awk '{print $1}' "$output/SHA256SUMS")"
+            printf '\n```\n'
+            xcodebuild -version
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
-          name: EvaOrbitHost${{ inputs.local_trackers && '-TrackersPoC' || '' }}-ad-hoc-${{ github.run_number }}
-          path: ${{ runner.temp }}/EvaOrbitHost-Artifact
+          path: ${{ runner.temp }}/EvaOrbitHost-Artifact/EvaOrbitHost-ad-hoc.ipa
+          archive: false
           if-no-files-found: error
           retention-days: 14
 

@@ -94,7 +94,7 @@ GitHub Actions 的 `iOS Native Host` workflow 当前配置使用标准 `macos-15
 4. 导出签名 entitlements，逐项断言以下值为 `true`：
    - `com.apple.developer.healthkit`
    - `com.apple.developer.healthkit.background-delivery`
-5. 打包 `EvaOrbitHost-ad-hoc.ipa`，并同时发布 entitlements、IPA SHA-256、dSYM、Git SHA 和 Xcode 版本。
+5. 直接上传 `EvaOrbitHost-ad-hoc.ipa`，在运行摘要中记录 IPA SHA-256、Git SHA 和 Xcode 版本。
 
 第一次实际构建产物导出的 entitlements 已确认上述两项均为 `true`。设备构建必须继续使用 ad-hoc code signing，不能用 `CODE_SIGNING_ALLOWED=NO` 生成完全 unsigned 的设备包；否则 patched xtool 没有可读取并重建的 entitlement。workflow 中 Simulator 编译使用 `CODE_SIGNING_ALLOWED=NO` 不属于设备包构建，不需要改变。
 
@@ -305,18 +305,10 @@ xtool auth login
 
 ### 1. 获取 Native Host IPA
 
-在 GitHub Actions 手动运行 `iOS Native Host`，下载并解压最新的 `EvaOrbitHost-ad-hoc-<run-number>` artifact。保留同一 artifact 中的：
-
-- `EvaOrbitHost-ad-hoc.ipa`
-- `EvaOrbitHost-ad-hoc-entitlements.plist`
-- `SHA256SUMS`
-- `GIT_SHA.txt`
-- `XCODE_VERSION.txt`
-
-在 WSL 进入解压目录，并使用 artifact 自带清单检查 IPA：
+在 GitHub Actions 手动运行 `iOS Native Host`，直接下载 `EvaOrbitHost-ad-hoc.ipa`。在 WSL 中进入下载目录，计算 IPA 的 SHA-256，并与同一次运行摘要中的值核对。
 
 ```bash
-sha256sum -c SHA256SUMS
+sha256sum EvaOrbitHost-ad-hoc.ipa
 ```
 
 不要用旧 workflow 生成的完全 unsigned IPA。
@@ -388,7 +380,7 @@ bash scripts/ios/xtool-install.sh /mnt/d/下载/EvaOrbitHost-ad-hoc.ipa
 
 ## 场景 C：EvaOrbit 发布新版 IPA 后升级安装
 
-先重新运行 `iOS Native Host` workflow，下载最新 artifact，并用该 artifact 的 `SHA256SUMS` 校验 IPA。之后不需要重建 Windows/WSL/xtool 环境：
+先重新运行 `iOS Native Host` workflow，下载最新 IPA，并用该次运行摘要中的 SHA-256 校验。之后不需要重建 Windows/WSL/xtool 环境：
 
 ```bash
 cd /mnt/e/EvaOrbit
@@ -477,7 +469,7 @@ Food & Drink 本地扩展使用 `food.readOnlySnapshot` / `food.readOnlyResource
 | `USBMUXD_SOCKET_ADDRESS` | 当前 WSL shell，且 gateway 可能变化 | 每次新开会话由辅助脚本重新解析并设置 |
 | WSL 本地 usbmuxd 停止状态 | 不应假设持久 | 每次由辅助脚本停止 |
 
-需要人工保留的只有非敏感审计信息：使用的 EvaOrbit Git SHA、GitHub Actions run/artifact、IPA 的 `SHA256SUMS`、Xcode 版本、固定 xtool upstream commit 和已审计 AppImage SHA。Apple ID、密码、2FA、token、cookie、UDID、IMEI、手机号和设备序列号都不得记录。
+需要人工保留的只有非敏感审计信息：使用的 EvaOrbit Git SHA、GitHub Actions run/artifact、IPA 的 SHA-256、Xcode 版本、固定 xtool upstream commit 和已审计 AppImage SHA。Apple ID、密码、2FA、token、cookie、UDID、IMEI、手机号和设备序列号都不得记录。
 
 ### Chronicle 只读缓存补充
 

@@ -11,6 +11,7 @@ const accountId = "10000000-0000-4000-8000-000000000099", now = "2026-11-05T16:0
 const connection = { paired: false, online: false, lastSeenAt: null, commands:[{name:"help",description:"Show commands",argsHint:"",aliases:[]},{name:"new",description:"New session",argsHint:"[name]",aliases:["reset"]},{name:"stop",description:"Stop active work",argsHint:"",aliases:[]},{name:"status",description:"Show session status",argsHint:"",aliases:[]}] }, conversations = [], messages = [], writes = [], errors = [];
 const seen = new Map(), sendWrites = () => writes.filter(write => write.action === "send");
 let failSend = true, failRead = false, pageSize = Infinity, sequence = 0;
+let interruptedSend;
 await fs.mkdir("tmp/hermes-qa", { recursive: true });
 await server.listen();console.log(JSON.stringify({ pid: process.pid, port: server.httpServer.address().port, synthetic: true }));
 try {
@@ -34,10 +35,17 @@ try {
       if(body.action==="seen"){seen.set(body.conversationId,Math.max(seen.get(body.conversationId)??0,body.seq));return route.fulfill({json:{seen:true}});}
       if (body.action === "send") {
         if (failSend) { failSend = false; return route.fulfill({ status: 500, json: { error: "模拟服务异常\nTraceback: synthetic gateway diagnostic", code: "hermes_fixture" } }); }
+        const interruption = interruptedSend;
+        interruptedSend = undefined;
+        if (interruption) {
+          await interruption.background;
+          if (!interruption.saved) return route.abort("connectionreset");
+        }
         let message = messages.find(m => m.id === body.id);
         if (!message) { message = { id: body.id, seq: ++sequence, conversation_id: body.conversationId, role: "user", content: body.content, status: "queued", attempt_id: body.id, reply_to: body.responseTo ?? null, error: null, presentation:body.note?{kind:"note"}:body.responseTo?{kind:"response"}:body.content==="/stop"?{kind:"command"}:{}, created_at: now, updated_at: now };messages.push(message); }
         if (!conversations.some(c => c.id === body.conversationId)) conversations.unshift({ id: body.conversationId, title: body.content.slice(0, 50), created_at: now, updated_at: now });
         if(body.responseTo) { messages.find(m=>m.id===body.responseTo).presentation.state="answered";message.status="done"; }
+        if (interruption) return route.abort("connectionreset");
         return route.fulfill({ json: message });
       }
       if (body.action === "pair") { connection.paired = true;return route.fulfill({ json: { url: "https://fixture.supabase.co", key: "public-fixture", token: "eo_" + "a".repeat(43), userId: accountId } }); }
@@ -100,6 +108,7 @@ try {
   assert.equal(await page.locator('article[data-role="assistant"] time').count(),1);assert.equal(await page.locator('article[data-role="assistant"] [data-bubble-tail]').count(),1);assert.equal(await page.locator('article[data-role="assistant"]').first().locator('time,[data-bubble-tail]').count(),0);
   assert.equal(await page.locator('article[data-role="assistant"]').nth(1).evaluate(element=>{const before=element.previousElementSibling.getBoundingClientRect();return Math.round(element.getBoundingClientRect().top-before.bottom);}),12,"consecutive assistant spacing is half the 24px mobile gap");
   const thinking=page.getByRole("button",{name:"思考内容",exact:true});assert.equal(await thinking.getAttribute("aria-expanded"),"false");await thinking.click();await page.getByText("只展示 Hermes 实际提供的思考内容。",{exact:true}).waitFor();await thinking.click();
+  assert(await thinking.evaluate(button => !button.closest("[data-bubble-tail]") && button.closest(".eo-disclosure").nextElementSibling?.querySelector(".markdown-content")), "thinking stays outside the reply bubble");
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"long code stays inside bubble");
   await input.fill("普通聊天草稿还在");await page.getByRole("button",{name:"便利贴",exact:true}).last().click();
   const noteDialog=page.getByRole("dialog",{name:"便利贴",exact:true}),noteInput=noteDialog.getByRole("textbox",{name:"便利贴内容",exact:true});await noteInput.fill("睡醒后让扫地机器人打扫");
@@ -181,6 +190,7 @@ try {
     Object.defineProperty(viewport, "offsetTop", { configurable: true, value: 24 });
     viewport.dispatchEvent(new Event("resize"));
   });
+  await page.waitForFunction(() => document.querySelector("[data-hermes-chat]")?.dataset.keyboardOpen === "true");
   assert.equal(await page.locator("[data-hermes-chat]").getAttribute("data-keyboard-open"), "true", JSON.stringify(await input.evaluate(element => ({
     focused: document.activeElement === element,
     viewportHeight: window.visualViewport.height,
@@ -286,19 +296,58 @@ try {
       const style = getComputedStyle(wallpaper);
       const chat = wallpaper.parentElement.querySelector("[data-hermes-chat]");
       const header = chat.querySelector("header");
+      const fade = getComputedStyle(header, "::before");
       return { bounds: bounds.toJSON(), main: main.toJSON(), viewportHeight: window.innerHeight,
         size: style.backgroundSize, overlay: getComputedStyle(wallpaper, "::after").content,
-        header: getComputedStyle(header).backgroundColor,
-        glass: [header.firstElementChild, chat.querySelector("form")].map(bar => getComputedStyle(bar).backgroundColor) };
+        headerFill: getComputedStyle(header).backgroundColor,
+        fade: [fade.backgroundColor, fade.backdropFilter, fade.maskImage],
+        glass: [header.querySelector(".page-back-button"), header.querySelector("nav"), chat.querySelector("form")].map(element => {
+          const material = getComputedStyle(element);
+          return [material.backgroundColor, material.backdropFilter, material.boxShadow];
+        }) };
     });
     await page.screenshot({ path: `tmp/hermes-qa/wallpaper-${name}.png`, animations: "disabled" });
     assert(["top", "left", "right"].every(edge => Math.abs(coverage.bounds[edge] - coverage.main[edge]) < 1)
       && coverage.bounds.bottom >= coverage.viewportHeight - 1 && coverage.size === "cover", `${name} wallpaper coverage ${JSON.stringify(coverage)}`);
     assert.equal(coverage.overlay === "none", mode === "light");
-    assert.equal(coverage.header, "rgba(0, 0, 0, 0)");
-    assert(coverage.glass.every(color => /^rgba\(.+, 0\.72\)$/.test(color)), "title and composer let the wallpaper show through");
+    assert.equal(coverage.headerFill, "rgba(0, 0, 0, 0)");
+    assert.equal(coverage.fade[0], coverage.headerFill);
+    assert.match(coverage.fade[1], /blur\(/);
+    assert.match(coverage.fade[2], /linear-gradient\(/);
+    assert.deepEqual(coverage.glass.slice(0, 2), [coverage.glass[2], coverage.glass[2]], "both header controls use the composer's material");
+    assert.match(coverage.glass[2][0], /^rgba\(.+, 0\.72\)$/, "composer keeps its glass tint");
   }
   await page.setViewportSize({ width: 402, height: 874 });
+  const wallpaper = page.locator("[data-hermes-wallpaper]");
+  await page.waitForFunction(() => document.querySelector("[data-hermes-wallpaper]")?.getBoundingClientRect().height === innerHeight);
+  const restingWallpaper = await wallpaper.boundingBox();
+  await input.focus();
+  for (const [height, top] of [[790, 0], [625, 0], [480, 125], [495, 8]]) {
+    await input.evaluate(async (element, { height, top }) => {
+      const viewport = window.visualViewport;
+      Object.defineProperty(viewport, "height", { configurable: true, value: height });
+      Object.defineProperty(viewport, "offsetTop", { configurable: true, value: top });
+      viewport.dispatchEvent(new Event("resize"));
+      viewport.dispatchEvent(new Event("scroll"));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }, { height, top });
+    const bounds = await wallpaper.boundingBox();
+    assert.equal(bounds.height, restingWallpaper.height, "keyboard motion must not recrop the wallpaper");
+    assert(Math.abs(bounds.y - top - restingWallpaper.y) <= 1, "wallpaper stays anchored when the visual viewport pans");
+    const gap = await input.evaluate(element => window.visualViewport.height + window.visualViewport.offsetTop - element.form.getBoundingClientRect().bottom);
+    assert(gap >= 3 && gap <= 5, `composer follows keyboard motion, got ${gap}px`);
+    const back = await page.getByRole("button", { name: "返回上一页" }).boundingBox();
+    assert(back.y >= top && back.y + back.height < top + height, "header controls remain visible when the viewport pans");
+  }
+  await input.blur();
+  await page.evaluate(async () => {
+    const viewport = window.visualViewport;
+    Reflect.deleteProperty(viewport, "height");
+    Reflect.deleteProperty(viewport, "offsetTop");
+    viewport.dispatchEvent(new Event("resize"));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+  assert.deepEqual(await wallpaper.boundingBox(), restingWallpaper);
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("[data-hermes-activity]").tap();
   await page.locator("[data-hermes-wallpaper]").waitFor();
@@ -380,12 +429,14 @@ try {
   activeWork.presentation = { toolActivity: { attemptId: activeWork.attempt_id, total: 36, running: 2, failed: 0,
     tools: [{ name: "search", count: 30 }, { name: "read_file", count: 4 }] } };
   await page.getByRole("button", { name: "重试连接", exact: true }).click();
-  const toolActivity = page.getByRole("button", { name: /工具执行 · 36 次/ });
+  const toolActivity = page.getByRole("button", { name: /调用了 36 次工具/ });
   await toolActivity.waitFor();
+  assert(await toolActivity.evaluate(button => !button.closest("article") && button.closest(".eo-disclosure").previousElementSibling?.matches('article[data-role="user"]')), "tool activity is a separate timeline row for its request");
   assert.equal(await toolActivity.getAttribute("aria-expanded"), "false");
   assert.match(await toolActivity.textContent(), /2 项执行中/);
   await toolActivity.click();
-  const toolDetails = page.locator(`[id="hermes-${activeWork.id}"]`);
+  const toolDetails = toolActivity.locator("../..");
+  assert(await toolDetails.evaluate(section => [section, section.firstElementChild].every(element => getComputedStyle(element).backgroundColor === "rgba(0, 0, 0, 0)")), "tool row has no capsule surface");
   assert.deepEqual(await toolDetails.getByRole("listitem").allTextContents(), ["search×30", "read_file×4"]);
   await toolDetails.getByText("另有 2 次调用", { exact: true }).waitFor();
   activeWork.presentation.toolActivity = { ...activeWork.presentation.toolActivity, running: 0, failed: 1 };
@@ -399,5 +450,45 @@ try {
   assert.equal(sendWrites().at(-1).conversationId, previewConversation);
   assert.equal(await input.inputValue(), "普通草稿要跨刷新");
   activeWork.status = "interrupted";
+  for (const saved of [true, false]) {
+    await page.getByRole("button", { name: "新对话", exact: true }).click();
+    const content = saved ? "退到后台时云端已保存" : "退到后台时请求未送达";
+    const sendButton = page.getByRole("button", { name: "发送", exact: true });
+    const before = sendWrites().length;
+    let release;
+    interruptedSend = { saved, background: new Promise(resolve => { release = resolve; }) };
+    await input.fill(content);
+    await sendButton.click();
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    release();
+    await page.getByText("正在确认送达…", { exact: true }).waitFor();
+    const id = sendWrites().at(-1).id;
+    const receiptRequest = page.waitForRequest(request => new URL(request.url()).searchParams.get("pending") === id);
+    await page.evaluate(() => {
+      Reflect.deleteProperty(document, "hidden");
+      Reflect.deleteProperty(document, "visibilityState");
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("evaorbit:native-active"));
+    });
+    await receiptRequest;
+    if (saved) {
+      await page.getByText(content, { exact: true }).waitFor();
+      assert.equal(await input.inputValue(), "");
+      assert.equal(sendWrites().length, before + 1, "a recovered receipt never resends the message");
+      assert.equal(await page.getByText("未确认送达，草稿已保留，可再次发送重试。", { exact: true }).count(), 0);
+    } else {
+      await page.getByText("未确认送达，草稿已保留，可再次发送重试。", { exact: true }).waitFor();
+      assert.equal(await input.inputValue(), content);
+      assert.equal(sendWrites().length, before + 1, "an unconfirmed delivery waits for a manual retry");
+      await sendButton.click();
+      await page.getByText(content, { exact: true }).waitFor();
+      assert.equal(sendWrites().at(-1).id, id);
+      assert.equal(messages.filter(message => message.id === id).length, 1);
+    }
+  }
   assert.deepEqual(errors, []);console.log(JSON.stringify({ passed: true, screenshots: 9, writes: writes.length, errors }));
 } finally { await context?.close();await browser?.close();await server.close(); }

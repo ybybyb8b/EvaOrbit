@@ -10,7 +10,8 @@ export function HermesErrorNotice({ error, inline, fallback, className }: { erro
   const status = Number(/\(HTTP (\d{3})\)/.exec(error)?.[1]);
   let summary = fallback ?? t("Hermes could not complete this action.", "Hermes 操作未完成。");
 
-  if (code === "session_expired" || status === 401) summary = t("Your session has expired. Sign in again.", "登录已失效，请重新登录。");
+  if (code === "hermes_delivery_unconfirmed") summary = t("Delivery unconfirmed. Your draft is kept. Send again to retry.", "未确认送达，草稿已保留，可再次发送重试。");
+  else if (code === "session_expired" || status === 401) summary = t("Your session has expired. Sign in again.", "登录已失效，请重新登录。");
   else if (code === "account_changed" || code === "account_mismatch") summary = t("The signed-in account changed. Reopen the page.", "当前登录账户已变化，请重新打开页面。");
   else if (code === "network_offline") summary = t("This device is offline.", "当前设备未联网。");
   else if (code === "network_timeout" || status === 504 || /timed? out|超时/i.test(error)) summary = t("The request timed out.", "请求超时。");

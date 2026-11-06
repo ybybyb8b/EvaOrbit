@@ -38,17 +38,18 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
       const value = await response.json() as HermesActivityData;
       value.connection.online = Boolean(value.connection.online && value.connection.lastSeenAt && Date.now() - Date.parse(value.connection.lastSeenAt) < 90000);
       if (alive.current) { setData(value); setError(""); if (value.receipt && value.receipt.id === outgoingRef.current?.id) { outgoingRef.current = undefined; setOutgoing(undefined); } }
-    } catch (reason) { if (alive.current && !(reason instanceof Error && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : String(reason)); }
+    } catch (reason) { if (alive.current && !document.hidden && !(reason instanceof Error && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : String(reason)); }
     } while (refreshAgain.current && alive.current && !document.hidden); }
     finally { pending.current = false; }
   }, [request, english]);
-  const hasWork = Boolean(outgoing?.state === "sending" || data?.threads.some(thread => thread.pending || thread.question));
+  const sending = outgoing?.state === "sending" || outgoing?.state === "confirming";
+  const hasWork = Boolean(sending || data?.threads.some(thread => thread.pending || thread.question));
   useEffect(() => {
     alive.current = true; abort.current = new AbortController();
     const first = setTimeout(() => void refresh(), 0), interval = setInterval(() => void refresh(), hasWork ? 5000 : 15000);
     const resume = () => void refresh();
-    window.addEventListener("focus", resume); window.addEventListener("online", resume); document.addEventListener("visibilitychange", resume);
-    return () => { alive.current = false; abort.current?.abort(); clearTimeout(first); clearInterval(interval); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); document.removeEventListener("visibilitychange", resume); };
+    window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener("evaorbit:native-active", resume); document.addEventListener("visibilitychange", resume);
+    return () => { alive.current = false; abort.current?.abort(); clearTimeout(first); clearInterval(interval); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); window.removeEventListener("evaorbit:native-active", resume); document.removeEventListener("visibilitychange", resume); };
   }, [refresh, hasWork]);
   useEffect(() => {
     const receive = (event: Event) => {
@@ -111,8 +112,9 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
   const online = Boolean(!error && data?.connection.online), failed = Boolean(error || outgoing?.state === "uncertain" || threads.some(thread => thread.error));
   const connectionLabel = error ? t("Connection issue", "连接异常") : !data ? t("Checking…", "正在检查…") : online ? "online" : "offline";
   const thinking = threads.some(thread => thread.pending === "processing" || thread.pending === "received"), question = threads.some(thread => thread.question);
-  const tone = failed ? "error" : outgoing?.state === "sending" ? "sending" : question ? "question" : thinking ? "thinking" : unread ? "reply" : threads.some(thread => thread.pending) ? "queued" : online ? "online" : "offline";
-  const label = failed ? t("Needs attention", "有情况需要查看") : tone === "sending" ? t("Sending…", "正在发送…") : question ? t("Waiting for your reply", "等待你回答") : thinking ? t("Working…", "正在处理…") : unread ? t(`${unread} new replies`, `${unread} 条新回复`) : tone === "queued" ? t("Waiting for Hermes", "等待 Hermes 接收") : online ? "online" : "offline";
+  const tone = failed ? "error" : sending ? "sending" : question ? "question" : thinking ? "thinking" : unread ? "reply" : threads.some(thread => thread.pending) ? "queued" : online ? "online" : "offline";
+  const deliveryLabel = outgoing?.state === "confirming" ? t("Checking delivery…", "正在确认送达…") : t("Sending…", "正在发送…");
+  const label = failed ? t("Needs attention", "有情况需要查看") : tone === "sending" ? deliveryLabel : question ? t("Waiting for your reply", "等待你回答") : thinking ? t("Working…", "正在处理…") : unread ? t(`${unread} new replies`, `${unread} 条新回复`) : tone === "queued" ? t("Waiting for Hermes", "等待 Hermes 接收") : online ? "online" : "offline";
   useEffect(() => { const show = setTimeout(() => setHint(true), 0), hide = setTimeout(() => setHint(false), 3800); return () => { clearTimeout(show); clearTimeout(hide); }; }, [tone, unread]);
   function showStatus() { setOpen(true); void refresh(); }
   function navigate(id?: string) { setOpen(false); onNavigate(id ? `/ai?conversation=${id}` : "/ai"); }
@@ -131,7 +133,7 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
     {open && !inConversation && <FormSheet title="Hermes" onClose={() => setOpen(false)}><div className={styles.detail}>
       <div className={styles.connection}><span data-online={online} />{connectionLabel}<button className="text-button" onClick={() => void refresh()}>{t("Refresh", "刷新状态")}</button></div>
       {error && <HermesErrorNotice inline error={error} fallback={t("Could not read Hermes status.", "暂时无法读取 Hermes 状态。")} />}
-      {outgoing && <div className={styles.localStatus}><p>{outgoing.state === "sending" ? t("Sending to EO…", "正在发送到 EO…") : t("Delivery unconfirmed. Your text stays in the original form.", "发送结果未确认，文字仍保留在原输入框。")}</p>{outgoing.error && <HermesErrorNotice inline error={outgoing.error} />}{outgoing.state !== "sending" && <button className="text-button" onClick={() => { outgoingRef.current = undefined; setOutgoing(undefined); }}>{t("Dismiss notice", "收起此提示")}</button>}</div>}
+      {outgoing && <div className={styles.localStatus}><p>{sending ? deliveryLabel : t("Delivery unconfirmed. Your text stays in the original form.", "发送结果未确认，文字仍保留在原输入框。")}</p>{outgoing.error && <HermesErrorNotice inline error={outgoing.error} />}{!sending && <button className="text-button" onClick={() => { outgoingRef.current = undefined; setOutgoing(undefined); }}>{t("Dismiss notice", "收起此提示")}</button>}</div>}
       <button className="button secondary" onClick={() => navigate()}>{t("Open Hermes", "打开 Hermes")}</button>
       <div className={styles.threads}>{threads.map(thread => <button key={thread.id} onClick={() => navigate(thread.id)}><strong>{thread.title}{thread.unread > 0 && <span>{thread.unread > 99 ? "99+" : thread.unread}</span>}</strong><small>{thread.error ? t("Could not finish · view details", "处理未完成 · 查看详情") : thread.question ? t("Waiting for your reply", "等待你回答") : thread.pending === "processing" || thread.pending === "received" ? t("Working…", "正在处理…") : thread.pending ? t("Waiting to be received", "等待接收") : thread.preview}</small>{thread.error && <span className={styles.error}>{thread.error}</span>}</button>)}</div>
     </div></FormSheet>}

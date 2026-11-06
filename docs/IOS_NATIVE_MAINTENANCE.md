@@ -155,7 +155,7 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 3. 由 `scripts/ios/package-ad-hoc-ipa.sh` 验证签名，并断言以下 entitlement 都是 `true`：
    - `com.apple.developer.healthkit`
    - `com.apple.developer.healthkit.background-delivery`
-4. 发布 IPA、导出的 entitlements、SHA-256、dSYM、Git SHA 和 Xcode 版本。
+4. 使用 `actions/upload-artifact@v7` 直接发布单个 IPA。运行摘要记录 IPA 的 SHA-256、Git SHA 和 Xcode 版本。
 
 设备 build 不能改成完全 unsigned 的 `CODE_SIGNING_ALLOWED=NO`。patched xtool 需要从 ad-hoc 签名中读取并重建 entitlement。
 
@@ -169,16 +169,7 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 
 ### 3.3 Artifact 与重建判断
 
-下载同一个 `EvaOrbitHost-ad-hoc-<run-number>` artifact 中的：
-
-- `EvaOrbitHost-ad-hoc.ipa`
-- `EvaOrbitHost-ad-hoc-entitlements.plist`
-- `SHA256SUMS`
-- `GIT_SHA.txt`
-- `XCODE_VERSION.txt`
-- dSYM（若 CI 产出）
-
-先用 artifact 自带的 `SHA256SUMS` 校验 IPA。以下情况需要新建 IPA：
+从对应的 Actions 运行直接下载 `EvaOrbitHost-ad-hoc.ipa`，并用运行摘要中的 SHA-256 校验。以下情况需要新建 IPA：
 
 - Swift、原生资源、`project.yml`、Info.plist、entitlement 或 Native bridge 的 Swift 端发生变化。
 - Web bridge 新能力同时依赖新的 Swift 方法；此时通常还要先部署兼容的 Web 端。
