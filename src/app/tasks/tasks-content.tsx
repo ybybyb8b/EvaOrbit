@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useWorkspaceData} from "@/components/workspace-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
@@ -257,7 +258,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
         {error && !showForm && <ErrorNotice role="alert">{error}</ErrorNotice>}
         {loading ? <PageLoading title="任务" englishTitle="tasks" inline /> : visibleTasks.length ? <>
           {(["overdue", "today", "upcoming", "unscheduled"] as const).map(group => groups[group].length > 0 && <section className={`task-group task-group-${group}`} key={group} aria-labelledby={`task-group-${group}`}><header className="task-group-heading"><h3 id={`task-group-${group}`}>{activeDate && group === "upcoming" ? (english ? "Due this day" : "当天到期") : groupLabels[group]}<span>{groups[group].length}</span></h3></header><div className="task-list">{groups[group].map(renderTask)}{group !== "overdue" && <button type="button" className="task-inline-add" onClick={() => startNew(group === "unscheduled" ? "" : activeDate ?? (group === "today" ? today : localDate(1)))}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div></section>)}
-          {groups.completed.length > 0 && (status === "done" ? <section className="task-group"><div className="task-list">{groups.completed.map(renderTask)}</div></section> : <details className="task-completed"><summary>{groupLabels.completed}<span>{groups.completed.length}</span><Icon name="chevronDown" /></summary><div className="task-list">{groups.completed.map(renderTask)}</div></details>)}
+          {groups.completed.length > 0 && (status === "done" ? <section className="task-group"><div className="task-list">{groups.completed.map(renderTask)}</div></section> : <Disclosure className="task-completed" title={groupLabels.completed} trailing={groups.completed.length}><div className="task-list">{groups.completed.map(renderTask)}</div></Disclosure>)}
         </> : <div className="task-empty"><Icon name="check" /><h3>{activeTag ? (english ? "No tasks match this filter" : "这个筛选下还没有任务") : status === "done" ? (english ? "No completed tasks" : "还没有完成项") : (english ? "A little breathing room" : "留一点空白，也很好")}</h3><p>{activeDate ? (english ? "No tasks due here. Add one when you need it." : "这一天暂时没有任务到期，有想做的事就记下来。") : (english ? "Add your next task here." : "把接下来想做的事，记在这里。")}</p>{activeTag && <button type="button" className="task-inline-add" onClick={() => setSelectedTag(null)}>{english ? "Show all tags" : "查看全部标签"}</button>}{status !== "done" && <button type="button" className="task-inline-add" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div>}
       </div>
       </div>

@@ -17,7 +17,7 @@ test("life-day settings migrate safely, persist, and drive routine completion th
   };
   try {
     run(`const db=await import('./src/lib/db.ts');
-      db.updateAppearancePreferences({appearanceMode:'dark',colorTheme:'powderblue',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});
+      db.updateAppearancePreferences({appearanceMode:'dark',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});
       const {DatabaseSync}=await import('node:sqlite');const connection=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       connection.exec('ALTER TABLE ui_preferences DROP COLUMN life_day_start; DELETE FROM migrations WHERE version=79;');connection.close();console.log('{}');`);
     const result = run(`

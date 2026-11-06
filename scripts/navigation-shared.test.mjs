@@ -15,6 +15,7 @@ function navigation(english=true){
     if(name==="react")return react;if(name==="react/jsx-runtime")return runtime;if(name==="reicon-react")return icons;
     if(name.endsWith("locale-controller"))return {useLocale:()=>({english})};
     if(name.endsWith("page-navigation"))return {isFoodDrinkPath};
+    if(name.endsWith("reicon-icons"))return {ReiconGlyph:()=>createElement("svg")};
     if(name.endsWith("icons"))return {Icon:()=>createElement("svg")};
     throw Error(name);
   },exports);return exports;

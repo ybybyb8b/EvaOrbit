@@ -4,26 +4,17 @@ import { LuciusSectionSwipe } from "./lucius-section-swipe";
 import {WorkspaceLink as Link,useWorkspaceData} from "@/components/workspace-data-context";
 import { luciusMoodPresentation } from "@/lib/lucius-mood";
 import { plainExcerpt } from "@/lib/long-term-memory";
-import type { LuciusCaseStatus, LuciusPostComment, LuciusState, LuciusPost, LuciusDiaryEntry, LuciusCase } from "@/lib/types";
+import type { LuciusPostComment, LuciusState, LuciusPost, LuciusDiaryEntry } from "@/lib/types";
 import { LuciusPostComments } from "./lucius-post-comments";
 import { PageBackButton } from "@/components/page-back-button";
 
 
-export type LuciusTab = "posts" | "diary" | "cases";
+export type LuciusTab = "posts" | "diary";
 
 const tabs: Array<{ id: LuciusTab; label: string; href: string }> = [
   { id: "posts", label: "Posts", href: "/lucius" },
   { id: "diary", label: "Diary", href: "/lucius?tab=diary" },
-  { id: "cases", label: "Case Files", href: "/lucius?tab=cases" },
 ];
-
-const caseStatusLabel: Record<LuciusCaseStatus, string> = {
-  serving: "Serving",
-  probation: "Probation",
-  temporary_release: "Temporary release",
-  permanent_record: "Permanent record",
-};
-
 
 function relativeTime(value: string,now:number) {
   const elapsed = Math.max(0, now - new Date(value).getTime());
@@ -42,7 +33,7 @@ function longDate(value: string) {
   return new Intl.DateTimeFormat("en", { month: "long", day: "numeric", year: "numeric" }).format(new Date(`${value}T12:00:00`));
 }
 
-export function LuciusProfile({tab,state,posts,diaryEntries,cases,comments,now}:{now:number;tab:LuciusTab;state:LuciusState;posts:LuciusPost[];diaryEntries:LuciusDiaryEntry[];cases:LuciusCase[];comments:LuciusPostComment[]}){
+export function LuciusProfile({tab,state,posts,diaryEntries,comments,now}:{now:number;tab:LuciusTab;state:LuciusState;posts:LuciusPost[];diaryEntries:LuciusDiaryEntry[];comments:LuciusPostComment[]}){
   const {local}=useWorkspaceData();
   const commentsByPost = comments.reduce((groups, comment) => {
     const group = groups.get(comment.postId) ?? [];
@@ -105,18 +96,6 @@ export function LuciusProfile({tab,state,posts,diaryEntries,cases,comments,now}:
         </Link>)}</div> : <div className="lucius-profile-empty"><span aria-hidden="true">✦</span><p>No diary entries yet.</p><small>An unwritten page is still a page.</small></div>}
       </section>}
 
-      {tab === "cases" && <section className="lucius-profile-archive" aria-labelledby="lucius-cases-heading">
-        <div className="lucius-profile-section-heading">
-          <div><span>Observed &amp; retained</span><h2 id="lucius-cases-heading">Case Files</h2></div>
-          <Link href="/lucius/cases">Open archive</Link>
-        </div>
-        {cases.length ? <div className="lucius-profile-list">{cases.map((item) => <Link href={`/lucius/cases/${item.id}`} className="lucius-case-entry" key={item.id}>
-          <div><span>No. {String(item.id).padStart(2, "0")}</span><time dateTime={item.latestOccurredDate}>{longDate(item.latestOccurredDate)}</time></div>
-          <strong>{item.title}</strong>
-          <p>{plainExcerpt(item.cause, 180)}</p>
-          <span>{caseStatusLabel[item.status]} <i aria-hidden="true">→</i></span>
-        </Link>)}</div> : <div className="lucius-profile-empty"><span aria-hidden="true">✦</span><p>The cabinet is quiet.</p><small>0 files currently kept.</small></div>}
-      </section>}
     </main>
   </LuciusSectionSwipe>;
 }

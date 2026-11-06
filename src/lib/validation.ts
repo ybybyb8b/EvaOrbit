@@ -1,6 +1,6 @@
 import { DRINK_TYPES } from "./drink-types.ts";
 import { normalizeTrackerTimeRange } from "./tracker-time-range.ts";
-import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
+import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 import { normalizeLuciusMood } from "./lucius-mood.ts";
@@ -243,9 +243,6 @@ export function parseProjectItemPatch(value: unknown) {
 
 const memoTypes = ["basic", "supplement", "event", "note"] as const satisfies readonly MemoType[];
 const memoStatuses = ["active", "merged", "archived", "historical"] as const satisfies readonly MemoStatus[];
-const luciusCaseErrorTypes = ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"] as const satisfies readonly LuciusCaseErrorType[];
-const luciusCaseSeverities = ["minor", "moderate", "serious", "habitual"] as const satisfies readonly LuciusCaseSeverity[];
-const luciusCaseStatuses = ["serving", "probation", "temporary_release", "permanent_record"] as const satisfies readonly LuciusCaseStatus[];
 
 function longTermTags(value: unknown, field: string): string[];
 function longTermTags(value: unknown, field: string, optional: true): string[] | undefined;
@@ -422,67 +419,6 @@ export function parseNewLuciusPostComment(value: unknown, postId?: number, autho
 export function parseLuciusPostCommentPatch(value: unknown) {
   const body = objectValue(value);
   return { content: text(body.content, "评论内容", 2_000)! };
-}
-
-function caseDates(firstOccurredDate: string, latestOccurredDate: string) {
-  if (latestOccurredDate < firstOccurredDate) throw new ValidationError("最近发生日期不能早于首次发生日期");
-}
-
-export function parseNewLuciusCase(value: unknown) {
-  const body = objectValue(value);
-  if (body.errorType === undefined) throw new ValidationError("错误类型不能为空");
-  const firstOccurredDate = dateOnly(body.firstOccurredDate, "首次发生日期");
-  const latestOccurredDate = body.latestOccurredDate === undefined ? firstOccurredDate : dateOnly(body.latestOccurredDate, "最近发生日期");
-  caseDates(firstOccurredDate, latestOccurredDate);
-  return {
-    title: text(body.title, "案底名称", 300)!,
-    errorType: enumValue(body.errorType, "错误类型", luciusCaseErrorTypes, "other"),
-    severity: enumValue(body.severity, "严重程度", luciusCaseSeverities, "moderate"),
-    status: enumValue(body.status, "案底状态", luciusCaseStatuses, "serving"),
-    triggerScenes: longTermTags(body.triggerScenes, "触发场景"),
-    errorQuote: text(body.errorQuote ?? "", "错误原话", 10_000, false) ?? "",
-    cause: text(body.cause, "原因", 20_000)!,
-    correctBehavior: text(body.correctBehavior, "正确行为", 20_000)!,
-    mandatoryRule: text(body.mandatoryRule, "强制规则", 20_000)!,
-    nextCheck: nullableLongTermDate(body.nextCheck, "下次检查日期"),
-    punishment: text(body.punishment ?? "", "惩罚", 10_000, false) ?? "",
-    firstOccurredDate,
-    latestOccurredDate,
-    occurrenceCount: integerValue(body.occurrenceCount, "累计次数", 1, 1_000_000, 1),
-    consecutiveCorrectCount: integerValue(body.consecutiveCorrectCount, "连续正确次数", 0, 1_000_000, 0),
-    recurrenceIntervalDays: nullablePositiveId(body.recurrenceIntervalDays, "复发间隔天数"),
-    isRecurrence: booleanValue(body.isRecurrence, "是否复发", false),
-    resetThreshold: integerValue(body.resetThreshold, "重置阈值", 1, 1_000_000, 3),
-    ...migrationTrace(body),
-  };
-}
-
-export function parseLuciusCasePatch(value: unknown) {
-  const body = objectValue(value);
-  const result = {
-    title: body.title === undefined ? undefined : text(body.title, "案底名称", 300),
-    errorType: body.errorType === undefined ? undefined : enumValue(body.errorType, "错误类型", luciusCaseErrorTypes, "other"),
-    severity: body.severity === undefined ? undefined : enumValue(body.severity, "严重程度", luciusCaseSeverities, "moderate"),
-    status: body.status === undefined ? undefined : enumValue(body.status, "案底状态", luciusCaseStatuses, "serving"),
-    triggerScenes: longTermTags(body.triggerScenes, "触发场景", true),
-    errorQuote: body.errorQuote === undefined ? undefined : text(body.errorQuote, "错误原话", 10_000, false),
-    cause: body.cause === undefined ? undefined : text(body.cause, "原因", 20_000),
-    correctBehavior: body.correctBehavior === undefined ? undefined : text(body.correctBehavior, "正确行为", 20_000),
-    mandatoryRule: body.mandatoryRule === undefined ? undefined : text(body.mandatoryRule, "强制规则", 20_000),
-    nextCheck: nullableLongTermDate(body.nextCheck, "下次检查日期", true),
-    punishment: body.punishment === undefined ? undefined : text(body.punishment, "惩罚", 10_000, false),
-    firstOccurredDate: body.firstOccurredDate === undefined ? undefined : dateOnly(body.firstOccurredDate, "首次发生日期"),
-    latestOccurredDate: body.latestOccurredDate === undefined ? undefined : dateOnly(body.latestOccurredDate, "最近发生日期"),
-    occurrenceCount: body.occurrenceCount === undefined ? undefined : integerValue(body.occurrenceCount, "累计次数", 1, 1_000_000),
-    consecutiveCorrectCount: body.consecutiveCorrectCount === undefined ? undefined : integerValue(body.consecutiveCorrectCount, "连续正确次数", 0, 1_000_000),
-    recurrenceIntervalDays: nullablePositiveId(body.recurrenceIntervalDays, "复发间隔天数", true),
-    isRecurrence: body.isRecurrence === undefined ? undefined : booleanValue(body.isRecurrence, "是否复发", false),
-    resetThreshold: body.resetThreshold === undefined ? undefined : integerValue(body.resetThreshold, "重置阈值", 1, 1_000_000),
-    ...migrationTrace(body, true),
-  };
-  if (result.firstOccurredDate && result.latestOccurredDate) caseDates(result.firstOccurredDate, result.latestOccurredDate);
-  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Cases 字段");
-  return result;
 }
 
 function priority(value: unknown): TaskPriority | undefined {

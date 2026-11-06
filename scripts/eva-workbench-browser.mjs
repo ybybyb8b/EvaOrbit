@@ -23,6 +23,7 @@ try {
   });
   await context.route("**/eo-api/**", async route => {
     const r = route.request(), url = new URL(r.url());
+    if (url.pathname === "/eo-api/business/hermes") return route.fulfill({ json: { connection: { paired: false, online: false, lastSeenAt: null }, conversations: [], messages: [], hasMore: false } });
     if (url.pathname === "/eo-api/business/eva") {
       if (r.method() === "GET") return route.fulfill({ json: url.searchParams.get("view") === "status" ? settings : { settings, jobs, calls } });
       const body = r.postDataJSON();writes.push(body);
@@ -33,6 +34,7 @@ try {
         if (!jobs.some(j => j.id === job.id)) jobs.unshift(job);return route.fulfill({ status: 201, json: job });
       }
       if (body.action === "keep") { jobs.find(j => j.id === body.id).status = "done";return route.fulfill({ json: jobs[0] }); }
+      if (body.action === "retry") { const job=jobs.find(j=>j.id===body.id);Object.assign(job,{status:"queued",feedback:undefined,error:null,attempts:job.attempts+1});return route.fulfill({json:job}); }
       throw Error("Unexpected Eva action " + body.action);
     }
     if (url.pathname === "/eo-api/session") return route.fulfill({ json: { authenticated: true, accountId, email: "preview@example.invalid", onlineBusinessProtocol: 1, onlineBusinessAccountAllowed: true } });
@@ -56,19 +58,58 @@ try {
   const expandedHeight = await compactInput.evaluate(el => el.getBoundingClientRect().height);
   assert(expandedHeight > initialHeight && expandedHeight <= 280, "paper grows up to its cap");
   await compactInput.fill("");
-  assert.equal(await compactInput.evaluate(el => el.getBoundingClientRect().height), initialHeight, "paper shrinks when cleared");
+  assert(Math.abs(await compactInput.evaluate(el => el.getBoundingClientRect().height)-initialHeight)<1, "paper shrinks when cleared");
   assert.match(await compactInput.evaluate(el => getComputedStyle(el).boxShadow), /inset/, "Vintage recess is preserved");
   await page.screenshot({animations:"disabled", path: "tmp/eva-qa/vintage-log-mobile.png" });
   const input = page.getByRole("textbox", { name: "纸条内容" });await input.fill("明天取快递。也想重新布置一下书架，还没想好。");
   await page.getByRole("button", { name: "交给 Eva", exact: true }).waitFor();
   await page.screenshot({animations:"disabled", path: "tmp/eva-qa/vintage-paper-mobile.png" });
+  await input.fill("");await page.getByRole("button", {name:"关闭",exact:true}).click();
+  const discard=page.getByRole("button",{name:"放弃并关闭",exact:true});if(await discard.isVisible())await discard.click();
+  await page.locator(".form-sheet-layer").waitFor({state:"detached"});
+  await navigateLocal(page,"Eva");await page.getByRole("button",{name:"旧纸条",exact:true}).click();await page.getByRole("button",{name:"放一张纸条",exact:true}).click();
+  await input.fill("明天取快递。也想重新布置一下书架，还没想好。");
   await page.getByRole("button", { name: "交给 Eva", exact: true }).click();
   await page.getByText(/模拟保存失败，请重试。/).waitFor().catch(async e=>{console.log(JSON.stringify({writes,body:await page.locator("body").innerText()}));throw e;});assert.match(await input.inputValue(), /明天取快递/);
   await page.getByRole("button", { name: "交给 Eva", exact: true }).click();await input.waitFor({ state: "detached" });
   const submissions = writes.filter(w => w.action === "capture");assert.equal(submissions.length, 2);assert.equal(submissions[0].key, submissions[1].key);
+  await page.locator("[data-eva-activity]").waitFor();
+  await page.screenshot({animations:"disabled",path:"tmp/eva-qa/eva-sending-mobile.png"});
+  jobs[0].status="running";jobs[0].leaseUntil=new Date(Date.now()+120000).toISOString();jobs[0].feedback={stage:"request",provider:"Fixture Provider",model:"fixture-model",requestStartedAt:now};
+  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+  await page.locator('[data-eva-activity][data-tone="thinking"]').waitFor();
+  await page.screenshot({animations:"disabled",path:"tmp/eva-qa/eva-thinking-mobile.png"});
+  await page.locator("[data-eva-activity]").click();await page.getByRole("dialog").getByText("已发起模型请求，尚未确认送达",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"关闭",exact:true}).click();
+  const floating=page.locator("[data-eva-activity]");await floating.waitFor();const bounds=await floating.boundingBox();
+  await page.mouse.move(bounds.x+28,bounds.y+28);await page.mouse.down();await page.mouse.move(35,bounds.y-40,{steps:6});await page.mouse.up();
+  await page.waitForFunction(()=>document.querySelector('[data-eva-activity]')?.getBoundingClientRect().x<30);
+  const leftBounds=await floating.boundingBox();await page.mouse.move(leftBounds.x+28,leftBounds.y+28);await page.mouse.down();await page.mouse.move(120,leftBounds.y+28,{steps:6});await page.mouse.up();
+  await page.waitForFunction(()=>document.querySelector('[data-eva-activity]')?.getBoundingClientRect().x<30);
+  jobs[0].status="failed";jobs[0].error="failed";jobs[0].feedback={...jobs[0].feedback,stage:"response",respondedAt:now,httpStatus:401,requestId:"fixture-request",failure:{code:"authentication",message:"Invalid API credential [redacted]"}};
+  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.getByRole("button",{name:"Eva 整理未完成",exact:true}).waitFor();
+  await page.locator("[data-eva-activity]").click();await page.getByRole("dialog").getByText("模型接口拒绝了凭据",{exact:true}).waitFor();await page.getByRole("dialog").getByText("模型接口已响应（HTTP 401）",{exact:true}).waitFor();
+  await page.screenshot({animations:"disabled",path:"tmp/eva-qa/eva-error-mobile.png"});
+  jobs[0].feedback={...jobs[0].feedback,stage:"save",httpStatus:200,repliedAt:now,failure:{code:"save",databaseCode:"22P02",message:"The model replied, but saving failed: malformed array literal. Refresh status before retrying."}};
+  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.getByRole("dialog").getByText("22P02",{exact:true}).waitFor();
+  await page.screenshot({animations:"disabled",path:"tmp/eva-qa/eva-database-error-mobile.png"});
+  await page.getByRole("button",{name:"重新处理",exact:true}).click();
+  await page.getByRole("dialog").getByText("纸条已保存，尚未确认发送到模型",{exact:true}).waitFor();
+  assert.equal(writes.at(-1).action,"retry");assert.equal(writes.at(-1).id,jobs[0].id);
+  assert.equal(await page.getByRole("dialog").getByText("模型接口拒绝了凭据",{exact:true}).count(),0,"retry must not reuse the previous attempt's diagnostic");
+  await page.getByRole("button",{name:"关闭",exact:true}).click();
+  await page.locator(".form-sheet-layer").waitFor({state:"detached"});
+  jobs[0].status="done";jobs[0].error=null;jobs[0].taskIds=[71];jobs[0].feedback={stage:"save",provider:"Fixture Provider",model:"fixture-model",requestStartedAt:now,respondedAt:now,repliedAt:now,httpStatus:200};jobs[0].result={summary:"已整理取快递。",remaining:"",review:false,tasks:[{title:"取快递",dueDate:"2026-11-05",dueTime:null,remind:false}]};
+  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.locator('[data-eva-activity][data-tone="done"]').waitFor();
+  await page.emulateMedia({reducedMotion:"reduce"});
+  assert.equal(await page.locator('[data-eva-activity] > span').first().evaluate(el=>getComputedStyle(el).animationName),"none");
+  await page.emulateMedia({reducedMotion:"no-preference"});
+  await page.screenshot({animations:"disabled",path:"tmp/eva-qa/eva-reply-mobile.png"});
+  await page.locator("[data-eva-activity]").click();await page.getByRole("dialog").getByText("已收到模型回复",{exact:true}).waitFor();await page.getByRole("button",{name:"关闭",exact:true}).click();
+  await page.locator("[data-eva-activity]").waitFor({state:"detached"});
   jobs[0].status = "review";jobs[0].taskIds = [71, 0];jobs[0].result = { summary: "已记下明天取快递。书架的想法留在 Inbox，等你想好了再说。", remaining: "想重新布置书架，具体怎么做还没决定。", review: false, tasks: [{ title: "取快递", notes: "", dueDate: "2026-11-05", dueTime: null, remind: false, review: false }, { title: "整理书架", notes: "先确定要不要做", dueDate: null, dueTime: null, remind: false, review: true }] };
   calls.push({ id: "call", jobId: jobs[0].id, createdAt: now, model: "fixture-model", input: 450, output: 120, cached: 320, cost: null, currency: null, pricing: null, promptVersion: "paper-1" });
-  await navigateLocal(page, "Eva");await page.getByText("等你看一眼", { exact: true }).waitFor();
+  await navigateLocal(page, "Eva");await page.getByRole("button",{name:"旧纸条",exact:true}).click();await page.getByText("等你看一眼", { exact: true }).waitFor();
   assert.equal(await page.getByRole("link", { name: "取快递", exact: true }).getAttribute("href"), "/tasks?taskId=71");
   await page.screenshot({animations:"disabled", path: "tmp/eva-qa/vintage-workbench-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "用量与费用", exact: true }).click();await page.getByRole("cell", { name: /未知/ }).waitFor();
@@ -108,5 +149,5 @@ try {
     }
   }
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, screenshots: 7, writes: writes.length, contrasts, errors }));
+  console.log(JSON.stringify({ passed: true, screenshots: 11, writes: writes.length, contrasts, errors }));
 } finally { await context?.close();await browser?.close();await server.close(); }

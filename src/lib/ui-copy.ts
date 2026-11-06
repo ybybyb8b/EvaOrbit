@@ -181,7 +181,6 @@ const UI_COPY: CopyPair[] = [
   ["搜索", "Search"], ["自由输入", "Free text"], ["单选", "Single select"], ["多选", "Multiple select"], ["数字", "Number"], ["是 / 否", "Yes / No"], ["属性", "Properties"], ["新增属性", "Add property"], ["记录结构", "Record structure"], ["趋势", "Trend"], ["节奏", "Rhythm"], ["洞察", "Insights"], ["记下", "Record now"],
   ["属性分布", "What the details reveal"], ["布里斯托分型", "Bristol"], ["是", "Yes"], ["否", "No"], ["量", "Amount"], ["多", "Large"], ["少", "Small"], ["顺畅程度", "Ease"], ["顺畅", "Easy"], ["稍费劲", "Some effort"], ["费劲", "Strained"], ["腹痛", "Abdominal pain"], ["1型", "Type 1"], ["2型", "Type 2"], ["3型", "Type 3"], ["4型", "Type 4"], ["5型", "Type 5"], ["6型", "Type 6"], ["7型", "Type 7"],
   ["处理过", "Processed"], ["没整理", "Unsorted"], ["放回未整理", "Move back to unsorted"], ["删除这条 Inbox", "Delete this Inbox item"], ["在翻 Inbox…", "Loading Inbox…"], ["队列已清空。", "The queue is clear."],
-  ["全部案底", "All cases"], ["建立案底", "New case"], ["案底名称", "Case title"], ["错误类型", "Error type"], ["错误原话", "Original response"], ["正确行为", "Correct behavior"], ["复发", "Recurrence"], ["这是一次复发", "This is a recurrence"], ["连续正确", "Correct streak"], ["观察期", "Probation"],
   ["新建对话", "New conversation"], ["会话名称", "Conversation name"], ["当前会话模型", "Current conversation model"], ["翻以前聊过的", "Conversation history"], ["空白对话", "Empty conversation"], ["生成回复失败", "Could not generate response"], ["先接一个模型", "Connect a model first"], ["告诉 Eva 一件事…", "Tell Eva something…"],
   ["先放这里", "Capture here"], ["Inbox 为空", "Inbox is empty"], ["查看全部历史", "View full history"], ["常喝类型", "Frequent types"], ["还没有足够记录", "Not enough records yet"], ["有评价后会更准确", "Ratings will make this more accurate"], ["糖度倾向", "Sweetness preference"], ["冷热偏好", "Temperature preference"], ["近期常喝", "Recent favorites"], ["我设的数量线", "My limits"], ["需要时再加，不默认催你。", "Add limits only when useful."], ["今天喝了什么", "Today's drinks"],
   ["基本信息", "Basics"], ["补充信息", "Additional details"], ["事件内容", "Event content"], ["便签内容", "Note content"], ["当前有效", "Active"], ["已合并", "Merged"], ["历史记录", "History"],
@@ -195,7 +194,7 @@ const UI_COPY: CopyPair[] = [
   ["没有匹配的碎片", "No matching Memo"], ["调整筛选，或新增一条长期记忆。", "Adjust the filters or keep a new long-term memory."], ["纪事还是空的", "Chronicle is empty"], ["先添加一条带日期的 Markdown 记录。", "Add a dated Markdown entry to begin."],
   ["浏览器推送", "Browser push"], ["网页推送和定时发送仍作为浏览器后备。", "Existing Web Push and scheduled delivery remain the browser fallback."], ["未订阅", "Not subscribed"], ["启用网页通知", "Enable Web Notifications"], ["暂无计划", "Nothing scheduled"], ["创建提醒后，它会立即显示在这里。", "Future reminders will appear here immediately after you create them."],
   ["生产数据", "Production data"], ["访问", "Access"], ["私人账户 · RLS", "Private account · RLS"], ["本地后备", "Local fallback"], ["能量同步", "Energy sync"], ["EvaOrbit 只同步静息与活动能量，不上传原始 HealthKit 样本。", "Resting and Active Energy only. EvaOrbit never uploads raw HealthKit samples."], ["仅网页", "Web only"], ["请在 EvaOrbit iOS App 内打开此页以连接 Apple Health。", "Open this page inside the EvaOrbit iOS app to connect Apple Health."],
-  ["安静的事也值得被看见", "silent things are still worth noticing"], ["动态", "Posts"], ["日记", "Diary"], ["案底", "Case Files"], ["还没有发布内容。", "Nothing has been posted yet."], ["这里的安静是有意的。", "The quiet here is intentional."], ["只在服务端加密保存", "Encrypted and stored on the server only"],
+  ["安静的事也值得被看见", "silent things are still worth noticing"], ["动态", "Posts"], ["日记", "Diary"], ["还没有发布内容。", "Nothing has been posted yet."], ["这里的安静是有意的。", "The quiet here is intentional."], ["只在服务端加密保存", "Encrypted and stored on the server only"],
   ["脑子里刚冒出来什么？\n随便写，不用整理", "What's on your mind?\nNo need to organize it."], ["Inbox 状态筛选", "Inbox status filter"], ["前一天", "Previous day"], ["选择日期", "Choose date"], ["后一天", "Next day"], ["找吃过的…", "Search food records…"], ["排序和筛选人物", "Sort and filter people"], ["AI Provider 列表", "AI provider list"], ["输入 API Key", "Enter API key"],
   ["摄入估算", "Intake estimate"], ["调整关系状态筛选，或新增人物。", "Adjust the relationship filter or add a person."], ["设置 · 通知", "Settings · Notifications"], ["旧数据入口", "Legacy data"], ["基础地址", "Base URL"],
   ["可信度：", "Confidence:"], ["低", "Low"], ["中", "Medium"], ["高", "High"],
@@ -207,7 +206,7 @@ const TO_CHINESE = new Map(UI_COPY.map(([zh, en]) => [en, zh]));
 const TO_CHINESE_LOWER = new Map(UI_COPY.map(([zh, en]) => [en.toLocaleLowerCase("en"), zh]));
 const ENGLISH_ALIASES = new Map<string, string>([
   ["New record", "新增记录"], ["New entry", "新增记录"], ["New project", "新增工坊"], ["New Memo", "新增碎片"], ["New Tracker", "新增观测"],
-  ["Add Item", "新增条目"], ["New conversation", "新建对话"], ["New case", "建立案底"], ["New Diary entry", "新增日记"],
+  ["Add Item", "新增条目"], ["New conversation", "新建对话"], ["New Diary entry", "新增日记"],
   ["Wake Eva", "唤醒 Eva"], ["Care", "护理"], ["Latest", "最近"], ["No recent records", "暂无近期记录"],
   ["One-time care you only need to do once.", "只需完成一次的护理。"], ["Recent household records", "最近家庭记录"],
   ["TODAY · IN PROGRESS", "今日进行中"], ["AI PROVIDERS", "AI 服务商"], ["SELF", "自我"],

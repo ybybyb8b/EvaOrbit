@@ -13,7 +13,7 @@ test('Timeline rules persist with CAS, migrate existing preferences, preserve Fo
   assert.equal(result.status,0,result.stderr||result.stdout);return JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1));
  };
  try {
-  run(`const db=await import('./src/lib/db.ts');db.updateAppearancePreferences({appearanceMode:'dark',colorTheme:'powderblue',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});const {DatabaseSync}=await import('node:sqlite');const connection=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);connection.exec('ALTER TABLE ui_preferences DROP COLUMN timeline_association;DELETE FROM migrations WHERE version=93;');connection.close();console.log('{}');`);
+  run(`const db=await import('./src/lib/db.ts');db.updateAppearancePreferences({appearanceMode:'dark',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});const {DatabaseSync}=await import('node:sqlite');const connection=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);connection.exec('ALTER TABLE ui_preferences DROP COLUMN timeline_association;DELETE FROM migrations WHERE version=93;');connection.close();console.log('{}');`);
   const result=run(`
    const assert=(await import('node:assert/strict')).default;
    const db=await import('./src/lib/db.ts'),service=await import('./src/lib/services/timeline-association.ts'),timeline=await import('./src/lib/services/timeline.ts'),home=await import('./src/lib/services/home-day.ts');
@@ -42,9 +42,9 @@ test('Timeline rules persist with CAS, migrate existing preferences, preserve Fo
    const disabled=await service.saveTimelineAssociation({...saved,rules:[{...rule,enabled:false}]});
    assert.equal((await timeline.getDailyTimelineOverview('2026-11-01',{readOnly:true})).events.filter(e=>e.association).length,0);
    await service.saveTimelineAssociation({...disabled,rules:[]});
-   console.log(JSON.stringify({rules:db.getTimelineAssociation(),appearance:db.getUiPreferences().colorTheme,rawUnchanged:rawBefore===JSON.stringify([db.getTrackerEntry(entry.id),db.getCalendarEvent(calendar.id),db.listFoodLogs()])}));
+   console.log(JSON.stringify({rules:db.getTimelineAssociation(),appearance:db.getUiPreferences().appearanceMode,rawUnchanged:rawBefore===JSON.stringify([db.getTrackerEntry(entry.id),db.getCalendarEvent(calendar.id),db.listFoodLogs()])}));
   `);
-  assert.equal(result.rules.rules.length,0);assert.equal(result.rules.revision,3);assert.equal(result.appearance,'powderblue');assert.equal(result.rawUnchanged,true);
+  assert.equal(result.rules.rules.length,0);assert.equal(result.rules.revision,3);assert.equal(result.appearance,'dark');assert.equal(result.rawUnchanged,true);
   assert.deepEqual(run(`const db=await import('./src/lib/db.ts');console.log(JSON.stringify(db.getTimelineAssociation()));`),result.rules);
  } finally {rmSync(directory,{recursive:true,force:true});}
 });

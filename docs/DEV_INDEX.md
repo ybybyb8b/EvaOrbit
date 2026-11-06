@@ -21,7 +21,7 @@
 | [Food](#food) | `/food-drink`、`/food`、`/drinks/history`、`/food/places`、`/food/library` |
 | [Health](#health) | `/health`：睡眠、体重、能量、周期与健康记录 |
 | [Training](#training) | `/health?view=training`：训练记录与循环计划 |
-| [Lucius](#lucius) | `/lucius`：状态、动态、评论、日记与 Case |
+| [Lucius](#lucius) | `/lucius`：状态、动态、评论与日记 |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
 | [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
 | [Insights](#insights) | MCP `insight_context`：只读分析上下文，无独立页面 |
@@ -46,11 +46,11 @@
 - **分区滑动**：[use-section-swipe.ts](../src/components/use-section-swipe.ts) 统一触摸方向锁定、系统边缘保留、横向滚动控件避让和滑动后的误点抑制；页面声明分区顺序、切换回调与专属排除选择器。Subscriptions、Tracker、Notifications、猫咪详情、Lucius 主页、Tasks 列表／月历和 Project 视图按需接入；编辑表单或模态弹层打开时暂停，不注册全局页面手势，也不把筛选条件当作视图。
 
 - **下拉刷新**：[pull-to-refresh-core.tsx](../src/components/pull-to-refresh-core.tsx) 共享手势、阻尼、阈值和提示；Web 包装失效缓存并刷新路由，本地 [适配器](../src/local-trackers/pull-to-refresh.tsx) 调用 [refresh.ts](../src/local-trackers/refresh.ts) 中当前挂载模块注册的既有加载器，不重载文档、不模拟网络恢复或前台事件。本地 Host 关闭原生刷新控件和滚动回弹，避免露出网页外背景；普通在线 Host 保持原行为。
-- **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[Disclosure](../src/components/disclosure.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。Disclosure 提供整行展开、独立前置控件、摘要与进度、保留表单状态的高度过渡及减少动态效果支持；Training Log 首批复用，其他模块按需接入。
+- **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[Disclosure](../src/components/disclosure.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。Disclosure 统一内容折叠的整行标题、摘要与计数、独立前置控件、受控／非受控展开、隐藏表单校验后的展开聚焦、保留输入及减少动态效果。Health／Training、Cats、Tracker 设置、Projects、Tasks、Relations、Eva、Home 短记和开发说明共用；筛选下拉与操作菜单保留各自语义，卡片堆叠继续由原组件管理。
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，保留 HTTP 状态及业务 code；[request-diagnostics.ts](../src/lib/request-diagnostics.ts) 与 Native `NativeDiagnostics.swift` 在共用边界记录模块操作、失败步骤和安全诊断码，不依赖 Next、不自动重试请求，也不输出正文或查询参数，见 [错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
-- **共享外观**：Classic / Vintage 是独立的全局设计主题（`designTheme`）；四套旧 `colorTheme` 仅作为 Classic 的配色，切换主题保留原选择。Vintage 的全局语义色、双字体层级及平面内容表面位于 [vintage-theme.css](../src/app/vintage-theme.css)，日历等 Home 形态保留在 Home 变体中；不再依赖 Home 挂载应用颜色。绿／蓝／紫 Classic 保留试版前样式，玫瑰木采用已认可的奶白／柔粉／浅灰绿全局配色；Home 试版样式仅挂载于玫瑰木和 Vintage。两主题共用居中隆起底栏轮廓，各自提供材质与色槽。Vintage 的统一 [Reicon 映射](../src/components/reicon-icons.tsx) 覆盖共享图标、侧栏和空间菜单，Classic 保留原图标。旧 `evaorbit.homeStyle` 在读取时兼容，下一次外观保存升级为正式偏好。Web 的 `ui_preferences.design_theme` 与本机使用相同枚举；本地版沿用设备存储。[fonts.css](../src/app/fonts.css) 统一 Web／本地的字体文件与注册；[appearance-preferences.ts](../src/lib/appearance-preferences.ts)、`LocaleController` 统一偏好读取、应用和持久化，`ThemeController` 统一系统外观及既有 Native loading 适配。两端使用同一 [AppearanceSettings](../src/components/appearance-settings.tsx)；Web 沿用偏好 API，本地只写设备持久存储，不进入业务 outbox。首次本地预览以英语／August 为基准，保留已有显式选择；Web 默认值不变。旧字体键 `ibm` 继续对应 August。
+- **共享外观**：Web 与本地版统一使用 Vintage。首次绘制和运行时都应用 [Vintage 语义色、字体与表面](../src/app/vintage-theme.css)，首页任务汇总同时呈现到期提醒。独立 [Due 卡组件](../src/components/due-reminders-view.tsx) 和 [Classic 插画图标](../src/components/icons.tsx) 保留备用。两端共用 [AppearanceSettings](../src/components/appearance-settings.tsx)，支持语言、字体与浅色／深色／跟随系统。本地只写设备存储，Web 沿用外观偏好 API。历史数据库迁移保留，当前偏好 API 只处理语言、字体与显示模式。本地初始语言与英文字体为英语／August，旧字体键 `ibm` 对应 August。
 - **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一设置目录；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器、选择器及 [菜单定义](../src/components/quick-log-options.ts)。本地 [Universal Log](../src/local-trackers/quick-log.tsx) 与 Tracker 页面经 [tracker-session.ts](../src/local-trackers/tracker-session.ts) 共用会话 Store、字段校验和独立同步队列；首页向表单传递所选日期，一键快速记录沿用当前时间语义。其他模块复用原表单，明确授权的测试账户通过统一在线请求层保存，离线只读适配仍作为读取后备。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
@@ -108,11 +108,11 @@
 
 ## Lucius
 
-- **本地只读阶段**：[LuciusProfile](../src/app/lucius/lucius-profile.tsx) 与原日记/案底组件在 Web、Host 共享；缓存状态、动态/评论、日记和案底，图片从 bundle 加载，全部业务写入及通知停用。Eva 聊天仍不接入；见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
+- **本地只读阶段**：[LuciusProfile](../src/app/lucius/lucius-profile.tsx) 与日记组件在 Web、Host 共享；缓存状态、动态/评论和日记，图片从 bundle 加载，全部业务写入及通知停用。Eva 聊天仍不接入；见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[lucius/](../src/app/lucius/)、[lucius 服务](../src/lib/services/lucius.ts)。
-- **数据与接口**：`lucius_state`、`lucius_posts`、`lucius_post_comments`、`lucius_diary_entries`、`lucius_cases`；`/api/lucius/*`；MCP `lucius_state`、`lucius_post`、`lucius_post_comment`、`lucius_diary`、`lucius_case`。
-- **依赖与决定**：状态/动态和 Lucius 新评论经 Notifications 通知，投递失败不回滚已保存内容；Case 复发使用原子业务操作。状态仅保留 status/mood，已退役的 `current_note` 兼容列只能为空，不恢复为内容入口。生活近况 Memo 属于 Memory，不复制进状态表。
+- **数据与接口**：`lucius_state`、`lucius_posts`、`lucius_post_comments`、`lucius_diary_entries`；`/api/lucius/*`；MCP `lucius_state`、`lucius_post`、`lucius_post_comment`、`lucius_diary`。
+- **依赖与决定**：状态/动态和 Lucius 新评论经 Notifications 通知，投递失败不回滚已保存内容。状态仅保留 status/mood，已退役的 `current_note` 兼容列只能为空，不恢复为内容入口。生活近况 Memo 属于 Memory，不复制进状态表。罪案库已退役；旧快照仅保留空数组兼容旧 Host，刷新会替换已缓存案底。
 - **详文**：[通知触发边界](../src/lib/push/README.md)、[Bark 通道](BARK_NOTIFICATIONS.md)、[MCP 契约](../src/lib/mcp/README.md)。
 
 ## Memory
@@ -126,7 +126,11 @@
 
 ## AI
 
-- **Eva 纸条后台**：原 `/ai` 页面改为共享 [EvaWorkbench](../src/components/eva-workbench.tsx)，Web／本地 Home 通用 Log 顶部复用 [EvaPaperCapture](../src/components/eva-paper.tsx)。仅存 Inbox 不用 AI，显式交给 Eva 才排队；默认关闭且不扫描其他记录。固定小提示词、单纸条上下文与结构校验在 [eva.ts](../src/lib/eva.ts)，[处理服务](../src/lib/services/eva.ts) 经 Next `after` 执行一次受限模型调用，Repository 原子保存现有 Task／提醒和审计引用。新增 `eva_settings`／`eva_jobs`／独立 `eva_calls` 用量账本，按日/月及模型统计，价格未知保持未知。详见 [后台契约与发布](EVA_WORKBENCH.md)；快捷指令仍后续单独接入。
+- **Hermes 消息平台**：`/ai` 的 [HermesChat](../src/components/hermes-chat.tsx) 经 [消息接口](../src/app/api/hermes/route.ts) 和 `hermes_*` 三表连接电脑上的 [Hermes 通道插件](../integrations/hermes-evaorbit/adapter.py)。EO 管理消息、回执及便利贴展示，Agent 上下文／工具在 Hermes；[消息气泡](../src/components/hermes-message.tsx) 支持 Markdown、折叠的 Hermes 思考内容与真实澄清选项。便利贴是消息的展示类型，不建立第二套 Agent；旧 `/ai/papers` 转至 Hermes，旧处理入口停用，既有数据保留。身份、配对、断线恢复与安装边界见 [Hermes 通道](HERMES_CHANNEL.md)。
+
+- **Hermes 常驻入口**：[HermesActivity](../src/components/hermes-activity.tsx) 挂在 Web／本地壳账户上下文内，全局浮动、拖动贴边并保存账户限定位置；状态面板展示在线、排队、处理、待回答、未读及失败原因，进入对应对话后才确认已读。[轻量状态接口](../src/app/api/hermes/route.ts) 经 `eo_hermes_activity` 按账户读取摘要及持久已读游标，不拉整段历史、不调用模型、后台页面暂停轮询。旧 Eva 浮层保留作历史兼容，不再挂载。
+
+- **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。Home 通用 Log 已移除纸条输入区，仅保留原记录按钮；便利贴统一在 Hermes 页填写。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
 
 - **开发版 AI 配置**：开发版设置直接复用 [AiProvidersSettings](../src/app/settings/ai-providers-settings.tsx)，通过 `settings.aiConfiguration` 在线管理 Provider 和模型；不包含 Eva 聊天。白名单、账户绑定与服务端协议检查由 [AI 请求契约](../src/lib/ai-configuration-request.ts)、Native Controller、认证 proxy 共同执行。密钥仅临时驻留表单，请求不缓存、不进入业务 outbox；断网清除未提交密钥。旧服务端缺少账户安全协议时拒绝操作。
 
@@ -134,6 +138,8 @@
 - **数据与接口**：`chat_sessions`、`chat_messages`、`ai_settings`、`ai_providers`、`ai_model_configs`；`/api/ai/*`。
 - **依赖与决定**：Persona 从 SELF_PERSONA、偏好、时间与动态上下文组装；业务 Tool Calling 复用服务，Graph 负责事实召回。界面昵称/头像不改变消息 role 或 Persona；Key 归 Provider，Model 引用 Provider，密钥不发送给客户端。内置聊天工具与远程 MCP 是不同入口，勿混用旧工具名。
 - **详文**：[Persona 内容](../SELF_PERSONA.md)、[README 架构与密钥](../README.md)、[部署配置](../DEPLOYMENT.md)。
+
+Hermes 聊天外观由 Web 与 Host 共用。头像与背景按账户保存在设备的 IndexedDB，选择图片时缩小后保存，打开对话时直接读取本机副本。
 
 ## Inbox
 

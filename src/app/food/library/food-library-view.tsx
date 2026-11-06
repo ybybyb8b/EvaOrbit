@@ -149,7 +149,7 @@ export function FoodLibraryView(){
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
     <div className={styles.content}><label className={`search-box ${styles.search}`}><Icon name="search" /><input type="search" aria-label={t("搜索食品名称或品牌")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("搜索食品名称或品牌")} /></label>
     <div className={styles.summary}><span role="status">{loading?t("正在加载…"):`${t("当前显示")} ${items.length} ${t("项")}`}</span>{query&&<button type="button" className="text-button" onClick={()=>setQuery("")}>清除搜索</button>}</div>
-    {loadError&&<div className={styles.loadError} role="alert"><span>{t(loadError)}</span><button type="button" className="text-button" onClick={()=>void load()}>重试</button></div>}
+    {loadError&&<div className={styles.loadError}><ErrorNotice inline as="span">{t(loadError)}</ErrorNotice><button type="button" className="text-button" onClick={()=>void load()}>重试</button></div>}
     {loading&&!items.length?<PageLoading title="食品库" englishTitle="library" inline/>:items.length ? <ul className={styles.list} aria-label={t("食品列表")} aria-busy={loading}>{items.map((item) => {
       const kcal=item.servingKcal??foodReferenceKcal(item);
       const basis=item.servingKcal!==null||item.referenceType==="per_serving"?"每份":item.referenceType==="per_100g"?"每 100 克":"每 100 毫升";

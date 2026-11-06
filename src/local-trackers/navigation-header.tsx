@@ -28,6 +28,7 @@ export function LocalBackAction({onBack}:{onBack:(()=>void)|undefined}){
  useEffect(()=>active?register?.({back:()=>latest.current?.()}):undefined,[register,active]);return null;
 }
 export function LocalDesktopBack(){const value=useContext(Context),onBack=value?.action?.back??value?.fallback;return <header className="desktop-page-navigation">{onBack&&<NavigationBackControl onClick={onBack}/>}<DownloadStatusButton/></header>;}
+export function LocalBackButton(){const value=useContext(Context),onBack=value?.action?.back??value?.fallback;return onBack?<NavigationBackControl onClick={onBack}/>:null;}
 export function LocalNavigationHeader({spaces}:{spaces:ReactNode}){
  const value=useContext(Context),onBack=value?.action?.back??value?.fallback,header=useRef<HTMLElement>(null);
  useEffect(()=>{const update=()=>header.current?.style.setProperty("--header-opacity",String(Math.min(1,Math.max(0,window.scrollY/80))));update();window.addEventListener("scroll",update,{passive:true});return()=>window.removeEventListener("scroll",update);},[]);

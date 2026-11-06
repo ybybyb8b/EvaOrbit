@@ -1,4 +1,5 @@
 "use client";
+import {Disclosure} from "@/components/disclosure";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useCatsData} from "@/components/cats-data-context";
@@ -44,7 +45,7 @@ export function PetDetailView({ initial }: { initial: Detail }) {
   const [filter, setFilter] = useState<"all" | "health" | CatRecordKind>("all");
   const [careBusy, setCareBusy] = useState(false);
   const swipeNav = useRef<HTMLElement>(null);
-  useSectionSwipe({ active: tab, sections, rootRef: copyScope, feedbackRef: swipeNav, onChange: setTab, enabled: editor === null && !careBusy, ignoreSelector: ".cat-health-chart, .cat-record-details, form", interactiveSurfaceSelector: ".cat-timeline-main" });
+  useSectionSwipe({ active: tab, sections, rootRef: copyScope, feedbackRef: swipeNav, onChange: setTab, enabled: editor === null && !careBusy, ignoreSelector: ".cat-health-chart, .cat-record-details, form", interactiveSurfaceSelector: ".cat-timeline .eo-disclosure-trigger" });
   function newRecord(kind: CatRecordKind) { setEditing(undefined); setRecordKind(kind); setEditor("record"); }
   async function careAction(action: () => Promise<void>) { if(previewOnly)return; if (careBusy) return; setCareBusy(true); setError(""); try { await action(); } catch { setError("Could not update care. Please retry."); } finally { setCareBusy(false); } }
   async function load() { const response = await read(`/api/cats/pets/${detail.pet.id}`); if (response.ok) setDetail(await response.json()); }
@@ -76,7 +77,16 @@ export function PetDetailView({ initial }: { initial: Detail }) {
 
 function OneTimeTasks({items,onEdit,onComplete,onCancel}:{items:Reminder[];onEdit:(item:Reminder)=>void;onComplete:(item:Reminder)=>void;onCancel:(item:Reminder)=>void}){ const previewOnly=useFormPreview();if(!items.length)return null;return <section className="pet-one-time"><div className="section-heading compact"><span className="eyebrow">ONE-TIME</span></div><div className="cats-one-time-list">{items.map(item=><article key={item.id}><div><strong>{item.title}</strong><small>{new Date(item.nextDueAt!).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}{item.dueHasExplicitTime?` · ${new Date(item.nextDueAt!).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}`:" · Date only"}</small></div><div className="routine-card-actions"><button className="text-button" onClick={()=>onEdit(item)}>Edit</button><button disabled={previewOnly} className="text-button danger" onClick={()=>onCancel(item)}>Cancel</button><button disabled={previewOnly} className="button primary compact" onClick={()=>onComplete(item)}>Done</button></div></article>)}</div></section>}
 
-function Timeline({ items, expanded, recordDetails, onToggle, onEdit, onRemove }: { items: CatTimelineEntry[]; expanded: string | null; recordDetails: Record<string, Record<string, unknown>>; onToggle: (item: CatTimelineEntry) => void; onEdit: (item: CatTimelineEntry) => void; onRemove: (item: CatTimelineEntry) => void }) { const previewOnly=useFormPreview(); return <section className="cat-timeline">{items.length ? items.map(item => { const key = `${item.kind}-${item.id}`; const type = timelineType(item); const showType = type.localeCompare(item.title.trim(), undefined, { sensitivity: "accent" }) !== 0; return <article key={key} className={expanded === key ? "expanded" : ""}><button aria-expanded={expanded === key} className="cat-timeline-main" onClick={() => void onToggle(item)}><time><strong>{new Date(item.occurredAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</strong>{item.occurredHasExplicitTime && <span>{new Date(item.occurredAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>}</time><span>{showType && <small>{type}</small>}<strong>{item.title}</strong>{item.summary && <p>{item.summary}</p>}</span></button>{expanded === key && <><RecordDetails record={recordDetails[key]}/><div className="cat-record-actions"><button onClick={() => void onEdit(item)}><Icon name="edit"/>Edit</button><button disabled={previewOnly} className="danger" onClick={() => void onRemove(item)}><Icon name="trash"/>Delete</button></div></>}</article>; }) : <div className="cats-inline-empty">No records</div>}</section>; }
+function Timeline({ items, expanded, recordDetails, onToggle, onEdit, onRemove }: { items: CatTimelineEntry[]; expanded: string | null; recordDetails: Record<string, Record<string, unknown>>; onToggle: (item: CatTimelineEntry) => void; onEdit: (item: CatTimelineEntry) => void; onRemove: (item: CatTimelineEntry) => void }) {
+  const previewOnly=useFormPreview();
+  return <section className="cat-timeline">{items.length ? items.map(item => {
+    const key = `${item.kind}-${item.id}`, type = timelineType(item);
+    const showType = type.localeCompare(item.title.trim(), undefined, { sensitivity: "accent" }) !== 0;
+    return <Disclosure key={key} className="cat-timeline-entry" open={expanded === key} onOpenChange={()=>void onToggle(item)} title={item.title} description={<><time>{new Date(item.occurredAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{item.occurredHasExplicitTime && ` ${new Date(item.occurredAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`}</time>{showType && ` · ${type}`}{item.summary && ` · ${item.summary}`}</>}>
+      <RecordDetails record={recordDetails[key]}/><div className="cat-record-actions"><button onClick={() => void onEdit(item)}><Icon name="edit"/>Edit</button><button disabled={previewOnly} className="danger" onClick={() => void onRemove(item)}><Icon name="trash"/>Delete</button></div>
+    </Disclosure>;
+  }) : <div className="cats-inline-empty">No records</div>}</section>;
+}
 
 function RoutineTab({ routines, records, onComplete, onEdit, onDelete }: { routines: CatRoutine[]; records: CatTimelineEntry[]; onComplete: (routine: CatRoutine) => void; onEdit: (routine: CatRoutine) => void; onDelete: (routine: CatRoutine) => void }) { const previewOnly=useFormPreview();
   return <div className="routine-tab"><section className="pet-routine-list">{routines.length ? routines.map(routine => {

@@ -3,7 +3,6 @@ import { getTimelineMonthSummary } from "@/lib/services/timeline";
 import { getHomeDayOverview } from "@/lib/services/home-day";
 import { getDueReminders } from "@/lib/services/reminder";
 
-import { DueReminders } from "@/components/due-reminders";
 import { HomeCalendarTimeline } from "./home-calendar-timeline";
 import { HomePageView } from "@/components/home-page-view";
 import { getHomeCacheScope } from "@/lib/services/home-cache-scope";
@@ -30,5 +29,5 @@ async function loadHomeData() {
 
 export default async function HomePage() {
   const [preferences, [today, monthSummary, due], cacheScope] = await Promise.all([getUiPreferences(), loadHomeData(), getHomeCacheScope()]);
-  return <HomePageView language={preferences.uiLanguage} due={<DueReminders items={due} compact/>}><HomeCalendarTimeline key={cacheScope} cacheScope={cacheScope} dueItems={due} initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage}/></HomePageView>;
+  return <HomePageView language={preferences.uiLanguage}><HomeCalendarTimeline key={cacheScope} cacheScope={cacheScope} dueItems={due} initialDay={today} initialSummary={monthSummary} language={preferences.uiLanguage}/></HomePageView>;
 }

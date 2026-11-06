@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useHealthData} from "@/components/health-data-context";
 
@@ -94,7 +95,7 @@ export function HealthRecordEditor({ editing, initialDate, onCancel, onSaved, fo
       <HealthDateTime label="Ended" value={draft.endedAt} onChange={(endedAt)=>setDraft({...draft,endedAt})} optional/>
       <label className="field wide"><span>Summary <small>(optional)</small></span><textarea rows={3} maxLength={5000} value={draft.summary} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} placeholder="A short note for later…" /></label>
     </div>
-    <details className="health-details-editor" open={editing ? undefined : false}><summary>Details · optional</summary><div className="form-grid health-form-grid">{fields.map((field) => <div className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><SuggestedInput suggestionLabel={field.label} suggestions={suggestedKeys.has(field.key) ? [...historyValues(history, `details.${field.key}`), ...(field.key === "severity" ? ["Mild", "Moderate", "Severe"] : [])] : []} type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onValueChange={value => setDetail(field.key, value, field.inputType)} placeholder={field.placeholder} /></div>)}</div></details>
+    <Disclosure className="health-details-editor" defaultOpen={editing ? undefined : false} title={<>Details · optional</>}><div className="form-grid health-form-grid">{fields.map((field) => <div className="field" key={field.key}><span>{field.label} <small>(optional)</small></span><SuggestedInput suggestionLabel={field.label} suggestions={suggestedKeys.has(field.key) ? [...historyValues(history, `details.${field.key}`), ...(field.key === "severity" ? ["Mild", "Moderate", "Severe"] : [])] : []} type={field.inputType ?? "text"} value={draft.details[field.key] === null || draft.details[field.key] === undefined ? "" : String(draft.details[field.key])} onValueChange={value => setDetail(field.key, value, field.inputType)} placeholder={field.placeholder} /></div>)}</div></Disclosure>
     {error && <ErrorNotice>{error}</ErrorNotice>}
     <div className="health-editor-actions"><button type="button" className="button secondary" onClick={onCancel}>Cancel</button><button className="button primary" disabled={saving||preview}>{saving ? "Saving…" : editing ? "Save changes" : "Add record"}</button></div>
   </form>;

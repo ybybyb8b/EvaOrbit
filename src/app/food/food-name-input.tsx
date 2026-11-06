@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import {useFoodData} from "@/components/food-data-context";
 import {useFormPreview} from "@/components/form-preview";
 import { PageLoading } from "@/components/page-loading";
@@ -48,7 +49,7 @@ export function FoodNameInput({ kind, value, onValueChange, onSelect, onRecord, 
     {open && <SelectDropdown anchor={anchor} id={id} label={label} onClose={() => setOpen(false)}><div className="eo-select-results" role="listbox" aria-label={label} aria-busy={loading}>
       {items.map(item => <button key={item.key} type="button" data-form-change className="eo-select-option user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => pick(item)}><span>{item.name}<small>{[item.placeName || t("通用食品"), item.servingKcal !== null ? english?`About ${item.servingKcal} kcal / serving`:`约 ${item.servingKcal} kcal / 份` : ""].filter(Boolean).join(" · ")}</small></span></button>)}
       {loading && <small className="eo-select-empty"><PageLoading title="搜索结果" englishTitle="search results" compact /></small>}
-      {error && <span role="alert">{error}<button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button></span>}
+      {error && <ErrorNotice inline as="span">{error} <button type="button" onClick={() => setAttempt(value => value + 1)}>重试</button></ErrorNotice>}
       {previewOnly&&!local&&<small className="eo-select-empty">Cloud suggestions are unavailable in form preview. Enter a name directly.</small>}{(!previewOnly||local) && !loading && !error && !items.length && <small className="eo-select-empty">{value ? "没有匹配物品，可直接记录名称" : "输入名称搜索食品库和店铺物品"}</small>}
       {!placeId && value.trim() && <button type="button" className="eo-select-option user-content" onClick={recordName}>{english?`Record “${value.trim()}” directly`:`直接记录「${value.trim()}」`}</button>}
     </div></SelectDropdown>}

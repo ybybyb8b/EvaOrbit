@@ -279,16 +279,13 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         replyHandler: @escaping (Any?, String?) -> Void
     ) {
         guard let rawMode = parameters["appearanceMode"] as? String,
-              let mode = NativeAppearanceMode(rawValue: rawMode),
-              let rawTheme = parameters["colorTheme"] as? String,
-              let theme = NativeThemeIdentifier(rawValue: rawTheme)
+              let mode = NativeAppearanceMode(rawValue: rawMode)
         else {
             replyHandler(failure(id: id, code: "invalid_appearance", message: "Appearance preference is invalid."), nil)
             return
         }
 
         NativeLoadingTheme.currentAppearanceMode = mode
-        NativeLoadingTheme.currentIdentifier = theme
         DispatchQueue.main.async {
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
@@ -296,7 +293,6 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 .forEach { $0.overrideUserInterfaceStyle = mode.interfaceStyle }
             replyHandler(self.success(id: id, result: [
                 "appearanceMode": mode.rawValue,
-                "colorTheme": theme.rawValue,
             ]), nil)
         }
     }

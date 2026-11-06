@@ -1,6 +1,9 @@
 "use client";
+import { Disclosure } from "./disclosure";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ComponentProps } from "react";
 import { useBusinessRequest } from "./business-request-context";
+import { useEvaActivity } from "./eva-activity";
+import { EvaFeedbackDetails } from "./eva-feedback-details";
 import { useFormPreview } from "./form-preview";
 import { useLocale } from "./locale-controller";
 import { ErrorNotice } from "./error-notice";
@@ -18,6 +21,7 @@ const statusNames: Record<EvaStatus, [string, string]> = { held: ["In Inbox", "�
 
 export function EvaWorkbench({ LinkComponent = Anchor }: { LinkComponent?: ComponentType<LinkProps> }) {
   const request = useBusinessRequest(), readonly = useFormPreview(), { english } = useLocale();
+  const activity = useEvaActivity();
   const [data, setData] = useState<Data | null>(null), [error, setError] = useState("");
   const [paper, setPaper] = useState(false), [tab, setTab] = useState<"activity" | "usage">("activity"), [period, setPeriod] = useState<"day" | "month">("day");
   const [busy, setBusy] = useState(false), [correction, setCorrection] = useState<{ id: string; text: string } | null>(null);
@@ -48,11 +52,17 @@ export function EvaWorkbench({ LinkComponent = Anchor }: { LinkComponent?: Compo
   async function act(body: object) {
     if (readonly || lock.current) return;
     lock.current = true; setBusy(true); setError("");
+    const operation = body as { action?: string; id?: string };
+    const trackedId = ["retry", "revise"].includes(operation.action ?? "") ? operation.id : undefined;
+    if (trackedId) activity?.begin(trackedId);
+    let rejected = false, accepted = false;
     try {
       const r = await request("/api/eva", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error(await responseError(r, t("Could not complete this action.", "操作未完成，请重试。")));
+      if (!r.ok) { rejected = [400, 401, 403, 404, 405, 409, 413, 422].includes(r.status); throw new Error(await responseError(r, t("Could not complete this action.", "操作未完成，请重试。"))); }
+      if (trackedId) activity?.accepted(await r.json() as EvaJob);
+      accepted = true;
       setCorrection(null); await load();
-    } catch (e) { setError(e instanceof Error ? e.message : t("Could not complete this action.", "操作未完成，请重试。")); }
+    } catch (e) { const message = e instanceof Error ? e.message : t("Could not complete this action.", "操作未完成，请重试。"); setError(message); if (trackedId && !accepted) activity?.failed(trackedId, message, rejected); }
     finally { lock.current = false; setBusy(false); }
   }
   const calls = data?.calls ?? [];
@@ -78,9 +88,9 @@ export function EvaWorkbench({ LinkComponent = Anchor }: { LinkComponent?: Compo
       <div className={styles.stack}>{data?.jobs.map(job => <article key={job.id} className={styles.paper}>
         <div className={styles.paperHeader}><time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString(english ? "en-US" : "zh-CN", { timeZone: "Asia/Shanghai", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time><span role={job.status === "running" ? "status" : undefined}>{job.status === "done" && !job.result ? t("Saved", "收好了") : statusNames[job.status][english ? 0 : 1]}</span></div>
         <p className={styles.original}>{job.content}</p>
-        {job.context.length > 0 && <details><summary>{t("Your clarifications", "你的补充")}</summary>{job.context.map((text, i) => <p key={i}>{text}</p>)}</details>}
+        {job.context.length > 0 && <Disclosure  title={<>{t("Your clarifications", "你的补充")}</>}>{job.context.map((text, i) => <p key={i}>{text}</p>)}</Disclosure>}
         {job.result && <><p>{job.result.summary}</p><ul>{job.result.tasks.map((task, i) => <li key={i}>{job.taskIds[i] ? <LinkComponent href={`/tasks?taskId=${job.taskIds[i]}`}>{task.title}</LinkComponent> : <strong>{task.title} · {t("Suggested", "待确认")}</strong>}<small>{[task.dueDate, task.dueTime, task.remind ? t("Reminder", "提醒") : ""].filter(Boolean).join(" · ") || t("No date set", "未设日期")}</small>{task.notes && <small>{task.notes}</small>}</li>)}</ul>{job.result.remaining && <p className={styles.hint}>{t("Stays in Inbox: ", "留在散落：")}{job.result.remaining}</p>}</>}
-        {job.error && <p role="alert">{t("Could not sort this time. Your original paper is safe; retry or keep it in Inbox.", "这次未能整理，原文已保留。可重试或留在散落。")}</p>}
+        {(job.feedback || job.error) && <EvaFeedbackDetails job={job} />}
         <div className={styles.actions}>
           {job.status === "review" && <button className="button primary" disabled={busy} onClick={() => void act({ action: "approve", id: job.id })}>{t("Create remaining tasks", "确认创建余下待办")}</button>}
           {["held", "failed"].includes(job.status) && <button className="text-button" disabled={busy || !data.settings.enabled || job.attempts >= 10} onClick={() => void act({ action: "retry", id: job.id })}>{t("Send to Eva", "交给 Eva")}</button>}
@@ -88,15 +98,15 @@ export function EvaWorkbench({ LinkComponent = Anchor }: { LinkComponent?: Compo
           {["held", "review", "failed", "queued"].includes(job.status) && <button className="text-button" disabled={busy} onClick={() => void act({ action: "keep", id: job.id })}>{t("Keep in Inbox", "留在散落")}</button>}
           <LinkComponent href="/inbox">{t("Inbox", "散落")}</LinkComponent>
         </div>
-        {correction?.id === job.id && <form onSubmit={e => { e.preventDefault(); void act({ action: "revise", id: job.id, instruction: correction.text }); }}><label>{t("Clarification for this paper only", "只补充当前这张纸条")}<textarea className={styles.correction} autoFocus required maxLength={1500} value={correction.text} onChange={e => setCorrection({ id: job.id, text: e.target.value })} /></label><div className={styles.actions}><button className="button primary" disabled={busy || !correction.text.trim()}>{t("Sort again", "重新整理")}</button><button className="text-button" type="button" onClick={() => setCorrection(null)}>{t("Cancel", "取消")}</button></div></form>}
+        {correction?.id === job.id && <form onSubmit={e => { e.preventDefault(); void act({ action: "revise", id: job.id, instruction: correction.text }); }}><label className="field"><span>{t("Clarification for this paper only", "只补充当前这张纸条")}</span><textarea className={styles.correction} autoFocus required maxLength={1500} value={correction.text} onChange={e => setCorrection({ id: job.id, text: e.target.value })} /></label><div className={styles.actions}><button className="button primary" disabled={busy || !correction.text.trim()}>{t("Sort again", "重新整理")}</button><button className="text-button" type="button" onClick={() => setCorrection(null)}>{t("Cancel", "取消")}</button></div></form>}
       </article>)}</div>
     </>}
     {tab === "usage" && <><p className={styles.hint}>{t("At most one model call per paper attempt. No global chat history or tool catalogue. Unreported usage and unpriced costs stay unknown; costs use the saved rate, not a provider invoice.", "每次整理至多一次模型调用，不携带全局聊天历史或工具清单。用量缺失、价格未配置时显示未知；费用按当次保存的价格估算，不等同于供应商账单。")}</p><div className={styles.toolbar}><div className="segmented"><button aria-pressed={period === "day"} onClick={() => setPeriod("day")}>{t("Daily", "按日")}</button><button aria-pressed={period === "month"} onClick={() => setPeriod("month")}>{t("Monthly", "按月")}</button></div><LinkComponent href="/settings/ai-connection">{t("Model settings", "模型设置")}</LinkComponent></div>
       {!calls.length ? <p>{t("No processing attempts yet.", "还没有处理尝试。")}</p> : <div className={styles.usage}><table><thead><tr>{[t("Period / model", "日期／模型"), t("Calls", "次数"), t("Input", "输入"), t("Output", "输出"), t("Cached", "缓存"), t("Est. cost", "估算费用")].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{[...grouped].map(([key, row]) => <tr key={key}><td>{key.split("|").slice(0, 2).join(" · ")}</td><td>{row.count}</td><td>{row.unknown ? `${row.input}+?` : row.input}</td><td>{row.unknown ? `${row.output}+?` : row.output}</td><td>{row.cached}{row.missingCache ? "+?" : ""}</td><td>{row.missingCost === row.count ? t("Unknown", "未知") : `${row.currency} ${row.cost.toFixed(6)}${row.missingCost ? " + ?" : ""}`}</td></tr>)}</tbody></table></div>}
-      <details className={styles.pricing}><summary>{t("Optional model pricing", "配置模型计价（可选）")}</summary><p className={styles.hint}>{t("Price per million tokens. Applies to future calls of this exact model; historical prices stay unchanged.", "每百万 Token 的价格。仅用于此模型之后的调用，历史价格不改写。")}</p><form onSubmit={e => { e.preventDefault(); const fields = new FormData(e.currentTarget); void act({ action: "settings", pricing: { model: String(fields.get("model")), currency: String(fields.get("currency")), input: Number(fields.get("input")), output: Number(fields.get("output")), cachedInput: Number(fields.get("cached")), version: new Date().toISOString() } }); }}>
-        <label>{t("Exact model ID", "准确模型 ID")}<input name="model" required maxLength={200} defaultValue={data?.settings.pricing?.model ?? ""} /></label><label>{t("Currency", "币种")}<select name="currency" defaultValue={data?.settings.pricing?.currency ?? "CNY"}><option>CNY</option><option>USD</option></select></label>
-        {([['input', t("Input", "输入"), 'input'], ['output', t("Output", "输出"), 'output'], ['cached', t("Cached input", "缓存输入"), 'cachedInput']] as const).map(([name, label, field]) => <label key={name}>{label}<input type="number" name={name} required min={0} max={10000} step="any" defaultValue={data?.settings.pricing?.[field] ?? ""} /></label>)}<button className="button secondary" disabled={busy || readonly}>{t("Save pricing", "保存价格")}</button>
-      </form></details></>}
+      <Disclosure className={styles.pricing} title={<>{t("Optional model pricing", "配置模型计价（可选）")}</>}><p className={styles.hint}>{t("Price per million tokens. Applies to future calls of this exact model; historical prices stay unchanged.", "每百万 Token 的价格。仅用于此模型之后的调用，历史价格不改写。")}</p><form onSubmit={e => { e.preventDefault(); const fields = new FormData(e.currentTarget); void act({ action: "settings", pricing: { model: String(fields.get("model")), currency: String(fields.get("currency")), input: Number(fields.get("input")), output: Number(fields.get("output")), cachedInput: Number(fields.get("cached")), version: new Date().toISOString() } }); }}>
+        <label className="field"><span>{t("Exact model ID", "准确模型 ID")}</span><input name="model" required maxLength={200} defaultValue={data?.settings.pricing?.model ?? ""} /></label><label className="field"><span>{t("Currency", "币种")}</span><select name="currency" defaultValue={data?.settings.pricing?.currency ?? "CNY"}><option>CNY</option><option>USD</option></select></label>
+        {([['input', t("Input", "输入"), 'input'], ['output', t("Output", "输出"), 'output'], ['cached', t("Cached input", "缓存输入"), 'cachedInput']] as const).map(([name, label, field]) => <label className="field" key={name}><span>{label}</span><input type="number" name={name} required min={0} max={10000} step="any" defaultValue={data?.settings.pricing?.[field] ?? ""} /></label>)}<button className="button secondary" disabled={busy || readonly}>{t("Save pricing", "保存价格")}</button>
+      </form></Disclosure></>}
     {paper && <EvaPaperSheet onClose={() => setPaper(false)} onSaved={() => load()} />}
   </div>;
 }

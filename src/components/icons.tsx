@@ -80,7 +80,8 @@ const paths: Partial<Record<IconProps["name"], React.ReactNode>> = {
   health: <><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/><path d="M7 13h3l1.5-3 2.2 6 1.3-3h2"/></>,
 };
 
-function ClassicIcon({ name, variant = "feature" }: IconProps) {
+// Illustrated theme icons are available for reuse outside the default icon set.
+export function ClassicIcon({ name, variant = "feature" }: IconProps) {
   if (name === "trash") return <Trash2 className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   if (name === "edit") return <Edit2 className="icon classic-icon" weight="Outline" aria-hidden="true" />;
   if (name === "history") return <History className="icon classic-icon" weight="Outline" aria-hidden="true" />;
@@ -97,6 +98,6 @@ function ClassicIcon({ name, variant = "feature" }: IconProps) {
   return <svg className="icon classic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
 
-export function Icon(props: IconProps) {
-  return <><ClassicIcon {...props}/><ReiconGlyph name={props.name}/></>;
+export function Icon({ name }: IconProps) {
+  return <ReiconGlyph name={name} />;
 }

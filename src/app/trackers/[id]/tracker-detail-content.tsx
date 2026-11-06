@@ -109,7 +109,7 @@ export function TrackerDetailContent({initial,trackerId,initialEntry,openDetaile
     else await save();
   }
   if(loading&&!detail)return <PageLoading title="观测" englishTitle="Tracker" />;
-  if(!detail)return <div className="page"><PageHeader eyebrow="" title={english?"Tracker not found":"找不到 Tracker"} description={error}/><Link className="button secondary" href="/trackers">{english?"Back to Trackers":"返回 Trackers"}</Link></div>;
+  if(!detail)return <div className="page"><PageHeader eyebrow="" title={english?"Tracker not found":"找不到 Tracker"} />{error && <ErrorNotice inline>{error}</ErrorNotice>}<Link className="button secondary" href="/trackers">{english?"Back to Trackers":"返回 Trackers"}</Link></div>;
   const {tracker,stats}=detail;
   const periodEntries=trackerInsightEntries(detail.entries,insightPeriod);
   const periodLabelText=english?{month:"This month","90d":"Last 90 days",year:"Last 365 days"}[insightPeriod]:{month:"本月","90d":"最近 90 天",year:"最近一年"}[insightPeriod];

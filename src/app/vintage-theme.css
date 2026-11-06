@@ -1,4 +1,4 @@
-/* Independent Vintage design. Classic palettes stay intact. */
+/* EvaOrbit Vintage theme. */
 html[data-design-theme="vintage"][data-theme][data-mode] {
   --surface-canvas:#f2f3f5;--surface-card:#fcfcfd;--surface-raised:#fff;
   --surface-soft:#e9e9ee;--surface-tint:#e6e1e7;--surface-warm:#e9e3e9;
@@ -57,17 +57,6 @@ html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
 html[data-design-theme="vintage"] body { background:var(--surface-canvas); }
 html[data-design-theme="vintage"] :is(input,textarea,[contenteditable="true"],.user-content,button,select) { font-family:var(--font-ui); }
 html[data-design-theme="vintage"] :is(h1,h2,h3,h4) { font-family:var(--font-editorial);font-weight:500; }
-.appearance-option-grid.design-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.appearance-classic-colors { margin-top:18px; }
-.appearance-classic-colors > strong { display:block;margin-bottom:10px;color:var(--text-secondary);font-size:13px;font-weight:500; }
-.appearance-theme-detail { margin:12px 0 0;color:var(--text-secondary);font-size:13px; }
-.appearance-theme-preview.classic { background:#f5f2e9; }
-.appearance-theme-preview.classic i { background:#a1aa92; }
-.appearance-theme-preview.vintage { background:#f2f3f5; }
-.appearance-theme-preview.vintage i:nth-child(1) { background:#5f3e54; }
-.appearance-theme-preview.vintage i:nth-child(2) { background:#dbe1e6; }
-.appearance-theme-preview.vintage i:nth-child(3) { background:#d8d0d7; }
-
 /* Flat editorial content; translucent material is reserved for floating chrome. */
 html[data-design-theme="vintage"][data-theme][data-mode] :is(.editor-card,.provider-card,.ai-providers-panel,.tracker-card,.tracker-insight-card,.module-intro-card,.module-preview-card,.health-detail-card,.daily-energy-card,.health-record-card,.capture-card,.inbox-row,.settings-directory-item,.notification-rules > article,.notification-history > article,.pet-profile-view,.apple-health-section,.subscription-card,.subscription-summary) {
   background:var(--surface-card);box-shadow:none;

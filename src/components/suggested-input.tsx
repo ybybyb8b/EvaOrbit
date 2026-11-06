@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { createContext, useContext, useId, useRef, useState, type InputHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "./locale-controller";
@@ -108,7 +109,7 @@ export function SuggestedInput({ value, onValueChange, suggestions, suggestionLa
         {canCreate && <button type="button" data-form-change className="eo-select-option eo-select-create user-content" role="option" aria-selected={false} onPointerDown={event => event.preventDefault()} onClick={() => create(newValue)}><span>{english ? `Create “${newValue}”` : `创建「${newValue}」`}</span><span aria-hidden="true">＋</span></button>}
         {!matches.length && !canCreate && <small className="eo-select-empty">{english ? "Type to search or create a value" : "输入以搜索或创建新值"}</small>}
       </div>
-      {suggestionActions?.error && <small className="input-option-error" role="alert">{suggestionActions.error}</small>}
+      {suggestionActions?.error && <ErrorNotice inline as="span" className="input-option-error">{suggestionActions.error}</ErrorNotice>}
     </SelectDropdown>}
     {!searchOnly && focused && (candidates.length > 0 || undo !== null) && !props.disabled && !props.readOnly && (target ? createPortal(quick, target) : quick)}
   </span>;

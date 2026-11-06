@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
@@ -71,11 +72,11 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
       <label className="field"><span>Repeat every</span><div className="field-inline"><input type="number" min="1" max="999" required value={draft.intervalValue} onChange={e => setDraft({ ...draft, intervalValue: Number(e.target.value) })}/><ChoiceSelect value={draft.intervalUnit} onChange={e => setDraft({ ...draft, intervalUnit: e.target.value as CatRoutine["intervalUnit"] })}><option value="day">days</option><option value="week">weeks</option><option value="month">months</option></ChoiceSelect></div></label>
       <label className="field"><span>{editing ? "Next reminder date" : "First reminder date"}</span><input type="date" required value={editing ? draft.nextDueDate : draft.firstDueDate} onInput={e => setDraft(editing ? { ...draft, nextDueDate: e.currentTarget.value, anchorDate: e.currentTarget.value } : { ...draft, firstDueDate: e.currentTarget.value, nextDueDate: e.currentTarget.value, anchorDate: e.currentTarget.value })}/></label>
       <label className="field"><span>Reminder time</span><input type="time" required value={draft.configuredReminderTime} onChange={e=>setDraft({...draft,configuredReminderTime:e.target.value})}/></label>
-      <details className="cat-form-disclosure wide"><summary>{english?"Recurrence and notification settings":"周期与通知设置"}</summary><div className="form-grid">
+      <Disclosure className="cat-form-disclosure wide" title={<>{english?"Recurrence and notification settings":"周期与通知设置"}</>}><div className="form-grid">
       <label className="field"><span>{english?"Calculate the next date from":"下次日期如何计算"}</span><ChoiceSelect value={draft.recurrenceMode} onChange={e=>setDraft({...draft,recurrenceMode:e.target.value as CatRoutine["recurrenceMode"]})}><option value="completion">{english?"When care is completed":"从实际完成日期起算"}</option><option value="fixed">{english?"Scheduled date; restart if overdue":"按计划日期；逾期后重新起算"}</option></ChoiceSelect></label>
       <label className="field"><span>Remind</span><ChoiceSelect value={draft.reminderLeadMinutes} onChange={e => setDraft({ ...draft, reminderLeadMinutes: Number(e.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></ChoiceSelect></label>
       <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={e=>setDraft({...draft,repeatWhileOverdue:e.target.checked})}/><span>Remind me daily while overdue</span></label>
-      </div></details>
+      </div></Disclosure>
       <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={3} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label>
       {editing && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.enabled} onChange={e => setDraft({ ...draft, enabled: e.target.checked })}/><span>Routine enabled</span></label>}
     </div>

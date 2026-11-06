@@ -35,7 +35,7 @@ try{
   await page.reload({waitUntil:"networkidle"});await navigateLocal(page,"Settings");
   const trigger=page.locator(".home-quick-log-trigger"),sheet=page.locator(".form-sheet-panel");
   const close=async()=>{await page.locator(".form-sheet-header button").click();await sheet.waitFor({state:"detached"});};
-  for(const theme of ["classic","vintage"])for(const width of [402,1440]){
+  for(const theme of ["vintage"])for(const width of [402,1440]){
     await page.setViewportSize({width,height:874});await page.evaluate(theme=>{document.documentElement.dataset.designTheme=theme;},theme);
     await page.getByRole("button",{name:"Settings shortcuts",exact:true}).click();await sheet.waitFor();
     assert.equal(await sheet.locator(".settings-directory-item").count(),10);

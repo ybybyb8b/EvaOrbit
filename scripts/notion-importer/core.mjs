@@ -2,20 +2,16 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const NOTION_RESOURCES = ["memo", "chronicle", "lucius_diary", "lucius_case"];
+export const NOTION_RESOURCES = ["memo", "chronicle", "lucius_diary"];
 
 const RESOURCE_ALIASES = new Map([
   ["memo", "memo"], ["memos", "memo"],
   ["chronicle", "chronicle"], ["chronicles", "chronicle"],
   ["lucius_diary", "lucius_diary"], ["lucius_diaries", "lucius_diary"],
-  ["lucius_case", "lucius_case"], ["lucius_cases", "lucius_case"],
 ]);
 
 const MEMO_TYPES = { basic: "basic", supplement: "supplement", event: "event", note: "note", "基本信息": "basic", "补充信息": "supplement", "事件内容": "event", "便签内容": "note" };
 const MEMO_STATUSES = { active: "active", merged: "merged", archived: "archived", historical: "historical", "当前有效": "active", "已合并": "merged", "已归档": "archived", "历史记录": "historical" };
-const CASE_ERROR_TYPES = { naming: "naming", memory_omission: "memory_omission", factual: "factual", tool_misuse: "tool_misuse", expression: "expression", other: "other", "称呼错误": "naming", "长期记忆遗漏": "memory_omission", "事实错误": "factual", "工具误操作": "tool_misuse", "表达违规": "expression", "其他": "other" };
-const CASE_SEVERITIES = { minor: "minor", moderate: "moderate", serious: "serious", habitual: "habitual", "轻微": "minor", "一般": "moderate", "严重": "serious", "惯犯": "habitual" };
-const CASE_STATUSES = { serving: "serving", probation: "probation", temporary_release: "temporary_release", permanent_record: "permanent_record", "服刑中": "serving", "观察期": "probation", "暂时出狱": "temporary_release", "永久留档": "permanent_record" };
 
 function objectValue(value, field) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${field} 必须是 JSON object`);
@@ -31,11 +27,6 @@ function stringValue(value, field, maximum, { required = true, preserve = false 
   if (required && !value.trim()) throw new Error(`${field} 不能为空`);
   if (value.length > maximum) throw new Error(`${field} 不能超过 ${maximum} 个字符；importer 不会截断数据`);
   return preserve ? value : value.trim();
-}
-
-function optionalString(value, field, maximum, preserve = false) {
-  if (value === undefined || value === null || value === "") return null;
-  return stringValue(value, field, maximum, { required: false, preserve });
 }
 
 function enumValue(value, field, values, fallback) {
@@ -91,12 +82,6 @@ function optionalInteger(value, field, minimum = 1) {
   return value === undefined || value === null || value === "" ? null : integerValue(value, field, minimum);
 }
 
-function booleanValue(value, field, fallback) {
-  if (value === undefined) return fallback;
-  if (typeof value !== "boolean") throw new Error(`${field} 必须是 boolean`);
-  return value;
-}
-
 function knownData(data, fields) {
   return Object.keys(data).filter((key) => !fields.includes(key));
 }
@@ -149,38 +134,6 @@ function mapDiary(data, record, importedAt) {
   };
 }
 
-function mapCase(data, record, importedAt) {
-  const fields = ["title", "error_type", "severity", "status", "trigger_scenes", "error_quote", "cause", "correct_behavior", "mandatory_rule", "next_check", "punishment", "first_occurred_date", "latest_occurred_date", "occurrence_count", "consecutive_correct_count", "recurrence_interval_days", "is_recurrence", "reset_threshold"];
-  const firstOccurredDate = dateValue(data.first_occurred_date, "lucius_case.first_occurred_date");
-  const latestOccurredDate = data.latest_occurred_date === undefined ? firstOccurredDate : dateValue(data.latest_occurred_date, "lucius_case.latest_occurred_date");
-  if (data.error_type === undefined || data.error_type === null || data.error_type === "") throw new Error("lucius_case.error_type 不能为空");
-  if (latestOccurredDate < firstOccurredDate) throw new Error("lucius_case.latest_occurred_date 不能早于 first_occurred_date");
-  return {
-    data: {
-      title: stringValue(data.title, "lucius_case.title", 300),
-      error_type: enumValue(data.error_type, "lucius_case.error_type", CASE_ERROR_TYPES, "other"),
-      severity: enumValue(data.severity, "lucius_case.severity", CASE_SEVERITIES, "moderate"),
-      status: enumValue(data.status, "lucius_case.status", CASE_STATUSES, "serving"),
-      trigger_scenes: tagsValue(data.trigger_scenes, "lucius_case.trigger_scenes"),
-      error_quote: optionalString(data.error_quote, "lucius_case.error_quote", 10000, true) ?? "",
-      cause: stringValue(data.cause, "lucius_case.cause", 20000, { preserve: true }),
-      correct_behavior: stringValue(data.correct_behavior, "lucius_case.correct_behavior", 20000, { preserve: true }),
-      mandatory_rule: stringValue(data.mandatory_rule, "lucius_case.mandatory_rule", 20000, { preserve: true }),
-      next_check: optionalDate(data.next_check, "lucius_case.next_check"),
-      punishment: optionalString(data.punishment, "lucius_case.punishment", 10000, true) ?? "",
-      first_occurred_date: firstOccurredDate,
-      latest_occurred_date: latestOccurredDate,
-      occurrence_count: integerValue(data.occurrence_count, "lucius_case.occurrence_count", 1, 1),
-      consecutive_correct_count: integerValue(data.consecutive_correct_count, "lucius_case.consecutive_correct_count", 0, 0),
-      recurrence_interval_days: optionalInteger(data.recurrence_interval_days, "lucius_case.recurrence_interval_days"),
-      is_recurrence: booleanValue(data.is_recurrence, "lucius_case.is_recurrence", false),
-      reset_threshold: integerValue(data.reset_threshold, "lucius_case.reset_threshold", 1, 3),
-      ...commonTrace(record, importedAt),
-    },
-    ignoredFields: knownData(data, fields),
-  };
-}
-
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
@@ -194,8 +147,7 @@ function hashValue(value) {
 function contentFingerprint(resource, data) {
   const value = resource === "memo" ? [data.title, data.content]
     : resource === "chronicle" ? [data.date, data.title, data.content_md]
-      : resource === "lucius_diary" ? [data.date, data.content]
-        : [data.title, data.first_occurred_date, data.cause];
+      : [data.date, data.content];
   return hashValue([resource, ...value]);
 }
 
@@ -238,8 +190,7 @@ function normalizeRecord(resource, rawRecord, importedAt) {
   const data = record.data === undefined ? flattenedData(record) : objectValue(record.data, `${resource}.data`);
   const mapped = resource === "memo" ? mapMemo(data, normalized, importedAt)
     : resource === "chronicle" ? mapChronicle(data)
-      : resource === "lucius_diary" ? mapDiary(data, normalized, importedAt)
-        : mapCase(data, normalized, importedAt);
+      : mapDiary(data, normalized, importedAt);
   const payloadHash = hashValue({ resource, notion_page_id: notionPageId, notion_url: normalized.notionUrl, notion_created_at: normalized.notionCreatedAt, notion_updated_at: normalized.notionUpdatedAt, data: Object.fromEntries(Object.entries(mapped.data).filter(([key]) => key !== "imported_at")) });
   return { ...normalized, ...mapped, payloadHash, contentFingerprint: contentFingerprint(resource, mapped.data), importedAt };
 }

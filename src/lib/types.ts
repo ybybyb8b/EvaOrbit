@@ -101,10 +101,8 @@ export interface ApiError {
 }
 
 export interface UiPreferences {
-  designTheme: import("./theme").DesignTheme;
   homeModuleOrder: import("./home-modules").HomeModuleId[];
   appearanceMode: import("./theme").AppearanceMode;
-  colorTheme: import("./theme").ColorTheme;
   uiLanguage: import("./locale").UiLanguage;
   chineseFont: import("./font-preferences").ChineseFont;
   englishFont: import("./font-preferences").EnglishFont;
@@ -975,33 +973,6 @@ export interface LuciusPostComment {
   postId: number;
   author: LuciusPostCommentAuthor;
   content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type LuciusCaseErrorType = "naming" | "memory_omission" | "factual" | "tool_misuse" | "expression" | "other";
-export type LuciusCaseSeverity = "minor" | "moderate" | "serious" | "habitual";
-export type LuciusCaseStatus = "serving" | "probation" | "temporary_release" | "permanent_record";
-export interface LuciusCase extends MigrationTrace {
-  id: number;
-  title: string;
-  errorType: LuciusCaseErrorType;
-  severity: LuciusCaseSeverity;
-  status: LuciusCaseStatus;
-  triggerScenes: string[];
-  errorQuote: string;
-  cause: string;
-  correctBehavior: string;
-  mandatoryRule: string;
-  nextCheck: string | null;
-  punishment: string;
-  firstOccurredDate: string;
-  latestOccurredDate: string;
-  occurrenceCount: number;
-  consecutiveCorrectCount: number;
-  recurrenceIntervalDays: number | null;
-  isRecurrence: boolean;
-  resetThreshold: number;
   createdAt: string;
   updatedAt: string;
 }

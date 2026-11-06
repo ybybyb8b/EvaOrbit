@@ -1,4 +1,5 @@
 import XCTest
+import WebKit
 @testable import EvaOrbitHost
 
 final class HostConfigurationTests: XCTestCase {
@@ -29,6 +30,7 @@ final class HostConfigurationTests: XCTestCase {
         let local = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app")!, localTrackers: true))
         let link = URL(string: "evaorbit-trackers-poc://open/tasks?taskId=123#details")!
         XCTAssertEqual(local.navigationURL(for: link)?.absoluteString, "https://eva-orbit.vercel.app/tasks?taskId=123#details")
+        XCTAssertEqual(local.navigationURL(for: URL(string: "evaorbit-trackers-poc://open/ai?conversation=thread")!)?.absoluteString, "https://eva-orbit.vercel.app/ai?conversation=thread")
         let online = try XCTUnwrap(HostConfiguration(validating: local.baseURL))
         XCTAssertNil(online.navigationURL(for: link))
         for raw in ["evaorbit-trackers-poc://user@open/tasks", "evaorbit-trackers-poc://open:443/tasks", "evaorbit-trackers-poc://open/tasks/%2e%2e/api/tasks", "evaorbit-trackers-poc://open/eventkit/token"] {
@@ -52,6 +54,12 @@ final class HostConfigurationTests: XCTestCase {
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
             "notification.cancel", "notification.listPending", "notification.openSettings"
         ]))
+    }
+
+    @MainActor
+    func testHostKeyboardUsesAZeroHeightAccessory() {
+        let webView = HostWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        XCTAssertEqual(webView.inputAccessoryView?.frame.height, 0)
     }
 
     func testHapticKindsStayAClosedBridgeVocabulary() {

@@ -108,7 +108,7 @@ App Icon 使用 `ios/EvaOrbitHost/Resources/AppIconSources` 中的浅色与深�
 
 Native Host 通过现有版本化 bridge 的 `haptic.play` 使用 UIKit 播放 `selection`、`light`、`medium`、`success`、`warning` 和 `error` 六种固定语义。它不使用 Web Vibration API，不需要 Core Haptics framework、权限、Info.plist 文案或 entitlement。Web 端通过 `host.getInfo().methods` 检查能力；旧 IPA 和普通浏览器会静默跳过。
 
-原生开屏只有浅色与深色两种外观，不跟随 Web 颜色主题。Web 向旧版 Host 的 `appearance.setPreference` 同步时固定传入兼容的 `editorial` 启动标识，让 `system / light / dark` 独立生效；页面内仍使用用户选择的真实颜色主题。这是 Web 兼容修复，不需要重建 IPA。
+原生开屏使用 Vintage 浅深色资源，跟随已保存的 `system / light / dark`。既有 `appearance.setPreference` 只同步显示模式。原生资源与外观调用更新随新 IPA 生效，覆盖安装沿用现有链路。
 
 Swift 端是通用触感执行器，具体页面触发点和业务语义仍由 Web 决定。因此首次加入 `haptic.play` 需要重新构建并安装 IPA；之后只增删 Web 触发点通常只需部署 Web，不需要再次重装 Host。
 

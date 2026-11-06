@@ -145,6 +145,6 @@ export async function withMediaReadOnlyRepository<T>(action:()=>Promise<T>):Prom
 
 // Bounded downloads for the remaining spaces never execute business commands.
 export async function withWorkspaceReadOnlyRepository<T>(action:()=>Promise<T>):Promise<T>{
- const repository=await getRepository(),allowed=new Set(["listTasks","listTaskReminders","listProjects","listProjectItems","getLuciusState","listLuciusPosts","listLuciusPostComments","listLuciusDiaryEntries","listLuciusCases"]);
+ const repository=await getRepository(),allowed=new Set(["listTasks","listTaskReminders","listProjects","listProjectItems","getLuciusState","listLuciusPosts","listLuciusPostComments","listLuciusDiaryEntries"]);
  return repositoryContext.run(new Proxy(repository,{get(target,key){if(key==="then")return undefined;if(typeof key!=="string"||!allowed.has(key))throw new Error("Workspace read-only aggregation refused a repository operation");return Reflect.get(target,key).bind(target);}}),action);
 }

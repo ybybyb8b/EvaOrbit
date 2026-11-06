@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import { presentError } from "../src/lib/error-presentation.ts";
 
 function fixture() {
   let active, context;
@@ -15,7 +16,7 @@ function fixture() {
   };
   const code = ts.transpileModule(readFileSync("src/components/error-feedback.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const loaded = {};
-  new Function("require", "exports", "document", code)(name => name === "react" ? react : name === "react/jsx-runtime" ? { jsx, jsxs: jsx } : name === "react-dom" ? { createPortal: node => node } : name.endsWith("locale-controller") ? { useLocale: () => ({ english: false }) } : {}, loaded, { body: {} });
+  new Function("require", "exports", "document", code)(name => name === "react" ? react : name === "react/jsx-runtime" ? { jsx, jsxs: jsx } : name === "react-dom" ? { createPortal: node => node } : name.endsWith("locale-controller") ? { useLocale: () => ({ english: false }) } : name.endsWith("error-presentation") ? { presentError } : {}, loaded, { body: {} });
   const provider = { slots: [], cursor: 0, effects: [], id: "provider" };
   function render(instance, fn, props) { active = instance; active.cursor = 0; const tree = fn(props); active.effects.splice(0).forEach(effect => effect()); return tree; }
   let tree = render(provider, loaded.ErrorFeedbackProvider, { children: "page" });
@@ -71,4 +72,20 @@ test("empty initial or cleared errors never create a blank banner", () => {
   assert.ok(f.banner());
   f.render(owner,f.loaded.RegisteredErrorNotice,{children:""});
   assert.equal(f.banner(),undefined);
+});
+
+test("technical feedback preserves diagnostics and retry actions, and retains actionable validation", () => {
+  const f = fixture(), owner = f.owner("request");
+  const raw = "GET /api/home-day: PGRST303 JWT issued at future (HTTP 500) [EO:http_500]";
+  const retry = { type: "button", props: { children: "重试", onClick() {} } };
+  f.render(owner, f.loaded.RegisteredErrorNotice, { children: [raw, " ", retry] });
+  assert.deepEqual(f.banner().props.children, ["暂时无法加载此内容。", " ", retry]);
+  assert.equal(f.banner().props.details, raw);
+  assert.deepEqual(presentError("请输入名称", false), { summary: "请输入名称" });
+  assert.equal(presentError("POST /api/tasks: 请输入名称 (HTTP 400) [EO:http_400]", false).summary, "请输入名称");
+  assert.equal(presentError("trackers.syncReplica: GET /api/native/session · HTTP 400: 请重新连接账户。 [EO:http_400]", false).summary, "请重新连接账户。");
+  assert.match(presentError("POST /api/tasks: The save result is unknown. [EO:network_timeout]", true).summary, /before submitting again/);
+  f.render(owner, f.loaded.RegisteredErrorNotice, { children: "Hermes 操作未完成。", details: raw });
+  assert.equal(f.banner().props.children, "Hermes 操作未完成。");
+  assert.equal(f.banner().props.details, raw);
 });

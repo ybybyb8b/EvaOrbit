@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { invalidateClientData } from "@/lib/client-data-cache";
 
@@ -167,7 +168,7 @@ export function EvaWakePanel({ open, onClose }: { open: boolean; onClose: () => 
         : !messages.length ? <div className="eva-wake-start"><div className="eva-wake-art"><span className="eva-wake-mark"><Icon name="ai" /></span><h2>Wake Eva</h2><p>Say one thing. Eva can record, find, and make sense of the life already here.</p></div>{sessions.length > 0 && <div className="eva-recent-sessions"><small>RECENT</small>{sessions.slice(0, 3).map((session) => <button key={session.id} onClick={() => void openSession(session.id)}><strong>{session.title}</strong><span>{session.preview || "Continue this conversation"}</span></button>)}</div>}</div>
         : <div className="eva-wake-messages">{messages.map((message) => <article className={message.role} key={message.id}><div>{message.content ? message.role === "assistant" ? <MarkdownMessage content={message.content} /> : message.content : <PageLoading title="回复" englishTitle="reply" compact />}</div></article>)}{toolActivity.length > 0 && <div className="eva-wake-tools">{toolActivity.map((item, index) => <span key={`${item}-${index}`}>✓ {item}</span>)}</div>}<div ref={endRef} /></div>}
       </div>
-      {settings?.enabled && <footer className="eva-wake-composer">{error && <p>{error}</p>}<div><textarea ref={inputRef} rows={1} maxLength={20000} value={draft} disabled={streaming} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyboardSend} placeholder="Tell Eva something…" />{streaming ? <button className="stop" onClick={() => abortRef.current?.abort()} aria-label="Stop">■</button> : <button disabled={!draft.trim()} onClick={() => void send()} aria-label="Send"><Icon name="arrow" /></button>}</div></footer>}
+      {settings?.enabled && <footer className="eva-wake-composer">{error && <ErrorNotice inline>{error}</ErrorNotice>}<div><textarea ref={inputRef} rows={1} maxLength={20000} value={draft} disabled={streaming} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyboardSend} placeholder="Tell Eva something…" />{streaming ? <button className="stop" onClick={() => abortRef.current?.abort()} aria-label="Stop">■</button> : <button disabled={!draft.trim()} onClick={() => void send()} aria-label="Send"><Icon name="arrow" /></button>}</div></footer>}
     </section>
   </div>;
 }

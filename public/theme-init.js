@@ -1,29 +1,24 @@
 (() => {
   try {
     const modes = new Set(["system", "light", "dark"]);
-    const themes = new Set(["editorial", "rosewood", "powderblue", "mistviolet"]);
-    const designTheme = (localStorage.getItem("evaorbit.designTheme") ?? localStorage.getItem("evaorbit.homeStyle")) === "vintage" ? "vintage" : "classic";
     const preferredMode = localStorage.getItem("evaorbit.appearanceMode");
-    const preferredTheme = localStorage.getItem("evaorbit.colorTheme");
     const preferredLanguage = localStorage.getItem("evaorbit.uiLanguage");
     const preferredChineseFont = localStorage.getItem("evaorbit.chineseFont");
     const preferredEnglishFont = localStorage.getItem("evaorbit.englishFont");
     const appearance = modes.has(preferredMode) ? preferredMode : "system";
-    const theme = themes.has(preferredTheme) ? preferredTheme : "editorial";
     const localBaseline = document.documentElement.dataset.localAppearance === "true";
     const language = preferredLanguage === "en" || preferredLanguage === null && localBaseline ? "en" : "zh-CN";
     const mode = appearance === "system" ? matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" : appearance;
     const root = document.documentElement;
     root.dataset.appearance = appearance;
     root.dataset.mode = mode;
-    root.dataset.designTheme = designTheme;
-    root.dataset.homeStyle = designTheme;
-    root.dataset.classicColorTheme = theme;
-    root.dataset.theme = designTheme === "vintage" ? "vintage" : theme;
+    root.dataset.designTheme = "vintage";
+    root.dataset.theme = "vintage";
     root.dataset.locale = language;
     root.lang = language;
     root.dataset.chineseFont = ["canger", "lxgw", "alimama", "ibm"].includes(preferredChineseFont) ? preferredChineseFont : "canger";
     root.dataset.englishFont = ["zen", "ibm", "polyamine", "cormorant"].includes(preferredEnglishFont) ? preferredEnglishFont : preferredEnglishFont === null && localBaseline ? "ibm" : "zen";
     root.style.colorScheme = mode;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", mode === "dark" ? "#202124" : "#f2f3f5");
   } catch {}
 })();

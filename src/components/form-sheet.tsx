@@ -7,6 +7,9 @@ import { translateUiCopy } from "@/lib/ui-copy";
 import { SheetSuggestionTarget } from "./suggested-input";
 
 type FormSheetProps = {
+  bare?: boolean;
+  closeIcon?: ReactNode;
+  className?: string;
   title: string;
   onClose: () => void;
   children: ReactNode;
@@ -34,6 +37,9 @@ export function scrollFormSheetField(body: HTMLElement | null, target: HTMLEleme
 }
 
 export function FormSheet({
+  bare = false,
+  closeIcon,
+  className = "",
   title,
   onClose,
   children,
@@ -219,18 +225,19 @@ export function FormSheet({
   };
 
   return createPortal(
-    <div className="form-sheet-layer" data-state={phase} role="presentation" ref={panelRef}>
+    <div className={className ? `form-sheet-layer ${className}` : "form-sheet-layer"} data-state={phase} role="presentation" ref={panelRef}>
       <button className="form-sheet-backdrop" type="button" aria-label={`${language === "en" ? "Close" : "关闭"} ${copy(title)}`} onClick={requestClose} />
-      <div className="form-sheet-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-owns="evaorbit-error-banner" tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
+      <div className="form-sheet-panel" style={bare ? { background: "transparent", border: 0, boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" } : undefined} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-owns="evaorbit-error-banner" tabIndex={-1} onTransitionEnd={finishCloseOnTransition}
         onChangeCapture={event => { if (dirty === undefined && (!(event.target instanceof HTMLInputElement) || event.target.type !== "search")) dirtyRef.current = true; }}
         onClickCapture={event => { if (dirty === undefined && event.target instanceof Element && event.target.closest("[data-form-change]")) dirtyRef.current = true; }}
         onInvalidCapture={event => { if (event.target instanceof HTMLElement) scrollFormSheetField(bodyRef.current, event.target); }}>
-        <header className="form-sheet-header">
+        <header className="form-sheet-header" style={bare ? { background: "transparent", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" } : undefined}>
           <h2 id={titleId}>{copy(title)}</h2>
-          <button className="text-button" type="button" onClick={requestClose} disabled={busy || discardOpen}>{language === "en" ? "Close" : "关闭"}</button>
+          <button className="text-button" type="button" aria-label={language === "en" ? "Close" : "关闭"} onClick={requestClose} disabled={busy || discardOpen}>{closeIcon ?? (language === "en" ? "Close" : "关闭")}</button>
         </header>
         <div
           className="form-sheet-body"
+          style={bare ? { background: "transparent", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" } : undefined}
           ref={bodyRef}
           inert={phase === "opening" || discardOpen || busy}
           onFocusCapture={(event) => {
@@ -246,7 +253,7 @@ export function FormSheet({
           <p role="alert">{language === "en" ? "Discard unsaved changes?" : "放弃尚未保存的修改？"}</p>
           <div><button className="button secondary" type="button" onClick={() => { discardRef.current = false; setDiscardOpen(false); dialogRef.current?.focus(); }}>{language === "en" ? "Keep editing" : "继续填写"}</button>
           <button className="button primary" type="button" onClick={() => { dirtyRef.current = false; discardRef.current = false; setDiscardOpen(false); requestClose(); }}>{language === "en" ? "Discard and close" : "放弃并关闭"}</button></div>
-        </footer> : submitLabel && <footer className="form-sheet-footer">
+        </footer> : submitLabel && <footer className="form-sheet-footer" style={bare ? { background: "transparent", boxShadow: "none", backdropFilter: "none", WebkitBackdropFilter: "none" } : undefined}>
           <button className="button secondary" type="button" onClick={requestClose} disabled={busy}>{copy(cancelLabel)}</button>
           <button className="button primary" type={formId ? "submit" : "button"} form={formId} onClick={formId ? undefined : () => bodyRef.current?.querySelector("form")?.requestSubmit()} disabled={busy || submitDisabled}>{copy(busy ? busyLabel : submitLabel)}</button>
         </footer>}

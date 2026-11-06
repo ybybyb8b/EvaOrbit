@@ -29,27 +29,17 @@ function createTarget(databasePath) {
       tags TEXT NOT NULL, source_system TEXT, source_id TEXT, source_url TEXT, imported_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
-    CREATE TABLE lucius_cases (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, title TEXT NOT NULL, error_type TEXT NOT NULL,
-      severity TEXT NOT NULL, status TEXT NOT NULL, trigger_scenes TEXT NOT NULL, error_quote TEXT NOT NULL,
-      cause TEXT NOT NULL, correct_behavior TEXT NOT NULL, mandatory_rule TEXT NOT NULL, next_check TEXT,
-      punishment TEXT NOT NULL, first_occurred_date TEXT NOT NULL, latest_occurred_date TEXT NOT NULL,
-      occurrence_count INTEGER NOT NULL, consecutive_correct_count INTEGER NOT NULL, recurrence_interval_days INTEGER,
-      is_recurrence INTEGER NOT NULL, reset_threshold INTEGER NOT NULL, source_system TEXT, source_id TEXT,
-      source_url TEXT, imported_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
   `);
   database.close();
 }
 
 function counts(database) {
   return Object.fromEntries([
-    ["memo", "memos"], ["chronicle", "chronicle_entries"], ["lucius_diary", "lucius_diary_entries"], ["lucius_case", "lucius_cases"],
+    ["memo", "memos"], ["chronicle", "chronicle_entries"], ["lucius_diary", "lucius_diary_entries"],
   ].map(([resource, table]) => [resource, Number(database.prepare(`SELECT count(*) AS count FROM ${table}`).get().count)]));
 }
 
-test("Notion importer dry-runs, imports four resources, reports duplicates and stays idempotent", async () => {
+test("Notion importer dry-runs, imports three resources, reports duplicates and stays idempotent", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "evaorbit-notion-import-"));
   const databasePath = path.join(directory, "target.sqlite");
   const input = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
@@ -58,19 +48,19 @@ test("Notion importer dry-runs, imports four resources, reports duplicates and s
   const firstTimestamp = () => "2026-08-29T12:00:00.000Z";
   try {
     const dryRun = await runNotionImport({ input, store, apply: false, now: firstTimestamp, inputName: "fixture" });
-    assert.deepEqual(dryRun.migrationReport.totals, { total: 5, valid: 4, created: 4, updated: 0, unchanged: 0, skipped_duplicates: 1, errors: 0 });
+    assert.deepEqual(dryRun.migrationReport.totals, { total: 4, valid: 3, created: 3, updated: 0, unchanged: 0, skipped_duplicates: 1, errors: 0 });
     assert.equal(dryRun.duplicateReport.duplicates[0].kind, "input_content_match");
     assert.deepEqual(dryRun.migrationReport.warnings[0].ignored_fields, ["legacy_notion_category"]);
     const afterDryRun = new DatabaseSync(databasePath, { readOnly: true });
-    assert.deepEqual(counts(afterDryRun), { memo: 0, chronicle: 0, lucius_diary: 0, lucius_case: 0 });
+    assert.deepEqual(counts(afterDryRun), { memo: 0, chronicle: 0, lucius_diary: 0 });
     assert.equal(afterDryRun.prepare("SELECT 1 FROM sqlite_master WHERE name='migration_import_ledger'").get(), undefined);
     afterDryRun.close();
 
     const imported = await runNotionImport({ input, store, apply: true, now: firstTimestamp, inputName: "fixture" });
-    assert.deepEqual(imported.migrationReport.totals, { total: 5, valid: 4, created: 4, updated: 0, unchanged: 0, skipped_duplicates: 1, errors: 0 });
+    assert.deepEqual(imported.migrationReport.totals, { total: 4, valid: 3, created: 3, updated: 0, unchanged: 0, skipped_duplicates: 1, errors: 0 });
     const database = new DatabaseSync(databasePath, { readOnly: true });
-    assert.deepEqual(counts(database), { memo: 1, chronicle: 1, lucius_diary: 1, lucius_case: 1 });
-    assert.equal(database.prepare("SELECT count(*) AS count FROM migration_import_ledger").get().count, 4);
+    assert.deepEqual(counts(database), { memo: 1, chronicle: 1, lucius_diary: 1 });
+    assert.equal(database.prepare("SELECT count(*) AS count FROM migration_import_ledger").get().count, 3);
     const memo = database.prepare("SELECT * FROM memos").get();
     assert.equal(memo.source_system, "notion");
     assert.equal(memo.source_id, "notion-memo-001");
@@ -85,11 +75,11 @@ test("Notion importer dry-runs, imports four resources, reports duplicates and s
     database.close();
 
     const rerun = await runNotionImport({ input, store, apply: true, now: () => "2026-08-30T12:00:00.000Z", inputName: "fixture" });
-    assert.equal(rerun.migrationReport.totals.unchanged, 4);
+    assert.equal(rerun.migrationReport.totals.unchanged, 3);
     assert.equal(rerun.migrationReport.totals.created, 0);
     assert.equal(rerun.migrationReport.totals.skipped_duplicates, 1);
     const afterRerun = new DatabaseSync(databasePath, { readOnly: true });
-    assert.deepEqual(counts(afterRerun), { memo: 1, chronicle: 1, lucius_diary: 1, lucius_case: 1 });
+    assert.deepEqual(counts(afterRerun), { memo: 1, chronicle: 1, lucius_diary: 1 });
     assert.equal(afterRerun.prepare("SELECT imported_at FROM memos").get().imported_at, "2026-08-29T12:00:00.000Z");
     afterRerun.close();
 
@@ -111,7 +101,7 @@ test("Notion importer dry-runs, imports four resources, reports duplicates and s
 
     const reportsDirectory = path.join(directory, "reports");
     const files = writeImportReports(rerun, reportsDirectory);
-    assert.equal(JSON.parse(fs.readFileSync(files.migration, "utf8")).totals.unchanged, 4);
+    assert.equal(JSON.parse(fs.readFileSync(files.migration, "utf8")).totals.unchanged, 3);
     assert.ok(fs.existsSync(files.duplicate));
     assert.ok(fs.existsSync(files.error));
   } finally {
@@ -140,21 +130,21 @@ test("Notion importer CLI runs dry-run, import and idempotent rerun with JSON re
     const dryRun = run("--dry-run", "dry-run");
     assert.equal(dryRun.status, 0, dryRun.stderr);
     let database = new DatabaseSync(databasePath, { readOnly: true });
-    assert.deepEqual(counts(database), { memo: 0, chronicle: 0, lucius_diary: 0, lucius_case: 0 });
+    assert.deepEqual(counts(database), { memo: 0, chronicle: 0, lucius_diary: 0 });
     database.close();
 
     const imported = run("--apply", "import");
     assert.equal(imported.status, 0, imported.stderr);
     database = new DatabaseSync(databasePath, { readOnly: true });
-    assert.deepEqual(counts(database), { memo: 1, chronicle: 1, lucius_diary: 1, lucius_case: 1 });
+    assert.deepEqual(counts(database), { memo: 1, chronicle: 1, lucius_diary: 1 });
     database.close();
 
     const rerun = run("--apply", "rerun");
     assert.equal(rerun.status, 0, rerun.stderr);
     const report = JSON.parse(fs.readFileSync(path.join(directory, "rerun", "migration-report.json"), "utf8"));
-    assert.equal(report.totals.unchanged, 4);
+    assert.equal(report.totals.unchanged, 3);
     assert.equal(report.totals.created, 0);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, "rerun", "duplicate-report.json"), "utf8")).duplicates.length, 5);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, "rerun", "duplicate-report.json"), "utf8")).duplicates.length, 4);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, "rerun", "error-report.json"), "utf8")).errors.length, 0);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

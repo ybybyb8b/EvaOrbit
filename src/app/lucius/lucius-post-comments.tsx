@@ -1,4 +1,6 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
+import {Disclosure} from "@/components/disclosure";
 import {useWorkspaceData} from "@/components/workspace-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
@@ -71,11 +73,8 @@ export function LuciusPostComments({ postId, initialComments }: { postId: number
     }
   }
 
-  return <div className="lucius-post-comments">
-    <button className="lucius-comment-toggle" type="button" aria-expanded={open} onClick={toggle}>
-      {comments.length ? `${comments.length} ${comments.length === 1 ? "comment" : "comments"}` : "Comment"}
-    </button>
-    {open && <div className="lucius-comment-thread">
+  return <Disclosure className="lucius-post-comments" title={comments.length ? `${comments.length} ${comments.length === 1 ? "comment" : "comments"}` : "Comment"} open={open} onOpenChange={()=>void toggle()}>
+    <div className="lucius-comment-thread">
       {comments.length > 0 && <div className="lucius-comment-list">{comments.map((comment) => <article key={comment.id} data-author={comment.author}>
         <div><strong>{comment.author === "lucius" ? "Lucius" : "You"}</strong><time dateTime={comment.createdAt}>{commentTime(comment.createdAt)}</time></div>
         <p>{comment.content}</p>
@@ -86,7 +85,7 @@ export function LuciusPostComments({ postId, initialComments }: { postId: number
         <textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} aria-label="Write a comment" placeholder="Write a comment" />
         <button type="submit" disabled={preview||busy || !content.trim()}>{busy ? "Posting" : "Post"}</button>
       </form>
-      {error && <p className="lucius-comment-error" role="alert">{error}</p>}
-    </div>}
-  </div>;
+      {error && <ErrorNotice inline className="lucius-comment-error">{error}</ErrorNotice>}
+    </div>
+  </Disclosure>;
 }

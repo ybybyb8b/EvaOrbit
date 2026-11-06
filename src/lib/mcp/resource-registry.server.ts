@@ -7,7 +7,7 @@ import { getDailyEnergy, getDailyNutritionSummary, updateDailyEnergy } from "../
 
 import { createChronicleEntry, deleteChronicleEntry, getChronicleEntry, listChronicle, updateChronicleEntry } from "../services/chronicle";
 import { archiveInbox, createInbox, deleteInbox, getInbox, markInboxProcessed, restoreInbox, searchInbox, updateInbox } from "../services/inbox";
-import { createLuciusCase, createLuciusDiaryEntry, createLuciusPost, createLuciusPostComment, deleteLuciusCase, deleteLuciusDiaryEntry, deleteLuciusPost, deleteLuciusPostComment, getLuciusCase, getLuciusDiaryEntry, getLuciusPost, getLuciusPostComment, getLuciusState, listLuciusCases, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts, recordLuciusCaseRecurrence, updateLuciusCase, updateLuciusDiaryEntry, updateLuciusPost, updateLuciusPostComment, updateLuciusState } from "../services/lucius";
+import { createLuciusDiaryEntry, createLuciusPost, createLuciusPostComment, deleteLuciusDiaryEntry, deleteLuciusPost, deleteLuciusPostComment, getLuciusDiaryEntry, getLuciusPost, getLuciusPostComment, getLuciusState, listLuciusDiaryEntries, listLuciusPostComments, listLuciusPosts, updateLuciusDiaryEntry, updateLuciusPost, updateLuciusPostComment, updateLuciusState } from "../services/lucius";
 import { createHealthRecord, deleteHealthRecord, getHealthRecord, listHealthRecords, updateHealthRecord } from "../services/health";
 import { createTrainingLog, deleteTrainingLog, getTrainingLog, listTrainingLogs, updateTrainingLog } from "../services/training";
 import { addMediaRewatch, createMedia, createMediaSeries, updateMediaSeries, deleteMedia, deleteMediaViewing, getMediaDetail, getMediaSeries, listMedia, listMediaSeries, updateMedia, updateMediaViewing } from "../services/media";
@@ -42,7 +42,6 @@ export const resourceRegistry = createResourceRegistry({
   memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
   luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },
-  luciusCase: { search: listLuciusCases, get: getLuciusCase, create: createLuciusCase, update: updateLuciusCase, delete: deleteLuciusCase, recordRecurrence: recordLuciusCaseRecurrence },
   luciusState: { get: getLuciusState, update: updateLuciusState },
   luciusPost: { search: listLuciusPosts, get: getLuciusPost, create: createLuciusPost, update: updateLuciusPost, delete: deleteLuciusPost },
   luciusPostComment: { search: listLuciusPostComments, get: getLuciusPostComment, create: createLuciusPostComment, update: updateLuciusPostComment, delete: deleteLuciusPostComment },

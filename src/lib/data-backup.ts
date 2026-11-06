@@ -64,7 +64,6 @@ export const BACKUP_TABLES = [
   "daily_journal_entries",
   "memos",
   "lucius_diary_entries",
-  "lucius_cases",
   "lucius_state",
   "lucius_posts",
   "lucius_post_comments",
@@ -188,6 +187,7 @@ export function parseBackupDocument(value: unknown): EvaOrbitBackup {
     throw new Error("备份文件缺少 resources");
   }
   const resources = { ...(document.resources as Record<string, unknown>) };
+  delete resources.lucius_cases; // Retired data in older backups must not be restored.
   if (Number(document.backup_version) < 17) { resources.eva_jobs ??= []; resources.eva_calls ??= []; }
   if (document.backup_version === 1) {
     resources.memory_entities ??= [];

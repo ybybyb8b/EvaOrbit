@@ -34,7 +34,7 @@ function fixture(route) {
 }
 
 const routes = [
-  { route: 'memos', max: 200 }, { route: 'lucius/cases', max: 200 },
+  { route: 'memos', max: 200 },
   { route: 'lucius/diary', max: 200 }, { route: 'lucius/posts', max: 100 },
   { route: 'health/records', max: 100 }, { route: 'chronicle', max: 200, trimEmpty: true },
   { route: 'media', max: 200, trimEmpty: true },
@@ -64,8 +64,7 @@ test('all migrated list routes retain limit bounds, defaults and distinct whites
 test('Memo, Lucius and Health enum filters retain labels and reject unknown or padded values', async () => {
   for (const [route, key, valid, label] of [
     ['memos', 'type', 'basic', 'Memo 类型'], ['memos', 'status', 'active', 'Memo 状态'],
-    ['lucius/cases', 'errorType', 'naming', '错误类型'], ['lucius/cases', 'severity', 'minor', '严重程度'],
-    ['lucius/cases', 'status', 'serving', '案底状态'], ['health/records', 'status', 'active', '健康记录状态'],
+    ['health/records', 'status', 'active', '健康记录状态'],
     ['health/records', 'type', 'symptom', '健康记录类型'],
   ]) {
     const f = fixture(route);

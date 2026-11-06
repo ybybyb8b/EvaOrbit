@@ -10,11 +10,6 @@ enum LoadingThemeToken: String, CaseIterable {
     case buttonText = "LoadingButtonText"
 }
 
-enum NativeThemeIdentifier: String {
-    case editorial
-    case rosewood
-}
-
 enum NativeAppearanceMode: String {
     case system
     case light
@@ -30,16 +25,7 @@ enum NativeAppearanceMode: String {
 }
 
 enum NativeLoadingTheme {
-    static let themePreferenceKey = "evaorbit.nativeThemeIdentifier"
     static let appearancePreferenceKey = "evaorbit.nativeAppearanceMode"
-
-    static var currentIdentifier: NativeThemeIdentifier {
-        get {
-            guard let value = UserDefaults.standard.string(forKey: themePreferenceKey) else { return .editorial }
-            return NativeThemeIdentifier(rawValue: value) ?? .editorial
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: themePreferenceKey) }
-    }
 
     static var currentAppearanceMode: NativeAppearanceMode {
         get {
@@ -60,30 +46,19 @@ struct LoadingThemePalette {
     let loadingButtonText: UIColor
 
     static func current(bundle: Bundle = .main) -> LoadingThemePalette {
-        palette(identifier: NativeLoadingTheme.currentIdentifier, bundle: bundle)
-    }
-
-    static func palette(identifier: NativeThemeIdentifier, bundle: Bundle = .main) -> LoadingThemePalette {
         LoadingThemePalette(
-            loadingBackground: color(.background, identifier: identifier, bundle: bundle),
-            loadingPrimary: color(.primary, identifier: identifier, bundle: bundle),
-            loadingAccent: color(.accent, identifier: identifier, bundle: bundle),
-            loadingText: color(.text, identifier: identifier, bundle: bundle),
-            loadingSecondaryText: color(.secondaryText, identifier: identifier, bundle: bundle),
-            loadingButtonBackground: color(.buttonBackground, identifier: identifier, bundle: bundle),
-            loadingButtonText: color(.buttonText, identifier: identifier, bundle: bundle)
+            loadingBackground: color(.background, bundle: bundle),
+            loadingPrimary: color(.primary, bundle: bundle),
+            loadingAccent: color(.accent, bundle: bundle),
+            loadingText: color(.text, bundle: bundle),
+            loadingSecondaryText: color(.secondaryText, bundle: bundle),
+            loadingButtonBackground: color(.buttonBackground, bundle: bundle),
+            loadingButtonText: color(.buttonText, bundle: bundle)
         )
     }
 
-    static func assetName(for token: LoadingThemeToken, identifier: NativeThemeIdentifier) -> String {
-        switch identifier {
-        case .editorial: return token.rawValue
-        case .rosewood: return "Rosewood\(token.rawValue)"
-        }
-    }
-
-    private static func color(_ token: LoadingThemeToken, identifier: NativeThemeIdentifier, bundle: Bundle) -> UIColor {
-        let name = assetName(for: token, identifier: identifier)
+    private static func color(_ token: LoadingThemeToken, bundle: Bundle) -> UIColor {
+        let name = token.rawValue
         guard let color = UIColor(named: name, in: bundle, compatibleWith: nil) else {
             preconditionFailure("Missing native loading theme color asset: \(name)")
         }

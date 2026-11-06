@@ -1,6 +1,6 @@
-import type {Task,Project,ProjectItem,LuciusState,LuciusPost,LuciusPostComment,LuciusDiaryEntry,LuciusCase} from "./types";
+import type {Task,Project,ProjectItem,LuciusState,LuciusPost,LuciusPostComment,LuciusDiaryEntry} from "./types";
 export type WorkspaceKind="tasks"|"projects"|"lucius";
-type Data={tasks:{tasks:Task[];complete:boolean};projects:{projects:Project[];items:ProjectItem[];complete:boolean};lucius:{state:LuciusState;posts:LuciusPost[];comments:LuciusPostComment[];diary:LuciusDiaryEntry[];cases:LuciusCase[];complete:boolean}};
+type Data={tasks:{tasks:Task[];complete:boolean};projects:{projects:Project[];items:ProjectItem[];complete:boolean};lucius:{state:LuciusState;posts:LuciusPost[];comments:LuciusPostComment[];diary:LuciusDiaryEntry[];cases?: [];complete:boolean}};
 export type WorkspaceReadonlySnapshot={[K in WorkspaceKind]:{format:"eo-workspace-readonly-v1";kind:K;accountId:string;capturedAt:string;data:Data[K]}}[WorkspaceKind];
 export const workspaceKinds:WorkspaceKind[]=["tasks","projects","lucius"];
 const id=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>0;
@@ -25,33 +25,33 @@ export function validateWorkspaceSnapshot(value:WorkspaceReadonlySnapshot,accoun
   if(value.data.complete)for(const p of value.data.projects){const own=value.data.items.filter(i=>i.projectId===p.id);if(own.filter(i=>i.status==="doing").length!==p.doingCount||own.filter(i=>i.status==="to_solve").length!==p.toSolveCount||own.filter(i=>i.status==="idea").length!==(p.ideaCount??0))fail();}
  }else{
   const d=value.data;if(typeof d.state?.status!=="string"||typeof d.state?.mood!=="string"||(d.state.updatedAt!==null&&!stamp(d.state.updatedAt)))fail();
-  rows(d.posts,50);rows(d.comments,500);rows(d.diary,100);rows(d.cases,100);const posts=new Set(d.posts.map(p=>p.id));
+  rows(d.posts,50);rows(d.comments,500);rows(d.diary,100);const posts=new Set(d.posts.map(p=>p.id));
   for(const p of d.posts)if(typeof p.content!=="string"||!stamp(p.publishedAt))fail();
   for(const c of d.comments)if(!posts.has(c.postId)||typeof c.content!=="string"||!["user","lucius"].includes(c.author))fail();
   for(const e of d.diary)if(!day(e.date)||typeof e.content!=="string"||!strings(e.tags))fail();
-  for(const c of d.cases){if(!["naming","memory_omission","factual","tool_misuse","expression","other"].includes(c.errorType)||!["minor","moderate","serious","habitual"].includes(c.severity)||!["serving","probation","temporary_release","permanent_record"].includes(c.status)||!strings(c.triggerScenes)||!day(c.firstOccurredDate)||!day(c.latestOccurredDate)||c.firstOccurredDate>c.latestOccurredDate||!Number.isSafeInteger(c.occurrenceCount)||c.occurrenceCount<1||!Number.isSafeInteger(c.consecutiveCorrectCount)||c.consecutiveCorrectCount<0||!Number.isSafeInteger(c.resetThreshold)||c.resetThreshold<1||typeof c.isRecurrence!=="boolean"||(c.nextCheck!==null&&!day(c.nextCheck))||(c.recurrenceIntervalDays!==null&&(!id(c.recurrenceIntervalDays))))fail();for(const key of ["title","errorQuote","cause","correctBehavior","mandatoryRule","punishment"] as const)if(typeof c[key]!=="string")fail();}
  }
  if(new TextEncoder().encode(JSON.stringify(value)).length>8*1024*1024)throw new Error("Workspace download exceeds 8 MiB; previous cache preserved");
  if(value.kind==="projects")return {...value,data:{...value.data,projects:value.data.projects.map(p=>({...p,ideaCount:p.ideaCount??0}))}};
+ // The empty field keeps older Hosts compatible and strips cases from old caches.
+ if(value.kind==="lucius")return {...value,data:{...value.data,cases:[]}} as typeof value;
  return value;
 }
 export function readWorkspaceSnapshot(snapshot:WorkspaceReadonlySnapshot,path:string,init?:RequestInit){
  if(init?.method&&init.method!=="GET")throw new Error("Workspace read-only adapter refused a write");
  if(!/^\/api\/[a-z-]+(?:\/[1-9][0-9]*|\/lucius)?/.test(path)||path.includes("#"))throw new Error("Workspace read-only path refused");
  const u=new URL(path,"https://offline.invalid");let data:unknown;const q=u.searchParams,query=q.get("q")?.trim().toLowerCase();
- const allowed=new Set(["status","q","tag","projectId","project","type","module","view","errorType","severity","limit"]);if([...q.keys()].some(k=>!allowed.has(k)))throw new Error("Workspace query refused");
+ const allowed=new Set(["status","q","tag","projectId","project","type","module","limit"]);if([...q.keys()].some(k=>!allowed.has(k)))throw new Error("Workspace query refused");
  if(snapshot.kind==="tasks"&&u.pathname==="/api/tasks")data=snapshot.data.tasks.filter(t=>!q.get("status")||q.get("status")==="all"||t.completed===(q.get("status")==="done"));
  else if(snapshot.kind==="projects"){
   const m=/^\/api\/(projects|project-items)(?:\/([1-9][0-9]*))?$/.exec(u.pathname);if(!m)throw new Error("Workspace read-only path refused");
   if(m[1]==="projects")data=m[2]?snapshot.data.projects.find(p=>p.id===Number(m[2])):snapshot.data.projects;
   else data=m[2]?snapshot.data.items.find(i=>i.id===Number(m[2])):snapshot.data.items.filter(i=>(!q.get("projectId")||i.projectId===Number(q.get("projectId")))&&(!q.get("project")||snapshot.data.projects.find(p=>p.id===i.projectId)?.name===q.get("project"))&&(!q.get("status")||i.status===q.get("status"))&&(!q.get("type")||i.type===q.get("type"))&&(!q.get("module")||i.module===q.get("module"))&&(!query||[i.title,i.description,i.resolution].some(v=>v?.toLowerCase().includes(query))));
  }else if(snapshot.kind==="lucius"){
-  const m=/^\/api\/lucius\/(diary|cases|state|posts)(?:\/([1-9][0-9]*)(\/comments)?)?$/.exec(u.pathname);if(!m)throw new Error("Workspace read-only path refused");
+  const m=/^\/api\/lucius\/(diary|state|posts)(?:\/([1-9][0-9]*)(\/comments)?)?$/.exec(u.pathname);if(!m)throw new Error("Workspace read-only path refused");
   const d=snapshot.data;
   if(m[1]==="state"&&!m[2])data=d.state;
   else if(m[1]==="posts")data=m[3]?d.comments.filter(c=>c.postId===Number(m[2])):m[2]?d.posts.find(p=>p.id===Number(m[2])):d.posts;
   else if(m[1]==="diary")data=m[2]?d.diary.find(e=>e.id===Number(m[2])):d.diary.filter(e=>(!query||e.content.toLowerCase().includes(query))&&(!q.get("tag")||e.tags.includes(q.get("tag")!)));
-  else if(m[1]==="cases")data=m[2]?d.cases.find(c=>c.id===Number(m[2])):d.cases.filter(c=>(q.get("view")!=="current"||["serving","probation"].includes(c.status))&&(!query||[c.title,c.cause,c.mandatoryRule].some(v=>v.toLowerCase().includes(query)))&&(!q.get("errorType")||c.errorType===q.get("errorType"))&&(!q.get("severity")||c.severity===q.get("severity")));
  }
  else throw new Error("Workspace read-only path refused");
  return new Response(JSON.stringify(data??{error:"Not in downloaded workspace snapshot"}),{status:data===undefined?404:200,headers:{"Content-Type":"application/json"}});

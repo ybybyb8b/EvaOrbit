@@ -49,7 +49,6 @@ try{
   assert.equal(await page.locator("html").getAttribute("data-english-font"),"ibm");
   const localMetrics=await inspectFont(page);
   await page.getByRole("button",{name:"Language & appearance",exact:true}).click();
-  await page.getByRole("button",{name:/Rosewood/}).click();
   await page.getByRole("button",{name:/^Dark/}).click();
   await page.waitForFunction(()=>document.documentElement.dataset.mode==="dark");
   await page.getByRole("button",{name:/^System/}).click();
@@ -57,7 +56,7 @@ try{
   await page.waitForFunction(()=>document.documentElement.dataset.mode==="light");
   await page.emulateMedia({colorScheme:"dark"});
   await page.waitForFunction(()=>document.documentElement.dataset.mode==="dark");
-  assert.equal(await page.locator("html").getAttribute("data-theme"),"rosewood");
+  assert.equal(await page.locator("html").getAttribute("data-theme"),"vintage");
   for(const [label,token] of [["仓耳华新体","canger"],["霞鹜文楷","lxgw"],["刻宋","alimama"],["仓耳玄三","ibm"]]) {
     await page.getByRole("button",{name:new RegExp("^"+label)}).click();
     await page.waitForFunction(token=>document.documentElement.dataset.chineseFont===token,token);
@@ -72,7 +71,6 @@ try{
   await page.waitForFunction(()=>document.documentElement.lang==="zh-CN");
   await page.getByRole("button",{name:/^English/}).click();
   await page.getByRole("button",{name:/^Light/}).click();
-  await page.getByRole("button",{name:/^Field Green/}).click();
   await page.getByRole("button",{name:"Close",exact:true}).click();
   await page.locator(".form-sheet-layer").waitFor({state:"detached"});
   await page.locator(".action-toast").waitFor({state:"detached"});

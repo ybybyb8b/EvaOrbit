@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useFormPreview} from "@/components/form-preview";
 import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
@@ -167,9 +168,9 @@ export function TrainingSection({ initial, initialRecent, initialSuggestions, in
     </article>
     <div className="section-heading"><div><h2>{english ? "Today's training" : "今日训练"}</h2></div><div className="training-heading-actions"><PageLogAction label={english ? "Log training" : "记录训练"} className="text-button training-add" onClick={openCreate}><Icon name="plus" />{english ? "Log training" : "记录训练"}</PageLogAction></div></div>
     {logs.length ? <div className="training-log-list">{logs.map((log) => <article className="training-log-row" key={log.id}><button className="training-log-main" onClick={() => openEdit(log)}><span><strong>{workoutActivityLabel(log, english) || typeLabel(log.trainingType)}</strong><small>{[log.bodyParts.map(bodyPartLabel).join(" · "),workoutStatus(log, english)].filter(Boolean).join(" · ")}</small></span><span className="training-log-meta">{trainingMeta(log, english)}</span></button><button className="icon-button subtle" aria-label={`${english ? "Edit" : "编辑"} ${typeLabel(log.trainingType)}`} onClick={() => openEdit(log)}><Icon name="edit" /></button></article>)}</div> : <p className="health-inline-empty">{english ? "No training logged today." : "今日还没有训练记录。"}</p>}
-    <details className="training-history"><summary><span><small>{english ? "LAST 7 DAYS" : "最近 7 天"}</small><strong>{english ? "Training history" : "训练记录"}</strong></span><span>{pastLogs.length}</span></summary>
+    <Disclosure className="training-history" title={english ? "Training history" : "训练记录"} description={english ? "Last 7 days" : "最近 7 天"} trailing={pastLogs.length}>
       {pastLogs.length ? <div className="training-log-list training-recent-list">{pastLogs.map((log) => <article className="training-log-row" key={log.id}><button className="training-log-main" onClick={() => openEdit(log)}><span><strong>{workoutActivityLabel(log, english) || typeLabel(log.trainingType)}</strong><small>{new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${dateInEvaOrbit(new Date(log.occurredAt))}T12:00:00Z`))} · {[log.bodyParts.map(bodyPartLabel).join(" · "),workoutStatus(log, english)].filter(Boolean).join(" · ")}</small></span><span className="training-log-meta">{trainingMeta(log, english)}</span></button><button className="icon-button subtle" aria-label={`${english ? "Edit" : "编辑"} ${typeLabel(log.trainingType)}`} onClick={() => openEdit(log)}><Icon name="edit" /></button></article>)}</div> : <p className="health-inline-empty">{english ? "No earlier training in the last 7 days." : "最近 7 天没有更早的训练记录。"}</p>}
       <p className="training-history-note">{english ? "Earlier training stays available in Home Calendar + Timeline." : "更早训练请通过首页 Calendar + Timeline 查看。"}</p>
-    </details>
+    </Disclosure>
   </section>;
 }

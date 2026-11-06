@@ -1,8 +1,8 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { CatFoodItem, CatFoodPurchase } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
-import type { AppearanceMode, ColorTheme } from "../theme";
+import type { AppearanceMode } from "../theme";
 import type { UiLanguage } from "../locale";
 import type { ChineseFont, EnglishFont } from "../font-preferences";
 import type { CalendarInterpretation } from "../calendar-interpretation";
@@ -123,9 +123,6 @@ export type NewSubscriptionPurchase = Required<Pick<SubscriptionPayment, "purcha
 export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
 export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
 export type LuciusDiaryListInput = { query?: string; tag?: string; limit?: number };
-export type NewLuciusCase = Omit<LuciusCase, "id" | "createdAt" | "updatedAt">;
-export type LuciusCasePatch = Partial<NewLuciusCase>;
-export type LuciusCaseListInput = { query?: string; errorType?: LuciusCaseErrorType; severity?: LuciusCaseSeverity; status?: LuciusCaseStatus; currentOnly?: boolean; limit?: number };
 export type LuciusStatePatch = Partial<Pick<LuciusState, "status" | "mood">>;
 export type NewLuciusPost = Pick<LuciusPost, "content" | "publishedAt">;
 export type LuciusPostPatch = Partial<NewLuciusPost>;
@@ -245,7 +242,7 @@ export interface EvaOrbitRepository {
   updateTimelineAssociation(input: import("../timeline-association").TimelineAssociationSettings): Promise<import("../timeline-association").TimelineAssociationSettings>;
   updateCalendarInterpretation(input: CalendarInterpretation): Promise<CalendarInterpretation>;
   updateHomeModuleOrder(order: HomeModuleId[]): Promise<UiPreferences>;
-  updateAppearancePreferences(input: { designTheme?: import("../theme").DesignTheme; appearanceMode: AppearanceMode; colorTheme: ColorTheme; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
+  updateAppearancePreferences(input: { appearanceMode: AppearanceMode; uiLanguage: UiLanguage; chineseFont: ChineseFont; englishFont: EnglishFont }): Promise<UiPreferences>;
   getAiSettings(): Promise<InternalAiSettings>;
   updateAiSettings(input: AiSettingsInput): Promise<InternalAiSettings>;
   updateChatPreferences(input: ChatPreferences): Promise<InternalAiSettings>;
@@ -410,12 +407,6 @@ export interface EvaOrbitRepository {
   updateLuciusDiaryEntry(id: number, input: LuciusDiaryPatch): Promise<LuciusDiaryEntry | null>;
   deleteLuciusDiaryEntry(id: number): Promise<boolean>;
 
-  listLuciusCases(input?: LuciusCaseListInput): Promise<LuciusCase[]>;
-  getLuciusCase(id: number): Promise<LuciusCase | null>;
-  createLuciusCase(input: NewLuciusCase): Promise<LuciusCase>;
-  updateLuciusCase(id: number, input: LuciusCasePatch): Promise<LuciusCase | null>;
-  deleteLuciusCase(id: number): Promise<boolean>;
-  recordLuciusCaseRecurrence(id: number, occurredDate: string): Promise<LuciusCase | null>;
   getLuciusState(): Promise<LuciusState>;
   updateLuciusState(input: LuciusStatePatch): Promise<LuciusState>;
   listLuciusPosts(input?: LuciusPostListInput): Promise<LuciusPost[]>;

@@ -4,7 +4,7 @@
 
 - Tasks：直接共享原任务列表、日历/标签筛选、任务表单。日期未知时间保持无时间；读取现有提醒，不完成/重开、不协调系统提醒。
 - Projects：原项目列表、项目详情、事项详情及表单，保留 Done/Verified、模块、优先级和生命周期；不做业务写入。
-- Lucius：原个人页、动态与评论、日记及案底列表/详情/表单。头像/封面从本地 bundle 加载；不发评论、不增删改日记或案底、不触发通知。
+- Lucius：原个人页、动态与评论、日记列表/详情/表单。头像/封面从本地 bundle 加载；不发评论、不增删改日记、不触发通知。
 - Eva 聊天暂不迁移。设置直接复用原 AiProvidersSettings，允许显式在线管理 Provider、密钥与模型，测试连接会访问对应服务商。
 
 ## 共享入口与存储
@@ -13,7 +13,7 @@ Web 保留 Next 路由/server loader，客户端组件接受共享 WorkspaceData
 
 `GET /api/native/workspace-readonly/:kind` 经独立 Repository 白名单聚合，只有 tasks/projects/lucius 三种 kind。Native Bridge `workspaces.readOnlySnapshot` 与浏览器平台都校验账户、结构及容量，先读缓存、后台刷新、失败保留缓存。独立 SQLite 表 `workspace_readonly_cache` 按 account_id/kind 分区；Windows 预览使用既有 IndexedDB，每次持久化与账户会话同事务检查。旧业务 state/outbox 不修改。
 
-每账户每模块上限8 MiB：Tasks 最多1,000项；Projects 最多200个项目、每项目200项，总事项超过5,000时拒绝刷新；Lucius 50条动态、500条评论、100篇日记、100个案底。任何集合触及上限标记部分下载，搜索仅覆盖已下载数据。没有覆盖全量历史的承诺。Tasks 复用既有逐项提醒读取，大数据量可能触及20秒请求超时；失败保持缓存，后续有实际性能证据再批量优化。
+每账户每模块上限8 MiB：Tasks 最多1,000项；Projects 最多200个项目、每项目200项，总事项超过5,000时拒绝刷新；Lucius 50条动态、500条评论、100篇日记。任何集合触及上限标记部分下载，搜索仅覆盖已下载数据。没有覆盖全量历史的承诺。Tasks 复用既有逐项提醒读取，大数据量可能触及20秒请求超时；失败保持缓存，后续有实际性能证据再批量优化。
 
 ## AI 设置在线例外
 

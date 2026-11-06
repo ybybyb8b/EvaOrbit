@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useFormPreview} from "@/components/form-preview";
 import {useHealthData} from "@/components/health-data-context";
 
@@ -73,7 +74,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], suggestions
     <form id="training-plan-form" className="training-form training-plan-form" onSubmit={event => void submit(event)} onInvalidCapture={event => {
       const field = event.target;
       if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
-      const day = field.closest<HTMLDetailsElement>(".training-plan-day");
+      const day = field.closest<HTMLElement>(".training-plan-day");
       if (!day) return;
       event.preventDefault();
       const dayId = day.id.slice("training-day-".length);
@@ -84,11 +85,8 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], suggestions
       <label className="field"><span>{t("Plan name", "计划名称")}</span><input required maxLength={120} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
       <div className="training-plan-list-heading"><strong>{t(`${draft.days.length} training days`, `${draft.days.length} 个训练日`)}</strong><span>{t("In order · No fixed dates", "按顺序循环 · 不限日期")}</span></div>
       {error && !errorDayId && <ErrorNotice role="alert">{error}</ErrorNotice>}
-      <div className="training-plan-days">{draft.days.map((day, index) => <details className="training-plan-day" key={day.id} id={`training-day-${day.id}`} open={expandedDayId === day.id} onToggle={event => {
-        const open = event.currentTarget.open;
-        setExpandedDayId(current => open ? day.id : current === day.id ? null : current);
-      }}>
-        <summary><span className="training-plan-day-number">Day {index + 1}</span><span className="training-plan-day-summary"><strong>{day.name || t("Untitled training day", "未命名训练日")}</strong><small>{[trainingTypeLabels[day.trainingType][english ? "en" : "zh"], day.durationMinutes ? `${day.durationMinutes} ${t("min", "分钟")}` : "", day.videoUrls.filter(url => url.trim()).length ? t(`${day.videoUrls.filter(url => url.trim()).length} videos`, `${day.videoUrls.filter(url => url.trim()).length} 个视频`) : ""].filter(Boolean).join(" · ")}</small></span><Icon name="chevronDown" /></summary>
+      <div className="training-plan-days">{draft.days.map((day, index) => <Disclosure className="training-plan-day" key={day.id} id={`training-day-${day.id}`} open={expandedDayId === day.id} onOpenChange={open=>setExpandedDayId(current=>open?day.id:current===day.id?null:current)} title={`Day ${index + 1} · ${day.name || t("Untitled training day", "未命名训练日")}`} description={[trainingTypeLabels[day.trainingType][english ? "en" : "zh"], day.durationMinutes ? `${day.durationMinutes} ${t("min", "分钟")}` : "", day.videoUrls.filter(url => url.trim()).length ? t(`${day.videoUrls.filter(url => url.trim()).length} videos`, `${day.videoUrls.filter(url => url.trim()).length} 个视频`) : ""].filter(Boolean).join(" · ")}>
+
         <fieldset className="training-plan-day-body" disabled={saving}>
           <legend className="sr-only">{t("Edit", "编辑")} Day {index + 1}</legend>
           {error && errorDayId === day.id && <ErrorNotice role="alert">{error}</ErrorNotice>}
@@ -109,7 +107,7 @@ export function TrainingPlanEditor({ plan, exerciseSuggestions = [], suggestions
             <button type="button" className="text-button" disabled={index === draft.days.length - 1} data-form-change onClick={() => move(index, 1)} aria-label={`${t("Move down", "下移")} Day ${index + 1}`}><Icon name="arrow" />{t("Move down", "下移")}</button>
           </div><button type="button" className="text-button training-plan-remove-day" data-form-change onClick={() => replaceDays(draft.days.filter(item => item.id !== day.id))} aria-label={`${t("Remove", "删除")} Day ${index + 1}`}><Icon name="trash" />{t("Remove day", "删除此日")}</button></div>
         </fieldset>
-      </details>)}</div>
+      </Disclosure>)}</div>
       {!draft.days.length && <div className="training-plan-empty"><strong>{t("Build your first training day", "添加第一个训练日")}</strong><p>{t("Start with a name and training areas. Videos and duration are optional.", "填写名称和训练部位即可，视频与时长可稍后补充。")}</p></div>}
       <button type="button" className="button secondary training-plan-add-day" disabled={saving || draft.days.length >= 30} data-form-change onClick={addDay}><Icon name="plus" />{t("Add training day", "添加训练日")}</button>
     </form>

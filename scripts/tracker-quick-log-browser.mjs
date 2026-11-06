@@ -34,7 +34,7 @@ try{
  await page.reload({waitUntil:"networkidle"});
  const picker=async()=>{await page.locator(".home-quick-log-trigger").click();await page.locator(".home-quick-log-grid").getByRole("button",{name:"Tracker",exact:true}).click();await page.locator(".home-quick-tracker-list").waitFor();};
  const close=async()=>{await page.locator(".form-sheet-header button").click();const discard=page.getByRole("button",{name:"Discard and close",exact:true});if(await discard.isVisible())await discard.click();await page.locator(".form-sheet-panel").waitFor({state:"detached"});};
- for(const theme of ["classic","vintage"])for(const mode of ["light","dark"])for(const width of [402,1280]){
+ for(const theme of ["vintage"])for(const mode of ["light","dark"])for(const width of [402,1280]){
   await page.setViewportSize({width,height:874});await page.evaluate(({theme,mode})=>{document.documentElement.dataset.designTheme=theme;document.documentElement.dataset.mode=mode;},{theme,mode});
   await picker();
   if(!before){

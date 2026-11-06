@@ -26,9 +26,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: "#f5f2e9", width: "device-width", initialScale: 1, viewportFit: "cover", colorScheme: "light dark" };
+export const viewport: Viewport = { themeColor: "#f2f3f5", width: "device-width", initialScale: 1, viewportFit: "cover", colorScheme: "light dark" };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const cacheScope = await getClientCacheScope();
-  return <html lang="zh-CN" suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><ThemeController /><ErrorFeedbackProvider><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></ErrorFeedbackProvider></LocaleController></body></html>;
+  return <html lang="zh-CN" data-design-theme="vintage" data-theme="vintage" data-mode="light" suppressHydrationWarning><body><Script src="/theme-init.js" strategy="beforeInteractive" /><PwaRegister /><LocaleController><ThemeController /><ErrorFeedbackProvider><AppShell cloudMode={usesSupabase()} cacheScope={cacheScope}>{children}</AppShell><ActionToastViewport/></ErrorFeedbackProvider></LocaleController></body></html>;
 }

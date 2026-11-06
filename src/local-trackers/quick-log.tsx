@@ -1,5 +1,4 @@
 import {OnlineForms,useOnlineReader,useOnlineBusiness} from "./online-business";
-import { EvaPaperCapture } from "@/components/eva-paper";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore,type ComponentProps} from "react";
 import {InboxCaptureForm} from "@/app/inbox/inbox-capture-form";
@@ -37,11 +36,10 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   const state=useSyncExternalStore(store.subscribe,store.getSnapshot);
   const [active,setActive]=useState<"picker"|QuickEntryKind|null>(null),[error,setError]=useState("");
   const [selectedId,setSelectedId]=useState<string|null>(null),[loading,setLoading]=useState(false);
-  const [paperDirty,setPaperDirty]=useState(false);
   const [date,setDate]=useState(dateInEvaOrbit),[health,setHealth]=useState<HealthReadonlySnapshot|null>(null),[cats,setCats]=useState<CatsReadonlySnapshot|null>(null);
   const generation=useRef(0),saving=useRef(false);
   const readOnly=platform.readOnly(account);
-  const close=()=>{setPaperDirty(false);generation.current++;setActive(null);setSelectedId(null);setLoading(false);setError("");};
+  const close=()=>{generation.current++;setActive(null);setSelectedId(null);setLoading(false);setError("");};
   useEffect(()=>()=>{generation.current++;},[]);
   useEffect(()=>{
     let alive=true;
@@ -61,8 +59,6 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
     if(!readOnly&&!isPreviewAccount(account))void synchronizeTrackerSession(account,platform).catch(()=>{});
   }
   async function choose(kind:QuickEntryKind){
-    if(paperDirty&&!window.confirm(english?"Discard this unsaved paper and open another form?":"放弃尚未保存的纸条，打开其他记录？"))return;
-    setPaperDirty(false);
     const request=++generation.current;setError("");setLoading(true);
     try{
       if(kind==="tracker")await store.initialize();
@@ -106,7 +102,7 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
       setDate(action?.selectedDate??dateInEvaOrbit());setError("");setActive("picker");if(action?.picker)void choose(action.picker);
     }}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
-    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}>{!action?.picker&&<OnlineForms><EvaPaperCapture compact onDirtyChange={setPaperDirty} onBusyChange={setLoading} onSaved={close}/></OnlineForms>}<QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}</FormSheet>}
+    {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}</FormSheet>}
     {active==="inbox"&&<OnlineForms><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" submitLabel={english?"Save":"记下"} submitDisabled={!onlineBusiness}><InboxCaptureForm sheet formId="local-inbox-capture" onSaved={close}/></FormSheet></OnlineForms>}
     {(active==="food"||active==="drink")&&<FoodPreviewEditor date={date} editor={{kind:active}} onClose={close}/>}
     {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={async()=>close()}/></OnlineForms></HealthDataProvider>}

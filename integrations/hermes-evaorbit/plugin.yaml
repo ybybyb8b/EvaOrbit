@@ -1,0 +1,23 @@
+name: evaorbit-platform
+label: EvaOrbit
+kind: platform
+version: 0.1.0
+description: Personal EvaOrbit messaging channel. Agent state and detailed logs stay in Hermes.
+author: EvaOrbit
+requires_env:
+  - name: EO_SUPABASE_URL
+    description: EvaOrbit Supabase URL
+    password: false
+  - name: EO_SUPABASE_KEY
+    description: Supabase publishable key (not a service-role key)
+    password: false
+  - name: EO_BRIDGE_TOKEN
+    description: Revocable connection token created in EvaOrbit
+    password: true
+  - name: EO_ALLOWED_USERS
+    description: Paired EvaOrbit account UUID
+    password: false
+optional_env:
+  - name: EO_HOME_CHAT
+    description: EvaOrbit conversation UUID for proactive messages
+    password: false

@@ -16,7 +16,7 @@ test("calendar rules migrate existing SQLite settings, persist across both entry
   };
   try {
     run(`const db=await import('./src/lib/db.ts');
-      db.updateAppearancePreferences({appearanceMode:'dark',colorTheme:'powderblue',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});
+      db.updateAppearancePreferences({appearanceMode:'dark',uiLanguage:'en',chineseFont:'canger',englishFont:'zen'});
       db.createCalendarEvent({title:'📚 999h',notes:'原始评论',startAt:'2026-10-01T04:00:00.000Z',endAt:'2026-10-01T04:30:00.000Z',isAllDay:false,timezone:'Asia/Shanghai',location:'家',status:'confirmed'});
       const {DatabaseSync}=await import('node:sqlite');const connection=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       connection.exec('ALTER TABLE ui_preferences DROP COLUMN calendar_interpretation; DELETE FROM migrations WHERE version=61;');connection.close();console.log('{}');`);
@@ -29,7 +29,6 @@ test("calendar rules migrate existing SQLite settings, persist across both entry
       try{await service.saveCalendarInterpretation({...saved,categories:saved.categories.map(item=>({...item,icon:'NotAnInstalledIcon'}))});}catch(error){invalidIcon=error instanceof ValidationError;}
       const overview=await service.getCalendarInterpretationOverview(),day=await home.getHomeDayOverview('2026-10-01');
       console.log(JSON.stringify({before,saved,stale,invalid,invalidIcon,overviewRevision:overview.settings.revision,dayRevision:day.calendarInterpretation.revision,reading:day.activities.find(item=>item.category==='reading'),notes:day.activityRecords[0].notes,event:db.getCalendarEvent(1)}));`);
-    assert.equal(result.before.colorTheme, "powderblue");
     assert.equal(result.before.appearanceMode, "dark");
     assert.equal(result.saved.revision, 1);
     assert.equal(result.overviewRevision, result.dayRevision);

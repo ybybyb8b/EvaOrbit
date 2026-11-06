@@ -8,13 +8,7 @@
 .detail :global(.text-button) { min-height:44px; font-size:13px; font-weight:500; }
 .detail :global(.health-inline-empty) { padding:18px; border-radius:16px; background:var(--surface-soft); color:var(--text-secondary); font-size:13px; line-height:1.6; }
 .detail :global(.training-history), .detail :global(.period-history) { margin-top:20px; }
-.detail :global(.training-history > summary), .detail :global(.period-history > summary) { min-height:64px; padding:12px 16px; border-radius:16px; background:var(--surface-soft); }
-.detail :global(.training-history > summary strong), .detail :global(.period-history-heading strong) { font-size:14px; font-weight:500; }
-.detail :global(.training-history > summary small), .detail :global(.period-history-heading small) { color:var(--text-secondary); font-size:12px; font-weight:400; letter-spacing:0; }
-.detail :global(.training-history > summary > span:first-child) { flex-direction:column-reverse; gap:5px; }
-.detail :global(.training-history > summary > span:last-child) { background:transparent; color:var(--text-secondary); font-size:12px; font-weight:400; }
 .detail :global(.training-history-note) { margin-top:14px; color:var(--text-secondary); font-size:12px; line-height:1.6; }
-.detail :global(summary:focus-visible) { outline:2px solid var(--accent-primary); outline-offset:3px; }
 
 .detail :global(.weight-overview), .detail :global(.period-overview) { margin-top:0; padding:20px; border-radius:16px; gap:20px; background:var(--surface-soft); }
 .detail :global(.weight-current) { grid-template-columns:max-content max-content; }

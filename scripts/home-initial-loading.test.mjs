@@ -33,7 +33,6 @@ function fixture(failure) {
       calls.push(["due", limit, now, options]); return [{ id: 1 }];
     } },
     "@/components/home-page-view": { HomePageView: "home" },
-    "@/components/due-reminders": { DueReminders: "due" },
     "./home-calendar-timeline": { HomeCalendarTimeline: "calendar" },
   };
   const loaded = {};
@@ -65,7 +64,7 @@ test("Home prepares renewals and medication once before snapshot reads, preservi
     ["due", 50, now, { readOnly: true }],
   ]);
   assert.equal(tree.props.language, "en");
-  assert.deepEqual(tree.props.due.props.items, [{ id: 1 }]);
+  assert.deepEqual(tree.props.children.props.dueItems, [{ id: 1 }]);
   assert.equal(tree.props.children.props.cacheScope, "account-a");
   assert.deepEqual(tree.props.children.props.initialDay, { date: "2026-10-21" });
   assert.deepEqual(tree.props.children.props.initialSummary, { month: "2026-10" });

@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
 import { useServerDataState } from "@/components/use-data-refresh";
@@ -11,7 +12,6 @@ import { SleepSummary } from "@/components/sleep-summary";
 import { homeDurationLabel } from "@/lib/home-day";
 import { sleepDisplay } from "@/lib/sleep";
 import { EVAORBIT_TIME_ZONE } from "@/lib/time";
-import { Icon } from "@/components/icons";
 import styles from "./sleep-section.module.css";
 import { subscribeDataChanged } from "@/lib/data-changed";
 import type { DailySleepSummary } from "@/lib/sleep";
@@ -48,7 +48,7 @@ export function SleepSection({ initial }: { initial: DailySleepSummary }) {
         {!summary.actual && <p className={styles.note}>{english ? "Measured sleep has not synced for this wake date. This window comes from Timeline." : "这个醒来日期的实际睡眠尚未同步，当前显示时间线估算窗口。"}</p>}
       </> : <div className={styles.empty}><strong>{english ? "No sleep data for this day" : "这一天暂无睡眠数据"}</strong><p>{english ? "Measured sleep has not synced for this wake date. Check the date or refresh after syncing." : "尚未收到这个醒来日期的实际睡眠，请核对日期或同步后刷新。"}</p></div>}
     </div>
-    <details className={styles.details}><summary><span>{english ? "Sleep details & data sources" : "睡眠明细与数据来源"}</span><Icon name="chevronDown" /></summary><div className={styles.detailsBody}><SleepSummary summary={summary} english={english} /></div></details>
+    <Disclosure className={styles.details} title={english ? "Sleep details & data sources" : "睡眠明细与数据来源"}><div className={styles.detailsBody}><SleepSummary summary={summary} english={english} /></div></Disclosure>
     {error && <ErrorNotice role="status">{english ? "Could not refresh sleep. Try Refresh again." : "睡眠数据刷新失败，请再次点击刷新。"}</ErrorNotice>}
   </section>;
 }

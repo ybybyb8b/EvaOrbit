@@ -51,10 +51,12 @@ test("Home keeps quick capture in the universal Log without favorite shortcuts",
   assert.doesNotMatch(healthQuickLog, /AppleHealthSection|WeightSettingsSheet|DailyEnergyCard/);
 });
 
-test("Home keeps the compact Due reminder stack", () => {
+test("Home passes due reminders into the shared task list", () => {
   const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const timeline = readFileSync(new URL("../components/home-calendar-timeline.tsx", import.meta.url), "utf8");
   assert.match(page, /getDueReminders\(50, now, \{ readOnly: true \}\)/);
-  assert.match(page, /<DueReminders items=\{due\} compact\s*\/>/);
+  assert.match(page, /<HomeCalendarTimeline[^>]*dueItems=\{due\}/);
+  assert.match(timeline, /<HomeTasksSummary[^>]*reminders=\{dueItems\?\?\[\]\}/);
 });
 
 test("Global mobile chrome excludes Login and Lucius from the scroll-aware header", () => {

@@ -23,13 +23,6 @@ const RESOURCE_CONFIG = {
     booleans: new Set(),
     natural: { columns: ["date", "content"], values: (data) => [data.date, data.content] },
   },
-  lucius_case: {
-    table: "lucius_cases",
-    columns: ["title", "error_type", "severity", "status", "trigger_scenes", "error_quote", "cause", "correct_behavior", "mandatory_rule", "next_check", "punishment", "first_occurred_date", "latest_occurred_date", "occurrence_count", "consecutive_correct_count", "recurrence_interval_days", "is_recurrence", "reset_threshold", "source_system", "source_id", "source_url", "imported_at"],
-    arrays: new Set(["trigger_scenes"]),
-    booleans: new Set(["is_recurrence"]),
-    natural: { columns: ["title", "first_occurred_date", "cause"], values: (data) => [data.title, data.first_occurred_date, data.cause] },
-  },
 };
 
 const LEDGER_SQLITE = `
@@ -38,7 +31,7 @@ const LEDGER_SQLITE = `
     user_id TEXT NOT NULL,
     source_system TEXT NOT NULL,
     source_id TEXT NOT NULL,
-    resource TEXT NOT NULL CHECK(resource IN ('memo','chronicle','lucius_diary','lucius_case')),
+    resource TEXT NOT NULL CHECK(resource IN ('memo','chronicle','lucius_diary')),
     target_id INTEGER NOT NULL,
     source_url TEXT,
     source_created_at TEXT,
@@ -95,7 +88,7 @@ export class SqliteNotionImportStore {
       if (ledger) return { resource: String(ledger.resource), targetId: Number(ledger.target_id), payloadHash: String(ledger.payload_hash), importedAt: String(ledger.imported_at), fromLedger: true };
     }
     const matches = [];
-    for (const resource of ["memo", "lucius_diary", "lucius_case"]) {
+    for (const resource of ["memo", "lucius_diary"]) {
       const config = configFor(resource);
       const rows = this.#database.prepare(`SELECT id,imported_at FROM ${config.table} WHERE user_id=? AND source_system='notion' AND source_id=? LIMIT 2`).all(this.#userId, item.notionPageId);
       for (const row of rows) matches.push({ resource, targetId: Number(row.id), payloadHash: null, importedAt: row.imported_at ? String(row.imported_at) : item.importedAt, fromLedger: false });
@@ -205,7 +198,7 @@ export class PostgresNotionImportStore {
       if (rows[0]) return { resource: String(rows[0].resource), targetId: Number(rows[0].target_id), payloadHash: String(rows[0].payload_hash), importedAt: String(rows[0].imported_at), fromLedger: true };
     }
     const matches = [];
-    for (const resource of ["memo", "lucius_diary", "lucius_case"]) {
+    for (const resource of ["memo", "lucius_diary"]) {
       const config = configFor(resource);
       const rows = await sql.unsafe(`select id,imported_at from public.${config.table} where user_id=$1 and source_system='notion' and source_id=$2 limit 2`, [this.#userId, item.notionPageId]);
       for (const row of rows) matches.push({ resource, targetId: Number(row.id), payloadHash: null, importedAt: row.imported_at ? String(row.imported_at) : item.importedAt, fromLedger: false });

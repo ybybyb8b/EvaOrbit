@@ -1,6 +1,7 @@
 "use client";
 import {nativeApiFetch} from "@/lib/native-api";
 import { ErrorNotice } from "@/components/error-notice";
+import { useLocale } from "@/components/locale-controller";
 import { apiErrorMessage } from "@/lib/response-error";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ToastNotice } from "@/components/action-toast";
@@ -18,6 +19,7 @@ function formatTime(value: string | null) {
 
 
 export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } = {}) {
+  const { english } = useLocale();
  const copyScope=useUiCopyScope<HTMLElement>();
   const [nativeHost, setNativeHost] = useState(false);
   const [status, setStatus] = useState<HealthKitStatus | null>(null);
@@ -124,7 +126,7 @@ export function AppleHealthSection({ readOnly = false }: { readOnly?: boolean } 
         <Status label="Last upload" value={formatTime(status.lastSuccessfulUpload)} />
       </div>
       <div className="apple-health-metrics">{status.metrics.map((metric) => <div key={metric.metric}><strong>{metric.name}</strong><span>{status.backgroundDelivery[metric.metric] === "sync_disabled" ? "Read capability ready · Sync disabled" : `Background delivery: ${status.backgroundDelivery[metric.metric]?.replaceAll("_", " ") ?? "not requested"}`}</span></div>)}</div>
-      {status.lastError && <p className="apple-health-error">Last error: {status.lastError}</p>}
+      {status.lastError && <ErrorNotice inline className="apple-health-error" details={status.lastError}>{english ? "The last Apple Health sync failed." : "上次 Apple 健康同步失败。"}</ErrorNotice>}
       {error && <ErrorNotice>{error}</ErrorNotice>}
       {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
       {!readOnly && <div className="apple-health-actions">

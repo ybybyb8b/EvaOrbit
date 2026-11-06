@@ -21,6 +21,7 @@ function fixture(remotePeriods = null) {
     currentLocalDate:()=>today,DateTimeField:empty,compactDateTimeValue:value=>value,
     compactDateTimePayload:value=>({value,hasExplicitTime:value.includes('T')}),
     FormSheet:props=>React.createElement('div',null,props.children),Icon:empty,
+    Disclosure:props=>React.createElement('section',null,props.title,props.children),
     ChoiceSelect:props=>React.createElement('select',null,props.children),SearchableSelect:empty,
     BottomLogScope:empty,ToastNotice:empty,
     syncMenstrualFlowToHealthKit:async()=>{},flushPendingMenstrualFlowToHealthKit:async()=>{},

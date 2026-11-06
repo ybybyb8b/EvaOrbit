@@ -1,6 +1,6 @@
 import {getRepository} from '../src/lib/repositories/index.ts';
 import {createTask} from '../src/lib/services/task.ts';
-import {parseNewTask,parseNewProjectItem,parseNewLuciusCase} from '../src/lib/validation.ts';
+import {parseNewTask,parseNewProjectItem} from '../src/lib/validation.ts';
 export async function seedWorkspaces(){
  const r=await getRepository();
  const task=await createTask(parseNewTask({title:'Offline task canary',notes:'Date only, not midnight',dueDate:'2026-10-20',dueTime:null,priority:'high',tags:['Canary']}));
@@ -15,7 +15,5 @@ export async function seedWorkspaces(){
  await r.createLuciusPostComment({postId:post.id,author:'lucius',content:'Lucius reply canary'});
  const trace={sourceSystem:null,sourceId:null,sourceUrl:null,importedAt:null};
  const diary=await r.createLuciusDiaryEntry({...trace,date:'2026-10-19',content:'Diary canary content <script>literal</script>',tags:['Canary']});
- const entry=await r.createLuciusCase(parseNewLuciusCase({title:'Case canary',errorType:'factual',severity:'minor',status:'serving',triggerScenes:['Canary'],cause:'Check the source',correctBehavior:'Read existing records',mandatoryRule:'No invented facts',firstOccurredDate:'2026-10-18',latestOccurredDate:'2026-10-19'}));
- await r.createLuciusCase(parseNewLuciusCase({title:'Archived case canary',errorType:'expression',severity:'moderate',status:'permanent_record',triggerScenes:[],cause:'Use clear language',correctBehavior:'Be concise',mandatoryRule:'Preserve semantics',firstOccurredDate:'2026-10-17'}));
- return {task,project,item,post,diary,entry};
+ return {task,project,item,post,diary};
 }

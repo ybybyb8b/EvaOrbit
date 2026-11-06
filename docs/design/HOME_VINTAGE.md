@@ -1,6 +1,8 @@
 # Vintage · Global theme and Home
 
-Operate surface. Existing fonts, header, routing, data and action semantics remain authoritative. Vintage is an independent global design theme; the four existing palettes belong to Classic and are retained when switching designs.
+Vintage is the single theme on Web and local clients. Display mode, language and font choices remain available in App & Appearance. The first paint and shared runtime ignore saved Classic values. The current preferences API reads and writes display mode, language and fonts. Historical migrations remain in place for existing databases. The standalone Due card and illustrated icons are available for reuse.
+
+The notes below record the earlier design and rollout.
 
 ## Direction contract
 
@@ -16,7 +18,7 @@ FORM: user-specified existing Home composition; no concept tournament or seed ne
 
 FINISH: inspect real browser renders at 320, 402 and desktop in both modes; exercise empty, overdue, large lists, deduplication, actions, calendar and rollback. No production deployment.
 
-## Implementation
+## Original implementation
 
 - Switch in Settings → App & Appearance → Theme. Classic exposes its four colors; Vintage currently has one plum palette. Switching retains the previous Classic color. Web saves through the existing appearance API; local saves on-device only.
 - `src/app/vintage-theme.css`: route-independent semantic colors, cool-white / neutral-charcoal surfaces, serif headings and Canger body, flat content and aligned icon palettes. It loads through shared globals on Web and local builds.

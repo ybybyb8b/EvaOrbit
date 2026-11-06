@@ -31,7 +31,7 @@ const errors=[],writes=[];
 try{
  browser=await chromium.launch({channel:"chrome",headless:true});
  context=await browser.newContext({viewport:{width:402,height:874},isMobile:true,hasTouch:true,deviceScaleFactor:2});
- await context.addInitScript(()=>{localStorage.setItem("evaorbit.homeStyle","vintage");localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.chineseFont","canger");localStorage.setItem("evaorbit.englishFont","ibm");localStorage.setItem("evaorbit.appearanceMode","light");localStorage.setItem("evaorbit.colorTheme","editorial");localStorage.setItem("evaorbit.trackerMode","readonly");});
+ await context.addInitScript(()=>{localStorage.setItem("evaorbit.designTheme","classic");localStorage.setItem("evaorbit.homeStyle","classic");localStorage.setItem("evaorbit.uiLanguage","en");localStorage.setItem("evaorbit.chineseFont","canger");localStorage.setItem("evaorbit.englishFont","ibm");localStorage.setItem("evaorbit.appearanceMode","light");localStorage.setItem("evaorbit.colorTheme","rosewood");localStorage.setItem("evaorbit.trackerMode","readonly");});
  await context.route("**/eo-api/**",route=>{
   const request=route.request(),url=new URL(request.url());
   if(!["GET","HEAD"].includes(request.method())){
@@ -65,7 +65,6 @@ try{
  assert.equal(await page.locator('.vintage-task-title strong').first().evaluate(e=>getComputedStyle(e).fontSize),'13px');
  assert.equal(await page.locator('.vintage-task-title strong').first().evaluate(e=>getComputedStyle(e).lineHeight),'16.9px');assert.equal(await page.locator('.vintage-task-meta').first().evaluate(e=>getComputedStyle(e).marginTop),'1px');
  const bodyFont=await page.locator('.vintage-task-title strong').first().evaluate(e=>getComputedStyle(e).fontFamily);assert.match(bodyFont,/Canger Huaxin/);assert.match(await page.locator('.home-date-weekday').first().evaluate(e=>getComputedStyle(e).fontFamily),/Canger Huaxin/);assert.doesNotMatch(await page.locator('.home-date-pill strong').first().evaluate(e=>getComputedStyle(e).fontFamily),/^"EO Canger Huaxin"/);
- const families=await page.locator('.home-masthead h1').evaluate(e=>getComputedStyle(e).fontFamily);
  const audit=[];
  for(const mode of ['light','dark'])for(const width of [320,402,1440]){
   await root.evaluate((e,mode)=>{e.dataset.mode=mode;e.style.colorScheme=mode;},mode);await page.setViewportSize({width,height:width===1440?1000:874});await page.evaluate(()=>window.scrollTo(0,0));await page.waitForTimeout(180);
@@ -96,11 +95,13 @@ try{
  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await selected.locator('strong').evaluate(e=>getComputedStyle(e).transitionDuration),'0s');await page.emulateMedia({reducedMotion:'no-preference'});
  const taskPane=page.locator('.home-tasks-pane');
  const finance=taskPane.locator('li').filter({hasText:'ChatGPT renewal'});await finance.getByRole('button',{name:'Actions for ChatGPT renewal',exact:true}).click();
- failNext=true;await finance.getByRole('button',{name:'Paid',exact:true}).click();await page.getByText(/Preview failure: try again/).first().waitFor();assert.equal(await finance.count(),1);
- await finance.getByRole('button',{name:'Paid',exact:true}).click();await finance.waitFor({state:'detached'});
+ failNext=true;await finance.getByRole('button',{name:'Paid',exact:true}).click();await page.locator(".error-banner [role=alert]").waitFor();assert.equal(await finance.count(),1);
+ await finance.getByRole('button',{name:'Actions for ChatGPT renewal',exact:true}).click();
+ await finance.getByRole('button',{name:'Paid',exact:true}).click();
+ await taskPane.locator('li[data-completed=true]').filter({hasText:'ChatGPT renewal'}).getByText('Completed',{exact:true}).waitFor();
  const cat=taskPane.locator('li').filter({hasText:'Luna · Flea treatment'});await cat.getByRole('button',{name:'Actions for Luna · Flea treatment',exact:true}).click();await cat.getByRole('button',{name:'Snooze',exact:true}).click();await cat.getByRole('button',{name:'Tomorrow',exact:true}).click();await cat.waitFor({state:'detached'});
  const reminderTask=taskPane.locator('li').filter({hasText:'Read the book by your side'});await reminderTask.getByRole('button',{name:'Actions for Read the book by your side',exact:true}).click();await reminderTask.getByRole('button',{name:'Skip',exact:true}).click();await reminderTask.getByRole('button',{name:'Skip',exact:true}).waitFor({state:'detached'});
- const normal=taskPane.getByRole('checkbox',{name:'Complete Prepare dinner ingredients',exact:true});await normal.click();await page.waitForFunction(()=>document.querySelector('input[aria-label="Complete Prepare dinner ingredients"]')?.checked===true);assert.equal(await normal.isChecked(),true);
+ const normal=taskPane.getByRole('checkbox',{name:'Complete Prepare dinner ingredients',exact:true});await normal.click();await page.waitForFunction(()=>document.querySelector('input[aria-label="Reopen Prepare dinner ingredients"]')?.checked===true);assert.equal(await taskPane.getByRole('checkbox',{name:'Reopen Prepare dinner ingredients',exact:true}).isChecked(),true);
  assert.ok(writes.some(w=>w.path.endsWith('/reminders/91/complete')));assert.ok(writes.some(w=>w.path.endsWith('/reminders/92/snooze')&&w.body.choice==='tomorrow'));assert.ok(writes.some(w=>w.path.endsWith('/reminders/93/skip')));assert.ok(writes.some(w=>w.path.endsWith('/tasks/3')&&w.body.completed===true));
  for(const state of ['empty','normal','many','long']){
   scenario=state;await page.reload({waitUntil:'networkidle'});await page.locator('.home-tasks-pane').waitFor();
@@ -110,28 +111,25 @@ try{
   if(state==='long'){for(const mode of ['light','dark']){await root.evaluate((e,m)=>{e.dataset.mode=m;e.style.colorScheme=m;},mode);await page.setViewportSize({width:320,height:874});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'tmp/vintage-global-long-'+mode+'-320.png',fullPage:true});}await page.setViewportSize({width:402,height:874});await root.evaluate(e=>{e.dataset.mode='light';e.style.colorScheme='light';});}
  }
  scenario='mixed';await page.reload({waitUntil:'networkidle'});await page.locator('.home-tasks-pane').waitFor();
- // Use the actual appearance controls to switch and roll back, leaving cloud preferences alone.
+ // Open the real appearance settings with legacy values in device storage.
  await page.locator('.mobile-nav').getByRole('link',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:/App & Appearance/}).click();
  assert.equal(await page.locator('.mobile-nav a.active').innerText(),'Settings');assert.ok(Math.abs((await page.locator('.home-quick-log-trigger').boundingBox()).x+36-201)<.6);
  for(const mode of ['light','dark']){await root.evaluate((e,m)=>{e.dataset.mode=m;e.style.colorScheme=m;},mode);const nav=await page.locator('.mobile-nav').boundingBox();await page.screenshot({path:`tmp/vintage-global-settings-bar-${mode}.png`,clip:{x:0,y:Math.floor(nav.y-24),width:402,height:874-Math.floor(nav.y-24)}});}
- // Vintage remains global on Settings, Trackers and Universal Log, independent of Classic color.
+ // Vintage remains global on Settings, Trackers and Universal Log.
  for(const width of [320,402,1440])for(const mode of ['light','dark']){
   await page.setViewportSize({width,height:width===1440?1000:874});
   await root.evaluate((e,m)=>{e.dataset.mode=m;e.style.colorScheme=m;},mode);
   const tokens=await root.evaluate(e=>{const c=getComputedStyle(e);return {design:e.dataset.designTheme,color:e.dataset.theme,canvas:c.getPropertyValue('--surface-canvas').trim(),accent:c.getPropertyValue('--accent-primary').trim()};});
   assert.equal(tokens.design,'vintage');assert.equal(tokens.color,'vintage');assert.equal(tokens.canvas,mode==='dark'?'#202124':'#f2f3f5');
-  assert.equal(await page.locator('.appearance-classic-colors').count(),0);
+  assert.equal(await page.getByRole('button',{name:/Classic|Rosewood|Field Green|Almond Blue|Mist Violet/}).count(),0);
   assert.match(await page.locator('.appearance-theme-settings').evaluate(e=>getComputedStyle(e).fontFamily),/Canger Huaxin/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-  await page.locator('.appearance-design-themes').scrollIntoViewIfNeeded();
+  await page.locator('.appearance-theme-settings').scrollIntoViewIfNeeded();
   await page.screenshot({path:'tmp/vintage-global-settings-'+mode+'-'+width+'.png',fullPage:true});
  }
  await page.setViewportSize({width:402,height:874});
  await root.evaluate(e=>{e.dataset.mode='light';e.style.colorScheme='light';});
- const oldTheme=await root.getAttribute('data-classic-color-theme');const beforeWrites=writes.length;
- await page.getByRole('button',{name:/^Classic.*Original design/}).click();await page.locator('.mobile-nav').getByRole('link',{name:'Home',exact:true}).click();await page.locator('.due-section').waitFor();assert.equal(await page.locator('.home-tasks-pane').count(),0);assert.equal(await root.getAttribute('data-theme'),oldTheme);assert.equal(await page.locator('.home-masthead h1').evaluate(e=>getComputedStyle(e).fontFamily),families);
- await page.locator('.mobile-nav').getByRole('link',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:/App & Appearance/}).click();await page.getByRole('button',{name:/^Vintage/}).click();await page.locator('.mobile-nav').getByRole('link',{name:'Home',exact:true}).click();await page.locator('.home-tasks-pane').waitFor();assert.equal(writes.length,beforeWrites);
- assert.equal(await page.evaluate(()=>localStorage.getItem('evaorbit.designTheme')),'vintage');
+ await page.locator('.mobile-nav').getByRole('link',{name:'Home',exact:true}).click();
  await page.reload({waitUntil:'networkidle'});await page.locator('.home-tasks-pane').waitFor();assert.equal(await root.getAttribute('data-theme'),'vintage');
  // Use real navigation so Home is unmounted during global-theme checks.
  for(const [label,selector] of [['Trackers','.local-trackers'],['Tasks','.tasks-page'],['Inbox','.inbox-page']]){
@@ -147,23 +145,9 @@ try{
   }
   await page.setViewportSize({width:402,height:874});
  }
- await navigateLocal(page,'Settings');await page.getByRole('button',{name:/App & Appearance/}).click();
- for(const [label,color] of [['Field Green','editorial'],['Rosewood','rosewood'],['Almond Blue','powderblue'],['Mist Violet','mistviolet']]){
-  await page.getByRole('button',{name:/^Classic.*Original design/}).click();
-  await page.locator('.appearance-classic-colors').getByRole('button',{name:new RegExp('^'+label)}).click();
-  assert.equal(await root.getAttribute('data-theme'),color);
-  await page.getByRole('button',{name:/^Vintage/}).click();assert.equal(await root.getAttribute('data-theme'),'vintage');
-  assert.equal(await root.getAttribute('data-classic-color-theme'),color);
-  await page.getByRole('button',{name:/^Classic.*Original design/}).click();assert.equal(await root.getAttribute('data-theme'),color);
- }
- await page.getByRole('button',{name:/^Vintage/}).click();
- for(const mode of ['light','dark']){
-  await root.evaluate((e,m)=>{e.dataset.mode=m;e.style.colorScheme=m;},mode);await page.locator('.appearance-design-themes').scrollIntoViewIfNeeded();
-  await page.locator('.appearance-design-themes').screenshot({path:'tmp/vintage-global-picker-'+mode+'.png'});
- }
  assert.deepEqual(errors,[]);
- await fs.writeFile('tmp/vintage-global-preview-audit.json',JSON.stringify({passed:true,audit,states:['empty','normal','many'],calendar:['normal','selected','pressed','month','reduced-motion'],actions:writes,cloudWrites:0,themeIsolation:true,serifHeadingsPreserved:true,bodyFont:"EO Canger Huaxin",sourceLabelsRemoved:true},null,2));
- console.log(JSON.stringify({passed:true,modes:2,widths:[320,402,1440],taskStates:4,reminderActions:true,rollback:true,concentricPress:true,centeredLog:true,safeAreaOffset:34,logForm:true}));
+ await fs.writeFile('tmp/vintage-global-preview-audit.json',JSON.stringify({passed:true,audit,states:['empty','normal','many'],calendar:['normal','selected','pressed','month','reduced-motion'],actions:writes,cloudWrites:0,legacyAppearanceIgnored:true,serifHeadingsPreserved:true,bodyFont:"EO Canger Huaxin",sourceLabelsRemoved:true},null,2));
+ console.log(JSON.stringify({passed:true,modes:2,widths:[320,402,1440],taskStates:4,reminderActions:true,legacyAppearanceIgnored:true,concentricPress:true,centeredLog:true,safeAreaOffset:34,logForm:true}));
 }finally{
  await context?.close();await browser?.close();await server.close();console.log(JSON.stringify({stoppedPort:port,serverClosed:!server.httpServer.listening}));
 }

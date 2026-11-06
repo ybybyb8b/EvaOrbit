@@ -3,30 +3,20 @@ import XCTest
 @testable import EvaOrbitHost
 
 final class NativeLoadingThemeTests: XCTestCase {
-    func testEditorialThemeMapsEverySemanticRoleToOneNamedColorAsset() {
-        let names = LoadingThemeToken.allCases.map {
-            LoadingThemePalette.assetName(for: $0, identifier: .editorial)
-        }
+    func testVintageLoadingColorsResolveInBothAppearances() {
+        let names = LoadingThemeToken.allCases.map(\.rawValue)
 
         XCTAssertEqual(Set(names).count, LoadingThemeToken.allCases.count)
         XCTAssertEqual(names, [
             "LoadingBackground", "LoadingPrimary", "LoadingAccent", "LoadingText",
             "LoadingSecondaryText", "LoadingButtonBackground", "LoadingButtonText",
         ])
-        for name in names { XCTAssertNotNil(UIColor(named: name), "Missing semantic color asset \(name)") }
-    }
-
-    func testRosewoodThemeMapsEverySemanticRoleToOneNamedColorAsset() {
-        let names = LoadingThemeToken.allCases.map {
-            LoadingThemePalette.assetName(for: $0, identifier: .rosewood)
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            for name in names {
+                XCTAssertNotNil(UIColor(named: name, in: .main, compatibleWith: traits), "Missing semantic color asset \(name)")
+            }
         }
-
-        XCTAssertEqual(Set(names).count, LoadingThemeToken.allCases.count)
-        XCTAssertEqual(names, [
-            "RosewoodLoadingBackground", "RosewoodLoadingPrimary", "RosewoodLoadingAccent", "RosewoodLoadingText",
-            "RosewoodLoadingSecondaryText", "RosewoodLoadingButtonBackground", "RosewoodLoadingButtonText",
-        ])
-        for name in names { XCTAssertNotNil(UIColor(named: name), "Missing semantic color asset \(name)") }
     }
 
     func testAppearanceModesMapToExpectedInterfaceStyles() {

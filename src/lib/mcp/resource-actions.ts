@@ -24,7 +24,6 @@ const actionGuidance: Record<string, Record<string, string>> = {
   },
   inbox: { mark_processed: "Marks the capture processed and records processing time; no content is converted or copied elsewhere.", archive: "Retains the capture with archived lifecycle; no conversion.", restore: "Returns the capture to pending inbox state; does not restore a permanently deleted capture." },
   task: { complete: "Marks Task done, records completion and reconciles owned reminders; this is not merely acknowledging a notification.", reopen: "Returns Task to open, clears completion and reconciles owned reminders; check existing Due/reminder configuration." },
-  lucius_case: { record_recurrence: "Records another actual recurrence atomically, including same-day recurrence. Defaults occurred_date to today's EvaOrbit date; cannot precede latest occurrence. Increments count, updates interval/dates and resets consecutive correct count. Not idempotent; do not retry blindly after uncertain success." },
   relation_person: { archive: "Retains person/events/notes and hides the profile from normal active listing; relationship_status is independent.", restore: "Clears profile archive; does not change ended/active relationship status or infer closeness." },
   relation_event: { settle_advance: "id is the advance FLOW id. Creates a linked repayment event, changing settlement balance. Use the outstanding amount from existing data; amount must be positive and cannot exceed unsettled advance. Money is integer fen, not yuan." },
   media: { add_viewing: "Adds a real dated viewing/rewatch to existing Media, affecting derived counts/latest date and setting Media status to completed; do not create duplicate Media.", update_viewing: "Corrects one viewing belonging to this Media; updates derived history summaries.", delete_viewing: "Removes one viewing belonging to this Media and recomputes summaries; the first viewing cannot be deleted (delete Media instead)." },
@@ -85,7 +84,6 @@ export const resourceActionSchemas: Record<string, Record<string, ResourceAction
   },
   inbox: { mark_processed: action(), archive: action(), restore: action() },
   task: { complete: action(), reopen: action() },
-  lucius_case: { record_recurrence: action({ occurred_date: date }, [], "Case with atomically updated recurrence counters and dates.") },
   relation_person: { archive: action(), restore: action() },
   relation_event: {
     settle_advance: {

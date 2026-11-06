@@ -15,6 +15,7 @@ test("SQLite papers are durable, opt-in, deduplicated and atomic with task remin
       import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {DatabaseSync} from 'node:sqlite';
       import {getRepository} from './src/lib/repositories/index.ts';
       import {processEvaPaper} from './src/lib/services/eva.ts';
+      import {createSupabaseEvaStore} from './src/lib/repositories/eva-supabase.ts';
       const repo=await getRepository(),store=repo.eva,sql=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       const task={title:'取快递',notes:'',dueDate:'2026-11-05',dueTime:'15:00',remind:true,review:false,evidence:'明天下午三点提醒我取快递',dateEvidence:'明天',timeEvidence:'下午三点',reminderEvidence:'提醒我'};
       const result={summary:'创建待办',remaining:'',review:false,tasks:[task]};
@@ -40,6 +41,24 @@ test("SQLite papers are durable, opt-in, deduplicated and atomic with task remin
       const original=globalThis.fetch;globalThis.fetch=async(url,init)=>{count++;const body=JSON.parse(init.body);assert.equal(body.tools,undefined);assert.equal(body.messages.length,2);assert.equal(body.stream,false);return Response.json({choices:[{message:{content:JSON.stringify({...result,tasks:[{...task,dueDate:null,dueTime:null,remind:false,evidence:'取快递'}]})}}],usage:{prompt_tokens:120,completion_tokens:50,prompt_cache_hit_tokens:64}});};
       try{await processEvaPaper(fakeRepo,stopped.id);}finally{globalThis.fetch=original;}
       assert.equal(count,1);assert.equal((await store.get(stopped.id)).status,'done');assert.equal((await store.calls())[0].input,120);
+      const successful=await store.latestCall(stopped.id);assert.equal(successful.feedback.stage,'save');assert(successful.feedback.repliedAt);assert(successful.feedback.respondedAt);
+      const rejected=await store.capture(randomUUID(),'取快递',true);globalThis.fetch=async()=>{const active=await store.latestCall(rejected.id);assert.equal(active.feedback.stage,'request');assert.equal(active.feedback.respondedAt,undefined);return Response.json({error:{message:'Invalid Bearer sk-secret-privatekey; fixture credential rejected'}},{status:401,headers:{'x-request-id':'test-request'}});};
+      try{await processEvaPaper(fakeRepo,rejected.id);}finally{globalThis.fetch=original;}
+      const denied=await store.latestCall(rejected.id);assert.equal(denied.feedback.httpStatus,401);assert.equal(denied.feedback.failure.code,'authentication');assert(!denied.feedback.failure.message.includes('fixture'));assert(!denied.feedback.failure.message.includes('sk-secret-privatekey'));assert.equal((await store.get(rejected.id)).status,'failed');
+      const timeout=await store.capture(randomUUID(),'取快递',true);globalThis.fetch=async()=>{throw new DOMException('Request timed out','TimeoutError');};
+      try{await processEvaPaper(fakeRepo,timeout.id);}finally{globalThis.fetch=original;}
+      const timed=await store.latestCall(timeout.id);assert.equal(timed.feedback.failure.code,'timeout');assert.equal(timed.feedback.respondedAt,undefined);
+      const invalid=await store.capture(randomUUID(),'取快递',true);globalThis.fetch=async()=>Response.json({choices:[{message:{content:'not JSON'}}]});
+      try{await processEvaPaper(fakeRepo,invalid.id);}finally{globalThis.fetch=original;}
+      const malformed=await store.latestCall(invalid.id);assert.equal(malformed.feedback.failure.code,'parse');assert(malformed.feedback.repliedAt);assert.equal((await store.get(invalid.id)).status,'failed');
+      const unconfigured=await store.capture(randomUUID(),'取快递',true);let requested=false;globalThis.fetch=async()=>{requested=true;throw Error('must not request');};
+      try{await processEvaPaper({...fakeRepo,getAiRuntimeSettings:async()=>({...runtime,enabled:false})},unconfigured.id);}finally{globalThis.fetch=original;}
+      assert.equal(requested,false);assert.equal((await store.latestCall(unconfigured.id)).feedback.failure.code,'configuration');
+      const remote=createSupabaseEvaStore({rpc:async()=>({error:{code:'22P02',message:'malformed array literal',details:'private database detail'}})});
+      await assert.rejects(remote.finish(key,lease,result),error=>error.databaseCode==='22P02'&&error.message==='malformed array literal');
+      const unsaved=await store.capture(randomUUID(),'取快递',true);globalThis.fetch=async()=>Response.json({choices:[{message:{content:JSON.stringify({...result,tasks:[]})}}]});
+      try{await processEvaPaper({...fakeRepo,eva:{...store,finish:async()=>{throw Object.assign(Error('Database refused fixture credential'),{databaseCode:'22P02'});}}},unsaved.id);}finally{globalThis.fetch=original;}
+      const saveFailure=(await store.latestCall(unsaved.id)).feedback.failure;assert.equal(saveFailure.code,'save');assert.equal(saveFailure.databaseCode,'22P02');assert(saveFailure.message.includes('Database refused'));assert(!saveFailure.message.includes('fixture'));
       sql.close();
     `], { encoding: "utf8", env: { ...process.env, EVAORBIT_DATA_BACKEND: "sqlite", EVAORBIT_SQLITE_PATH: path.join(directory, "test.db"), VERCEL: "" } });
     assert.equal(run.status, 0, run.stderr || run.stdout);
@@ -54,7 +73,7 @@ test("Postgres paper RPC isolates owners and atomically creates task/reminder re
       create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
       set test.uid='${owner}';
       create table inbox_items(id bigserial primary key,user_id uuid,content text,source text,status text default 'inbox',processed_at timestamptz);
-      create table tasks(id bigserial primary key,user_id uuid,title text,notes text,due_date date,due_time time,priority text,tags jsonb,reminder_id bigint);
+      create table tasks(id bigserial primary key,user_id uuid,title text,notes text,due_date date,due_time time,priority text,tags text[] not null default '{}',reminder_id bigint);
       create table task_reminders(id bigserial primary key,user_id uuid,task_id bigint,reminder_id bigint,trigger_type text,relative_to text,offset_minutes int,timezone text,repeat_while_overdue boolean);
       create table reminders(id bigserial primary key,user_id uuid,title text,target_type text,target_id bigint,source_type text,source_id bigint,schedule_type text,starts_at timestamptz,next_due_at timestamptz,timezone text,note text,lead_time_minutes int,repeat_while_overdue boolean,status text,is_active boolean,due_has_explicit_time boolean,overdue_after timestamptz);
       grant usage on schema public,auth to authenticated;grant execute on function auth.uid() to authenticated;
@@ -69,7 +88,13 @@ test("Postgres paper RPC isolates owners and atomically creates task/reminder re
     assert(await command("claim", { id: key, lease: token }));assert.equal(await command("claim", { id: key, lease: randomUUID() }), null);
     const task = { title: "取快递", notes: "", dueDate: "2026-11-05", dueTime: "15:00", remind: true, review: false };
     const result = { summary: "创建待办", remaining: "", review: false, tasks: [task] };
+    await assert.rejects(command("finish", { id: key, lease: token, result }), /malformed array literal/);
+    assert.equal((await db.query("select count(*)::int as n from tasks")).rows[0].n, 0, "failed result is fully rolled back");
+    await db.exec("reset role");
+    await db.exec(readFileSync("supabase/migrations/202611050001_eva_task_tags_default.sql", "utf8"));
+    await db.exec("set role authenticated");
     const done = await command("finish", { id: key, lease: token, result });assert.equal(done.status, "done");
+    assert.deepEqual((await db.query("select tags from tasks")).rows[0].tags, [], "task uses the real Postgres text-array default");
     assert.equal((await db.query("select count(*)::int as n from tasks")).rows[0].n, 1);
     const reminders = (await db.query("select * from reminders")).rows;assert.equal(reminders.length, 1);assert.equal(new Date(reminders[0].next_due_at).toISOString(), "2026-11-05T07:00:00.000Z");
     await assert.rejects(command("finish", { id: key, lease: token, result }), /EVA_LEASE/);

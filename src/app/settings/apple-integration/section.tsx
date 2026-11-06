@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import { ErrorNotice } from "@/components/error-notice";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -49,9 +50,9 @@ export function AppleIntegrationSection({readOnly=false}:{readOnly?:boolean}={})
         <Permission title={title} permission={permission} disabled={busy} onRequest={()=>void request(kind)}/>
         <div className="apple-health-actions"><button className="button secondary" disabled={busy||!granted||(!selected.length&&!routeCount)} onClick={()=>void sync(kind)}>{syncing===kind?"Syncing…":`Sync ${title}`}</button><small>{current?.lastSync?`Last round ${new Date(current.lastSync).toLocaleString()}`:!selected.length&&!routeCount?"Choose sync sources to begin":"Ready to sync"}</small></div>
         {current?.error&&<ErrorNotice inline>{`${title}：${current.error}`}</ErrorNotice>}{current?.diagnostic&&<p className="apple-health-fallback" role="status">{current.diagnostic}</p>}
-        <details className="eventkit-preferences"><summary><strong>{title} sync settings</strong><span>{selected.length?selected.map(source=>source.title).join(" · "):"No sources selected"}{routeCount?` · ${routeCount} EO routes`:""}</span></summary>
+        <Disclosure className="eventkit-preferences" title={`${title} sync settings`} description={`${selected.length ? selected.map(source=>source.title).join(" · ") : "No sources selected"}${routeCount ? ` · ${routeCount} EO routes` : ""}`}>
           <Sources disabled={busy} kind={kind} items={items} modes={modes} onMode={(source,mode)=>setMode(kind,source,mode)}/>{kind==="reminder"&&<DomainRoutes disabled={busy} items={status.reminderLists} routes={routes} onRoute={setRoute}/>}
-        </details>
+        </Disclosure>
       </div>;
     })}
     {preferenceNotice&&<p className="apple-health-fallback" role="status">{preferenceNotice}</p>}{diagnostic&&<p className="apple-health-fallback" role="status">{diagnostic}</p>}{error&&<ErrorNotice>{error}</ErrorNotice>}{message&&<ToastNotice message={message} onShown={() => setMessage("")} />}<div className="apple-health-actions"><button className="button primary" disabled={busy} onClick={()=>void sync("all")}>{syncing?"Syncing…":"Sync all"}</button><small>{lastSync?`Last sync round ${new Date(lastSync).toLocaleString()}`:"No sync result yet"}</small></div>

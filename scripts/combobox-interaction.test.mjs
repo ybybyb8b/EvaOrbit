@@ -47,6 +47,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name.endsWith("food-consumption-fields")) return { FoodConsumptionFields: "consumption-fields", consumptionFromItem: load("src/app/food/food-consumption-fields.tsx").consumptionFromItem };
       if (name.endsWith("native-bridge")) return { reconcileNativeNotifications: async () => {} };
       if (name.endsWith("form-sheet")) return { FormSheet: "sheet" };
+      if (name.endsWith("disclosure")) return { Disclosure: "disclosure" };
       if (name.endsWith("action-toast")) return { showActionToast() {} };
       if (name.endsWith("error-notice")) return { ErrorNotice: "error-notice" };
       if (name.endsWith("icons")) return { Icon: "icon" };

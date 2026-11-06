@@ -35,6 +35,7 @@ test("Day capsules only preview; switching requires an explicit action and confi
     if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: false }) };
     if (name.endsWith("bottom-log-core")) return { PageLogAction: "log-action" };
     if (name.endsWith("form-sheet")) return {FormSheet:"form-sheet"};
+    if (name.endsWith("disclosure")) return {Disclosure:"disclosure"};
     if (name.endsWith("icons")) return { Icon: "icon" };
     if (name.endsWith("date-time-field")) return { compactDateTimeValue: () => "" };
     if (name.endsWith("time")) return { dateInEvaOrbit: () => "2026-10-15", shiftDate: value => value };

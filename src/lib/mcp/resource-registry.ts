@@ -12,11 +12,11 @@ import { documentedFields, resourceGuidance } from "./resource-guidance.ts";
 import { reminderSourceDefinition } from "../reminder-source-registry.ts";
 import type { CalendarEvent } from "../types.ts";
 import { parseCalendarEventPatch, parseNewCalendarEvent } from "../validation.ts";
-import type { CatRecordKind, CatRoutine, CatTimelineEntry, ChronicleEntry, DrinkLimit, FoodDish, FoodPlace, FoodLibraryItem, HealthRecord, InboxItem, InboxStatus, LuciusCase, LuciusCaseErrorType, LuciusCaseSeverity, LuciusCaseStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MediaDetail, MediaListItem, Memo, MemoStatus, MemoType, MemoryEntity, MemoryEntityDetail, MemoryEntityMergeResult, MemoryFact, MemoryFactDetail, MemorySource, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary, Reminder, Subscription, SubscriptionDetail, SubscriptionPayment, Task, Tracker, TrackerSummary, TrainingLog } from "../types.ts";
+import type { CatRecordKind, CatRoutine, CatTimelineEntry, ChronicleEntry, DrinkLimit, FoodDish, FoodPlace, FoodLibraryItem, HealthRecord, InboxItem, InboxStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MediaDetail, MediaListItem, Memo, MemoStatus, MemoType, MemoryEntity, MemoryEntityDetail, MemoryEntityMergeResult, MemoryFact, MemoryFactDetail, MemorySource, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, RelationEvent, RelationPerson, RelationPersonSummary, Reminder, Subscription, SubscriptionDetail, SubscriptionPayment, Task, Tracker, TrackerSummary, TrainingLog } from "../types.ts";
 import { parseCatRecord, parseCatRoutine, parsePet, parsePetPatch, parseReminder } from "../cats-validation.ts";
 import { parseMemoryNote,parseRelationEvent,parseRelationPerson,parseRelationPersonPatch,parseSettleAdvance } from "../relations-validation.ts";
 import { memoryUuid, parseMemoryEntityPatch, parseMemoryEntitySearch, parseMemoryFactPatch, parseMemoryFactSearch, parseMemorySourcePatch, parseNewMemoryEntity, parseNewMemoryFact, parseNewMemorySource } from "../memory-graph-validation.ts";
-import { dateOnly, parseChronicleEntryPatch, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodPlace, parseFoodPlacePatch, parseHealthRecordPatch, parseInboxPatch, parseLuciusCasePatch, parseLuciusDiaryPatch, parseLuciusPostCommentPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMediaPatch, parseMediaSeries, parseMediaViewing, parseMemoPatch, parseNewChronicleEntry, parseNewHealthRecord, parseNewInbox, parseNewLuciusCase, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewLuciusPostComment, parseNewMedia, parseNewMemo, parseNewProject, parseNewProjectItem, parseNewSubscription, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseNewTrainingLog, parseProjectItemPatch, parseProjectPatch, parseSubscriptionPatch, parseSubscriptionPayment, parseTaskPatch, parseTrackerEntryPatch, parseTrackerPatch, parseTrainingLogPatch, ValidationError } from "../validation.ts";
+import { dateOnly, parseChronicleEntryPatch, parseDrinkLimit, parseFoodDish, parseFoodDishPatch, parseFoodPlace, parseFoodPlacePatch, parseHealthRecordPatch, parseInboxPatch, parseLuciusDiaryPatch, parseLuciusPostCommentPatch, parseLuciusPostPatch, parseLuciusStatePatch, parseMediaPatch, parseMediaSeries, parseMediaViewing, parseMemoPatch, parseNewChronicleEntry, parseNewHealthRecord, parseNewInbox, parseNewLuciusDiaryEntry, parseNewLuciusPost, parseNewLuciusPostComment, parseNewMedia, parseNewMemo, parseNewProject, parseNewProjectItem, parseNewSubscription, parseNewTask, parseNewTracker, parseNewTrackerEntry, parseNewTrackerField, parseNewTrackerGoal, parseNewTrackerReminder, parseNewTrainingLog, parseProjectItemPatch, parseProjectPatch, parseSubscriptionPatch, parseSubscriptionPayment, parseTaskPatch, parseTrackerEntryPatch, parseTrackerPatch, parseTrainingLogPatch, ValidationError } from "../validation.ts";
 
 export type ResourceId = string | number;
 export type ResourceCapability = "search" | "get" | "create" | "update" | "delete" | "action";
@@ -123,15 +123,6 @@ export type LuciusDiaryResourceOperations = {
   delete(id: number): Promise<boolean>;
 };
 
-export type LuciusCaseResourceOperations = {
-  search(input: { query?: string; errorType?: LuciusCaseErrorType; severity?: LuciusCaseSeverity; status?: LuciusCaseStatus; currentOnly?: boolean; limit?: number }): Promise<LuciusCase[]>;
-  get(id: number): Promise<LuciusCase | null>;
-  create(input: Omit<LuciusCase, "id" | "createdAt" | "updatedAt">): Promise<LuciusCase>;
-  update(id: number, input: Partial<Omit<LuciusCase, "id" | "createdAt" | "updatedAt">>): Promise<LuciusCase | null>;
-  delete(id: number): Promise<boolean>;
-  recordRecurrence(id: number, occurredDate?: string): Promise<LuciusCase | null>;
-};
-
 export type LuciusStateResourceOperations = {
   get(): Promise<LuciusState>;
   update(input: Partial<Pick<LuciusState, "status" | "mood">>): Promise<LuciusState>;
@@ -160,7 +151,6 @@ export type ResourceRegistryOperations = {
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   luciusDiary: LuciusDiaryResourceOperations;
-  luciusCase: LuciusCaseResourceOperations;
   luciusState: LuciusStateResourceOperations;
   project: ProjectResourceOperations;
   projectItem: ProjectItemResourceOperations;
@@ -382,7 +372,7 @@ function taskResource(operations: TaskResourceOperations): RegisteredResource {
 function calendarEventRecord(item:CalendarEvent):ResourceRecord{return{id:item.id,title:item.title,notes:item.notes,start_at:item.startAt,end_at:item.endAt,is_all_day:item.isAllDay,timezone:item.timezone,location:item.location,status:item.status,created_at:item.createdAt,updated_at:item.updatedAt};}
 function calendarEventResource(operations:CalendarEventResourceOperations):RegisteredResource{const writable=["title","notes","start_at","end_at","is_all_day","timezone","location","status"],map={title:"title",notes:"notes",start_at:"startAt",end_at:"endAt",is_all_day:"isAllDay",timezone:"timezone",location:"location",status:"status"};return{schema:{resource:"calendar_event",description:"Faithful structured calendar events synchronized with selected Apple calendars.",fields:{id:{type:"integer",description:"Stable EvaOrbit identifier.",read_only:true},title:{type:"string",max_length:300,description:"Event title, preserved verbatim."},notes:{type:"string",max_length:10000,description:"Event notes."},start_at:{type:"string",description:"ISO date-time for timed events or YYYY-MM-DD for all-day events."},end_at:{type:"string",description:"Exclusive end boundary."},is_all_day:{type:"boolean",description:"Whether boundaries use date-only semantics."},timezone:{type:"string",description:"IANA timezone for timed events."},location:{type:"string",max_length:1000,description:"Event location."},status:{type:"string",enum:["confirmed","tentative","cancelled"],description:"Calendar event status."},created_at:{type:"string",format:"date-time",description:"Creation timestamp.",read_only:true},updated_at:{type:"string",format:"date-time",description:"Update timestamp.",read_only:true}},required_fields:["title","start_at","end_at","is_all_day"],writable_fields:writable,searchable_fields:["title","notes","location","status"],supported_actions:[],validation_rules:["all-day boundaries are date-only and end is exclusive","timed boundaries are ISO date-times","end_at must be later than start_at","content is not classified or rewritten"]},async search({query,filters={},limit,cursor}){assertOnlyKeys(filters,["from","to","status"],"calendar_event search filters");rejectCursor(cursor,"Calendar event");const status=filterEnum(filters.status,["confirmed","tentative","cancelled"] as const,"status");const items=await operations.search({query,from:typeof filters.from==="string"?filters.from:undefined,to:typeof filters.to==="string"?filters.to:undefined,status,limit});return{items:items.map(calendarEventRecord),next_cursor:null};},async get(id){const item=await operations.get(numericId(id,"Calendar event"));if(!item)throw new ConflictError("Calendar event not found.");return calendarEventRecord(item);},async create(data){assertOnlyKeys(data,writable,"calendar_event create");return calendarEventRecord(await operations.create(parseNewCalendarEvent(mappedInput(data,map))));},async update(id,data){assertOnlyKeys(data,writable,"calendar_event update");const item=await operations.update(numericId(id,"Calendar event"),parseCalendarEventPatch(mappedInput(data,map)));if(!item)throw new ConflictError("Calendar event not found.");return calendarEventRecord(item);},async delete(id){const numeric=numericId(id,"Calendar event");if(!await operations.delete(numeric))throw new ConflictError("Calendar event not found.");return{deleted:true,id:numeric};}};}
 
-function migrationRecord(item: Memo | LuciusDiaryEntry | LuciusCase) {
+function migrationRecord(item: Memo | LuciusDiaryEntry) {
   return { source_system: item.sourceSystem, source_id: item.sourceId, source_url: item.sourceUrl, imported_at: item.importedAt };
 }
 
@@ -406,10 +396,6 @@ function projectItemResource(operations:ProjectItemResourceOperations):Registere
 
 function luciusDiaryRecord(item: LuciusDiaryEntry): ResourceRecord {
   return { id: item.id, date: item.date, content: item.content, tags: item.tags, ...migrationRecord(item), created_at: item.createdAt, updated_at: item.updatedAt };
-}
-
-function luciusCaseRecord(item: LuciusCase): ResourceRecord {
-  return { id: item.id, title: item.title, error_type: item.errorType, severity: item.severity, status: item.status, trigger_scenes: item.triggerScenes, error_quote: item.errorQuote, cause: item.cause, correct_behavior: item.correctBehavior, mandatory_rule: item.mandatoryRule, next_check: item.nextCheck, punishment: item.punishment, first_occurred_date: item.firstOccurredDate, latest_occurred_date: item.latestOccurredDate, occurrence_count: item.occurrenceCount, consecutive_correct_count: item.consecutiveCorrectCount, recurrence_interval_days: item.recurrenceIntervalDays, is_recurrence: item.isRecurrence, reset_threshold: item.resetThreshold, ...migrationRecord(item), created_at: item.createdAt, updated_at: item.updatedAt };
 }
 
 function luciusStateRecord(item: LuciusState): ResourceRecord {
@@ -575,38 +561,6 @@ function luciusDiaryResource(operations: LuciusDiaryResourceOperations): Registe
     async create(data) { assertOnlyKeys(data, writableFields, "lucius_diary create"); return luciusDiaryRecord(await operations.create(parseNewLuciusDiaryEntry(mappedInput(data, inputMap)))); },
     async update(resourceId, data) { assertOnlyKeys(data, writableFields, "lucius_diary update"); const item = await operations.update(numericId(resourceId, "Lucius Diary"), definedValues(parseLuciusDiaryPatch(mappedInput(data, inputMap)))); if (!item) throw new ConflictError("Lucius Diary entry not found."); return luciusDiaryRecord(item); },
     async delete(resourceId) { const id = numericId(resourceId, "Lucius Diary"); if (!await operations.delete(id)) throw new ConflictError("Lucius Diary entry not found."); return { deleted: true, id }; },
-  };
-}
-
-function luciusCaseResource(operations: LuciusCaseResourceOperations): RegisteredResource {
-  const writableFields = ["title", "error_type", "severity", "status", "trigger_scenes", "error_quote", "cause", "correct_behavior", "mandatory_rule", "next_check", "punishment", "first_occurred_date", "latest_occurred_date", "occurrence_count", "consecutive_correct_count", "recurrence_interval_days", "is_recurrence", "reset_threshold", ...migrationWritableFields];
-  const inputMap = { title: "title", error_type: "errorType", severity: "severity", status: "status", trigger_scenes: "triggerScenes", error_quote: "errorQuote", cause: "cause", correct_behavior: "correctBehavior", mandatory_rule: "mandatoryRule", next_check: "nextCheck", punishment: "punishment", first_occurred_date: "firstOccurredDate", latest_occurred_date: "latestOccurredDate", occurrence_count: "occurrenceCount", consecutive_correct_count: "consecutiveCorrectCount", recurrence_interval_days: "recurrenceIntervalDays", is_recurrence: "isRecurrence", reset_threshold: "resetThreshold", ...migrationInputMap };
-  return {
-    schema: {
-      resource: "lucius_case",
-      description: "Lucius correction and recurrence case records. Use record_recurrence instead of calculating recurrence counters client-side.",
-      fields: {
-        id: { type: "integer", description: "Stable case identifier.", read_only: true }, title: { type: "string", max_length: 300, description: "Case name." },
-        error_type: { type: "string", enum: ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"], description: "Error classification." },
-        severity: { type: "string", enum: ["minor", "moderate", "serious", "habitual"], default: "moderate", description: "Case severity." },
-        status: { type: "string", enum: ["serving", "probation", "temporary_release", "permanent_record"], default: "serving", description: "Case status." },
-        trigger_scenes: { type: "array", items: { type: "string" }, description: "Scenes that trigger this error." }, error_quote: { type: "string", max_length: 10000, description: "Original erroneous wording." },
-        cause: { type: "string", max_length: 20000, description: "Root cause." }, correct_behavior: { type: "string", max_length: 20000, description: "Expected correct behavior." }, mandatory_rule: { type: "string", max_length: 20000, description: "Mandatory rule." },
-        next_check: { type: "string", format: "date", description: "Optional next review date." }, punishment: { type: "string", max_length: 10000, description: "Optional consequence or corrective task." },
-        first_occurred_date: { type: "string", format: "date", description: "First occurrence date." }, latest_occurred_date: { type: "string", format: "date", description: "Latest occurrence date." },
-        occurrence_count: { type: "integer", default: 1, description: "Total occurrences." }, consecutive_correct_count: { type: "integer", default: 0, description: "Consecutive correct interactions." }, recurrence_interval_days: { type: "integer", description: "Days between the two latest occurrences; null for same-day recurrence." }, is_recurrence: { type: "boolean", default: false, description: "Whether recurrence has been recorded." }, reset_threshold: { type: "integer", default: 3, description: "Correct streak threshold." },
-        ...migrationFields(), created_at: { type: "string", format: "date-time", description: "Server-assigned creation timestamp.", read_only: true }, updated_at: { type: "string", format: "date-time", description: "Server-assigned update timestamp.", read_only: true },
-      },
-      required_fields: ["title", "error_type", "cause", "correct_behavior", "mandatory_rule", "first_occurred_date"], writable_fields: writableFields,
-      searchable_fields: ["title", "cause", "mandatory_rule"], supported_actions: ["record_recurrence"],
-      validation_rules: ["search filters accept error_type, severity, status, and current_only", "latest_occurred_date cannot be earlier than first_occurred_date", "record_recurrence accepts optional data.occurred_date and atomically updates recurrence state", "do not send occurrence_count or other derived recurrence values to record_recurrence", "update is PATCH: omitted fields remain unchanged", "unknown fields are rejected"],
-    },
-    async search({ query, filters = {}, limit, cursor }) { assertOnlyKeys(filters, ["error_type", "severity", "status", "current_only"], "lucius_case search filters"); rejectCursor(cursor, "Lucius Case"); if (filters.current_only !== undefined && typeof filters.current_only !== "boolean") throw new ValidationError("current_only filter is invalid."); return { items: (await operations.search({ query, errorType: filterEnum(filters.error_type, ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"] as const, "error_type"), severity: filterEnum(filters.severity, ["minor", "moderate", "serious", "habitual"] as const, "severity"), status: filterEnum(filters.status, ["serving", "probation", "temporary_release", "permanent_record"] as const, "status"), currentOnly: filters.current_only as boolean | undefined, limit })).map(luciusCaseRecord), next_cursor: null }; },
-    async get(resourceId) { const item = await operations.get(numericId(resourceId, "Lucius Case")); if (!item) throw new ConflictError("Lucius Case not found."); return luciusCaseRecord(item); },
-    async create(data) { assertOnlyKeys(data, writableFields, "lucius_case create"); return luciusCaseRecord(await operations.create(parseNewLuciusCase(mappedInput(data, inputMap)))); },
-    async update(resourceId, data) { assertOnlyKeys(data, writableFields, "lucius_case update"); const item = await operations.update(numericId(resourceId, "Lucius Case"), definedValues(parseLuciusCasePatch(mappedInput(data, inputMap)))); if (!item) throw new ConflictError("Lucius Case not found."); return luciusCaseRecord(item); },
-    async delete(resourceId) { const id = numericId(resourceId, "Lucius Case"); if (!await operations.delete(id)) throw new ConflictError("Lucius Case not found."); return { deleted: true, id }; },
-    async action({ id, action, data }) { if (action !== "record_recurrence") throw new ValidationError(`lucius_case does not support action: ${action}.`); if (id === undefined) throw new ValidationError("record_recurrence requires a case id."); assertOnlyKeys(data, ["occurred_date"], "lucius_case record_recurrence"); const occurredDate = data.occurred_date === undefined ? undefined : dateOnly(data.occurred_date, "复发日期"); const item = await operations.recordRecurrence(numericId(id, "Lucius Case"), occurredDate); if (!item) throw new ConflictError("Lucius Case not found."); return luciusCaseRecord(item); },
   };
 }
 
@@ -1216,7 +1170,6 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
     memoResource(operations.memo),
     chronicleResource(operations.chronicle),
     luciusDiaryResource(operations.luciusDiary),
-    luciusCaseResource(operations.luciusCase),
     luciusStateResource(operations.luciusState),
     projectResource(operations.project),
     projectItemResource(operations.projectItem),

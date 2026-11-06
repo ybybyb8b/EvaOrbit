@@ -1,4 +1,5 @@
 "use client";
+import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { invalidateClientData } from "@/lib/client-data-cache";
@@ -208,7 +209,7 @@ export function AiChatView({ initialPrompt, initialSessionId, autoSend }: { init
           </article>; })}{toolActivity.length > 0 && <div className="tool-activity"><span className="tool-icon"><Icon name="check" /></span><div><strong>刚刚动了这些</strong>{toolActivity.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}</div></div>}<div ref={bottomRef} /></div>}
         </section>
         <footer className="composer-wrap">
-          {error && <div className="chat-error">{error}<button onClick={() => setError("")}>×</button></div>}
+          {error && <div className="chat-error"><ErrorNotice inline as="span">{error}</ErrorNotice><button type="button" onClick={() => setError("")}>×</button></div>}
           <div className="composer-shortcuts"><button onClick={() => setDraft("看看今天的吃喝记录")}>看今天</button><button onClick={() => setDraft("帮我记下刚刚喝的：")}>记饮品</button><button onClick={() => setDraft("先放进 Inbox：")}>放 Inbox</button><span>{settings.allowWriteActions ? "可以写入" : "只看不改"}</span></div>
           <div className="composer"><textarea rows={1} maxLength={20000} value={draft} disabled={streaming} onKeyDown={keyboardSend} onChange={(event) => setDraft(event.target.value)} placeholder="想到什么就写…" />{streaming ? <button className="send-button stop" onClick={() => abortRef.current?.abort()} aria-label="停一下">■</button> : <button className="send-button" disabled={!draft.trim()} onClick={() => void send()} aria-label="发出去"><Icon name="arrow" /></button>}</div>
           <div className="composer-foot"><span>Timeline 与生活数据按需读取</span><small>重要的还是自己确认一下</small></div>

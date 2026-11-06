@@ -1,5 +1,11 @@
 # EvaOrbit iOS Native Host 维护契约
 
+主 Host 和原生集成设置共用 `HostWebView`。它通过 UIKit 的 `inputAccessoryView` 提供零高度附件，移除 WebKit 表单的上下箭头和「完成」工具栏。收起键盘继续使用输入法自身的控件。此改动需要重建并安装 IPA，须在 iPhone 上验证软键盘、候选栏及输入法收起操作。
+
+Hermes Bark 点击通过既有深链解析器，精确新增 `/ai` 页面白名单并保留对话 UUID 查询参数；不新增 Bridge、权限、framework 或 entitlement，原安装签名链不变。需重建本地 Host；Windows SQL、Node 与插件检查不替代 Swift XCTest 和真机推送点击验收。
+
+Hermes 接入仅在共享 `business-routes.json` 增加精确 GET/POST `/api/hermes`，本地 React 复用 Web 消息界面。沿用既有账户绑定 `business.request`，不增加 Bridge 方法、权限、framework、entitlement、签名能力或设备离线写队列。Hermes 在电脑运行，本地包不执行 Agent。需先迁移并发布 Web/API，再重建本地包；旧 IPA 不支持新消息路径。Windows 模拟和 Python 插件验证不替代 macOS／iPhone 验收，见 [Hermes 通道](HERMES_CHANNEL.md)。
+
 Eva 纸条后台在本地 React 复用 Web 表单与工作台；安装包 `business-routes.json` 增加精确 GET／POST `/api/eva`，通过既有账户绑定 `business.request` 在线保存和读取。AI 只在服务器执行，不增加设备后台能力、离线队列、Bridge 方法、权限、framework、entitlement 或改变签名链。旧 IPA 不支持新路径；先迁移／发布 API，再更新本地包。Windows 合成账户和模拟 Provider 不替代真实模型与 iPhone 验收。详见 [Eva 后台](EVA_WORKBENCH.md)。
 
 Project Ideas 使用既有 `project_items.status=idea`；`TrackerLocalDatabase` 的 Workspace 缓存白名单接受该状态，并单独校验 `ideaCount`，旧缓存缺少该字段时按零兼容。没有新增 Bridge 方法、协议、权限、framework、entitlement 或业务队列。先应用 Project 状态约束迁移并发布 Web/API，再按原链路重建本地 IPA；旧 IPA 遇到含 Ideas 的新快照会拒绝并保留此前缓存。Windows 的 Node/浏览器回归不替代 Swift XCTest 和 iPhone 16 Pro 验收。
@@ -376,7 +382,7 @@ Swift 新方法需要按现有链路构建新 IPA，兼容 Web 可先部署并�
 - 方法必须同时加入 Swift 白名单并实现显式参数校验。
 - Web 必须先通过 `host.getInfo` 的 `methods`/capabilities 做向后兼容检测，旧 IPA 不应因 Web 更新而报错。
 - Swift 返回结构化成功/错误，不把 secret、系统原始错误体或设备标识送回 Web。
-- 原生开屏只有浅色与深色两种外观，不跟随 Web 颜色主题。Web 调用旧版 Host 的 `appearance.setPreference` 时固定传入兼容的 `editorial` 启动标识，避免 `rosewood / powderblue` 等页面主题连带阻断 `system / light / dark` 的窗口外观切换；Web 页面仍保留真实颜色主题。
+- 原生开屏使用 Vintage 浅深色资源。Bridge v1 的 `appearance.setPreference` 只读取并返回 `appearanceMode`，界面切换不再关联颜色主题。新版 Web 在旧 Host 中仍会显示 Vintage，旧 Host 的窗口模式同步需要重建 IPA 后生效。
 - HealthKit credential 配置继续限制 credential 最短长度、同源 HTTPS ingest URL 和固定 API path。
 - Native 权限调用必须由可见的用户操作触发；bridge ready 或 App launch 只允许读状态、恢复已有后台能力或 reconcile 已获授权的项目。
 

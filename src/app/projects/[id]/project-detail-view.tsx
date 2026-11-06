@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "@/components/disclosure";
 import {useWorkspaceData,WorkspaceLink as Link} from "@/components/workspace-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
@@ -48,11 +49,11 @@ export function ProjectDetailView({initialProject,initialItems}:{initialProject:
       <span className="project-filter-count" role="status">{filteredItems.length} Items</span>
     </div>
     {view==="modules" ? <div className="project-module-groups">{moduleGroups.length ? moduleGroups.map(group=><div className="project-module-group" key={group.name}>
-      <details open={Boolean(moduleFilter)}><summary><Icon name="chevronDown"/><strong>{group.name||"No module"}</strong><span>{group.items.length} Items</span></summary>
+      <Disclosure defaultOpen={Boolean(moduleFilter)} key={moduleFilter} title={group.name || "No module"} trailing={`${group.items.length} Items`}>
         <div className="project-module-content"><button type="button" className="text-button project-module-add" onClick={()=>newItem(group.name)}><Icon name="plus"/>Add Item</button>
-        {group.categories.map(category=>category.name ? <details className="project-category-group" key={category.name} open><summary><Icon name="chevronDown"/><strong>{category.name}</strong><span>{category.items.length}</span></summary><div className="project-item-list">{category.items.map(item=><ItemRow key={item.id} item={item} grouped/>)}</div><button type="button" className="text-button project-module-add" onClick={()=>newItem(`${group.name} / ${category.name}`)}><Icon name="plus"/>Add Item</button></details> : <div className="project-item-list" key="">{category.items.map(item=><ItemRow key={item.id} item={item}/>)}</div>)}
+        {group.categories.map(category=>category.name ? <Disclosure className="project-category-group" key={category.name} defaultOpen title={category.name} trailing={category.items.length}><div className="project-item-list">{category.items.map(item=><ItemRow key={item.id} item={item} grouped/>)}</div><button type="button" className="text-button project-module-add" onClick={()=>newItem(`${group.name} / ${category.name}`)}><Icon name="plus"/>Add Item</button></Disclosure> : <div className="project-item-list" key="">{category.items.map(item=><ItemRow key={item.id} item={item}/>)}</div>)}
         </div>
-      </details>
+      </Disclosure>
     </div>) : <p className="project-empty-line">No Items match these filters.</p>}</div> : view==="list" ? <div className="project-item-list">{filteredItems.length ? filteredItems.map(item=><ItemRow key={item.id} item={item}/>) : <p className="project-empty-line">No Items match these filters.</p>}</div> : <>
     <section className="project-section"><div className="section-heading"><div><span className="eyebrow">NOW</span><h2>Current Focus</h2></div><small>{groups.focus.length}</small></div>{groups.focus.length?<div className="project-item-list focus">{groups.focus.map(i=><ItemRow item={i} key={i.id}/>)}</div>:<p className="project-empty-line">Nothing is actively moving or blocked.</p>}</section>
     <div className="project-columns"><section className="project-section"><div className="section-heading"><div><span className="eyebrow">QUEUE</span><h2>To Solve</h2></div><small>{groups.open.length}</small></div>{groups.open.length?<div className="project-item-list">{groups.open.map(i=><ItemRow item={i} key={i.id}/>)}</div>:<p className="project-empty-line">The queue is clear.</p>}</section><section className="project-section"><div className="section-heading"><div><span className="eyebrow">RECENT</span><h2>Recently Solved</h2></div><small>{groups.solved.length}</small></div>{groups.solved.length?<div className="project-item-list">{groups.solved.map(i=><ItemRow item={i} key={i.id}/>)}</div>:<p className="project-empty-line">No completed work yet.</p>}</section></div>

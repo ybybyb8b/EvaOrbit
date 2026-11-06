@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import styles from "./food-delete-action.module.css";
@@ -35,7 +36,7 @@ export function FoodDeleteAction({ label, description, onDelete, disabled = fals
     <button ref={trigger} type="button" className={`${styles.trigger} ${iconOnly ? styles.iconOnly : ""} danger`} disabled={disabled || pending} aria-expanded={confirming} onClick={() => { setError(""); setConfirming(true); }}><Icon name="trash"/><span className={iconOnly ? "sr-only" : undefined}>{label}</span></button>
     {confirming && <div ref={confirmation} className={styles.confirm} role="group" aria-label={label} aria-describedby={descriptionId}>
       <p id={descriptionId}>{description}</p>
-      {error && <p role="alert">{error}</p>}
+      {error && <ErrorNotice inline>{error}</ErrorNotice>}
       <div className={styles.actions}>
         <button type="button" disabled={disabled || pending} onClick={() => { setConfirming(false); trigger.current?.focus(); }}>取消删除</button>
         <button type="button" className="danger" disabled={disabled || pending} onClick={() => void remove()}>{pending ? "正在删除…" : "确认删除"}</button>

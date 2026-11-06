@@ -19,7 +19,11 @@ test("retired state notes are deleted and Lucius activity pushes follow saved ch
     run('import "./src/lib/db.ts";');
     const old = new DatabaseSync(databasePath);
     old.exec(`ALTER TABLE lucius_state ADD COLUMN current_note TEXT NOT NULL DEFAULT '';
-      DELETE FROM migrations WHERE version=72;
+      DELETE FROM migrations WHERE version IN (72, 98);
+      CREATE TABLE lucius_cases(id INTEGER PRIMARY KEY, title TEXT);
+      INSERT INTO lucius_cases VALUES(1, 'retired case');
+      CREATE TABLE migration_import_ledger(resource TEXT);
+      INSERT INTO migration_import_ledger VALUES('lucius_case'), ('lucius_diary');
       INSERT INTO lucius_state(user_id,current_note,status,mood) VALUES('local','old private note','reading','🌙');`);
     old.close();
     run(`
@@ -32,6 +36,8 @@ test("retired state notes are deleted and Lucius activity pushes follow saved ch
       import { DatabaseSync } from "node:sqlite";
       const connection = new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
       assert.equal(connection.prepare("PRAGMA table_info(lucius_state)").all().some(row => row.name === "current_note"), false);
+      assert.equal(connection.prepare("SELECT 1 FROM sqlite_master WHERE name='lucius_cases'").get(), undefined);
+      assert.deepEqual(connection.prepare("SELECT resource FROM migration_import_ledger").all().map(row => row.resource), ["lucius_diary"]);
       connection.close();
       assert.equal(db.getLuciusState().status, "reading");
       assert.equal(db.getLuciusState().mood, "🌙");

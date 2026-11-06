@@ -1,4 +1,5 @@
 "use client";
+import { Disclosure } from "./disclosure";
 
 import { useLocale } from "./locale-controller";
 
@@ -10,11 +11,11 @@ export function ExpenseItemsInput({ value, onValueChange }: { value: string; onV
   }
   return <div className="expense-items-input">
     {rows.map((row, index) => <div className="expense-item-row" key={index}>
-      <input aria-label={`${english ? "Item" : "项目"} ${index + 1}`} placeholder={english ? "Item" : "项目名称"} value={row.label} onChange={event => update(index, "label", event.target.value)} />
-      <input aria-label={`${english ? "Amount" : "金额"} ${index + 1}`} inputMode="decimal" placeholder="CNY" value={row.amount} onChange={event => update(index, "amount", event.target.value)} />
+      <label className="field"><input aria-label={`${english ? "Item" : "项目"} ${index + 1}`} placeholder={english ? "Item" : "项目名称"} value={row.label} onChange={event => update(index, "label", event.target.value)} /></label>
+      <label className="field"><input aria-label={`${english ? "Amount" : "金额"} ${index + 1}`} inputMode="decimal" placeholder="CNY" value={row.amount} onChange={event => update(index, "amount", event.target.value)} /></label>
       <button type="button" data-form-change className="text-button" aria-label={`${english ? "Remove item" : "移除项目"} ${index + 1}`} onClick={() => onValueChange(rows.filter((_, rowIndex) => rowIndex !== index).map(row => `${row.label} | ${row.amount}`).join("\n"))}>×</button>
     </div>)}
     <button className="text-button" data-form-change type="button" onClick={() => onValueChange([...(value ? [value] : []), " | "].join("\n"))}>{english ? "Add item" : "添加一项"}</button>
-    <details><summary>{english ? "Paste item list" : "粘贴明细"}</summary><textarea rows={3} aria-label={english ? "Items, one label | amount per line" : "每行填写名称 | 金额"} placeholder={"Dinner | 180\nDrinks | 60"} value={value} onChange={event => onValueChange(event.target.value)} /></details>
+    <Disclosure title={english ? "Paste item list" : "粘贴明细"}><label className="field"><textarea rows={3} aria-label={english ? "Items, one label | amount per line" : "每行填写名称 | 金额"} placeholder={"Dinner | 180\nDrinks | 60"} value={value} onChange={event => onValueChange(event.target.value)} /></label></Disclosure>
   </div>;
 }

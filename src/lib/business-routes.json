@@ -1,5 +1,9 @@
 [
   {
+    "pattern": "^/api/hermes$",
+    "methods": ["GET", "POST"]
+  },
+  {
     "pattern": "^/api/eva$",
     "methods": ["GET", "POST"]
   },
@@ -414,21 +418,6 @@
   },
   {
     "pattern": "^/api/inbox$",
-    "methods": [
-      "GET",
-      "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/cases/[1-9][0-9]*$",
-    "methods": [
-      "GET",
-      "PATCH",
-      "DELETE"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/cases$",
     "methods": [
       "GET",
       "POST"

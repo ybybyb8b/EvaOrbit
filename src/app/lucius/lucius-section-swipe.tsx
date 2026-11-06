@@ -3,8 +3,8 @@
 import { useCallback, useRef, type ReactNode } from "react";
 import { useSectionSwipe } from "@/components/use-section-swipe";
 
-const sections = ["posts", "diary", "cases"] as const;
-const links = { posts: "/lucius", diary: "/lucius?tab=diary", cases: "/lucius?tab=cases" };
+const sections = ["posts", "diary"] as const;
+const links = { posts: "/lucius", diary: "/lucius?tab=diary" };
 
 export function LuciusSectionSwipe({ tab, children }: { tab: typeof sections[number]; children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null), navRef = useRef<HTMLElement>(null);
