@@ -465,7 +465,7 @@ try {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     release();
-    await page.getByText("正在确认送达…", { exact: true }).waitFor();
+    await page.locator("[data-hermes-chat]").getByText("正在确认送达…", { exact: true }).waitFor();
     const id = sendWrites().at(-1).id;
     const receiptRequest = page.waitForRequest(request => new URL(request.url()).searchParams.get("pending") === id);
     await page.evaluate(() => {
@@ -476,8 +476,8 @@ try {
     });
     await receiptRequest;
     if (saved) {
-      await page.getByText(content, { exact: true }).waitFor();
-      assert.equal(await input.inputValue(), "");
+      await page.locator(`[id="hermes-${id}"]`).getByText(content, { exact: true }).waitFor();
+      await page.waitForFunction(() => document.querySelector("[data-hermes-chat] textarea")?.value === "");
       assert.equal(sendWrites().length, before + 1, "a recovered receipt never resends the message");
       assert.equal(await page.getByText("未确认送达，草稿已保留，可再次发送重试。", { exact: true }).count(), 0);
     } else {
@@ -485,7 +485,7 @@ try {
       assert.equal(await input.inputValue(), content);
       assert.equal(sendWrites().length, before + 1, "an unconfirmed delivery waits for a manual retry");
       await sendButton.click();
-      await page.getByText(content, { exact: true }).waitFor();
+      await page.locator(`[id="hermes-${id}"]`).getByText(content, { exact: true }).waitFor();
       assert.equal(sendWrites().at(-1).id, id);
       assert.equal(messages.filter(message => message.id === id).length, 1);
     }
