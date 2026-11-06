@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Menu4 } from "reicon-react";
 import { useBusinessRequest } from "./business-request-context";
 import { useLocale } from "./locale-controller";
@@ -69,43 +69,57 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useLayoutEffect(() => {
+    const element = container.current;
+    const surface = element?.parentElement;
+    if (!element || !surface) return;
     let fullHeight = window.visualViewport?.height ?? window.innerHeight;
     let layoutWidth = window.innerWidth;
+    let keyboardOpen = false;
+    let frame = 0;
     const fit = () => {
-      const element = container.current; if (!element) return;
+      frame = 0;
       const viewport = window.visualViewport;
       const visibleHeight = viewport?.height ?? window.innerHeight;
+      const visibleTop = viewport?.offsetTop ?? 0;
       const focused = document.activeElement === input.current;
       if (layoutWidth !== window.innerWidth) {
         layoutWidth = window.innerWidth;
         fullHeight = window.innerHeight;
       }
-      const wasOpen = element.dataset.keyboardOpen === "true";
-      const keyboardOpen = Boolean(viewport && Math.abs(viewport.scale - 1) < .05
-        && window.matchMedia("(any-pointer: coarse)").matches
-        && (focused || wasOpen)
-        && Math.max(fullHeight, window.innerHeight) - visibleHeight > (wasOpen ? 70 : 150));
+      const keyboardInset = (focused || keyboardOpen) && window.matchMedia("(any-pointer: coarse)").matches
+        && Math.abs((viewport?.scale ?? 1) - 1) < .05 ? Math.max(0, fullHeight - visibleHeight) : 0;
+      keyboardOpen = keyboardInset > (keyboardOpen ? 2 : 100);
       if (!keyboardOpen && !focused) fullHeight = visibleHeight;
       element.dataset.keyboardOpen = String(keyboardOpen);
 
       const top = element.getBoundingClientRect().top;
-      const bottomEdge = visibleHeight + (viewport?.offsetTop ?? 0);
-      element.style.setProperty("--hermes-chat-height", `${Math.max(keyboardOpen ? 0 : 200, bottomEdge - top)}px`);
+      // Keep the wallpaper crop tied to the resting viewport, even when WebKit pans it to reveal the input.
+      const wallpaperOffset = keyboardInset > 0 ? visibleTop - surface.getBoundingClientRect().top : 0;
+      surface.style.setProperty("--hermes-wallpaper-height", `${Math.max(fullHeight, visibleHeight)}px`);
+      surface.style.setProperty("--hermes-wallpaper-offset", `${wallpaperOffset}px`);
+      element.style.setProperty("--hermes-chat-height", `${Math.max(0, visibleTop + visibleHeight - top)}px`);
+      element.style.setProperty("--hermes-keyboard-inset", `${keyboardInset}px`);
+      element.style.setProperty("--hermes-header-offset", `${keyboardInset > 0 ? Math.max(0, visibleTop - top) : 0}px`);
       element.style.setProperty("--hermes-composer-height", `${(composerArea.current?.offsetHeight ?? 130) + 32}px`);
       if (followBottom.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
     };
-    const observer = new ResizeObserver(fit);
+    const scheduleFit = () => { if (!frame) frame = requestAnimationFrame(fit); };
+    const observer = new ResizeObserver(scheduleFit);
     if (composerArea.current) observer.observe(composerArea.current);
-    const frame = requestAnimationFrame(fit);
-    window.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("scroll", fit);
+    fit();
+    window.addEventListener("resize", scheduleFit);
+    window.addEventListener("scroll", scheduleFit, { passive: true });
+    window.visualViewport?.addEventListener("resize", scheduleFit);
+    window.visualViewport?.addEventListener("scroll", scheduleFit);
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", scheduleFit);
+      window.removeEventListener("scroll", scheduleFit);
+      window.visualViewport?.removeEventListener("resize", scheduleFit);
+      window.visualViewport?.removeEventListener("scroll", scheduleFit);
+      surface.style.removeProperty("--hermes-wallpaper-height");
+      surface.style.removeProperty("--hermes-wallpaper-offset");
     };
   }, []);
   useEffect(() => {
@@ -333,7 +347,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   const noticeError = error || stopError || visibleLoadError;
   const question = messages.find(message => message.id === choiceId) ?? messages.findLast(message => message.role === "assistant" && message.presentation?.state === "pending");
   const commands = filterHermesCommands(connection?.commands?.length ? connection.commands : [{ name:"help",description:"Show available commands",argsHint:"",aliases:[] }], draft);
-  function chooseCommand(command: HermesCommand) { setDraft(`/${command.name}${command.argsHint ? " " : ""}`);setCommandOpen(false);setCommandIndex(0);input.current?.focus(); }
+  function chooseCommand(command: HermesCommand) { setDraft(`/${command.name}${command.argsHint ? " " : ""}`);setCommandOpen(false);setCommandIndex(0);input.current?.focus({ preventScroll: true }); }
   return <>
   {appearance.images.wallpaper && <div className={styles.wallpaper} data-hermes-wallpaper aria-hidden="true" style={{ backgroundImage: `url("${appearance.images.wallpaper}")` }} />}
   <section ref={container} className={styles.chat} aria-label="Hermes" data-hermes-chat data-wallpaper={Boolean(appearance.images.wallpaper) || undefined}>
@@ -341,9 +355,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       <div className={styles.back}>{back}</div>
       <div className={styles.identity}><h1>Hermes</h1><button className={styles.connection} onClick={() => setSetup(true)}><span data-online={online} data-error={Boolean(loadError)} />{statusLabel}</button></div>
       <nav aria-label={t("Conversations", "对话操作")}>
-        <button className="icon-button" aria-label={t("Conversation history", "历史对话")} disabled={sending || stopping || busy} onClick={() => setHistory(true)}><Icon name="history" /></button>
-        <button className="icon-button" aria-label={t("New conversation", "新对话")} disabled={sending || stopping || busy} onClick={() => select()}><Icon name="plus" /></button>
-        <button className="icon-button" disabled={sending} aria-label={t("Note history", "便利贴记录")} title={t("Note history", "便利贴记录")} aria-haspopup="dialog" onClick={() => setNotes(true)}><Icon name="memory" /></button>
+        <button type="button" aria-label={t("Conversation history", "历史对话")} disabled={sending || stopping || busy} onClick={() => setHistory(true)}><Icon name="history" /></button>
+        <button type="button" aria-label={t("New conversation", "新对话")} disabled={sending || stopping || busy} onClick={() => select()}><Icon name="plus" /></button>
+        <button type="button" disabled={sending} aria-label={t("Note history", "便利贴记录")} title={t("Note history", "便利贴记录")} aria-haspopup="dialog" onClick={() => setNotes(true)}><Icon name="memory" /></button>
       </nav>
     </header>
     <div className={styles.scroll} ref={scroll} onScroll={updateReadingPosition}>
@@ -363,7 +377,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
         const next = messages[index + 1];
         const lastInGroup = !next || next.role !== message.role || hermesNotice(next);
         const avatar = appearance.images[message.role];
-        return <article key={message.id} id={`hermes-${message.id}`} className={styles.message} data-hermes-message data-role={message.role} data-group-end={lastInGroup} data-avatar={Boolean(avatar)}>
+        return <Fragment key={message.id}><article id={`hermes-${message.id}`} className={styles.message} data-hermes-message data-role={message.role} data-group-end={lastInGroup} data-avatar={Boolean(avatar)}>
         {avatar && lastInGroup && (
           // eslint-disable-next-line @next/next/no-img-element -- The resized image is a device-local blob.
           <img className={styles.messageAvatar} data-hermes-avatar src={avatar} alt="" width={28} height={28} />
@@ -374,9 +388,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           {message.role === "user" && <span data-state={message.status}>{hermesStatusText(message, online, english)}</span>}
           {["failed", "interrupted"].includes(message.status) && message.presentation?.kind !== "response" && <button className="text-button" disabled={busy} onClick={() => void act({ action: "retry", id: message.id })}>{t("Retry", "重新处理")}</button>}
         </footer>}
-        <HermesToolActivity message={message} english={english} />
         {message.error && <HermesErrorNotice inline className={styles.diagnostic} error={message.error} fallback={t("Hermes could not finish.", "Hermes 处理未完成。")} />}
-      </article>; })}</div>
+      </article><HermesToolActivity message={message} english={english} /></Fragment>; })}</div>
       {waiting && <p className={styles.activity} role="status"><i/><i/><i/>{t("Hermes is working", "Hermes 正在处理")}</p>}
     </div>
     <div ref={composerArea} className={styles.composerArea}>
@@ -393,7 +406,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           else setLoadErrorDismissed(true);
         }}>{t("Dismiss notice", "关闭提示")}</button>
       </div>}
-      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus();}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button><button type="button" disabled={sending || !data} aria-haspopup="dialog" onClick={() => { setCommandOpen(false); setNoteOpen(true); }}><Icon name="memory" />{t("Sticky note", "便利贴")}</button>
+      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus({ preventScroll: true });}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button><button type="button" disabled={sending || !data} aria-haspopup="dialog" onClick={() => { setCommandOpen(false); setNoteOpen(true); }}><Icon name="memory" />{t("Sticky note", "便利贴")}</button>
         {scope && <button type="button" aria-label={t("Chat appearance", "聊天外观")} title={t("Chat appearance", "聊天外观")} aria-haspopup="dialog" disabled={sending} onClick={() => { setCommandOpen(false); setAppearanceOpen(true); }}><Icon name="settings" /></button>}
         {(stopTarget && connection?.commands?.some(command => command.name === "stop") || stopPending || stopping) && <button type="button" className={styles.stopButton} disabled={online !== true || stopping || stopPending}
           onClick={() => void stopConversation()}>{stopping ? t("Requesting stop…", "正在请求停止…") : stopPending ? t("Stop requested", "已请求停止") : t("Stop", "停止")}</button>}

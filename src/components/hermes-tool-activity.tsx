@@ -13,7 +13,7 @@ export function HermesToolActivity({ message, english }: { message: HermesMessag
     : message.status === "interrupted" ? (english ? "Interrupted" : "已中断")
       : activity.failed > 0 ? (english ? `${activity.failed} failed` : `${activity.failed} 项异常`) : undefined;
   return <Disclosure className={styles.toolActivity}
-    title={english ? `Tool activity · ${activity.total}` : `工具执行 · ${activity.total} 次`}
+    title={english ? `${activity.total} tool ${activity.total === 1 ? "call" : "calls"}` : `调用了 ${activity.total} 次工具`}
     trailing={state}>
     <ul>{activity.tools.map(tool => <li key={tool.name}><code data-no-translate translate="no">{tool.name}</code><span>×{tool.count}</span></li>)}</ul>
     {remaining > 0 && <p>{english ? `${remaining} more calls` : `另有 ${remaining} 次调用`}</p>}
