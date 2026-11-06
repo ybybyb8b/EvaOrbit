@@ -1,4 +1,5 @@
 "use client";
+import {ClassicEditorialPreview,useClassicEditorialPreview} from "@/components/classic-editorial-preview";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useUiCopyScope } from "@/components/ui-copy-scope";
 import { PageLogAction } from "@/components/bottom-log-core";
@@ -25,6 +26,7 @@ const tones = ["var(--accent-primary)", "var(--accent-gold)", "var(--text-second
 const tone = (index: number) => ({ "--preview-tone": tones[index % tones.length] }) as CSSProperties;
 
 export function SubscriptionPreview({ items: initialItems, payments, today, iconSources, onCreate, refined = false, initialView }: { items: Subscription[]; payments: SubscriptionPayment[]; today: string; iconSources?: Record<number, string>; onCreate?: () => void; refined?: boolean; initialView?: "home" | "trends" }) {
+  const editorial=useClassicEditorialPreview();
   const [items, setItems] = useServerDataState(initialItems);
   const {local}=useSubscriptionsData();
   const copyScope = useUiCopyScope<HTMLDivElement>();
@@ -51,7 +53,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
   const featured = useMemo(() => [...items].sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || subscriptionDate(a).localeCompare(subscriptionDate(b)) || a.id - b.id), [items]);
   useEffect(() => {
     const node = rail.current, faceContainer = faces.current;
-    if (!refined || view !== "home" || !node || !faceContainer) return;
+    if (editorial || !refined || view !== "home" || !node || !faceContainer) return;
     let width = 0;
     let maxLeft = 0;
     let cards: { slide: HTMLElement; center: number; width: number }[] = [];
@@ -107,7 +109,7 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
       scroll.dispose();
       scrollController.current = null;
     };
-  }, [refined, view, featured]);
+  }, [editorial, refined, view, featured]);
   const visible = featured.filter(item => status === "all" || membershipState(item,today) === status);
   const dotStart = Math.max(0, Math.min(focused - 2, featured.length - 5));
   const parts = stats.breakdown(month, selectedCurrency);
@@ -189,16 +191,17 @@ export function SubscriptionPreview({ items: initialItems, payments, today, icon
     <div><dt>{t("Paid this month", "本月已付")}</dt><dd>{totals(stats.actual[stats.currentMonth])}</dd></div>
   </dl>;
 
-  return <div ref={copyScope} className={`page ${styles.page}`} data-view={view} data-refined={refined || undefined}>
+  return <div ref={copyScope} className={`page ${styles.page} ${editorial?styles.editorial:""}`} data-view={view} data-refined={refined || undefined}>
+    <ClassicEditorialPreview/>
     <header className={styles.header}>
       <h1>{t("Subscriptions", "订阅")}</h1>
       {onCreate && <PageLogAction label={t("Add subscription", "新增订阅")} onClick={onCreate}><Icon name="plus" />{t("Add", "新增订阅")}</PageLogAction>}
     </header>
-    {refined && view === "home" && <MotionDiagnostics rail={rail} />}
+    {!editorial && refined && view === "home" && <MotionDiagnostics rail={rail} />}
     <SubscriptionSections active={view==="home"?"overview":"trends"} onViewChange={initialView?undefined:next=>{setFocused(0);setView(next==="overview"?"home":"trends");}}/>
     {(!refined || view !== "home") && summary}
     {view === "home" ? <>
-      {featured.length > 0 && <section className={styles.featured} data-subscription-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
+      {!editorial && featured.length > 0 && <section className={styles.featured} data-subscription-swipe-ignore aria-label={t("Subscription carousel", "订阅卡片浏览")} aria-roledescription={t("carousel", "轮播")}>
         <div className={styles.sectionHead}><h2>{t("On the horizon", "即将续费")}</h2><span>{t("Swipe to explore", "左右滑动浏览")}</span></div>
         {refined ? <div className={styles.stackStage}>
           <div className={styles.stackFaces} ref={faces} aria-hidden="true">
