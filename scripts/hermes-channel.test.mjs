@@ -7,7 +7,9 @@ import { PGlite } from "@electric-sql/pglite";
 test("Hermes channel scopes accounts, survives disconnects and commits receipts without duplicate delivery", async () => {
   const db = new PGlite(), owner = randomUUID(), other = randomUUID(), token = `eo_${randomUUID()}${randomUUID()}`, instance = randomUUID();
   const rpc = async (action, data = {}) => (await db.query("select eo_hermes($1,$2::jsonb) value", [action, JSON.stringify(data)])).rows[0].value;
+  const rename = async (conversationId, title) => (await db.query("select eo_hermes_rename_conversation($1,$2) value", [conversationId, title])).rows[0].value;
   const bridge = async (action, data = {}, secret = token, worker = instance) => (await db.query("select hermes_bridge($1,$2::uuid,$3,$4::jsonb) value", [secret, worker, action, JSON.stringify(data)])).rows[0].value;
+  const tools = async (action, data, worker = instance) => (await db.query("select hermes_bridge_tools($1,$2::uuid,$3,$4::jsonb) value", [token, worker, action, JSON.stringify(data)])).rows[0].value;
   try {
     await db.exec(`create schema auth;create role anon;create role authenticated;
       create table auth.users(id uuid primary key);insert into auth.users values('${owner}'),('${other}');
@@ -17,20 +19,33 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     await db.exec(readFileSync("supabase/migrations/202611060002_hermes_message_surfaces.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/202611060003_hermes_activity.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/202611060004_hermes_commands.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/202611060007_hermes_message_metadata.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/202611060008_hermes_rename_conversation.sql", "utf8"));
+    await db.exec(readFileSync("supabase/migrations/202611060009_hermes_tool_activity.sql", "utf8"));
     await db.exec("set role authenticated");
     const empty = await rpc("read"); assert.equal(empty.connection.paired, false);
     await rpc("pair", { hash: createHash("sha256").update(token).digest("hex") });
     await assert.rejects(db.query("select token_hash from hermes_connections"), /permission denied/);
-    const conversationId = randomUUID(), id = randomUUID(), message = { conversationId, id, content: "明天选礼物，睡醒后打扫", note: true };
+    const conversationId = randomUUID(), id = randomUUID(), message = { conversationId, id, content: "  明天选礼物，\n    睡醒后打扫\n", note: true };
     const sent = await rpc("send", message); assert.equal(sent.status, "queued");
     assert.equal(sent.presentation.kind, "note");
+    assert.equal(sent.content, message.content);
+    await assert.rejects(rpc("send", { ...message, id: randomUUID(), content: " \n\t" }), /HERMES_INPUT/);
     assert.equal((await rpc("send", message)).seq, sent.seq);
     await assert.rejects(rpc("send", { ...message, content: "changed" }), /HERMES_CONFLICT/);
     const read = await rpc("read", { conversationId }); assert.equal(read.messages.length, 1); assert.equal(read.connection.online, false);
     const activity = async (action="read",data={}) => (await db.query("select eo_hermes_activity($1,$2::jsonb) value",[action,JSON.stringify(data)])).rows[0].value;
     assert.equal((await activity("read",{receiptId:id})).receipt.id,id);
     assert.equal((await activity()).threads[0].pending,"queued");
+    await assert.rejects(rename(conversationId, " \t "), /HERMES_INPUT/);
+    await assert.rejects(rename(conversationId, "字".repeat(81)), /HERMES_INPUT/);
+    assert.deepEqual(await rename(conversationId, "  礼物计划  "), { id: conversationId, title: "礼物计划" });
+    const renamed = await rpc("read", { conversationId });
+    assert.deepEqual(renamed.conversations[0], { ...read.conversations[0], title: "礼物计划" });
+    assert.deepEqual(renamed.messages, read.messages);
+    assert.equal((await activity()).threads[0].title, "礼物计划");
     await db.exec(`set test.uid='${other}'`);
+    await assert.rejects(rename(conversationId, "另一个账户"), /HERMES_NOT_FOUND/);
     assert.equal((await rpc("read")).conversations.length, 0);
     assert.equal((await activity("read",{receiptId:id})).receipt,null);
     assert.equal((await activity()).threads.length,0);
@@ -39,6 +54,7 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     assert.equal((await db.query("select * from hermes_messages")).rows.length, 0);
     await assert.rejects(rpc("send", { ...message, id: randomUUID() }), /HERMES_NOT_FOUND/);
     await db.exec("set role anon");
+    await assert.rejects(rename(conversationId, "匿名修改"), /permission denied/);
     await assert.rejects(rpc("read"), /permission denied/);
     await assert.rejects(activity(),/permission denied/);
     await assert.rejects(bridge("hello", {}, "wrong-token".repeat(5)), /HERMES_TOKEN/);
@@ -47,6 +63,12 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     const claimed = await bridge("claim"); assert.equal(claimed.id, id); assert.equal(claimed.status, "received");
     assert.equal(await bridge("claim"), null);
     await bridge("start", { id, attemptId: claimed.attempt_id });
+    const runningTools = { revision: 2, total: 2, running: 1, failed: 0, tools: [{ name: "search", count: 2, args: "discard" }] };
+    const toolUpdate = { id, attemptId: claimed.attempt_id, toolActivity: runningTools };
+    await assert.rejects(tools("tools", toolUpdate, randomUUID()), /HERMES_INSTANCE/);
+    await assert.rejects(tools("tools", { ...toolUpdate, attemptId: randomUUID() }), /HERMES_ATTEMPT/);
+    await tools("tools", toolUpdate);
+    await tools("tools", { ...toolUpdate, toolActivity: { ...runningTools, revision: 1, running: 2 } });
     const promptId=randomUUID(), questionId=randomUUID();
     await bridge("send", { id:questionId,conversationId,content:"选哪一种？",presentation:{kind:"choices",promptId,options:["A","B"],state:"pending",multi:false} });
     await db.exec(`set role authenticated;set test.uid='${other}'`);
@@ -60,6 +82,9 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     await bridge("responded",{id:picked.id,attemptId:picked.attempt_id,accepted:true});
     await db.exec(`set role authenticated;set test.uid='${owner}'`);
     const surface=await rpc("read",{conversationId});assert.equal(surface.messages.find(m=>m.id===questionId).presentation.state,"answered");
+    assert.deepEqual(surface.messages.find(m => m.id === id).presentation.toolActivity, {
+      ...runningTools, attemptId: claimed.attempt_id, tools: [{ name: "search", count: 2 }],
+    });
     await assert.rejects(rpc("send",{id:randomUUID(),conversationId,content:"B",responseTo:questionId}),/HERMES_PROMPT_EXPIRED/);
     await db.exec(`set role authenticated;set test.uid='${owner}'`);
     await assert.rejects(rpc("clear", { conversationId }), /HERMES_BUSY/);
@@ -68,13 +93,22 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     await assert.rejects(bridge("send", { id: randomUUID(), conversationId, content: "unbound reply", replyTo: id }), /HERMES_ATTEMPT/);
     const responseId = randomUUID(), answer = { id: responseId, conversationId, content: "先把预算限定到三百。", replyTo: id, attemptId: claimed.attempt_id };
     await bridge("send", answer); await bridge("send", answer);
-    await bridge("complete", { id, attemptId: claimed.attempt_id, outcome: "success" });
+    await tools("complete", { ...toolUpdate, outcome: "success", toolActivity: { ...runningTools, revision: 3, running: 0, failed: 1 } });
     await db.exec(`set role authenticated;set test.uid='${owner}'`);
     const delta = await rpc("read", { conversationId, after: sent.seq, pending: [id] });
     assert.equal(delta.messages.filter(m => m.role === "assistant").length, 2);
     assert.equal(delta.messages.find(m => m.id === id).status, "done");
+    assert.equal(delta.messages.find(m => m.id === id).presentation.toolActivity.failed, 1);
     const activityBefore=await activity();assert.equal(activityBefore.threads[0].unread,2);
     const latestReply=delta.messages.find(m=>m.id===responseId);
+    const noticeId = randomUUID();
+    await db.exec("set role anon");
+    await bridge("send", { id: noticeId, conversationId, content: "Hermes system status", presentation: { notice: true } });
+    await db.exec("set role authenticated");
+    const afterNotice = await activity();
+    assert.equal(afterNotice.threads[0].unread, 2);
+    assert.equal(afterNotice.threads[0].preview, activityBefore.threads[0].preview);
+    assert.equal((await rpc("read", { conversationId, after: latestReply.seq })).messages.find(m => m.id === noticeId).presentation.notice, true);
     await assert.rejects(activity("seen",{conversationId,seq:latestReply.seq+100}),/HERMES_INPUT/);
     await activity("seen",{conversationId,seq:latestReply.seq});await activity("seen",{conversationId,seq:sent.seq});
     assert.equal((await activity()).threads[0].unread,0,"read markers are monotonic and shared across views");
@@ -83,9 +117,11 @@ test("Hermes channel scopes accounts, survives disconnects and commits receipts 
     await db.exec(`set role authenticated;set test.uid='${owner}'`);
     assert.equal((await rpc("read", { conversationId })).messages.find(m => m.id === secondId).status, "failed", "agent completion alone does not acknowledge reply delivery");
     const retried = await rpc("retry", { id: secondId }); assert.notEqual(retried.attempt_id, second.attempt_id);
+    assert.equal(retried.created_at, second.created_at);
     await db.exec("set role anon");
     await assert.rejects(bridge("send", { ...answer, id: randomUUID(), replyTo: secondId, attemptId: second.attempt_id }), /HERMES_ATTEMPT/);
     const last = await bridge("claim"); assert.equal(last.id, secondId);
+    assert.equal(last.created_at, second.created_at);
     await bridge("heartbeat");
     await db.exec("reset role"); await db.exec("update hermes_messages set lease_until=now()-interval '1 second' where status='received'");
     await db.exec("set role anon"); assert.equal(await bridge("claim"), null, "expired work is not automatically replayed");
@@ -108,14 +144,14 @@ test("Hermes advertises its actual commands and control messages bypass a busy c
   const bridge=async(action,data={})=>(await db.query('select hermes_bridge($1,$2::uuid,$3,$4::jsonb) value',[token,worker,action,JSON.stringify(data)])).rows[0].value;
   try {
     await db.exec(`create schema auth;create role anon;create role authenticated;create table auth.users(id uuid primary key);insert into auth.users values('${owner}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;grant usage on schema public,auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;set test.uid='${owner}';`);
-    for(const filename of ['202611060001_hermes_channel.sql','202611060002_hermes_message_surfaces.sql','202611060003_hermes_activity.sql','202611060004_hermes_commands.sql'])await db.exec(readFileSync('supabase/migrations/'+filename,'utf8'));
+    for(const filename of ['202611060001_hermes_channel.sql','202611060002_hermes_message_surfaces.sql','202611060003_hermes_activity.sql','202611060004_hermes_commands.sql','202611060007_hermes_message_metadata.sql'])await db.exec(readFileSync('supabase/migrations/'+filename,'utf8'));
     await db.exec('set role authenticated');await rpc('pair',{hash:createHash('sha256').update(token).digest('hex')});
     await db.exec('set role anon');await bridge('hello',{commands:[{name:'stop',description:'Stop active work',localizedDescription:'停止任务',argsHint:'',aliases:[]},{name:'new',description:'New session',argsHint:'',aliases:['reset']}]});
     await db.exec('set role authenticated');assert.equal((await rpc('read')).connection.commands[0].name,'stop');
     const conversationId=randomUUID(),first={id:randomUUID(),conversationId,content:'A long task'};await rpc('send',first);
     await db.exec('set role anon');const running=await bridge('claim');await bridge('start',{id:running.id,attemptId:running.attempt_id});
     await db.exec('set role authenticated');const regular=await rpc('send',{id:randomUUID(),conversationId,content:'Another message'});const note=await rpc('send',{id:randomUUID(),conversationId,content:'/stop',note:true});assert.equal(note.presentation.kind,'note');
-    const command=await rpc('send',{id:randomUUID(),conversationId,content:'/stop'});assert.equal(command.presentation.kind,'command');
+    const command=await rpc('send',{id:randomUUID(),conversationId,content:'  /stop\n'});assert.equal(command.presentation.kind,'command');
     await db.exec('set role anon');const control=await bridge('claim');assert.equal(control.id,command.id,'stop is claimed ahead of queued text and a literal slash note');await bridge('start',{id:control.id,attemptId:control.attempt_id});await bridge('send',{id:randomUUID(),conversationId,replyTo:control.id,attemptId:control.attempt_id,content:'Stopped'});await bridge('complete',{id:control.id,attemptId:control.attempt_id,outcome:'success'});
     assert.equal(await bridge('claim'),null,'ordinary messages remain serial while original work drains');
     await db.exec('set role authenticated');const alias=await rpc('send',{id:randomUUID(),conversationId,content:'/reset'});assert.equal(alias.presentation.kind,'command');assert.equal((await rpc('read',{conversationId})).messages.find(m=>m.id===regular.id).status,'queued');

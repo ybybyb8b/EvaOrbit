@@ -36,7 +36,7 @@ final class NativeIntegrationViewController: UIViewController, WKNavigationDeleg
         settings.websiteDataStore = .nonPersistent()
         settings.userContentController = content
         settings.applicationNameForUserAgent = "EvaOrbitNative/0.1"
-        webView = WKWebView(frame: .zero, configuration: settings)
+        webView = HostWebView(frame: .zero, configuration: settings)
         super.init(nibName: nil, bundle: nil)
     }
     @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }

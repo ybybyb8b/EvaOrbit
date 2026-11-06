@@ -6,8 +6,12 @@ import logging
 import re
 import json
 import uuid
-from datetime import datetime
+from collections import Counter
+from contextvars import ContextVar
+from datetime import UTC, datetime
+from functools import wraps
 from pathlib import Path
+from threading import Lock
 
 from gateway.config import Platform
 from gateway.platforms._shared import extra_or_secret, get_scoped_secret, seed_extra_from_env
@@ -22,6 +26,209 @@ _transport = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_transport)
 Transport, Outbox, BridgeError = _transport.Transport, _transport.Outbox, _transport.BridgeError
 logger = logging.getLogger(__name__)
+
+class ToolActivity:
+    def __init__(self):
+        self.lock = Lock()
+        self.calls = {}
+        self.revision = self.published = 0
+
+    def record(self, request_id, call_id, name, status):
+        if not call_id or not name or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name):
+            return
+        key = (request_id, call_id)
+        with self.lock:
+            previous = self.calls.get(key)
+            if previous is not None and (status == "running" or previous == (name, status)):
+                return
+            self.calls[key] = (name, status)
+            self.revision += 1
+
+    def snapshot(self, *, final=False):
+        with self.lock:
+            if not self.revision or not final and self.revision == self.published:
+                return None
+            names = Counter(name for name, _ in self.calls.values())
+            return {
+                "revision": self.revision + int(final),
+                "total": len(self.calls),
+                "running": 0 if final else sum(status == "running" for _, status in self.calls.values()),
+                "failed": sum(status in {"error", "blocked", "cancelled"} for _, status in self.calls.values()),
+                "tools": [{"name": name, "count": count} for name, count in names.most_common(12)],
+            }
+
+
+def register_tool_activity(ctx):
+    from gateway.run_turn_runner import TurnRunner
+
+    run = TurnRunner._run_conversation_with_approval
+    current = getattr(run, "_evaorbit_tool_context", None)
+    if current is None:
+        current = ContextVar("evaorbit_tool_activity", default=None)
+
+        @wraps(run)
+        def run_with_activity(runner, agent, *args, **kwargs):
+            turn = runner._ctx
+            platform = getattr(turn.source.platform, "value", turn.source.platform)
+            adapter = turn._status_adapter
+            runs = getattr(adapter, "tool_runs", {}) if platform == "evaorbit" else {}
+            activity = runs.get(turn.inbound_message_id)
+            if activity is None:
+                return run(runner, agent, *args, **kwargs)
+            token = current.set((agent, activity))
+            start = agent.tool_start_callback
+            text_progress = turn.tool_progress_enabled
+
+            def started(call_id, name, args):
+                activity.record(agent._current_api_request_id, call_id, name, "running")
+                if start is not None:
+                    start(call_id, name, args)
+
+            agent.tool_start_callback = started
+            turn.tool_progress_enabled = False
+            try:
+                return run(runner, agent, *args, **kwargs)
+            finally:
+                turn.tool_progress_enabled = text_progress
+                agent.tool_start_callback = start
+                current.reset(token)
+
+        run_with_activity._evaorbit_tool_context = current
+        TurnRunner._run_conversation_with_approval = run_with_activity
+
+    def completed(*, session_id, api_request_id, tool_call_id, tool_name, status, **_):
+        bound = current.get()
+        if bound is not None:
+            agent, activity = bound
+            if session_id == agent.session_id:
+                activity.record(api_request_id, tool_call_id, tool_name, status)
+
+    ctx.register_hook("post_tool_call", completed)
+
+
+class EvaOrbitClarifyAnswer(str):
+    def __new__(cls, content, sent_at):
+        answer = super().__new__(cls, content)
+        answer.sent_at = sent_at
+        return answer
+
+    def __str__(self):
+        # Hermes coerces the submitted answer to str before waking the tool.
+        return self
+
+
+def install_model_timestamps():
+    # Hermes persists MessageEvent.timestamp but its built-in labels are global and non-ISO.
+    # Keep the label in Hermes' provider-side replay copy, separate from the transcript.
+    from agent import agent_runtime_helpers, session_persistence, turn_request_assembly
+    from agent.message_metadata import is_compaction_scaffolding
+    from agent.turn_context import compose_user_api_content
+    from gateway import run
+    from gateway.run_turn_prepare import GatewayTurnPrepareMixin
+    from gateway.message_timestamps import coerce_message_timestamp
+    from tools import clarify_tool
+
+    build = turn_request_assembly.build_api_messages
+    if getattr(build, "_evaorbit_timestamps", False):
+        return
+    prepare = GatewayTurnPrepareMixin._hmwa_apply_message_timestamp
+    clarify_result = clarify_tool._result
+    durable = session_persistence.durable_user_row_content
+    replay = run._build_replay_entry
+    merge_users = agent_runtime_helpers._merge_consecutive_users
+
+    def eo_row(row):
+        return row.get("role") == "user" and EvaOrbitAdapter._attempt(row.get("platform_message_id") or row.get("message_id"))
+
+    def labeled(body, timestamp):
+        if not isinstance(body, str) or not body.strip() or timestamp is None:
+            return body
+        iso_time = datetime.fromtimestamp(timestamp, UTC).isoformat()
+        label = f'<evaorbit-message sent-at="{iso_time}">\n'
+        return body if body.startswith(label) and "\n</evaorbit-message>" in body else f"{label}{body}\n</evaorbit-message>"
+
+    @wraps(prepare)
+    def prepare_timestamp(runner, event, message_text):
+        platform = getattr(event.source, "platform", None)
+        if getattr(platform, "value", platform) == "evaorbit" and EvaOrbitAdapter._attempt(event.message_id):
+            return message_text, event.text, event.timestamp.timestamp()
+        return prepare(runner, event, message_text)
+
+    @wraps(durable)
+    def durable_with_timestamp(agent, row, content, api_content):
+        original, sidecar = durable(agent, row, content, api_content)
+        if getattr(agent, "platform", None) == "evaorbit" and eo_row(row) and not is_compaction_scaffolding(row):
+            sidecar = labeled(sidecar or content, coerce_message_timestamp(row.get("timestamp")))
+        return original, sidecar
+
+    @wraps(replay)
+    def replay_with_timestamp(role, content, row, preserve_timestamp=False):
+        entry = replay(role, content, row, preserve_timestamp=preserve_timestamp)
+        if eo_row(row) and content == row.get("content") and not is_compaction_scaffolding(row):
+            entry["api_content"] = labeled(entry.get("api_content") or content, coerce_message_timestamp(row.get("timestamp")))
+        return entry
+
+    @wraps(merge_users)
+    def keep_evaorbit_rows_separate(messages):
+        # Hermes also merges adjacent users on the wire, after each row has its own label.
+        # Keep these boundaries during transcript repair so their original times aren't lost.
+        result, repairs, start = [], 0, 0
+        for index, row in enumerate(messages):
+            sidecar = row.get("api_content")
+            if eo_row(row) or (row.get("role") == "user" and isinstance(sidecar, str) and sidecar.startswith("<evaorbit-message sent-at=")):
+                merged, count = merge_users(messages[start:index])
+                result.extend(merged)
+                result.append(row)
+                repairs += count
+                start = index + 1
+        if not start:
+            return merge_users(messages)
+        merged, count = merge_users(messages[start:])
+        return result + merged, repairs + count
+
+    @wraps(build)
+    def build_with_timestamps(agent, messages, **kwargs):
+        if getattr(agent, "platform", None) != "evaorbit":
+            return build(agent, messages, **kwargs)
+        request = list(messages)
+        for index, row in enumerate(messages):
+            if row.get("role") != "user" or row.get("display_kind") or is_compaction_scaffolding(row):
+                continue
+            body = row.get("content")
+            sent_at = coerce_message_timestamp(row.get("timestamp"))
+            if not isinstance(body, str) or not body.strip() or sent_at is None:
+                continue
+            wire_body = row.get("api_content") or body
+            if index == kwargs["current_turn_user_idx"] and not row.get("api_content"):
+                wire_body = compose_user_api_content(body, kwargs["ext_prefetch_cache"], kwargs["plugin_user_context"]) or body
+            request[index] = {**row, "api_content": labeled(wire_body, sent_at)}
+        return build(agent, request, **kwargs)
+
+    @wraps(clarify_result)
+    def clarify_with_timestamps(normalized, reply, shown=None):
+        result = clarify_result(normalized, reply, shown)
+        answers = reply.get("answers") or {}
+        if not any(isinstance(answer, EvaOrbitClarifyAnswer) for answer in answers.values()):
+            return result
+        payload = json.loads(result)
+        for question, response in zip(normalized, payload["responses"]):
+            answer = answers.get(question["qid"])
+            if isinstance(answer, EvaOrbitClarifyAnswer):
+                response["user_message_sent_at"] = answer.sent_at
+                if response["user_response"] != answer:
+                    response["user_message"] = str.__str__(answer)
+        return json.dumps(payload, ensure_ascii=False)
+
+    build_with_timestamps._evaorbit_timestamps = True
+    GatewayTurnPrepareMixin._hmwa_apply_message_timestamp = prepare_timestamp
+    turn_request_assembly.build_api_messages = build_with_timestamps
+    session_persistence.durable_user_row_content = durable_with_timestamp
+    run._build_replay_entry = replay_with_timestamp
+    agent_runtime_helpers._SEQUENCE_REPAIR_PASSES = tuple(
+        keep_evaorbit_rows_separate if step is merge_users else step
+        for step in agent_runtime_helpers._SEQUENCE_REPAIR_PASSES
+    )
+    clarify_tool._result = clarify_with_timestamps
 
 
 def command_catalog():
@@ -51,10 +258,13 @@ class EvaOrbitAdapter(BasePlatformAdapter):
         self.outbox = Outbox(get_hermes_home() / "cache" / "evaorbit-outbox.db")
         self.lock = asyncio.Lock()
         self.poll_task = self.heartbeat_task = None
+        self.tool_progress_task = None
+        self.tool_runs = {}
         self.prompts = {}
         self.catalog = []
 
     async def connect(self, *, is_reconnect=False):
+        install_model_timestamps()
         self.catalog = command_catalog()
         identity = await self.transport.rpc("hello", {"commands": self.catalog})
         if identity["userId"] != self.owner:
@@ -64,11 +274,12 @@ class EvaOrbitAdapter(BasePlatformAdapter):
         self._mark_connected()
         self.poll_task = asyncio.create_task(self._poll())
         self.heartbeat_task = asyncio.create_task(self._heartbeat())
+        self.tool_progress_task = asyncio.create_task(self._publish_tool_activity())
         return True
 
     async def disconnect(self):
         self._mark_disconnected()
-        for task in (self.poll_task, self.heartbeat_task):
+        for task in (self.poll_task, self.heartbeat_task, self.tool_progress_task):
             if task:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -126,6 +337,21 @@ class EvaOrbitAdapter(BasePlatformAdapter):
                 logger.exception("EvaOrbit receive failed")
                 await asyncio.sleep(10)
 
+    async def _publish_tool_activity(self):
+        while True:
+            await asyncio.sleep(4)
+            for message_id, activity in list(self.tool_runs.items()):
+                snapshot = activity.snapshot()
+                if snapshot is None:
+                    continue
+                try:
+                    await self.transport.rpc("tools", {**self._attempt(message_id), "toolActivity": snapshot})
+                except BridgeError as error:
+                    if str(error) != "HERMES_ATTEMPT":
+                        logger.debug("EvaOrbit tool activity: %s", error)
+                    continue
+                activity.published = snapshot["revision"]
+
     @staticmethod
     def _attempt(message_id):
         try:
@@ -138,6 +364,7 @@ class EvaOrbitAdapter(BasePlatformAdapter):
         attempt = self._attempt(event.message_id)
         if attempt:
             await self.transport.rpc("start", attempt)
+            self.tool_runs[event.message_id] = ToolActivity()
 
     async def _dispatch_inline_reply(self, event, **kwargs):
         # Hermes' busy-command path deliberately skips normal session lifecycle hooks.
@@ -156,6 +383,10 @@ class EvaOrbitAdapter(BasePlatformAdapter):
         if not attempt:
             return
         payload = {**attempt, "outcome": outcome.value}
+        activity = self.tool_runs.pop(event.message_id, None)
+        snapshot = activity.snapshot(final=True) if activity else None
+        if snapshot:
+            payload["toolActivity"] = snapshot
         key = f'complete:{event.message_id}'
         async with self.lock:
             self.outbox.put(key, "complete", payload)
@@ -168,9 +399,15 @@ class EvaOrbitAdapter(BasePlatformAdapter):
             chat_id = str(uuid.UUID(chat_id))
         except ValueError:
             return SendResult(success=False, error="Use an EvaOrbit conversation UUID")
+        metadata = metadata or {}
         attempt = self._attempt(reply_to)
         # Stable on retries within a turn. Proactive messages are distinct invocations.
-        presentation = dict((metadata or {}).get("eo_presentation", {}))
+        presentation = dict(metadata.get("eo_presentation", {}))
+        if not presentation and (metadata.get("eo_notice") or (
+            metadata.get("_interim_send") and content.startswith("💾 ")
+        )):
+            presentation["notice"] = True
+            attempt = None
         # Only Hermes' own localized reasoning envelope, anchored at the message start.
         # Never interpret think tags or code fences in ordinary answers as internal reasoning.
         match = re.match(r'^💭 \*\*(?:Reasoning:|推理：)\*\*\n```\n([\s\S]*?)\n```\n\n([\s\S]+)$', content)
@@ -193,6 +430,9 @@ class EvaOrbitAdapter(BasePlatformAdapter):
             return SendResult(success=False, error="Conversation cleared or attempt superseded", retryable=False)
         return SendResult(success=True, message_id=message_id)
 
+    async def send_or_update_status(self, chat_id, status_key, content, metadata=None):
+        return await self.send(chat_id, content, metadata={**(metadata or {}), "eo_notice": True})
+
     async def send_clarify(self, chat_id, question, choices, clarify_id, session_key, metadata=None):
         from tools.clarify_gateway import get_pending, mark_awaiting_text
         entry = get_pending(clarify_id)
@@ -211,8 +451,10 @@ class EvaOrbitAdapter(BasePlatformAdapter):
         prompt_id = message["presentation"].get("promptId")
         entry = get_pending(prompt_id)
         expected = self.prompts.get(prompt_id)
-        accepted = bool(entry and expected == (message["conversation_id"], entry.session_key)
-                        and resolve_gateway_clarify(prompt_id, message["content"]))
+        accepted = False
+        if entry and expected == (message["conversation_id"], entry.session_key):
+            sent_at = datetime.fromisoformat(message["created_at"].replace("Z", "+00:00")).astimezone(UTC).isoformat()
+            accepted = resolve_gateway_clarify(prompt_id, EvaOrbitClarifyAnswer(message["content"], sent_at))
         payload = {"id": message["id"], "attemptId": message["attempt_id"], "accepted": accepted}
         async with self.lock:
             self.outbox.put(f'responded:{message["id"]}', "responded", payload)
@@ -247,6 +489,7 @@ async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_f
 
 
 def register(ctx):
+    register_tool_activity(ctx)
     ctx.register_platform(name="evaorbit", label="EvaOrbit", adapter_factory=EvaOrbitAdapter,
         check_fn=lambda: all(get_scoped_secret(key) for key in ("EO_SUPABASE_URL", "EO_SUPABASE_KEY", "EO_BRIDGE_TOKEN", "EO_ALLOWED_USERS")),
         validate_config=lambda config: all(_settings(config).values()),
@@ -254,4 +497,4 @@ def register(ctx):
         env_enablement_fn=lambda: seed_extra_from_env((("EO_SUPABASE_URL", "url", None), ("EO_SUPABASE_KEY", "key", None), ("EO_BRIDGE_TOKEN", "token", None), ("EO_ALLOWED_USERS", "owner", None)), home_env="EO_HOME_CHAT") if get_scoped_secret("EO_BRIDGE_TOKEN") else None,
         allowed_users_env="EO_ALLOWED_USERS", cron_deliver_env_var="EO_HOME_CHAT", standalone_sender_fn=_standalone_send,
         display_tier="minimal", display_overrides={"show_reasoning": True, "reasoning_style": "code"}, max_message_length=30000, emoji="✦",
-        platform_hint="You are receiving messages through EvaOrbit, the user's personal app. It supports Markdown. Use your own session history and tools; the client does not resend history. Reply in the user's language.")
+        platform_hint="You are receiving messages through EvaOrbit, the user's personal app. It supports Markdown. Use your own session history and tools; the client does not resend history. An EvaOrbit message's sent-at attribute records its original send time. Reply in the user's language.")

@@ -5,6 +5,7 @@ import { responseError } from "@/lib/response-error";
 import { useBusinessRequest } from "./business-request-context";
 import { useLocale } from "./locale-controller";
 import { FormSheet } from "./form-sheet";
+import { HermesErrorNotice } from "./hermes-error-notice";
 import { Icon } from "./icons";
 import styles from "./hermes-activity.module.css";
 
@@ -18,7 +19,7 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
   const button = useRef<HTMLButtonElement>(null), abort = useRef<AbortController | null>(null), pending = useRef(false), alive = useRef(true);
   const refreshAgain = useRef(false);
   const readMarkers = useRef(new Map<string, number>()), reading = useRef(new Map<string, number>());
-  const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null), suppress = useRef(false);
+  const drag = useRef<{ x: number; y: number; startX: number; startY: number; startedAt: number; moved: boolean } | null>(null), suppress = useRef(false);
   const storageKey = `eo:hermes-float:${scope}`;
   useEffect(() => {
     if (!inConversation) return;
@@ -94,9 +95,11 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
     const y = top + Math.max(70, Math.min(current.startY + dy - top, (v?.height ?? innerHeight) - 160));
     if (button.current) button.current.style.transform = `translate3d(${x}px,${y}px,0)`;
   }
-  function release(event: PointerEvent<HTMLButtonElement>) {
+  function release(event: PointerEvent<HTMLButtonElement>, cancelled = false) {
     const current = drag.current; if (!current) return;
-    suppress.current = current.moved;
+    const held = !cancelled && !current.moved && event.timeStamp - current.startedAt >= 500;
+    suppress.current = cancelled || current.moved || held;
+    if (held) showStatus();
     const v = window.visualViewport, width = v?.width ?? innerWidth, height = v?.height ?? innerHeight, top = v?.offsetTop ?? 0;
     const side = current.startX + event.clientX - current.x < width / 2 ? "left" : "right";
     const next = { x: side === "left" ? 12 : width - 64, y: top + Math.max(70, Math.min(current.startY + event.clientY - current.y - top, height - 160)) };
@@ -106,15 +109,19 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
   }
   const threads = data?.threads ?? [], unread = threads.reduce((sum, thread) => sum + thread.unread, 0);
   const online = Boolean(!error && data?.connection.online), failed = Boolean(error || outgoing?.state === "uncertain" || threads.some(thread => thread.error));
+  const connectionLabel = error ? t("Connection issue", "连接异常") : !data ? t("Checking…", "正在检查…") : online ? "online" : "offline";
   const thinking = threads.some(thread => thread.pending === "processing" || thread.pending === "received"), question = threads.some(thread => thread.question);
   const tone = failed ? "error" : outgoing?.state === "sending" ? "sending" : question ? "question" : thinking ? "thinking" : unread ? "reply" : threads.some(thread => thread.pending) ? "queued" : online ? "online" : "offline";
   const label = failed ? t("Needs attention", "有情况需要查看") : tone === "sending" ? t("Sending…", "正在发送…") : question ? t("Waiting for your reply", "等待你回答") : thinking ? t("Working…", "正在处理…") : unread ? t(`${unread} new replies`, `${unread} 条新回复`) : tone === "queued" ? t("Waiting for Hermes", "等待 Hermes 接收") : online ? "online" : "offline";
   useEffect(() => { const show = setTimeout(() => setHint(true), 0), hide = setTimeout(() => setHint(false), 3800); return () => { clearTimeout(show); clearTimeout(hide); }; }, [tone, unread]);
+  function showStatus() { setOpen(true); void refresh(); }
   function navigate(id?: string) { setOpen(false); onNavigate(id ? `/ai?conversation=${id}` : "/ai"); }
+  const target = threads.find(thread => thread.question) ?? threads.find(thread => thread.unread > 0) ?? threads.find(thread => thread.error) ?? threads.find(thread => thread.pending);
   return <>
-    <button ref={button} type="button" className={styles.floating} data-hermes-activity data-tone={tone} data-dragging={dragging} hidden={inConversation || covered || !position.x} style={{ transform: `translate3d(${position.x}px,${position.y}px,0)` }} aria-label={`Hermes · ${label}`} aria-haspopup="dialog"
-      onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, y: event.clientY, startX: position.x, startY: position.y, moved: false }; suppress.current = false; event.currentTarget.setPointerCapture(event.pointerId); setDragging(true); }} onPointerMove={move} onPointerUp={release} onPointerCancel={event => { release(event); suppress.current = true; }}
-      onClick={() => { if (suppress.current) { suppress.current = false; return; } setOpen(true); void refresh(); }}>
+    <button ref={button} type="button" className={styles.floating} data-hermes-activity data-tone={tone} data-dragging={dragging} hidden={inConversation || covered || !position.x} style={{ transform: `translate3d(${position.x}px,${position.y}px,0)` }} aria-label={`Hermes · ${label}`} aria-description={t("Open Hermes. Press and hold or use Shift+F10 for status.", "打开 Hermes。长按或按 Shift+F10 查看状态。")}
+      onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, y: event.clientY, startX: position.x, startY: position.y, startedAt: event.timeStamp, moved: false }; suppress.current = false; event.currentTarget.setPointerCapture(event.pointerId); setDragging(true); }} onPointerMove={move} onPointerUp={event => release(event)} onPointerCancel={event => release(event, true)}
+      onContextMenu={event => { event.preventDefault(); if (!drag.current) showStatus(); }}
+      onClick={event => { if (suppress.current && event.detail !== 0) { suppress.current = false; return; } navigate(target?.id); }}>
       <span className={styles.mark}><Icon name="ai" variant="stroke" /></span><span className={styles.statusDot} />
       {(thinking || tone === "sending") && <span className={styles.dots} aria-hidden="true"><i/><i/><i/></span>}
       {(unread > 0 || failed || question) && <span className={styles.badge}>{failed || question ? "!" : unread > 99 ? "99+" : unread}</span>}
@@ -122,9 +129,9 @@ export function HermesActivity({ scope, inConversation = false, onNavigate }: { 
     </button>
     <span className={styles.live} role="status" aria-live="polite">{inConversation || tone === "online" || tone === "offline" ? "" : `Hermes · ${label}`}</span>
     {open && !inConversation && <FormSheet title="Hermes" onClose={() => setOpen(false)}><div className={styles.detail}>
-      <div className={styles.connection}><span data-online={online} />{online ? "online" : "offline"}<button className="text-button" onClick={() => void refresh()}>{t("Refresh", "刷新状态")}</button></div>
-      {error && <p className={styles.error} role="alert">{error}</p>}
-      {outgoing && <div className={styles.localStatus}><p>{outgoing.state === "sending" ? t("Sending to EO…", "正在发送到 EO…") : t("Delivery unconfirmed. Your text stays in the original form.", "发送结果未确认，文字仍保留在原输入框。")}</p>{outgoing.error && <p className={styles.error}>{outgoing.error}</p>}{outgoing.state !== "sending" && <button className="text-button" onClick={() => { outgoingRef.current = undefined; setOutgoing(undefined); }}>{t("Dismiss notice", "收起此提示")}</button>}</div>}
+      <div className={styles.connection}><span data-online={online} />{connectionLabel}<button className="text-button" onClick={() => void refresh()}>{t("Refresh", "刷新状态")}</button></div>
+      {error && <HermesErrorNotice inline error={error} fallback={t("Could not read Hermes status.", "暂时无法读取 Hermes 状态。")} />}
+      {outgoing && <div className={styles.localStatus}><p>{outgoing.state === "sending" ? t("Sending to EO…", "正在发送到 EO…") : t("Delivery unconfirmed. Your text stays in the original form.", "发送结果未确认，文字仍保留在原输入框。")}</p>{outgoing.error && <HermesErrorNotice inline error={outgoing.error} />}{outgoing.state !== "sending" && <button className="text-button" onClick={() => { outgoingRef.current = undefined; setOutgoing(undefined); }}>{t("Dismiss notice", "收起此提示")}</button>}</div>}
       <button className="button secondary" onClick={() => navigate()}>{t("Open Hermes", "打开 Hermes")}</button>
       <div className={styles.threads}>{threads.map(thread => <button key={thread.id} onClick={() => navigate(thread.id)}><strong>{thread.title}{thread.unread > 0 && <span>{thread.unread > 99 ? "99+" : thread.unread}</span>}</strong><small>{thread.error ? t("Could not finish · view details", "处理未完成 · 查看详情") : thread.question ? t("Waiting for your reply", "等待你回答") : thread.pending === "processing" || thread.pending === "received" ? t("Working…", "正在处理…") : thread.pending ? t("Waiting to be received", "等待接收") : thread.preview}</small>{thread.error && <span className={styles.error}>{thread.error}</span>}</button>)}</div>
     </div></FormSheet>}

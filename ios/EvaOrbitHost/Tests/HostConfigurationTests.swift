@@ -1,4 +1,5 @@
 import XCTest
+import WebKit
 @testable import EvaOrbitHost
 
 final class HostConfigurationTests: XCTestCase {
@@ -53,6 +54,12 @@ final class HostConfigurationTests: XCTestCase {
             "notification.getStatus", "notification.requestAuthorization", "notification.schedule",
             "notification.cancel", "notification.listPending", "notification.openSettings"
         ]))
+    }
+
+    @MainActor
+    func testHostKeyboardUsesAZeroHeightAccessory() {
+        let webView = HostWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        XCTAssertEqual(webView.inputAccessoryView?.frame.height, 0)
     }
 
     func testHapticKindsStayAClosedBridgeVocabulary() {

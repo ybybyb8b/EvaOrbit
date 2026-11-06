@@ -36,7 +36,8 @@ class Transport:
             request = urllib.request.Request("https://eva-orbit.vercel.app/api/hermes/notify", data=json.dumps(data).encode(), headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json"})
         else:
             payload = json.dumps({"p_token": self.token, "p_instance": self.instance, "p_action": action, "p_data": data}).encode()
-            request = urllib.request.Request(self.url, data=payload, headers={"apikey": self.key, "Content-Type": "application/json"})
+            endpoint = self.url + "_tools" if "toolActivity" in data else self.url
+            request = urllib.request.Request(endpoint, data=payload, headers={"apikey": self.key, "Content-Type": "application/json"})
         try:
             with urllib.request.build_opener(NoRedirect).open(request, timeout=15) as response:
                 body = response.read(1048577)
@@ -48,6 +49,11 @@ class Transport:
                 message = json.loads(error.read(4096)).get("message", "")
             except (ValueError, AttributeError):
                 message = ""
+            if error.code == 404 and "toolActivity" in data:
+                # An older EO deployment still needs to commit the reply receipt.
+                if action == "complete":
+                    return self._request(action, {key: value for key, value in data.items() if key != "toolActivity"})
+                return None
             code = re.search(r"\bHERMES_[A-Z_]+\b", message)
             raise BridgeError(code.group() if code else f"Channel HTTP {error.code}") from None
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
@@ -84,7 +90,7 @@ class Outbox:
                 discarded.add(key)
                 # Explicit retry/clear superseded this attempt. Do not attach its reply elsewhere.
             with self.db:
-                if key not in discarded and action in {"send", "deliver", "complete"}:
+                if key not in discarded and action in {"send", "deliver", "complete"} and not data.get("presentation", {}).get("notice"):
                     self.db.execute("insert or ignore into notifications(id) values(?)", (data["id"],))
                 self.db.execute("delete from outbox where seq=?", (seq,))
         return discarded

@@ -16,9 +16,11 @@ async function client() {
   if (!await currentNativeAccount()) throw new HttpError("请先登录 EvaOrbit。", 401);
   return createSupabaseServerClient();
 }
-async function command(action: string, data: object) {
+async function command(action: string, data: Record<string, unknown>) {
   const supabase = await client();
-  const result = await supabase.rpc(action === "activity" || action === "seen" ? "eo_hermes_activity" : "eo_hermes", { p_action: action === "activity" ? "read" : action, p_data: data });
+  const result = action === "rename"
+    ? await supabase.rpc("eo_hermes_rename_conversation", { p_conversation_id: data.conversationId, p_title: data.title })
+    : await supabase.rpc(action === "activity" || action === "seen" ? "eo_hermes_activity" : "eo_hermes", { p_action: action === "activity" ? "read" : action, p_data: data });
   if (result.error) {
     if (result.error.message.includes("HERMES_PROMPT_EXPIRED")) throw new ConflictError("这个提问已结束，请刷新后重新发消息给 Hermes。");
     if (result.error.message.includes("HERMES_BUSY")) throw new ConflictError("Hermes 正在处理这段对话，结束后再清理。");

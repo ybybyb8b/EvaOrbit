@@ -11,7 +11,12 @@ try {
   for (const mobile of [true, false]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 402, height: 874 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile });
     const page = await context.newPage(), errors = [];
-    await context.addInitScript(() => { localStorage.setItem('evaorbit.uiLanguage','zh-CN'); localStorage.setItem('evaorbit.englishFont','zen'); });
+    await context.addInitScript(mobile => {
+      localStorage.setItem("evaorbit.uiLanguage", "zh-CN");
+      localStorage.setItem("evaorbit.englishFont", "zen");
+      localStorage.setItem("evaorbit.designTheme", mobile ? "classic" : "vintage");
+      localStorage.setItem("evaorbit.appearanceMode", mobile ? "light" : "dark");
+    }, mobile);
     page.on("pageerror", error => errors.push(String(error)));
     // The shipped bundle intentionally blocks browser networking via CSP.
     // This exercises a real connection failure without contacting production.
@@ -23,6 +28,16 @@ try {
     await submit.click();
     await banner.waitFor();
     await banner.getByText("暂时无法连接登录服务，请检查网络后重试。", { exact: true }).waitFor();
+    assert.equal(await banner.locator("[data-error-details]").count(), 0);
+    const detailsToggle = banner.getByRole("button", { name: "查看报错详情" });
+    await detailsToggle.click();
+    assert.match(await banner.locator("[data-error-details]").textContent(), /POST \/eo-api\/session:.*\[EO:request_failed\]/);
+    const hideDetails = banner.getByRole("button", { name: "收起报错详情" });
+    assert.equal(await hideDetails.getAttribute("aria-expanded"), "true");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: `tmp/error-details-${mobile ? "mobile" : "desktop"}.png` });
+    await hideDetails.click();
+    assert.equal(await banner.locator("[data-error-details]").count(), 0);
     await page.waitForTimeout(2700);
     assert.equal(await banner.count(), 1, "errors must outlive success capsules");
     assert.equal(await banner.evaluate(el => el.inert || Boolean(el.closest("[inert]"))), false);
@@ -32,13 +47,16 @@ try {
     await page.screenshot({ path: `tmp/error-banner-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
     if (mobile) {
       const cdp = await context.newCDPSession(page);
-      const x = bounds.x + 55, y = bounds.y + bounds.height - 5;
+      const x = bounds.x + 20, y = bounds.y + bounds.height - 14;
       await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
       await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - 15 }] });
       await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
       assert.equal(await banner.count(), 1, "a small drag must not dismiss");
+      await page.waitForFunction(() => document.querySelector(".error-banner").style.transform === "translateY(0px)");
       await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - 55 }] });
+      for (const distance of [20, 40, 60]) {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - distance }] });
+      }
       await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     } else {
       await page.getByRole("button", { name: "收起错误提示" }).focus();

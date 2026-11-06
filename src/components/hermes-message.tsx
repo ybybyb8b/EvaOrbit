@@ -1,16 +1,18 @@
 "use client";
 import { useId } from "react";
-import type { HermesMessage } from "@/lib/hermes";
+import { hermesResponseChoices, type HermesMessage } from "@/lib/hermes";
 import { MarkdownMessage } from "./markdown-message";
 import { Disclosure } from "./disclosure";
 import styles from "./hermes-chat.module.css";
 
-export function HermesMessageBody({ message, english, showTail = true, onOpenOptions }: {
+export function HermesMessageBody({ message, responseQuestion, english, showTail = true, onOpenOptions }: {
   message: HermesMessage; english: boolean; showTail?: boolean;
+  responseQuestion?: HermesMessage;
   onOpenOptions: (message: HermesMessage) => void;
 }) {
   const tailMask = useId();
   const presentation = message.presentation;
+  const selectedChoices = hermesResponseChoices(message, responseQuestion);
   const t = (en: string, zh: string) => english ? en : zh;
   const pending = presentation?.state === "pending";
   return <div className={styles.bubble} data-note={presentation?.kind === "note" || undefined}>
@@ -23,7 +25,9 @@ export function HermesMessageBody({ message, english, showTail = true, onOpenOpt
     {message.role === "assistant" && presentation?.reasoning && <Disclosure title={t("Thinking", "思考内容")} className={styles.reasoning}>
       <div className={styles.thoughtContent}><MarkdownMessage content={presentation.reasoning} /></div>
     </Disclosure>}
-    {message.role === "assistant" ? <MarkdownMessage content={message.content} /> : <p className={styles.userText}>{message.content}</p>}
+    {message.role === "assistant" ? <MarkdownMessage content={message.content} /> : selectedChoices
+      ? <ul className={styles.selectedChoices}>{selectedChoices.map((choice, index) => <li key={index}>{choice}</li>)}</ul>
+      : <p className={styles.userText}>{message.content}</p>}
     {message.role === "assistant" && presentation?.kind === "choices" && <div className={styles.choiceCard}>
       {pending ? <button className="text-button" aria-haspopup="dialog" onClick={() => onOpenOptions(message)}>{t("View options", "查看选项")}</button> : <small className={styles.choiceState}>{presentation.state === "answered" ? t("Answered", "已回复") : t("Question expired", "提问已结束")}</small>}
     </div>}

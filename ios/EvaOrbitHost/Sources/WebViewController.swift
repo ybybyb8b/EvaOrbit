@@ -1,6 +1,15 @@
 import UIKit
 import WebKit
 
+final class HostWebView: WKWebView {
+    private let emptyFormAccessory = UIView(frame: .zero)
+
+    override var inputAccessoryView: UIView? {
+        // An empty accessory takes the place of WebKit's default form toolbar.
+        emptyFormAccessory
+    }
+}
+
 final class WebViewController: UIViewController {
     private let hostConfiguration: HostConfiguration
     private let bridge: NativeBridge
@@ -90,7 +99,7 @@ final class WebViewController: UIViewController {
         webConfiguration.userContentController = userContentController
         webConfiguration.applicationNameForUserAgent = "EvaOrbitNative/0.1"
         webConfiguration.defaultWebpagePreferences.allowsContentJavaScript = true
-        webView = WKWebView(frame: .zero, configuration: webConfiguration)
+        webView = HostWebView(frame: .zero, configuration: webConfiguration)
 
         super.init(nibName: nil, bundle: nil)
         nativeBridge.onDataChanged = { [weak self] domains, source in
