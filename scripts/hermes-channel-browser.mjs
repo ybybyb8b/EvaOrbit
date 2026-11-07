@@ -199,8 +199,8 @@ try {
     touch: matchMedia("(any-pointer: coarse)").matches,
   }))));
   assert.equal(await mobileNav.count(), 0);
-  const keyboardGap = await input.evaluate(element => window.visualViewport.height + window.visualViewport.offsetTop - element.form.getBoundingClientRect().bottom);
-  assert(keyboardGap >= 0 && keyboardGap <= 6, "composer stays just above the keyboard even when the viewport pans");
+  const keyboardGap = await input.evaluate(element => window.visualViewport.height - element.form.getBoundingClientRect().bottom);
+  assert(keyboardGap >= 0 && keyboardGap <= 6, "composer stays just above the keyboard when a reported offset has not moved the page");
   await page.evaluate(() => {
     const viewport = window.visualViewport;
     Reflect.deleteProperty(viewport, "height");
@@ -307,7 +307,8 @@ try {
         }) };
     });
     await page.screenshot({ path: `tmp/hermes-qa/wallpaper-${name}.png`, animations: "disabled" });
-    assert(["top", "left", "right"].every(edge => Math.abs(coverage.bounds[edge] - coverage.main[edge]) < 1)
+    assert(Math.abs(coverage.bounds.top - Math.max(0, coverage.main.top)) < 1
+      && ["left", "right"].every(edge => Math.abs(coverage.bounds[edge] - coverage.main[edge]) < 1)
       && coverage.bounds.bottom >= coverage.viewportHeight - 1 && coverage.size === "cover", `${name} wallpaper coverage ${JSON.stringify(coverage)}`);
     assert.equal(coverage.overlay === "none", mode === "light");
     assert.equal(coverage.headerFill, "rgba(0, 0, 0, 0)");
@@ -321,33 +322,40 @@ try {
   const wallpaper = page.locator("[data-hermes-wallpaper]");
   await page.waitForFunction(() => document.querySelector("[data-hermes-wallpaper]")?.getBoundingClientRect().height === innerHeight);
   const restingWallpaper = await wallpaper.boundingBox();
+  const back = page.getByRole("button", { name: "返回上一页" });
+  const restingHeader = await back.boundingBox();
+  const restingComposer = await input.evaluate(element => element.form.getBoundingClientRect().bottom);
+  assert.equal(await input.evaluate(element => getComputedStyle(element).scrollMarginBottom), "0px");
   await input.focus();
-  for (const [height, top] of [[790, 0], [625, 0], [480, 125], [495, 8]]) {
-    await input.evaluate(async (element, { height, top }) => {
+  for (const [height, top, pan] of [[790, 0, 0], [528, 346, 0], [480, 125, 0], [495, 84, 84]]) {
+    const gap = await input.evaluate(async (element, { height, top, pan }) => {
       const viewport = window.visualViewport;
+      element.closest("main").style.translate = `0 -${pan}px`;
       Object.defineProperty(viewport, "height", { configurable: true, value: height });
       Object.defineProperty(viewport, "offsetTop", { configurable: true, value: top });
       viewport.dispatchEvent(new Event("resize"));
       viewport.dispatchEvent(new Event("scroll"));
       await new Promise(resolve => requestAnimationFrame(resolve));
-    }, { height, top });
+      return height - element.form.getBoundingClientRect().bottom;
+    }, { height, top, pan });
     const bounds = await wallpaper.boundingBox();
     assert.equal(bounds.height, restingWallpaper.height, "keyboard motion must not recrop the wallpaper");
-    assert(Math.abs(bounds.y - top - restingWallpaper.y) <= 1, "wallpaper stays anchored when the visual viewport pans");
-    const gap = await input.evaluate(element => window.visualViewport.height + window.visualViewport.offsetTop - element.form.getBoundingClientRect().bottom);
+    assert(Math.abs(bounds.y - restingWallpaper.y) <= 1, "wallpaper stays anchored even when the reported offset is out of sync");
+    assert(Math.abs((await back.boundingBox()).y - restingHeader.y) <= 1, "header stays at its resting position");
     assert(gap >= 3 && gap <= 5, `composer follows keyboard motion, got ${gap}px`);
-    const back = await page.getByRole("button", { name: "返回上一页" }).boundingBox();
-    assert(back.y >= top && back.y + back.height < top + height, "header controls remain visible when the viewport pans");
   }
   await input.blur();
-  await page.evaluate(async () => {
+  await input.evaluate(async element => {
     const viewport = window.visualViewport;
+    element.closest("main").style.removeProperty("translate");
     Reflect.deleteProperty(viewport, "height");
-    Reflect.deleteProperty(viewport, "offsetTop");
-    viewport.dispatchEvent(new Event("resize"));
+    window.dispatchEvent(new Event("evaorbit:native-active"));
     await new Promise(resolve => requestAnimationFrame(resolve));
   });
   assert.deepEqual(await wallpaper.boundingBox(), restingWallpaper);
+  assert.deepEqual(await back.boundingBox(), restingHeader);
+  assert.equal(await input.evaluate(element => element.form.getBoundingClientRect().bottom), restingComposer);
+  await page.evaluate(() => Reflect.deleteProperty(window.visualViewport, "offsetTop"));
   await page.reload({ waitUntil: "networkidle" });
   await page.locator("[data-hermes-activity]").tap();
   await page.locator("[data-hermes-wallpaper]").waitFor();

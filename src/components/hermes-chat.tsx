@@ -103,27 +103,25 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const fit = () => {
       frame = 0;
       const viewport = window.visualViewport;
-      const visibleHeight = viewport?.height ?? window.innerHeight;
-      const visibleTop = viewport?.offsetTop ?? 0;
+      const unzoomed = Math.abs((viewport?.scale ?? 1) - 1) < .05;
+      const visibleHeight = unzoomed ? (viewport?.height ?? window.innerHeight) : window.innerHeight;
+      if (document.hidden || visibleHeight <= 0) return;
       const focused = document.activeElement === input.current;
       if (layoutWidth !== window.innerWidth) {
         layoutWidth = window.innerWidth;
         fullHeight = window.innerHeight;
       }
-      const keyboardInset = (focused || keyboardOpen) && window.matchMedia("(any-pointer: coarse)").matches
-        && Math.abs((viewport?.scale ?? 1) - 1) < .05 ? Math.max(0, fullHeight - visibleHeight) : 0;
-      keyboardOpen = keyboardInset > (keyboardOpen ? 2 : 100);
-      if (!keyboardOpen && !focused) fullHeight = visibleHeight;
+      const touchViewport = unzoomed && window.matchMedia("(any-pointer: coarse)").matches;
+      keyboardOpen = touchViewport && (focused || keyboardOpen) && fullHeight - visibleHeight > (focused ? 2 : 40);
+      if (!keyboardOpen) fullHeight = visibleHeight;
       element.dataset.keyboardOpen = String(keyboardOpen);
 
-      const top = element.getBoundingClientRect().top;
-      // Keep the wallpaper crop tied to the resting viewport, even when WebKit pans it to reveal the input.
-      const wallpaperOffset = keyboardInset > 0 ? visibleTop - surface.getBoundingClientRect().top : 0;
-      surface.style.setProperty("--hermes-wallpaper-height", `${Math.max(fullHeight, visibleHeight)}px`);
-      surface.style.setProperty("--hermes-wallpaper-offset", `${wallpaperOffset}px`);
-      element.style.setProperty("--hermes-chat-height", `${Math.max(0, visibleTop + visibleHeight - top)}px`);
-      element.style.setProperty("--hermes-keyboard-inset", `${keyboardInset}px`);
-      element.style.setProperty("--hermes-header-offset", `${keyboardInset > 0 ? Math.max(0, visibleTop - top) : 0}px`);
+      // WebKit can report a keyboard offset before the page moves. Only correct
+      // movement of the surface itself, and size the chat from the visible height.
+      const surfaceTop = surface.getBoundingClientRect().top;
+      surface.style.setProperty("--hermes-screen-inset", `${touchViewport ? Math.max(0, -surfaceTop) : 0}px`);
+      surface.style.setProperty("--hermes-wallpaper-height", `${fullHeight}px`);
+      element.style.setProperty("--hermes-chat-height", `${Math.max(0, visibleHeight - Math.max(0, surfaceTop))}px`);
       element.style.setProperty("--hermes-composer-height", `${(composerArea.current?.offsetHeight ?? 130) + 32}px`);
       if (followBottom.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
     };
@@ -133,6 +131,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     fit();
     window.addEventListener("resize", scheduleFit);
     window.addEventListener("scroll", scheduleFit, { passive: true });
+    window.addEventListener("pageshow", scheduleFit);
+    window.addEventListener(nativeActive, scheduleFit);
+    document.addEventListener("visibilitychange", scheduleFit);
     window.visualViewport?.addEventListener("resize", scheduleFit);
     window.visualViewport?.addEventListener("scroll", scheduleFit);
     return () => {
@@ -140,10 +141,13 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", scheduleFit);
       window.removeEventListener("scroll", scheduleFit);
+      window.removeEventListener("pageshow", scheduleFit);
+      window.removeEventListener(nativeActive, scheduleFit);
+      document.removeEventListener("visibilitychange", scheduleFit);
       window.visualViewport?.removeEventListener("resize", scheduleFit);
       window.visualViewport?.removeEventListener("scroll", scheduleFit);
       surface.style.removeProperty("--hermes-wallpaper-height");
-      surface.style.removeProperty("--hermes-wallpaper-offset");
+      surface.style.removeProperty("--hermes-screen-inset");
     };
   }, []);
   useEffect(() => {
@@ -212,10 +216,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const row = document.getElementById(`hermes-${last.id}`);
     if (!row) return;
     const bounds = row.getBoundingClientRect();
-    const viewport = window.visualViewport, paneBounds = pane.getBoundingClientRect();
-    const top = Math.max(viewport?.offsetTop ?? 0, paneBounds.top + 28);
-    const bottom = Math.min((viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight), paneBounds.bottom,
-      composerArea.current?.getBoundingClientRect().top ?? window.innerHeight);
+    const paneBounds = pane.getBoundingClientRect();
+    const top = paneBounds.top + 28;
+    const bottom = Math.min(paneBounds.bottom, composerArea.current?.getBoundingClientRect().top ?? paneBounds.bottom);
     if (Math.min(bottom, bounds.bottom) > Math.max(top, bounds.top)) {
       notifyHermesActivity({ state: "seen", conversationId: last.conversation_id, seq: last.seq });
     }
