@@ -12,6 +12,7 @@ const connection = { paired: false, online: false, lastSeenAt: null, commands:[{
 const seen = new Map(), sendWrites = () => writes.filter(write => write.action === "send");
 let failSend = true, failRead = false, pageSize = Infinity, sequence = 0;
 let interruptedSend;
+let delayedConversationRead;
 await fs.mkdir("tmp/hermes-qa", { recursive: true });
 await server.listen();console.log(JSON.stringify({ pid: process.pid, port: server.httpServer.address().port, synthetic: true }));
 try {
@@ -27,6 +28,7 @@ try {
       if (request.method() === "GET") {
         if (failRead) return route.fulfill({ status: 503, json: { error: "模拟查询失败" } });
         if(url.searchParams.get("view")==="activity") return route.fulfill({json:{connection,threads:conversations.map(c=>{const rows=messages.filter(m=>m.conversation_id===c.id),latest=rows.at(-1),pending=rows.find(m=>m.role==="user"&&["queued","received","processing"].includes(m.status));return {id:c.id,title:c.title,latestSeq:latest?.seq??0,preview:latest?.content??"",unread:rows.filter(m=>m.role==="assistant"&&m.seq>(seen.get(c.id)??0)).length,pending:pending?.status??null,question:rows.some(m=>m.presentation?.state==="pending"),error:rows.find(m=>["failed","interrupted"].includes(m.status)&&m.seq>(seen.get(c.id)??0))?.error??null};}),receipt:messages.find(m=>m.id===url.searchParams.get("receiptId"))??null}});
+        if (delayedConversationRead) await delayedConversationRead;
         const pending = (url.searchParams.get("pending") || "").split(","), after = Number(url.searchParams.get("after") ?? -1), before = Number(url.searchParams.get("before") ?? Number.MAX_SAFE_INTEGER);
         const rows = messages.filter(m => m.conversation_id === url.searchParams.get("conversationId") && m.seq < before && (m.seq > after || pending.includes(m.id)));
         return route.fulfill({ json: { connection, conversations, messages: rows.slice(-pageSize), hasMore: rows.length > pageSize } });
@@ -110,17 +112,12 @@ try {
   const thinking=page.getByRole("button",{name:"思考内容",exact:true});assert.equal(await thinking.getAttribute("aria-expanded"),"false");await thinking.click();await page.getByText("只展示 Hermes 实际提供的思考内容。",{exact:true}).waitFor();await thinking.click();
   assert(await thinking.evaluate(button => !button.closest("[data-bubble-tail]") && button.closest(".eo-disclosure").nextElementSibling?.querySelector(".markdown-content")), "thinking stays outside the reply bubble");
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"long code stays inside bubble");
-  await input.fill("普通聊天草稿还在");await page.getByRole("button",{name:"便利贴",exact:true}).last().click();
-  const noteDialog=page.getByRole("dialog",{name:"便利贴",exact:true}),noteInput=noteDialog.getByRole("textbox",{name:"便利贴内容",exact:true});await noteInput.fill("睡醒后让扫地机器人打扫");
-  assert.equal(await noteDialog.locator('[data-reicon="close"]').count(),1);assert.equal(await noteInput.locator('..').getByRole('button').count(),0);const noteBounds=await noteDialog.locator('.form-sheet-body').evaluate(element=>({width:element.clientWidth,height:element.clientHeight,scrollWidth:element.scrollWidth,scrollHeight:element.scrollHeight,paperHeight:element.querySelector('form').getBoundingClientRect().height,paperWidth:element.querySelector('form').getBoundingClientRect().width,panelHeight:element.parentElement.getBoundingClientRect().height}));assert(noteBounds.scrollWidth<=noteBounds.width&&noteBounds.scrollHeight<=noteBounds.height,JSON.stringify(noteBounds));
-  await page.screenshot({path:"tmp/hermes-qa/sticky-note-mobile.png",animations:"disabled"});
-  await page.setViewportSize({width:320,height:520});assert(await noteDialog.locator('.form-sheet-body').evaluate(element=>element.scrollWidth<=element.clientWidth&&element.scrollHeight<=element.clientHeight),"small viewport keeps the paper outside scroll containers");const noteSend=await noteDialog.getByRole('button',{name:'交给 Hermes',exact:true}).boundingBox();assert(noteSend.y+noteSend.height<=520);await page.setViewportSize({width:402,height:874});
-  await noteDialog.getByRole("button",{name:"稍后再写",exact:true}).click();await noteDialog.waitFor({state:"detached"});assert.equal(await input.inputValue(),"普通聊天草稿还在");
-  await page.getByRole("button",{name:"便利贴",exact:true}).first().click();await noteInput.waitFor();assert.equal(await noteInput.inputValue(),"睡醒后让扫地机器人打扫");
-  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:"tmp/hermes-qa/sticky-note-desktop.png",animations:"disabled"});await page.setViewportSize({width:402,height:874});
-  failSend=true;await noteDialog.getByRole("button",{name:"交给 Hermes",exact:true}).click();await banner.getByText("Hermes 消息服务暂时出错。",{exact:true}).waitFor();assert.equal(await noteInput.inputValue(),"睡醒后让扫地机器人打扫");
-  await noteDialog.getByRole("button",{name:"交给 Hermes",exact:true}).click();await noteDialog.waitFor({state:"detached"});await page.getByText("睡醒后让扫地机器人打扫",{exact:true}).waitFor();assert.equal(sendWrites().at(-1).note,true);assert.equal(sendWrites().at(-1).id,sendWrites().at(-2).id);assert.equal(await input.inputValue(),"普通聊天草稿还在");await input.fill("");
-  await page.getByRole("button",{name:"便利贴记录",exact:true}).click();await page.getByRole("button",{name:/睡醒后让扫地机器人打扫/}).waitFor();await page.getByRole("button",{name:"关闭",exact:true}).click();
+  assert.equal(await page.getByRole("button", { name: /便利贴/ }).count(), 0);
+  const legacyNote = { ...messages[0], id: "20000000-0000-4000-8000-000000000011", seq: ++sequence,
+    content: "睡醒后让扫地机器人打扫", presentation: { kind: "note" } };
+  messages.push(legacyNote);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.locator("#hermes-" + legacyNote.id).locator("[data-note]").getByText(legacyNote.content, { exact: true }).waitFor();
   const question={...answer,id:"20000000-0000-4000-8000-000000000003",seq:++sequence,content:"你更想先处理哪一个？",presentation:{kind:"choices",promptId:"test-prompt",state:"pending",options:["先挑礼物","先打扫"],multi:false}};messages.push(question);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   const choiceDialog=page.getByRole("dialog",{name:"Hermes 在问",exact:true});await choiceDialog.waitFor();
@@ -160,7 +157,7 @@ try {
   assert.equal(await titleInput.inputValue(), "另一件独立的事");
   await titleInput.fill("  ");
   const saveTitle = renameDialog.getByRole("button", { name: "保存", exact: true });
-  assert(await saveTitle.isDisabled());
+  await saveTitle.and(page.locator(":disabled")).waitFor();
   await titleInput.fill("  独立计划  ");
   await saveTitle.click();
   await renameDialog.getByText("请求超时。", { exact: true }).waitFor();
@@ -344,6 +341,38 @@ try {
     assert(Math.abs((await back.boundingBox()).y - restingHeader.y) <= 1, "header stays at its resting position");
     assert(gap >= 3 && gap <= 5, `composer follows keyboard motion, got ${gap}px`);
   }
+  const keyboardComposer = await input.evaluate(element => element.form.getBoundingClientRect().bottom);
+  await input.evaluate(async () => {
+    const viewport = window.visualViewport;
+    Object.defineProperty(viewport, "height", { configurable: true, value: 497 });
+    viewport.dispatchEvent(new Event("resize"));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+  assert.equal(await input.evaluate(element => element.form.getBoundingClientRect().bottom), keyboardComposer, "small candidate-bar changes do not move the composer");
+  const originalDraft = await input.inputValue();
+  const keyboardFormHeight = await input.evaluate(element => element.form.getBoundingClientRect().height);
+  await input.fill("单行");
+  const typingPositions = await input.evaluate(async element => {
+    const positions = [];
+    for (const [text, height] of [["zh", 519], ["zhong", 478], ["中", 495]]) {
+      element.dispatchEvent(new CompositionEvent("compositionupdate", { data: text, bubbles: true }));
+      Object.defineProperty(window.visualViewport, "height", { configurable: true, value: height });
+      window.visualViewport.dispatchEvent(new Event("resize"));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      positions.push(element.form.getBoundingClientRect().bottom);
+    }
+    return positions;
+  });
+  assert.deepEqual(typingPositions, [keyboardComposer, keyboardComposer, keyboardComposer], "single-line composition ignores transient candidate viewport changes");
+  await input.evaluate(element => {
+    element.dispatchEvent(new CompositionEvent("compositionupdate", { data: "中文", bubbles: true }));
+    Object.defineProperty(window.visualViewport, "height", { configurable: true, value: 520 });
+    window.visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await page.waitForFunction(() => Math.abs(document.querySelector("[data-hermes-chat] textarea").form.getBoundingClientRect().bottom - 516) <= 1);
+  await input.fill("中文输入测试\n候选词变化\n继续输入第三行");
+  assert.equal(await input.evaluate(element => element.form.getBoundingClientRect().height), keyboardFormHeight, "text wraps inside a stable composer while the keyboard is open");
+  await input.fill(originalDraft);
   await input.blur();
   await input.evaluate(async element => {
     const viewport = window.visualViewport;
@@ -379,10 +408,6 @@ try {
   };
   await openPreview();
   await input.fill("普通草稿要跨刷新");
-  await page.getByRole("button", { name: "便利贴", exact: true }).click();
-  await noteInput.fill("便利贴草稿也要跨刷新");
-  await noteDialog.getByRole("button", { name: "稍后再写", exact: true }).click();
-  await noteDialog.waitFor({ state: "detached" });
   await page.getByRole("button", { name: "新对话", exact: true }).click();
   assert.equal(await input.inputValue(), "", "a new conversation does not inherit the previous draft");
   await openPreview();
@@ -395,21 +420,21 @@ try {
     return row;
   };
   for (let index = 1; index <= 20; index++) appendPreview(`历史消息 ${index}`);
+  seen.set(previewConversation, sequence);
   pageSize = 12;
   await page.reload({ waitUntil: "networkidle" });
   await floating.tap();
   await openPreview();
   await page.getByText("历史消息 20", { exact: true }).waitFor();
   assert.equal(await input.inputValue(), "普通草稿要跨刷新");
-  await page.getByRole("button", { name: "便利贴", exact: true }).click();
-  assert.equal(await noteInput.inputValue(), "便利贴草稿也要跨刷新");
+  await appearanceButton.click();
   const covered = appendPreview("弹窗背后收到的回复");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByText(covered.content, { exact: true }).waitFor({ state: "attached" });
-  assert((seen.get(previewConversation) ?? 0) < covered.seq, "a covered reply cannot be acknowledged before the note closes");
+  assert((seen.get(previewConversation) ?? 0) < covered.seq, "a covered reply cannot be acknowledged before the appearance dialog closes");
   await Promise.all([page.waitForRequest(request => request.method() === "POST" && request.postDataJSON()?.seq === covered.seq),
-    noteDialog.getByRole("button", { name: "稍后再写", exact: true }).click()]);
-  await noteDialog.waitFor({ state: "detached" });
+    appearanceDialog.getByRole("button", { name: "关闭", exact: true }).click()]);
+  await appearanceDialog.waitFor({ state: "detached" });
   const pane = page.locator("[data-hermes-message]").first().locator("../..");
   await pane.evaluate(element => { element.scrollTop = 0; });
   const olderButton = page.getByRole("button", { name: "更早的消息", exact: true });
@@ -420,14 +445,65 @@ try {
   await olderButton.click();
   await page.getByText("历史消息 1", { exact: true }).waitFor();
   assert(Math.abs((await page.locator(`[id="${anchorId}"]`).boundingBox()).y - anchorTop) < 2, "loading earlier messages preserves the reading position");
-  const newReply = appendPreview("翻看历史期间的新回复");
+  const longReply = heading => [heading, ...Array.from({ length: 25 }, (_, i) => `第 ${i + 1} 段测试正文。这条消息的长度超过一屏，用来核对回看时的阅读位置。`)].join("\n\n");
+  const waitForReplyStart = row => page.waitForFunction(id => {
+    const message = document.getElementById(`hermes-${id}`);
+    const pane = message?.parentElement?.parentElement;
+    const header = pane?.previousElementSibling;
+    return header && Math.abs(message.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 14) < 2;
+  }, row.id);
+  const newReply = appendPreview(longReply("翻看历史期间的新回复"));
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   const jump = page.getByRole("button", { name: "有新消息", exact: true });
   await jump.waitFor();
   assert((seen.get(previewConversation) ?? 0) < newReply.seq);
   await jump.click();
   await jump.waitFor({ state: "detached" });
+  await waitForReplyStart(newReply);
+  assert((seen.get(previewConversation) ?? 0) < newReply.seq, "showing the start of a long reply does not acknowledge the unseen end");
 
+  await pane.evaluate(element => { element.scrollTop = 120; });
+  await page.getByRole("button", { name: "回到最新", exact: true }).waitFor();
+  const savedScroll = await pane.evaluate(element => element.scrollTop);
+  let releaseRead;
+  delayedConversationRead = new Promise(resolve => { releaseRead = resolve; });
+  try {
+    await back.click();
+    await mobileNav.waitFor();
+    await page.evaluate(id => {
+      window.__evaorbitPendingPath = `/ai?conversation=${id}`;
+      window.dispatchEvent(new Event("evaorbit:open-path"));
+    }, previewConversation);
+    await page.getByText("历史消息 1", { exact: true }).waitFor({ state: "attached" });
+    assert.equal(await pane.evaluate(element => element.scrollTop), savedScroll, "reopening restores the cached reading position before any network response");
+  } finally {
+    delayedConversationRead = undefined;
+    releaseRead();
+  }
+  await page.getByRole("button", { name: "回到最新", exact: true }).click();
+  await page.waitForFunction(id => {
+    const row = document.getElementById(`hermes-${id}`);
+    const pane = row?.parentElement?.parentElement;
+    return pane && pane.scrollHeight - pane.clientHeight - pane.scrollTop < 2;
+  }, newReply.id);
+  const liveReply = appendPreview(longReply("当前对话收到的长回复"));
+  const headerBefore = await back.boundingBox();
+  const composerBefore = await input.boundingBox();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await waitForReplyStart(liveReply);
+  assert.deepEqual(await back.boundingBox(), headerBefore, "scrolling to the reply leaves the header in place");
+  assert.deepEqual(await input.boundingBox(), composerBefore, "scrolling to the reply leaves the composer in place");
+  await page.getByRole("button", { name: "回到最新", exact: true }).click();
+  await back.click();
+  await mobileNav.waitFor();
+  const barkReply = appendPreview(longReply("从通知回来看到的第一条未读回复"));
+  appendPreview("从通知回来看到的第二条未读回复");
+  await page.evaluate(id => {
+    window.__evaorbitPendingPath = `/ai?conversation=${id}`;
+    window.dispatchEvent(new Event("evaorbit:open-path"));
+  }, previewConversation);
+  await waitForReplyStart(barkReply);
+  await page.getByRole("button", { name: "回到最新", exact: true }).click();
   failRead = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByRole("button", { name: "连接异常", exact: true }).waitFor();
@@ -444,9 +520,13 @@ try {
   assert.match(await toolActivity.textContent(), /2 项执行中/);
   await toolActivity.click();
   const toolDetails = toolActivity.locator("../..");
-  assert(await toolDetails.evaluate(section => [section, section.firstElementChild].every(element => getComputedStyle(element).backgroundColor === "rgba(0, 0, 0, 0)")), "tool row has no capsule surface");
+  assert(await toolDetails.evaluate(section => [section, section.firstElementChild, section.querySelector(".eo-disclosure-body")].every(element => getComputedStyle(element).backgroundColor === "rgba(0, 0, 0, 0)")), "tool title and expanded details have no background");
   assert.deepEqual(await toolDetails.getByRole("listitem").allTextContents(), ["search×30", "read_file×4"]);
   await toolDetails.getByText("另有 2 次调用", { exact: true }).waitFor();
+  const workingStatus = page.getByText("Hermes 正在处理", { exact: true });
+  const toolBounds = await toolDetails.boundingBox();
+  const workingBounds = await workingStatus.boundingBox();
+  assert(workingBounds.y - toolBounds.y - toolBounds.height >= 12, "expanded tools leave a clear gap before the working status");
   activeWork.presentation.toolActivity = { ...activeWork.presentation.toolActivity, running: 0, failed: 1 };
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await toolActivity.getByText("1 项异常", { exact: true }).waitFor();
@@ -460,6 +540,7 @@ try {
   activeWork.status = "interrupted";
   for (const saved of [true, false]) {
     await page.getByRole("button", { name: "新对话", exact: true }).click();
+    assert.equal(await page.getByText("想到什么，直接说。", { exact: true }).evaluate(element => getComputedStyle(element).backgroundColor), "rgba(0, 0, 0, 0)");
     const content = saved ? "退到后台时云端已保存" : "退到后台时请求未送达";
     const sendButton = page.getByRole("button", { name: "发送", exact: true });
     const before = sendWrites().length;

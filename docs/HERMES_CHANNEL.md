@@ -12,7 +12,7 @@ EO 是 Hermes 的消息平台。EO 保存用户输入、助手回复、投递／
 
 ## 组成
 
-- `/ai` 使用共享 `HermesChat`，便利贴在 Hermes 页填写和查看；旧 `/ai/papers` 转至 `/ai`，原 AI 处理入口停用，历史数据保留。Home Log 仅保留原来的 2×5 记录按钮，不再展示纸条输入区。
+- `/ai` 使用共享 `HermesChat`。已有便利贴仍随聊天历史展示。旧 `/ai/papers` 转至 `/ai`，Home Log 保留原来的 2×5 记录按钮。
 - `GET/POST /api/hermes` 复用账户认证及账户头校验，经受限 `eo_hermes` RPC 管理消息。首次发送提供会话 UUID 和消息 UUID，响应丢失后复用 ID；新对话使用新 UUID。
 - `hermes_connections` 保存可撤销凭据的 SHA-256、工作实例和心跳；`hermes_conversations`／`hermes_messages` 保存云端聊天副本和投递状态。不复用旧模型调用表，也不自动导入旧聊天。三表不进入生活数据备份；清理云端聊天不删除 Hermes 本地会话或记忆。
 - `integrations/hermes-evaorbit` 为 Hermes `kind: platform` 插件，使用正式 `BasePlatformAdapter`、`MessageEvent` 和生命周期钩子。只需 stdlib 加 Hermes 已有依赖，不新增 Python 网络或 Supabase SDK。原始通道凭据只在下载连接文件和电脑 `.env` 中出现，数据库只存哈希；不用 service-role key。
@@ -45,9 +45,9 @@ EO 是 Hermes 的消息平台。EO 保存用户输入、助手回复、投递／
 
 空闲状态每 15 秒查询轻量摘要，有任务时每 5 秒查询；页面不可见时暂停，并在回到前台恢复。发送事件即时显示提交中／已保存／未确认，响应丢失时可以按消息 ID 查询保存回执，不自动重发。Native 的 Hermes 写入不触发无关 Home 快照刷新。仅是应用内常驻入口，不是 iOS 应用外悬浮窗或锁屏后台执行保证。
 
-`202611060002_hermes_message_surfaces.sql` 增加有容量限制的消息 `presentation`。用户只能通过发送操作标记便利贴，不能伪造助手、思考内容或提问卡。Hermes 页的便利贴和普通对话使用同一消息通道；便利贴列表按当前对话分页查找。独立 Papers 页面转至 `/ai`，旧 API 仅保留幂等存入 Inbox 的兼容动作，不能开启、重试或恢复旧 AI 整理；历史数据不删除。
+`202611060002_hermes_message_surfaces.sql` 增加有容量限制的消息 `presentation`。新 Hermes 界面使用普通输入框发送消息。旧客户端的便利贴消息协议继续兼容，已发送的便利贴沿用原有气泡显示。旧 Papers API 保留幂等存入 Inbox 的兼容动作。
 
-Hermes 页输入区便利贴入口展开独立的 `HermesNoteSheet`，顶部入口查看便利贴记录，不改变普通聊天草稿。采用用户提供样张第三排中间的淡紫纸／绿色胶带款，经图片编辑提取的透明素材位于 `public/textures/hermes-note-lavender-green.png`；纸面仅叠加可编辑文字；不显示标题或外层面板，右上角为 Reicon 关闭按钮，底部两按钮独立悬浮。纸张按可用视口缩放，外层无横向或纵向滚动区域，仅正文可在纸内滚动。暂时关闭保留当前页面的便利贴草稿，发送失败也保留正文及同一请求 ID；成功后才清空便利贴，不清空普通聊天输入。本地 Host 使用同一组件，须安装本轮重建包后使用。
+淡紫纸和绿色胶带设计存档在 [HermesNoteSheet](../src/components/hermes-note-sheet.tsx)、[配套样式](../src/components/hermes-note-sheet.module.css)和[纸张素材](../public/textures/hermes-note-lavender-green.png)，可供后续复用。
 
 Hermes 提供的本地化 reasoning 消息封套在适配器发送前拆成独立展示字段，默认折叠。没有收到的思考内容不生成，普通代码、HTML 标签不猜作思考链。Hermes 自身仍决定是否显示推理，且当前网关投影最多保留前 15 行，并不代表完整内部过程。EO 不逐 Token 上传内容。
 
@@ -81,7 +81,7 @@ Hermes 提供的本地化 reasoning 消息封套在适配器发送前拆成独�
 
 已验证：隔离发布目录完整 Node 回归共 835 项（820 通过、15 可选跳过；临时目录缺失项补齐后定向重跑）、TypeScript、ESLint、本地 React 构建、手机／桌面合成浏览器与真实 Hermes 库生命周期、SQLite outbox 三项恢复测试。正式 Web 构建及部署收据保存在忽略的 tmp/eva-qa；仅在实际成功后据收据确认发布结果。没有执行 Native XCTest 或 iPhone 真机验收。手机连接由用户稍后提供，本轮先触发原签名链的 local_trackers=true 打包，不卸载现有 App、不改权限与 entitlement。
 
-灰色气泡、弧形尾巴、同角色分组、独立便利贴与常驻入口保持用户认可样式。输入框取消聚焦外圈；对话、菜单、思考和代码滚动区使用透明轨道与低对比细滑块。iOS 系统滚动指示器仍受 WKWebView 控制，最终观感需真机确认。
+灰色气泡、弧形尾巴、同角色分组与常驻入口保持用户认可样式。输入框取消聚焦外圈；对话、菜单、思考和代码滚动区使用透明轨道与低对比细滑块。iOS 系统滚动指示器仍受 WKWebView 控制，最终观感需真机确认。
 
 
 Hermes Bark 通知复用已保存的加密设置；电脑仅带配对令牌和消息 UUID 唤醒精确 `/api/hermes/notify`，该接口自校验令牌、无浏览器 Cookie 依赖。服务端从真实消息生成摘要，SQL 投递租约和按轮次去重回执限制重复；已读普通回复不推送，提问即时推送，普通回复等本轮完成再合并，失败另行提醒。通知发送失败只保留本机 UUID 重试队列，与聊天回执独立；最多五次实际 Bark 投递尝试，失败原因保留于账户隔离回执。Bark 的外部收件确认不等于手机已展示，网络确认丢失仍可能重复。

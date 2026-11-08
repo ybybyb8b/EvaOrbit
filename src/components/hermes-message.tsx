@@ -23,8 +23,10 @@ export function HermesMessageBody({ message, responseQuestion, english, showTail
   <div className={styles.bubble} data-note={presentation?.kind === "note" || undefined}>
     {showTail && presentation?.kind !== "note" && <svg className={styles.tail} data-bubble-tail viewBox="0 0 26 22" aria-hidden="true" focusable="false">
       <defs><mask id={tailMask} maskUnits="userSpaceOnUse" x="-1" y="-1" width="28" height="24"><rect x="-1" y="-1" width="28" height="24" fill="white" /><rect x="6" y="-100" width="1000" height="122" rx="18" fill="black" /></mask></defs>
-      <path className={styles.tailFill} d="M26 0C22 10 15 19 0 22C7 16 9 9 7 0Z" />
-      <path className={styles.tailEdge} d="M26 0C22 10 15 19 0 22C7 16 9 9 7 0" mask={`url(#${tailMask})`} />
+      <g mask={`url(#${tailMask})`}>
+        <path className={styles.tailFill} d="M26 0C22 10 15 19 0 22C7 16 9 9 7 0Z" />
+        <path className={styles.tailEdge} d="M26 0C22 10 15 19 0 22C7 16 9 9 7 0" />
+      </g>
     </svg>}
     {presentation?.kind === "note" && <span className={styles.noteLabel}>{t("Sticky note", "便利贴")}</span>}
     {message.role === "assistant" ? <MarkdownMessage content={message.content} /> : selectedChoices

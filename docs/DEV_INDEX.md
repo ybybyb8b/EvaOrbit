@@ -126,11 +126,11 @@
 
 ## AI
 
-- **Hermes 消息平台**：`/ai` 的 [HermesChat](../src/components/hermes-chat.tsx) 经 [消息接口](../src/app/api/hermes/route.ts) 和 `hermes_*` 三表连接电脑上的 [Hermes 通道插件](../integrations/hermes-evaorbit/adapter.py)。EO 管理消息、回执及便利贴展示，Agent 上下文／工具在 Hermes；[消息气泡](../src/components/hermes-message.tsx) 支持 Markdown、折叠的 Hermes 思考内容与真实澄清选项。便利贴是消息的展示类型，不建立第二套 Agent；旧 `/ai/papers` 转至 Hermes，旧处理入口停用，既有数据保留。身份、配对、断线恢复与安装边界见 [Hermes 通道](HERMES_CHANNEL.md)。
+- **Hermes 消息平台**：`/ai` 的 [HermesChat](../src/components/hermes-chat.tsx) 经 [消息接口](../src/app/api/hermes/route.ts) 和 `hermes_*` 三表连接电脑上的 [Hermes 通道插件](../integrations/hermes-evaorbit/adapter.py)。EO 管理消息和回执，Agent 上下文／工具在 Hermes。[消息气泡](../src/components/hermes-message.tsx) 支持 Markdown、折叠的 Hermes 思考内容、澄清选项和历史便利贴。身份、配对、断线恢复与安装边界见 [Hermes 通道](HERMES_CHANNEL.md)。
 
 - **Hermes 常驻入口**：[HermesActivity](../src/components/hermes-activity.tsx) 挂在 Web／本地壳账户上下文内，全局浮动、拖动贴边并保存账户限定位置；状态面板展示在线、排队、处理、待回答、未读及失败原因，进入对应对话后才确认已读。[轻量状态接口](../src/app/api/hermes/route.ts) 经 `eo_hermes_activity` 按账户读取摘要及持久已读游标，不拉整段历史、不调用模型、后台页面暂停轮询。旧 Eva 浮层保留作历史兼容，不再挂载。
 
-- **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。Home 通用 Log 已移除纸条输入区，仅保留原记录按钮；便利贴统一在 Hermes 页填写。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
+- **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。旧 `/ai/papers` 转至 Hermes，Home 通用 Log 保留原记录按钮。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
 
 - **开发版 AI 配置**：开发版设置直接复用 [AiProvidersSettings](../src/app/settings/ai-providers-settings.tsx)，通过 `settings.aiConfiguration` 在线管理 Provider 和模型；不包含 Eva 聊天。白名单、账户绑定与服务端协议检查由 [AI 请求契约](../src/lib/ai-configuration-request.ts)、Native Controller、认证 proxy 共同执行。密钥仅临时驻留表单，请求不缓存、不进入业务 outbox；断网清除未提交密钥。旧服务端缺少账户安全协议时拒绝操作。
 

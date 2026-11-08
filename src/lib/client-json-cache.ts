@@ -40,6 +40,15 @@ export function invalidateCachedJson(url: string) {
   entries.delete(url);
 }
 
+export function readClientSnapshot<T>(key: string): T | undefined {
+  const entry = entries.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.data as T;
+}
+
+export function writeClientSnapshot<T>(key: string, data: T, ttl = 5 * 60_000) {
+  entries.set(key, { data, expiresAt: Date.now() + ttl });
+}
+
 export function clearClientJsonCache() {
   entries.clear();
 }

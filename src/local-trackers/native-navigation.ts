@@ -10,5 +10,5 @@ export function takeNativeNavigationPath(host: Pick<Window, "__evaorbitPendingPa
   try { decoded = decodeURIComponent(rawPath); } catch { return null; }
   if (/[\\\u0000-\u001f]/.test(decoded) || decoded.startsWith("//") || decoded.split("/").some(part => part === "." || part === "..")) return null;
   const routes = ["/tasks", "/settings/notifications", "/food", "/health", "/lucius", "/memo"];
-  return decoded === "/" || routes.some(route => decoded === route || decoded.startsWith(route + "/")) ? path : null;
+  return decoded === "/" || decoded === "/ai" || routes.some(route => decoded === route || decoded.startsWith(route + "/")) ? path : null;
 }

@@ -4,7 +4,7 @@ import { useRef, useSyncExternalStore } from "react";
 
 const changed = "eo:hermes-draft";
 const empty = "";
-type DraftKind = "chat" | "note" | "answer";
+type DraftKind = "chat" | "answer";
 
 function subscribe(listener: () => void) {
   window.addEventListener(changed, listener);

@@ -9,19 +9,37 @@ import { MarkdownMessage } from "./markdown-message";
 import { HermesMessageBody } from "./hermes-message";
 import { HermesToolActivity } from "./hermes-tool-activity";
 import { HermesChoiceSheet } from "./hermes-choice-sheet";
-import { HermesNoteSheet } from "./hermes-note-sheet";
 import { filterHermesCommands, HermesCommandMenu } from "./hermes-command-menu";
 import { HermesErrorNotice } from "./hermes-error-notice";
 import { HermesAppearanceSheet, useHermesAppearance } from "./hermes-appearance-sheet";
 import { PageLoading } from "./page-loading";
 import { responseError } from "@/lib/response-error";
-import { notifyHermesActivity } from "@/lib/hermes-activity";
+import { invalidateCachedJson, readClientSnapshot, writeClientSnapshot } from "@/lib/client-json-cache";
+import { notifyHermesActivity, type HermesActivityData, type HermesThread } from "@/lib/hermes-activity";
 import { readHermesDraft, useHermesDraft } from "@/lib/hermes-draft";
 import { hermesNotice, hermesPending, hermesStatusText, mergeHermesMessages, type HermesCommand, type HermesData, type HermesMessage, type HermesPairing } from "@/lib/hermes";
 import styles from "./hermes-chat.module.css";
 
 const noticeGraphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const nativeActive = "evaorbit:native-active";
+
+function replyStartTop(pane: HTMLElement) {
+  return pane.getBoundingClientRect().top + parseFloat(getComputedStyle(pane).paddingTop);
+}
+
+function showReplyStart(pane: HTMLElement, id: string) {
+  const row = document.getElementById(`hermes-${id}`);
+  if (!row || !pane.contains(row)) return false;
+  pane.scrollTop += row.getBoundingClientRect().top - replyStartTop(pane);
+  return true;
+}
+type HermesViewSnapshot = {
+  conversationId: string;
+  data: HermesData;
+  messages: HermesMessage[];
+  hasOlder: boolean;
+  scrollTop: number | null;
+};
 
 function interruptedRequest(reason: unknown) {
   return reason instanceof Error && (
@@ -47,34 +65,45 @@ function waitForForeground(signal: AbortSignal) {
 export function HermesChat({ initialConversationId, scope, back }: { initialConversationId?: string; scope: string | null; back: ReactNode }) {
   const request = useBusinessRequest(), { english } = useLocale();
   const appearance = useHermesAppearance(scope);
+  const snapshotKey = scope ? `hermes-view:${scope}` : undefined;
+  const [initialSnapshot] = useState(() => {
+    if (!snapshotKey || typeof window === "undefined") return;
+    const snapshot = readClientSnapshot<HermesViewSnapshot>(snapshotKey);
+    if (initialConversationId) return snapshot?.conversationId === initialConversationId ? snapshot : undefined;
+    if (!readHermesDraft(scope, undefined, "chat")) return snapshot;
+  });
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const [data, setData] = useState<HermesData>(), [messages, setMessages] = useState<HermesMessage[]>([]);
-  const [active, setActive] = useState<string | undefined>(initialConversationId);
+  const [data, setData] = useState(initialSnapshot?.data);
+  const [messages, setMessages] = useState<HermesMessage[]>(() => initialSnapshot?.messages ?? []);
+  const [active, setActive] = useState(initialConversationId ?? initialSnapshot?.conversationId);
   const [draft, setDraft] = useHermesDraft(scope, active, "chat");
-  const [noteDraft, setNoteDraft] = useHermesDraft(scope, active, "note");
   const [error, setError] = useState(""), [sending, setSending] = useState(false), [busy, setBusy] = useState(false);
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadErrorDismissed, setLoadErrorDismissed] = useState(false);
   const [stopping, setStopping] = useState(false), [stopError, setStopError] = useState("");
-  const [awayFromLatest, setAwayFromLatest] = useState(false), [newReply, setNewReply] = useState(false);
-  const [history, setHistory] = useState(false), [setup, setSetup] = useState(false), [hasOlder, setHasOlder] = useState(false);
+  const [awayFromLatest, setAwayFromLatest] = useState(initialSnapshot?.scrollTop != null);
+  const [newReplyId, setNewReplyId] = useState<string>();
+  const [history, setHistory] = useState(false), [setup, setSetup] = useState(false), [hasOlder, setHasOlder] = useState(initialSnapshot?.hasOlder ?? false);
   const [renaming, setRenaming] = useState<{ id: string; title: string }>();
   const [renameError, setRenameError] = useState("");
   const [clearId, setClearId] = useState<string>(), [connectionAction, setConnectionAction] = useState<"pair" | "disconnect">();
-  const [notes, setNotes] = useState(false), [noteOpen, setNoteOpen] = useState(false), [choiceId, setChoiceId] = useState<string>();
+  const [choiceId, setChoiceId] = useState<string>();
   const seenQuestions = useRef(new Set<string>());
   const [commandOpen, setCommandOpen] = useState(false), [commandIndex, setCommandIndex] = useState(0);
   const commandId = useId();
   const renameFormId = useId();
   const titleRevision = useRef(0);
   const input = useRef<HTMLTextAreaElement>(null);
-  const messageRef = useRef<HermesMessage[]>([]), activeRef = useRef(active), newChat = useRef(false), mounted = useRef(true);
-  const requestKey = useRef<{ id: string; conversationId: string; content: string; note?: boolean; responseTo?: string } | null>(null), sendLock = useRef(false);
+  const messageRef = useRef(messages), activeRef = useRef(active), newChat = useRef(false), mounted = useRef(true);
+  const requestKey = useRef<{ id: string; conversationId: string; content: string; responseTo?: string } | null>(null), sendLock = useRef(false);
   const sendRecovery = useRef<AbortController | null>(null);
   const stopRequest = useRef<{ id: string; conversationId: string; targetAttempt: string } | null>(null), stopLock = useRef(false);
-  const refresh = useRef<() => Promise<void>>(async () => {}), scroll = useRef<HTMLDivElement>(null), followBottom = useRef(true);
+  const refresh = useRef<() => Promise<void>>(async () => {}), scroll = useRef<HTMLDivElement>(null), followBottom = useRef(initialSnapshot?.scrollTop == null);
   const readingAnchor = useRef<{ element: HTMLElement; top: number } | null>(null);
+  const arrivingReply = useRef<{ id: string; showStart: boolean } | null>(null);
+  const restoreScroll = useRef(initialSnapshot?.scrollTop ?? null);
+  const awaitingSnapshotRefresh = useRef(Boolean(initialSnapshot));
   const container = useRef<HTMLElement>(null), composerArea = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!commandOpen) return;
@@ -83,36 +112,71 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     return () => {document.removeEventListener("pointerdown",close);document.removeEventListener("keydown",close);};
   }, [commandOpen]);
   const t = (en: string, zh: string) => english ? en : zh;
-  const merge = useCallback((incoming: HermesMessage[], replace = false) => {
+  const merge = useCallback((incoming: HermesMessage[], replace = false, thread?: HermesThread) => {
     const lastSeq = messageRef.current.at(-1)?.seq ?? 0;
-    if (!replace && !followBottom.current && incoming.some(message => message.seq > lastSeq && message.role === "assistant" && !hermesNotice(message))) {
-      setNewReply(true);
-    }
     const next = replace ? incoming : mergeHermesMessages(messageRef.current, incoming);
+    if (!replace) {
+      const firstNew = lastSeq ? next.find(message => message.seq > lastSeq && message.role === "assistant" && !hermesNotice(message)) : undefined;
+      if (followBottom.current) {
+        // The activity count only includes assistant rows through its own latest sequence.
+        const firstUnread = thread?.unread ? next.filter(message =>
+          message.seq <= thread.latestSeq && message.role === "assistant" && !message.presentation?.notice
+        ).slice(-thread.unread).find(message => !hermesNotice(message)) : undefined;
+        const reply = firstUnread ?? firstNew;
+        if (reply) arrivingReply.current = { id: reply.id, showStart: Boolean(firstUnread) };
+      } else if (firstNew) {
+        setNewReplyId(previous => previous ?? firstNew.id);
+      }
+    }
     messageRef.current = next; setMessages(next);
   }, []);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; sendRecovery.current?.abort(); }; }, []);
   useLayoutEffect(() => {
     const element = container.current;
     const surface = element?.parentElement;
-    if (!element || !surface) return;
+    const composerInput = input.current;
+    if (!element || !surface || !composerInput) return;
     let fullHeight = window.visualViewport?.height ?? window.innerHeight;
     let layoutWidth = window.innerWidth;
     let keyboardOpen = false;
+    let fittedHeight = fullHeight;
     let frame = 0;
+    let lastEdit = -Infinity;
+    let pendingHeight: { value: number; since: number } | undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const trackEdit = () => { lastEdit = performance.now(); };
     const fit = () => {
       frame = 0;
+      clearTimeout(settleTimer);
       const viewport = window.visualViewport;
       const unzoomed = Math.abs((viewport?.scale ?? 1) - 1) < .05;
-      const visibleHeight = unzoomed ? (viewport?.height ?? window.innerHeight) : window.innerHeight;
-      if (document.hidden || visibleHeight <= 0) return;
-      const focused = document.activeElement === input.current;
-      if (layoutWidth !== window.innerWidth) {
+      const measuredHeight = Math.round(unzoomed ? (viewport?.height ?? window.innerHeight) : window.innerHeight);
+      if (document.hidden || measuredHeight <= 0) return;
+      const focused = document.activeElement === composerInput;
+      const widthChanged = layoutWidth !== window.innerWidth;
+      if (widthChanged) {
         layoutWidth = window.innerWidth;
         fullHeight = window.innerHeight;
       }
       const touchViewport = unzoomed && window.matchMedia("(any-pointer: coarse)").matches;
-      keyboardOpen = touchViewport && (focused || keyboardOpen) && fullHeight - visibleHeight > (focused ? 2 : 40);
+      const wasOpen = keyboardOpen;
+      const nextKeyboardOpen = touchViewport && (focused || wasOpen) && fullHeight - measuredHeight > (focused ? 2 : 40);
+      const smallChange = nextKeyboardOpen && wasOpen && !widthChanged && Math.abs(measuredHeight - fittedHeight) <= 3;
+      const now = performance.now();
+      let settling = false;
+      if (!smallChange && touchViewport && wasOpen && focused && !widthChanged && now - lastEdit < 200) {
+        // Some input methods briefly report a different viewport while updating candidates.
+        if (pendingHeight?.value !== measuredHeight) pendingHeight = { value: measuredHeight, since: now };
+        const remaining = 120 - (now - pendingHeight.since);
+        if (remaining > 0) {
+          settling = true;
+          settleTimer = setTimeout(scheduleFit, remaining);
+        }
+      }
+      if (!settling) pendingHeight = undefined;
+      keyboardOpen = settling ? wasOpen : nextKeyboardOpen;
+      const visibleHeight = smallChange || settling ? fittedHeight : measuredHeight;
+      fittedHeight = visibleHeight;
       if (!keyboardOpen) fullHeight = visibleHeight;
       element.dataset.keyboardOpen = String(keyboardOpen);
 
@@ -129,6 +193,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const observer = new ResizeObserver(scheduleFit);
     if (composerArea.current) observer.observe(composerArea.current);
     fit();
+    const editEvents = ["beforeinput", "input", "compositionupdate"];
+    for (const event of editEvents) composerInput.addEventListener(event, trackEdit);
     window.addEventListener("resize", scheduleFit);
     window.addEventListener("scroll", scheduleFit, { passive: true });
     window.addEventListener("pageshow", scheduleFit);
@@ -139,6 +205,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
+      clearTimeout(settleTimer);
+      for (const event of editEvents) composerInput.removeEventListener(event, trackEdit);
       window.removeEventListener("resize", scheduleFit);
       window.removeEventListener("scroll", scheduleFit);
       window.removeEventListener("pageshow", scheduleFit);
@@ -151,9 +219,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     };
   }, []);
   useEffect(() => {
-    const abort = new AbortController(); let inFlight = false, refreshAgain = false, resuming = false;
+    const abort = new AbortController(); let inFlight = false, refreshAgain = false, resuming = false, checkUnread = true;
     const load = async () => {
-      if (inFlight || document.visibilityState === "hidden") return;
+      if (inFlight || abort.signal.aborted || activeRef.current !== active || document.visibilityState === "hidden") return;
       inFlight = true;
       const requestedTitleRevision = titleRevision.current;
       try {
@@ -165,19 +233,36 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           const pending = current.filter(hermesPending).map(m => m.id).slice(-100);
           if (pending.length) params.set("pending", pending.join(","));
         }
+        const unread = active && checkUnread && followBottom.current
+          ? request("/api/hermes?view=activity", { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(2500)]), cache: "no-store" })
+            .then(async response => response.ok ? (await response.json() as HermesActivityData).threads.find(thread => thread.id === active) : undefined)
+            .catch(() => undefined)
+          : undefined;
+        checkUnread = false;
         const r = await request(`/api/hermes?${params}`, { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(12000)]), cache: "no-store" });
-        if (!r.ok) throw new Error(await responseError(r, t("Could not load messages.", "暂时无法读取消息。")));
+        if (!r.ok) {
+          if (abort.signal.aborted || activeRef.current !== active) return;
+          if (snapshotKey && (r.status === 401 || r.status === 403 || r.status === 409)) invalidateCachedJson(snapshotKey);
+          if (r.status === 401 || r.status === 403) { merge([], true); setData(undefined); }
+          if (active && r.status === 409 && !sendLock.current) {
+            select();
+            return;
+          }
+          throw new Error(await responseError(r, t("Could not load messages.", "暂时无法读取消息。")));
+        }
         const next = await r.json() as HermesData;
-        if (abort.signal.aborted) return;
+        const thread = await unread;
+        if (abort.signal.aborted || activeRef.current !== active) return;
+        awaitingSnapshotRefresh.current = false;
         next.connection.online = Boolean(next.connection.online && next.connection.lastSeenAt && Date.now() - Date.parse(next.connection.lastSeenAt) < 90000);
         setData(previous => requestedTitleRevision === titleRevision.current || !previous
           ? next
           : { ...next, conversations: previous.conversations });
         setLoadError(""); setLoadErrorDismissed(false);
-        if (!active && !newChat.current && next.conversations[0] && !readHermesDraft(scope, undefined, "chat") && !readHermesDraft(scope, undefined, "note")) {
+        if (!active && !newChat.current && next.conversations[0] && !readHermesDraft(scope, undefined, "chat")) {
           activeRef.current = next.conversations[0].id; setActive(next.conversations[0].id);
         }
-        else { if (!current.length) setHasOlder(next.hasMore); merge(next.messages); }
+        else { if (!current.length) setHasOlder(next.hasMore); merge(next.messages, false, thread); }
       } catch (reason) {
         if (!abort.signal.aborted && !document.hidden && !(resuming && interruptedRequest(reason))) {
           setLoadError(reason instanceof Error ? reason.message : t("Message connection failed.", "消息连接失败。"));
@@ -191,35 +276,57 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const initial = setTimeout(() => void load(), 0);
     // Small metadata/incremental updates only. No per-token writes or idle model calls.
     const interval = setInterval(() => void load(), 5000);
-    const resume = () => {
+    const resume = (event: Event) => {
       resuming = true;
       if (document.hidden) return;
+      if (event.type === "visibilitychange" || event.type === nativeActive) checkUnread = true;
       if (inFlight) refreshAgain = true;
       else void load();
     };
     window.addEventListener("focus", resume); window.addEventListener("online", resume); window.addEventListener(nativeActive, resume); document.addEventListener("visibilitychange", resume);
     return () => { abort.abort(); clearTimeout(initial); clearInterval(interval); window.removeEventListener("focus", resume); window.removeEventListener("online", resume); window.removeEventListener(nativeActive, resume); document.removeEventListener("visibilitychange", resume); };
-  }, [active, request, english, merge, scope]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, request, english, merge, scope, snapshotKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const pane = scroll.current, anchor = readingAnchor.current;
+    const reply = arrivingReply.current;
     readingAnchor.current = null;
+    arrivingReply.current = null;
     if (!pane) return;
-    if (anchor?.element.isConnected) pane.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top;
-    else if (followBottom.current) pane.scrollTop = pane.scrollHeight;
+    if (restoreScroll.current !== null && messages.length) {
+      pane.scrollTop = restoreScroll.current;
+      restoreScroll.current = null;
+    } else if (anchor?.element.isConnected) pane.scrollTop += anchor.element.getBoundingClientRect().top - anchor.top;
+    else if (followBottom.current) {
+      pane.scrollTop = pane.scrollHeight;
+      const row = reply && document.getElementById(`hermes-${reply.id}`);
+      if (reply && row && (reply.showStart || row.getBoundingClientRect().top < replyStartTop(pane))) {
+        showReplyStart(pane, reply.id);
+        followBottom.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 1;
+      }
+    }
   }, [messages, hasOlder]);
-  const dialogOpen = Boolean(history || setup || notes || noteOpen || clearId || choiceId || appearanceOpen);
+  useLayoutEffect(() => {
+    if (!snapshotKey || awaitingSnapshotRefresh.current || !active || !data || messages[0]?.conversation_id !== active) return;
+    const scrollTop = followBottom.current ? null : scroll.current?.scrollTop ?? null;
+    const saved = messages.slice(-300);
+    writeClientSnapshot<HermesViewSnapshot>(snapshotKey, {
+      conversationId: active, data: { ...data, messages: [] }, messages: saved,
+      hasOlder: hasOlder || saved.length < messages.length, scrollTop: saved.length === messages.length ? scrollTop : null,
+    });
+  }, [active, data, hasOlder, messages, snapshotKey]);
+  const dialogOpen = Boolean(history || setup || clearId || choiceId || appearanceOpen);
   const confirmSeen = useCallback(() => {
     const last = messageRef.current.at(-1), pane = scroll.current;
-    if (!last || !pane || !followBottom.current || dialogOpen || document.visibilityState === "hidden" ||
+    if (!last || !pane || !followBottom.current || awaitingSnapshotRefresh.current || dialogOpen || document.visibilityState === "hidden" ||
       document.querySelector(".form-sheet-layer,.space-drawer-layer")) return;
     if (messageRef.current.some(message => message.presentation?.state === "pending" && !seenQuestions.current.has(message.id))) return;
     const row = document.getElementById(`hermes-${last.id}`);
     if (!row) return;
     const bounds = row.getBoundingClientRect();
     const paneBounds = pane.getBoundingClientRect();
-    const top = paneBounds.top + 28;
+    const top = replyStartTop(pane) + 14;
     const bottom = Math.min(paneBounds.bottom, composerArea.current?.getBoundingClientRect().top ?? paneBounds.bottom);
-    if (Math.min(bottom, bounds.bottom) > Math.max(top, bounds.top)) {
+    if (bounds.bottom > top && bounds.bottom <= bottom + 1) {
       notifyHermesActivity({ state: "seen", conversationId: last.conversation_id, seq: last.seq });
     }
   }, [dialogOpen]);
@@ -234,7 +341,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     };
   }, [messages, confirmSeen]);
   useEffect(() => {
-    if (dialogOpen) return;
+    if (dialogOpen || awaitingSnapshotRefresh.current) return;
     const question = messages.findLast(message => message.role === "assistant" && message.presentation?.state === "pending" && !seenQuestions.current.has(message.id));
     if (!question) return;
     const timer = setTimeout(() => { seenQuestions.current.add(question.id); setChoiceId(question.id); }, 0);
@@ -243,21 +350,27 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   function select(id?: string) {
     if (sendLock.current || stopLock.current) return;
     if (id && id === activeRef.current) { setHistory(false); return; }
-    newChat.current = !id; activeRef.current = id; setActive(id); merge([], true); setHasOlder(false); setHistory(false); setChoiceId(undefined); setNoteOpen(false); setNotes(false);
-    followBottom.current = true; setAwayFromLatest(false); setNewReply(false); setCommandOpen(false); requestKey.current = null;
+    awaitingSnapshotRefresh.current = false;
+    newChat.current = !id; activeRef.current = id; setActive(id); merge([], true); setHasOlder(false); setHistory(false); setChoiceId(undefined);
+    followBottom.current = true; setAwayFromLatest(false); setNewReplyId(undefined); setCommandOpen(false); requestKey.current = null;
   }
   function updateReadingPosition() {
     const pane = scroll.current;
     if (!pane) return;
-    const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
+    const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 24;
     followBottom.current = nearBottom;
+    const snapshot = snapshotKey && readClientSnapshot<HermesViewSnapshot>(snapshotKey);
+    if (snapshot && snapshot.conversationId === activeRef.current && snapshot.messages[0]?.id === messageRef.current[0]?.id) {
+      snapshot.scrollTop = nearBottom ? null : pane.scrollTop;
+    }
     setAwayFromLatest(!nearBottom);
-    if (nearBottom) { setNewReply(false); confirmSeen(); }
+    if (nearBottom) { setNewReplyId(undefined); confirmSeen(); }
   }
   function jumpToLatest() {
     const pane = scroll.current;
     if (!pane) return;
-    pane.scrollTop = pane.scrollHeight;
+    if (!newReplyId || !showReplyStart(pane, newReplyId)) pane.scrollTop = pane.scrollHeight;
+    setNewReplyId(undefined);
     updateReadingPosition();
   }
   async function post(body: object, signal?: AbortSignal) {
@@ -282,13 +395,12 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     }
     await waitForForeground(signal);
   }
-  async function send(event?: FormEvent, choice?: { message: HermesMessage; content: string }, stickyContent?: string): Promise<boolean> {
-    event?.preventDefault(); const content = stickyContent ?? choice?.content ?? draft; if (!content.trim() || sendLock.current) return false;
-    const asNote = stickyContent !== undefined;
-    const responseTo = choice?.message.id ?? (!asNote && !/^\/[a-z][\w-]*(?:\s|$)/i.test(content.trimStart()) ? messageRef.current.findLast(message => message.role === "assistant" && message.presentation?.state === "pending")?.id : undefined);
+  async function send(event?: FormEvent, choice?: { message: HermesMessage; content: string }): Promise<boolean> {
+    event?.preventDefault(); const content = choice?.content ?? draft; if (!content.trim() || sendLock.current) return false;
+    const responseTo = choice?.message.id ?? (!/^\/[a-z][\w-]*(?:\s|$)/i.test(content.trimStart()) ? messageRef.current.findLast(message => message.role === "assistant" && message.presentation?.state === "pending")?.id : undefined);
     sendLock.current = true; setSending(true);
     const previous = requestKey.current;
-    const submission = previous?.content === content && previous.note === asNote && previous.responseTo === responseTo && (!active || previous.conversationId === active) ? previous : { id: crypto.randomUUID(), conversationId: active ?? crypto.randomUUID(), content, note: asNote, responseTo };
+    const submission = previous?.content === content && previous.responseTo === responseTo && (!active || previous.conversationId === active) ? previous : { id: crypto.randomUUID(), conversationId: active ?? crypto.randomUUID(), content, responseTo };
     setError("");
     requestKey.current = submission;
     setCommandOpen(false);
@@ -309,14 +421,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
         message = receipt;
       }
       notifyHermesActivity({ state: "saved", id: submission.id, conversationId: submission.conversationId });
-      if (asNote) setNoteDraft("", active, content); else if (!choice) setDraft("", active, content);
-      if (!active) {
-        if (asNote && draft) { setDraft(draft, message.conversation_id, ""); setDraft("", active, draft); }
-        if (!asNote && noteDraft) { setNoteDraft(noteDraft, message.conversation_id, ""); setNoteDraft("", active, noteDraft); }
-      }
+      if (!choice) setDraft("", active, content);
       if (!mounted.current) return false;
-      newChat.current = false; followBottom.current = true; setAwayFromLatest(false); setNewReply(false);
-      if (asNote) setNoteOpen(false);
+      newChat.current = false; followBottom.current = true; setAwayFromLatest(false); setNewReplyId(undefined);
       requestKey.current = null;
       if (!active) { activeRef.current = message.conversation_id; setActive(message.conversation_id); }
       merge([message]); void refresh.current();
@@ -352,6 +459,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       const result = await post(body);
       if (!mounted.current) return;
       if ("role" in result && result.conversation_id === activeRef.current) merge([result]);
+      if (snapshotKey && "action" in body && (body.action === "clear" || body.action === "disconnect")) invalidateCachedJson(snapshotKey);
       setClearId(undefined); setConnectionAction(undefined); void refresh.current();
       return result;
     } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : t("Action failed.", "操作失败。")); }
@@ -390,7 +498,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       if (mounted.current && activeRef.current === cid) {
         const pane = scroll.current;
         if (pane) {
-          const top = pane.getBoundingClientRect().top + 28;
+          const top = replyStartTop(pane) + 14;
           const element = Array.from(pane.querySelectorAll<HTMLElement>("[data-hermes-message]"))
             .find(row => row.getBoundingClientRect().bottom > top);
           if (element) readingAnchor.current = { element, top: element.getBoundingClientRect().top };
@@ -429,7 +537,6 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       <nav aria-label={t("Conversations", "对话操作")}>
         <button type="button" aria-label={t("Conversation history", "历史对话")} disabled={sending || stopping || busy} onClick={() => setHistory(true)}><Icon name="history" /></button>
         <button type="button" aria-label={t("New conversation", "新对话")} disabled={sending || stopping || busy} onClick={() => select()}><Icon name="plus" /></button>
-        <button type="button" disabled={sending} aria-label={t("Note history", "便利贴记录")} title={t("Note history", "便利贴记录")} aria-haspopup="dialog" onClick={() => setNotes(true)}><Icon name="memory" /></button>
       </nav>
     </header>
     <div className={styles.scroll} ref={scroll} onScroll={updateReadingPosition}>
@@ -468,9 +575,9 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       {confirmingDelivery && <div className={styles.notice} role="status">{t("Checking delivery…", "正在确认送达…")}</div>}
       {commandOpen && <HermesCommandMenu id={commandId} commands={commands} selected={Math.min(commandIndex,Math.max(0,commands.length-1))} english={english} onChoose={chooseCommand} />}
       {awayFromLatest && !commandOpen && <button className={styles.latestButton} type="button" onClick={jumpToLatest}>
-        <Icon name="chevronDown" />{newReply ? t("New messages", "有新消息") : t("Back to latest", "回到最新")}
+        <Icon name="chevronDown" />{newReplyId ? t("New messages", "有新消息") : t("Back to latest", "回到最新")}
       </button>}
-      {noticeError && !noteOpen && !choiceId && <div className={styles.notice}>
+      {noticeError && !choiceId && <div className={styles.notice}>
         <HermesErrorNotice error={noticeError} />
         {noticeError === visibleLoadError && <button className="text-button" onClick={() => void refresh.current()}>{t("Retry connection", "重试连接")}</button>}
         <button className="text-button" onClick={() => {
@@ -479,7 +586,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           else setLoadErrorDismissed(true);
         }}>{t("Dismiss notice", "关闭提示")}</button>
       </div>}
-      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus({ preventScroll: true });}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button><button type="button" disabled={sending || !data} aria-haspopup="dialog" onClick={() => { setCommandOpen(false); setNoteOpen(true); }}><Icon name="memory" />{t("Sticky note", "便利贴")}</button>
+      <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus({ preventScroll: true });}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button>
         {scope && <button type="button" aria-label={t("Chat appearance", "聊天外观")} title={t("Chat appearance", "聊天外观")} aria-haspopup="dialog" disabled={sending} onClick={() => { setCommandOpen(false); setAppearanceOpen(true); }}><Icon name="settings" /></button>}
         {(stopTarget && connection?.commands?.some(command => command.name === "stop") || stopPending || stopping) && <button type="button" className={styles.stopButton} disabled={online !== true || stopping || stopPending}
           onClick={() => void stopConversation()}>{stopping ? t("Requesting stop…", "正在请求停止…") : stopPending ? t("Stop requested", "已请求停止") : t("Stop", "停止")}</button>}
@@ -495,15 +602,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
         <button className="button primary" type="submit" disabled={!data || !draft.trim() || sending} aria-label={t("Send", "发送")}><Icon name="arrow" /></button>
       </form>
     </div>
-    {noteOpen && <HermesNoteSheet draft={noteDraft} onChange={setNoteDraft} onSend={() => send(undefined, undefined, noteDraft)} onClose={() => setNoteOpen(false)} english={english} busy={sending} available={Boolean(data)} error={error} onDismissError={() => setError("")} />}
     {appearanceOpen && <HermesAppearanceSheet appearance={appearance} english={english} onClose={() => setAppearanceOpen(false)} />}
     {question && <HermesChoiceSheet key={question.id} scope={scope} message={question} open={Boolean(choiceId)} english={english} busy={sending || busy} online={online} error={error} onDismissError={() => setError("")} onClose={() => setChoiceId(undefined)} onAnswer={(prompt, content) => send(undefined, { message: prompt, content })} />}
-    {notes && <FormSheet title={t("Sticky notes", "便利贴")} onClose={() => setNotes(false)}><div className={styles.notes}>
-      <button className="button secondary" onClick={() => { setNotes(false); setNoteOpen(true); }}>{t("New note", "写张便利贴")}</button>
-      {messages.filter(message => message.presentation?.kind === "note").map(message => <button key={message.id} className={styles.savedNote} onClick={() => { setNotes(false); requestAnimationFrame(() => document.getElementById(`hermes-${message.id}`)?.scrollIntoView({ block: "center" })); }}><span>{message.content}</span><small>{hermesStatusText(message, online, english)}</small></button>)}
-      {!messages.some(message => message.presentation?.kind === "note") && <p>{t("No notes in this conversation yet.", "这段对话还没有便利贴。")}</p>}
-      {hasOlder && <button className="text-button" disabled={busy} onClick={() => void older()}>{t("Load earlier notes", "查找更早的便利贴")}</button>}
-    </div></FormSheet>}
     {history && (renaming ? <FormSheet key="rename" title={t("Rename conversation", "修改对话名称")}
       onClose={() => setRenaming(undefined)} formId={renameFormId} submitLabel={t("Save", "保存")}
       cancelLabel={t("Cancel", "取消")} busyLabel={t("Saving…", "正在保存…")} busy={busy} submitDisabled={!renaming.title.trim()}>
