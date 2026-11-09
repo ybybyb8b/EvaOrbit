@@ -210,7 +210,7 @@ export interface EvaOrbitRepository {
   createPersonMemoryNote(personId: number, content: string): Promise<PersonMemoryNote>;
   updatePersonMemoryNote(id: number, content: string): Promise<PersonMemoryNote | null>;
   deletePersonMemoryNote(id: number): Promise<boolean>;
-  listTasks(filter?: TaskFilter, dueDate?: string, completedRange?: { from: string; to: string }): Promise<Task[]>;
+  listTasks(filter?: TaskFilter, dueDate?: string, completedRange?: { from: string; to: string }, includeOverdue?: boolean): Promise<Task[]>;
   getTask(id: number): Promise<Task | null>;
   createTask(input: NewTask): Promise<Task>;
   updateTask(id: number, input: Record<string, unknown>): Promise<Task | null>;

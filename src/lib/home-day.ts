@@ -64,7 +64,8 @@ export type HomeCompletedItem = { key: string; title: string; href: string; comp
 export interface HomeDayOverview {
   date: string;
   events: TimelineEvent[];
-  tasks: Array<{ id: number; title: string; completed: boolean; completedAt?: string | null; dueTime: string | null; priority: string }>;
+  // Snapshots created before overdue tasks were included omit dueDate.
+  tasks: Array<{ id: number; title: string; completed: boolean; completedAt?: string | null; dueDate?: string | null; dueTime: string | null; priority: string }>;
   completedItems?: HomeCompletedItem[];
   meals: Array<{ mealType: string; title: string; detail: string | null }>;
   journal: DailyJournalEntry[];

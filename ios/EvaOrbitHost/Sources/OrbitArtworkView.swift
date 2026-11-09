@@ -31,8 +31,9 @@ final class OrbitArtworkView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard bounds.width > 0, bounds.height > 0, bounds != lastLayoutBounds else { return }
+        guard bounds != lastLayoutBounds else { return }
         lastLayoutBounds = bounds
+        guard !bounds.isEmpty else { return }
         orbitContainer.frame = bounds
         updatePaths()
         if quietLoopActive { addQuietLoopAnimations(reduceMotion: reduceMotionForLoop) }
@@ -238,6 +239,8 @@ final class OrbitArtworkView: UIView {
     }
 
     private func addQuietLoopAnimations(reduceMotion: Bool) {
+        guard !bounds.isEmpty, lastLayoutBounds == bounds else { return }
+        let previousOrbitStart = planetLayer.animation(forKey: "quietOrbit")?.beginTime
         orbitContainer.removeAnimation(forKey: "quietBreathing")
         planetLayer.removeAnimation(forKey: "quietOrbit")
         planetLayer.removeAnimation(forKey: "quietOpacity")
@@ -259,6 +262,10 @@ final class OrbitArtworkView: UIView {
         orbit.calculationMode = .paced
         orbit.duration = 6.2
         orbit.repeatCount = .infinity
+        if planetOnlyLoop {
+            // Keep the same phase when startup layout changes the orbit path.
+            orbit.beginTime = previousOrbitStart ?? planetLayer.convertTime(CACurrentMediaTime(), from: nil)
+        }
         planetLayer.add(orbit, forKey: "quietOrbit")
         if planetOnlyLoop { return }
 

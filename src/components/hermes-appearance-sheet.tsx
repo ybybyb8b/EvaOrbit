@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { hermesAppearanceImages, hermesImageLimit, hermesImageTypes, prepareHermesAppearanceImage, readHermesAppearance, saveHermesAppearanceImage, type HermesAppearanceImage } from "@/lib/hermes-appearance";
 import { ErrorNotice } from "./error-notice";
 import { FormSheet } from "./form-sheet";
 import styles from "./hermes-chat.module.css";
+
+const segmentRepliesKey = (scope: string) => `evaorbit.hermes.segmentReplies:${scope}`;
 
 export function useHermesAppearance(scope: string | null) {
   const urls = useRef<Partial<Record<HermesAppearanceImage, string>>>({});
   const mounted = useRef(false);
   const [images, setImages] = useState<typeof urls.current>({});
   const [ready, setReady] = useState(false);
+  const [segmentReplies, setSegmentReplies] = useState(false);
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -22,7 +25,10 @@ export function useHermesAppearance(scope: string | null) {
       }
       setImages({ ...urls.current });
     }).catch(() => { /* The chat can render with its default appearance. */ }).finally(() => {
-      if (active) setReady(true);
+      if (!active) return;
+      try { setSegmentReplies(Boolean(scope && localStorage.getItem(segmentRepliesKey(scope)) === "true")); }
+      catch { setSegmentReplies(false); }
+      setReady(true);
     });
     return () => {
       active = false;
@@ -43,7 +49,13 @@ export function useHermesAppearance(scope: string | null) {
     setImages({ ...urls.current });
   }
 
-  return { images, ready, save };
+  function saveSegmentReplies(enabled: boolean) {
+    if (!scope) return;
+    localStorage.setItem(segmentRepliesKey(scope), String(enabled));
+    setSegmentReplies(enabled);
+  }
+
+  return { images, ready, save, segmentReplies, saveSegmentReplies };
 }
 
 export function HermesAppearanceSheet({ appearance, english, onClose }: {
@@ -53,6 +65,7 @@ export function HermesAppearanceSheet({ appearance, english, onClose }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const segmentId = useId();
   const t = (en: string, zh: string) => english ? en : zh;
   const labels = {
     assistant: t("Hermes avatar", "Hermes 头像"),
@@ -83,6 +96,19 @@ export function HermesAppearanceSheet({ appearance, english, onClose }: {
 
   return <FormSheet title={t("Chat appearance", "聊天外观")} busy={busy} dirty={false} onClose={onClose}>
     <div className={styles.appearanceList}>
+      <label className={styles.appearanceToggle}>
+        <span>
+          <strong id={segmentId}>{t("Split replies into bubbles", "自动分段气泡")}</strong>
+          <small id={`${segmentId}-hint`}>{t("Show Hermes replies in separate bubbles by paragraph or block.", "按段落或内容块拆分 Hermes 的回复。")}</small>
+        </span>
+        <input type="checkbox" role="switch" className="toggle-switch" aria-labelledby={segmentId} aria-describedby={`${segmentId}-hint`}
+          checked={appearance.segmentReplies} disabled={!appearance.ready || busy}
+          onChange={event => {
+            setError("");
+            try { appearance.saveSegmentReplies(event.currentTarget.checked); }
+            catch { setError(t("Could not save this setting on this device.", "无法在当前设备保存此设置。")); }
+          }} />
+      </label>
       {hermesAppearanceImages.map(kind => {
         const url = appearance.images[kind];
         return <div className={styles.appearanceRow} key={kind}>
@@ -103,7 +129,7 @@ export function HermesAppearanceSheet({ appearance, english, onClose }: {
           </div>
         </div>;
       })}
-      <small>{t("Saved on this device.", "图片保存在当前设备。")}</small>
+      <small>{t("Appearance is saved on this device.", "聊天外观设置保存在当前设备。")}</small>
       {error && <ErrorNotice inline>{error}</ErrorNotice>}
     </div>
   </FormSheet>;

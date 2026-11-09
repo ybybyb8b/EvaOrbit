@@ -2131,10 +2131,11 @@ function aiProviderFromRow(row: AiProviderRow, models: AiModelConfig[] = []): Ai
   return { id: row.id, name: row.name, providerType: row.provider_type, baseUrl: row.base_url, enabled: Boolean(row.enabled), hasApiKey: Boolean(apiKey), maskedApiKey: maskApiKey(apiKey), models, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
-export function listTasks(filter: "all" | "open" | "done" = "all", dueDate?: string, completedRange?: { from: string; to: string }) {
-  const conditions = [filter === "open" ? "completed = 0" : filter === "done" ? "completed = 1" : "", dueDate ? completedRange ? "(due_date = ? OR (completed = 1 AND completed_at >= ? AND completed_at < ?))" : "due_date = ?" : ""].filter(Boolean);
+export function listTasks(filter: "all" | "open" | "done" = "all", dueDate?: string, completedRange?: { from: string; to: string }, includeOverdue = false) {
+  const dates = ["due_date = ?", includeOverdue && "(completed = 0 AND due_date < ?)", completedRange && "(completed = 1 AND completed_at >= ? AND completed_at < ?)"].filter(Boolean);
+  const conditions = [filter === "open" ? "completed = 0" : filter === "done" ? "completed = 1" : "", dueDate ? `(${dates.join(" OR ")})` : ""].filter(Boolean);
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate, ...(completedRange ? [completedRange.from, completedRange.to] : [])] : [])) as TaskRow[]).map(taskFromRow);
+  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate, ...(includeOverdue ? [dueDate] : []), ...(completedRange ? [completedRange.from, completedRange.to] : [])] : [])) as TaskRow[]).map(taskFromRow);
 }
 
 export function getTask(id: number) {

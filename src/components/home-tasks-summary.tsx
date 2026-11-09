@@ -45,6 +45,7 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   const [openActions,setOpenActions]=useState<string|null>(null);
   const [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{const tick=()=>setNow(Date.now());const timer=window.setInterval(tick,60_000);window.addEventListener("focus",tick);return()=>{window.clearInterval(timer);window.removeEventListener("focus",tick);};},[]);
+  const today=dateInEvaOrbit(new Date(now));
   const [taskBusy,setTaskBusy]=useState<number|null>(null),[taskError,setTaskError]=useState("");
   const remembered=Object.values(localReminders);
   const localCompletion=(item:DueReminder)=>{
@@ -58,9 +59,15 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   for(const saved of remembered)if(!visibleReminders.some(item=>item.id===saved.item.id))visibleReminders.push(saved.item);
   const taskMap=new Map(tasks.map(task=>[task.id,{...task,...localTasks[task.id]}]));
   for(const task of Object.values(localTasks))if(!taskMap.has(task.id))taskMap.set(task.id,task);
-  const rows=[...homeTaskItems([...taskMap.values()],visibleReminders),...homeTaskItems([],future)].map(row=>({...row,
-    key:row.task?row.key:row.key+":"+Math.min(...row.reminders.map(item=>Date.parse(item.nextDueAt??item.startsAt))),
-  }));
+  // A day cached while it was Today can still contain open tasks from earlier dates.
+  const visibleTasks=[...taskMap.values()].filter(task=>task.completed||localTasks[task.id]?.saving||task.dueDate===undefined||task.dueDate===date||date===today&&task.dueDate!==null&&task.dueDate<date);
+  const rows=[...homeTaskItems(visibleTasks,visibleReminders),...homeTaskItems([],future)].map(row=>{
+    const task=row.task, dueDate=task?.dueDate===undefined?(task?date:null):task.dueDate;
+    const taskDue=Boolean(!task?.completed&&dueDate&&(task?.dueTime?Date.parse(zonedDateTimeToUtc(dueDate,task.dueTime))<=now:dueDate<today));
+    return {...row,dueDate,taskDue,due:taskDue||row.reminders.length>0,
+      key:task?row.key:row.key+":"+Math.min(...row.reminders.map(item=>Date.parse(item.nextDueAt??item.startsAt))),
+    };
+  });
   const complete=(row:typeof rows[number])=>row.task?row.task.completed:Boolean(row.reminders.length&&row.reminders.every(item=>localCompletion(item)));
   const pending=(row:typeof rows[number])=>Boolean(row.task&&localTasks[row.task.id]?.saving||row.reminders.some(item=>localCompletion(item)?.saving));
   const history=completedItems.filter(item=>!remembered.some(saved=>homeReminderCompletionMatches(saved.item,item)));
@@ -71,7 +78,7 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
     const heights=Object.fromEntries(Array.from(listRef.current?.querySelectorAll<HTMLElement>("li[data-row-key]")??[]).filter(row=>!row.querySelector(".vintage-reminder-actions,.vintage-snooze")).map(row=>[row.dataset.rowKey!,row.getBoundingClientRect().height]));
     setRowHeights(current=>({...heights,...current}));
   };
-  const dueCount=rows.filter(row=>!complete(row)&&(row.reminders.length>0||row.task?.dueTime&&Date.parse(zonedDateTimeToUtc(date,row.task.dueTime))<=now)).length;
+  const dueCount=rows.filter(row=>!complete(row)&&row.due).length;
   const doneCount=rows.filter(complete).length+history.length;
   async function toggle(id:number,completed:boolean) {
     if(readOnly||writeLock.current||busy!==null)return;
@@ -113,24 +120,28 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   }
   return <article className="home-day-pane home-tasks-pane">
     <header><Checklist size={19} weight="Outline" aria-hidden="true"/><h3><Link href="/tasks">{english?"Tasks":"任务"}</Link></h3><small className="vintage-task-count">{dueCount>0?english?`${dueCount} due`:`${dueCount} 到期`:english?`${entries.length} items`:`${entries.length} 项`}</small><small aria-label={english?"Completed / total":"已完成 / 总数"}>{doneCount}/{entries.length}</small></header>
-    {date!==dateInEvaOrbit(new Date(now))&&remaining.length>0&&<p className="vintage-live-label">{english?"Includes reminders pending now":"含当前待处理提醒"}</p>}
+    {date!==today&&remaining.length>0&&<p className="vintage-live-label">{english?"Includes reminders pending now":"含当前待处理提醒"}</p>}
     {!remindersAvailable&&<p className="vintage-live-label">{english?"Reminder snapshot unavailable. Connect to refresh.":"提醒快照不可用，请联网刷新。"}</p>}
     <ErrorNotice>{error||taskError}</ErrorNotice>
     {entries.length===0?<p className="home-pane-empty">{english?"No tasks or reminders due":"没有待处理任务或提醒"}</p>:<ul ref={listRef} className="vintage-task-list">{entries.map(({key,row,completion})=>{
       if(completion)return <li key={key} data-completed="true"><div className="vintage-task-title"><CheckCircle className="vintage-completed-check" size={20} weight="Outline" aria-hidden="true"/><strong><Link href={completion.href}>{completion.title}</Link></strong><Link className="vintage-more" href={completion.href}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"View record":"查看记录"}</span></Link></div><div className="vintage-task-meta"><span>{english?"Completed":"已完成"}</span>{completion.hasExplicitTime&&<time>{completionTime(completion.completedAt)}</time>}</div></li>;
       if(!row)return null;
       const done=complete(row),saving=pending(row);
-      const task=row.task, title=task?.title??homeReminderTitle(row.reminders[0]), due=!done&&(row.reminders.length>0||Boolean(task?.dueTime&&Date.parse(zonedDateTimeToUtc(date,task.dueTime))<=now));
+      const task=row.task, title=task?.title??homeReminderTitle(row.reminders[0]), due=!done&&row.due;
+      const {dueDate,taskDue}=row, showDate=dueDate&&(taskDue||dueDate!==date), hasReminders=row.reminders.length>0;
+      const taskStatus=saving?(english?"Saving…":"保存中…"):done?(english?"Completed":"已完成"):
+        taskDue?(dueDate&&dueDate<today?(english?"Overdue":"已逾期"):(english?"Due":"已到期")):(english?"Pending":"待处理");
       return <li key={key} data-row-key={key} style={{minHeight:rowHeights[key]}} data-due={due} data-completed={done||undefined} aria-busy={saving||undefined}>
         <div className="vintage-task-title">{task?<label className="vintage-task-check"><input type="checkbox" aria-label={english?`${task.completed?"Reopen":"Complete"} ${task.title}`:`${task.completed?"重新打开":"完成"} ${task.title}`} checked={task.completed} disabled={readOnly||taskBusy!==null||busy!==null} onChange={event=>void toggle(task.id,event.target.checked)}/><span aria-hidden="true"><Icon name="check"/></span></label>:row.reminders.length===1||done?<button type="button" className="vintage-quick-complete" aria-pressed={done} disabled={readOnly||done||busy!==null||taskBusy!==null} aria-label={`${row.reminders[0].targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")} ${row.reminders[0].title}`} onClick={()=>void performReminderAction(row.reminders[0].id,"complete")}><span><Icon name="check"/></span></button>:<span className="vintage-due-mark" aria-hidden="true"/>}
           <strong>{task?<Link href={`/tasks?taskId=${task.id}`}>{task.title}</Link>:title}</strong>
           {row.reminders.length>0&&!done&&<button type="button" className="vintage-more" aria-label={`${english?"Actions for":"操作"} ${title}`} aria-expanded={openActions===row.key} onClick={()=>{setOpenActions(openActions===row.key?null:row.key);setSnoozing(null);}}><ReiconGlyph name="more" className="icon"/></button>}{row.reminders.length===0&&task&&<Link className="vintage-more" href={`/tasks?taskId=${task.id}`}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"Task details":"任务详情"}</span></Link>}
         </div>
-        {row.reminders.length?row.reminders.map(item=><div className="vintage-reminder" key={item.id} data-completed={done||Boolean(localCompletion(item))||undefined}>
+        {task&&(!hasReminders||!done&&dueDate&&(showDate||task.dueTime))&&<div className="vintage-task-meta"><span className={taskDue&&!saving?"vintage-overdue":undefined}>{taskStatus}</span>{done&&task.completedAt?<time>{completionTime(task.completedAt)}</time>:!done&&dueDate&&(showDate||task.dueTime)&&<time dateTime={dueDate+(task.dueTime?`T${task.dueTime}`:"")}>{[showDate&&dueDate,task.dueTime].filter(Boolean).join(" ")}</time>}</div>}
+        {row.reminders.map(item=><div className="vintage-reminder" key={item.id} data-completed={done||Boolean(localCompletion(item))||undefined}>
           <div className="vintage-task-meta"><span className={done||localCompletion(item)?undefined:"vintage-overdue"}>{localCompletion(item)?.saving||saving?(english?"Saving…":"保存中…"):done||localCompletion(item)?(english?"Completed":"已完成"):overdue(item,english)}</span><time>{done||localCompletion(item)?completionTime(localCompletion(item)?.completedAt??task?.completedAt??new Date().toISOString()):reminderDate(item,english)}</time>{row.reminders.length>1&&<span>{item.title}</span>}</div>
           {openActions===row.key&&!localCompletion(item)&&<div className="vintage-reminder-actions"><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"complete")}>{item.targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")}</button><button type="button" disabled={readOnly||busy!==null} aria-expanded={snoozing===item.id} onClick={()=>setSnoozing(snoozing===item.id?null:item.id)}>{english?"Snooze":"稍后"}</button><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"skip")}>{item.targetType==="subscription"?(english?"Skip cycle":"跳过本期"):(english?"Skip":"跳过")}</button></div>}
           {snoozing===item.id&&!localCompletion(item)&&<div className="vintage-snooze"><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"snooze",{choice:"later_today"})}>{english?"Later today":"今天稍后"}</button><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"snooze",{choice:"tomorrow"})}>{english?"Tomorrow":"明天"}</button><label>{english?"Custom":"自定义"}<input type="datetime-local" disabled={readOnly||busy!==null} onChange={event=>event.target.value&&void performReminderAction(item.id,"snooze",{choice:"custom",custom:new Date(event.target.value).toISOString()})}/></label></div>}
-        </div>):<div className="vintage-task-meta"><span>{saving?(english?"Saving…":"保存中…"):task?.completed?(english?"Completed":"已完成"):due?(english?"Due":"已到期"):(english?"Pending":"待处理")}</span>{task?.completed&&task.completedAt?<time>{completionTime(task.completedAt)}</time>:!task?.completed&&task?.dueTime&&<time>{task.dueTime}</time>}</div>}
+        </div>)}
       </li>;
     })}</ul>}
   </article>;

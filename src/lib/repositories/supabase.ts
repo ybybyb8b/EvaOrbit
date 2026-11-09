@@ -378,17 +378,26 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async createPersonMemoryNote(personId,content){const{data,error}=await client.from("person_memory_notes").insert({user_id:userId,person_id:personId,content}).select().single();fail(error,"创建记忆碎片");return memoryNoteFromRow(data);},
     async updatePersonMemoryNote(id,content){const{data,error}=await client.from("person_memory_notes").update({content}).eq("id",id).select().maybeSingle();fail(error,"更新记忆碎片");return data?memoryNoteFromRow(data):null;},
     async deletePersonMemoryNote(id){const{data,error}=await client.from("person_memory_notes").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除记忆碎片");return Boolean(data);},
-    async listTasks(filter: TaskFilter = "all", dueDate?: string, completedRange?: { from: string; to: string }) {
+    async listTasks(filter: TaskFilter = "all", dueDate?: string, completedRange?: { from: string; to: string }, includeOverdue = false) {
       let query = client.from("tasks").select("*");
-      if (dueDate) query = completedRange
-        ? query.or(`due_date.eq.${dueDate},and(completed.eq.true,completed_at.gte.${completedRange.from},completed_at.lt.${completedRange.to})`)
-        : query.eq("due_date", dueDate);
+      if (dueDate) query = query.or([
+        `due_date.eq.${dueDate}`,
+        includeOverdue && `and(completed.eq.false,due_date.lt.${dueDate})`,
+        completedRange && `and(completed.eq.true,completed_at.gte.${completedRange.from},completed_at.lt.${completedRange.to})`,
+      ].filter(Boolean).join(","));
       if (filter === "open") query = query.eq("completed", false);
       if (filter === "done") query = query.eq("completed", true);
-      const { data, error } = await query.order("completed").order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
-      fail(error, "读取任务");
+      query = query.order("completed").order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false }).order("id");
+      const rows: Row[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await (includeOverdue ? query.range(offset, offset + 499) : query);
+        fail(error, "读取任务");
+        const page = data as Row[];
+        rows.push(...page);
+        if (!includeOverdue || page.length < 500) break;
+      }
       const priority = { high: 0, medium: 1, low: 2 };
-      return (data as Row[]).map(taskFromRow).sort((a, b) => Number(a.completed) - Number(b.completed) || priority[a.priority] - priority[b.priority]);
+      return rows.map(taskFromRow).sort((a, b) => Number(a.completed) - Number(b.completed) || priority[a.priority] - priority[b.priority]);
     },
     async getTask(id) {
       const { data, error } = await client.from("tasks").select("*").eq("id", id).maybeSingle();

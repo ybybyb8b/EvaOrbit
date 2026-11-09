@@ -16,6 +16,10 @@ test("Home reads actual completion dates across modules, persists them, excludes
    import {withHomeReadOnlyRepository} from './src/lib/repositories/index.ts';
    import {completeReminder,skipReminder} from './src/lib/services/reminder.ts';
    import {dateRange} from './src/lib/time.ts';
+   import {mock} from 'node:test';
+   import {updateTask} from './src/lib/services/task.ts';
+   import {getDueReminders} from './src/lib/services/reminder.ts';
+   import {validateHomeResource} from './src/lib/home-readonly.ts';
    const task=db.createTask({title:'Undated completed task',notes:'',dueDate:null,dueTime:null,priority:'medium',tags:[]});
    db.updateTask(task.id,{completed:true,completedAt:'2026-10-28T16:10:00.000Z'});
    const old=db.createTask({title:'Overdue completed task',notes:'',dueDate:'2026-10-27',dueTime:'09:00',priority:'medium',tags:[]});
@@ -36,6 +40,37 @@ test("Home reads actual completion dates across modules, persists them, excludes
    assert.equal(db.listReminderOccurrences(dateRange('2026-10-29')).length,1,'skip is not a completion');
    db.updateTask(task.id,{completed:false,completedAt:null});
    assert.equal((await read('2026-10-29')).tasks.some(t=>t.id===task.id),false,'reopening removes completion fact');
+
+   mock.timers.enable({apis:['Date'],now:Date.parse('2026-11-08T15:59:59.999Z')});
+   const add=(title,dueDate,dueTime=null)=>db.createTask({title,notes:'',dueDate,dueTime,priority:'medium',tags:[]});
+   const older=add('Earlier backlog','2026-11-07');
+   const dateOnly=add('Laundry','2026-11-08');
+   const timed=add('Timed laundry','2026-11-08','21:30');
+   const todayTask=add('Due today','2026-11-09');
+   const future=add('Future','2026-11-10');
+   add('No date',null);
+   const ids=day=>day.tasks.map(t=>t.id).sort((a,b)=>a-b);
+   assert.deepEqual(ids(await getHomeDayOverview()),[older.id,dateOnly.id,timed.id]);
+   assert.deepEqual(ids(await read('2026-11-09')),[todayTask.id],'future views remain scoped to their own day');
+   mock.timers.tick(1);
+   const webDay=await getHomeDayOverview();
+   assert.equal(webDay.date,'2026-11-09');
+   assert.deepEqual(ids(webDay),[older.id,dateOnly.id,timed.id,todayTask.id]);
+   assert.deepEqual(webDay.tasks.filter(t=>[dateOnly.id,timed.id].includes(t.id)).map(t=>[t.dueDate,t.dueTime]).sort(),[['2026-11-08','21:30'],['2026-11-08',null]].sort());
+   const envelope=JSON.parse(JSON.stringify({format:'eo-home-readonly-v1',accountId:'test',kind:'day',key:webDay.date,capturedAt:new Date().toISOString(),data:await read(webDay.date)}));
+   assert.deepEqual(validateHomeResource(envelope,'test','day',webDay.date).data.tasks,webDay.tasks);
+   assert.deepEqual(ids(await read('2026-11-08')),[dateOnly.id,timed.id],'history does not inherit the earlier backlog');
+   assert.deepEqual(ids(await read('2026-11-10')),[future.id]);
+   assert.equal((await getDueReminders(50,new Date(),{readOnly:true})).length,0,'Home visibility does not create due reminders');
+   assert.deepEqual(db.listTaskReminders(dateOnly.id),[]);
+   await updateTask(dateOnly.id,{completed:true});
+   const completed=(await read(webDay.date)).tasks.filter(t=>t.id===dateOnly.id);
+   assert.equal(completed.length,1);
+   assert.equal(completed[0].completedAt,'2026-11-08T16:00:00.000Z');
+   assert.deepEqual(ids(await read('2026-11-08')),[timed.id]);
+   await updateTask(dateOnly.id,{completed:false});
+   assert.equal((await read(webDay.date)).tasks.find(t=>t.id===dateOnly.id)?.completed,false);
+   assert.equal(db.getTask(dateOnly.id).dueDate,'2026-11-08');
   `],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"test.db"),VERCEL:""}});
   assert.equal(result.status,0,result.stderr||result.stdout);
  }finally{rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}

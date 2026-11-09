@@ -58,7 +58,6 @@ final class LoadingOverlayView: UIView, LoadingExperiencePresenting {
         if launchStyle == .local {
             wordmarkLabel.alpha = 1
             wordmarkLabel.transform = .identity
-            beginQuietLoop()
             completion()
             return
         }

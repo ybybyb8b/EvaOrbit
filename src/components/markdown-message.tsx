@@ -1,6 +1,7 @@
 "use client";
 
 import { type ComponentPropsWithoutRef, type ReactNode, useDeferredValue, useState } from "react";
+import type { Element, Root } from "hast";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -40,14 +41,40 @@ function Link({ href = "", children, ...props }: ComponentPropsWithoutRef<"a">) 
   return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined}>{children}</a>;
 }
 
-export function MarkdownMessage({ content, offlineMedia = false }: { content: string; offlineMedia?: boolean }) {
+function groupMarkdownBlocks() {
+  return (tree: Root) => {
+    const groups: Element[][] = [];
+    let group: Element[] = [];
+    for (const child of tree.children) {
+      if (child.type !== "element") continue;
+      group.push(child);
+      if (/^h[1-6]$/.test(child.tagName)) continue;
+      groups.push(group);
+      group = [];
+    }
+    if (group.length) groups.push(group);
+    tree.children = groups.map((children, index) => ({
+      type: "element", tagName: "div", properties: { dataMarkdownLast: index === groups.length - 1 }, children,
+    }));
+  };
+}
+
+export function MarkdownMessage({ content, offlineMedia = false, renderBlock }: {
+  content: string;
+  offlineMedia?: boolean;
+  renderBlock?: (children: ReactNode, last: boolean) => ReactNode;
+}) {
   const renderedContent = useDeferredValue(content);
-  return <div className="markdown-content">
+  const markdown = (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={renderBlock ? [groupMarkdownBlocks] : undefined}
       skipHtml
       urlTransform={safeMarkdownUrl}
       components={{
+        ...(renderBlock ? { div: ({ children, node }) => renderBlock(
+          <div className="markdown-content">{children}</div>, node?.properties.dataMarkdownLast === true,
+        ) } : {}),
         a: offlineMedia ? ({children}) => <span>{children}</span> : Link,
         ...(offlineMedia ? {img: ({alt}: {alt?:string}) => <span className="chronicle-offline-image">{alt || "Image"} · Image unavailable offline</span>} : {}),
         table: Table,
@@ -60,5 +87,6 @@ export function MarkdownMessage({ content, offlineMedia = false }: { content: st
         input: ({ type, ...props }) => type === "checkbox" ? <input type="checkbox" {...props} disabled /> : <input type={type} {...props} />,
       }}
     >{renderedContent}</ReactMarkdown>
-  </div>;
+  );
+  return renderBlock ? markdown : <div className="markdown-content">{markdown}</div>;
 }
