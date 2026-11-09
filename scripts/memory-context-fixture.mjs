@@ -27,6 +27,33 @@ export async function seedMemoryContext(insert, owner) {
   await insert("memory_sources", { ...at, id: id(3, 501), fact_id: id(2, 301), source_resource: "manual",
     source_record_id: "OPAQUE-special-context-id", excerpt: "  保留原始证据  " });
   await insert("memory_sources", { ...at, id: id(3, 502), fact_id: id(2, 301), source_resource: "chat", excerpt: "第二原话" });
+
+  for (const [n, name] of [[310, "星禾"], [311, "林舟"], [312, "雨竹"], [320, "纸鹭"]]) {
+    await insert("memory_entities", { ...at, id: id(1, n), canonical_name: name, aliases: [], entity_type: "person" });
+  }
+  const add = (n, subject, predicate, fields) => insert("memory_facts", {
+    ...at, id: id(2, n), subject_entity_id: id(1, subject), predicate, valid_from: "2025-07-01", importance: 1, ...fields,
+  });
+  await add(310, 310, "茶饮偏好", { object_value: JSON.stringify("乌龙") });
+  await add(311, 310, "茶饮偏好", { object_value: JSON.stringify("红茶"), importance: 5 });
+  await add(312, 310, "音乐偏好", { object_value: JSON.stringify("古典乐"), importance: 5 });
+  await add(313, 311, "茶饮偏好", { object_value: JSON.stringify("白茶"), perspective_entity_id: id(1, 310), importance: 5 });
+  await add(314, 310, "图书推荐", { object_entity_id: id(1, 311) });
+  await add(315, 311, "图书推荐", { object_entity_id: id(1, 310), importance: 5 });
+  await add(316, 311, "协作方式", { object_value: JSON.stringify("一起写提纲"), perspective_entity_id: id(1, 310) });
+  await add(317, 311, "协作方式", { object_value: JSON.stringify("各自写提纲"), perspective_entity_id: id(1, 312), importance: 5 });
+  await add(318, 310, "交接事项", { object_value: JSON.stringify("整理纪要") });
+  await insert("memory_sources", { ...at, id: id(3, 510), fact_id: id(2, 310), source_resource: "chat", excerpt: "常喝的茶饮是乌龙" });
+  await insert("memory_sources", { ...at, id: id(3, 513), fact_id: id(2, 313), source_resource: "chat", excerpt: "星禾只负责记录" });
+  await insert("memory_sources", { ...at, id: id(3, 518), fact_id: id(2, 318), source_resource: "chat", excerpt: "雨竹的协作纪要" });
+  await add(320, 320, "favorite_music_artists", { object_value: JSON.stringify(["Aster"]) });
+  await add(321, 320, "favorite_food", { object_value: JSON.stringify("fruit"), importance: 5 });
+  await add(322, 311, "music_history", { object_value: JSON.stringify("classical"), perspective_entity_id: id(1, 320), importance: 5 });
+  await add(323, 320, "collection_preferences", { object_value: JSON.stringify({ wardrobe: "linen" }) });
+  await add(324, 320, "notebook_setup", { object_value: JSON.stringify("grid paper") });
+  await add(325, 320, "font_style", { object_value: JSON.stringify("serif") });
+  await insert("memos", { ...at, id: 320, title: "Cabin notes", content: "The itinerary includes two stops.", tags: [] });
+  await insert("memos", { ...at, id: 321, title: "纸鹭的字体", content: "文字设定归档。", tags: [] });
 }
 
 export async function assertMemoryContext(read) {
@@ -117,6 +144,32 @@ export async function assertMemoryContext(read) {
   assert.equal(partial.sources.length, 100);
   const empty = await context("nonexistentneedle");
   assert.deepEqual([empty.coverage.complete, empty.coverage.matched_count, empty.context_text], [true, 0, ""]);
+
+  const factIds = async query => (await context(query)).current_facts.map(hit => hit.id);
+  const preferences = await context("星禾喜欢什么茶饮？");
+  assert.deepEqual(preferences.current_facts.map(hit => hit.id), [id(2, 310), id(2, 311)]);
+  assert.ok(preferences.current_facts[0].relevance > preferences.current_facts[1].relevance);
+  assert.ok(preferences.current_facts[0].matched_by.includes("source_excerpt"));
+  assert.deepEqual(preferences.current_facts[0].source_ids, [id(3, 510)]);
+  assert.deepEqual(await factIds("星禾的音乐偏好是什么？"), [id(2, 312)]);
+  assert.ok(!(await factIds("星禾")).includes(id(2, 313)));
+  assert.ok((await factIds("雨竹")).includes(id(2, 318)));
+  assert.deepEqual(await factIds("星禾向林舟推荐过什么书？"), [id(2, 314)]);
+  assert.deepEqual(await factIds("林舟向星禾推荐过什么书？"), [id(2, 315)]);
+  assert.deepEqual(await factIds("谁向星禾推荐过书？"), [id(2, 315)]);
+  assert.deepEqual(await factIds("从星禾的视角看林舟的协作方式"), [id(2, 316)]);
+
+  const music = await context("纸鹭有哪些听歌偏好？");
+  assert.deepEqual(music.current_facts.map(hit => hit.id), [id(2, 320)]);
+  assert.ok(music.current_facts[0].matched_by.includes("predicate"));
+  assert.ok(music.current_facts[0].matched_terms.includes("听歌"));
+  assert.deepEqual(await factIds("纸鹭的穿搭是什么？"), [id(2, 323)]);
+  assert.ok(!(await factIds("纸鹭的阅读记录")).includes(id(2, 324)));
+  const travel = await context("想找旅游记忆");
+  assert.ok(travel.memos.some(hit => hit.id === 320 && hit.matched_by.includes("memo_content")));
+  const title = await context("纸鹭的字体", { limit: 1 });
+  assert.deepEqual(title.memos.map(hit => hit.id), [321]);
+  assert.deepEqual(title.current_facts, []);
   await assert.rejects(() => context("茶饮", { time_mode: "as_of" }), /as_of/);
   await assert.rejects(() => context("茶饮", { as_of: "2026-02-30", time_mode: "as_of" }), /as_of/);
   await assert.rejects(() => context("茶饮", { query_variants: Array(9).fill("词") }), /variants/);

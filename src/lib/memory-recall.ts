@@ -10,14 +10,20 @@ export function adaptMemoryRecall(result: MemoryContext) {
     const fact = hit.record;
     const subject = entities.get(fact.subjectEntityId);
     if (!subject) continue;
+    const objectEntity = fact.objectEntityId ? entities.get(fact.objectEntityId) ?? null : null;
+    const perspectiveEntity = fact.perspectiveEntityId ? entities.get(fact.perspectiveEntityId) ?? null : null;
     const channels: MemoryRecallChannel[] = [];
-    if (hit.relevance >= 90) channels.push("exact");
+    const terms = new Set(hit.matched_terms.map(term => term.toLowerCase()));
+    const namedRoles = [["subject", subject], ["object_entity", objectEntity], ["perspective", perspectiveEntity]] as const;
+    if (namedRoles.some(([role, entity]) => entity && (
+      hit.matched_by.includes(`${role}_canonical_name`) && terms.has(entity.canonicalName.toLowerCase()) ||
+      hit.matched_by.includes(`${role}_alias`) && entity.aliases.some(alias => terms.has(alias.toLowerCase()))
+    ))) channels.push("exact");
     if (hit.matched_by.some(field => ["predicate", "object_value", "source_excerpt", "source_note", "source_record_id"].includes(field))) channels.push("literal");
     if (!channels.length) channels.push("graph");
     facts.push({
       fact, subject, sources: hit.source_ids.flatMap(id => sources.has(id) ? [sources.get(id)!] : []),
-      objectEntity: fact.objectEntityId ? entities.get(fact.objectEntityId) ?? null : null,
-      perspectiveEntity: fact.perspectiveEntityId ? entities.get(fact.perspectiveEntityId) ?? null : null,
+      objectEntity, perspectiveEntity,
       channels, score: hit.relevance,
       explanation: channels.join(" + ") + (hit.time_status === "unknown" ? " · validity unknown" : ""),
     });

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import type { MemoryPage, MemoryPageInput, MemoryPageItem, MemoryPageReader, MemoryResource } from "./memory-pagination";
 import { memoryUuid } from "./memory-graph-validation.ts";
+import { memoryTopicMatches, memoryTopics, memoryTopicSearchTerms, type MemoryTopic } from "./memory-topic.ts";
 import { dateInEvaOrbit } from "./time.ts";
 import type { Memo, MemoStatus, MemoType, MemoryEntity, MemoryFact, MemorySource } from "./types";
 import { dateOnly, ValidationError } from "./validation.ts";
@@ -105,6 +106,108 @@ function readInput(input: MemoryContextInput, today: string) {
 
 type Match = { field: string; term: string; score: number };
 type Terms = { terms: string[]; supplied: Set<string> };
+type Role = "subject" | "object_entity" | "perspective";
+type Mention = { start: number; end: number; ids: Set<string>; name: string };
+const factRoles = (fact: MemoryFact) => ({
+  subject: fact.subjectEntityId, object_entity: fact.objectEntityId, perspective: fact.perspectiveEntityId,
+});
+const roles = ["subject", "object_entity", "perspective"] as const;
+const best = (matches: Match[]) => matches.reduce((score, match) => Math.max(score, match.score), 0);
+
+function factIntent(query: string, entities: MemoryEntity[], ids: string[]) {
+  const text = fold(query.normalize("NFKC"));
+  const spans = new Map<string, Mention>();
+  const word = /[a-z0-9_]/;
+  for (const entity of entities) for (const label of [entity.canonicalName, ...entity.aliases]) {
+    const name = fold(label.normalize("NFKC").trim());
+    if (!name) continue;
+    for (let start = text.indexOf(name); start !== -1; start = text.indexOf(name, start + name.length)) {
+      const end = start + name.length;
+      if ((word.test(name[0]) && word.test(text[start - 1] ?? "")) ||
+        (word.test(name.at(-1)!) && word.test(text[end] ?? ""))) continue;
+      if ([...name].length === 1 && text !== name &&
+        !/(?:主体|对象|宾语|视角)\s*[是为:]\s*$/.test(text.slice(0, start))) continue;
+      const key = `${start}:${end}`;
+      const span = spans.get(key) ?? { start, end, ids: new Set<string>(), name };
+      span.ids.add(entity.id);
+      spans.set(key, span);
+    }
+  }
+  const mentions: Mention[] = [];
+  for (const span of [...spans.values()].sort((a, b) => a.start - b.start || b.end - a.end)) {
+    if (mentions.length && mentions.at(-1)!.end > span.start) continue;
+    const preferred = ids.filter(id => span.ids.has(id));
+    mentions.push(preferred.length ? { ...span, ids: new Set(preferred) } : span);
+  }
+  const bindings: Partial<Record<Role, Set<string>>> = {};
+  const [first, second] = mentions;
+  const before = first ? text.slice(0, first.start) : "";
+  const between = second ? text.slice(first.end, second.start).trim() : "";
+  const after = first ? text.slice(first.end).trim() : "";
+  const bare = first?.name === text ? first.ids : undefined;
+  let topicText: string | undefined;
+
+  // Recognize explicit roles and a few unambiguous Chinese forms. Name order alone is not direction.
+  for (const mention of mentions) {
+    const label = text.slice(0, mention.start).match(/(?:^|[、,;\s])(主体|对象|宾语|视角)\s*[是为:]\s*$/)?.[1];
+    if (label) bindings[label === "主体" ? "subject" : label === "视角" ? "perspective" : "object_entity"] = mention.ids;
+  }
+  if (Object.keys(bindings).length) {
+    topicText = text.slice(mentions.at(-1)!.end);
+  } else if (first && !bare && second && mentions.length === 2) {
+    if (/^(?:从|站在)?\s*$/.test(before) && /^(?:的视角(?:看|评价)?|眼中的?)$/.test(between)) {
+      bindings.perspective = first.ids;
+      bindings.subject = second.ids;
+      topicText = text.slice(second.end);
+    } else if (!before && /^被$/.test(between)) {
+      bindings.subject = second.ids;
+      bindings.object_entity = first.ids;
+      topicText = text.slice(second.end);
+    } else if (/^(?:请问\s*)?$/.test(before) && /^(?:向|给|对|喜欢|信任|支持|反对|帮助|推荐了?)$/.test(between)) {
+      bindings.subject = first.ids;
+      bindings.object_entity = second.ids;
+      topicText = (between.match(/^(?:向|给|对)$/) ? "" : between) + text.slice(second.end);
+    }
+  } else if (first && !bare && mentions.length === 1) {
+    const incoming = before.match(/^(?:谁|哪位|哪些人)\s*(向|给|对|喜欢|信任|支持|反对|帮助|推荐)(?:了|过)?$/)?.[1];
+    if (incoming) {
+      bindings.object_entity = first.ids;
+      topicText = (/^(?:向|给|对)$/.test(incoming) ? "" : incoming) + after;
+    } else if (/^(?:从|站在)$/.test(before) && /^的视角/.test(after)) {
+      bindings.perspective = first.ids;
+      topicText = after.replace(/^的视角(?:看|出发)?/, "");
+    } else if (/^(?:请问\s*)?(?:关于\s*)?$/.test(before) && /^[\s\p{Script=Han}a-z0-9_]/u.test(after)) {
+      bindings.subject = first.ids;
+      topicText = after;
+    }
+  }
+  const topic = topicText?.replace(/(?:的?(?:事实|关系)?记录|有哪些|是什么|怎么样|什么|如何|是否|有没有|本人|关于|相关|目前|现在|过去|最近|谁)/g, " ")
+    .replace(/^[\s的]+|[\s的了呢吗？?。！!]+$/g, "").trim() ?? "";
+  const names = new Set(mentions.map(mention => mention.name));
+  const mentionedIds = new Set(mentions.flatMap(mention => [...mention.ids]));
+  return { bindings, bare, topic, names, mentionedIds };
+}
+
+function semanticMatches(values: (string | null)[], field: string, topics: MemoryTopic[], score: number): Match[] {
+  return memoryTopicMatches(values, topics).map(topic => ({ field, term: topic.term, score }));
+}
+
+function factTopicTerms(intent: ReturnType<typeof factIntent>, terms: Terms) {
+  if (!intent.topic) return null;
+  const query = intent.topic;
+  const ignored = /^(?:喜欢|偏好|喜好|关系|项目|什么|关于|记录|本人|哪些|就是|的是|的事|现在|过去|最近)$/;
+  const residual = terms.terms.filter(term => fold(query).includes(fold(term)) && !ignored.test(term) && !intent.names.has(fold(term)));
+  const fragments = query.split(/\s+/).filter(term => !ignored.test(term) && !/^[喝吃看去在跟与和的]$/.test(term));
+  const variants = [...terms.supplied].slice(1).filter(term => !intent.names.has(fold(term)));
+  return { terms: unique([query, ...fragments, ...residual, ...variants]), supplied: new Set([query, ...variants]) };
+}
+
+function factRelevance(content: Match[], roleScore: number) {
+  const channels = [best(content.filter(match => match.field === "predicate")),
+    best(content.filter(match => match.field === "object_value")),
+    best(content.filter(match => match.field.startsWith("source_")))].sort((a, b) => b - a);
+  return roleScore + channels[0] + Math.round(channels[1] / 4 + channels[2] / 8);
+}
 
 function textMatches(values: (string | null)[], field: string, query: Terms, exact: number, substring: number) {
   const candidates = values.filter((value): value is string => value !== null).map(fold);
@@ -179,6 +282,8 @@ export async function readMemoryContext(
   const { query, time, supplied, ids, limit, maxChars } = readInput(input, today);
   const factsOnly = input.primary_resource === "fact";
   const terms = { terms: query.terms, supplied };
+  // Expand the repository query, then require actual topic evidence after role resolution.
+  const searchTerms = unique([...query.terms, ...memoryTopicSearchTerms(memoryTopics(query.original))]);
   const packet: Packet = { version: 1, time, current_facts: [], historical_facts: [], unknown_facts: [], memos: [], entities: [], sources: [] };
   const reasons = new Set<Reason>();
   const notices: Notice[] = [];
@@ -219,12 +324,12 @@ export async function readMemoryContext(
   const [entities, facts, memos] = await Promise.all([
     collect("entity", { relatedTerms: query.terms }),
     collect("fact", {
-      relatedTerms: query.terms, includeSourceMatches: true,
+      relatedTerms: searchTerms, includeSourceMatches: true,
       ...(ids.length ? { relatedEntityIds: ids } : {}),
       ...(time.mode === "current" ? { status: "active" as const } : {}),
       ...(time.mode !== "history" ? { validOn: time.date } : {}),
     }),
-    factsOnly ? null : collect("memo", { relatedTerms: query.terms, type: input.memo_type, status: input.memo_status ?? (time.mode === "history" ? undefined : "active") }),
+    factsOnly ? null : collect("memo", { relatedTerms: searchTerms, type: input.memo_type, status: input.memo_status ?? (time.mode === "history" ? undefined : "active") }),
   ]);
   const entityHits = new Map<string, EntityHit>();
   for (const entity of entities.items) {
@@ -238,18 +343,49 @@ export async function readMemoryContext(
       entityHits.set(entity.id, makeHit("entity", entity, [{ field: "entity_id", term: "", score: 110 }, ...entityMatches(entity, terms)], "not_applicable"));
     }
   }
-  const candidates: Primary[] = factsOnly ? [] : [...entityHits.values()].filter(hit => !ids.length || ids.includes(hit.id));
+  const intent = factIntent(query.original, [...entityHits.values()].map(hit => hit.record), ids);
+  const requiredRoles = roles.filter(role => intent.bindings[role]);
+  const scoped = requiredRoles.length > 0;
+  const topicTerms = factTopicTerms(intent, terms);
+  const topics = intent.bare ? [] : memoryTopics(scoped ? intent.topic : query.original);
+  const literalTopic = new Set([scoped ? intent.topic : query.original, ...query.variants]);
+  const topical = (match: Match) => literalTopic.has(match.term) || memoryTopicMatches([match.term], topics).length > 0;
+  const originalTerms = new Set(query.terms);
+  const knownTerms = new Set(query.terms);
+  const candidates: Primary[] = factsOnly ? [] : [...entityHits.values()].filter(hit =>
+    (!ids.length || ids.includes(hit.id)) && (!topics.length || ids.includes(hit.id) || intent.mentionedIds.has(hit.id)));
+  const exactMemoTitles = new Set<number>();
   for (const memo of memos?.items ?? []) {
     if (outOfTime()) break;
     if (memo.status === "merged" && input.memo_status !== "merged") continue;
     const date = memo.eventDate;
     if ((time.from && (!date || date < time.from)) || (time.to && (!date || date > time.to)) ||
       (time.mode === "as_of" && (!date || date > time.date))) continue;
-    const matches = [
-      ...textMatches([memo.title], "memo_title", terms, 82, 72), ...textMatches([memo.content], "memo_content", terms, 80, 68),
-      ...textMatches(memo.tags, "memo_tag", terms, 76, 52), ...textMatches([memo.type, memo.status], "memo_type_or_status", terms, 36, 24),
+    const exactTitle = fold(memo.title ?? "") === fold(query.original);
+    const memoTerms = scoped && !exactTitle
+      ? topicTerms ?? { terms: [...intent.names], supplied: new Set<string>() } : terms;
+    const lexical = [
+      ...textMatches([memo.title], "memo_title", memoTerms, 82, 72), ...textMatches([memo.content], "memo_content", memoTerms, 80, 68),
+      ...textMatches(memo.tags, "memo_tag", memoTerms, 76, 52), ...textMatches([memo.type, memo.status], "memo_type_or_status", memoTerms, 36, 24),
     ];
-    if (matches.length) candidates.push(makeHit("memo", memo, matches, date ? "dated" : "unknown"));
+    const matches = exactTitle || !topics.length ? lexical : [
+      ...lexical.filter(match => match.field !== "memo_type_or_status" && topical(match)),
+      ...semanticMatches([memo.title], "memo_title", topics, 71),
+      ...semanticMatches([memo.content], "memo_content", topics, 61),
+      ...semanticMatches(memo.tags, "memo_tag", topics, 57),
+    ];
+    if (scoped && !exactTitle) {
+      const prose = fold([memo.title, memo.content, ...memo.tags].join("\n"));
+      if (requiredRoles.some(role => ![...intent.bindings[role]!].some(id => {
+        const entity = entityHits.get(id)?.record;
+        return entity && [entity.canonicalName, ...entity.aliases].some(name => intent.names.has(fold(name)) && prose.includes(fold(name)));
+      }))) continue;
+    }
+    if (matches.length) {
+      for (const match of matches) knownTerms.add(match.term);
+      if (exactTitle) exactMemoTitles.add(memo.id);
+      candidates.push(makeHit("memo", memo, matches, date ? "dated" : "unknown"));
+    }
   }
   const factHits = new Map<string, FactHit>();
   for (const { sourceMatches: sourceSignals = [], ...fact } of facts.items) {
@@ -258,22 +394,54 @@ export async function readMemoryContext(
     if (ids.length && !linked.some(id => ids.includes(id))) continue;
     const status = factTime(fact, time);
     if (!status) continue;
+    const roleIds = factRoles(fact);
+    if (requiredRoles.some(role => !intent.bindings[role]?.has(roleIds[role] ?? ""))) continue;
     const fields = factFields(fact.objectValue);
-    const matches: Match[] = [
-      ...textMatches([fact.predicate], "predicate", terms, 74, 63),
-      ...textMatches(fields.text, "object_value", terms, 73, 63),
-      ...query.terms.filter(term => /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d{1,3})?$/i.test(term) && fields.numbers.includes(Number(term)))
+    const lexical = (matching: Terms): Match[] => [
+      ...textMatches([fact.predicate], "predicate", matching, 74, 63),
+      ...textMatches(fields.text, "object_value", matching, 73, 63),
+      ...matching.terms.filter(term => /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d{1,3})?$/i.test(term) && fields.numbers.includes(Number(term)))
         .map(term => ({ field: "object_value", term, score: 73 })),
-      ...sourceSignals.map(({ field, term }) => ({
-        field, term, score: (field === "source_excerpt" ? 58 : field === "source_record_id" ? 43 : 41) + (supplied.has(term) ? 2 : 0),
-      })),
     ];
-    for (const [field, id] of [["subject", fact.subjectEntityId], ["object_entity", fact.objectEntityId], ["perspective", fact.perspectiveEntityId]] as const) {
+    // The repository reports substring hits for Sources. Use the original query's hits;
+    // expanded aliases need whole-word validation, which is available on the Fact and Memo fields.
+    const sources = sourceSignals.filter(({ term }) => originalTerms.has(term)).map(({ field, term }) => ({
+        field, term, score: (field === "source_excerpt" ? 58 : field === "source_record_id" ? 43 : 41) + (supplied.has(term) ? 2 : 0),
+    }));
+    const perspectiveOnly = intent.mentionedIds.has(roleIds.perspective ?? "") &&
+      !intent.mentionedIds.has(roleIds.subject) && !intent.mentionedIds.has(roleIds.object_entity ?? "");
+    const content = [...lexical(terms), ...sources.filter(match =>
+      !perspectiveOnly || ![...intent.names].some(name => name.includes(fold(match.term))))];
+    const topicLexical = topicTerms
+      ? [...lexical(topicTerms), ...sources.filter(match => topicTerms.terms.includes(match.term))] : content;
+    const topicMatches = topics.length ? [
+      ...topicLexical.filter(topical),
+      ...semanticMatches([fact.predicate], "predicate", topics, 68),
+      ...semanticMatches(fields.text, "object_value", topics, 61),
+    ] : topicLexical;
+    if ((topicTerms || topics.length) && !topicMatches.length) continue;
+    const matches = scoped && !topicTerms && !topics.length ? [] : [...topicMatches];
+    let subject = 0, object = 0;
+    for (const field of roles) {
+      const id = roleIds[field];
       const entity = id && entityHits.get(id);
-      if (entity) matches.push(...entityMatches(entity.record, terms).map(match => ({ ...match, field: field + "_" + match.field })));
+      if (!entity) continue;
+      const found = entityMatches(entity.record, terms);
+      matches.push(...found.map(match => ({ ...match, field: field + "_" + match.field })));
+      if (field === "subject") subject = best(found);
+      if (field === "object_entity") object = best(found);
     }
-    if (matches.length) factHits.set(fact.id, { ...makeHit("fact", fact, matches, status, linked), sources_complete: false });
+    const anchor = intent.bare;
+    const direct = anchor ? anchor.has(fact.subjectEntityId) || anchor.has(fact.objectEntityId ?? "") : subject >= 90 || object >= 90;
+    // Names and importance cannot stand in for the requested topic. Perspective is attribution unless explicitly requested.
+    if (!scoped && !direct && !content.length) continue;
+    for (const match of topicMatches) knownTerms.add(match.term);
+    const roleScore = scoped ? 85 * requiredRoles.length : Math.max(subject * 0.65, object * 0.5);
+    const coveredTopics = topics.filter(topic => topicMatches.some(match => match.term === topic.term)).length;
+    const relevance = factRelevance(scoped && !topicTerms ? [] : topicMatches, Math.round(roleScore)) + Math.max(0, coveredTopics - 1) * 4;
+    factHits.set(fact.id, { ...makeHit("fact", fact, matches, status, linked), relevance, sources_complete: false });
   }
+  query.terms = [...knownTerms];
   if (time.mode === "history" && factHits.size && !reasons.has("timeout")) {
     const seeds = [...factHits.values()].sort((a, b) => b.relevance - a.relevance || a.id.localeCompare(b.id)).slice(0, limit);
     const parents = unique(seeds.map(hit => hit.record.supersedesFactId).filter((id): id is string => id !== null));
@@ -294,7 +462,8 @@ export async function readMemoryContext(
     }
   }
   candidates.push(...factHits.values());
-  candidates.sort((a, b) => b.relevance - a.relevance || priority(b) - priority(a) ||
+  const exactMemo = (hit: Primary) => hit.resource_type === "memo" && exactMemoTitles.has(hit.id) ? 1 : 0;
+  candidates.sort((a, b) => exactMemo(b) - exactMemo(a) || b.relevance - a.relevance || priority(b) - priority(a) ||
     importance(b) - importance(a) || recency(b).localeCompare(recency(a)) || String(a.id).localeCompare(String(b.id)) ||
     a.resource_type.localeCompare(b.resource_type));
   if (candidates.length > limit) reasons.add("result_limit");
