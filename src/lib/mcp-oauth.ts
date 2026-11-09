@@ -27,6 +27,7 @@ type CachedJwks = {
 export type McpOAuthIdentity = {
   accessToken: string;
   userId: string;
+  clientId?: string;
 };
 
 export class McpOAuthError extends Error {
@@ -153,5 +154,5 @@ export async function verifySupabaseMcpAccessToken(input: {
   if (!scopeIncludesRequiredScope(claims.scope)) throw new McpOAuthError("required_scope_missing");
   if (!USER_ID_PATTERN.test(userId)) throw new McpOAuthError("subject_invalid");
 
-  return { accessToken: input.token, userId };
+  return { accessToken: input.token, userId, ...(typeof claims.client_id === "string" ? { clientId: claims.client_id.slice(0,190) } : {}) };
 }

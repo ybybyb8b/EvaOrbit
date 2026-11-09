@@ -14,6 +14,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
     import {mcpHandler} from "./src/lib/mcp/server.ts";
     import {DatabaseSync} from "node:sqlite";
     import {deleteCatRoutine} from "./src/lib/services/cat-routine.ts";
+    import {promoteMemoryFactCandidate,rejectMemoryFactCandidate,proposeMemoryFactCandidate} from "./src/lib/services/memory-graph.ts";
     import {withMcpRequestRepository} from "./src/lib/repositories/index.ts";
     let requestId=0;
     async function rpc(method,params={}) {
@@ -31,7 +32,8 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const tools=(await rpc("tools/list")).tools;
       assert.deepEqual(tools.map(tool=>tool.name).sort(),["eo_resources","eo_schema","eo_search","eo_get","eo_create","eo_update","eo_delete","eo_action"].sort());
       const resources=(await call("eo_resources")).resources;
-      assert.equal(resources.length,37);
+      assert.equal(resources.length,39);
+      assert.deepEqual(resources.find(resource=>resource.resource==="memory_context").capabilities,["search"]);
       assert(resources.some(resource=>resource.resource==="software_library"));
       assert(!resources.some(resource=>["insight_run","insight_report","lucius_case"].includes(resource.resource)));
       assert.deepEqual(resources.find(resource=>resource.resource==="insight_context").capabilities,["get"]);
@@ -41,6 +43,41 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       await reject("eo_create",{resource:"insight_context",data:{}},/does not support/);
       await reject("eo_get",{resource:"insight_context",id:"month/2026-01"},/Phase 1/);
       for(const resource of resources){const {schema}=await call("eo_schema",{resource:resource.resource});assert.deepEqual(Object.keys(schema.action_schemas).sort(),[...resource.actions].sort());}
+      const {randomUUID}=await import("node:crypto");
+      const {item:entity}=await call("eo_create",{resource:"memory_entity",data:{canonical_name:"Governance subject",entity_type:"person"}});
+      await reject("eo_create",{resource:"memory_fact",data:{subject_entity_id:entity.id,predicate:"prefers",object_value:"tea"}},/memory_candidate/);
+      const input={fact:{subject_entity_id:entity.id,predicate:"prefers",object_value:"tea",epistemic_type:"direct_statement"},sources:[{source_resource:"chat",excerpt:"I prefer tea."}],review_mode:"user_confirmed",written_by:"test-user",request_id:randomUUID()};
+      const {result:confirmed}=await call("eo_action",{resource:"memory_candidate",action:"submit",data:input});
+      assert.equal(confirmed.status,"promoted");assert.equal(confirmed.actor,"local");assert.equal(confirmed.client,"mcp");assert.equal(confirmed.review_client,"mcp");
+      assert.equal((await call("eo_action",{resource:"memory_candidate",action:"submit",data:input})).result.id,confirmed.id);
+      assert.equal((await call("eo_get",{resource:"memory_candidate",id:confirmed.id})).item.id,confirmed.id);
+      assert.equal((await call("eo_search",{resource:"memory_candidate",filters:{promoted_fact_id:confirmed.promoted_fact_id}})).items[0].id,confirmed.id);
+      const {item:detail}=await call("eo_get",{resource:"memory_fact",id:confirmed.promoted_fact_id});
+      const originalSource=detail.sources[0];
+      const {item:filled}=await call("eo_update",{resource:"memory_source",id:originalSource.id,data:{source_record_id:"drive-id"}});
+      assert.equal(filled.source_record_id,"drive-id");assert.equal(filled.excerpt,"I prefer tea.");
+      await reject("eo_delete",{resource:"memory_source",id:originalSource.id},/last valid Source/);
+      await reject("eo_action",{resource:"memory_candidate",action:"submit",data:{...input,request_id:randomUUID(),written_by:null}},/written_by|writtenBy/);
+      await reject("eo_action",{resource:"memory_candidate",action:"submit",data:{...input,request_id:randomUUID(),sources:[{source_resource:"chat",note:"not evidence"}]}},/excerpt/);
+      const manualCandidate={fact:{...input.fact,epistemic_type:"derived"},sources:input.sources,request_id:randomUUID()};
+      const {request_id:omitted,...noId}=manualCandidate;
+      await reject("eo_action",{resource:"memory_candidate",action:"submit",data:noId},/request_id/);
+      const {result:pending}=await call("eo_action",{resource:"memory_candidate",action:"submit",data:manualCandidate});
+      assert.equal(pending.status,"pending");
+      assert.equal((await call("eo_action",{resource:"memory_candidate",action:"submit",data:manualCandidate})).result.id,pending.id,"lost-response replay must reuse the candidate");
+      await reject("eo_action",{resource:"memory_candidate",action:"submit",data:{...manualCandidate,fact:{...manualCandidate.fact,object_value:"different"}}},/different/);
+      const {result:distinct}=await call("eo_action",{resource:"memory_candidate",action:"submit",data:{...manualCandidate,request_id:randomUUID(),fact:{...manualCandidate.fact,object_value:"different"}}});
+      assert.notEqual(distinct.id,pending.id,"distinct requests must not be content-deduplicated");
+      for(const action of ["promote","reject"])await reject("eo_action",{resource:"memory_candidate",action,id:pending.id,data:{}},/does not support action|Web-only/);
+      assert.equal((await call("eo_get",{resource:"memory_candidate",id:pending.id})).item.status,"pending");
+      await withMcpRequestRepository({userId:"local",accessToken:"test",clientId:"web"},async()=>{
+        await assert.rejects(()=>promoteMemoryFactCandidate(pending.id,null),/Web review/);
+        await assert.rejects(()=>rejectMemoryFactCandidate(pending.id,null),/Web review/);
+        await assert.rejects(()=>proposeMemoryFactCandidate({fact:{subjectEntityId:entity.id,predicate:"prefers",objectValue:"tea"},sources:[{sourceResource:"chat",excerpt:"original"}]},"web"),/request_id/);
+      });
+      // Outside MCP context, the existing trusted Web service still reviews the same pending row.
+      assert.equal((await promoteMemoryFactCandidate(pending.id,"Web review")).status,"promoted");
+      assert.equal((await rejectMemoryFactCandidate(distinct.id,"Web review")).status,"rejected");
       const {item:limit}=await call("eo_create",{resource:"drink_limit",data:{name:"Coffee",target_type:"coffee",period:"daily",limit_value:3}});
       const {item:disabled}=await call("eo_update",{resource:"drink_limit",id:limit.id,data:{enabled:false}});
       assert.equal(disabled.limit_value,3);assert.equal(disabled.target_type,"coffee");assert.equal(disabled.enabled,false);

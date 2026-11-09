@@ -13,6 +13,7 @@ export type ResourceActionSchema = {
 // Returned documentation only. The handler continues to enforce the original contracts below.
 const actionGuidance: Record<string, Record<string, string>> = {
   insight_run:{start:"Creates or resumes one bounded attempt with a 30-minute input lease; lunch and dinner are required before leasing; changed source data opens a new bounded generation. Does not write a report or any source record.",complete:"Checks the lease and frozen inputs, atomically appends an immutable report version and completes the run; identical replay returns the original result. Only supported important facts may trigger one best-effort existing-channel notification.",fail:"Closes only the specified active attempt with a safe error. Retryable failure waits ten minutes, up to three attempts; completed runs cannot be changed."},
+  memory_candidate: {submit:"Atomically submit a proposal; manual stays pending, declared user_confirmed promotes with original evidence and audit. Retry with the same request_id."},
   memory_entity: {
     merge: "Resolve identities first; never merge on name alone. id is source UUID, target_entity_id is active target UUID. Redirects subject/object/perspective references atomically, retains the merged redirect and reports self_loops; this does not deduplicate Facts.",
     archive: "Retains Entity and Facts; marks Entity archived. Does not invalidate assertions or close their validity. Archived Entities can appear in default search.",
@@ -73,6 +74,17 @@ export const resourceActionSchemas: Record<string, Record<string, ResourceAction
       }, ["resting_energy_kcal", "active_energy_kcal"], "Calculated nutrition summary with effective energy and manual/HealthKit provenance.", ["Replaces both manual energy values and notes; not PATCH."]),
       id_description: "Valid YYYY-MM-DD date.",
     },
+  },
+  memory_candidate: {
+    submit: {id_required:false,id_description:"Do not supply id.",fields:{
+      fact:{type:"object",description:"Fact fields: subject_entity_id, predicate, exactly one object_entity_id/object_value; optional perspective_entity_id, epistemic_type, confidence, importance, valid_from/to, supersedes_fact_id."},
+      sources:{type:"array",items:{type:"object"},description:"1-50 source drafts with source_resource, source_record_id/source_url/excerpt, and optional note. chat requires original excerpt."},
+      review_mode:{type:"string",enum:["manual","user_confirmed"],description:"manual leaves pending; user_confirmed atomically promotes a direct_statement."},
+      written_by:{type:"string",description:"Declared writer, required for user_confirmed."},
+      request_id:{type:"string",format:"uuid",description:"Required for every MCP submission. Generate before calling; reuse with identical content on retries."},
+      proposed_by:{type:"string",enum:["user","model","system","import"],description:"Defaults to model for manual and user for user_confirmed."},
+      proposer_model:{type:"string",description:"Optional model name."}
+    },required_fields:["fact","sources","request_id"],validation_rules:["user_confirmed requires direct_statement, user chat excerpt, written_by and request_id; a caller declaration, not independently verified user consent.","All writes commit or roll back together; a request_id cannot be reused for different content."],result_description:"Candidate with pending/promoted status, promoted_fact_id and audit fields."},
   },
   memory_entity: {
     merge: action({ target_entity_id: { type: "string", format: "uuid", description: "Active target Entity UUID." } }, ["target_entity_id"], "Target Entity with redirected_facts and self_loops."),

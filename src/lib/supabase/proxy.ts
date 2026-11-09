@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { isAllowedAccountEmail, allowedEmail, supabaseConfig, usesSupabase } from "../config";
+import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
 
 function unauthorized(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -15,8 +15,6 @@ function unauthorized(request: NextRequest) {
 }
 
 export async function updateSession(request: NextRequest) {
-  if (!usesSupabase()) return NextResponse.next({ request });
-
   let response = NextResponse.next({ request });
   const { url, publishableKey } = supabaseConfig();
   const supabase = createServerClient(url, publishableKey, {

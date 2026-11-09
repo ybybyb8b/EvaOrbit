@@ -148,3 +148,14 @@ test("Postgres time values are compatible with the local minute-only reminder sc
   assert.equal(sanitizeExportRow("tasks", { due_time: "09:45:00" }).due_time, "09:45");
   assert.equal(normalizeBackupRowForSqlite("tasks", { due_time: "21:05:00.000000" }).due_time, "21:05");
 });
+
+test("memory audit survives export and SQLite normalization; version 17 remains accepted",()=>{
+  const row={id:"candidate",user_id:"owner",review_mode:"user_confirmed",written_by:"declared-user",actor:"original-owner",client:"mcp:client",review_client:"web",request_id:"request"};
+  const exported=sanitizeExportRow("memory_fact_candidates",row);
+  assert.equal(exported.user_id,undefined);
+  assert.equal(exported.actor,"original-owner");
+  assert.deepEqual(normalizeBackupRowForSqlite("memory_fact_candidates",exported),exported);
+  const resources=emptyBackupResources();resources.memory_fact_candidates=[exported];
+  const old=parseBackupDocument({backup_version:17,exported_at:"2026-11-07T04:00:00Z",schema:{supabase_migration:"old"},source:{backend:"supabase"},resources});
+  assert.equal(old.resources.memory_fact_candidates[0].review_mode,"user_confirmed");
+});

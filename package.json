@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-local.mjs",
     "dev:trackers": "vite --config vite.trackers.config.ts",
     "build:trackers": "vite build --config vite.trackers.config.ts",
     "test:trackers:browser": "node scripts/tracker-local-browser.mjs",

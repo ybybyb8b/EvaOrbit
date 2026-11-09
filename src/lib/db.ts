@@ -1,3 +1,6 @@
+import { isDeepStrictEqual } from "node:util";
+import { finishMemoryPage, memoryPageTables, prepareMemoryPage, type MemoryPageInput, type MemoryPageItem, type MemoryResource, type MemorySourceMatch } from "./memory-pagination";
+import { assertMemorySourceEvidence, hasMemorySourceEvidence, parseMemoryCandidateSubmission, parseMemorySourceDraft, parseMemorySourcePatch } from "./memory-graph-validation";
 import {sameSubscriptionPurchase} from "./subscription-purchase";
 import type {NewSubscriptionPurchase} from "./repositories/types";
 import { mergePlaceAddress } from "./place-menu";
@@ -2008,6 +2011,19 @@ if(!hasV98){
   INSERT INTO migrations(version) VALUES(98); COMMIT;`);
 }
 
+const hasV99 = database.prepare("SELECT 1 FROM migrations WHERE version=99").get();
+if (!hasV99) database.exec(`BEGIN;
+  ALTER TABLE memory_fact_candidates ADD COLUMN review_mode TEXT NOT NULL DEFAULT 'manual' CHECK(review_mode IN ('manual','user_confirmed'));
+  ALTER TABLE memory_fact_candidates ADD COLUMN review_client TEXT;
+  ALTER TABLE memory_fact_candidates ADD COLUMN written_by TEXT;
+  ALTER TABLE memory_fact_candidates ADD COLUMN actor TEXT;
+  ALTER TABLE memory_fact_candidates ADD COLUMN client TEXT;
+  ALTER TABLE memory_fact_candidates ADD COLUMN request_id TEXT;
+  CREATE UNIQUE INDEX idx_memory_candidates_request ON memory_fact_candidates(user_id,request_id) WHERE request_id IS NOT NULL;
+  CREATE INDEX idx_memory_candidates_fact ON memory_fact_candidates(user_id,promoted_fact_id);
+  INSERT INTO migrations(version) VALUES(99);
+  COMMIT;`);
+
 export function listTrainingSuggestionExclusions(): import("./types").TrainingSuggestionExclusion[] {
   const rows = database.prepare("SELECT kind,value FROM training_suggestion_exclusions WHERE user_id='local' ORDER BY kind,value").all() as import("./types").TrainingSuggestionExclusion[];
   return rows.map(row => ({ kind: row.kind, value: row.value }));
@@ -2961,7 +2977,112 @@ export function recordSubscriptionPayment(subscriptionId:number,input:NewSubscri
 function memoryEntityFromRow(row:Record<string,unknown>):MemoryEntity{return{id:String(row.id),canonicalName:String(row.canonical_name),entityType:String(row.entity_type),aliases:stringArrayFromRow(row.aliases),description:row.description===null?null:String(row.description),status:row.status as MemoryEntity["status"],mergedIntoEntityId:row.merged_into_entity_id===null?null:String(row.merged_into_entity_id),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function memoryFactFromRow(row:Record<string,unknown>):MemoryFact{return{id:String(row.id),subjectEntityId:String(row.subject_entity_id),predicate:String(row.predicate),objectEntityId:row.object_entity_id===null?null:String(row.object_entity_id),objectValue:row.object_value===null?null:jsonValue(row.object_value,null),perspectiveEntityId:row.perspective_entity_id===null?null:String(row.perspective_entity_id),epistemicType:(row.epistemic_type??"unknown") as MemoryFact["epistemicType"],supersedesFactId:row.supersedes_fact_id===null||row.supersedes_fact_id===undefined?null:String(row.supersedes_fact_id),confidence:Number(row.confidence),importance:Number(row.importance),validFrom:row.valid_from===null?null:String(row.valid_from),validTo:row.valid_to===null?null:String(row.valid_to),status:row.status as MemoryFact["status"],invalidatedAt:row.invalidated_at===null?null:String(row.invalidated_at),invalidationReason:row.invalidation_reason===null?null:String(row.invalidation_reason),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function memorySourceFromRow(row:Record<string,unknown>):MemorySource{return{id:String(row.id),factId:String(row.fact_id),sourceResource:String(row.source_resource),sourceRecordId:row.source_record_id===null?null:String(row.source_record_id),sourceUrl:row.source_url===null?null:String(row.source_url),excerpt:row.excerpt===null?null:String(row.excerpt),note:row.note===null?null:String(row.note),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-function memoryFactCandidateFromRow(row:Record<string,unknown>):MemoryFactCandidate{return{id:String(row.id),proposedFact:jsonValue(row.proposed_fact,{}) as MemoryFactCandidate["proposedFact"],proposedSources:jsonValue(row.proposed_sources,[]) as MemoryFactCandidate["proposedSources"],proposedBy:row.proposed_by as MemoryFactCandidate["proposedBy"],proposerModel:row.proposer_model===null?null:String(row.proposer_model),status:row.status as MemoryFactCandidate["status"],reviewNote:row.review_note===null?null:String(row.review_note),promotedFactId:row.promoted_fact_id===null?null:String(row.promoted_fact_id),createdAt:String(row.created_at),reviewedAt:row.reviewed_at===null?null:String(row.reviewed_at)};}
+function memoryFactCandidateFromRow(row:Record<string,unknown>):MemoryFactCandidate{return{id:String(row.id),proposedFact:jsonValue(row.proposed_fact,{}) as MemoryFactCandidate["proposedFact"],proposedSources:jsonValue(row.proposed_sources,[]) as MemoryFactCandidate["proposedSources"],proposedBy:row.proposed_by as MemoryFactCandidate["proposedBy"],proposerModel:row.proposer_model===null?null:String(row.proposer_model),reviewClient:row.review_client==null?null:String(row.review_client),reviewMode:(row.review_mode??"manual") as MemoryFactCandidate["reviewMode"],writtenBy:row.written_by==null?null:String(row.written_by),actor:row.actor==null?null:String(row.actor),client:row.client==null?null:String(row.client),requestId:row.request_id==null?null:String(row.request_id),status:row.status as MemoryFactCandidate["status"],reviewNote:row.review_note===null?null:String(row.review_note),promotedFactId:row.promoted_fact_id===null?null:String(row.promoted_fact_id),createdAt:String(row.created_at),reviewedAt:row.reviewed_at===null?null:String(row.reviewed_at)};}
+
+export function pageMemory<K extends MemoryResource>(resource: K, input: MemoryPageInput<K> = {} as MemoryPageInput<K>) {
+  const page = prepareMemoryPage(resource, "local", input);
+  page.signal?.throwIfAborted();
+  const args: Array<string | number> = [];
+  const bind = (value: string | number) => { args.push(value); return "?"; };
+  const where = ["r.user_id='local'"];
+  const exact = (column: string, value: string | undefined) => {
+    if (value !== undefined) where.push(column + "=" + bind(value));
+  };
+  const match = (column: string) => "instr(lower(" + column + "),lower(q.value))>0";
+  const entityMatch = (alias: string) => "(" + match(alias + ".canonical_name") +
+    " OR EXISTS (SELECT 1 FROM json_each(" + alias + ".aliases) a WHERE " + match("a.value") + "))";
+  const sourceMatch = (alias: string, includeId = false) => ["excerpt", "note", "source_resource", ...(includeId ? ["source_record_id"] : [])]
+    .map(column => match(alias + "." + column)).join(" OR ");
+  let terms: string[] = [];
+  let text = "";
+  switch (resource) {
+    case "memo": {
+      const filters = input as MemoryPageInput<"memo">;
+      exact("r.status", filters.status); exact("r.type", filters.type);
+      if (filters.tag) where.push("EXISTS (SELECT 1 FROM json_each(r.tags) t WHERE t.value=" + bind(filters.tag) + ")");
+      terms = filters.relatedTerms ?? (filters.query?.trim() ? [filters.query.trim()] : []);
+      text = match("r.title") + " OR " + match("r.content");
+      if (filters.relatedTerms) text += " OR EXISTS (SELECT 1 FROM json_each(r.tags) tag WHERE " + match("tag.value") +
+        ") OR " + match("r.type") + " OR " + match("r.status");
+      break;
+    }
+    case "entity": {
+      const filters = input as MemoryPageInput<"entity">;
+      exact("r.status", filters.status); exact("r.entity_type", filters.entityType);
+      if (!filters.status && !filters.includeMerged) where.push("r.status<>'merged'");
+      if (filters.ids) where.push("r.id IN (SELECT value FROM json_each(" + bind(JSON.stringify(filters.ids)) + "))");
+      terms = filters.relatedTerms ?? (filters.query?.trim() ? [filters.query.trim()] : []);
+      text = entityMatch("r");
+      break;
+    }
+    case "fact": {
+      const filters = input as MemoryPageInput<"fact">;
+      exact("r.status", filters.status); exact("r.predicate", filters.predicate);
+      if (filters.ids) where.push("r.id IN (SELECT value FROM json_each(" + bind(JSON.stringify(filters.ids)) + "))");
+      if (filters.supersedesIds) where.push("r.supersedes_fact_id IN (SELECT value FROM json_each(" + bind(JSON.stringify(filters.supersedesIds)) + "))");
+      if (filters.relatedEntityIds) where.push("EXISTS (SELECT 1 FROM json_each(" + bind(JSON.stringify(filters.relatedEntityIds)) +
+        ") e WHERE e.value IN (r.subject_entity_id,r.object_entity_id,r.perspective_entity_id))");
+      if (filters.entityId) {
+        const columns = filters.direction === "in" ? ["object_entity_id"] : filters.direction === "out" ? ["subject_entity_id"] : ["subject_entity_id", "object_entity_id"];
+        where.push("(" + columns.map(column => "r." + column + "=" + bind(filters.entityId!)).join(" OR ") + ")");
+      }
+      if (filters.perspectiveEntityId === null) where.push("r.perspective_entity_id IS NULL");
+      else exact("r.perspective_entity_id", filters.perspectiveEntityId);
+      if (filters.validOn) where.push("(r.valid_from IS NULL OR r.valid_from<=" + bind(filters.validOn) +
+        ") AND (r.valid_to IS NULL OR r.valid_to>=" + bind(filters.validOn) + ")");
+      const related = filters.relatedTerms !== undefined;
+      terms = filters.relatedTerms ?? (filters.query?.trim() ? [filters.query.trim()] : []);
+      const entityIds = related ? "r.subject_entity_id,r.object_entity_id,r.perspective_entity_id" : "r.object_entity_id";
+      text = match("r.predicate") + " OR EXISTS (SELECT 1 FROM json_tree(r.object_value) j WHERE " +
+        "(typeof(j.key)='text' AND " + match("j.key") + ") OR (j.type IN ('text','true','false','null') AND " +
+        match("case when j.type='text' then j.atom else j.type end") + ") OR " +
+        "(j.type IN ('integer','real') AND CASE WHEN json_valid(q.value) THEN json_type(q.value) IN ('integer','real') " +
+        "AND j.atom=json_extract(q.value, '$') ELSE 0 END))" +
+        " OR EXISTS (SELECT 1 FROM memory_entities e WHERE e.user_id=r.user_id AND e.id IN (" + entityIds + ") AND " + entityMatch("e") + ")";
+      if (related) text += " OR EXISTS (SELECT 1 FROM memory_sources s WHERE s.user_id=r.user_id AND s.fact_id=r.id AND (" + sourceMatch("s", true) + "))";
+      break;
+    }
+    case "source": {
+      const filters = input as MemoryPageInput<"source">;
+      exact("r.fact_id", filters.factId); exact("r.source_resource", filters.sourceResource); exact("r.source_record_id", filters.sourceRecordId);
+      if (filters.factIds) where.push("r.fact_id IN (SELECT value FROM json_each(" + bind(JSON.stringify(filters.factIds)) + "))");
+      if (filters.query?.trim()) terms = [filters.query.trim()];
+      text = sourceMatch("r");
+      break;
+    }
+    case "candidate": {
+      const filters = input as MemoryPageInput<"candidate">;
+      exact("r.status", filters.status); exact("r.proposed_by", filters.proposedBy); exact("r.promoted_fact_id", filters.promotedFactId);
+      break;
+    }
+  }
+  if ("relatedTerms" in input && Array.isArray(input.relatedTerms) && input.relatedTerms.length === 0) where.push("0");
+  if (terms.length) where.push("EXISTS (SELECT 1 FROM json_each(" + bind(JSON.stringify(terms)) + ") q WHERE " + text + ")");
+  const time = "r." + page.sortTime;
+  const idOrder = page.idDescending ? "DESC" : "ASC";
+  if (page.after) {
+    const key = page.after;
+    const earlier = () => "(" + time + "<" + bind(key.time) + " OR (" + time + "=" + bind(key.time) +
+      " AND r.id" + (page.idDescending ? "<" : ">") + bind(key.id) + "))";
+    where.push(page.sortImportance
+      ? "(r.importance<" + bind(key.importance!) + " OR (r.importance=" + bind(key.importance!) + " AND " + earlier() + "))"
+      : earlier());
+  }
+  const order = (page.sortImportance ? "r.importance DESC, " : "") + time + " DESC, r.id " + idOrder;
+  const includeMatches = resource === "fact" && (input as MemoryPageInput<"fact">).includeSourceMatches && terms.length;
+  const matches = includeMatches ? ", (SELECT json_group_array(DISTINCT json_object('term',q.value,'field',m.key)) " +
+    "FROM memory_sources s, json_each(?) q, json_each(json_object('source_excerpt',s.excerpt,'source_note',s.note," +
+    "'source_resource',s.source_resource,'source_record_id',s.source_record_id)) m " +
+    "WHERE s.user_id=r.user_id AND s.fact_id=r.id AND " + match("m.value") + ") AS source_matches" : "";
+  const sql = "SELECT r.*" + matches + " FROM " + memoryPageTables[resource] + " r WHERE " + where.join(" AND ") + " ORDER BY " + order + " LIMIT " + bind(page.limit + 1);
+  const rows = database.prepare(sql).all(...(includeMatches ? [JSON.stringify(terms), ...args] : args)) as Record<string, unknown>[];
+  page.signal?.throwIfAborted();
+  const mappers = { memo: memoFromRow, entity: memoryEntityFromRow,
+    fact: (row: Record<string, unknown>) => ({ ...memoryFactFromRow(row),
+      ...(typeof row.source_matches === "string" ? { sourceMatches: JSON.parse(row.source_matches) as MemorySourceMatch[] } : {}) }),
+    source: memorySourceFromRow, candidate: memoryFactCandidateFromRow };
+  return finishMemoryPage(rows.map(row => mappers[resource](row)) as MemoryPageItem<K>[], page);
+}
 
 export function listMemoryEntities(input:MemoryEntityListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(!input.includeMerged&&!input.status)conditions.push("status<>'merged'");if(input.status){conditions.push("status=?");values.push(input.status);}if(input.entityType){conditions.push("entity_type=?");values.push(input.entityType);}if(input.query){const pattern=`%${escapedLike(input.query.trim())}%`;conditions.push("(canonical_name LIKE ? ESCAPE '\\' COLLATE NOCASE OR EXISTS(SELECT 1 FROM json_each(memory_entities.aliases) WHERE value LIKE ? ESCAPE '\\' COLLATE NOCASE))");values.push(pattern,pattern);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM memory_entities WHERE ${conditions.join(" AND ")} ORDER BY updated_at DESC,id LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(memoryEntityFromRow);}
 export function getMemoryEntity(id:string){const row=database.prepare("SELECT * FROM memory_entities WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?memoryEntityFromRow(row):null;}
@@ -2972,21 +3093,155 @@ export function mergeMemoryEntities(sourceId:string,targetId:string){database.ex
 
 export function listMemoryFacts(input:MemoryFactListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.entityId){const direction=input.direction??"both";if(direction==="in"){conditions.push("object_entity_id=?");values.push(input.entityId);}else if(direction==="out"){conditions.push("subject_entity_id=?");values.push(input.entityId);}else{conditions.push("(subject_entity_id=? OR object_entity_id=?)");values.push(input.entityId,input.entityId);}}if(input.predicate){conditions.push("predicate=?");values.push(input.predicate);}if(input.perspectiveEntityId===null)conditions.push("perspective_entity_id IS NULL");else if(input.perspectiveEntityId){conditions.push("perspective_entity_id=?");values.push(input.perspectiveEntityId);}if(input.status){conditions.push("status=?");values.push(input.status);}if(input.validOn){conditions.push("(valid_from IS NULL OR valid_from<=?) AND (valid_to IS NULL OR valid_to>=?)");values.push(input.validOn,input.validOn);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM memory_facts WHERE ${conditions.join(" AND ")} ORDER BY importance DESC,updated_at DESC,id LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(memoryFactFromRow);}
 export function getMemoryFact(id:string){const row=database.prepare("SELECT * FROM memory_facts WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?memoryFactFromRow(row):null;}
-export function createMemoryFact(input:NewMemoryFact){database.prepare("INSERT INTO memory_facts(id,user_id,subject_entity_id,predicate,object_entity_id,object_value,perspective_entity_id,epistemic_type,supersedes_fact_id,confidence,importance,valid_from,valid_to,status) VALUES(?,'local',?,?,?,?,?,?,?,?,?,?,?,?)").run(input.id,input.subjectEntityId,input.predicate,input.objectEntityId,input.objectValue===null?null:JSON.stringify(input.objectValue),input.perspectiveEntityId,input.epistemicType??"unknown",input.supersedesFactId??null,input.confidence,input.importance,input.validFrom,input.validTo,input.status);return getMemoryFact(input.id)!;}
-export function createMemoryFactWithSources(input:NewMemoryFact,sources:NewMemorySource[]){if(!sources.length)throw new ConflictError("A Memory Fact requires at least one source.");database.exec("BEGIN IMMEDIATE");try{const fact=createMemoryFact(input);for(const source of sources)createMemorySource(source);database.exec("COMMIT");return fact;}catch(error){database.exec("ROLLBACK");throw error;}}
-export function supersedeMemoryFact(oldFactId:string,input:NewMemoryFact,sources:NewMemorySource[]){if(!sources.length)throw new ConflictError("A Memory Fact requires at least one source.");if(input.supersedesFactId!==oldFactId)throw new ConflictError("Replacement lineage does not match the superseded Fact.");database.exec("BEGIN IMMEDIATE");try{const old=getMemoryFact(oldFactId);if(!old||old.status!=="active")throw new ConflictError("The superseded Memory Fact is missing or inactive.");const fact=createMemoryFact(input);for(const source of sources)createMemorySource(source);database.prepare("UPDATE memory_facts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='superseded',updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(oldFactId);database.exec("COMMIT");return fact;}catch(error){database.exec("ROLLBACK");throw error;}}
+function insertMemoryFact(input:NewMemoryFact){database.prepare("INSERT INTO memory_facts(id,user_id,subject_entity_id,predicate,object_entity_id,object_value,perspective_entity_id,epistemic_type,supersedes_fact_id,confidence,importance,valid_from,valid_to,status) VALUES(?,'local',?,?,?,?,?,?,?,?,?,?,?,?)").run(input.id,input.subjectEntityId,input.predicate,input.objectEntityId,input.objectValue===null?null:JSON.stringify(input.objectValue),input.perspectiveEntityId,input.epistemicType??"unknown",input.supersedesFactId??null,input.confidence,input.importance,input.validFrom,input.validTo,input.status);return getMemoryFact(input.id)!;}
 export function updateMemoryFact(id:string,input:MemoryFactPatch){const existing=getMemoryFact(id);if(!existing)return null;const validFrom=input.validFrom===undefined?existing.validFrom:input.validFrom,validTo=input.validTo===undefined?existing.validTo:input.validTo;if(validFrom&&validTo&&validTo<validFrom)throw new ConflictError("validTo cannot be earlier than validFrom.");const entries=Object.entries({confidence:"confidence",importance:"importance",validFrom:"valid_from",validTo:"valid_to"}).filter(([key])=>input[key as keyof MemoryFactPatch]!==undefined);if(entries.length)database.prepare(`UPDATE memory_facts SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof MemoryFactPatch] as string|number|null),id);return getMemoryFact(id);}
 export function invalidateMemoryFact(id:string,reason:string|null){const result=database.prepare("UPDATE memory_facts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local' AND status='active'").run(reason,id);return result.changes?getMemoryFact(id):null;}
-export function restoreMemoryFact(id:string){const replacement=database.prepare("SELECT 1 FROM memory_facts WHERE user_id='local' AND supersedes_fact_id=? AND status='active'").get(id);if(replacement)throw new ConflictError("This Memory Fact has an active replacement and cannot be restored.");const result=database.prepare("UPDATE memory_facts SET status='active',invalidated_at=NULL,invalidation_reason=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local' AND status='invalidated'").run(id);return result.changes?getMemoryFact(id):null;}
+function memoryWriteTransaction<T>(write: () => T): T {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const result = write();
+    database.exec("COMMIT");
+    return result;
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
 
+export function restoreMemoryFact(id: string) {
+  return memoryWriteTransaction(() => {
+    if (getMemoryFact(id)?.status !== "invalidated") return null;
+    const active = database.prepare(`
+      WITH RECURSIVE successors(id) AS (
+        SELECT id FROM memory_facts WHERE user_id='local' AND supersedes_fact_id=?
+        UNION SELECT f.id FROM memory_facts f JOIN successors s ON f.supersedes_fact_id=s.id WHERE f.user_id='local'
+      ), predecessors(id) AS (
+        SELECT supersedes_fact_id FROM memory_facts WHERE user_id='local' AND id=?
+        UNION SELECT f.supersedes_fact_id FROM memory_facts f JOIN predecessors p ON f.id=p.id WHERE f.user_id='local'
+      )
+      SELECT 1 FROM memory_facts WHERE user_id='local' AND status='active'
+      AND (id IN (SELECT id FROM successors) OR id IN (SELECT id FROM predecessors))
+      LIMIT 1`).get(id,id);
+    if (active) throw new ConflictError("This Memory Fact has an active Fact in its replacement chain and cannot be restored.");
+    if (!memorySourcesForFact(id).some(hasMemorySourceEvidence)) throw new ConflictError("Attach a valid Source before restoring this Memory Fact.");
+    database.prepare("UPDATE memory_facts SET status='active',invalidated_at=NULL,invalidation_reason=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(id);
+    return getMemoryFact(id);
+  });
+}
 export function listMemorySources(input:MemorySourceListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.factId){conditions.push("fact_id=?");values.push(input.factId);}if(input.sourceResource){conditions.push("source_resource=?");values.push(input.sourceResource);}if(input.sourceRecordId){conditions.push("source_record_id=?");values.push(input.sourceRecordId);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM memory_sources WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC,id LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(memorySourceFromRow);}
 export function getMemorySource(id:string){const row=database.prepare("SELECT * FROM memory_sources WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?memorySourceFromRow(row):null;}
-export function createMemorySource(input:NewMemorySource){database.prepare("INSERT INTO memory_sources(id,user_id,fact_id,source_resource,source_record_id,source_url,excerpt,note) VALUES(?,'local',?,?,?,?,?,?)").run(input.id,input.factId,input.sourceResource,input.sourceRecordId,input.sourceUrl,input.excerpt,input.note);return getMemorySource(input.id)!;}
-export function updateMemorySource(id:string,input:MemorySourcePatch){const entries=Object.entries({sourceUrl:"source_url",excerpt:"excerpt",note:"note"}).filter(([key])=>input[key as keyof MemorySourcePatch]!==undefined);if(entries.length)database.prepare(`UPDATE memory_sources SET ${entries.map(([,column])=>`${column}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...entries.map(([key])=>input[key as keyof MemorySourcePatch] as string|null),id);return getMemorySource(id);}
-export function deleteMemorySource(id:string){return database.prepare("DELETE FROM memory_sources WHERE id=? AND user_id='local'").run(id).changes>0;}
+export function createMemorySource(input:NewMemorySource) {
+  const source = parseMemorySourceDraft(input);
+  database.prepare("INSERT INTO memory_sources(id,user_id,fact_id,source_resource,source_record_id,source_url,excerpt,note) VALUES(?,'local',?,?,?,?,?,?)")
+    .run(input.id,input.factId,source.sourceResource,source.sourceRecordId,source.sourceUrl,source.excerpt,source.note);
+  return getMemorySource(input.id)!;
+}
 
-export function listMemoryFactCandidates(input:MemoryFactCandidateListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.status){conditions.push("status=?");values.push(input.status);}if(input.proposedBy){conditions.push("proposed_by=?");values.push(input.proposedBy);}values.push(Math.min(Math.max(input.limit??100,1),200));return(database.prepare(`SELECT * FROM memory_fact_candidates WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC,id LIMIT ?`).all(...values) as Record<string,unknown>[]).map(memoryFactCandidateFromRow);}
+function memorySourcesForFact(factId: string) {
+  return (database.prepare("SELECT * FROM memory_sources WHERE user_id='local' AND fact_id=?").all(factId) as Record<string,unknown>[]).map(memorySourceFromRow);
+}
+
+export function updateMemorySource(id: string, input: MemorySourcePatch) {
+  return memoryWriteTransaction(() => {
+    const existing = getMemorySource(id);
+    if (!existing) return null;
+    const patch = parseMemorySourcePatch(input);
+    const fields = [
+      ["sourceRecordId", "source_record_id"],
+      ["sourceUrl", "source_url"],
+      ["excerpt", "excerpt"],
+      ["note", "note"],
+    ] as const;
+    const submitted = fields.filter(([key]) => patch[key] !== undefined);
+    if (submitted.some(([key]) => key !== "note" && patch[key] !== existing[key])) {
+      assertMemorySourceEvidence({
+        sourceResource: existing.sourceResource,
+        sourceRecordId: patch.sourceRecordId === undefined ? existing.sourceRecordId : patch.sourceRecordId,
+        sourceUrl: patch.sourceUrl === undefined ? existing.sourceUrl : patch.sourceUrl,
+        excerpt: patch.excerpt === undefined ? existing.excerpt : patch.excerpt,
+      });
+    }
+    const assignments = submitted.map(([, column]) => `${column}=?`).join(",");
+    database.prepare(`UPDATE memory_sources SET ${assignments},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`)
+      .run(...submitted.map(([key]) => patch[key] ?? null), id);
+    return getMemorySource(id);
+  });
+}
+
+export function deleteMemorySource(id: string) {
+  return memoryWriteTransaction(() => {
+    const source = getMemorySource(id);
+    if (!source) return false;
+    if (getMemoryFact(source.factId)?.status === "active" && hasMemorySourceEvidence(source) &&
+        !memorySourcesForFact(source.factId).some((other) => other.id !== id && hasMemorySourceEvidence(other))) {
+      throw new ConflictError("Cannot delete the last valid Source of an active Memory Fact.");
+    }
+    return database.prepare("DELETE FROM memory_sources WHERE id=? AND user_id='local'").run(id).changes > 0;
+  });
+}
+
+export function listMemoryFactCandidates(input:MemoryFactCandidateListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.status){conditions.push("status=?");values.push(input.status);}if(input.proposedBy){conditions.push("proposed_by=?");values.push(input.proposedBy);}if(input.promotedFactId){conditions.push("promoted_fact_id=?");values.push(input.promotedFactId);}values.push(Math.min(Math.max(input.limit??100,1),200));return(database.prepare(`SELECT * FROM memory_fact_candidates WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC,id LIMIT ?`).all(...values) as Record<string,unknown>[]).map(memoryFactCandidateFromRow);}
 export function getMemoryFactCandidate(id:string){const row=database.prepare("SELECT * FROM memory_fact_candidates WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?memoryFactCandidateFromRow(row):null;}
-export function createMemoryFactCandidate(input:NewMemoryFactCandidate){database.prepare("INSERT INTO memory_fact_candidates(id,user_id,proposed_fact,proposed_sources,proposed_by,proposer_model) VALUES(?,'local',?,?,?,?)").run(input.id,JSON.stringify(input.proposedFact),JSON.stringify(input.proposedSources),input.proposedBy,input.proposerModel);return getMemoryFactCandidate(input.id)!;}
-export function promoteMemoryFactCandidate(id:string,factId:string,sourceIds:string[],reviewNote:string|null){database.exec("BEGIN IMMEDIATE");try{const candidate=getMemoryFactCandidate(id);if(!candidate||candidate.status!=="pending"){database.exec("COMMIT");return null;}const factInput={id:factId,...candidate.proposedFact,status:"active" as const};const sources=candidate.proposedSources.map((source,index)=>({id:sourceIds[index],factId,...source}));if(sources.some(source=>!source.id))throw new ConflictError("Candidate source identifiers are incomplete.");if(factInput.supersedesFactId){const old=getMemoryFact(factInput.supersedesFactId);if(!old||old.status!=="active")throw new ConflictError("The superseded Memory Fact is missing or inactive.");}createMemoryFact(factInput);for(const source of sources)createMemorySource(source);if(factInput.supersedesFactId)database.prepare("UPDATE memory_facts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='superseded',updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(factInput.supersedesFactId);database.prepare("UPDATE memory_fact_candidates SET status='promoted',review_note=?,promoted_fact_id=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'").run(reviewNote,factId,id);database.exec("COMMIT");return getMemoryFactCandidate(id);}catch(error){database.exec("ROLLBACK");throw error;}}
-export function rejectMemoryFactCandidate(id:string,reviewNote:string|null){const result=database.prepare("UPDATE memory_fact_candidates SET status='rejected',review_note=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local' AND status='pending'").run(reviewNote,id);return result.changes?getMemoryFactCandidate(id):null;}
+function validateMemoryFactTargets(fact: NewMemoryFactCandidate["proposedFact"], newId?: string) {
+  const ids = new Set([fact.subjectEntityId, fact.objectEntityId, fact.perspectiveEntityId]);
+  for (const id of ids) if (id && getMemoryEntity(id)?.status !== "active") throw new ConflictError("Memory Entity is missing or inactive.");
+  if (!fact.supersedesFactId) return;
+  const old = getMemoryFact(fact.supersedesFactId);
+  if (newId === fact.supersedesFactId || !old || old.status !== "active") throw new ConflictError("The superseded Memory Fact is missing, inactive, or self-referential.");
+  if (old.subjectEntityId !== fact.subjectEntityId || old.predicate !== fact.predicate || old.perspectiveEntityId !== fact.perspectiveEntityId) {
+    throw new ConflictError("A correction must match the subject, predicate and perspective of the old Memory Fact.");
+  }
+  if (database.prepare("SELECT 1 FROM memory_facts WHERE user_id='local' AND supersedes_fact_id=?").get(old.id)) {
+    throw new ConflictError("The Memory Fact already has a replacement.");
+  }
+}
+
+function promotePendingMemoryCandidate(candidate: MemoryFactCandidate, reviewNote: string | null, reviewClient: string) {
+  const { proposedFact, proposedSources } = parseMemoryCandidateSubmission({
+    fact: candidate.proposedFact, sources: candidate.proposedSources, proposedBy: candidate.proposedBy,
+    reviewMode: candidate.reviewMode, writtenBy: candidate.writtenBy, requestId: candidate.requestId ?? undefined,
+  });
+  const factId = randomUUID();
+  validateMemoryFactTargets(proposedFact, factId);
+  insertMemoryFact({ id: factId, ...proposedFact, status: "active" });
+  for (const source of proposedSources) createMemorySource({ id: randomUUID(), factId, ...source });
+  if (proposedFact.supersedesFactId) invalidateMemoryFact(proposedFact.supersedesFactId, "superseded");
+  database.prepare("UPDATE memory_fact_candidates SET status='promoted',review_note=?,promoted_fact_id=?,review_client=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'")
+    .run(reviewNote,factId,reviewClient,candidate.id);
+  return getMemoryFactCandidate(candidate.id)!;
+}
+
+export function submitMemoryFactCandidate(input: NewMemoryFactCandidate) {
+  if (!input.client?.trim() || input.client.length > 200) throw new ConflictError("Memory write client is required and must not exceed 200 characters.");
+  const parsed = parseMemoryCandidateSubmission({
+    fact: input.proposedFact, sources: input.proposedSources, proposedBy: input.proposedBy,
+    proposerModel: input.proposerModel, reviewMode: input.reviewMode, writtenBy: input.writtenBy, requestId: input.requestId,
+  });
+  return memoryWriteTransaction(() => {
+    const writtenBy = parsed.writtenBy ?? "local";
+    const existing = database.prepare("SELECT * FROM memory_fact_candidates WHERE user_id='local' AND request_id=?").get(input.requestId);
+    if (existing) {
+      const item = memoryFactCandidateFromRow(existing);
+      if (item.client !== input.client || item.reviewMode !== parsed.reviewMode || item.writtenBy !== writtenBy ||
+          item.proposedBy !== parsed.proposedBy || item.proposerModel !== parsed.proposerModel ||
+          !isDeepStrictEqual(item.proposedFact, parsed.proposedFact) || !isDeepStrictEqual(item.proposedSources, parsed.proposedSources)) {
+        throw new ConflictError("requestId was already used for a different Memory Candidate.");
+      }
+      return item;
+    }
+    validateMemoryFactTargets(parsed.proposedFact);
+    database.prepare(`INSERT INTO memory_fact_candidates(id,user_id,proposed_fact,proposed_sources,proposed_by,proposer_model,review_mode,written_by,actor,client,request_id)
+      VALUES(?,'local',?,?,?,?,?,?,'local',?,?)`)
+      .run(input.id,JSON.stringify(parsed.proposedFact),JSON.stringify(parsed.proposedSources),parsed.proposedBy,parsed.proposerModel,parsed.reviewMode,writtenBy,input.client,input.requestId);
+    const candidate = getMemoryFactCandidate(input.id)!;
+    return parsed.reviewMode === "user_confirmed" ? promotePendingMemoryCandidate(candidate,null,input.client) : candidate;
+  });
+}
+
+export function promoteMemoryFactCandidate(id: string, reviewNote: string | null, reviewClient = "local") {
+  return memoryWriteTransaction(() => {
+    const candidate = getMemoryFactCandidate(id);
+    return candidate?.status === "pending" ? promotePendingMemoryCandidate(candidate,reviewNote,reviewClient) : null;
+  });
+}
+export function rejectMemoryFactCandidate(id:string,reviewNote:string|null,reviewClient="local"){const result=database.prepare("UPDATE memory_fact_candidates SET status='rejected',review_note=?,review_client=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local' AND status='pending'").run(reviewNote,reviewClient,id);return result.changes?getMemoryFactCandidate(id):null;}

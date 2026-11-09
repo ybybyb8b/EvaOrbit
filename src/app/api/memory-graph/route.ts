@@ -1,23 +1,73 @@
 import { NextRequest, NextResponse } from "next/server";
-import { apiError } from "@/lib/api";
-import { getMemoryGraphSnapshot, proposeMemoryFactCandidate, recallMemory } from "@/lib/services/memory-graph";
+import { apiError, optionalEnum, optionalLimit } from "@/lib/api";
+import { getMemoryEntityDetail, getMemoryFactDetail, getMemoryGraphSnapshot, pageMemory, proposeMemoryFactCandidate, recallMemory } from "@/lib/services/memory-graph";
 import { ValidationError } from "@/lib/validation";
+import { memoryUuid, parseMemoryEntitySearch, parseMemoryFactSearch } from "@/lib/memory-graph-validation";
+import type { MemoryPageOrder } from "@/lib/memory-pagination";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request:NextRequest){
   try{
-    const query=request.nextUrl.searchParams.get("q")?.trim();
-    if(query){const raw=Number(request.nextUrl.searchParams.get("limit")??8);if(!Number.isSafeInteger(raw)||raw<1||raw>20)throw new ValidationError("limit 格式不正确");return NextResponse.json(await recallMemory(query,raw));}
+    const params = request.nextUrl.searchParams;
+    const query = params.get("q")?.trim() || undefined;
+    if (params.has("resource")) {
+      const resource = params.get("resource");
+      const options = {
+        limit: optionalLimit(params.get("limit")), cursor: params.get("cursor") ?? undefined,
+        order: optionalEnum<MemoryPageOrder>(params.get("order"), ["display", "created"], "排序"),
+      };
+      const id = params.get("id");
+      const param = (key: string) => params.get(key) ?? undefined;
+      const uuid = (key: string) => params.has(key) ? memoryUuid(param(key), key) : undefined;
+      if (id !== null) {
+        if (resource !== "entity" && resource !== "fact") throw new ValidationError("Unsupported Memory detail resource.");
+        const itemId = memoryUuid(id, "id");
+        const item = resource === "entity" ? await getMemoryEntityDetail(itemId, options) : await getMemoryFactDetail(itemId, options);
+        return item ? NextResponse.json(item) : NextResponse.json({ error: "Memory record not found." }, { status: 404 });
+      }
+      switch (resource) {
+        case "entity":
+          return NextResponse.json(await pageMemory("entity", { ...options, query, ...parseMemoryEntitySearch({
+            status: param("status"), entityType: param("entity_type"),
+            includeMerged: optionalEnum(params.get("include_merged"), ["true", "false"], "include_merged") === "true",
+          }) }));
+        case "fact":
+          return NextResponse.json(await pageMemory("fact", { ...options, query, ...parseMemoryFactSearch({
+            entityId: param("entity_id"), direction: param("direction"), predicate: param("predicate"),
+            perspectiveEntityId: params.get("perspective_entity_id") === "null" ? null : param("perspective_entity_id"),
+            status: param("status"), validOn: param("valid_on"),
+          }) }));
+        case "source":
+          return NextResponse.json(await pageMemory("source", { ...options, query, factId: uuid("fact_id"),
+            sourceResource: param("source_resource"), sourceRecordId: param("source_record_id") }));
+        case "candidate":
+          if (query) throw new ValidationError("Candidate search accepts structured filters only.");
+          return NextResponse.json(await pageMemory("candidate", { ...options, promotedFactId: uuid("promoted_fact_id"),
+            status: optionalEnum(params.get("status"), ["pending", "promoted", "rejected"], "status"),
+            proposedBy: optionalEnum(params.get("proposed_by"), ["user", "model", "system", "import"], "proposed_by"),
+          }));
+        default:
+          throw new ValidationError("Unsupported Memory resource.");
+      }
+    }
+    if (query) {
+      const detailed = params.get("recall") === "1";
+      const result = await recallMemory(query, optionalLimit(params.get("limit"), { max: 20 }) ?? 8, request.signal,
+        detailed ? undefined : { primary_resource: "fact" });
+      if (detailed) return NextResponse.json(result);
+      if (result.coverage.status === "failed" || result.coverage.status === "timeout") {
+        return NextResponse.json({ error: "Memory recall did not complete.", coverage: result.coverage }, { status: result.coverage.status === "timeout" ? 504 : 503 });
+      }
+      return NextResponse.json(result.facts, { headers: { "X-Memory-Recall-Complete": String(result.coverage.complete) } });
+    }
     return NextResponse.json(await getMemoryGraphSnapshot());
   }catch(error){return apiError(error);}
 }
 
 export async function POST(request:NextRequest){
   try{
-    const body=await request.json() as Record<string,unknown>;
-    if(!Array.isArray(body.sources))throw new ValidationError("sources 必须是数组");
-    return NextResponse.json(await proposeMemoryFactCandidate({fact:body.fact,sources:body.sources,proposedBy:typeof body.proposedBy==="string"?body.proposedBy as "user"|"model"|"system"|"import":undefined,proposerModel:typeof body.proposerModel==="string"?body.proposerModel:null}),{status:201});
+    return NextResponse.json(await proposeMemoryFactCandidate(await request.json()),{status:201});
   }catch(error){return apiError(error);}
 }

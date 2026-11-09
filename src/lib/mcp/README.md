@@ -62,11 +62,16 @@ tool protocol:
 - `memory_entity`: canonical-name and alias search, get/create/update, archive,
   restore, and atomic merge. Merged entities remain readable redirects.
 - `memory_fact`: direct `in`/`out`/`both` entity queries with predicate,
-  perspective, status, and `valid_on` filters; get/create and metadata-only
+  perspective, status, and `valid_on` filters; get and metadata-only
   update; invalidate and restore. Subject, predicate, object, and perspective
   cannot be rewritten by update.
 - `memory_source`: forward lookup by Fact and reverse lookup by resource plus an
   opaque string record ID, with create/get/update/delete for provenance links.
+  Keyword search checks excerpt, note and source_resource before pagination.
+
+Memo, Entity, Fact, Source and Candidate support next_cursor and has_more.
+Continue with the same filters and query. Use filters.order=created for traversal.
+The default display order preserves each resource's existing sort keys.
 
 `perspective_entity_id` attributes an assertion's viewpoint; it is not access
 control or a claim about what an Identity knows. `valid_to` ends real-world
@@ -76,8 +81,7 @@ and Fact delete are intentionally unavailable.
 Known implementation limits remain visible in schema metadata, not fixed by this
 documentation change: Relation Event update requires complete input; bounded
 post-filtered keyword searches can miss records; Food Dish archive reports
-`deleted: true`; direct Fact create and source create are separate writes and the
-reviewed candidate/supersede path is not exposed by generic MCP. Reminder delete
+`deleted: true`; formal Graph writes use the Candidate transaction; direct Fact create is rejected. Reminder delete
 dispatches by owner (Cat Routine skips one occurrence). Subscription reads can
 catch up automatic payments and advance renewal dates. These need separate
 business/contract decisions rather than documentation pretending different behavior.
@@ -89,3 +93,15 @@ the purchase/bonus duration and resulting `valid_until`; callers must retain a
 stable `purchase_key` for retries. Expiry-only PATCH and expiry reminder
 complete/skip never create payments. Queries return mode and derived
 `membership_state`; expired is not a new persisted lifecycle status.
+
+## Governed memory writes
+
+memory_candidate search/get and action submit use the existing Candidate service.
+Ordinary promote/reject is restricted to the trusted Web review entry; it is not exposed through MCP.
+Every MCP submission requires a stable request_id, including manual inference. Direct memory_fact create is disabled. user_confirmed submissions require
+direct_statement, a chat Source containing the user's original excerpt, written_by
+and a UUID request_id. This is a caller declaration, not independently verified consent.
+The response contains candidate audit and promoted_fact_id. Candidate search supports
+promoted_fact_id to trace a formal Fact back to its writer and review client.
+Source PATCH includes source_record_id; note-only evidence and last-valid-source
+deletion for an active Fact are refused. See docs/MEMORY_WRITE_GOVERNANCE.md.

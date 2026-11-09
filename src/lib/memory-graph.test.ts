@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseMemoryEntitySearch, parseMemoryFactPatch, parseMemorySourceDraft, parseNewMemoryFact, parseNewMemorySource } from "./memory-graph-validation.ts";
+import { hasMemorySourceEvidence, parseMemoryEntitySearch, parseMemoryFactPatch, parseMemorySourceDraft, parseMemorySourcePatch, parseNewMemoryFact, parseNewMemorySource } from "./memory-graph-validation.ts";
 
 const id=(tail:string)=>`00000000-0000-4000-8000-${tail.padStart(12,"0")}`;
 
@@ -16,10 +16,25 @@ test("Memory Graph validation keeps object forms, validity, and immutable update
   assert.throws(()=>parseNewMemoryFact({subjectEntityId:id("1"),predicate:"bad",objectValue:true,validFrom:"2026-09-08",validTo:"2026-09-07"}),/earlier/);
   assert.throws(()=>parseMemoryFactPatch({predicate:"rewritten"}),/No Memory Fact fields/);
   assert.throws(()=>parseMemoryEntitySearch({includeMerged:"false"}),/boolean/);
-  assert.equal(parseNewMemorySource({factId:id("3"),sourceResource:"chat",sourceRecordId:"0007"}).sourceRecordId,"0007");
+  assert.equal(parseNewMemorySource({factId:id("3"),sourceResource:"external",sourceRecordId:"0007"}).sourceRecordId,"0007");
   assert.throws(()=>parseNewMemorySource({factId:id("3"),sourceResource:"chat",sourceRecordId:7}),/sourceRecordId/);
   assert.equal(parseMemorySourceDraft({sourceResource:"chat",excerpt:"姐姐亲口说的"}).excerpt,"姐姐亲口说的");
-  assert.throws(()=>parseMemorySourceDraft({sourceResource:"chat"}),/needs a record id/);
+  assert.throws(()=>parseMemorySourceDraft({sourceResource:"chat"}),/requires/);
+});
+
+test("Source validation uses ECMAScript whitespace and rejects NUL in submitted text", () => {
+  const chat = { sourceResource: "\uFEFFCHAT\uFEFF", sourceRecordId: "record", sourceUrl: null, excerpt: "\uFEFF", note: null };
+  assert.equal(hasMemorySourceEvidence(chat), false);
+  const manual = { ...chat, sourceResource: "manual", sourceRecordId: "\u00A0", excerpt: null };
+  assert.equal(hasMemorySourceEvidence(manual), false);
+  assert.equal(hasMemorySourceEvidence({ ...manual, sourceUrl: "https://exam\uFEFFple.test" }), false);
+  const excerpt = " \tOriginal words.\n";
+  assert.deepEqual(parseMemorySourceDraft({ ...chat, excerpt }), { ...chat, sourceResource: "CHAT", excerpt });
+  assert.equal(parseMemorySourcePatch({ excerpt: "\u0085\u180E\u200B" }).excerpt, "\u0085\u180E\u200B");
+  for (const field of ["sourceResource", "sourceRecordId", "sourceUrl", "excerpt", "note"]) {
+    assert.throws(() => parseMemorySourceDraft({ ...chat, excerpt, [field]: "A\u0000B" }), /NUL/);
+    if (field !== "sourceResource") assert.throws(() => parseMemorySourcePatch({ [field]: "\u0000" }), /NUL/);
+  }
 });
 
 test("Supabase and SQLite schemas define the v0.2 owner-scoped graph resources",()=>{

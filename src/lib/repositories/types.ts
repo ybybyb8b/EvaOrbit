@@ -16,16 +16,18 @@ export type TaskFilter = "all" | "open" | "done";
 
 export type NewMemoryEntity = Omit<MemoryEntity, "createdAt" | "updatedAt" | "mergedIntoEntityId">;
 export type MemoryEntityPatch = Partial<Pick<MemoryEntity, "canonicalName" | "entityType" | "aliases" | "description">>;
+import type { MemoryPageReader } from "../memory-pagination";
+
 export type MemoryEntityListInput = { query?: string; entityType?: string; status?: MemoryEntityStatus; includeMerged?: boolean; limit?: number };
 export type NewMemoryFact = Omit<MemoryFact, "createdAt" | "updatedAt" | "invalidatedAt" | "invalidationReason">;
 export type MemoryFactPatch = Partial<Pick<MemoryFact, "confidence" | "importance" | "validFrom" | "validTo">>;
 export type MemoryFactListInput = { entityId?: string; direction?: "in" | "out" | "both"; predicate?: string; perspectiveEntityId?: string | null; status?: MemoryFactStatus; validOn?: string; limit?: number };
 export type NewMemorySource = Omit<MemorySource, "createdAt" | "updatedAt">;
 export type MemorySourceDraft = Omit<NewMemorySource, "id" | "factId">;
-export type MemorySourcePatch = Partial<Pick<MemorySource, "sourceUrl" | "excerpt" | "note">>;
+export type MemorySourcePatch = Partial<Pick<MemorySource, "sourceRecordId" | "sourceUrl" | "excerpt" | "note">>;
 export type MemorySourceListInput = { factId?: string; sourceResource?: string; sourceRecordId?: string; limit?: number };
-export type NewMemoryFactCandidate = Pick<MemoryFactCandidate, "id" | "proposedFact" | "proposedSources" | "proposedBy" | "proposerModel">;
-export type MemoryFactCandidateListInput = { status?: MemoryFactCandidateStatus; proposedBy?: MemoryFactCandidateProposer; limit?: number };
+export type NewMemoryFactCandidate = Pick<MemoryFactCandidate, "id" | "proposedFact" | "proposedSources" | "proposedBy" | "proposerModel" | "writtenBy" | "reviewMode"> & { client: string; requestId: string };
+export type MemoryFactCandidateListInput = { status?: MemoryFactCandidateStatus; proposedBy?: MemoryFactCandidateProposer; promotedFactId?: string; limit?: number };
 
 export type NewTask = {
   title: string;
@@ -171,6 +173,7 @@ export interface EvaOrbitRepository {
   getInsightVersion(reportId: string, version: number): Promise<import("../insight-reports").InsightVersion | null>;
   listInsightVersions(reportId: string, before?: number): Promise<import("../insight-reports").InsightVersionSummary[]>;
   saveInsightReport(input: import("../insight-reports").InsightReportWrite): Promise<import("../insight-reports").InsightReportResult>;
+  pageMemory: MemoryPageReader;
   listMemoryEntities(input?: MemoryEntityListInput): Promise<MemoryEntity[]>;
   getMemoryEntity(id: string): Promise<MemoryEntity | null>;
   createMemoryEntity(input: NewMemoryEntity): Promise<MemoryEntity>;
@@ -179,9 +182,6 @@ export interface EvaOrbitRepository {
   mergeMemoryEntities(sourceId: string, targetId: string): Promise<MemoryEntityMergeResult | null>;
   listMemoryFacts(input?: MemoryFactListInput): Promise<MemoryFact[]>;
   getMemoryFact(id: string): Promise<MemoryFact | null>;
-  createMemoryFact(input: NewMemoryFact): Promise<MemoryFact>;
-  createMemoryFactWithSources(input: NewMemoryFact, sources: NewMemorySource[]): Promise<MemoryFact>;
-  supersedeMemoryFact(oldFactId: string, input: NewMemoryFact, sources: NewMemorySource[]): Promise<MemoryFact>;
   updateMemoryFact(id: string, input: MemoryFactPatch): Promise<MemoryFact | null>;
   invalidateMemoryFact(id: string, reason: string | null): Promise<MemoryFact | null>;
   restoreMemoryFact(id: string): Promise<MemoryFact | null>;
@@ -192,9 +192,9 @@ export interface EvaOrbitRepository {
   deleteMemorySource(id: string): Promise<boolean>;
   listMemoryFactCandidates(input?: MemoryFactCandidateListInput): Promise<MemoryFactCandidate[]>;
   getMemoryFactCandidate(id: string): Promise<MemoryFactCandidate | null>;
-  createMemoryFactCandidate(input: NewMemoryFactCandidate): Promise<MemoryFactCandidate>;
-  promoteMemoryFactCandidate(id: string, factId: string, sourceIds: string[], reviewNote: string | null): Promise<MemoryFactCandidate | null>;
-  rejectMemoryFactCandidate(id: string, reviewNote: string | null): Promise<MemoryFactCandidate | null>;
+  submitMemoryFactCandidate(input: NewMemoryFactCandidate): Promise<MemoryFactCandidate>;
+  promoteMemoryFactCandidate(id: string, reviewNote: string | null, reviewClient: string): Promise<MemoryFactCandidate | null>;
+  rejectMemoryFactCandidate(id: string, reviewNote: string | null, reviewClient: string): Promise<MemoryFactCandidate | null>;
 
   listRelationPeople(input?: { query?: string; includeArchived?: boolean; relationshipStatus?: "active" | "ended" }): Promise<RelationPerson[]>;
   getRelationPerson(id: number): Promise<RelationPerson | null>;

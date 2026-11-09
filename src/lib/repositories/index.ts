@@ -6,6 +6,10 @@ import { usesSupabase } from "../config";
 import type { McpOAuthIdentity } from "../mcp-oauth";
 import type { EvaOrbitRepository } from "./types";
 
+const mcpClientContext = new AsyncLocalStorage<string>();
+export function isMcpRequest() { return mcpClientContext.getStore() !== undefined; }
+export function memoryWriteClient() { return mcpClientContext.getStore() ?? "web"; }
+
 const repositoryContext = new AsyncLocalStorage<EvaOrbitRepository>();
 
 export async function withInsightsReadOnlyRepository<T>(action: () => Promise<T>): Promise<T> {
@@ -134,7 +138,7 @@ export async function withMcpRequestRepository<T>(identity: McpOAuthIdentity, ac
   const repository = usesSupabase()
     ? await import("./supabase").then(({ createMcpSupabaseRepository }) => createMcpSupabaseRepository(identity.accessToken, identity.userId))
     : await import("./sqlite").then(({ sqliteRepository }) => sqliteRepository);
-  return repositoryContext.run(repository, action);
+  return mcpClientContext.run(identity.clientId ? "mcp:"+identity.clientId : "mcp", () => repositoryContext.run(repository, action));
 }
 
 // Media caching has no command or upload capability. Refuse capped history.

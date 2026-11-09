@@ -194,3 +194,14 @@ Supabase 的托管备份和自行生成逻辑备份方式见[官方备份文档]
 ## 12. Future MCP
 
 当前没有 `/mcp` route，因此不存在未鉴权的公开 MCP endpoint。未来 Remote MCP 必须走 HTTPS、authentication、authorization 和 server-side database access，并复用 `src/lib/services/evaorbit.ts`。写工具需要 tool-level write protection，数据库密码、service key 和 AI Key 都不能进入客户端或工具输出。
+
+## SQLite local access boundary
+
+SQLite is a single-owner local development backend. Use npm run dev, whose launcher
+binds Next to 127.0.0.1 and rejects hostname overrides. The proxy permits SQLite only
+in development through this launcher, with loopback Host/Origin checks, rejecting
+foreign forwarding headers and cross-site browser requests. Plain next dev/start,
+hosted execution and production SQLite fail closed; Host alone is not authentication.
+Do not reverse-proxy or tunnel this unauthenticated local development listener.
+Use dev:online with Supabase authentication for remote/phone previews. Supabase
+OAuth/JWT/RLS paths are unchanged. No production configuration is changed by this patch.

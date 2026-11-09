@@ -1,3 +1,5 @@
+import { memoryWriteClient } from "../repositories";
+import { getMemoryFactCandidate, proposeMemoryFactCandidate } from "../services/memory-graph";
 import {listSoftwareLibrary,getSoftwareLibraryEntry,createSoftwareLibraryEntry,updateSoftwareLibraryEntry} from "../services/software-library";
 import "server-only";
 import { getInsightContext } from "../services/insight-context";
@@ -16,30 +18,33 @@ import { createTracker, createTrackerEntry, createTrackerField, createTrackerGoa
 import { archivePet, catTimeline, createCatRecord, createPet, deleteCatRecord, getCatRecord, getPetDetail, listPets, updateCatRecord, updatePet } from "../services/cats";
 import { deleteCatRoutine, archiveCatRoutine, completeCatRoutine, createCatRoutine, getCatRoutine, listCatRoutines, skipCatRoutineOccurrence, updateCatRoutine } from "../services/cat-routine";
 import { completeReminder, createReminder, deleteReminder, listReminders, skipReminder, snoozeReminder, updateReminder } from "../services/reminder";
-import { createMemo, deleteMemo, getMemo, listMemos, updateMemo } from "../services/memo";
+import { createMemo, deleteMemo, getMemo, updateMemo } from "../services/memo";
 import { createProject, createProjectItem, getProject, getProjectItem, listProjectItems, listProjects, updateProject, updateProjectItem } from "../services/project";
 import { createMemoryNote,createRelationEvent,createRelationPerson,deleteMemoryNote,deleteRelationEvent,getMemoryNote,getRelationEvent,getRelationPersonDetail,listMemoryNotes,listRelationEvents,listRelationPeople,settleAdvance,updateMemoryNote,updateRelationEvent,updateRelationPerson } from "../services/relations";
 import { createResourceRegistry } from "./resource-registry";
+import { getMemoryContext } from "../services/memory-context";
 import { getPlaceLibraryItems,createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,removeFoodPlace,updateFoodDish,updateFoodPlace } from "../services/food";
-import { createMemoryEntity,createMemoryFact,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,listMemoryEntities,listMemoryFacts,listMemorySources,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
+import { createMemoryEntity,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,pageMemory,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
 import { createSubscription, getSubscriptionDetail, listSubscriptions, updateSubscriptionPaymentDate, recordSubscriptionPurchase, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "../services/evaorbit";
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
+  memoryContext: getMemoryContext,
   insightContext: { get: getInsightContext },
   foodLog: { search: listFoodLogs, get: getFoodLog, create: createFoodLog, update: updateFoodLog, delete: deleteFoodLog },
   drinkLog: { search: listDrinkLogs, get: getDrinkLog, create: createDrinkLog, update: updateDrinkLog, delete: deleteDrinkLog },
   foodLibrary: { search: searchFoodLibrary, get: getFoodLibraryItem, create: upsertFoodLibraryItem, update: updateFoodLibraryItem, delete: removeFoodLibraryItem },
   nutritionDaily: { get: getDailyNutritionSummary },
   dailyEnergy: { get: getDailyEnergy, upsert: updateDailyEnergy },
-  memoryEntity:{search:listMemoryEntities,get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
-  memoryFact:{search:listMemoryFacts,get:getMemoryFactDetail,create:createMemoryFact,update:updateMemoryFact,invalidate:invalidateMemoryFact,restore:restoreMemoryFact},
-  memorySource:{search:listMemorySources,get:getMemorySource,create:createMemorySource,update:updateMemorySource,delete:deleteMemorySource},
+  memoryCandidate:{ search:(input)=>pageMemory("candidate",input), get:getMemoryFactCandidate, submit:(input)=>proposeMemoryFactCandidate(input,memoryWriteClient()) },
+  memoryEntity:{search:(input)=>pageMemory("entity",input),get:getMemoryEntityDetail,create:createMemoryEntity,update:updateMemoryEntity,setArchived:setMemoryEntityArchived,merge:mergeMemoryEntities},
+  memoryFact:{search:(input)=>pageMemory("fact",input),get:getMemoryFactDetail,update:updateMemoryFact,invalidate:invalidateMemoryFact,restore:restoreMemoryFact},
+  memorySource:{search:(input)=>pageMemory("source",input),get:getMemorySource,create:createMemorySource,update:updateMemorySource,delete:deleteMemorySource},
   inbox: { search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox },
   task: { search: listTasks, get: getTask, create: createTask, update: updateTask, delete: deleteTask },
   calendarEvent:{search:listCalendarEvents,get:getCalendarEvent,create:createCalendarEvent,update:updateCalendarEvent,delete:deleteCalendarEvent},
-  memo: { search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
+  memo: { search: (input)=>pageMemory("memo",input), get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo },
   chronicle: { search: listChronicle, get: getChronicleEntry, create: createChronicleEntry, update: updateChronicleEntry, delete: deleteChronicleEntry },
   luciusDiary: { search: listLuciusDiaryEntries, get: getLuciusDiaryEntry, create: createLuciusDiaryEntry, update: updateLuciusDiaryEntry, delete: deleteLuciusDiaryEntry },
   luciusState: { get: getLuciusState, update: updateLuciusState },

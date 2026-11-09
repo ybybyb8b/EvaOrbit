@@ -75,11 +75,13 @@ export interface MemorySource {
 export interface MemoryEntityDetail {
   entity: MemoryEntity;
   facts: MemoryFact[];
+  factsPage?: { has_more: boolean; next_cursor: string | null };
 }
 
 export interface MemoryFactDetail {
   fact: MemoryFact;
   sources: MemorySource[];
+  sourcesPage?: { has_more: boolean; next_cursor: string | null };
 }
 
 export interface MemoryEntityMergeResult {
@@ -676,12 +678,19 @@ export interface WeightRecord {
 
 export type MemoryFactCandidateStatus = "pending" | "promoted" | "rejected";
 export type MemoryFactCandidateProposer = "user" | "model" | "system" | "import";
+export type MemoryFactReviewMode = "manual" | "user_confirmed";
 export interface MemoryFactCandidate {
   id: string;
   proposedFact: Omit<MemoryFact, "id" | "status" | "invalidatedAt" | "invalidationReason" | "createdAt" | "updatedAt">;
   proposedSources: Array<Omit<MemorySource, "id" | "factId" | "createdAt" | "updatedAt">>;
   proposedBy: MemoryFactCandidateProposer;
   proposerModel: string | null;
+  reviewMode: MemoryFactReviewMode;
+  reviewClient: string | null;
+  writtenBy: string | null;
+  actor: string | null;
+  client: string | null;
+  requestId: string | null;
   status: MemoryFactCandidateStatus;
   reviewNote: string | null;
   promotedFactId: string | null;

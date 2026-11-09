@@ -17,10 +17,15 @@ test("restore command targets only an explicit development SQLite and keeps IDs/
       if (table === "projects") schemaDatabase.exec("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT, status TEXT, created_at TEXT, updated_at TEXT)");
       else if (table === "project_items") schemaDatabase.exec("CREATE TABLE project_items (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL REFERENCES projects(id), title TEXT NOT NULL, type TEXT, status TEXT, created_at TEXT, updated_at TEXT)");
       else if (table === "meal_reminder_rules") schemaDatabase.exec("CREATE TABLE meal_reminder_rules (meal_type TEXT PRIMARY KEY, remind_at TEXT NOT NULL CHECK(remind_at GLOB '[0-2][0-9]:[0-5][0-9]'), enabled INTEGER NOT NULL, updated_at TEXT)");
+      else if (table === "memory_sources") schemaDatabase.exec("CREATE TABLE memory_sources (id TEXT PRIMARY KEY,source_resource TEXT,source_record_id TEXT,excerpt TEXT,note TEXT)");
+      else if (table === "memory_fact_candidates") schemaDatabase.exec("CREATE TABLE memory_fact_candidates (id TEXT PRIMARY KEY,review_mode TEXT,written_by TEXT,actor TEXT,client TEXT,review_client TEXT,request_id TEXT)");
       else schemaDatabase.exec(`CREATE TABLE "${table}" (id INTEGER PRIMARY KEY)`);
     }
     schemaDatabase.close();
     const resources = emptyBackupResources();
+    const legacySource = { id: "legacy-source", source_resource: "\uFEFFchat\uFEFF", source_record_id: "  archive  ", excerpt: null, note: "" };
+    resources.memory_sources.push(legacySource);
+    resources.memory_fact_candidates.push({id:"audit-candidate",review_mode:"user_confirmed",written_by:"writer",actor:"original-owner",client:"mcp:client",review_client:"web",request_id:"request-id"});
     resources.projects.push({ id: 42, name: "真实长度项目", description: "用于界面调试", status: "active", created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-05T00:00:00Z" });
     resources.project_items.push({ id: 84, project_id: 42, title: "保留关联关系", type: "ui", status: "doing", created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-05T00:00:00Z" });
     resources.meal_reminder_rules.push({ meal_type: "breakfast", remind_at: "10:00:00", enabled: true, updated_at: "2026-09-05T00:00:00Z" });
@@ -42,8 +47,23 @@ test("restore command targets only an explicit development SQLite and keeps IDs/
     assert.deepEqual({ ...database.prepare("SELECT id,name FROM projects").get() }, { id: 42, name: "真实长度项目" });
     assert.deepEqual({ ...database.prepare("SELECT id,project_id FROM project_items").get() }, { id: 84, project_id: 42 });
     assert.equal(database.prepare("SELECT remind_at FROM meal_reminder_rules WHERE meal_type='breakfast'").get().remind_at, "10:00");
+    assert.deepEqual({...database.prepare("SELECT * FROM memory_fact_candidates").get()},resources.memory_fact_candidates[0]);
+    assert.deepEqual({ ...database.prepare("SELECT * FROM memory_sources").get() }, legacySource);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     database.close();
+
+    const invalidBackup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
+    invalidBackup.resources.memory_sources[0].excerpt = "A\u0000B";
+    fs.writeFileSync(backupPath, JSON.stringify(invalidBackup));
+    const invalidResult = spawnSync(process.execPath, ["scripts/restore-backup.mjs", backupPath], {
+      cwd: process.cwd(), encoding: "utf8",
+      env: { ...process.env, NODE_ENV: "development", EVAORBIT_DATA_BACKEND: "sqlite", EVAORBIT_SQLITE_PATH: databasePath, VERCEL: "" },
+    });
+    assert.notEqual(invalidResult.status, 0);
+    assert.match(invalidResult.stderr, /excerpt must not contain NUL/);
+    const afterInvalid = new DatabaseSync(databasePath, { readOnly: true });
+    assert.deepEqual({ ...afterInvalid.prepare("SELECT * FROM memory_sources").get() }, legacySource);
+    afterInvalid.close();
 
     const legacyResources=emptyBackupResources();
     delete legacyResources.memory_entities;

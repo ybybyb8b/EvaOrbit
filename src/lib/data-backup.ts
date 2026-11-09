@@ -1,6 +1,7 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
-export const BACKUP_VERSION = 17 as const;
-export const BACKUP_SCHEMA_VERSION = "202611040005_eva_workbench";
+import { assertMemorySourceNoNul } from "./memory-graph-validation.ts";
+export const BACKUP_VERSION = 18 as const;
+export const BACKUP_SCHEMA_VERSION = "202611070002_memory_write_governance";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -100,7 +101,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -139,6 +140,11 @@ export function sanitizeExportRow(table: BackupTable, source: BackupRow): Backup
 export function normalizeBackupRowForSqlite(table: BackupTable, source: BackupRow): BackupRow {
   const row = table === "food_logs" || table === "drink_logs" ? migrateFoodDrinkRecord(table, source) : { ...source };
   delete row.user_id;
+  if (table === "memory_sources") {
+    for (const field of ["id", "fact_id", "source_resource", "source_record_id", "source_url", "excerpt", "note"]) {
+      assertMemorySourceNoNul(row[field], field);
+    }
+  }
   if (table === "eva_jobs") {
     if (row.status === "running" || row.status === "queued") row.status = "held";
     row.lease = null; row.lease_until = null;
@@ -174,7 +180,7 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== 13 && document.backup_version !== 14 && document.backup_version !== 15 && document.backup_version !== 16 && document.backup_version !== BACKUP_VERSION) {
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== 13 && document.backup_version !== 14 && document.backup_version !== 15 && document.backup_version !== 16 && document.backup_version !== 17 && document.backup_version !== BACKUP_VERSION) {
     throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 至 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {

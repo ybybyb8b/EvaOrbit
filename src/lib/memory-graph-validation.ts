@@ -1,3 +1,4 @@
+import type { NewMemoryFactCandidate } from "./repositories/types.ts";
 import { dateOnly, ValidationError } from "./validation.ts";
 import type { MemoryEntityStatus, MemoryEpistemicType, MemoryFactStatus } from "./types.ts";
 
@@ -137,26 +138,83 @@ export function parseNewMemorySource(value: unknown) {
   return { factId: memoryUuid(body.factId, "factId"), ...parseMemorySourceDraft(body) };
 }
 
+export function assertMemorySourceNoNul(value: unknown, field: string) {
+  if (typeof value === "string" && value.includes("\u0000")) throw new ValidationError(field + " must not contain NUL (U+0000).");
+}
+
+function nullableSourceText(value: unknown, field: string, max: number) {
+  assertMemorySourceNoNul(value, field);
+  return nullableText(value, field, max);
+}
+
+function originalExcerpt(value: unknown) {
+  assertMemorySourceNoNul(value, "excerpt");
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || !value.trim() || value.length > 10000) throw new ValidationError("excerpt must be nonblank and at most 10000 characters.");
+  return value;
+}
+
+// ECMAScript WhiteSpace and LineTerminator define both \s and trim().
+// Keep the explicit PostgreSQL set in memory_source_whitespace in sync.
+const sourceUrlPattern = /^https?:\/\/[^\s/?#]+[^\s]*$/i;
+
+function validateSourceUrl(value: string | null | undefined) {
+  if (value && !sourceUrlPattern.test(value)) throw new ValidationError("sourceUrl must be an HTTP or HTTPS URL.");
+}
+
+export function hasMemorySourceEvidence(source: Pick<NewMemoryFactCandidate["proposedSources"][number], "sourceResource" | "sourceRecordId" | "sourceUrl" | "excerpt">) {
+  const resource = source.sourceResource.trim().toLowerCase();
+  const traceable = Boolean(source.sourceRecordId?.trim() || (source.sourceUrl && sourceUrlPattern.test(source.sourceUrl)));
+  if (resource === "chat") return Boolean(source.excerpt?.trim());
+  return traceable;
+}
+
+export function assertMemorySourceEvidence(source: Parameters<typeof hasMemorySourceEvidence>[0]) {
+  if (!hasMemorySourceEvidence(source)) throw new ValidationError("Chat requires an original excerpt; non-chat sources require a record id or URL. A note alone is not evidence.");
+}
+
 export function parseMemorySourceDraft(value: unknown) {
   const body = object(value);
+  assertMemorySourceNoNul(body.sourceResource, "sourceResource");
   const result = {
     sourceResource: text(body.sourceResource, "sourceResource", 100),
-    sourceRecordId: nullableText(body.sourceRecordId, "sourceRecordId", 300), sourceUrl: nullableText(body.sourceUrl, "sourceUrl", 2000),
-    excerpt: nullableText(body.excerpt, "excerpt", 10000), note: nullableText(body.note, "note", 2000),
+    sourceRecordId: nullableSourceText(body.sourceRecordId, "sourceRecordId", 300),
+    sourceUrl: nullableSourceText(body.sourceUrl, "sourceUrl", 2000),
+    excerpt: originalExcerpt(body.excerpt), note: nullableSourceText(body.note, "note", 2000),
   };
-  if (!result.sourceRecordId && !result.sourceUrl && !result.excerpt && !result.note) throw new ValidationError("A Memory Source needs a record id, URL, excerpt, or note.");
-  if (result.sourceUrl && !/^https?:\/\//i.test(result.sourceUrl)) throw new ValidationError("sourceUrl must use HTTP or HTTPS.");
+  validateSourceUrl(result.sourceUrl);
+  assertMemorySourceEvidence(result);
   return result;
 }
 
 export function parseMemorySourcePatch(value: unknown) {
   const body = object(value);
   const result = {
-    sourceUrl: body.sourceUrl === undefined ? undefined : nullableText(body.sourceUrl, "sourceUrl", 2000),
-    excerpt: body.excerpt === undefined ? undefined : nullableText(body.excerpt, "excerpt", 10000),
-    note: body.note === undefined ? undefined : nullableText(body.note, "note", 2000),
+    sourceRecordId: body.sourceRecordId === undefined ? undefined : nullableSourceText(body.sourceRecordId, "sourceRecordId", 300),
+    sourceUrl: body.sourceUrl === undefined ? undefined : nullableSourceText(body.sourceUrl, "sourceUrl", 2000),
+    excerpt: body.excerpt === undefined ? undefined : originalExcerpt(body.excerpt),
+    note: body.note === undefined ? undefined : nullableSourceText(body.note, "note", 2000),
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("No Memory Source fields to update.");
-  if (result.sourceUrl && !/^https?:\/\//i.test(result.sourceUrl)) throw new ValidationError("sourceUrl must use HTTP or HTTPS.");
+  validateSourceUrl(result.sourceUrl);
   return result;
+}
+
+export function parseMemoryCandidateSubmission(value: unknown): Omit<NewMemoryFactCandidate, "id" | "client" | "requestId"> & { requestId?: string } {
+  const body = object(value);
+  const proposedFact = parseNewMemoryFact(body.fact);
+  if (!Array.isArray(body.sources) || !body.sources.length || body.sources.length > 50) throw new ValidationError("Provide 1 to 50 Memory Sources.");
+  const proposedSources = body.sources.map(parseMemorySourceDraft);
+  const reviewMode = body.reviewMode ?? "manual";
+  if (reviewMode !== "manual" && reviewMode !== "user_confirmed") throw new ValidationError("reviewMode must be manual or user_confirmed.");
+  const proposedBy = body.proposedBy ?? (reviewMode === "user_confirmed" ? "user" : "model");
+  if (proposedBy !== "user" && proposedBy !== "model" && proposedBy !== "system" && proposedBy !== "import") throw new ValidationError("proposedBy is invalid.");
+  const writtenBy = nullableText(body.writtenBy, "writtenBy", 200);
+  const requestId = body.requestId === undefined ? undefined : memoryUuid(body.requestId, "requestId");
+  if (reviewMode === "user_confirmed") {
+    if (proposedFact.epistemicType !== "direct_statement" || proposedBy !== "user") throw new ValidationError("user_confirmed requires a direct user statement.");
+    if (!proposedSources.some((source) => source.sourceResource.toLowerCase() === "chat" && source.excerpt?.trim())) throw new ValidationError("user_confirmed requires the original user excerpt in a chat Source.");
+    if (!writtenBy || !requestId) throw new ValidationError("user_confirmed requires writtenBy and requestId.");
+  }
+  return { proposedFact, proposedSources, proposedBy, proposerModel: nullableText(body.proposerModel, "proposerModel", 200), reviewMode, writtenBy, requestId };
 }

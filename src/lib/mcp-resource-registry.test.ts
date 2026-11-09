@@ -1,3 +1,5 @@
+import type { MemoryFactCandidate } from "./types.ts";
+import { parseMemoryCandidateSubmission } from "./memory-graph-validation.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -11,8 +13,8 @@ test("production schemas describe every action and distinguish create from PATCH
   const bindings = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   for (const [, key] of bindings.matchAll(/^\s*(\w+):\s*\{/gm)) Object.assign(operations, { [key]: {} });
   const registry = createResourceRegistry(operations);
-  assert.equal(registry.resources().length, 37);
-  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 38);
+  assert.equal(registry.resources().length, 38);
+  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 39);
   assert.ok(registry.resources().some(item=>item.resource==="software_library"));
   for (const item of registry.resources()) {
     const schema = registry.schema(item.resource);
@@ -27,11 +29,11 @@ test("production schemas describe every action and distinguish create from PATCH
       assert.notEqual(schema.fields[key].read_only, true, `${item.resource}.${key} is writable`);
     }
     for (const [name, action] of Object.entries(schema.action_schemas)) {
-      assert.equal(action.id_required, true);
+      assert.equal(action.id_required, !(item.resource === "memory_candidate" && name === "submit"));
       assert.ok(action.result_description);
       assert.ok(action.description, `${item.resource}/${name} explains business effects`);
       for (const key of action.required_fields) assert.ok(action.fields[key]);
-      await assert.rejects(() => registry.action(item.resource, { action: name, id: 1, data: { unexpected: true } }), /does not accept: unexpected/);
+      await assert.rejects(() => registry.action(item.resource, { action: name, ...(action.id_required ? {id:1} : {}), data: { unexpected: true } }), /does not accept: unexpected/);
     }
   }
   assert.deepEqual(registry.schema("lucius_post_comment").update_fields, ["content"]);
@@ -47,9 +49,9 @@ test("production schemas describe every action and distinguish create from PATCH
   assert.match(registry.schema("memo").usage_guidance.join(" "), /Retrieval does not authorize writing/);
   assert.match(registry.schema("calendar_event").description, /one-way.*do not write back/);
   assert.equal(registry.schema("relation_event").operation_semantics.update_mode, "complete replacement input");
-  assert.deepEqual(registry.schema("memory_source").search_schema.query_fields, []);
+  assert.deepEqual(registry.schema("memory_source").search_schema.query_fields, ["excerpt", "note", "source_resource"]);
   assert.equal(registry.schema("tracker").search_schema.pagination, "cursor");
-  assert.ok(registry.schema("memory_fact").search_schema.limitations.some(rule => rule.includes("bounded")));
+  assert.equal(registry.schema("memory_fact").search_schema.pagination, "cursor");
   assert.ok(registry.schema("memory_fact").required_conditions.length);
   assert.equal(registry.schema("food_log").fields.food_dish_id.legacy, true);
   const foodSchema=registry.schema("food_log");
@@ -215,30 +217,36 @@ function fakeOperations() {
   const projectItems: ProjectItem[] = [];
   const memoryEntities: MemoryEntity[] = [];
   const memoryFacts: MemoryFact[] = [];
+  const candidates: MemoryFactCandidate[] = [];
   const memorySources: MemorySource[] = [];
   let nextInbox = 0, nextTask = 0, nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextProject = 0, nextProjectItem = 0;
   let nextMemoryId = 0;
   const memoryId = () => `00000000-0000-4000-8000-${String(++nextMemoryId).padStart(12,"0")}`;
   const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
+  function promoteFakeCandidate(id:string,note:string|null){const c=candidates.find(c=>c.id===id&&c.status==="pending");if(!c)return null;const f:MemoryFact={...c.proposedFact,id:memoryId(),status:"active",invalidatedAt:null,invalidationReason:null,createdAt,updatedAt:createdAt};memoryFacts.push(f);for(const src of c.proposedSources)memorySources.push({...src,id:memoryId(),factId:f.id,createdAt,updatedAt:createdAt});c.status="promoted";c.promotedFactId=f.id;c.reviewNote=note;c.reviewedAt=createdAt;return c;}
   const operations: ResourceRegistryOperations = {
     memoryEntity: {
-      async search({query,entityType,status,includeMerged,limit=100}) { const needle=query?.toLocaleLowerCase(); return memoryEntities.filter(item=>(includeMerged||status||item.status!=="merged")&&(!status||item.status===status)&&(!entityType||item.entityType===entityType)&&(!needle||item.canonicalName.toLocaleLowerCase().includes(needle)||item.aliases.some(alias=>alias.toLocaleLowerCase().includes(needle)))).slice(0,limit); },
+      async search({query,entityType,status,includeMerged,limit=100}) { const needle=query?.toLocaleLowerCase(); return { items: memoryEntities.filter(item=>(includeMerged||status||item.status!=="merged")&&(!status||item.status===status)&&(!entityType||item.entityType===entityType)&&(!needle||item.canonicalName.toLocaleLowerCase().includes(needle)||item.aliases.some(alias=>alias.toLocaleLowerCase().includes(needle)))).slice(0,limit), has_more: false, next_cursor: null }; },
       async get(id) { const entity=memoryEntities.find(item=>item.id===id); return entity?{entity,facts:memoryFacts.filter(fact=>fact.subjectEntityId===id||fact.objectEntityId===id)}:null; },
       async create(input) { const item:MemoryEntity={...input,id:memoryId(),status:"active",mergedIntoEntityId:null,createdAt,updatedAt:createdAt};memoryEntities.push(item);return item; },
       async update(id,input) { const item=memoryEntities.find(entry=>entry.id===id&&entry.status!=="merged");if(!item)return null;Object.assign(item,input,{updatedAt:createdAt});return item; },
       async setArchived(id,archived) { const item=memoryEntities.find(entry=>entry.id===id&&entry.status!=="merged");if(!item)return null;item.status=archived?"archived":"active";return item; },
       async merge(sourceId,targetId) { const source=memoryEntities.find(item=>item.id===sourceId&&item.status==="active"),target=memoryEntities.find(item=>item.id===targetId&&item.status==="active");if(!source||!target||source===target)return null;const changed=new Set<string>();for(const fact of memoryFacts){if(fact.subjectEntityId===sourceId){fact.subjectEntityId=targetId;changed.add(fact.id);}if(fact.objectEntityId===sourceId){fact.objectEntityId=targetId;changed.add(fact.id);}if(fact.perspectiveEntityId===sourceId){fact.perspectiveEntityId=targetId;changed.add(fact.id);}}source.status="merged";source.mergedIntoEntityId=targetId;target.aliases=[...new Set([...target.aliases,...source.aliases,source.canonicalName])];return{entity:target,redirectedFacts:changed.size,selfLoops:memoryFacts.filter(f=>f.subjectEntityId===targetId&&f.objectEntityId===targetId).length}; },
     },
+    memoryCandidate: {
+      async search({status,proposedBy,limit=20}) {return { items: candidates.filter(c=>(!status||c.status===status)&&(!proposedBy||c.proposedBy===proposedBy)).slice(0,limit), has_more: false, next_cursor: null };},
+      async get(id){return candidates.find(c=>c.id===id)??null;},
+      async submit(input){const parsed=parseMemoryCandidateSubmission(input);const item:MemoryFactCandidate={...parsed,id:memoryId(),requestId:parsed.requestId??memoryId(),writtenBy:parsed.writtenBy??"test",actor:"local",client:"test",status:"pending",reviewNote:null,promotedFactId:null,createdAt,reviewedAt:null,reviewClient:null};candidates.push(item);if(parsed.reviewMode==="user_confirmed")return (await promoteFakeCandidate(item.id,null))!;return item;},
+    },
     memoryFact: {
-      async search({entityId,direction="both",predicate,perspectiveEntityId,status,validOn,limit=100}) { return memoryFacts.filter(item=>(!entityId||(direction!=="in"&&item.subjectEntityId===entityId)||(direction!=="out"&&item.objectEntityId===entityId))&&(!predicate||item.predicate===predicate)&&(perspectiveEntityId===undefined||item.perspectiveEntityId===perspectiveEntityId)&&(!status||item.status===status)&&(!validOn||(!item.validFrom||item.validFrom<=validOn)&&(!item.validTo||item.validTo>=validOn))).slice(0,limit); },
+      async search({entityId,direction="both",predicate,perspectiveEntityId,status,validOn,limit=100}) { return { items: memoryFacts.filter(item=>(!entityId||(direction!=="in"&&item.subjectEntityId===entityId)||(direction!=="out"&&item.objectEntityId===entityId))&&(!predicate||item.predicate===predicate)&&(perspectiveEntityId===undefined||item.perspectiveEntityId===perspectiveEntityId)&&(!status||item.status===status)&&(!validOn||(!item.validFrom||item.validFrom<=validOn)&&(!item.validTo||item.validTo>=validOn))).slice(0,limit), has_more: false, next_cursor: null }; },
       async get(id) { const fact=memoryFacts.find(item=>item.id===id);return fact?{fact,sources:memorySources.filter(source=>source.factId===id)}:null; },
-      async create(input) { const item:MemoryFact={...input,id:memoryId(),status:"active",invalidatedAt:null,invalidationReason:null,createdAt,updatedAt:createdAt};memoryFacts.push(item);return item; },
       async update(id,input) { const item=memoryFacts.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item; },
       async invalidate(id,reason) { const item=memoryFacts.find(entry=>entry.id===id&&entry.status==="active");if(!item)return null;item.status="invalidated";item.invalidatedAt=createdAt;item.invalidationReason=reason;return item; },
       async restore(id) { const item=memoryFacts.find(entry=>entry.id===id&&entry.status==="invalidated");if(!item)return null;item.status="active";item.invalidatedAt=null;item.invalidationReason=null;return item; },
     },
     memorySource: {
-      async search({factId,sourceResource,sourceRecordId,limit=100}) { return memorySources.filter(item=>(!factId||item.factId===factId)&&(!sourceResource||item.sourceResource===sourceResource)&&(!sourceRecordId||item.sourceRecordId===sourceRecordId)).slice(0,limit); },
+      async search({factId,sourceResource,sourceRecordId,limit=100}) { return { items: memorySources.filter(item=>(!factId||item.factId===factId)&&(!sourceResource||item.sourceResource===sourceResource)&&(!sourceRecordId||item.sourceRecordId===sourceRecordId)).slice(0,limit), has_more: false, next_cursor: null }; },
       async get(id) { return memorySources.find(item=>item.id===id)??null; },
       async create(input) { const item:MemorySource={...input,id:memoryId(),createdAt,updatedAt:createdAt};memorySources.push(item);return item; },
       async update(id,input) { const item=memorySources.find(entry=>entry.id===id);if(!item)return null;Object.assign(item,input);return item; },
@@ -269,7 +277,7 @@ function fakeOperations() {
       async delete(id) { return remove(chronicles, id); },
     },
     memo: {
-      async search({ query, tag, type, status, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return memos.filter((item) => (!needle || item.title.toLocaleLowerCase().includes(needle) || item.content.toLocaleLowerCase().includes(needle)) && (!tag || item.tags.includes(tag)) && (!type || item.type === type) && (!status || item.status === status)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id).slice(0, limit); },
+      async search({ query, tag, type, status, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return { items: memos.filter((item) => (!needle || item.title.toLocaleLowerCase().includes(needle) || item.content.toLocaleLowerCase().includes(needle)) && (!tag || item.tags.includes(tag)) && (!type || item.type === type) && (!status || item.status === status)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id - a.id).slice(0, limit), has_more: false, next_cursor: null }; },
       async get(id) { return memos.find((item) => item.id === id) ?? null; },
       async create(input) { const item: Memo = { ...input, id: ++nextMemo, createdAt, updatedAt: createdAt }; memos.push(item); return item; },
       async update(id, patch) { const item = memos.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
@@ -307,7 +315,7 @@ function fakeOperations() {
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_entity", "memory_fact", "memory_source", "inbox", "task", "memo", "chronicle", "lucius_diary", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_candidate", "memory_entity", "memory_fact", "memory_source", "inbox", "task", "memo", "chronicle", "lucius_diary", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_state")?.capabilities, ["get", "update"]);
@@ -351,7 +359,11 @@ test("Memory Graph resources preserve lifecycle, provenance, and immutable asser
   const project=await registry.create("memory_entity",{canonical_name:"EvaOrbit",entity_type:"project",aliases:["Orbit"]});
   assert.equal(typeof eva.id,"string");
   assert.deepEqual((await registry.search("memory_entity",{query:"orbit",filters:{},limit:20})).items.map(item=>item.id),[eva.id,project.id]);
-  const fact=await registry.create("memory_fact",{subject_entity_id:eva.id,predicate:"maintains",object_entity_id:project.id,perspective_entity_id:eva.id,confidence:0.9,importance:5,valid_from:"2026-09-01"});
+  await assert.rejects(()=>registry.create("memory_fact",{subject_entity_id:eva.id,predicate:"maintains",object_entity_id:project.id}),/Direct Fact creation is disabled/);
+  assert.ok(!registry.resources().find(r=>r.resource==="memory_fact")!.capabilities.includes("create"));
+  const promoted=await registry.action("memory_candidate",{action:"submit",data:{request_id:"00000000-0000-4000-8000-000000000099",review_mode:"user_confirmed",written_by:"test-user",fact:{subject_entity_id:eva.id,predicate:"maintains",object_entity_id:project.id,perspective_entity_id:eva.id,epistemic_type:"direct_statement",confidence:0.9,importance:5,valid_from:"2026-09-01"},sources:[{source_resource:"chat",excerpt:"I maintain this project."}]}});
+  assert.equal(promoted.status,"promoted");
+  const fact=await registry.get("memory_fact",promoted.promoted_fact_id as string);
   const source=await registry.create("memory_source",{fact_id:fact.id,source_resource:"external",source_record_id:"0007",source_url:"https://example.com/source"});
   assert.equal(source.source_record_id,"0007");
   assert.deepEqual((await registry.search("memory_fact",{filters:{entity_id:project.id,direction:"in",predicate:"maintains",status:"active",valid_on:"2026-09-07"},limit:20})).items.map(item=>item.id),[fact.id]);
@@ -363,7 +375,7 @@ test("Memory Graph resources preserve lifecycle, provenance, and immutable asser
   assert.equal(merged.redirected_facts,1);
   assert.equal((await registry.get("memory_entity",eva.id as string)).merged_into_entity_id,project.id);
   const factDetail=await registry.get("memory_fact",fact.id as string);
-  assert.equal((factDetail.sources as Array<Record<string,unknown>>)[0].id,source.id);
+  assert.ok((factDetail.sources as Array<Record<string,unknown>>).some(item=>item.id===source.id));
   await assert.rejects(()=>registry.delete("memory_fact",fact.id as string),/does not support delete/);
   await assert.rejects(()=>registry.search("memory_source",{filters:{source_record_id:7},limit:20}),/opaque string/);
 });
@@ -532,7 +544,7 @@ test("registry rejects table names, invalid filters and retired resources", asyn
 test("production registry delegates every write and action to existing business services", () => {
   const source = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   assert.match(source, /delete: deleteChronicleEntry/);
-  assert.match(source, /memo: \{ search: listMemos, get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
+  assert.match(source, /memo: \{ search: \(input\)=>pageMemory\("memo",input\), get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
   assert.match(source, /luciusPost: \{ search: listLuciusPosts, get: getLuciusPost, create: createLuciusPost, update: updateLuciusPost, delete: deleteLuciusPost \}/);
   assert.match(source, /luciusPostComment: \{ search: listLuciusPostComments, get: getLuciusPostComment, create: createLuciusPostComment, update: updateLuciusPostComment, delete: deleteLuciusPostComment \}/);
   assert.match(source, /healthRecord: \{ search: listHealthRecords/);
@@ -540,11 +552,26 @@ test("production registry delegates every write and action to existing business 
   assert.match(source, /mediaSeries: \{ search: listMediaSeries/);
   assert.match(source, /catRecord: \{ search: catTimeline/);
   assert.match(source, /reminder: \{ search: listReminders/);
-  assert.match(source, /memoryEntity:\{search:listMemoryEntities/);
-  assert.match(source, /memoryFact:\{search:listMemoryFacts/);
-  assert.match(source, /memorySource:\{search:listMemorySources/);
+  assert.match(source, /memoryEntity:\{search:\(input\)=>pageMemory\("entity"/);
+  assert.match(source, /memoryFact:\{search:\(input\)=>pageMemory\("fact"/);
+  assert.match(source, /memorySource:\{search:\(input\)=>pageMemory\("source"/);
   assert.match(source, /task: \{ search: listTasks, get: getTask, create: createTask, update: updateTask, delete: deleteTask \}/);
   assert.doesNotMatch(source, /services\/memory["']|\bmemory:\s*\{/i);
   assert.match(source, /inbox: \{ search: searchInbox, get: getInbox, create: createInbox, update: updateInbox, delete: deleteInbox, markProcessed: markInboxProcessed, archive: archiveInbox, restore: restoreInbox \}/);
   assert.doesNotMatch(source, /\.from\(|DELETE FROM|INSERT INTO|UPDATE\s+\w+/i);
+});
+
+test("MCP manual Candidate requires a stable request ID and cannot be promoted or rejected",async()=>{
+  const fake=fakeOperations(),registry=createResourceRegistry(fake.operations);
+  const entity=await registry.create("memory_entity",{canonical_name:"Subject",entity_type:"person"});
+  const input={fact:{subject_entity_id:entity.id,predicate:"prefers",object_value:"tea",epistemic_type:"derived"},sources:[{source_resource:"chat",excerpt:"Original words"}]};
+  await assert.rejects(()=>registry.action("memory_candidate",{action:"submit",data:input}),/request_id/);
+  const c=await registry.action("memory_candidate",{action:"submit",data:{...input,request_id:"00000000-0000-4000-8000-000000000098"}});
+  assert.equal(c.status,"pending");
+  for(const action of ["promote","reject"])await assert.rejects(()=>registry.action("memory_candidate",{action,id:c.id as string,data:{}}),/does not support action|Web-only/);
+  assert.equal((await registry.get("memory_candidate",c.id as string)).status,"pending");
+  assert.equal(fake.memoryFacts.length,0);
+  const schema=registry.schema("memory_candidate");
+  assert.deepEqual(schema.supported_actions,["submit"]);
+  assert.ok(schema.action_schemas.submit.required_fields.includes("request_id"));
 });

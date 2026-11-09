@@ -3,10 +3,11 @@ import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState } from "@/components/use-data-refresh";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchMemoryPages } from "@/lib/memory-page-client";
 import { Icon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
-import type { ApiError, MemoryFact, MemoryGraphSnapshot, MemoryRecallHit } from "@/lib/types";
+import type { ApiError, MemoryEntity, MemoryFact, MemoryFactDetail, MemoryGraphSnapshot, MemoryRecallHit, MemorySource } from "@/lib/types";
 
 const epistemicLabels={direct_statement:"直接陈述",recorded_observation:"记录观察",derived:"推导",agent_judgment:"Agent 判断",external_report:"外部资料",unknown:"未标注"} as const;
 const channelLabels={exact:"精确",literal:"字面",lexical:"词项",graph:"一跳"} as const;
@@ -16,14 +17,53 @@ function date(value:string){const zoned=value.endsWith("Z")||/[+-]\d\d:\d\d$/.te
 
 export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
   const[data,setData]=useServerDataState(initial),[query,setQuery]=useRememberedState("MemoryGraphView:query", ""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useRememberedState("MemoryGraphView:showHistory", false),[entityFilter,setEntityFilter]=useRememberedState<string|null>("MemoryGraphView:entityFilter", null),[error,setError]=useState("");
-  const entityById=useMemo(()=>new Map(data.entities.map(entity=>[entity.id,entity])),[data.entities]);
-  const sourcesByFact=useMemo(()=>{const map=new Map<string,typeof data.sources>();for(const source of data.sources){const values=map.get(source.factId)??[];values.push(source);map.set(source.factId,values);}return map;},[data]);
+  const [detail, setDetail] = useState<(MemoryFactDetail & { entities: MemoryEntity[] }) | null>(null);
+  const [refresh, setRefresh] = useState(0);
+  const selectedDetail = detail?.fact.id === selectedId ? detail : null;
+  const entityById=useMemo(()=>new Map([...data.entities, ...(selectedDetail?.entities ?? [])].map(entity=>[entity.id,entity])),[data.entities, selectedDetail]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = <K extends "entities" | "facts" | "candidates">(
+      resource: string, filters: Record<string, string> = {},
+    ) => fetchMemoryPages<MemoryGraphSnapshot[K][number]>("/api/memory-graph", new URLSearchParams({ resource, ...filters }), controller.signal);
+    void Promise.all([
+      load<"entities">("entity", { include_merged: "true" }), load<"facts">("fact"), load<"candidates">("candidate", { status: "pending" }),
+    ]).then(([entities, facts, candidates]) => {
+      if (controller.signal.aborted) return;
+      setData(previous => ({
+        ...previous, entities, facts, candidates,
+      }));
+      setSelectedId(previous => previous ?? facts[0]?.id ?? null);
+    }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
+    return () => controller.abort();
+  }, [refresh, setData]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const controller = new AbortController();
+    async function load() {
+      const params = new URLSearchParams({ resource: "fact", id: selectedId!, order: "created" });
+      const response = await fetch("/api/memory-graph?" + params, { signal: controller.signal });
+      if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
+      const next = await response.json() as MemoryFactDetail & { entities: MemoryEntity[] };
+      const cursor = next.sourcesPage?.next_cursor;
+      if (cursor) {
+        const extra = await fetchMemoryPages<MemorySource>("/api/memory-graph",
+          new URLSearchParams({ resource: "source", fact_id: next.fact.id, order: "created", cursor }), controller.signal);
+        next.sources = [...next.sources, ...extra];
+      }
+      if (!controller.signal.aborted) setDetail(next);
+    }
+    void load().catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
+    return () => controller.abort();
+  }, [selectedId, refresh]);
   const facts=useMemo(()=>data.facts.filter(fact=>(showHistory||fact.status==="active")&&(!entityFilter||fact.subjectEntityId===entityFilter||fact.objectEntityId===entityFilter||fact.perspectiveEntityId===entityFilter)),[data,entityFilter,showHistory]);
-  const selected=data.facts.find(fact=>fact.id===selectedId)??null,selectedSources=selected?sourcesByFact.get(selected.id)??[]:[];
-  const pending=data.candidates.filter(candidate=>candidate.status==="pending");
+  const selected=selectedDetail?.fact??null,selectedSources=selectedDetail?.sources??[];
+  const pending=data.candidates;
 
   async function search(event:React.FormEvent){event.preventDefault();if(!query.trim()){setHits([]);return;}setSearching(true);setError("");const response=await fetch(`/api/memory-graph?q=${encodeURIComponent(query.trim())}&limit=8`);if(response.ok)setHits(await response.json());else setError(((await response.json()) as ApiError).error);setSearching(false);}
-  async function review(id:string,action:"promote"|"reject"){setError("");const response=await fetch(`/api/memory-graph/candidates/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});if(!response.ok){setError(((await response.json()) as ApiError).error);return;}const snapshot=await fetch("/api/memory-graph");if(snapshot.ok)setData(await snapshot.json());}
+  async function review(id:string,action:"promote"|"reject"){setError("");const response=await fetch(`/api/memory-graph/candidates/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});if(!response.ok){setError(((await response.json()) as ApiError).error);return;}setRefresh(previous => previous + 1);}
   function selectFact(fact:MemoryFact){setSelectedId(fact.id);}
 
   return <div className="page memory-graph-page">
@@ -32,7 +72,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
     <section className="memory-graph-summary" aria-label="Memory Graph 摘要">
       <span><strong>{data.entities.filter(item=>item.status==="active").length}</strong><small>活跃实体</small></span>
       <span><strong>{data.facts.filter(item=>item.status==="active").length}</strong><small>当前 Fact</small></span>
-      <span><strong>{data.sources.length}</strong><small>来源链接</small></span>
+      <span><strong>{data.sources.length}</strong><small>已载入来源</small></span>
       <span data-attention={pending.length>0}><strong>{pending.length}</strong><small>待审核</small></span>
     </section>
 
@@ -56,7 +96,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
           <span className="memory-node"><em>{subject?.canonicalName.slice(0,1)}</em><strong>{subject?.canonicalName??"未知实体"}</strong><small>{subject?.entityType}</small></span>
           <span className="memory-edge"><i/><strong>{fact.predicate}</strong><small>{epistemicLabels[fact.epistemicType]}</small><i/></span>
           <span className="memory-node object"><em>{object?.canonicalName.slice(0,1)??"·"}</em><strong>{object?.canonicalName??literal(fact.objectValue)}</strong><small>{object?.entityType??"literal"}</small></span>
-          <span className="memory-path-meta"><em>{fact.status==="active"?"当前":"已失效"}</em><small>{sourcesByFact.get(fact.id)?.length??0} 个来源 · 重要度 {fact.importance}</small></span>
+          <span className="memory-path-meta"><em>{fact.status==="active"?"当前":"已失效"}</em><small>{selected?.id===fact.id ? selectedSources.length+" 个来源 · " : ""}重要度 {fact.importance}</small></span>
         </button>;}) : <div className="empty-state compact"><h2>这里还没有 Fact</h2><p>换一个实体，或显示历史记录。</p></div>}
       </section>
 

@@ -1,6 +1,7 @@
 "use client";
 import {useBusinessRequest} from "@/components/business-request-context";
 import { ErrorNotice } from "@/components/error-notice";
+import { fetchMemoryPages } from "@/lib/memory-page-client";
 import { responseError } from "@/lib/response-error";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
@@ -41,10 +42,21 @@ export function MemoView({ initial }: { initial: Memo[] }) {
     setLoading(true); setError("");
     const params = new URLSearchParams({ limit: "100" });
     if (query.trim()) params.set("q", query.trim()); if (tag) params.set("tag", tag); if (type) params.set("type", type); if (status) params.set("status", status);
-    try { const response = await read(`/api/memos?${params}`, { cache: "no-store",signal }); if (!response.ok) throw new Error(await responseError(response, "Could not load Memo.")); const next=await response.json() as Memo[]; if(!signal?.aborted)setItems(next); }
+    try {
+      if (!local) {
+        params.set("page", "1");
+        const next = await fetchMemoryPages<Memo>("/api/memos", params, signal, read);
+        if (!signal?.aborted) setItems(next);
+      } else {
+        const response = await read("/api/memos?" + params, { cache: "no-store", signal });
+        if (!response.ok) throw new Error(await responseError(response, "Could not load Memo."));
+        const next = await response.json() as Memo[];
+        if (!signal?.aborted) setItems(next);
+      }
+    }
     catch (reason) { if(!signal?.aborted)setError(reason instanceof Error ? reason.message : "Could not load Memo."); }
     finally { if(!signal?.aborted)setLoading(false); }
-  }, [query, status, tag, type,read]);
+  }, [query, status, tag, type, read, local]);
   useDataRefresh("/memo", () => load());
 
   useEffect(()=>{const controller=new AbortController();const timer=window.setTimeout(()=>void load(controller.signal),180);return()=>{clearTimeout(timer);controller.abort();};},[load]);

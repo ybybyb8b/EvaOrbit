@@ -3,7 +3,7 @@ import { apiError } from "@/lib/api";
 import { extractDelta, selectConversationHistory, startChatCompletion, type ProviderMessage } from "@/lib/ai-provider";
 import { executeAiTool } from "@/lib/ai-tools";
 import { addChatMessage, autoTitleChatSession, getAiRuntimeSettings, getChatSession, listChatMessages } from "@/lib/services/evaorbit";
-import { recallMemory } from "@/lib/services/memory-graph";
+import { getMemoryContext } from "@/lib/services/memory-context";
 import { ValidationError, parseChatRequest } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -74,28 +74,30 @@ export async function POST(request: NextRequest) {
     const messages = await listChatMessages(input.sessionId);
     const selectedHistory = selectConversationHistory(messages);
     const history: ProviderMessage[] = selectedHistory.messages.map(({ role, content }) => ({ role, content }));
-    const recall = /[\p{L}\p{N}]{2,}/u.test(input.content) ? await recallMemory(input.content, 6).catch(() => []) : [];
-    const memoryContext = recall.map((hit) => {
-      const object = hit.objectEntity?.canonicalName ?? (typeof hit.fact.objectValue === "string" ? hit.fact.objectValue : JSON.stringify(hit.fact.objectValue));
-      const source = hit.sources[0];
-      return `- ${hit.subject.canonicalName} ${hit.fact.predicate} ${object} [${hit.fact.epistemicType}; confidence=${hit.fact.confidence}; source=${source ? `${source.sourceResource}${source.sourceRecordId ? `:${source.sourceRecordId}` : ""}` : "legacy-unknown"}]`;
-    }).join("\n");
+    const shouldRecall = /[\p{L}\p{N}]{2,}/u.test(input.content);
+    const recall = shouldRecall ? await getMemoryContext({ query: input.content, limit: 6 }, request.signal).catch(() => null) : null;
+    const memoryCoverage = recall?.coverage ?? (shouldRecall
+      ? { status: "failed", complete: false, truncated: false, reasons: ["query_failed"], matched_count: 0, returned_count: 0 }
+      : undefined);
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         let answer = "";
         try {
           const providerMessages = [...history];
+          const promptContext = { module: "想想 / 对话", sessionTitle: session.title, omittedMessages: selectedHistory.omittedMessages };
           for (let round = 0; round < 4; round += 1) {
-            const upstream = await startChatCompletion(settings, providerMessages, request.signal, {
-              module: "想想 / 对话",
-              sessionTitle: session.title,
-              omittedMessages: selectedHistory.omittedMessages,
-              memoryContext,
-            });
+            const upstream = await startChatCompletion(settings, providerMessages, request.signal, promptContext);
             const completion = await readCompletion(upstream);
             if (!completion.toolCalls.length) {
               answer = completion.content;
+              // Only the final response sees memory. It cannot dispatch tools, even if a provider returns calls.
+              if (recall?.context_text) {
+                const response = await startChatCompletion(settings, providerMessages, request.signal, {
+                  ...promptContext, recalledFacts: [JSON.parse(recall.context_text)],
+                });
+                answer = (await readCompletion(response)).content || answer;
+              }
               if (answer) controller.enqueue(event({ delta: answer }));
               break;
             }
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
           }
           if (!answer.trim()) throw new Error("Provider 未返回文本内容");
           const message = await addChatMessage(input.sessionId, "assistant", answer, settings.model, settings.providerId, settings.modelConfigId);
-          controller.enqueue(event({ done: true, message }));
+          controller.enqueue(event({ done: true, message, memoryCoverage }));
         } catch (error) {
           controller.enqueue(event({ error: error instanceof Error ? error.message : "生成回复失败" }));
         } finally {
