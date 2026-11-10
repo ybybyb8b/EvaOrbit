@@ -187,6 +187,7 @@ export interface EvaOrbitRepository {
   invalidateMemoryFact(id: string, reason: string | null): Promise<MemoryFact | null>;
   restoreMemoryFact(id: string): Promise<MemoryFact | null>;
   listMemorySources(input?: MemorySourceListInput): Promise<MemorySource[]>;
+  countMemorySources(): Promise<number>;
   getMemorySource(id: string): Promise<MemorySource | null>;
   createMemorySource(input: NewMemorySource): Promise<MemorySource>;
   updateMemorySource(id: string, input: MemorySourcePatch): Promise<MemorySource | null>;

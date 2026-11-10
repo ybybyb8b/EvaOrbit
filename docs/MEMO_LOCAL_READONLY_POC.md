@@ -3,7 +3,9 @@
 - 复用 Web `MemoView`、`MemoDetailContent`；新增/编辑公共 `MemoEditor` 保存相同字段和校验。Web 默认 API/Next Link；本地 `MemoDataProvider` 注入 GET、链接与下载范围。
 - 本地从既有纯读取 `GET /api/memos` 下载最近更新的 100 条完整碎片，最多 8 MiB/账户。搜索、标签、类型、状态筛选及表单标签/合并目标候选只查已下载记录；`limit=200` 历史候选请求也不能突破快照。合并目标不在窗口内时保留原 ID 展示，不自动解关联。
 - `eventDate` 可为 null 或 date-only；`confirmedAt` 保留明确 instant；原文、标签、类型、状态、合并引用和迁移溯源字段不改写。Memo 正文沿用 Web 纯文本，不擅自改成 Markdown。
-- 创建/编辑只保留临时草稿；保存、归档、删除及强制提交全部禁止；不触发 recent_life_context 通知。Memory Graph 不在本轮范围，本地不显示其未接入入口；Web 图谱入口保留。
+- 创建/编辑只保留临时草稿；保存、归档、删除及强制提交全部禁止；不触发 recent_life_context 通知。
+
+本地 Echo 的 Graph 卡片在 App 内打开。精确 GET `/api/memory-graph/offline` 复用账户绑定的 `business.request` 和现有 SQLite 业务缓存，沿用容量及淘汰策略。单次下载最多 200 实体、200 事实和 200 条关联证据，超出条数标记为部分下载，超出 6 MiB 时保留旧缓存。缓存可浏览、筛选、搜索及展开事实证据；实体编辑、事实修正和候选审核走在线网页版。先发布 GET 接口再构建本地版 IPA，不需要数据库迁移或新 Swift bridge。
 - 浏览器账户缓存 `memo-readonly:<accountId>`；Native bridge v1 增加 `memo.readOnlySnapshot`，精确放行 `memos` GET 映射 `/api/memos`，不开放远程详情、查询参数、写方法。SQLite 仅新增 `memo_readonly_cache`；原记录/outbox/备份保留。刷新前后验证身份，提交时再查本地会话，Native 检查 generation。
 - 验证格式、重复 ID、数据类型/日期、账户及体积；响应异常或账户变化不覆盖原缓存。旧 Host 缺能力时提示升级，不回退不安全路径。
 - 本轮不需要生产 migration 或新 Memo API；其他模块尚未部署的只读 API 继续待单独确认，不因本轮顺手发布。新本地资源与 bridge 需要新 IPA；Web 表单调整需另行授权部署。签名链、权限、framework、HealthKit/EventKit/通知保留。

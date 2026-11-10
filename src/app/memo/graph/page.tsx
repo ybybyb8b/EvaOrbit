@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { getMemoryGraphSnapshot } from "@/lib/services/memory-graph";
+import { getRepository } from "@/lib/repositories";
 import { memoryUuid } from "@/lib/memory-graph-validation";
-import { MemoryGraphView } from "./memory-graph-view";
+import { MemoryGraphWebView } from "./memory-graph-view";
 
 export const metadata:Metadata={title:"Memory Graph"};
 export const dynamic="force-dynamic";
@@ -12,5 +12,12 @@ export default async function MemoryGraphPage({ searchParams }: { searchParams: 
   if (fact !== undefined) {
     try { factId = memoryUuid(fact); } catch { /* Ignore malformed deep links. */ }
   }
-  return <MemoryGraphView key={factId ?? "graph"} initial={await getMemoryGraphSnapshot("pending")} initialFactId={factId} />;
+  const repository = await getRepository();
+  const [entities, facts, candidates, sourceCount] = await Promise.all([
+    repository.pageMemory("entity", { includeMerged: true }),
+    repository.pageMemory("fact"),
+    repository.pageMemory("candidate", { status: "pending" }),
+    repository.countMemorySources(),
+  ]);
+  return <MemoryGraphWebView key={factId ?? "graph"} initial={{ entities, facts, candidates, sourceCount }} initialFactId={factId} />;
 }

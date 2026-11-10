@@ -1,122 +1,294 @@
 "use client";
-import Link from "next/link";
-import { ErrorNotice } from "@/components/error-notice";
-import { useRememberedState } from "@/components/use-remembered-state";
-import { useServerDataState } from "@/components/use-data-refresh";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchMemoryPages } from "@/lib/memory-page-client";
+import { useRouter } from "next/navigation";
+import { ErrorNotice } from "@/components/error-notice";
+import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
-import { PageHeader } from "@/components/page-header";
-import type { ApiError, MemoryEntity, MemoryFact, MemoryFactDetail, MemoryGraphSnapshot, MemoryRecallHit, MemorySource } from "@/lib/types";
+import { useLocale } from "@/components/locale-controller";
+import { graphWebUrl, type GraphOfflineSnapshot } from "@/lib/memory-graph-offline";
+import { fetchMemoryPages } from "@/lib/memory-page-client";
+import type { MemoryPage } from "@/lib/memory-pagination";
+import { responseError } from "@/lib/response-error";
+import type { MemoryEntity, MemoryFact, MemoryFactCandidate, MemoryFactDetail, MemoryRecallHit, MemorySource } from "@/lib/types";
+import { GraphIcon } from "../echo-entries";
+import echo from "../echo.module.css";
+import { GraphCanvas } from "./graph-canvas";
+import { graphActivity, graphDate, graphProjection, graphTime, literal, relatedIds, typeIcons, typeName } from "./graph-model";
+import { EntityContent, FactContent, ReviewContent } from "./graph-inspector";
+import styles from "./graph.module.css";
 
-const epistemicLabels={direct_statement:"直接陈述",recorded_observation:"记录观察",derived:"推导",agent_judgment:"Agent 判断",external_report:"外部资料",unknown:"未标注"} as const;
-const channelLabels={exact:"精确",literal:"字面",lexical:"词项",graph:"一跳"} as const;
+const endpoint = "/api/memory-graph";
+type Initial = {
+  entities: MemoryPage<MemoryEntity>;
+  facts: MemoryPage<MemoryFact>;
+  candidates: MemoryPage<MemoryFactCandidate>;
+  sourceCount: number;
+};
+type GraphData = { entities: MemoryEntity[]; facts: MemoryFact[]; candidates: MemoryFactCandidate[] };
+type Detail = MemoryFactDetail & { entities: MemoryEntity[] };
+type Selection = { kind: "entity" | "fact"; id: string } | { kind: "review" };
 
-function literal(value:unknown){if(typeof value==="string")return value;if(value===null)return "空值";return JSON.stringify(value);}
-function date(value:string){const zoned=value.endsWith("Z")||/[+-]\d\d:\d\d$/.test(value)?value:`${value.replace(" ","T")}Z`;return new Intl.DateTimeFormat("zh-CN",{year:"numeric",month:"short",day:"numeric"}).format(new Date(zoned));}
+async function remaining<T extends { id: string }>(resource: string, page: MemoryPage<T>, signal: AbortSignal, filters: Record<string, string> = {}) {
+  if (!page.next_cursor) return page.items;
+  const next = await fetchMemoryPages<T>(endpoint, new URLSearchParams({ resource, cursor: page.next_cursor, ...filters }), signal);
+  return [...new Map([...page.items, ...next].map(item => [item.id, item])).values()];
+}
 
-export function MemoryGraphView({initial, initialFactId}:{initial:MemoryGraphSnapshot; initialFactId?: string}){
-  const[data,setData]=useServerDataState(initial),[query,setQuery]=useRememberedState("MemoryGraphView:query", ""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initialFactId??initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useRememberedState("MemoryGraphView:showHistory", false),[entityFilter,setEntityFilter]=useRememberedState<string|null>("MemoryGraphView:entityFilter", null),[error,setError]=useState("");
-  const [detail, setDetail] = useState<(MemoryFactDetail & { entities: MemoryEntity[] }) | null>(null);
-  const [refresh, setRefresh] = useState(0);
-  const selectedDetail = detail?.fact.id === selectedId ? detail : null;
-  const entityById=useMemo(()=>new Map([...data.entities, ...(selectedDetail?.entities ?? [])].map(entity=>[entity.id,entity])),[data.entities, selectedDetail]);
+export function MemoryGraphWebView(props: { initial: Initial; initialFactId?: string }) {
+  const router = useRouter();
+  return <MemoryGraphView {...props} onRefresh={() => router.refresh()}/>;
+}
+
+export function MemoryGraphView({ initial, initialFactId, offline, onRefresh }: {
+  initial: Initial; initialFactId?: string; offline?: GraphOfflineSnapshot; onRefresh?: () => void;
+}) {
+  const { english } = useLocale();
+  const tr = (en: string, zh: string) => english ? en : zh;
+  const [loaded, setLoaded] = useState<{ initial: Initial; data: GraphData }>();
+  const [loadFailure, setLoadFailure] = useState<{ initial: Initial; message: string }>();
+  const data = loaded?.initial === initial ? loaded.data : {
+    entities: initial.entities.items, facts: initial.facts.items, candidates: initial.candidates.items,
+  };
+  const loading = loaded?.initial !== initial && loadFailure?.initial !== initial
+    && Boolean(initial.entities.next_cursor || initial.facts.next_cursor || initial.candidates.next_cursor);
+  const [selection, setSelection] = useState<Selection | null>(initialFactId ? { kind: "fact", id: initialFactId } : null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const [ego, setEgo] = useState(false);
+  const [resetVersion, setResetVersion] = useState(0);
+  const [type, setType] = useState("");
+  const [history, setHistory] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [recall, setRecall] = useState<{ query: string; facts: MemoryFact[]; error?: string }>();
+  const [searching, setSearching] = useState(false);
+  const [reviewed, setReviewed] = useState<string[]>([]);
+  const [editedEntities, setEditedEntities] = useState<MemoryEntity[]>([]);
+  const [entitySaveVersion, setEntitySaveVersion] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    const load = <K extends "entities" | "facts" | "candidates">(
-      resource: string, filters: Record<string, string> = {},
-    ) => fetchMemoryPages<MemoryGraphSnapshot[K][number]>("/api/memory-graph", new URLSearchParams({ resource, ...filters }), controller.signal);
+    const signal = controller.signal;
+    if (!initial.entities.next_cursor && !initial.facts.next_cursor && !initial.candidates.next_cursor) return;
     void Promise.all([
-      load<"entities">("entity", { include_merged: "true" }), load<"facts">("fact"), load<"candidates">("candidate", { status: "pending" }),
+      remaining("entity", initial.entities, signal, { include_merged: "true" }),
+      remaining("fact", initial.facts, signal),
+      remaining("candidate", initial.candidates, signal, { status: "pending" }),
     ]).then(([entities, facts, candidates]) => {
-      if (controller.signal.aborted) return;
-      setData(previous => ({
-        ...previous, entities, facts, candidates,
-      }));
-      setSelectedId(previous => previous ?? facts[0]?.id ?? null);
-    }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
+      if (!signal.aborted) setLoaded({ initial, data: { entities, facts, candidates } });
+    }).catch(reason => {
+      if (!signal.aborted) setLoadFailure({ initial, message: String(reason) });
+    });
     return () => controller.abort();
-  }, [refresh, setData]);
+  }, [initial]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    const controller = new AbortController();
-    async function load() {
-      const params = new URLSearchParams({ resource: "fact", id: selectedId!, order: "created" });
-      const response = await fetch("/api/memory-graph?" + params, { signal: controller.signal });
-      if (!response.ok) throw new Error(((await response.json()) as ApiError).error);
-      const next = await response.json() as MemoryFactDetail & { entities: MemoryEntity[] };
-      const cursor = next.sourcesPage?.next_cursor;
-      if (cursor) {
-        const extra = await fetchMemoryPages<MemorySource>("/api/memory-graph",
-          new URLSearchParams({ resource: "source", fact_id: next.fact.id, order: "created", cursor }), controller.signal);
-        next.sources = [...next.sources, ...extra];
-      }
-      if (!controller.signal.aborted) setDetail(next);
+    if (!offline && window.location.hash === "#memory-candidates") {
+      const frame = requestAnimationFrame(() => setSelection({ kind: "review" }));
+      return () => cancelAnimationFrame(frame);
     }
-    void load().catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
+  }, [offline]);
+
+  const selectedFact = selection?.kind === "fact" ? selection.id : null;
+  const [factState, setFactState] = useState<{ id: string; detail?: Detail; error?: string }>();
+  const [factRetry, setFactRetry] = useState(0);
+  useEffect(() => {
+    if (offline || !selectedFact) return;
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const id = selectedFact;
+    async function load() {
+      const params = new URLSearchParams({ resource: "fact", id, order: "created" });
+      const response = await fetch(endpoint + "?" + params, { signal, cache: "no-store" });
+      if (!response.ok) throw new Error(await responseError(response, "Could not load the fact."));
+      const detail: Detail = await response.json();
+      const cursor = detail.sourcesPage?.next_cursor;
+      if (cursor) {
+        try {
+          detail.sources = [...detail.sources, ...await fetchMemoryPages<MemorySource>(endpoint,
+            new URLSearchParams({ resource: "source", fact_id: id, order: "created", cursor }), signal)];
+        } catch (reason) {
+          if (!signal.aborted) setFactState({ id, detail, error: String(reason) });
+          return;
+        }
+      }
+      if (!signal.aborted) setFactState({ id, detail });
+    }
+    void load().catch(reason => {
+      if (!signal.aborted) setFactState({ id, error: String(reason) });
+    });
     return () => controller.abort();
-  }, [selectedId, refresh]);
-  const facts=useMemo(()=>data.facts.filter(fact=>(showHistory||fact.status==="active")&&(!entityFilter||fact.subjectEntityId===entityFilter||fact.objectEntityId===entityFilter||fact.perspectiveEntityId===entityFilter)),[data,entityFilter,showHistory]);
-  const selected=selectedDetail?.fact??null,selectedSources=selectedDetail?.sources??[];
-  const pending=data.candidates;
+  }, [selectedFact, factRetry, initial, offline]);
 
-  async function search(event:React.FormEvent){event.preventDefault();if(!query.trim()){setHits([]);return;}setSearching(true);setError("");const response=await fetch(`/api/memory-graph?q=${encodeURIComponent(query.trim())}&limit=8`);if(response.ok)setHits(await response.json());else setError(((await response.json()) as ApiError).error);setSearching(false);}
-  async function review(id:string,action:"promote"|"reject"){setError("");const response=await fetch(`/api/memory-graph/candidates/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});if(!response.ok){setError(((await response.json()) as ApiError).error);return;}setRefresh(previous => previous + 1);}
-  function selectFact(fact:MemoryFact){setSelectedId(fact.id);}
+  const cachedFact = offline?.facts.find(fact => fact.id === selectedFact);
+  const detail = useMemo(() => offline
+    ? cachedFact && { fact: cachedFact, sources: offline.sources.filter(source => source.factId === cachedFact.id), entities: [] }
+    : factState?.id === selectedFact ? factState?.detail : undefined, [offline, cachedFact, selectedFact, factState]);
+  const allEntities = useMemo(() => data.entities.filter(entity => entity.status !== "merged").map(entity => {
+    const edited = editedEntities.find(item => item.id === entity.id);
+    return edited && graphTime(edited.updatedAt) >= graphTime(entity.updatedAt) ? edited : entity;
+  }), [data.entities, editedEntities]);
+  const entityById = useMemo(() => new Map([...(detail?.entities ?? []), ...data.entities, ...allEntities].map(entity => [entity.id, entity])), [data.entities, detail, allEntities]);
+  const entities = useMemo(() => allEntities.filter(entity => !type || entity.entityType === type), [allEntities, type]);
+  const visibleFacts = useMemo(() => data.facts.filter(fact => history || fact.status === "active"), [data.facts, history]);
+  const graph = useMemo(() => graphProjection(entities, visibleFacts, focused, ego, selectedFact), [entities, visibleFacts, focused, ego, selectedFact]);
+  const activity = useMemo(() => graphActivity(entities, visibleFacts), [entities, visibleFacts]);
+  const types = [...new Set(allEntities.map(entity => entity.entityType))].sort((a, b) => typeName(a, english).localeCompare(typeName(b, english)));
+  const primaryTypes = ["person", "place", "concept", "event"].filter(kind => types.includes(kind));
+  const pending = data.candidates.filter(candidate => !reviewed.includes(candidate.id));
+  const number = new Intl.NumberFormat(english ? "en" : "zh-CN");
 
-  return <div className="page memory-graph-page">
-    <PageHeader eyebrow="MEMORY GRAPH" title="记忆如何相连" description="查看事实、来源、视角与修正路径。"/>
+  const term = query.trim().normalize("NFKC").toLocaleLowerCase();
+  const matches = (value: string) => value.normalize("NFKC").toLocaleLowerCase().includes(term);
+  const matchedEntities = term ? allEntities.filter(entity => [entity.canonicalName, ...entity.aliases].some(matches)).slice(0, 8) : [];
+  const directFacts = term ? data.facts.filter(fact => matches(fact.predicate) || matches(fact.predicate.replaceAll("_", " "))
+    || matches(fact.objectEntityId ? entityById.get(fact.objectEntityId)?.canonicalName ?? "" : literal(fact.objectValue))) : [];
+  const matchedFacts = [...new Map([...directFacts, ...(recall?.query === term ? recall.facts : [])].map(fact => [fact.id, fact])).values()].slice(0, 8);
 
-    <section className="memory-graph-summary" aria-label="Memory Graph 摘要">
-      <span><strong>{data.entities.filter(item=>item.status==="active").length}</strong><small>活跃实体</small></span>
-      <span><strong>{data.facts.filter(item=>item.status==="active").length}</strong><small>当前 Fact</small></span>
-      <span><strong>{data.sources.length}</strong><small>已载入来源</small></span>
-      {pending.length > 0
-        ? <Link href="#memory-candidates" onNavigate={() => document.getElementById("memory-candidates")?.focus({ preventScroll: true })}>
-            <strong>{pending.length}</strong><small>待审核</small>
-          </Link>
-        : <span><strong>0</strong><small>待审核</small></span>}
-    </section>
+  function chooseEntity(id: string) {
+    const entity = entityById.get(id);
+    if (type && entity?.entityType !== type) setType("");
+    setFocused(id);
+    setSelection({ kind: "entity", id });
+    setSearchOpen(false);
+  }
 
-    <form className="memory-recall-bar" onSubmit={search}>
-      <label className="search-box"><Icon name="search"/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="试着问：姐姐喜欢什么，项目由谁维护…" aria-label="检索 Memory Graph"/></label>
-      <button className="button primary" disabled={searching}>{searching?"正在召回":"召回"}</button>
+  function chooseFact(id: string) {
+    const fact = data.facts.find(item => item.id === id) ?? matchedFacts.find(item => item.id === id);
+    if (fact) {
+      setFocused(fact.subjectEntityId);
+      if (type && (entityById.get(fact.subjectEntityId)?.entityType !== type
+        || fact.objectEntityId && entityById.get(fact.objectEntityId)?.entityType !== type)) setType("");
+      if (fact.status === "invalidated") setHistory(true);
+    }
+    setSelection({ kind: "fact", id });
+    setSearchOpen(false);
+  }
+
+  async function search(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!term || searching) return;
+    setSearchOpen(true);
+    if (offline) return;
+    setSearching(true);
+    try {
+      const response = await fetch(endpoint + "?" + new URLSearchParams({ q: query.trim(), limit: "8" }));
+      if (!response.ok) throw new Error(await responseError(response, "Graph recall failed."));
+      const hits: MemoryRecallHit[] = await response.json();
+      setRecall({ query: term, facts: hits.map(hit => hit.fact) });
+    } catch (reason) {
+      setRecall({ query: term, facts: [], error: String(reason) });
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function filter(value: string) {
+    setType(value);
+    setFocused(null);
+    setEgo(false);
+  }
+
+  const activeEntity = selection?.kind === "entity" ? entityById.get(selection.id) : undefined;
+  const sourceError = offline && selectedFact && !cachedFact
+    ? tr("This fact is not in the downloaded graph.", "此事实不在已下载的图谱中。")
+    : factState?.id === selectedFact ? factState?.error : undefined;
+  return <div className={`page ${echo.echo} ${styles.page}`}>
+    <header className={`${echo.masthead} ${styles.masthead}`}>
+      <div><p>People, ideas, and the links between them.</p><h1 className={echo.innerTitle}>Memory Graph</h1></div>
+      {offline ? <a className={styles.manage} href={graphWebUrl + "#memory-candidates"} target="_blank" rel="noreferrer"
+        aria-label={tr("Manage graph on the web", "在网页版管理图谱")}><GraphIcon/></a>
+        : <button className={styles.manage} type="button" aria-label={tr("Manage graph", "管理图谱")}
+          onClick={() => setSelection({ kind: "review" })}><GraphIcon/></button>}
+    </header>
+
+    <form className={`${echo.search} ${styles.search}`} role="search" onSubmit={search}>
+      <button type="submit" className={echo.searchIcon} aria-label={tr("Search graph", "搜索图谱")}><Icon name="search"/></button>
+      <input type="search" value={query} maxLength={1000} placeholder={tr("Search the graph...", "搜索图谱…")}
+        aria-label={tr("Search the graph", "搜索图谱")} onChange={event => { setQuery(event.target.value); setSearchOpen(true); }}
+        onFocus={() => setSearchOpen(true)} onKeyDown={event => { if (event.key === "Escape") setSearchOpen(false); }}/>
     </form>
-    {error&&<ErrorNotice role="alert">{error}</ErrorNotice>}
-    {hits.length>0&&<section className="memory-recall-results" aria-label="召回结果"><header><strong>召回路径</strong><button type="button" onClick={()=>setHits([])}>收起</button></header>{hits.map(hit=><button type="button" key={hit.fact.id} onClick={()=>selectFact(hit.fact)}><span><strong>{hit.subject.canonicalName} · {hit.fact.predicate}</strong><small>{hit.objectEntity?.canonicalName??literal(hit.fact.objectValue)}</small></span><span className="memory-channel-line">{hit.channels.map(channel=><em key={channel}>{channelLabels[channel]}</em>)}</span></button>)}</section>}
+    {searchOpen && term && <section className={styles.results} aria-label={tr("Graph search results", "图谱搜索结果")}>
+      <header><strong>{tr("Matches", "搜索结果")}</strong><button type="button" onClick={() => setSearchOpen(false)} aria-label={tr("Close search results", "收起搜索结果")}><Icon name="close"/></button></header>
+      {matchedEntities.map(entity => <button type="button" key={entity.id} onClick={() => chooseEntity(entity.id)}>
+        <Icon name={typeIcons[entity.entityType] ?? "memory"}/><span>{entity.canonicalName}</span><small>{typeName(entity.entityType, english)}</small>
+      </button>)}
+      {matchedFacts.map(fact => <button type="button" key={fact.id} onClick={() => chooseFact(fact.id)}>
+        <GraphIcon/><span>{entityById.get(fact.subjectEntityId)?.canonicalName} · {fact.predicate}</span><small>Fact</small>
+      </button>)}
+      {searching && <p role="status">{tr("Recalling…", "正在召回…")}</p>}
+      {!searching && !matchedEntities.length && !matchedFacts.length && <p>{offline
+        ? tr("No matches in the downloaded graph.", "已下载的图谱中没有匹配。")
+        : loading ? tr("Loading graph…", "正在载入图谱…") : tr("No matches. Press Search to try Recall.", "没有匹配。可提交搜索进行召回。")}</p>}
+      {recall?.query === term && recall.error && <ErrorNotice inline role="alert">{recall.error}</ErrorNotice>}
+    </section>}
 
-    <section className="memory-entity-rail" aria-label="实体筛选">
-      <button type="button" className={!entityFilter?"active":""} onClick={()=>setEntityFilter(null)}>全部实体</button>
-      {data.entities.filter(entity=>entity.status==="active").map(entity=><button type="button" className={entityFilter===entity.id?"active":""} onClick={()=>setEntityFilter(entity.id)} key={entity.id}><span>{entity.canonicalName.slice(0,1)}</span><strong>{entity.canonicalName}</strong><small>{entity.entityType}</small></button>)}
-    </section>
-
-    <div className="memory-graph-layout">
-      <section className="memory-fact-stream">
-        <header className="memory-section-heading"><span><strong>{entityFilter?entityById.get(entityFilter)?.canonicalName:"Fact 路径"}</strong><small>{facts.length} 条可见</small></span><label><input role="switch" className="toggle-switch" type="checkbox" checked={showHistory} onChange={event=>setShowHistory(event.target.checked)}/>显示历史</label></header>
-        {facts.length?facts.map(fact=>{const subject=entityById.get(fact.subjectEntityId),object=fact.objectEntityId?entityById.get(fact.objectEntityId):null,replaces=fact.supersedesFactId?data.facts.find(item=>item.id===fact.supersedesFactId):null;return <button type="button" className={`memory-fact-path ${selectedId===fact.id?"selected":""}`} data-status={fact.status} onClick={()=>selectFact(fact)} key={fact.id}>
-          {replaces&&<span className="memory-lineage-note">修正了 {entityById.get(replaces.subjectEntityId)?.canonicalName??"旧 Fact"} · {replaces.predicate}</span>}
-          <span className="memory-node"><em>{subject?.canonicalName.slice(0,1)}</em><strong>{subject?.canonicalName??"未知实体"}</strong><small>{subject?.entityType}</small></span>
-          <span className="memory-edge"><i/><strong>{fact.predicate}</strong><small>{epistemicLabels[fact.epistemicType]}</small><i/></span>
-          <span className="memory-node object"><em>{object?.canonicalName.slice(0,1)??"·"}</em><strong>{object?.canonicalName??literal(fact.objectValue)}</strong><small>{object?.entityType??"literal"}</small></span>
-          <span className="memory-path-meta"><em>{fact.status==="active"?"当前":"已失效"}</em><small>{selected?.id===fact.id ? selectedSources.length+" 个来源 · " : ""}重要度 {fact.importance}</small></span>
-        </button>;}) : <div className="empty-state compact"><h2>这里还没有 Fact</h2><p>换一个实体，或显示历史记录。</p></div>}
-      </section>
-
-      <aside id="memory-sources" className="memory-fact-inspector" aria-live="polite" style={{scrollMarginTop: 72}}>
-        {selected?<><header><span className="eyebrow">FACT INSPECTOR</span><h2>{entityById.get(selected.subjectEntityId)?.canonicalName} · {selected.predicate}</h2><p>{selected.objectEntityId?entityById.get(selected.objectEntityId)?.canonicalName:literal(selected.objectValue)}</p></header>
-          <dl><div><dt>认知类型</dt><dd>{epistemicLabels[selected.epistemicType]}</dd></div><div><dt>可信度</dt><dd>{Math.round(selected.confidence*100)}%</dd></div><div><dt>有效期</dt><dd>{selected.validFrom??"未限定"} 至 {selected.validTo??"现在"}</dd></div><div><dt>视角</dt><dd>{selected.perspectiveEntityId?entityById.get(selected.perspectiveEntityId)?.canonicalName:"未指定"}</dd></div></dl>
-          <section><h3>来源</h3>{selectedSources.length?selectedSources.map(source=><article key={source.id}><span><strong>{source.sourceResource}</strong>{source.sourceRecordId&&<small>#{source.sourceRecordId}</small>}</span>{source.excerpt&&<p>{source.excerpt}</p>}{source.note&&<p>{source.note}</p>}{source.sourceUrl&&<a href={source.sourceUrl} target="_blank" rel="noreferrer">打开来源</a>}</article>):<p className="memory-source-missing">这是 v0.1 遗留 Fact，尚未补充来源。</p>}</section>
-          <footer><time>{date(selected.updatedAt)} 更新</time><code>{selected.id.slice(0,8)}</code></footer>
-        </>:<div className="empty-state compact"><h2>选择一条 Fact</h2><p>这里会显示来源、有效期与认知性质。</p></div>}
-      </aside>
+    <div className={styles.filters} role="group" aria-label={tr("Filter entities by type", "按实体类型筛选")}>
+      <button type="button" aria-pressed={!type} onClick={() => filter("")}>{tr("All", "全部")}</button>
+      {primaryTypes.map(kind => <button type="button" key={kind} aria-pressed={type === kind} onClick={() => filter(kind)}>{typeName(kind, english)}</button>)}
+      {types.length > 0 && <label><select aria-label={tr("Entity type", "实体类型")} data-active={Boolean(type)} value={type} onChange={event => filter(event.target.value)}>
+        <option value="">{tr("Type", "类型")}</option>
+        {types.map(kind => <option key={kind} value={kind}>{typeName(kind, english)}</option>)}
+      </select><Icon name="chevronDown"/></label>}
     </div>
 
-    <section id="memory-candidates" className="memory-candidate-section" aria-labelledby="memory-candidates-title" tabIndex={-1} style={{scrollMarginTop: 72}}>
-      <header className="memory-section-heading"><span><strong id="memory-candidates-title">候选记忆</strong><small>模型可以提出，但不能直接写入正式 Graph。</small></span></header>
-      {pending.length?<div className="memory-candidate-list">{pending.map(candidate=>{const fact=candidate.proposedFact;return <article key={candidate.id}><div><span>{candidate.proposedBy}{candidate.proposerModel?` · ${candidate.proposerModel}`:""}</span><strong>{entityById.get(fact.subjectEntityId)?.canonicalName??"未知实体"} · {fact.predicate}</strong><p>{fact.objectEntityId?entityById.get(fact.objectEntityId)?.canonicalName:literal(fact.objectValue)}</p><small>{epistemicLabels[fact.epistemicType]} · {candidate.proposedSources.length} 个来源</small></div><span><button className="button secondary" type="button" onClick={()=>review(candidate.id,"reject")}>拒绝</button><button className="button primary" type="button" onClick={()=>review(candidate.id,"promote")}>确认进入 Graph</button></span></article>;})}</div>:<div className="memory-candidate-empty"><strong>候选区是空的</strong><p>新的自动整理结果会先停在这里，直到被确认。</p></div>}
+    {loadFailure?.initial === initial && <ErrorNotice inline role="alert">
+      {tr("Part of the graph could not load.", "部分图谱未能载入。")} <button type="button" onClick={onRefresh}>{tr("Retry", "重试")}</button>
+    </ErrorNotice>}
+    <GraphCanvas graph={graph} focused={focused} selectedFact={selectedFact} ego={ego} english={english} resetVersion={resetVersion}
+      onEgo={() => { if (!focused && graph.nodes[0]) setFocused(graph.nodes[0].id); setEgo(!ego); }}
+      onEntity={chooseEntity} onFact={chooseFact}/>
+    <div className={styles.mapActions}>
+      <button type="button" onClick={() => { setFocused(null); setEgo(false); setResetVersion(version => version + 1); }}>{tr("Reset view", "重置视角")}</button>
+      <label><input type="checkbox" checked={history} onChange={event => setHistory(event.target.checked)}/>{tr("Show history", "显示历史")}</label>
+    </div>
+
+    <div className={styles.stats} aria-label={tr("Graph totals", "图谱统计")} aria-busy={loading}>
+      <span><Icon name="memory"/><b>{number.format(allEntities.length)}{loaded?.initial !== initial && initial.entities.has_more ? "+" : ""}</b> {tr("Entities", "实体")}</span>
+      <span><GraphIcon/><b>{number.format(data.facts.length)}{loaded?.initial !== initial && initial.facts.has_more ? "+" : ""}</b> {tr("Facts", "事实")}</span>
+      <span><Icon name="chronicle"/><b>{number.format(initial.sourceCount)}</b> {tr("Sources", "来源")}</span>
+    </div>
+    {pending.length > 0 && <button type="button" className={styles.review} onClick={() => setSelection({ kind: "review" })}>
+      <span className={styles.itemIcon}><Icon name="tasks"/></span>
+      <span><strong>{english ? `Review ${number.format(pending.length)}${loaded?.initial !== initial && initial.candidates.has_more ? "+" : ""} ${pending.length === 1 ? "candidate" : "candidates"}` : `审核 ${number.format(pending.length)}${loaded?.initial !== initial && initial.candidates.has_more ? "+" : ""} 条候选`}</strong>
+        <small>{tr("Check new or updated information", "核对新提出或更新的记忆")}</small></span>
+      <span className={styles.chevron} aria-hidden="true">›</span>
+    </button>}
+
+    <section className={styles.recent} aria-labelledby="graph-recent">
+      <header><h2 id="graph-recent">{tr("Recently Updated", "最近更新")}</h2>
+        {activity.length > 3 && <button type="button" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>{showAll ? tr("Show less", "收起") : tr("View all", "查看全部")}</button>}
+      </header>
+      {activity.length ? <div className={styles.activity}>
+        {(showAll ? activity : activity.slice(0, 3)).map(row => <button type="button" key={row.entity.id} onClick={() => chooseEntity(row.entity.id)}>
+          <span className={styles.itemIcon}><Icon name={typeIcons[row.entity.entityType] ?? "memory"}/></span>
+          <span><strong>{row.entity.canonicalName}</strong><small>{row.created ? tr("New", "新增") : tr("Updated", "已更新")} · {number.format(row.relatedFacts)} {tr(row.relatedFacts === 1 ? "related fact" : "related facts", "条关联事实")}</small></span>
+          <time dateTime={new Date(graphTime(row.time)).toISOString()}>{graphDate(row.time, english)}</time>
+          <span className={styles.chevron} aria-hidden="true">›</span>
+        </button>)}
+      </div> : <p className={styles.empty}>{tr("No recent activity in this view.", "当前视图没有近期活动。")}</p>}
     </section>
+
+    {selection && <FormSheet key={selection.kind === "review" ? "review"
+      : selection.kind === "entity" ? selection.id + ":" + entitySaveVersion : selection.id}
+      className={styles.sheet} title={selection.kind === "review" ? tr("Review candidates", "审核候选")
+      : selection.kind === "entity" ? activeEntity?.canonicalName ?? tr("Entity", "实体") : tr("Fact details", "事实详情")}
+      onClose={() => setSelection(null)}>
+      {selection.kind === "review" ? <ReviewContent candidates={pending} entityById={entityById} incomplete={loading || loadFailure?.initial === initial} english={english}
+        onReviewed={id => { setReviewed(ids => [...ids, id]); onRefresh?.(); }}/>
+        : selection.kind === "entity" && activeEntity ? <EntityContent key={activeEntity.id} entity={activeEntity} facts={data.facts.filter(fact => relatedIds(fact).has(activeEntity.id))}
+          entityById={entityById} english={english} loading={loading} chooseEntity={chooseEntity} chooseFact={chooseFact} readOnly={Boolean(offline)}
+          onSaved={entity => {
+            setEditedEntities(entities => [...entities.filter(item => item.id !== entity.id), entity]);
+            setEntitySaveVersion(version => version + 1);
+            onRefresh?.();
+          }}
+          onFocus={() => { setEgo(true); setSelection(null); }}/>
+        : selection.kind === "fact" && <FactContent detail={detail} error={sourceError} entityById={entityById} facts={data.facts}
+          english={english} chooseEntity={chooseEntity} chooseFact={chooseFact} readOnly={Boolean(offline)}
+          onProposed={() => { setSelection({ kind: "review" }); onRefresh?.(); }}
+          onRetry={offline ? undefined : () => { setFactState(undefined); setFactRetry(value => value + 1); }}/>}
+    </FormSheet>}
   </div>;
 }

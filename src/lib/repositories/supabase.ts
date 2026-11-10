@@ -355,6 +355,11 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
         source: memorySourceFromRow, candidate: memoryFactCandidateFromRow };
       return finishMemoryPage((data as Row[]).map(row => mappers[resource](row)) as MemoryPageItem<K>[], page);
     },
+    async countMemorySources() {
+      const { count, error } = await client.from("memory_sources").select("id", { count: "exact", head: true }).eq("user_id", userId);
+      fail(error, "统计 Memory Sources");
+      return count ?? 0;
+    },
     async getEchoOverview() {
       const [memos, facts, entities, pending] = await Promise.all([
         client.from("memos").select("*", { count: "exact" }).order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(2),

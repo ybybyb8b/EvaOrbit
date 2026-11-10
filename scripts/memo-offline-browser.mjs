@@ -23,7 +23,14 @@ async function open(){
  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`,{waitUntil:"networkidle"});return page;
 }
 async function cache(page,key){return page.evaluate(async key=>{const db=await new Promise(resolve=>{const r=indexedDB.open("eo-tracker-local-v1",1);r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const r=db.transaction("states").objectStore("states").get(key);r.onsuccess=()=>{resolve(r.result);db.close();};});},key);}
-async function memo(page){await navigateLocal(page,"Memo");await page.getByRole("heading",{name:"Echo",exact:true}).waitFor();assert.equal(await page.getByRole("link",{name:/^Graph/}).count(),0);await page.getByRole("link",{name:/^Memos/}).click();await page.locator(".memo-row").first().waitFor();}
+async function memo(page){
+  await navigateLocal(page,"Echo");
+  await page.getByRole("heading",{name:"Echo",exact:true}).waitFor();
+  const graph=page.getByRole("link",{name:/^Graph/});
+  assert.equal(await graph.getAttribute("href"),"/memo/graph");
+  await page.getByRole("link",{name:/^Memos/}).click();
+  await page.locator(".memo-row").first().waitFor();
+}
 async function closeSheet(page){await page.locator(".form-sheet-header button").click();const discard=page.getByRole("button",{name:"Discard and close",exact:true});if(await discard.isVisible())await discard.click();await page.locator(".form-sheet-layer").waitFor({state:"detached"});}
 async function force(page,id){assert(await page.locator(`button[form="${id}"]`).isDisabled());await page.locator(`#${id}`).evaluate(form=>form.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));}
 try{
@@ -31,7 +38,7 @@ try{
  let page=await open();await page.evaluate(async({account,old})=>{const db=await new Promise(resolve=>{const r=indexedDB.open("eo-tracker-local-v1",1);r.onsuccess=()=>resolve(r.result);});await new Promise((resolve,reject)=>{const tx=db.transaction(["session","states"],"readwrite");tx.objectStore("session").put({accountId:account,email:"test@example.invalid"},"current");tx.objectStore("states").put(old,account);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();},{account,old});
  await page.reload({waitUntil:"networkidle"});assert.equal(await page.locator(".local-account-menu").count(),0);
  await navigateLocal(page,"Settings");await page.getByRole("heading",{name:"Settings",exact:true}).waitFor();await page.getByText("test@example.invalid",{exact:true}).waitFor();assert(await page.getByRole("button",{name:"Connect account",exact:true}).isVisible());assert(await page.getByRole("button",{name:"Sign out",exact:true}).isVisible());
- await memo(page);assert.equal(await page.getByRole("link",{name:"Memory Graph",exact:true}).count(),0);
+ await memo(page);
  const rects=await page.locator(".mobile-global-header").evaluate(h=>{const b=h.querySelector(".page-back-button").getBoundingClientRect(),m=h.querySelector(".spaces-drawer-trigger").getBoundingClientRect();return {left:b.right,right:m.left};});assert(rects.left<rects.right);
 
  for(const width of [402,900,1280]){await page.setViewportSize({width,height:874});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}

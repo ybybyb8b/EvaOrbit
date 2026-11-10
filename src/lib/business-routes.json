@@ -1,5 +1,9 @@
 [
   {
+    "pattern": "^/api/memory-graph/offline$",
+    "methods": ["GET"]
+  },
+  {
     "pattern": "^/api/hermes$",
     "methods": ["GET", "POST"]
   },

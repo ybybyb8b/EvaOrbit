@@ -2980,6 +2980,10 @@ function memoryFactFromRow(row:Record<string,unknown>):MemoryFact{return{id:Stri
 function memorySourceFromRow(row:Record<string,unknown>):MemorySource{return{id:String(row.id),factId:String(row.fact_id),sourceResource:String(row.source_resource),sourceRecordId:row.source_record_id===null?null:String(row.source_record_id),sourceUrl:row.source_url===null?null:String(row.source_url),excerpt:row.excerpt===null?null:String(row.excerpt),note:row.note===null?null:String(row.note),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function memoryFactCandidateFromRow(row:Record<string,unknown>):MemoryFactCandidate{return{id:String(row.id),proposedFact:jsonValue(row.proposed_fact,{}) as MemoryFactCandidate["proposedFact"],proposedSources:jsonValue(row.proposed_sources,[]) as MemoryFactCandidate["proposedSources"],proposedBy:row.proposed_by as MemoryFactCandidate["proposedBy"],proposerModel:row.proposer_model===null?null:String(row.proposer_model),reviewClient:row.review_client==null?null:String(row.review_client),reviewMode:(row.review_mode??"manual") as MemoryFactCandidate["reviewMode"],writtenBy:row.written_by==null?null:String(row.written_by),actor:row.actor==null?null:String(row.actor),client:row.client==null?null:String(row.client),requestId:row.request_id==null?null:String(row.request_id),status:row.status as MemoryFactCandidate["status"],reviewNote:row.review_note===null?null:String(row.review_note),promotedFactId:row.promoted_fact_id===null?null:String(row.promoted_fact_id),createdAt:String(row.created_at),reviewedAt:row.reviewed_at===null?null:String(row.reviewed_at)};}
 
+export function countMemorySources() {
+  return (database.prepare("SELECT count(*) AS total FROM memory_sources WHERE user_id='local'").get() as { total: number }).total;
+}
+
 export function getEchoOverview() {
   const counts = database.prepare(`SELECT
     (SELECT count(*) FROM memos WHERE user_id='local') AS memoCount,

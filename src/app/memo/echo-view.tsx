@@ -27,12 +27,14 @@ export function EchoWebView(props: { memos: Memo[]; facts: EchoEntry[]; overview
   return <EchoView {...props} onSaved={() => router.refresh()} />;
 }
 
-export function EchoView({ memos, facts = [], overview, onSaved }: { memos: Memo[]; facts?: EchoEntry[]; overview?: Overview; onSaved?: () => void }) {
+export function EchoView({ memos: downloadedMemos, facts = [], overview, onSaved }: { memos?: Memo[]; facts?: EchoEntry[]; overview?: Overview; onSaved?: () => void }) {
   const { english } = useLocale();
   const { local, complete } = useMemoData();
+  const memos = downloadedMemos ?? [];
   const entries = recentEchoEntries(memos.map(echoMemo), facts);
   const count = new Intl.NumberFormat(english ? "en" : "zh-CN");
   const memoCount = overview?.memoCount ?? memos.length;
+  const memoUnavailable = local && !downloadedMemos;
   const pendingCount = overview?.pendingCount ?? 0;
   const graphDescription = english ? "Explore connections" : "探索记忆间的联系";
   const pendingDescription = english ? `${count.format(pendingCount)} pending review` : `${count.format(pendingCount)} 条待审`;
@@ -40,7 +42,7 @@ export function EchoView({ memos, facts = [], overview, onSaved }: { memos: Memo
   return <div className={`page ${styles.echo}`}>
     <header className={styles.masthead}>
       <div><p>An archive of what remains.</p><h1>Echo</h1></div>
-      <MemoCapture knownTags={[...new Set(memos.flatMap(memo => memo.tags))].sort()} onSaved={onSaved} />
+      {!memoUnavailable && <MemoCapture knownTags={[...new Set(memos.flatMap(memo => memo.tags))].sort()} onSaved={onSaved} />}
     </header>
     {!local && <EchoSearch showRecall />}
     <nav className={styles.destinations} aria-label={english ? "Memory sections" : "记忆分区"}>
@@ -48,8 +50,16 @@ export function EchoView({ memos, facts = [], overview, onSaved }: { memos: Memo
         <span className={styles.tileIcon}><Icon name="memory" variant="stroke" /></span>
         <strong>{english ? "Memos" : "碎片"}</strong>
         <span className={styles.tileDescription}>{english ? "Notes to revisit" : "回看记下的片段"}</span>
-        <span className={styles.tileStats}><b>{count.format(memoCount)}{local && !complete ? "+" : ""}</b> {english ? (memoCount === 1 ? "Memo" : "Memos") : "条碎片"}</span>
+        <span className={styles.tileStats}>{memoUnavailable
+          ? (english ? "Not downloaded" : "尚未下载")
+          : <><b>{count.format(memoCount)}{local && !complete ? "+" : ""}</b> {english ? (memoCount === 1 ? "Memo" : "Memos") : "条碎片"}</>}
+        </span>
       </MemoLink>
+      {local && <MemoLink className={styles.destination} href="/memo/graph">
+        <span className={styles.tileIcon}><GraphIcon /></span>
+        <strong>Graph</strong>
+        <span className={styles.tileDescription}>{graphDescription}</span>
+      </MemoLink>}
       {!local && overview && <MemoLink className={styles.destination} href="/memo/graph">
         <span className={styles.tileIcon}><GraphIcon /></span>
         <strong>Graph</strong>
@@ -65,7 +75,9 @@ export function EchoView({ memos, facts = [], overview, onSaved }: { memos: Memo
     </nav>
     <section className={styles.memos} aria-labelledby="echo-recent-title">
       <div className={styles.sectionHeading}><h2 id="echo-recent-title">{english ? "Recent Memories" : "最近的记忆"}</h2></div>
-      {entries.length ? <EchoEntries entries={entries} /> : <p className={styles.empty}>{english ? "No memories yet." : "还没有记忆。"}</p>}
+      {entries.length ? <EchoEntries entries={entries} /> : <p className={styles.empty}>{memoUnavailable
+        ? (english ? "Download Memos to see recent entries." : "下载碎片后可查看最近记录。")
+        : (english ? "No memories yet." : "还没有记忆。")}</p>}
     </section>
   </div>;
 }

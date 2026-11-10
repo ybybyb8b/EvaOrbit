@@ -6,6 +6,7 @@ import ts from "typescript";
 test("Back reuses the destination; direct entry uses client replacement without adding history", () => {
   for (const canGoBack of [true, false]) {
     const calls = [], listeners = new EventTarget();
+    let pathname = "/food";
     const win = {
       history: { state: { evaOrbitCanGoBack: canGoBack } },
       addEventListener: (...args) => listeners.addEventListener(...args),
@@ -19,7 +20,8 @@ test("Back reuses the destination; direct entry uses client replacement without 
     new Function("require", "module", "exports", "window", code)(name => {
       if (name === "react") return { useRef: value => ({ current: value }), useEffect: effect => effect(), useTransition: () => [false, action => action()] };
       if (name === "react/jsx-runtime") return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
-      if (name === "next/navigation") return { usePathname: () => "/food", useRouter: () => ({ back: () => calls.push("back"), replace: path => calls.push(`replace:${path}`) }) };
+      if (name === "next/navigation") return { usePathname: () => pathname, useRouter: () => ({ back: () => calls.push("back"), replace: path => calls.push(`replace:${path}`) }) };
+      if (name === "next/link") return { default: "a" };
       if (name === "./navigation-back-control") return {NavigationBackControl:"button"};
       if (name === "reicon-react") return { ArrowLeft2: "icon" };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: true }) };
@@ -35,5 +37,7 @@ test("Back reuses the destination; direct entry uses client replacement without 
       listeners.dispatchEvent(new Event("popstate"));
       assert.deepEqual(calls, ["back"]);
     } else assert.deepEqual(calls, ["evaorbit:page-back-fallback", "replace:/food-drink"]);
+    pathname = "/memo/graph";
+    assert.equal(loaded.exports.PageBackButton().props.href, "/memo");
   }
 });

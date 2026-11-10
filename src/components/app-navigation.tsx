@@ -19,7 +19,7 @@ const navigationGroups = [
     { href: "/chronicle", label: "Chronicle", zh: "纪事", icon: "chronicle" as const },
     { href: "/relations", label: "Relations", zh: "她们", icon: "people" as const },
     { href: "/media", label: "Media", zh: "展架", icon: "media" as const },
-    { href: "/memo", label: "Memo", zh: "碎片", icon: "memory" as const },
+    { href: "/memo", label: "Echo", icon: "memory" as const },
   ] },
   { label: "SPACE", items: [
     { href: "/", label: "Home", zh: "首页", icon: "home" as const },

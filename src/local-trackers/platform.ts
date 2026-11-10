@@ -26,7 +26,7 @@ import {foodResourceKey,validateFoodResource,type FoodReadonlyResource,type Food
 
 export type LocalAccount = { accountId: string; email: string };
 export type TrackerPlatform = {
-  businessRequest(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
+  businessRequest(account:LocalAccount,path:string,init?:RequestInit & { cacheOnly?: boolean }):Promise<Response>;
   settingsConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   aiConfiguration(account:LocalAccount,path:string,init?:RequestInit):Promise<Response>;
   workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,refresh?:boolean):Promise<WorkspaceReadonlySnapshot|null>;
@@ -566,11 +566,12 @@ async function workspaceSnapshot(account:LocalAccount,kind:WorkspaceKind,native:
 }
 
 // Interactive business writes only. No durable drafts, replay, or automatic retry.
-async function businessRequest(account:LocalAccount,path:string,native:boolean,init:RequestInit={}):Promise<Response>{
+async function businessRequest(account:LocalAccount,path:string,native:boolean,init:RequestInit & { cacheOnly?: boolean }={}):Promise<Response>{
   const method=(init.method??"GET").toUpperCase();
   if(!allowsBusinessRequest(path,method))throw new Error("This request is not available in the local app.");
   init.signal?.throwIfAborted();
-  if(!navigator.onLine&&method!=="GET")throw new Error("Connect to the internet to save. Nothing was uploaded or queued.");
+  const offline=Boolean(init.cacheOnly)||!navigator.onLine;
+  if(offline&&method!=="GET")throw new Error("Connect to the internet to save. Nothing was uploaded or queued.");
   let bodyBase64:string|undefined,contentType="application/json";
   if(init.body!=null){
     if(!["POST","PATCH","PUT"].includes(method))throw new Error("Unexpected request body");
@@ -585,7 +586,7 @@ async function businessRequest(account:LocalAccount,path:string,native:boolean,i
   if(native){
     const info=await nativeCall<{methods?:string[]}>("host.getInfo");
     if(!info.methods?.includes("business.request"))throw new Error("Install the updated development Host to save online.");
-    const result=await nativeCall<{status:number;body:unknown}>("business.request",{accountId:account.accountId,path,method,contentType,...(bodyBase64===undefined?{}:{bodyBase64}),offline:!navigator.onLine}).catch(reason=>{if(reason instanceof NativeBridgeError&&reason.code==="session_expired")notifySessionExpired(account.accountId);throw reason;});
+    const result=await nativeCall<{status:number;body:unknown}>("business.request",{accountId:account.accountId,path,method,contentType,...(bodyBase64===undefined?{}:{bodyBase64}),offline}).catch(reason=>{if(reason instanceof NativeBridgeError&&reason.code==="session_expired")notifySessionExpired(account.accountId);throw reason;});
     if(result?.status===401)notifySessionExpired(account.accountId);
     init.signal?.throwIfAborted();
     if(!result)throw new Error("This content has not been downloaded. Connect to load it.");
@@ -594,7 +595,7 @@ async function businessRequest(account:LocalAccount,path:string,native:boolean,i
   const current=async()=>{if(isPreviewAccount(account)||(await read<LocalAccount>("session","current"))?.accountId!==account.accountId)throw new Error("Account changed. Reopen the form.");};
   await current();
   const cacheKey=`business:${account.accountId}:${path}`;
-  if(!navigator.onLine){
+  if(offline){
     const cached=await read<{status:number;body:unknown}>("states",cacheKey);await current();
     if(!cached)throw new Error("This content has not been downloaded. Connect to load it.");
     return Response.json(cached.body,{status:cached.status});
