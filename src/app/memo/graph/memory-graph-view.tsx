@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { ErrorNotice } from "@/components/error-notice";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useServerDataState } from "@/components/use-data-refresh";
@@ -15,8 +16,8 @@ const channelLabels={exact:"精确",literal:"字面",lexical:"词项",graph:"一
 function literal(value:unknown){if(typeof value==="string")return value;if(value===null)return "空值";return JSON.stringify(value);}
 function date(value:string){const zoned=value.endsWith("Z")||/[+-]\d\d:\d\d$/.test(value)?value:`${value.replace(" ","T")}Z`;return new Intl.DateTimeFormat("zh-CN",{year:"numeric",month:"short",day:"numeric"}).format(new Date(zoned));}
 
-export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
-  const[data,setData]=useServerDataState(initial),[query,setQuery]=useRememberedState("MemoryGraphView:query", ""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useRememberedState("MemoryGraphView:showHistory", false),[entityFilter,setEntityFilter]=useRememberedState<string|null>("MemoryGraphView:entityFilter", null),[error,setError]=useState("");
+export function MemoryGraphView({initial, initialFactId}:{initial:MemoryGraphSnapshot; initialFactId?: string}){
+  const[data,setData]=useServerDataState(initial),[query,setQuery]=useRememberedState("MemoryGraphView:query", ""),[hits,setHits]=useState<MemoryRecallHit[]>([]),[searching,setSearching]=useState(false),[selectedId,setSelectedId]=useState<string|null>(initialFactId??initial.facts.find(fact=>fact.status==="active")?.id??initial.facts[0]?.id??null),[showHistory,setShowHistory]=useRememberedState("MemoryGraphView:showHistory", false),[entityFilter,setEntityFilter]=useRememberedState<string|null>("MemoryGraphView:entityFilter", null),[error,setError]=useState("");
   const [detail, setDetail] = useState<(MemoryFactDetail & { entities: MemoryEntity[] }) | null>(null);
   const [refresh, setRefresh] = useState(0);
   const selectedDetail = detail?.fact.id === selectedId ? detail : null;
@@ -73,7 +74,11 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
       <span><strong>{data.entities.filter(item=>item.status==="active").length}</strong><small>活跃实体</small></span>
       <span><strong>{data.facts.filter(item=>item.status==="active").length}</strong><small>当前 Fact</small></span>
       <span><strong>{data.sources.length}</strong><small>已载入来源</small></span>
-      <span data-attention={pending.length>0}><strong>{pending.length}</strong><small>待审核</small></span>
+      {pending.length > 0
+        ? <Link href="#memory-candidates" onNavigate={() => document.getElementById("memory-candidates")?.focus({ preventScroll: true })}>
+            <strong>{pending.length}</strong><small>待审核</small>
+          </Link>
+        : <span><strong>0</strong><small>待审核</small></span>}
     </section>
 
     <form className="memory-recall-bar" onSubmit={search}>
@@ -100,7 +105,7 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
         </button>;}) : <div className="empty-state compact"><h2>这里还没有 Fact</h2><p>换一个实体，或显示历史记录。</p></div>}
       </section>
 
-      <aside className="memory-fact-inspector" aria-live="polite">
+      <aside id="memory-sources" className="memory-fact-inspector" aria-live="polite" style={{scrollMarginTop: 72}}>
         {selected?<><header><span className="eyebrow">FACT INSPECTOR</span><h2>{entityById.get(selected.subjectEntityId)?.canonicalName} · {selected.predicate}</h2><p>{selected.objectEntityId?entityById.get(selected.objectEntityId)?.canonicalName:literal(selected.objectValue)}</p></header>
           <dl><div><dt>认知类型</dt><dd>{epistemicLabels[selected.epistemicType]}</dd></div><div><dt>可信度</dt><dd>{Math.round(selected.confidence*100)}%</dd></div><div><dt>有效期</dt><dd>{selected.validFrom??"未限定"} 至 {selected.validTo??"现在"}</dd></div><div><dt>视角</dt><dd>{selected.perspectiveEntityId?entityById.get(selected.perspectiveEntityId)?.canonicalName:"未指定"}</dd></div></dl>
           <section><h3>来源</h3>{selectedSources.length?selectedSources.map(source=><article key={source.id}><span><strong>{source.sourceResource}</strong>{source.sourceRecordId&&<small>#{source.sourceRecordId}</small>}</span>{source.excerpt&&<p>{source.excerpt}</p>}{source.note&&<p>{source.note}</p>}{source.sourceUrl&&<a href={source.sourceUrl} target="_blank" rel="noreferrer">打开来源</a>}</article>):<p className="memory-source-missing">这是 v0.1 遗留 Fact，尚未补充来源。</p>}</section>
@@ -109,8 +114,8 @@ export function MemoryGraphView({initial}:{initial:MemoryGraphSnapshot}){
       </aside>
     </div>
 
-    <section className="memory-candidate-section">
-      <header className="memory-section-heading"><span><strong>候选记忆</strong><small>模型可以提出，但不能直接写入正式 Graph。</small></span></header>
+    <section id="memory-candidates" className="memory-candidate-section" aria-labelledby="memory-candidates-title" tabIndex={-1} style={{scrollMarginTop: 72}}>
+      <header className="memory-section-heading"><span><strong id="memory-candidates-title">候选记忆</strong><small>模型可以提出，但不能直接写入正式 Graph。</small></span></header>
       {pending.length?<div className="memory-candidate-list">{pending.map(candidate=>{const fact=candidate.proposedFact;return <article key={candidate.id}><div><span>{candidate.proposedBy}{candidate.proposerModel?` · ${candidate.proposerModel}`:""}</span><strong>{entityById.get(fact.subjectEntityId)?.canonicalName??"未知实体"} · {fact.predicate}</strong><p>{fact.objectEntityId?entityById.get(fact.objectEntityId)?.canonicalName:literal(fact.objectValue)}</p><small>{epistemicLabels[fact.epistemicType]} · {candidate.proposedSources.length} 个来源</small></div><span><button className="button secondary" type="button" onClick={()=>review(candidate.id,"reject")}>拒绝</button><button className="button primary" type="button" onClick={()=>review(candidate.id,"promote")}>确认进入 Graph</button></span></article>;})}</div>:<div className="memory-candidate-empty"><strong>候选区是空的</strong><p>新的自动整理结果会先停在这里，直到被确认。</p></div>}
     </section>
   </div>;

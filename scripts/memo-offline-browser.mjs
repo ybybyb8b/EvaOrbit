@@ -23,7 +23,7 @@ async function open(){
  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`,{waitUntil:"networkidle"});return page;
 }
 async function cache(page,key){return page.evaluate(async key=>{const db=await new Promise(resolve=>{const r=indexedDB.open("eo-tracker-local-v1",1);r.onsuccess=()=>resolve(r.result);});return new Promise(resolve=>{const r=db.transaction("states").objectStore("states").get(key);r.onsuccess=()=>{resolve(r.result);db.close();};});},key);}
-async function memo(page){await navigateLocal(page,"Memo");await page.locator(".memo-row").first().waitFor();}
+async function memo(page){await navigateLocal(page,"Memo");await page.getByRole("heading",{name:"Echo",exact:true}).waitFor();assert.equal(await page.getByRole("link",{name:/^Graph/}).count(),0);await page.getByRole("link",{name:/^Memos/}).click();await page.locator(".memo-row").first().waitFor();}
 async function closeSheet(page){await page.locator(".form-sheet-header button").click();const discard=page.getByRole("button",{name:"Discard and close",exact:true});if(await discard.isVisible())await discard.click();await page.locator(".form-sheet-layer").waitFor({state:"detached"});}
 async function force(page,id){assert(await page.locator(`button[form="${id}"]`).isDisabled());await page.locator(`#${id}`).evaluate(form=>form.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true})));}
 try{
@@ -36,7 +36,7 @@ try{
 
  for(const width of [402,900,1280]){await page.setViewportSize({width,height:874});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
  await page.screenshot({path:"tmp/memo-list-desktop.png",fullPage:true});await page.setViewportSize({width:402,height:874});await page.screenshot({path:"tmp/memo-list-mobile.png",fullPage:true});
- const search=page.getByRole("textbox",{name:"Search Memo"});await search.fill("conversation");await page.waitForFunction(()=>document.querySelectorAll(".memo-row").length===1);await search.fill("notfound");await page.getByRole("heading",{name:"No matching Memo"}).waitFor();await search.fill("");await page.locator(".memo-row").nth(1).waitFor();
+ const search=page.getByRole("searchbox",{name:"Search Memo"});await search.fill("conversation");await page.waitForFunction(()=>document.querySelectorAll(".memo-row").length===1);await search.fill("notfound");await page.getByRole("heading",{name:"No matching Memo"}).waitFor();await search.fill("");await page.locator(".memo-row").nth(1).waitFor();
  await page.locator(".home-quick-log-trigger").click();await page.locator("#memo-create-form").waitFor();await page.getByLabel("Title",{exact:true}).fill("Temporary draft");await page.getByLabel("Content",{exact:true}).fill("# Preview canary");await force(page,"memo-create-form");await closeSheet(page);
  await page.locator(".memo-row").first().click();await page.locator(".long-term-prose").waitFor();await page.getByRole("button",{name:"Back to previous page",exact:true}).click();await page.locator(".memo-row").first().waitFor();await page.locator(".memo-row").first().click();await page.locator(".long-term-prose").waitFor();assert.equal(await page.locator(".long-term-prose img").count(),0);assert.equal(await page.locator(".long-term-prose a").count(),0);assert.equal(await page.locator(".long-term-prose script").count(),0);
  for(const width of [402,1280]){await page.setViewportSize({width,height:874});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`tmp/memo-detail-${width}.png`,fullPage:true});}

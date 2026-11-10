@@ -355,6 +355,21 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
         source: memorySourceFromRow, candidate: memoryFactCandidateFromRow };
       return finishMemoryPage((data as Row[]).map(row => mappers[resource](row)) as MemoryPageItem<K>[], page);
     },
+    async getEchoOverview() {
+      const [memos, facts, entities, pending] = await Promise.all([
+        client.from("memos").select("*", { count: "exact" }).order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(2),
+        client.from("memory_facts").select("*", { count: "exact" }).order("updated_at", { ascending: false }).order("id").limit(2),
+        client.from("memory_entities").select("id", { count: "exact", head: true }).neq("status", "merged"),
+        client.from("memory_fact_candidates").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      ]);
+      for (const result of [memos, facts, entities, pending]) fail(result.error, "读取 Echo 概览");
+      return {
+        memos: (memos.data as Row[]).map(memoFromRow),
+        facts: (facts.data as Row[]).map(memoryFactFromRow),
+        memoCount: memos.count ?? 0, factCount: facts.count ?? 0,
+        entityCount: entities.count ?? 0, pendingCount: pending.count ?? 0,
+      };
+    },
     async listMemoryEntities(input={}){const limit=Math.min(Math.max(input.limit??100,1),200);if(input.query){const{data,error}=await client.rpc("search_memory_entities",{p_query:input.query,p_entity_type:input.entityType??null,p_status:input.status??null,p_include_merged:input.includeMerged??false,p_limit:limit});fail(error,"搜索 Memory Entities");return(data as Row[]).map(memoryEntityFromRow);}let request=client.from("memory_entities").select("*");if(!input.includeMerged&&!input.status)request=request.neq("status","merged");if(input.status)request=request.eq("status",input.status);if(input.entityType)request=request.eq("entity_type",input.entityType);const{data,error}=await request.order("updated_at",{ascending:false}).order("id").limit(limit);fail(error,"读取 Memory Entities");return(data as Row[]).map(memoryEntityFromRow);},
     async getMemoryEntity(id){const{data,error}=await client.from("memory_entities").select("*").eq("id",id).maybeSingle();fail(error,"读取 Memory Entity");return data?memoryEntityFromRow(data):null;},
     async createMemoryEntity(input){const{data,error}=await client.from("memory_entities").insert({id:input.id,user_id:userId,canonical_name:input.canonicalName,entity_type:input.entityType,aliases:input.aliases,description:input.description,status:input.status}).select().single();fail(error,"创建 Memory Entity");return memoryEntityFromRow(data);},

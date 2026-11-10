@@ -117,10 +117,10 @@
 
 ## Memory
 
-- **职责与入口**：[Memo](../src/app/memo/)、[Graph](../src/app/memo/graph/)、[旧 Memory](../src/app/memory/)；服务为 [memo.ts](../src/lib/services/memo.ts)、[memory-graph.ts](../src/lib/services/memory-graph.ts)，旧记忆经 [evaorbit.ts](../src/lib/services/evaorbit.ts)。
+- **职责与入口**：[Echo](../src/app/memo/)（`/memo`）汇集近期更新的 Memo 和 Fact；[Memos](../src/app/memo/memos/) 负责浏览和筛选，[Graph](../src/app/memo/graph/) 负责事实、证据和候选审核。旧 Memory 位于 [`/memory`](../src/app/memory/)。
 - **数据与接口**：叙事 `memos` → `/api/memos`、MCP `memo`；旧记忆 `memories` → `/api/memories`；Graph `memory_entities`、`memory_facts`、`memory_sources`、`memory_fact_candidates` → `/api/memory-graph` 及 candidates；MCP `memory_entity`、`memory_fact`、`memory_source`。
 - **依赖与决定**：Graph 为 owner-scoped Entity → Fact → Source；正式 Fact 通过 Candidate 审核与原子事务写入。MCP 使用 memory_candidate submit（强制 request_id），普通审核仅走 Web，拒绝直接创建 Fact；user_confirmed 是带原话、审计和幂等 ID 的调用方确认声明。Entity 合并保留重定向，Fact 作废与现实有效期分离。AI 工具阶段不接收 Graph 召回，最终回复使用独立 JSON 数据消息且不开放工具。SQLite Web 只通过 loopback 启动器访问。特定近况 Memo 更新会触发 Lucius 通知。
-- **统一召回**：[Memory Context](../src/lib/services/memory-context.ts) 复用分页读取并返回匹配、时间、证据和覆盖信息。内部聊天、旧 Graph 召回和 MCP [memory_context](../MCP.md#memory-context-c3) 共用该服务。
+- **统一召回**：[Memory Context](../src/lib/services/memory-context.ts) 复用分页读取并返回匹配、时间、证据和覆盖信息。[Echo Recall](../src/app/memo/recall/)、内部聊天、Graph 召回和 MCP [memory_context](../MCP.md#memory-context-c3) 共用该服务。
 - **详文**：[Memory Graph](MEMORY_GRAPH.md)、[写入治理](MEMORY_WRITE_GOVERNANCE.md)、[MCP 兼容与生命周期](../src/lib/mcp/README.md)、[Memo 通知条件](../src/lib/push/README.md)。
 
 - **Memo 本地只读**：[MemoWorkspace](../src/local-trackers/memo-workspace.tsx) 复用 Web 列表、详情和 [MemoEditor](../src/app/memo/memo-editor.tsx)，通过 [MemoDataProvider](../src/components/memo-data-context.tsx) 注入账户快照 GET/导航。既有纯 GET 下载最近更新 100 条，保存/归档/删除禁用，图谱不在本阶段。范围、缓存和回退见 [Memo 只读阶段](MEMO_LOCAL_READONLY_POC.md)。

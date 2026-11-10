@@ -174,6 +174,7 @@ export interface EvaOrbitRepository {
   listInsightVersions(reportId: string, before?: number): Promise<import("../insight-reports").InsightVersionSummary[]>;
   saveInsightReport(input: import("../insight-reports").InsightReportWrite): Promise<import("../insight-reports").InsightReportResult>;
   pageMemory: MemoryPageReader;
+  getEchoOverview(): Promise<{ memos: Memo[]; facts: MemoryFact[]; memoCount: number; entityCount: number; factCount: number; pendingCount: number }>;
   listMemoryEntities(input?: MemoryEntityListInput): Promise<MemoryEntity[]>;
   getMemoryEntity(id: string): Promise<MemoryEntity | null>;
   createMemoryEntity(input: NewMemoryEntity): Promise<MemoryEntity>;

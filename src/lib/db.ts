@@ -2979,6 +2979,18 @@ function memoryFactFromRow(row:Record<string,unknown>):MemoryFact{return{id:Stri
 function memorySourceFromRow(row:Record<string,unknown>):MemorySource{return{id:String(row.id),factId:String(row.fact_id),sourceResource:String(row.source_resource),sourceRecordId:row.source_record_id===null?null:String(row.source_record_id),sourceUrl:row.source_url===null?null:String(row.source_url),excerpt:row.excerpt===null?null:String(row.excerpt),note:row.note===null?null:String(row.note),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function memoryFactCandidateFromRow(row:Record<string,unknown>):MemoryFactCandidate{return{id:String(row.id),proposedFact:jsonValue(row.proposed_fact,{}) as MemoryFactCandidate["proposedFact"],proposedSources:jsonValue(row.proposed_sources,[]) as MemoryFactCandidate["proposedSources"],proposedBy:row.proposed_by as MemoryFactCandidate["proposedBy"],proposerModel:row.proposer_model===null?null:String(row.proposer_model),reviewClient:row.review_client==null?null:String(row.review_client),reviewMode:(row.review_mode??"manual") as MemoryFactCandidate["reviewMode"],writtenBy:row.written_by==null?null:String(row.written_by),actor:row.actor==null?null:String(row.actor),client:row.client==null?null:String(row.client),requestId:row.request_id==null?null:String(row.request_id),status:row.status as MemoryFactCandidate["status"],reviewNote:row.review_note===null?null:String(row.review_note),promotedFactId:row.promoted_fact_id===null?null:String(row.promoted_fact_id),createdAt:String(row.created_at),reviewedAt:row.reviewed_at===null?null:String(row.reviewed_at)};}
 
+export function getEchoOverview() {
+  const counts = database.prepare(`SELECT
+    (SELECT count(*) FROM memos WHERE user_id='local') AS memoCount,
+    (SELECT count(*) FROM memory_entities WHERE user_id='local' AND status<>'merged') AS entityCount,
+    (SELECT count(*) FROM memory_facts WHERE user_id='local') AS factCount,
+    (SELECT count(*) FROM memory_fact_candidates WHERE user_id='local' AND status='pending') AS pendingCount`
+  ).get() as { memoCount: number; entityCount: number; factCount: number; pendingCount: number };
+  const facts = database.prepare("SELECT * FROM memory_facts WHERE user_id='local' ORDER BY updated_at DESC,id LIMIT 2")
+    .all().map(memoryFactFromRow);
+  return { ...counts, memos: listMemos({ limit: 2 }), facts };
+}
+
 export function pageMemory<K extends MemoryResource>(resource: K, input: MemoryPageInput<K> = {} as MemoryPageInput<K>) {
   const page = prepareMemoryPage(resource, "local", input);
   page.signal?.throwIfAborted();
