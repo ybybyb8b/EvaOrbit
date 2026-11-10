@@ -148,6 +148,7 @@ try {
   await floating.tap();await input.waitFor();await page.getByText("收到，睡醒后再决定。",{exact:true}).waitFor();assert.equal(await floating.isVisible(),false,"floating entry hides again after opening a specific conversation");
   await page.waitForFunction(()=>document.querySelector('[data-hermes-activity]')?.dataset.tone!=="reply");assert(writes.some(write=>write.action==="seen"));
   await page.getByRole("button", { name: "新对话", exact: true }).click();await input.fill("另一件独立的事");await page.getByRole("button", { name: "发送", exact: true }).click();await page.locator("[data-hermes-chat]").getByText("等待 Hermes 接收", { exact: true }).waitFor();
+  assert(await page.getByRole("button", { name: "等待 Hermes 接收后可停止", exact: true }).isDisabled());
   assert.notEqual(sendWrites()[0].conversationId, sendWrites().at(-1).conversationId);assert.equal(sendWrites().at(-1).messages, undefined, "EO must not send chat history to Hermes");
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
   const history = page.getByRole("dialog", { name: "历史对话" });
@@ -207,9 +208,10 @@ try {
   assert.equal(await mobileNav.count(), 0, "closing the keyboard keeps Hermes in full-screen mode");
   await input.blur();
   await page.setViewportSize({ width: 402, height: 520 });assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  const composer = await page.getByRole("button", { name: "发送", exact: true }).boundingBox();assert(composer.y + composer.height <= 520, "composer stays in the reduced viewport");
+  const composerAction = page.locator("[data-hermes-chat] form:has(textarea) > button");
+  const composer = await composerAction.boundingBox();assert(composer.y + composer.height <= 520, "composer stays in the reduced viewport");
   await page.setViewportSize({ width: 1440, height: 1000 });await page.screenshot({ path: "tmp/hermes-qa/desktop.png" });
-  const desktopComposer = await page.getByRole("button", { name: "发送", exact: true }).boundingBox();assert(desktopComposer.y + desktopComposer.height < 1000);
+  const desktopComposer = await composerAction.boundingBox();assert(desktopComposer.y + desktopComposer.height < 1000);
   await page.setViewportSize({ width: 402, height: 874 });await page.emulateMedia({ reducedMotion: "reduce" });await page.evaluate(() => { document.documentElement.dataset.mode = "dark"; });await page.screenshot({ path: "tmp/hermes-qa/dark-mobile.png" });
   const previewConversation = "20000000-0000-4000-8000-000000000020";
   conversations.unshift({ id: previewConversation, title: "明天再整理", created_at: now, updated_at: now });
@@ -324,60 +326,56 @@ try {
   const restingComposer = await input.evaluate(element => element.form.getBoundingClientRect().bottom);
   assert.equal(await input.evaluate(element => getComputedStyle(element).scrollMarginBottom), "0px");
   await input.focus();
-  for (const [height, top, pan] of [[790, 0, 0], [528, 346, 0], [480, 125, 0], [495, 84, 84]]) {
-    const gap = await input.evaluate(async (element, { height, top, pan }) => {
+  for (const [height, top, pan, visibleTop] of [[790, 0, 0, 0], [528, 346, 0, 0], [480, 125, 0, 125], [160, 0, 0, 0], [495, 84, 84, 0]]) {
+    const gap = await input.evaluate(async (element, { height, top, pan, visibleTop }) => {
       const viewport = window.visualViewport;
       element.closest("main").style.translate = `0 -${pan}px`;
       Object.defineProperty(viewport, "height", { configurable: true, value: height });
       Object.defineProperty(viewport, "offsetTop", { configurable: true, value: top });
+      Object.defineProperty(viewport, "pageTop", { configurable: true, value: scrollY + visibleTop });
       viewport.dispatchEvent(new Event("resize"));
       viewport.dispatchEvent(new Event("scroll"));
       await new Promise(resolve => requestAnimationFrame(resolve));
-      return height - element.form.getBoundingClientRect().bottom;
-    }, { height, top, pan });
+      return visibleTop + height - element.form.getBoundingClientRect().bottom;
+    }, { height, top, pan, visibleTop });
     const bounds = await wallpaper.boundingBox();
     assert.equal(bounds.height, restingWallpaper.height, "keyboard motion must not recrop the wallpaper");
-    assert(Math.abs(bounds.y - restingWallpaper.y) <= 1, "wallpaper stays anchored even when the reported offset is out of sync");
-    assert(Math.abs((await back.boundingBox()).y - restingHeader.y) <= 1, "header stays at its resting position");
+    assert(Math.abs(bounds.y - visibleTop - restingWallpaper.y) <= 1, "wallpaper stays anchored in the visible viewport");
+    assert(Math.abs((await back.boundingBox()).y - visibleTop - restingHeader.y) <= 1, "header stays at its resting position in the visible viewport");
     assert(gap >= 3 && gap <= 5, `composer follows keyboard motion, got ${gap}px`);
   }
-  const keyboardComposer = await input.evaluate(element => element.form.getBoundingClientRect().bottom);
-  await input.evaluate(async () => {
-    const viewport = window.visualViewport;
-    Object.defineProperty(viewport, "height", { configurable: true, value: 497 });
-    viewport.dispatchEvent(new Event("resize"));
-    await new Promise(resolve => requestAnimationFrame(resolve));
-  });
-  assert.equal(await input.evaluate(element => element.form.getBoundingClientRect().bottom), keyboardComposer, "small candidate-bar changes do not move the composer");
   const originalDraft = await input.inputValue();
   const keyboardFormHeight = await input.evaluate(element => element.form.getBoundingClientRect().height);
   await input.fill("单行");
-  const typingPositions = await input.evaluate(async element => {
-    const positions = [];
-    for (const [text, height] of [["zh", 519], ["zhong", 478], ["中", 495]]) {
-      element.dispatchEvent(new CompositionEvent("compositionupdate", { data: text, bubbles: true }));
+  const fittedBottoms = await input.evaluate(async element => {
+    const bottoms = [element.form.getBoundingClientRect().bottom];
+    for (const [inputType, height] of [["insertText", 494], ["deleteContentBackward", 497], ["deleteContentBackward", 519], ["insertText", 495], ["insertText", 448], ["deleteContentBackward", 520]]) {
+      element.dispatchEvent(new InputEvent("beforeinput", { inputType, bubbles: true }));
       Object.defineProperty(window.visualViewport, "height", { configurable: true, value: height });
       window.visualViewport.dispatchEvent(new Event("resize"));
       await new Promise(resolve => requestAnimationFrame(resolve));
-      positions.push(element.form.getBoundingClientRect().bottom);
+      bottoms.push(element.form.getBoundingClientRect().bottom);
     }
-    return positions;
+    return bottoms;
   });
-  assert.deepEqual(typingPositions, [keyboardComposer, keyboardComposer, keyboardComposer], "single-line composition ignores transient candidate viewport changes");
-  await input.evaluate(element => {
-    element.dispatchEvent(new CompositionEvent("compositionupdate", { data: "中文", bubbles: true }));
-    Object.defineProperty(window.visualViewport, "height", { configurable: true, value: 520 });
-    window.visualViewport.dispatchEvent(new Event("resize"));
-  });
+  assert.deepEqual(fittedBottoms, [491, 491, 491, 491, 491, 444, 444], "typing and deleting ignore small jitter and transient extra space, but immediately clear a taller keyboard");
   await page.waitForFunction(() => Math.abs(document.querySelector("[data-hermes-chat] textarea").form.getBoundingClientRect().bottom - 516) <= 1);
+  assert.equal(await input.evaluate(element => getComputedStyle(element.form).outlineStyle), "none", "focusing the input does not outline the composer");
   await input.fill("中文输入测试\n候选词变化\n继续输入第三行");
-  assert.equal(await input.evaluate(element => element.form.getBoundingClientRect().height), keyboardFormHeight, "text wraps inside a stable composer while the keyboard is open");
+  assert(await input.evaluate(element => element.form.getBoundingClientRect().height) > keyboardFormHeight, "multiline drafts can expand with the keyboard open");
+  assert(await input.evaluate(element => {
+    const log = element.closest("[data-hermes-chat]").querySelector("header + div");
+    const formBottom = element.form.getBoundingClientRect().bottom;
+    return log.getBoundingClientRect().bottom <= element.form.getBoundingClientRect().top && Math.abs(formBottom - 516) <= 1;
+  }), "composer growth uses space from the message list and keeps the same keyboard gap");
+  await page.screenshot({ path: "tmp/hermes-qa/keyboard-mobile.png", clip: { x: 0, y: 0, width: 402, height: 520 } });
   await input.fill(originalDraft);
   await input.blur();
   await input.evaluate(async element => {
     const viewport = window.visualViewport;
     element.closest("main").style.removeProperty("translate");
     Reflect.deleteProperty(viewport, "height");
+    Reflect.deleteProperty(viewport, "pageTop");
     window.dispatchEvent(new Event("evaorbit:native-active"));
     await new Promise(resolve => requestAnimationFrame(resolve));
   });
@@ -532,12 +530,19 @@ try {
   await toolActivity.getByText("1 项异常", { exact: true }).waitFor();
   assert.equal(await toolActivity.getAttribute("aria-expanded"), "true");
   const stop = page.getByRole("button", { name: "停止", exact: true });
+  assert.equal(await stop.and(composerAction).count(), 1, "the send button becomes the stop button");
+  const stopBounds = await stop.boundingBox();
   await stop.click();
-  await page.getByRole("button", { name: "已请求停止", exact: true }).waitFor();
+  assert(await page.getByRole("button", { name: "已请求停止", exact: true }).isDisabled());
   assert.equal(sendWrites().at(-1).content, "/stop");
   assert.equal(sendWrites().at(-1).conversationId, previewConversation);
   assert.equal(await input.inputValue(), "普通草稿要跨刷新");
   activeWork.status = "interrupted";
+  messages.find(message => message.id === sendWrites().at(-1).id).status = "done";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const resumedSend = page.getByRole("button", { name: "发送", exact: true });
+  await resumedSend.waitFor();
+  assert.deepEqual(await resumedSend.boundingBox(), stopBounds, "the action returns to Send in the same place");
   for (const saved of [true, false]) {
     await page.getByRole("button", { name: "新对话", exact: true }).click();
     assert.equal(await page.getByText("想到什么，直接说。", { exact: true }).evaluate(element => getComputedStyle(element).backgroundColor), "rgba(0, 0, 0, 0)");
@@ -579,5 +584,42 @@ try {
       assert.equal(messages.filter(message => message.id === id).length, 1);
     }
   }
-  assert.deepEqual(errors, []);console.log(JSON.stringify({ passed: true, screenshots: 9, writes: writes.length, errors }));
+  const userDraft = appendPreview("我发的第一段\n\n我发的第二段", { role: "user", presentation: {} });
+  const segmented = appendPreview([
+    "第一段保留[参考链接][guide]。", "这是第二段。", "### 步骤\n\n1. 保留列表\n2. 保留序号",
+    "```js\nconst a = 1;\n\nconsole.log(a);\n```", "| 名称 | 值 |\n| --- | --- |\n| A | 1 |",
+    "[guide]: https://example.invalid/guide",
+  ].join("\n\n"), { presentation: {} });
+  await openPreview();
+  const segmentedRow = page.locator(`[id="hermes-${segmented.id}"]`);
+  await segmentedRow.waitFor({ state: "attached" });
+  const bubbles = segmentedRow.locator("[data-segment]");
+  assert.equal(await bubbles.count(), 0, "reply segmentation starts off");
+  await appearanceButton.click();
+  const segmentSwitch = appearanceDialog.getByRole("switch", { name: "自动分段气泡", exact: true });
+  await segmentSwitch.check();
+  await appearanceDialog.getByRole("button", { name: "关闭", exact: true }).click();
+  await appearanceDialog.waitFor({ state: "detached" });
+  assert.equal(await bubbles.count(), 5);
+  assert.equal(await bubbles.first().getByRole("link", { name: "参考链接" }).getAttribute("href"), "https://example.invalid/guide");
+  assert.equal(await bubbles.nth(2).locator("h3 + ol > li").count(), 2, "a heading and its list stay together");
+  assert.equal(await bubbles.nth(3).locator("pre code").textContent(), "const a = 1;\n\nconsole.log(a);");
+  assert.equal(await bubbles.last().locator("table").count(), 1);
+  assert(await bubbles.last().locator(".markdown-table-wrap").evaluate(table => table.scrollWidth <= table.clientWidth + 1), "a short table fits in its bubble");
+  assert.equal(await bubbles.last().locator("[data-bubble-tail]").count(), 1);
+  assert.equal(await page.locator(`[id="hermes-${userDraft.id}"] [data-segment]`).count(), 0);
+  await page.locator("[data-hermes-chat] > header + div").evaluate(pane => { pane.scrollTop = pane.scrollHeight; });
+  await page.screenshot({ path: "tmp/hermes-qa/segmented-mobile.png" });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.locator("[data-hermes-activity]").tap();
+  await openPreview();
+  await bubbles.last().waitFor({ state: "attached" });
+  await appearanceButton.click();
+  assert.equal(await segmentSwitch.isChecked(), true, "segmentation is restored after reload");
+  await segmentSwitch.uncheck();
+  await appearanceDialog.getByRole("button", { name: "关闭", exact: true }).click();
+  await appearanceDialog.waitFor({ state: "detached" });
+  assert.equal(await bubbles.count(), 0);
+  assert.equal(await segmentedRow.locator(".markdown-content").count(), 1);
+  assert.deepEqual(errors, []);console.log(JSON.stringify({ passed: true, screenshots: 10, writes: writes.length, errors }));
 } finally { await context?.close();await browser?.close();await server.close(); }

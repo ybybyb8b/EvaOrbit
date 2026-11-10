@@ -24,6 +24,8 @@ final class LoadingExperienceCoordinatorTests: XCTestCase {
         coordinator.startColdLaunch()
         presenter.finishIntro()
         XCTAssertEqual(coordinator.state, .waitingForWebView)
+        presenter.finishIntro()
+        XCTAssertEqual(presenter.quietLoopCount, 1)
         XCTAssertEqual(presenter.dismissCount, 0)
         coordinator.webViewDidBecomeReady()
         XCTAssertEqual(presenter.dismissCount, 1)
@@ -46,18 +48,30 @@ final class LoadingExperienceCoordinatorTests: XCTestCase {
 
     func testLocalOrbitMovesOnlyThePlanetUntilStoppedAndReducedMotionIsStatic() {
         let artwork = OrbitArtworkView(palette: .current())
-        artwork.frame = CGRect(x: 0, y: 0, width: 260, height: 177)
-        artwork.layoutIfNeeded()
         func animatedLayers(_ layer: CALayer) -> [CALayer] {
             (layer.animationKeys()?.isEmpty == false ? [layer] : []) + (layer.sublayers ?? []).flatMap { animatedLayers($0) }
         }
         artwork.beginQuietLoop(reduceMotion: false, planetOnly: true)
+        XCTAssertTrue(animatedLayers(artwork.layer).isEmpty)
+        artwork.frame = CGRect(x: 0, y: 0, width: 260, height: 177)
+        artwork.setNeedsLayout()
+        artwork.layoutIfNeeded()
         let layers = animatedLayers(artwork.layer)
         XCTAssertEqual(layers.count, 1)
         let orbit = layers.first?.animation(forKey: "quietOrbit") as? CAKeyframeAnimation
         XCTAssertEqual(orbit?.keyPath, "position")
         XCTAssertEqual(orbit?.repeatCount, Float.infinity)
-        XCTAssertNotNil(orbit?.path)
+        XCTAssertFalse(orbit?.path?.boundingBoxOfPath.isEmpty ?? true)
+        XCTAssertGreaterThan(orbit?.beginTime ?? 0, 0)
+
+        artwork.frame = CGRect(x: 0, y: 0, width: 240, height: 163)
+        artwork.setNeedsLayout()
+        artwork.layoutIfNeeded()
+        let resizedOrbit = layers.first?.animation(forKey: "quietOrbit") as? CAKeyframeAnimation
+        XCTAssertNotNil(resizedOrbit?.path)
+        XCTAssertNotEqual(resizedOrbit?.path?.boundingBoxOfPath, orbit?.path?.boundingBoxOfPath)
+        XCTAssertEqual(resizedOrbit?.beginTime, orbit?.beginTime)
+
         artwork.stopAnimations()
         XCTAssertTrue(animatedLayers(artwork.layer).isEmpty)
         artwork.beginQuietLoop(reduceMotion: true, planetOnly: true)

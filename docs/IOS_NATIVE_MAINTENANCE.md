@@ -373,7 +373,7 @@ Swift 新方法需要按现有链路构建新 IPA，兼容 Web 可先部署并�
 - 方法必须同时加入 Swift 白名单并实现显式参数校验。
 - Web 必须先通过 `host.getInfo` 的 `methods`/capabilities 做向后兼容检测，旧 IPA 不应因 Web 更新而报错。
 - Swift 返回结构化成功/错误，不把 secret、系统原始错误体或设备标识送回 Web。
-- 原生开屏使用 Vintage 浅深色资源。Bridge v1 的 `appearance.setPreference` 只读取并返回 `appearanceMode`，界面切换不再关联颜色主题。新版 Web 在旧 Host 中仍会显示 Vintage，旧 Host 的窗口模式同步需要重建 IPA 后生效。
+- 原生开屏按外观模式使用浅深色资源。`LoadingBackground` 和字标沿用 Vintage，`LoadingPrimary` 和 `LoadingAccent` 为轨道、行星及共用颜色的小星点提供原配色。Bridge v1 的 `appearance.setPreference` 只读取并返回 `appearanceMode`。配色随新版 IPA 生效。
 - HealthKit credential 配置继续限制 credential 最短长度、同源 HTTPS ingest URL 和固定 API path。
 - Native 权限调用必须由可见的用户操作触发；bridge ready 或 App launch 只允许读状态、恢复已有后台能力或 reconcile 已获授权的项目。
 
@@ -491,6 +491,8 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 ## 本地包加载环绕
 
 本地 Host 继续使用 `LoadingOverlayView.local` 与既有轨道/核心/字标，立即完整显示，仅行星持续沿轨道环绕；没有入场淡入、描边、缩放、呼吸、固定展示时长或退出淡出。环绕周期只控制速度，页面就绪可在一圈中任意时刻立即撤下；既有 React 内容就绪条件及25秒失败/重试出口保留。系统减少动态效果时保持静态。本地首页重新进入而尚无缓存时也使用同样轨道比例、原生核心图片与持续环绕，数据到达后直接卸载；缓存后台刷新不覆盖已有内容。在线 Web Host 的原动效保持。
+
+本地冷启动由协调器启动一次环绕。轨道尺寸有效后挂载动画，布局改变时沿用原起播时间，让行星在新轨道上接着转。
 
 复用 `OrbitArtworkView`、`LoadingCore` 浅深资源，不增加图片资源、Bridge、权限、framework、entitlement、数据库或签名链变化；需新 IPA。XCTest 覆盖立即就绪、仅行星无限运动/停止与减少动态效果；Windows 只能检查页面和源码，尚未运行 UIKit XCTest 或真机动画验收。
 

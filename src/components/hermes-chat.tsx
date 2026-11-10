@@ -135,85 +135,93 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     const element = container.current;
     const surface = element?.parentElement;
     const composerInput = input.current;
-    if (!element || !surface || !composerInput) return;
+    const pane = scroll.current;
+    if (!element || !surface || !composerInput || !pane) return;
+    const viewport = window.visualViewport;
+    const coarsePointer = window.matchMedia("(any-pointer: coarse)");
     let fullHeight = window.visualViewport?.height ?? window.innerHeight;
     let layoutWidth = window.innerWidth;
     let keyboardOpen = false;
-    let fittedHeight = fullHeight;
     let frame = 0;
+    let settleTimer: number | undefined;
     let lastEdit = -Infinity;
-    let pendingHeight: { value: number; since: number } | undefined;
-    let settleTimer: ReturnType<typeof setTimeout> | undefined;
-    const trackEdit = () => { lastEdit = performance.now(); };
+    let fitted: { inset: number; height: number } | undefined;
+    const markEdit = () => { lastEdit = performance.now(); };
+    const pinLatest = () => { if (followBottom.current) pane.scrollTop = pane.scrollHeight; };
     const fit = () => {
       frame = 0;
-      clearTimeout(settleTimer);
-      const viewport = window.visualViewport;
+      window.clearTimeout(settleTimer);
       const unzoomed = Math.abs((viewport?.scale ?? 1) - 1) < .05;
-      const measuredHeight = Math.round(unzoomed ? (viewport?.height ?? window.innerHeight) : window.innerHeight);
-      if (document.hidden || measuredHeight <= 0) return;
-      const focused = document.activeElement === composerInput;
+      const visibleHeight = unzoomed ? viewport?.height ?? window.innerHeight : window.innerHeight;
+      if (document.hidden || visibleHeight <= 0) return;
       const widthChanged = layoutWidth !== window.innerWidth;
       if (widthChanged) {
         layoutWidth = window.innerWidth;
         fullHeight = window.innerHeight;
       }
-      const touchViewport = unzoomed && window.matchMedia("(any-pointer: coarse)").matches;
-      const wasOpen = keyboardOpen;
-      const nextKeyboardOpen = touchViewport && (focused || wasOpen) && fullHeight - measuredHeight > (focused ? 2 : 40);
-      const smallChange = nextKeyboardOpen && wasOpen && !widthChanged && Math.abs(measuredHeight - fittedHeight) <= 3;
-      const now = performance.now();
-      let settling = false;
-      if (!smallChange && touchViewport && wasOpen && focused && !widthChanged && now - lastEdit < 200) {
-        // Some input methods briefly report a different viewport while updating candidates.
-        if (pendingHeight?.value !== measuredHeight) pendingHeight = { value: measuredHeight, since: now };
-        const remaining = 120 - (now - pendingHeight.since);
-        if (remaining > 0) {
-          settling = true;
-          settleTimer = setTimeout(scheduleFit, remaining);
+      const touchViewport = unzoomed && coarsePointer.matches;
+      const editing = document.activeElement === composerInput;
+      const wasKeyboardOpen = keyboardOpen;
+      keyboardOpen = touchViewport && (editing || keyboardOpen) &&
+        Math.max(fullHeight, window.innerHeight) - visibleHeight > (keyboardOpen ? 8 : 48);
+      if (!keyboardOpen && unzoomed) fullHeight = visibleHeight;
+      if (!fitted || keyboardOpen !== wasKeyboardOpen) element.dataset.keyboardOpen = String(keyboardOpen);
+
+      // Use the visible top and the surface's bounds in the same coordinate
+      // space so document scrolling and visual viewport panning don't add up twice.
+      const visibleTop = touchViewport && viewport ? Math.max(0, viewport.pageTop - window.scrollY) : 0;
+      const surfaceTop = surface.getBoundingClientRect().top;
+      const inset = touchViewport ? Math.max(0, Math.round(visibleTop - surfaceTop)) : 0;
+      const height = Math.max(0, Math.floor(visibleHeight - Math.max(0, surfaceTop - visibleTop)));
+      if (fitted && keyboardOpen && wasKeyboardOpen && !widthChanged) {
+        const bottomChange = inset + height - fitted.inset - fitted.height;
+        // The 4px keyboard gap absorbs 2px of jitter in either direction.
+        if (Math.abs(bottomChange) <= 2 && Math.abs(inset - fitted.inset) <= 2) return;
+        // Candidate updates can briefly report extra space while typing or deleting.
+        // Move immediately when space shrinks so the keyboard can't cover the input.
+        const remaining = 80 - (performance.now() - lastEdit);
+        if (editing && bottomChange > 0 && remaining > 0) {
+          settleTimer = window.setTimeout(scheduleFit, remaining);
+          return;
         }
       }
-      if (!settling) pendingHeight = undefined;
-      keyboardOpen = settling ? wasOpen : nextKeyboardOpen;
-      const visibleHeight = smallChange || settling ? fittedHeight : measuredHeight;
-      fittedHeight = visibleHeight;
-      if (!keyboardOpen) fullHeight = visibleHeight;
-      element.dataset.keyboardOpen = String(keyboardOpen);
-
-      // WebKit can report a keyboard offset before the page moves. Only correct
-      // movement of the surface itself, and size the chat from the visible height.
-      const surfaceTop = surface.getBoundingClientRect().top;
-      surface.style.setProperty("--hermes-screen-inset", `${touchViewport ? Math.max(0, -surfaceTop) : 0}px`);
       surface.style.setProperty("--hermes-wallpaper-height", `${fullHeight}px`);
-      element.style.setProperty("--hermes-chat-height", `${Math.max(0, visibleHeight - Math.max(0, surfaceTop))}px`);
-      element.style.setProperty("--hermes-composer-height", `${(composerArea.current?.offsetHeight ?? 130) + 32}px`);
-      if (followBottom.current && scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight;
+      if (fitted?.inset === inset && fitted.height === height && keyboardOpen === wasKeyboardOpen) return;
+      fitted = { inset, height };
+      surface.style.setProperty("--hermes-screen-inset", `${inset}px`);
+      element.style.setProperty("--hermes-chat-height", `${height}px`);
+      pinLatest();
     };
     const scheduleFit = () => { if (!frame) frame = requestAnimationFrame(fit); };
-    const observer = new ResizeObserver(scheduleFit);
-    if (composerArea.current) observer.observe(composerArea.current);
+    const observer = new ResizeObserver(pinLatest);
+    observer.observe(pane);
     fit();
-    const editEvents = ["beforeinput", "input", "compositionupdate"];
-    for (const event of editEvents) composerInput.addEventListener(event, trackEdit);
+    composerInput.addEventListener("focus", scheduleFit);
+    composerInput.addEventListener("blur", scheduleFit);
+    composerInput.addEventListener("beforeinput", markEdit);
+    composerInput.addEventListener("compositionupdate", markEdit);
     window.addEventListener("resize", scheduleFit);
     window.addEventListener("scroll", scheduleFit, { passive: true });
     window.addEventListener("pageshow", scheduleFit);
     window.addEventListener(nativeActive, scheduleFit);
     document.addEventListener("visibilitychange", scheduleFit);
-    window.visualViewport?.addEventListener("resize", scheduleFit);
-    window.visualViewport?.addEventListener("scroll", scheduleFit);
+    viewport?.addEventListener("resize", scheduleFit);
+    viewport?.addEventListener("scroll", scheduleFit);
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
-      clearTimeout(settleTimer);
-      for (const event of editEvents) composerInput.removeEventListener(event, trackEdit);
+      window.clearTimeout(settleTimer);
+      composerInput.removeEventListener("focus", scheduleFit);
+      composerInput.removeEventListener("blur", scheduleFit);
+      composerInput.removeEventListener("beforeinput", markEdit);
+      composerInput.removeEventListener("compositionupdate", markEdit);
       window.removeEventListener("resize", scheduleFit);
       window.removeEventListener("scroll", scheduleFit);
       window.removeEventListener("pageshow", scheduleFit);
       window.removeEventListener(nativeActive, scheduleFit);
       document.removeEventListener("visibilitychange", scheduleFit);
-      window.visualViewport?.removeEventListener("resize", scheduleFit);
-      window.visualViewport?.removeEventListener("scroll", scheduleFit);
+      viewport?.removeEventListener("resize", scheduleFit);
+      viewport?.removeEventListener("scroll", scheduleFit);
       surface.style.removeProperty("--hermes-wallpaper-height");
       surface.style.removeProperty("--hermes-screen-inset");
     };
@@ -304,7 +312,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
         followBottom.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 1;
       }
     }
-  }, [messages, hasOlder]);
+  }, [messages, hasOlder, appearance.segmentReplies]);
   useLayoutEffect(() => {
     if (!snapshotKey || awaitingSnapshotRefresh.current || !active || !data || messages[0]?.conversation_id !== active) return;
     const scrollTop = followBottom.current ? null : scroll.current?.scrollTop ?? null;
@@ -395,8 +403,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     }
     await waitForForeground(signal);
   }
-  async function send(event?: FormEvent, choice?: { message: HermesMessage; content: string }): Promise<boolean> {
-    event?.preventDefault(); const content = choice?.content ?? draft; if (!content.trim() || sendLock.current) return false;
+  async function send(choice?: { message: HermesMessage; content: string }): Promise<boolean> {
+    const content = choice?.content ?? draft; if (!content.trim() || sendLock.current) return false;
     const responseTo = choice?.message.id ?? (!/^\/[a-z][\w-]*(?:\s|$)/i.test(content.trimStart()) ? messageRef.current.findLast(message => message.role === "assistant" && message.presentation?.state === "pending")?.id : undefined);
     sendLock.current = true; setSending(true);
     const previous = requestKey.current;
@@ -435,7 +443,7 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
     }
   }
   async function stopConversation() {
-    if (!active || !stopTarget || online !== true || stopLock.current || stopPending) return;
+    if (!active || !stopTarget || online !== true || sendLock.current || stopLock.current || stopPending) return;
     stopLock.current = true;
     setStopping(true);
     setStopError("");
@@ -519,13 +527,19 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
   const connection = data?.connection, online = loadError ? undefined : connection?.online, current = data?.conversations.find(c => c.id === active);
   const statusLabel = loadError ? t("Connection issue", "连接异常") : online === undefined ? t("Checking…", "正在检查…") : online ? "online" : "offline";
   const waiting = messages.some(m => m.status === "received" || m.status === "processing");
+  const pendingUserMessage = messages.some(message => message.role === "user" && message.presentation?.kind !== "command" && hermesPending(message));
   const stopTarget = messages.findLast(message => message.role === "user" && message.presentation?.kind !== "command" &&
     (message.status === "received" || message.status === "processing"));
   const stopPending = messages.some(message => message.role === "user" && message.presentation?.kind !== "note" &&
     message.content.trim() === "/stop" && hermesPending(message));
+  const pendingQuestion = messages.findLast(message => message.role === "assistant" && message.presentation?.state === "pending");
+  const showStop = stopping || stopPending || Boolean(online && pendingUserMessage && !pendingQuestion &&
+    connection?.commands?.some(command => command.name === "stop"));
+  const stopLabel = stopping ? t("Requesting stop…", "正在请求停止…") : stopPending ? t("Stop requested", "已请求停止")
+    : stopTarget ? t("Stop", "停止") : t("Waiting for Hermes to receive the message", "等待 Hermes 接收后可停止");
   const visibleLoadError = loadErrorDismissed ? "" : loadError;
   const noticeError = error || stopError || visibleLoadError;
-  const question = messages.find(message => message.id === choiceId) ?? messages.findLast(message => message.role === "assistant" && message.presentation?.state === "pending");
+  const question = messages.find(message => message.id === choiceId) ?? pendingQuestion;
   const commands = filterHermesCommands(connection?.commands?.length ? connection.commands : [{ name:"help",description:"Show available commands",argsHint:"",aliases:[] }], draft);
   function chooseCommand(command: HermesCommand) { setDraft(`/${command.name}${command.argsHint ? " " : ""}`);setCommandOpen(false);setCommandIndex(0);input.current?.focus({ preventScroll: true }); }
   return <>
@@ -562,7 +576,8 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
           <img className={styles.messageAvatar} data-hermes-avatar src={avatar} alt="" width={28} height={28} />
         )}
         <HermesMessageBody message={message} responseQuestion={message.reply_to ? messages.find(row => row.id === message.reply_to) : undefined}
-          english={english} showTail={lastInGroup} onOpenOptions={prompt => { seenQuestions.current.add(prompt.id); setChoiceId(prompt.id); }} />
+          english={english} showTail={lastInGroup} segmentReplies={appearance.segmentReplies}
+          onOpenOptions={prompt => { seenQuestions.current.add(prompt.id); setChoiceId(prompt.id); }} />
         {(lastInGroup || message.role === "user" || ["failed", "interrupted"].includes(message.status)) && <footer>{lastInGroup && <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString(english ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit" })}</time>}
           {message.role === "user" && <span data-state={message.status}>{hermesStatusText(message, online, english)}</span>}
           {["failed", "interrupted"].includes(message.status) && message.presentation?.kind !== "response" && <button className="text-button" disabled={busy} onClick={() => void act({ action: "retry", id: message.id })}>{t("Retry", "重新处理")}</button>}
@@ -588,22 +603,28 @@ export function HermesChat({ initialConversationId, scope, back }: { initialConv
       </div>}
       <div className={styles.composerTools}><button type="button" disabled={sending} aria-label={t("Hermes commands", "Hermes 命令")} aria-haspopup="listbox" aria-expanded={commandOpen} aria-controls={commandOpen ? commandId : undefined} onClick={()=>{setCommandOpen(!commandOpen);setCommandIndex(0);input.current?.focus({ preventScroll: true });}}><Menu4 className="icon" weight="Outline" />{t("Commands", "命令")}</button>
         {scope && <button type="button" aria-label={t("Chat appearance", "聊天外观")} title={t("Chat appearance", "聊天外观")} aria-haspopup="dialog" disabled={sending} onClick={() => { setCommandOpen(false); setAppearanceOpen(true); }}><Icon name="settings" /></button>}
-        {(stopTarget && connection?.commands?.some(command => command.name === "stop") || stopPending || stopping) && <button type="button" className={styles.stopButton} disabled={online !== true || stopping || stopPending}
-          onClick={() => void stopConversation()}>{stopping ? t("Requesting stop…", "正在请求停止…") : stopPending ? t("Stop requested", "已请求停止") : t("Stop", "停止")}</button>}
       </div>
-      <form className={styles.composer} onSubmit={event => void send(event)}>
+      <form className={styles.composer} onSubmit={event => {
+        event.preventDefault();
+        if (!showStop) void send();
+      }}>
         <textarea ref={input} aria-label={t("Message", "消息内容")} aria-controls={commandOpen ? commandId : undefined} aria-activedescendant={commandOpen && commands.length ? `${commandId}-${Math.min(commandIndex,commands.length-1)}` : undefined} rows={1} maxLength={20000} value={draft} disabled={sending || !data && !active} onChange={event => {setDraft(event.target.value);setCommandOpen(/^\/[\w-]*$/.test(event.target.value));setCommandIndex(0);}} placeholder={t("Message Hermes…", "发给 Hermes……")} onKeyDown={event => {
-          if(event.nativeEvent.isComposing)return;
+          if(event.nativeEvent.isComposing || event.keyCode === 229)return;
           if(commandOpen && event.key==="Escape"){event.preventDefault();setCommandOpen(false);return;}
           if(commandOpen && ["ArrowDown","ArrowUp"].includes(event.key)&&commands.length){event.preventDefault();const next=(commandIndex+(event.key==="ArrowDown"?1:-1)+commands.length)%commands.length;setCommandIndex(next);document.getElementById(`${commandId}-${next}`)?.scrollIntoView({block:"nearest"});return;}
           if(commandOpen && event.key==="Enter"&&!event.shiftKey&&commands.length){event.preventDefault();chooseCommand(commands[Math.min(commandIndex,commands.length-1)]);return;}
-          if (event.key === "Enter" && !event.shiftKey && window.matchMedia("(pointer:fine)").matches) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
+          if (!showStop && event.key === "Enter" && !event.shiftKey && window.matchMedia("(pointer:fine)").matches) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
         }}/>
-        <button className="button primary" type="submit" disabled={!data || !draft.trim() || sending} aria-label={t("Send", "发送")}><Icon name="arrow" /></button>
+        <button className="button primary" type={showStop ? "button" : "submit"}
+          disabled={sending || (showStop ? !stopTarget || online !== true || stopping || stopPending : !data || !draft.trim())}
+          aria-label={showStop ? stopLabel : t("Send", "发送")} title={showStop ? stopLabel : undefined}
+          onClick={showStop ? () => void stopConversation() : undefined}>
+          {showStop ? <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg> : <Icon name="arrow" />}
+        </button>
       </form>
     </div>
     {appearanceOpen && <HermesAppearanceSheet appearance={appearance} english={english} onClose={() => setAppearanceOpen(false)} />}
-    {question && <HermesChoiceSheet key={question.id} scope={scope} message={question} open={Boolean(choiceId)} english={english} busy={sending || busy} online={online} error={error} onDismissError={() => setError("")} onClose={() => setChoiceId(undefined)} onAnswer={(prompt, content) => send(undefined, { message: prompt, content })} />}
+    {question && <HermesChoiceSheet key={question.id} scope={scope} message={question} open={Boolean(choiceId)} english={english} busy={sending || busy} online={online} error={error} onDismissError={() => setError("")} onClose={() => setChoiceId(undefined)} onAnswer={(prompt, content) => send({ message: prompt, content })} />}
     {history && (renaming ? <FormSheet key="rename" title={t("Rename conversation", "修改对话名称")}
       onClose={() => setRenaming(undefined)} formId={renameFormId} submitLabel={t("Save", "保存")}
       cancelLabel={t("Cancel", "取消")} busyLabel={t("Saving…", "正在保存…")} busy={busy} submitDisabled={!renaming.title.trim()}>

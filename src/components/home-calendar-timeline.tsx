@@ -83,7 +83,8 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
   const businessFetch=useBusinessRequest();
   const Link=LinkComponent, CalendarRuleSheet=RuleEditor ?? EmptySlot, BottomLogScope=LogScope ?? EmptySlot;
   const readHomeSnapshot=dataSource?.read ?? cachedRead,saveHomeSnapshot=dataSource?.save ?? cachedSave;
-  const english = language === "en", today = readOnly ? dateInEvaOrbit() : initialDay.date;
+  const english = language === "en";
+  const [today, setToday] = useState(readOnly ? dateInEvaOrbit() : initialDay.date);
   const [month, setMonth] = useState(initialSummary.month), [summaries, setSummaries] = useState<Record<string, TimelineMonthSummary>>({ [initialSummary.month]: initialSummary });
   const [selected, setSelected] = useState(initialDay.date), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
   const [days, setDays] = useState<Record<string, HomeDayOverview>>({ [initialDay.date]: initialDay });
@@ -121,6 +122,19 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
   const selectedLabel = new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "long", day: "numeric", weekday: "long", timeZone: "UTC" }).format(new Date(`${selected}T12:00:00Z`));
   const periods = useMemo(() => [...new Map(Object.values(summaries).flatMap((summary) => summary.periods ?? []).map((period) => [period.id, period])).values()], [summaries]);
   const periodContext = periodDayForDate(periods, selected, today), periodFlow = events.find((item) => item.eventType === "health.menstrual_flow" && item.metadata.periodId === periodContext?.period.id), periodDose = events.find((item) => item.eventType === "health.medication_dose" && item.metadata.periodId === periodContext?.period.id);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const updateToday = () => {
+      clearTimeout(timer);
+      const now = new Date(), date = dateInEvaOrbit(now);
+      setToday(date);
+      timer = setTimeout(updateToday, Date.parse(dateRange(date).to) - now.getTime());
+    };
+    timer = setTimeout(updateToday, 0);
+    document.addEventListener("visibilitychange", updateToday);
+    return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", updateToday); };
+  }, []);
 
   const refreshChangedData = useEffectEvent(async () => {
     const date = selected, requiredMonths = calendarExpanded ? [month] : [...new Set(visibleWeek.map(value => value.slice(0, 7)))];
@@ -182,7 +196,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
     return () => controller.abort();
   }, [calendarExpanded, month, summaries, visibleWeek, cacheScope, loadingMonth, readHomeSnapshot]);
 
-  async function loadDay(date: string, force = false) {
+  async function loadDay(date: string, force = date === today && date !== initialDay.date) {
     setRefreshFailed(false);
     setSelected(date); setTimelineExpanded(false); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
     dayRequest.current?.abort(); const controller = new AbortController(); dayRequest.current = controller; setLoadingDate(date);
