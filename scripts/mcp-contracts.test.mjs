@@ -35,6 +35,14 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       assert.equal(resources.length,39);
       assert.deepEqual(resources.find(resource=>resource.resource==="memory_context").capabilities,["search"]);
       assert(resources.some(resource=>resource.resource==="software_library"));
+      assert.deepEqual(resources.find(resource=>resource.resource==="echo").aliases,["memo"]);
+      assert(!resources.some(resource=>resource.resource==="memo"));
+      assert.equal((await call("eo_schema",{resource:"echo"})).schema.resource,"echo");
+      const {item:echo}=await call("eo_create",{resource:"echo",data:{title:"Echo compatibility",content:"One shared record"}});
+      assert.equal((await call("eo_get",{resource:"memo",id:echo.id})).item.id,echo.id);
+      await call("eo_update",{resource:"memo",id:echo.id,data:{title:"Alias updated"}});
+      assert.equal((await call("eo_get",{resource:"echo",id:echo.id})).item.title,"Alias updated");
+      await call("eo_delete",{resource:"echo",id:echo.id});
       assert(!resources.some(resource=>["insight_run","insight_report","lucius_case"].includes(resource.resource)));
       assert.deepEqual(resources.find(resource=>resource.resource==="insight_context").capabilities,["get"]);
       const {item:context}=await call("eo_get",{resource:"insight_context",id:"day/2026-01-01"});

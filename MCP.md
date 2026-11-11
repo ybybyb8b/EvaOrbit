@@ -32,7 +32,7 @@ Generic tools keep `resource` as a plain string. Call `eo_resources`, then `eo_s
 
 Call `eo_resources` for the resources enabled on the current server:
 
-- Memory and capture: `memory_context`, `memory_entity`, `memory_fact`, `memory_source`, `memory_candidate`, `inbox`, `memo`, `chronicle`.
+- Memory and capture: `memory_context`, `memory_entity`, `memory_fact`, `memory_source`, `memory_candidate`, `inbox`, `echo`, `chronicle`.
 - Work and calendar: `task`, `calendar_event`, `project`, `project_item`.
 - Lucius: `lucius_diary`, `lucius_state`, `lucius_post`, `lucius_post_comment`.
 - People: `relation_person`, `relation_event`, `person_note`.
@@ -81,7 +81,7 @@ Food's optional `description` is extra context, not a duplicate summary. Useful 
 
 `eo_schema` retains `writable_fields` for compatibility and adds operation-specific `create_fields` and `update_fields`. Read `field_variants` for Cat Record's kind-specific fields. `action_schemas` describes each action's required ID, ID meaning, data fields, required data, validation rules and result. Unknown action data is rejected rather than silently ignored.
 
-Memo searches default to active records unless a status filter is supplied. `relation_event/settle_advance` uses the advance **flow** ID, not an event ID.
+Echo notes use resource `echo`; legacy `memo` calls remain supported with the same records and permissions. Discovery advertises `echo` with `memo` as its alias. Searches default to active records unless a status filter is supplied. `relation_event/settle_advance` uses the advance **flow** ID, not an event ID.
 
 Drink Limit updates are PATCH: `{ "enabled": false }` preserves other settings. Cat Routine updates preserve the existing recurrence mode, anchor, local reminder time, timezone and linked reminder. Prefer `first_due_date`, `next_due_date`, `configured_reminder_time`, `recurrence_mode`, `anchor_date` and `timezone`; legacy `first_due_at`/`next_due_at` remain accepted. `eo_delete(cat_pet)` archives and returns `deleted: false, action: "archived"`. Cat Routine has distinct operations: `eo_action(cat_routine, archive)` retains the routine, reminder and execution history while disabling reminders; `eo_delete(cat_routine)` permanently removes the routine and linked reminder (including its occurrences) and returns `deleted: true`. Generated care records and notification delivery snapshots remain.
 

@@ -315,7 +315,7 @@ function fakeOperations() {
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_candidate", "memory_entity", "memory_fact", "memory_source", "inbox", "task", "memo", "chronicle", "lucius_diary", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_candidate", "memory_entity", "memory_fact", "memory_source", "inbox", "task", "echo", "chronicle", "lucius_diary", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_state")?.capabilities, ["get", "update"]);
@@ -498,6 +498,23 @@ test("project items remain durable and Done stays distinct from Verified", async
   const verified=await registry.update("project_item",issue.id as number,{status:"verified"});
   assert.equal(verified.status,"verified");assert.ok(verified.verified_at);
   assert.deepEqual((await registry.search("project_item",{filters:{project:"EvaOrbit",status:"verified"},limit:20})).items.map((item)=>item.id),[issue.id]);
+});
+
+test("Echo discovery and CRUD preserve the legacy memo alias", async () => {
+  const registry = createResourceRegistry(fakeOperations().operations);
+  const echo = registry.resources().find(item => item.resource === "echo");
+  assert.deepEqual(echo?.aliases, ["memo"]);
+  assert.equal(registry.resources().some(item => item.resource === "memo"), false);
+  assert.equal(registry.schema("echo").resource, "echo");
+  assert.equal(registry.schema("memo").canonical_resource, "echo");
+  assert.deepEqual(registry.schema("echo").search_schema, registry.schema("memo").search_schema);
+  const note = await registry.create("echo", { title: "Shared note", content: "One record" });
+  assert.deepEqual(await registry.get("memo", note.id as number), note);
+  await registry.update("memo", note.id as number, { title: "Updated note" });
+  assert.equal((await registry.get("echo", note.id as number)).title, "Updated note");
+  assert.deepEqual(await registry.search("echo", {}), await registry.search("memo", {}));
+  await registry.delete("echo", note.id as number);
+  await assert.rejects(() => registry.get("memo", note.id as number), /not found/);
 });
 
 test("generic Memo CRUD defaults search to active and keeps historical states separate", async () => {

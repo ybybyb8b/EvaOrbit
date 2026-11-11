@@ -1,30 +1,21 @@
 .echo {
-  --echo-ink: #2f222c;
-  --echo-muted: #685765;
-  --echo-accent: #78445e;
-  --echo-tint: #eae0e8;
-  --echo-edge: #fff9ff;
-  --echo-surface: #faf7fa;
+  --echo-ink: var(--text-primary);
+  --echo-muted: var(--text-secondary);
+  --echo-accent: var(--accent-primary);
+  --echo-tint: var(--surface-tint);
+  --echo-edge: var(--border-default);
+  --echo-surface: var(--surface-card);
   --echo-display: var(--font-cormorant, "Cormorant Garamond"), var(--font-selected-zh), Georgia, serif;
-  --echo-shadow: 0 7px 22px #5332470a;
+  --echo-shadow: 0 7px 22px rgb(var(--shadow-rgb) / .04);
   width: min(760px, calc(100% - 44px));
   padding-top: 32px;
   color: var(--echo-ink);
   font-family: system-ui, var(--font-selected-zh), sans-serif;
 }
 
-:global(html[data-mode="dark"]) .echo {
-  --echo-ink: #f2e7ef;
-  --echo-muted: #c8b4c2;
-  --echo-accent: #e1aaca;
-  --echo-tint: #443141;
-  --echo-edge: #594555;
-  --echo-surface: #332633;
-  --echo-shadow: 0 7px 22px #120a151f;
-}
-
-:global(.main-content):has(.echo) { background: #f3eff3; }
-:global(html[data-mode="dark"] .main-content):has(.echo) { background: #282029; }
+:global(.main-content):has(.echo, .detail) { background: var(--surface-canvas); }
+.detail { color: var(--text-primary); }
+.detail :global(.long-term-prose), .detail :global(.long-term-meta) > div { background: var(--surface-card); }
 
 .echo ::selection { background: var(--echo-tint); color: var(--echo-ink); }
 .echo :is(a, button, select):focus-visible,
@@ -149,8 +140,8 @@
 }
 .filters select { appearance: none; max-width: 140px; padding-right: 24px; text-overflow: ellipsis; }
 .filters label > :global(.icon) { position: absolute; right: 8px; top: 50%; width: 12px; height: 12px; transform: translateY(-50%); pointer-events: none; }
-.filters button[aria-pressed="true"], .filters select[data-selected="true"] { background: var(--echo-accent); color: var(--echo-surface); }
-.filters label:has(select[data-selected="true"]) > :global(.icon) { color: var(--echo-surface); }
+.filters button[aria-pressed="true"], .filters select[data-selected="true"] { background: var(--echo-accent); color: var(--accent-on); }
+.filters label:has(select[data-selected="true"]) > :global(.icon) { color: var(--accent-on); }
 .filters option { color: var(--echo-ink); background: var(--echo-surface); }
 
 .sectionHeading { display: flex; min-height: 43px; justify-content: space-between; align-items: center; gap: 12px; margin: 17px 0 6px; }

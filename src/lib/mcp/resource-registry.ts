@@ -1156,14 +1156,15 @@ export class ResourceRegistry {
   }
 
   #resource(name: string) {
-    const resource = this.#resources.get(name);
+    const resource = this.#resources.get(name === "echo" ? "memo" : name);
     if (!resource) throw new ValidationError(`Unknown resource: ${name}. Call eo_resources for available resources.`);
     return resource;
   }
 
   resources() {
     return [...this.#resources.values()].map((resource) => ({
-      resource: resource.schema.resource,
+      resource: resource.schema.resource === "memo" ? "echo" : resource.schema.resource,
+      ...(resource.schema.resource === "memo" ? { aliases: ["memo"] } : {}),
       description: resourceGuidance(resource.schema).description,
       capabilities: (["search", "get", "create", "update", "delete", "action"] as const).filter((capability) => Boolean(resource[capability])),
       actions: resource.schema.supported_actions,
@@ -1173,6 +1174,11 @@ export class ResourceRegistry {
   schema(resource: string) {
     const registered = this.#resource(resource), schema = registered.schema;
     return { ...schema, ...resourceGuidance(schema), fields: documentedFields(schema),
+      ...(schema.resource === "memo" ? {
+        resource,
+        canonical_resource: "echo",
+        aliases: ["memo"],
+      } : {}),
       required_fields: schema.required_fields.filter((key) => Object.hasOwn(schema.fields, key)
         && !(resource === "reminder" && key === "starts_at")
         && !(resource === "relation_event" && ["items", "flows"].includes(key))),
