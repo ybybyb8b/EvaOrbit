@@ -11,7 +11,7 @@ export async function proxy(request: NextRequest) {
     }
     return NextResponse.next({ request });
   }
-  if (request.nextUrl.pathname === "/theme-init.js" || request.nextUrl.pathname === "/api/mcp" || request.nextUrl.pathname === "/.well-known/oauth-protected-resource" || request.nextUrl.pathname === "/api/reminders/deliver" || request.nextUrl.pathname === "/api/hermes/notify" || request.nextUrl.pathname === "/api/healthkit/energy/ingest" || request.nextUrl.pathname === "/api/native/session") {
+  if (request.nextUrl.pathname === "/theme-init.js" || request.nextUrl.pathname === "/api/mcp" || request.nextUrl.pathname === "/.well-known/oauth-protected-resource" || request.nextUrl.pathname === "/api/reminders/deliver" || request.nextUrl.pathname === "/api/healthkit/energy/ingest" || request.nextUrl.pathname === "/api/native/session") {
     return NextResponse.next({ request });
   }
   return updateSession(request);

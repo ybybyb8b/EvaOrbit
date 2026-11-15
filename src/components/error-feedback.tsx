@@ -83,7 +83,7 @@ export function RegisteredErrorNotice({ inline, details, as: Text = "p", classNa
   const id = useId();
   const hydrated = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot);
   const notice = useMemo(() => {
-    // An explicit summary/details pair (including Hermes) already has its own wording.
+    // An explicit summary/details pair (including Parlor) already has its own wording.
     if (details !== undefined) return { content: children, details };
     const diagnostics: string[] = [];
     function separate(node: ReactNode): ReactNode {

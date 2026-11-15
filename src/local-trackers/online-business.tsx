@@ -22,7 +22,6 @@ export function OnlineBusinessProvider({account,platform,children}:{account:Loca
       if(!alive)throw new Error("Account changed. Check the cloud before submitting again.");
       if(response.ok&&(init?.method??"GET").toUpperCase()!=="GET"){
         const domain=path.split("/")[2];
-        if(domain==="hermes")return response;
         clearClientJsonCache();
         const resource=domain==="food"||domain==="drinks"?"food":domain==="project-items"?"projects":domain==="nutrition"||domain==="preferences"?"health":domain;
         let snapshotUpdated=false;

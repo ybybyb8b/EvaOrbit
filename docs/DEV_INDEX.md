@@ -23,7 +23,7 @@
 | [Training](#training) | `/health?view=training`：训练记录与循环计划 |
 | [Lucius](#lucius) | `/lucius`：状态、动态、评论与日记 |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
-| [AI](#ai) | `/ai`：想想、Persona、Provider 与 Model |
+| [Parlor](#parlor) | `/ai`：私人会客厅、Persona、Provider 与 Model |
 | [Insights](#insights) | MCP `insight_context`：只读分析上下文，无独立页面 |
 | [Inbox](#inbox) | `/inbox`：捕获、处理与转换 |
 | [Tasks](#tasks) | `/tasks`：待办及其提醒规则 |
@@ -125,22 +125,24 @@
 
 - **Echo 本地视图**：[MemoWorkspace](../src/local-trackers/memo-workspace.tsx) 复用 Echo、Web 列表、详情和 [MemoEditor](../src/app/memo/memo-editor.tsx)，通过 [MemoDataProvider](../src/components/memo-data-context.tsx) 注入账户快照读取和导航。[GraphWorkspace](../src/local-trackers/graph-workspace.tsx) 复用网页版图谱及事实详情，下载通过账户绑定的业务缓存，离线只读。范围、缓存和回退见 [Memo 只读阶段](MEMO_LOCAL_READONLY_POC.md)。
 
-## AI
+## Parlor
 
-- **Hermes 消息平台**：`/ai` 的 [HermesChat](../src/components/hermes-chat.tsx) 经 [消息接口](../src/app/api/hermes/route.ts) 和 `hermes_*` 三表连接电脑上的 [Hermes 通道插件](../integrations/hermes-evaorbit/adapter.py)。EO 管理消息和回执，Agent 上下文／工具在 Hermes。[消息气泡](../src/components/hermes-message.tsx) 支持 Markdown、折叠的 Hermes 思考内容、澄清选项和历史便利贴。身份、配对、断线恢复与安装边界见 [Hermes 通道](HERMES_CHANNEL.md)。
+- **空间与人格**：UI 统一为 Parlor，本地模块标识 `parlor`，继续使用 `/ai` 路径兼容旧链接。默认人格 Sebastian 由独立 [ParlorPersona](../ios/EvaOrbitHost/Sources/ParlorPersona.swift) 与账户隔离的 `ai_personas` 保存；名称、提示词、交流偏好和默认模型不绑定 Runtime。新回答保存当时的人格署名，旧历史不改写。共用 [ParlorSettings](../src/components/parlor-settings.tsx) 集中八类设置，原 `/settings/ai-connection` 兼容转入；未来记忆、群聊、工具仅说明真实边界。见 [Parlor V1](PARLOR_V1.md)。
 
-- **Hermes 常驻入口**：[HermesActivity](../src/components/hermes-activity.tsx) 挂在 Web／本地壳账户上下文内，全局浮动、拖动贴边并保存账户限定位置；状态面板展示在线、排队、处理、待回答、未读及失败原因，进入对应对话后才确认已读。[轻量状态接口](../src/app/api/hermes/route.ts) 经 `eo_hermes_activity` 按账户读取摘要及持久已读游标，不拉整段历史、不调用模型、后台页面暂停轮询。旧 Eva 浮层保留作历史兼容，不再挂载。
+- **Native Eva（Phase 1A）**：本地安装包通过 `host.getInfo.methods` 检测完整 `ai.*` 能力，首页悬浮入口与 `/ai` 直接使用 [NativeEvaChat](../src/components/native-eva-chat.tsx)；无该能力时提示升级本地 Host。Swift [AIRuntime](../ios/EvaOrbitHost/Sources/AIRuntime.swift) 直连 OpenAI-compatible HTTPS SSE，独立 `ai.sqlite3` 保存账户隔离的配置、会话、消息与请求用量，API Key 仅存独立 Keychain。React 复用 Hermes 消息、Markdown、输入、键盘适配与 Vintage 样式；本地模型设置不复用云端密钥。不导入旧 Hermes 历史。实现与尚待原生验收见 [Phase 1A](NATIVE_EVA_PHASE1A.md)。
 
-- **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。旧 `/ai/papers` 转至 Hermes，Home 通用 Log 保留原记录按钮。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
+- **Native-only 入口**：[ParlorActivity](../src/components/parlor-activity.tsx) 保留首页悬浮、拖动贴边与本地状态面板，不再轮询电脑或云端 Hermes。无完整 Native 能力时明确提示升级 Host，不回退到电脑 Agent。旧连接 API、通知回调和插件已从测试分支移除；服务端历史表与已应用迁移保留，见 [Native 测试发布](PARLOR_NATIVE_TEST.md)。
 
-- **开发版 AI 配置**：开发版设置直接复用 [AiProvidersSettings](../src/app/settings/ai-providers-settings.tsx)，通过 `settings.aiConfiguration` 在线管理 Provider 和模型；不包含 Eva 聊天。白名单、账户绑定与服务端协议检查由 [AI 请求契约](../src/lib/ai-configuration-request.ts)、Native Controller、认证 proxy 共同执行。密钥仅临时驻留表单，请求不缓存、不进入业务 outbox；断网清除未提交密钥。旧服务端缺少账户安全协议时拒绝操作。
+- **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。旧 `/ai/papers` 转至 Parlor，Home 通用 Log 保留原记录按钮。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
+
+- **本机 AI 配置**：Parlor 设置使用 Native `ai.*` 与独立 Keychain；不调用旧在线 Provider 配置。旧在线配置底层为兼容保留，不作为 Parlor 设置入口。
 
 - **职责与入口**：[ai/](../src/app/ai/)、[chat API](../src/app/api/ai/chat/route.ts)、[persona.ts](../src/lib/persona.ts)、[ai-tools.ts](../src/lib/ai-tools.ts)、[Provider 设置](../src/app/settings/ai-providers-settings.tsx)。
 - **数据与接口**：`chat_sessions`、`chat_messages`、`ai_settings`、`ai_providers`、`ai_model_configs`；`/api/ai/*`。
 - **依赖与决定**：Persona 从 SELF_PERSONA、偏好、时间与动态上下文组装；业务 Tool Calling 复用服务，Graph 负责事实召回。界面昵称/头像不改变消息 role 或 Persona；Key 归 Provider，Model 引用 Provider，密钥不发送给客户端。内置聊天工具与远程 MCP 是不同入口，勿混用旧工具名。
 - **详文**：[Persona 内容](../SELF_PERSONA.md)、[README 架构与密钥](../README.md)、[部署配置](../DEPLOYMENT.md)。
 
-Hermes 聊天外观由 Web 与 Host 共用。头像与背景按账户保存在设备的 IndexedDB，选择图片时缩小后保存，打开对话时直接读取本机副本。
+Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好，沿用原 IndexedDB／localStorage 格式标识；这些名称不代表存在 Hermes 连接。头像与背景按账户保存在设备的 IndexedDB，选择图片时缩小后保存，打开对话时直接读取本机副本。
 
 ## Inbox
 

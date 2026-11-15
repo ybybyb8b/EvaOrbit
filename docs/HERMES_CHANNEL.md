@@ -1,5 +1,7 @@
 # Hermes 消息通道
 
+> 后续变更：`codex/parlor-native-test` 已按用户授权退役 Hermes 插件、连接 API 与 UI 后备链路，仅保留共用聊天视觉及设备偏好。本文相关旧链路描述为历史记录，当前行为以 [Native 测试发布](PARLOR_NATIVE_TEST.md) 为准；生产 Web 分支未切换。
+
 ## EO 业务工具连接
 
 消息平台本身只收发消息，不能据此认定 Hermes 能操作 EO 业务。2026-11-06 已为本机 Hermes 另行接入 `mcp_servers.evaorbit`，使用正式 `/api/mcp`、OAuth 与现有 8 个通用业务工具；原有其他 MCP 连接保留。用户完成浏览器授权，凭据和刷新令牌由 Hermes 本机存储，未把消息通道令牌或服务端超级密钥用作业务授权。

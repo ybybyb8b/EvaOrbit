@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     if (!parsed.success) throw new ValidationError("纸条或操作格式不正确，请检查后重试。");
     const data = parsed.data, repository = await getRepository();
     // Compatibility for Home's idempotent Inbox-only save. Retired clients cannot start the former agent.
-    if (data.action !== "capture" || data.process) return NextResponse.json({ error: "Papers 已停用，请在 Hermes 中发送便利贴。" }, { status: 410 });
+    if (data.action !== "capture" || data.process) return NextResponse.json({ error: "旧 AI 处理已停用，请在本地 Parlor 中聊天。" }, { status: 410 });
     return NextResponse.json(await repository.eva.capture(data.key, data.content, false), { status: 201 });
   } catch (e) { return apiError(e); }
 }

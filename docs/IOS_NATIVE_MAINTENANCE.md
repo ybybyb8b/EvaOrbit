@@ -1,5 +1,21 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Parlor Native-only 测试分支
+
+用户已授权在 `codex/parlor-native-test` 提交、推送并以 `local_trackers=true` 打包。该分支禁用 Vercel 部署并禁止 push 自动构建普通线上 Host；使用手动 workflow_dispatch，只构建独立本地包，不切换生产 Web 构建分支。Hermes 连接 API、通知回调、插件、本地后备入口及业务白名单已移除，保留消息渲染、分段气泡、头像背景和设备偏好。既有 SQL 迁移／服务端历史数据不删除、不执行迁移。以下早期 Hermes 接入段落仅为历史。
+
+Bundle ID、scheme、ad-hoc 签名、HealthKit entitlement、patched xtool 重签与覆盖安装流程保持原链路。CI 继续按既有决定省略 Simulator／Swift Testing 执行，iphoneos Release 构建与 entitlement 断言通过后才能声称 IPA 已生成；真机测试由用户执行。测试项见 [Parlor Native 验收清单](PARLOR_NATIVE_TEST.md)。
+
+## Native Eva Phase 1A（源码候选，尚未原生验收）
+
+按用户授权的 Eva AI V2，AI 推理与 AI 私有数据作为明确例外由本地 Host 承担；EO 正式业务的 Web/API 权威、Apple 集成及签名安装链保持原职责。仅本地可信主框架在 Runtime 初始化成功后，通过既有 Bridge v1 暴露 `ai.getState`、`ai.saveProvider`、`ai.deleteProvider`、`ai.send`、`ai.cancel`、`ai.deleteConversation`；普通线上 Host 方法集合不增加 AI。本地账户和 generation 在异步操作前后校验，事件再次检查账户与可信本地页面；不允许 `native.invoke` 转发 AI。
+
+Swift Runtime 使用无 Cookie / credential cache 的 ephemeral URLSession，拒绝重定向，直连用户配置的 HTTPS `chat/completions` SSE；只支持文本，不自动重试。Keychain 独立 service `com.evaorbit.nativehost.ai.v1` 按 EO account / Provider 隔离，端点更改须重输或清除原 Key，不导入服务端密钥。独立 `Application Support/EvaOrbitAI/ai.sqlite3` 使用 WAL/FULL 与 schema v1；用户与 assistant 草稿原子写入，增量先持久化再发事件，重新打开数据库将孤立 streaming 标为 interrupted。切换 / 登出账户或进入后台取消任务，保留部分输出，不承诺后台持续推理。
+
+React 依完整方法能力切换 Native / Hermes，空间统一显示 Parlor，复用消息气泡、Markdown、输入与键盘适配；旧 Hermes 历史保留次级入口。AI SQLite 不加入 Tracker outbox、EO 备份或 Supabase。无新增依赖、framework、Info.plist、entitlement、系统权限或签名设置。需要后续授权的新版本地 IPA 才能在手机使用；本轮未构建 IPA，未运行 Swift Testing / Xcode / 真机及真实 Provider。检查与限制见 [Phase 1A 交付记录](NATIVE_EVA_PHASE1A.md)。
+
+Parlor V1 在上述候选源码上增加受同一账户 / origin / 主 frame / generation 校验保护的 `ai.savePersona`，`ai.getState` 增加默认 Persona；完整能力检测同时要求此方法。`ai.sqlite3` schema v2 幂等增加 `ai_personas(account_id,id,payload)`，兼容 v1 的 Provider、消息与中断恢复。Sebastian 按账户首次读取时创建，保存不请求模型；改名与提示词修改不改写历史消息的可选 `personaId/personaName` 快照。当前只提供默认 Persona 编辑，未开放 Persona CRUD、记忆、群聊或 EO 工具；提示词明确当前能力边界。详见 [Parlor V1](PARLOR_V1.md)。
+
 主 Host 和原生集成设置共用 `HostWebView`。它通过 UIKit 的 `inputAccessoryView` 提供零高度附件，移除 WebKit 表单的上下箭头和「完成」工具栏。收起键盘继续使用输入法自身的控件。此改动需要重建并安装 IPA，须在 iPhone 上验证软键盘、候选栏及输入法收起操作。
 
 Hermes Bark 点击通过既有深链解析器，精确新增 `/ai` 页面白名单并保留对话 UUID 查询参数；不新增 Bridge、权限、framework 或 entitlement，原安装签名链不变。需重建本地 Host；Windows SQL、Node 与插件检查不替代 Swift XCTest 和真机推送点击验收。

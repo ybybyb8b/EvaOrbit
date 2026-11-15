@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "codex/local-online-api-release": false,
-      "codex/tracker-local-first-poc": false
+      "codex/tracker-local-first-poc": false,
+      "codex/parlor-native-test": false
     }
   }
 }

@@ -1,11 +1,11 @@
 import {useLocalNativeEnabled} from "./native-integrations";
-import {useLocalInitialPath} from "./routes";
+import {useLocalInitialPath,LocalRouteContext} from "./routes";
 import {LocalSyncManager} from "./sync-manager";
 import {AccountSettings} from "@/components/account-settings";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { SettingsDirectory } from "@/app/settings/settings-directory";
 import { AppearanceSettings } from "@/components/appearance-settings";
-import { AiProvidersSettings } from "@/app/settings/ai-providers-settings";
+import {ParlorSettings} from "@/components/parlor-settings";
 import { LifeDaySettings } from "@/app/settings/life-day-settings";
 import { CalendarInterpretationView } from "@/app/settings/calendar-interpretation/view";
 import { TimelineAssociationView } from "@/app/settings/timeline-association/view";
@@ -31,13 +31,14 @@ import { browserTrackerExport, type LocalAccount, type TrackerPlatform } from ".
 export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { account: LocalAccount; platform: TrackerPlatform; onSignIn: () => void; onSignOut: () => void }) {
   const { english } = useLocale();
   const nativeEnabled=useLocalNativeEnabled();
+  const localRoute=useContext(LocalRouteContext);
   const [section, setSection] = useState(useLocalInitialPath("/settings").split(/[?#]/, 1)[0].replace(/^\/settings$/, "")), [error, setError] = useState("");
   const request = useCallback((path: RequestInfo | URL, init?: RequestInit) => {
     if (typeof path !== "string") return Promise.reject(new Error("Unsupported settings request"));
     return platform.settingsConfiguration(account, path, init);
   }, [platform, account]);
   const aiRequest = useCallback((path: string, init?: RequestInit) => platform.aiConfiguration(account, path, init), [platform, account]);
-  function navigate(path: string) { setError(""); setSection(path); window.scrollTo({ top: 0, behavior: "instant" }); }
+  function navigate(path: string) { if(path.startsWith("/ai")){localRoute.navigate(path);return;} setError(""); setSection(path); window.scrollTo({ top: 0, behavior: "instant" }); }
   async function exportLocal() {
     if (platform.native) { await nativeCall("trackers.exportState"); return; }
     const state = await browserTrackerExport(account);
@@ -53,7 +54,7 @@ export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { 
   if (section === "/settings/data-sync") return <>{back}<LocalSyncManager key={account.accountId} account={account} platform={platform}/></>;
   if (section === "/settings/app-appearance") return detail(english ? "App & Appearance" : "应用与外观", <div className="provider-card"><AppearanceSettings localOnly /></div>);
   if (section === "/settings/life-day") return <>{back}<LifeDaySettings request={request} embedded /></>;
-  if (section === "/settings/ai-connection") return detail(english ? "AI & Connection" : "AI 与连接", <AiProvidersSettings request={aiRequest} onlineOnly />);
+  if (section === "/settings/ai-connection") return <ParlorSettings accountId={account.accountId} back={back} providerRequest={aiRequest}/>;
   if (section === "/settings/calendar-interpretation") return <>{back}<LocalCalendarSettings request={request} onAppleIntegration={() => navigate("/settings/apple-integration")} /></>;
   if (section === "/settings/timeline-association") return <>{back}<LocalTimelineAssociationSettings key={account.accountId} request={request} onSaved={() => { try { localStorage.setItem(`eo:timeline-association-saved:${account.accountId}`, String(Date.now())); } catch { /* Home still refreshes on entry. */ } window.dispatchEvent(new Event("eo:online-business-changed")); }} /></>;
   if (section === "/settings/health-native") return detail(english ? "Health & Native" : "健康与原生能力", <><AppleHealthSection readOnly={!nativeEnabled} />{nativeNote}</>);

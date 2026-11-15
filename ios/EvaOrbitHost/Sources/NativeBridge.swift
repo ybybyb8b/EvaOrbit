@@ -45,6 +45,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     static let trackerMethods: Set<String> = ["native.invoke", "native.api", "navigation.openNativeSettings", "business.request", "trackers.getSession", "trackers.signIn", "trackers.signOut", "trackers.readReplica", "trackers.commitReplica", "trackers.syncReplica", "trackers.readState", "trackers.commitState", "trackers.sync", "trackers.exportState", "trackers.readOnlySnapshot", "trackers.acceptanceStatus", "home.readOnlyResource", "food.readOnlySnapshot", "food.readOnlyResource", "cats.readOnlySnapshot", "settings.aiConfiguration", "settings.configuration", "workspaces.readOnlySnapshot", "media.readOnlySnapshot", "relations.readOnlySnapshot", "health.readOnlySnapshot", "subscriptions.readOnlySnapshot", "chronicle.readOnlySnapshot", "memo.readOnlySnapshot", "inbox.readOnlySnapshot"]
     static let localCoreMethods: Set<String> = ["host.ping", "host.getInfo", "haptic.play", "appearance.setPreference", "navigation.openExternal", "healthkit.getStatus", "eventkit.getStatus", "notification.getStatus", "notification.openSettings"]
     private let trackerController: TrackerLocalController?
+    private let aiRuntime: AIRuntime?
+    private var aiBackgroundObserver: NSObjectProtocol?
     private let healthKitCoordinator: HealthKitCoordinator
     private let notificationManager: NotificationManager
     private let hapticFeedbackManager = HapticFeedbackManager()
@@ -63,9 +65,22 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         if hostConfiguration.localTrackers, let database = try? TrackerLocalDatabase.live() {
             trackerController = TrackerLocalController(baseURL: hostConfiguration.baseURL, database: database)
         } else { trackerController = nil }
+        if hostConfiguration.localTrackers, let store = try? AIStore.live() {
+            aiRuntime = AIRuntime(store: store)
+        } else { aiRuntime = nil }
         self.healthKitCoordinator = healthKitCoordinator
         self.notificationManager = notificationManager
         self.eventKitSyncEngine = eventKitSyncEngine
+        trackerController?.onAccountChanging = { [weak aiRuntime = self.aiRuntime] in aiRuntime?.interrupt() }
+        aiBackgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak aiRuntime = self.aiRuntime] _ in
+            Task { @MainActor in aiRuntime?.interrupt() }
+        }
+    }
+
+    deinit {
+        if let aiBackgroundObserver { NotificationCenter.default.removeObserver(aiBackgroundObserver) }
+        let runtime = aiRuntime
+        Task { @MainActor in runtime?.interrupt() }
     }
 
     func userContentController(
@@ -94,14 +109,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             return
         }
 
-        let parameters = request["params"] as? [String: Any] ?? [:]
+        guard let parameters = request["params"] as? [String: Any] else {
+            replyHandler(failure(id: identifier, code: "invalid_request", message: "Bridge parameters must be an object."), nil)
+            return
+        }
         let isLocal = hostConfiguration.allowsTrackerUI(sourceURL)
-        let allowed = isLocal ? Self.localCoreMethods.union(Self.trackerMethods) : Self.supportedMethods
+        let allowed = isLocal ? Self.localCoreMethods.union(Self.trackerMethods).union(aiRuntime == nil ? [] : AIRuntime.methods) : Self.supportedMethods
         guard allowed.contains(method) else {
             replyHandler(failure(id: identifier, code: "unknown_method", message: "Unsupported native method."), nil)
             return
         }
-        if Self.trackerMethods.contains(method) {
+        if Self.trackerMethods.contains(method) || AIRuntime.methods.contains(method) {
             handleTracker(method: method, parameters: parameters, id: identifier, webView: message.webView, replyHandler: replyHandler)
             return
         }
@@ -399,6 +417,18 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 guard let controller = trackerController else { throw TrackerLocalError.storage }
                 let result: Any
                 switch method {
+                case let aiMethod where AIRuntime.methods.contains(aiMethod):
+                    guard let runtime = aiRuntime, let account = parameters["accountId"] as? String else { throw AIError.invalid }
+                    let generation = try await controller.aiAccountGeneration(account)
+                    result = try await runtime.handle(aiMethod, account: account, parameters: parameters) { [weak webView, weak controller] event in
+                        Task { @MainActor in
+                            guard let controller, let webView, let url = webView.url,
+                                  self.hostConfiguration.allowsTrackerUI(url),
+                                  (try? await controller.requireAIAccount(account, generation: generation)) != nil else { return }
+                            webView.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('evaorbit:ai', {detail: detail}));", arguments: ["detail": event], in: nil, in: .page, completionHandler: nil)
+                        }
+                    }
+                    try await controller.requireAIAccount(account, generation: generation)
                 case "native.invoke":
                     guard let account = parameters["accountId"] as? String, let target = parameters["method"] as? String,
                           Self.nativeIntegrationMethods.contains(target), let arguments = parameters["arguments"] as? [String: Any] else { throw TrackerLocalError.invalid }

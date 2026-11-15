@@ -7,6 +7,16 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     private let cookies: HTTPCookieStorage
     private var activeSession: URLSession?
     private var generation = 0
+    var onAccountChanging: (() -> Void)?
+
+    func aiAccountGeneration(_ account: String) async throws -> Int {
+        try await database.requireAccount(account)
+        return generation
+    }
+    func requireAIAccount(_ account: String, generation expected: Int) async throws {
+        try await database.requireAccount(account)
+        guard generation == expected else { throw TrackerLocalError.account }
+    }
     private var nativeSettingsAccount: String?
     private var nativeOperations = 0
     private var replicaSessions: [String: Int] = [:]
@@ -85,6 +95,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before switching accounts.") }
         guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
+        onAccountChanging?()
         generation += 1
         let expectedGeneration = generation
         guard !email.isEmpty, email.count <= 254, !password.isEmpty, password.count <= 1024 else { throw TrackerLocalError.invalid }
@@ -98,6 +109,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before signing out.") }
         guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
+        onAccountChanging?()
         generation += 1
         try await database.clearAccount()
         // Local logout must work offline. No business records or queue are erased.

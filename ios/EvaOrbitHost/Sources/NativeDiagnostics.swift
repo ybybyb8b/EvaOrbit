@@ -17,6 +17,9 @@ enum NativeDiagnostics {
 
     static func describe(_ error: Error) -> NativeDiagnosticFailure {
         if let diagnostic = error as? NativeDiagnosticFailure { return diagnostic }
+        if let ai = error as? AIError {
+            return .init(code: "ai_failed", message: ai.localizedDescription)
+        }
         if let local = error as? TrackerLocalError {
             switch local {
             case .storage: return .init(code: "local_storage_failed", message: "Local database read/write failed. Check available device storage; do not clear the App.")

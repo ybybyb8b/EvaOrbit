@@ -1,15 +1,16 @@
 [
   {
     "pattern": "^/api/memory-graph/offline$",
-    "methods": ["GET"]
-  },
-  {
-    "pattern": "^/api/hermes$",
-    "methods": ["GET", "POST"]
+    "methods": [
+      "GET"
+    ]
   },
   {
     "pattern": "^/api/eva$",
-    "methods": ["GET", "POST"]
+    "methods": [
+      "GET",
+      "POST"
+    ]
   },
   {
     "pattern": "^/api/cats/food/[1-9][0-9]*/consume$",
@@ -384,7 +385,10 @@
   },
   {
     "pattern": "^/api/health/training/suggestions$",
-    "methods": ["GET", "PATCH"]
+    "methods": [
+      "GET",
+      "PATCH"
+    ]
   },
   {
     "pattern": "^/api/health/training/video$",
