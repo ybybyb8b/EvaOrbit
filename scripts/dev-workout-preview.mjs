@@ -37,7 +37,7 @@ try {
 console.log("Workout 本地演示：使用独立 SQLite 和模拟训练，不连接 Supabase；再次启动保留已填写内容。");
 console.log("打开首页 Universal Log → Training → 补充已有训练，或 /health?view=training 查看历史。");
 if (!process.argv.includes("--seed-only")) {
-  const child = spawn(process.execPath, [fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url)), "dev", ...process.argv.slice(2)], { stdio: "inherit", env: process.env });
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./dev-local.mjs", import.meta.url)), ...process.argv.slice(2)], { stdio: "inherit", env: process.env });
   child.on("error", error => { console.error("本地演示启动失败：", error.message); process.exitCode = 1; });
   child.on("exit", code => { process.exitCode = code ?? 1; });
 }
