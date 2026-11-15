@@ -79,7 +79,7 @@ export type HomeLinkProps = {href:string;className?:string;children?:ReactNode};
 const PlainLink = (props:HomeLinkProps) => <a {...props}/>;
 const EmptySlot = () => null;
 export type HomeTimelineProps = { initialDay:HomeDayOverview;dueItems?:DueReminder[];initialSummary:TimelineMonthSummary;language:UiLanguage;cacheScope:string;readOnly?:boolean;LinkComponent?:ComponentType<HomeLinkProps>;RuleEditor?:typeof import("./calendar-rule-sheet").CalendarRuleSheet;LogScope?:typeof import("./bottom-log").BottomLogScope;dataSource?:{read:typeof cachedRead;save:typeof cachedSave} };
-export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource }:HomeTimelineProps) {
+export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:initialDueItems, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource }:HomeTimelineProps) {
   const businessFetch=useBusinessRequest();
   const Link=LinkComponent, CalendarRuleSheet=RuleEditor ?? EmptySlot, BottomLogScope=LogScope ?? EmptySlot;
   const readHomeSnapshot=dataSource?.read ?? cachedRead,saveHomeSnapshot=dataSource?.save ?? cachedSave;
@@ -88,6 +88,9 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
   const [month, setMonth] = useState(initialSummary.month), [summaries, setSummaries] = useState<Record<string, TimelineMonthSummary>>({ [initialSummary.month]: initialSummary });
   const [selected, setSelected] = useState(initialDay.date), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
   const [days, setDays] = useState<Record<string, HomeDayOverview>>({ [initialDay.date]: initialDay });
+  const [dueOverride,setDueOverride]=useState<{source:typeof initialDueItems;items:DueReminder[]}>();
+  const dueItems=dueOverride?.source===initialDueItems ? dueOverride?.items : initialDueItems;
+  const dueRefresh=useRef<AbortController|null>(null);
   const [loadingDate, setLoadingDate] = useState<string | null>(null), [loadingMonth, setLoadingMonth] = useState(false), [error, setError] = useState("");
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [journalContent, setJournalContent] = useState(""), [journalMood, setJournalMood] = useState<DailyJournalMood | null>(null), [editingJournalId, setEditingJournalId] = useState<number | null>(null), [savingJournal, setSavingJournal] = useState(false);
@@ -182,6 +185,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
       window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", visible);
       dayRequest.current?.abort(); monthRequest.current?.abort(); nativeRefreshRequest.current?.abort();
+      dueRefresh.current?.abort();
     };
   }, []);
   useEffect(() => () => nativeRefreshRequest.current?.abort(), [selected, month, calendarExpanded]);
@@ -204,10 +208,31 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this day" : "无法读取这一天"); }
     finally { if (dayRequest.current === controller) setLoadingDate(null); }
   }
-  async function refreshSelectedDate(invalidateRules = false) {
-    const date = selected;
+  async function refreshDay(date:string, invalidateRules = false) {
     try { const signal = new AbortController().signal; const [nextDay, summary] = await Promise.all([readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, signal, () => {}, true), readHomeSnapshot<TimelineMonthSummary>(cacheScope, `/api/timeline?month=${date.slice(0, 7)}`, signal, () => {}, true)]); setDays((current) => ({ ...(invalidateRules ? {} : current), [date]: nextDay })); setSummaries((current) => ({ ...current, [summary.month]: summary })); setRefreshFailed(false); }
     catch (reason) { if ((reason as Error)?.name !== "AbortError") setError(english ? "Saved, but this day could not refresh" : "已保存，但这一天刷新失败"); }
+  }
+  function refreshSelectedDate(invalidateRules=false){return refreshDay(selected,invalidateRules);}
+  async function refreshTasks(completedOn?:string) {
+    dueRefresh.current?.abort();
+    const controller=new AbortController();
+    dueRefresh.current=controller;
+    await Promise.all([
+      refreshSelectedDate(),
+      completedOn&&completedOn!==selected ? refreshDay(completedOn) : Promise.resolve(),
+      (async()=>{
+        try {
+          const path="/api/reminders/due";
+          const items=dataSource
+            ? await readHomeSnapshot<DueReminder[]>(cacheScope,path,controller.signal,()=>{},true)
+            : await businessFetch(path,{cache:"no-store",signal:controller.signal}).then(async response=>{
+              if(!response.ok)throw new Error("Could not refresh reminders");
+              return await response.json() as DueReminder[];
+            });
+          if(!controller.signal.aborted)setDueOverride({source:initialDueItems,items});
+        } catch { /* The most recent available snapshot is still usable. */ }
+      })(),
+    ]);
   }
   async function changeMonth(nextMonth: string) {
     monthRequest.current?.abort(); const controller = new AbortController(); monthRequest.current = controller; setLoadingMonth(true); setError("");
@@ -257,7 +282,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
     {(error || refreshFailed) && <ErrorNotice role="alert">{error || (english ? "Synced data could not refresh. Please try again." : "同步数据刷新失败，请重试。")}</ErrorNotice>}
     {!day ? <PageLoading title="这一天" englishTitle="day" inline /> : <>
       <div className="home-day-grid">
-        <HomeTasksSummary key={selected} tasks={day.tasks} completedItems={day.completedItems} reminders={dueItems??[]} remindersAvailable={dueItems!==undefined} date={selected} readOnly={readOnly} english={english} LinkComponent={Link} onChanged={()=>void refreshSelectedDate()}/>
+        <HomeTasksSummary key={selected} tasks={day.tasks} completedItems={day.completedItems} reminders={dueItems??[]} remindersAvailable={dueItems!==undefined} date={selected} readOnly={readOnly} english={english} LinkComponent={Link} onChanged={completedOn=>void refreshTasks(completedOn)}/>
         <article className="home-day-pane home-sleep-pane"><button type="button" className="home-pane-open" onClick={() => setSleepSheetOpen(true)} aria-label={english ? "View sleep records" : "查看睡眠记录"}><header><MoonSleep size={19} weight="Outline" aria-hidden="true" /><h3>{english ? "Sleep" : "睡眠"}</h3></header>{sleepSummary && (sleepSummary.actual || sleepSummary.window) ? <><SleepOverviewPreview summary={sleepSummary} timeline={day?.sleep} english={english} />{!sleepSummary.actual && <small>{english ? "Calendar record" : "日历记录"} · {timeLabel(sleepSummary.window!.startAt)}–{timeLabel(sleepSummary.window!.endAt)}</small>}</> : <p className="home-pane-empty">{english ? "No sleep record ending this day" : "没有在这一天结束的睡眠记录"}</p>}</button></article>
         <article className="home-day-pane"><header><ForkKnife size={19} weight="Outline" aria-hidden="true" /><h3><Link href={`/food?date=${selected}`}>{english ? "Meals" : "一日三餐"}</Link></h3></header>{day.meals.length ? <ul className="home-pane-list home-meal-list">{day.meals.map((meal, index) => <li key={`${meal.mealType}-${index}`}><Link href={`/food?date=${selected}&mealType=${encodeURIComponent(meal.mealType)}`}><span>{english ? mealLabels[meal.mealType]?.en ?? "Meal" : mealLabels[meal.mealType]?.zh ?? "饮食"}</span><strong>{meal.detail || meal.title}</strong></Link></li>)}</ul> : <p className="home-pane-empty">{english ? "No meals recorded" : "还没有饮食记录"}</p>}</article>
         <article className="home-day-pane home-journal-pane">
@@ -273,7 +298,8 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems, lan
       <section className="home-day-timeline" aria-busy={loadingDate === selected}><header className="home-day-heading"><h2>Timeline</h2>{events.length > 4 && <button type="button" className="section-link" onClick={() => setTimelineExpanded((current) => !current)}>{timelineExpanded ? english ? "Show less" : "收起" : english ? `Show all ${events.length}` : `查看全部 ${events.length} 条`}</button>}</header>{periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}{events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.slice(0, timelineExpanded ? undefined : 4).map((item) => {
         const source = sourceMeta[item.sourceType], calendar = item.sourceType === "calendar", detail = calendar ? [calendarTimelineRangeLabel(item, english, selected), item.association ? `${item.association.tracker.name} · ${english ? "2 associated records" : "2 条关联记录"}` : ""].filter(Boolean).join(" · ") : detailFor(item, english);
         const meal = item.metadata.calendarMeal as FoodLog["calendarMeal"];
-        const content = <><time style={item.sourceType === "food" ? { whiteSpace: "normal" } : undefined}>{meal ? <>{timeLabel(meal.startAt)}<br />–{timeLabel(meal.endAt)}</> : item.hasExplicitTime ? timeLabel(item.occurredAt) : item.sourceType === "food" ? english ? "Time unspecified" : "未指定时间" : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}{calendar && item.metadata.status === "tentative" ? english ? " · Tentative" : " · 待定" : ""}</span><strong className="user-content">{titleFor(item, english)}</strong>{detail && <small className="user-content">{detail}</small>}{meal && <small>{timeLabel(meal.startAt)}–{timeLabel(meal.endAt)}{timelineDurationLabel(item) && ` · ${timelineDurationLabel(item)}`} · {english ? "Time from Calendar" : "时间来自日历"}</small>}</span></>;
+        const dateOnlyCompletion = item.sourceType==="cat" && ["cat_routine","reminder"].includes(String(item.metadata.sourceType));
+        const content = <><time style={item.sourceType === "food" ? { whiteSpace: "normal" } : undefined}>{meal ? <>{timeLabel(meal.startAt)}<br />–{timeLabel(meal.endAt)}</> : item.hasExplicitTime ? timeLabel(item.occurredAt) : dateOnlyCompletion ? english ? "Date only" : "仅日期" : item.sourceType === "food" ? english ? "Time unspecified" : "未指定时间" : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}{calendar && item.metadata.status === "tentative" ? english ? " · Tentative" : " · 待定" : ""}</span><strong className="user-content">{titleFor(item, english)}</strong>{detail && <small className="user-content">{detail}</small>}{meal && <small>{timeLabel(meal.startAt)}–{timeLabel(meal.endAt)}{timelineDurationLabel(item) && ` · ${timelineDurationLabel(item)}`} · {english ? "Time from Calendar" : "时间来自日历"}</small>}</span></>;
         return item.association ? <button type="button" key={item.id} id={`calendar-event-${item.sourceId}`} className="home-activity-item" data-source="calendar" onClick={() => setAssociationDetail(item.association)} aria-haspopup="dialog">{content}</button> : meal ? <button type="button" key={item.id} className="home-activity-item" data-source="food" onClick={() => setMealDetail(item)} aria-haspopup="dialog">{content}</button> : calendar ? <button type="button" id={`calendar-event-${item.sourceId}`} key={item.id} className="home-activity-item" data-source="calendar" onClick={() => setCalendarDetail(item)} aria-haspopup="dialog">{content}</button> : <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}>{content}</Link>;
       })}</div> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有 Timeline 记录"}</p>}</section>
     </>}

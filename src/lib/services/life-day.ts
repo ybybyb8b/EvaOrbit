@@ -1,6 +1,6 @@
 import "server-only";
 import { matchingCalendarRule } from "../calendar-interpretation";
-import { recurrenceCompletionDate } from "../life-day";
+import { lifeDayDate, recurrenceCompletionDate } from "../life-day";
 import { actualSleepSessions } from "../sleep";
 import { shiftDate, zonedDateParts, zonedDateTimeToUtc } from "../time";
 import { getRepository } from "../repositories";
@@ -15,7 +15,7 @@ export async function updateLifeDayStart(value: unknown) {
   return { fallbackTime: value };
 }
 
-export async function getRecurrenceCompletionDate(actedAt: Date, scheduledAt: string, timezone: string) {
+export async function getRecurrenceCompletionDates(actedAt: Date, scheduledAt: string, timezone: string) {
   if (!Number.isFinite(actedAt.getTime())) throw new ValidationError("完成时间不正确");
   const repository = await getRepository();
   const date = zonedDateParts(actedAt, timezone).date;
@@ -30,5 +30,13 @@ export async function getRecurrenceCompletionDate(actedAt: Date, scheduledAt: st
     && interpretation.categories.find(category => category.id === matchingCalendarRule(event.title, interpretation)?.categoryId)?.kind === "sleep"
     && !actualDates.has(zonedDateParts(event.endAt, timezone).date))
     .map(event => ({ startAt: event.startAt, endAt: event.endAt, durationMinutes: (Date.parse(event.endAt) - Date.parse(event.startAt)) / 60_000 }));
-  return recurrenceCompletionDate(actedAt, scheduledAt, timezone, fallbackTime, [...actual, ...calendar]);
+  const sleeps=[...actual,...calendar];
+  return {
+    completedOn: lifeDayDate(actedAt,timezone,fallbackTime,sleeps),
+    scheduleOn: recurrenceCompletionDate(actedAt,scheduledAt,timezone,fallbackTime,sleeps),
+  };
+}
+
+export async function getRecurrenceCompletionDate(actedAt: Date, scheduledAt: string, timezone: string) {
+  return (await getRecurrenceCompletionDates(actedAt,scheduledAt,timezone)).scheduleOn;
 }

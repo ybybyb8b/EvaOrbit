@@ -2,7 +2,8 @@ import "server-only";
 
 import { ConflictError } from "../errors";
 import { getRepository } from "../repositories";
-import { dateInEvaOrbit } from "../time";
+import { dateInEvaOrbit, zonedDateParts, zonedDateTimeToUtc } from "../time";
+import { completionDateOnly } from "../validation";
 import type { NewCatEvent, NewCatMeasurement, NewCatMedication, NewCatSymptom, NewCatVetVisit, NewPet } from "../repositories/types";
 import type { CatRecordKind, CatTimelineEntry } from "../types";
 
@@ -14,8 +15,62 @@ export async function updatePet(id:number,input:Record<string,unknown>){await en
 export async function archivePet(id:number){await ensurePet(id,true);const repository=await getRepository();const archived=await repository.archivePet(id);if(!archived)return false;const [reminders,routines]=await Promise.all([repository.listReminders({targetType:"cat",targetId:id,activeOnly:true}),repository.listCatRoutines({scope:"cat",petId:id,enabledOnly:true})]);await Promise.all([...reminders.map(reminder=>repository.updateReminder(reminder.id,{isActive:false,status:"cancelled",cancelledAt:new Date().toISOString(),snoozedUntil:null})),...routines.map(routine=>repository.updateCatRoutine(routine.id,{enabled:false}))]);return true;}
 
 export async function createCatRecord(kind:CatRecordKind,input:NewCatEvent|NewCatSymptom|NewCatVetVisit|NewCatMedication|NewCatMeasurement){const repository=await getRepository();const petId=(input as {petId:number|null}).petId;if(petId!==null)await ensurePet(petId);if(kind==="event")return repository.createCatEvent(input as NewCatEvent);if(kind==="symptom")return repository.createCatSymptom(input as NewCatSymptom);if(kind==="vet_visit")return repository.createCatVetVisit(input as NewCatVetVisit);if(kind==="medication")return repository.createCatMedication(input as NewCatMedication);return repository.createCatMeasurement(input as NewCatMeasurement);}
-export async function updateCatRecord(kind:CatRecordKind,id:number,input:Record<string,unknown>){const repository=await getRepository();if(typeof input.petId==="number")await ensurePet(input.petId,true);if(kind==="event")return repository.updateCatEvent(id,input);if(kind==="symptom")return repository.updateCatSymptom(id,input);if(kind==="vet_visit")return repository.updateCatVetVisit(id,input);if(kind==="medication")return repository.updateCatMedication(id,input);return repository.updateCatMeasurement(id,input);}
-export async function deleteCatRecord(kind:CatRecordKind,id:number){const repository=await getRepository();if(kind==="event")return repository.deleteCatEvent(id);if(kind==="symptom")return repository.deleteCatSymptom(id);if(kind==="vet_visit")return repository.deleteCatVetVisit(id);if(kind==="medication")return repository.deleteCatMedication(id);return repository.deleteCatMeasurement(id);}
+export async function updateCatRecord(kind:CatRecordKind,id:number,input:Record<string,unknown>){
+  const repository=await getRepository();
+  if(typeof input.petId==="number")await ensurePet(input.petId,true);
+  if(kind==="event"){
+    const event=await repository.getCatEvent(id);
+    if(!event)return null;
+    if(event.sourceType==="cat_routine"||event.sourceType==="reminder"){
+      const occurredAt=typeof input.occurredAt==="string"?input.occurredAt:event.occurredAt;
+      const completedOn=completionDateOnly(dateInEvaOrbit(new Date(occurredAt)));
+      const saved=await repository.changeCatCompletion(id,{
+        occurredAt,completedOn,occurredHasExplicitTime:typeof input.occurredHasExplicitTime==="boolean"?input.occurredHasExplicitTime:event.occurredHasExplicitTime,
+        title:typeof input.title==="string"?input.title:undefined,note:typeof input.note==="string"?input.note:undefined,
+      });
+      if(!saved)throw new ConflictError("完成日期必须晚于上一次护理的完成日期");
+      return saved;
+    }
+    return repository.updateCatEvent(id,input);
+  }
+  if(kind==="symptom")return repository.updateCatSymptom(id,input);
+  if(kind==="vet_visit")return repository.updateCatVetVisit(id,input);
+  if(kind==="medication")return repository.updateCatMedication(id,input);
+  return repository.updateCatMeasurement(id,input);
+}
+
+export async function correctCatCompletion(id:number,value:unknown){
+  const completedOn=completionDateOnly(value);
+  const repository=await getRepository();
+  const event=await repository.getCatEvent(id);
+  if(!event)throw new ConflictError("找不到护理完成记录");
+  const time=event.occurredHasExplicitTime?zonedDateParts(event.occurredAt).time:"12:00";
+  const saved=await repository.changeCatCompletion(id,{
+    completedOn,occurredAt:zonedDateTimeToUtc(completedOn,time),occurredHasExplicitTime:event.occurredHasExplicitTime,
+  });
+  if(!saved)throw new ConflictError("完成日期无法更正，请检查它是否晚于上一次护理的完成日期");
+  return saved;
+}
+
+export async function undoCatRoutineCompletion(routineId:number,eventId:number){
+  const repository=await getRepository();
+  const event=await repository.getCatEvent(eventId);
+  if(event?.sourceType!=="cat_routine"||event.sourceId!==routineId||!await repository.changeCatCompletion(eventId,null)){
+    throw new ConflictError("这期护理已无法撤销，请刷新后在护理历史中更正");
+  }
+}
+export async function deleteCatRecord(kind:CatRecordKind,id:number){
+  const repository=await getRepository();
+  if(kind==="event"){
+    const event=await repository.getCatEvent(id);
+    if(event?.sourceType==="cat_routine"||event?.sourceType==="reminder")return Boolean(await repository.changeCatCompletion(id,{deleteHistory:true}));
+    return repository.deleteCatEvent(id);
+  }
+  if(kind==="symptom")return repository.deleteCatSymptom(id);
+  if(kind==="vet_visit")return repository.deleteCatVetVisit(id);
+  if(kind==="medication")return repository.deleteCatMedication(id);
+  return repository.deleteCatMeasurement(id);
+}
 
 export async function getCatRecord(kind:CatRecordKind,id:number){const repository=await getRepository();if(kind==="event")return repository.getCatEvent(id);if(kind==="symptom")return repository.getCatSymptom(id);if(kind==="vet_visit")return repository.getCatVetVisit(id);if(kind==="medication")return repository.getCatMedication(id);return repository.getCatMeasurement(id);}
 

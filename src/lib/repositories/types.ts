@@ -151,7 +151,17 @@ export type NewCatVetVisit = Omit<CatVetVisit, "id" | "createdAt" | "updatedAt">
 export type NewCatMedication = Omit<CatMedication, "id" | "createdAt" | "updatedAt">;
 export type NewCatMeasurement = Omit<CatMeasurement, "id" | "createdAt" | "updatedAt">;
 export type NewReminder = Omit<Reminder, "id" | "overdueAfter" | "lastCompletedAt" | "snoozedUntil" | "lastNotifiedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt"> & { overdueAfter?: string | null };
-export type NewCatRoutine = Omit<CatRoutine, "id" | "lastCompletedAt" | "createdAt" | "updatedAt">;
+export type NewCatRoutine = Omit<CatRoutine, "id" | "lastCompletedAt" | "lastCompletedOn" | "undoableEventId" | "createdAt" | "updatedAt">;
+export type CatRoutineCompletion = Pick<CatRoutine, "lastCompletedAt" | "anchorDate" | "nextDueDate" | "nextDueAt"> & {
+  completedOn: string;
+  occurredAt: string;
+  previousCompletedOn: string | null;
+};
+export type CatCompletionEdit = Pick<CatEvent, "occurredAt" | "occurredHasExplicitTime"> & {
+  completedOn: string;
+  title?: string;
+  note?: string;
+};
 export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archivedAt" | "createdAt" | "updatedAt">;
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
@@ -501,7 +511,8 @@ export interface EvaOrbitRepository {
   getCatRoutine(id: number): Promise<CatRoutine | null>;
   createCatRoutine(input: NewCatRoutine): Promise<CatRoutine>;
   updateCatRoutine(id: number, input: Record<string, unknown>): Promise<CatRoutine | null>;
-  completeCatRoutineOccurrence(id: number, expected: Pick<CatRoutine, "nextDueAt" | "lastCompletedAt">, completion: Pick<CatRoutine, "lastCompletedAt" | "anchorDate" | "nextDueDate" | "nextDueAt">): Promise<{ routine: CatRoutine; event: CatEvent } | null>;
+  completeCatRoutineOccurrence(id: number, expected: Pick<CatRoutine, "nextDueAt" | "lastCompletedAt">, completion: CatRoutineCompletion): Promise<{ routine: CatRoutine; event: CatEvent } | null>;
+  changeCatCompletion(eventId: number, edit: CatCompletionEdit | { deleteHistory: true } | null): Promise<CatEvent | null>;
   archiveCatRoutine(id: number): Promise<boolean>;
   deleteCatRoutine(id: number): Promise<boolean>;
 
@@ -510,7 +521,9 @@ export interface EvaOrbitRepository {
   createReminder(input: NewReminder): Promise<Reminder>;
   updateReminder(id: number, input: Record<string, unknown>): Promise<Reminder | null>;
   deleteReminder(id: number): Promise<boolean>;
-  listReminderOccurrences(range: { from: string; to: string }): Promise<ReminderOccurrence[]>;
+  listReminderOccurrences(range: { from: string; to: string }, date?: string): Promise<ReminderOccurrence[]>;
+  getReminderOccurrence(reminderId: number, occurrenceId: number): Promise<ReminderOccurrence | null>;
+  correctReminderCompletion(reminderId: number, occurrenceId: number, completedOn: string, schedule?: { expectedNextDueAt: string | null; nextDueAt: string | null; isActive: boolean }): Promise<boolean>;
   createReminderOccurrence(input: Omit<ReminderOccurrence, "id" | "createdAt">): Promise<ReminderOccurrence>;
   listNotificationDeliveries(limit?: number): Promise<NotificationDelivery[]>;
   createNotificationDelivery(input: Omit<NotificationDelivery, "id" | "createdAt">): Promise<NotificationDelivery>;

@@ -4,7 +4,7 @@ import { ConflictError } from "../errors";
 import { getRepository } from "../repositories";
 import type { NewTask, TaskFilter } from "../repositories/types";
 import type { Task, TaskReminder } from "../types";
-import { EVAORBIT_TIME_ZONE, shiftDate, zonedDateTimeToUtc } from "../time";
+import { EVAORBIT_TIME_ZONE, dateInEvaOrbit, shiftDate, zonedDateTimeToUtc } from "../time";
 
 type ReminderMode = "none" | "at_due" | "custom";
 type TaskReminderWrite = { reminderMode?:ReminderMode;reminderDate?:string|null;reminderTime?:string|null;repeatWhileOverdue?:boolean;timezone?:string };
@@ -77,12 +77,21 @@ export async function createTask(input:TaskCreateInput){
 export async function updateTask(id:number,input:TaskPatch){
   const repository=await getRepository(),current=await repository.getTask(id);if(!current)return null;
   const reminder=reminderFields(input),taskPatch=Object.fromEntries(Object.entries(input).filter(([key])=>!["reminderMode","reminderDate","reminderTime","repeatWhileOverdue","timezone"].includes(key)));
-  if(input.completed===true&&input.completedAt===undefined)taskPatch.completedAt=new Date().toISOString();
-  if(input.completed===false)taskPatch.completedAt=null;
+  if(input.completedOn!==undefined&&(input.completed===false||!(input.completed===true||current.completed))) throw new ConflictError("请先完成任务，再修改完成日期");
+  if(input.completed===true&&(!current.completed||!current.completedAt||input.completedAt!==undefined)){
+    const now=new Date();
+    const timestamp=typeof input.completedAt==="string"?input.completedAt:current.completedAt??now.toISOString();
+    taskPatch.completedAt=timestamp;
+    const timestampChanged=typeof input.completedAt==="string"&&Date.parse(input.completedAt)!==Date.parse(current.completedAt??"");
+    taskPatch.completedOn=input.completedOn??(!timestampChanged?current.completedOn:null)??dateInEvaOrbit(new Date(timestamp));
+  }
+  if(input.completed===false){taskPatch.completedAt=null;taskPatch.completedOn=null;}
   if(taskPatch.dueDate===null)taskPatch.dueTime=null;
   const nextDueDate=taskPatch.dueDate===undefined?current.dueDate:taskPatch.dueDate,nextDueTime=taskPatch.dueTime===undefined?current.dueTime:taskPatch.dueTime;
   if(nextDueTime&&!nextDueDate)throw new ConflictError("设置截止时间前需要先选择截止日期");
-  const task=await repository.updateTask(id,taskPatch);if(!task)return null;
+  const task=await repository.updateTask(id,taskPatch);
+  if(!task&&input.completedOn!==undefined)throw new ConflictError("任务状态已变化，请刷新后重试");
+  if(!task)return null;
   const reminderChanged=Object.values(reminder).some(value=>value!==undefined);
   if(reminderChanged)await writePrimaryRule(task,input);
   return reconcileTaskReminders(id,reminderChanged||input.dueDate!==undefined||input.dueTime!==undefined||input.completed!==undefined);
@@ -94,7 +103,7 @@ export async function disableTaskReminder(ruleId:number){
   const task=await repository.getTask(rule.taskId);if(task?.reminderId===rule.reminderId)await repository.updateTask(task.id,{reminderId:null});return true;
 }
 
-export async function completeTaskFromReminder(ruleId:number){const rule=await(await getRepository()).getTaskReminder(ruleId);if(!rule)throw new ConflictError("Task reminder rule not found.");return updateTask(rule.taskId,{completed:true});}
+export async function completeTaskFromReminder(ruleId:number,actedAt:Date,completedOn:string){const rule=await(await getRepository()).getTaskReminder(ruleId);if(!rule)throw new ConflictError("Task reminder rule not found.");const task=await getTask(rule.taskId);return task?.completed?task:updateTask(rule.taskId,{completed:true,completedAt:actedAt.toISOString(),completedOn});}
 
 export async function replaceTaskRemindersFromEventKit(taskId:number,alarms:Array<{absoluteDate:string|null;absoluteTime:string|null;offsetMinutes:number|null;timezone:string}>){const repository=await getRepository(),task=await repository.getTask(taskId);if(!task)throw new ConflictError("Task not found.");for(const rule of await repository.listTaskReminders(taskId)){if(rule.reminderId)await repository.deleteReminder(rule.reminderId);await repository.deleteTaskReminder(rule.id);}for(const alarm of alarms){const absolute=Boolean(alarm.absoluteDate&&alarm.absoluteTime);await repository.createTaskReminder({taskId,reminderId:null,triggerType:absolute?"absolute":"relative",absoluteDate:absolute?alarm.absoluteDate:null,absoluteTime:absolute?alarm.absoluteTime:null,relativeTo:absolute?null:"due",offsetMinutes:absolute?null:alarm.offsetMinutes,timezone:alarm.timezone,repeatWhileOverdue:false,deliveryChannel:"apple_reminders"});}return reconcileTaskReminders(taskId,true);}
 

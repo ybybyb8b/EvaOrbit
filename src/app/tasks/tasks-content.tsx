@@ -23,12 +23,13 @@ import { PageLoading } from "@/components/page-loading";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { groupTasks, taskCalendarDates, taskDateOffset, type TaskGroup } from "@/lib/task-groups";
+import { dateInEvaOrbit } from "@/lib/time";
 import type { ApiError, Task, TaskPriority } from "@/lib/types";
 
 type Status = "all" | "open" | "done";
 const sections = ["list", "month"] as const;
 type ReminderMode="none"|"at_due"|"custom";
-type TaskDraft = { title:string;notes:string;dueDate:string;dueTime:string;reminderMode:ReminderMode;reminderDate:string;reminderTime:string;repeatWhileOverdue:boolean;priority:TaskPriority;tags:string };
+type TaskDraft = { title:string;notes:string;dueDate:string;dueTime:string;completedOn?:string;reminderMode:ReminderMode;reminderDate:string;reminderTime:string;repeatWhileOverdue:boolean;priority:TaskPriority;tags:string };
 const emptyDraft:TaskDraft={title:"",notes:"",dueDate:"",dueTime:"",reminderMode:"none",reminderDate:"",reminderTime:"",repeatWhileOverdue:false,priority:"medium",tags:""};
 
 function localDate(offset = 0) {
@@ -79,7 +80,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   const startEdit = useCallback((task: Task) => {
     const reminder=task.reminders?.[0];
     setEditing(task.id);
-    setDraft({title:task.title,notes:task.notes,dueDate:task.dueDate??"",dueTime:task.dueTime??"",reminderMode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",reminderDate:reminder?.absoluteDate??"",reminderTime:reminder?.absoluteTime??"",repeatWhileOverdue:reminder?.repeatWhileOverdue??false,priority:task.priority,tags:task.tags.join(", ")});
+    setDraft({title:task.title,notes:task.notes,dueDate:task.dueDate??"",dueTime:task.dueTime??"",completedOn:task.completed?(task.completedOn??(task.completedAt?dateInEvaOrbit(new Date(task.completedAt)):"")):undefined,reminderMode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",reminderDate:reminder?.absoluteDate??"",reminderTime:reminder?.absoluteTime??"",repeatWhileOverdue:reminder?.repeatWhileOverdue??false,priority:task.priority,tags:task.tags.join(", ")});
     setShowMore(true); setError(""); setShowForm(true);
   }, []);
 
@@ -210,11 +211,12 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
 
   function renderTask(task: Task) {
     const due = dueLabel(task, english), reminder = task.reminders?.[0];
+    const completedOn = task.completed ? task.completedOn ?? (task.completedAt ? dateInEvaOrbit(new Date(task.completedAt)) : null) : null;
     return <article className={`task-row ${task.completed ? "completed" : ""}`} key={task.id}>
       <button type="button" className="task-check" disabled={preview||busyTaskId !== null} aria-pressed={task.completed} aria-busy={busyTaskId === task.id} onClick={() => void toggle(task)} aria-label={task.completed ? (english ? `Reopen ${task.title}` : `重新打开：${task.title}`) : (english ? `Complete ${task.title}` : `完成：${task.title}`)}><Icon name="check" /></button>
       <button type="button" className="task-body task-open" onClick={() => startEdit(task)} aria-label={english ? `Edit ${task.title}` : `编辑：${task.title}`}>
         <span className="task-title-line"><span className="task-title">{task.title}</span>{task.priority === "high" && <span className="priority-label high">{english ? "High" : "高优先级"}</span>}</span>
-        {(due || reminder || task.notes || task.tags.length > 0) && <span className="task-meta">{due && (task.dueDate !== activeDate || task.dueTime) && <time dateTime={`${task.dueDate}${task.dueTime ? `T${task.dueTime}` : ""}`}>{task.dueDate === activeDate ? task.dueTime : due}</time>}{task.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}{reminder && <span className="task-reminder-state" title={reminder.triggerType === "absolute" ? `${reminder.absoluteDate} ${reminder.absoluteTime}` : (english ? "At due time" : "截止时提醒")}><Icon name="notifications" variant="stroke" /><span className="sr-only">{english ? "Reminder set" : "已设置提醒"}</span></span>}{task.notes && <span className="task-note-indicator" title={task.notes}><Icon name="memory" variant="stroke" /><span className="sr-only">{english ? "Has notes" : "有备注"}</span></span>}</span>}
+        {(completedOn || due || reminder || task.notes || task.tags.length > 0) && <span className="task-meta">{completedOn ? <time dateTime={completedOn}>{english?"Done":"完成"} {completedOn}</time> : due && (task.dueDate !== activeDate || task.dueTime) && <time dateTime={`${task.dueDate}${task.dueTime ? `T${task.dueTime}` : ""}`}>{task.dueDate === activeDate ? task.dueTime : due}</time>}{task.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}{reminder && <span className="task-reminder-state" title={reminder.triggerType === "absolute" ? `${reminder.absoluteDate} ${reminder.absoluteTime}` : (english ? "At due time" : "截止时提醒")}><Icon name="notifications" variant="stroke" /><span className="sr-only">{english ? "Reminder set" : "已设置提醒"}</span></span>}{task.notes && <span className="task-note-indicator" title={task.notes}><Icon name="memory" variant="stroke" /><span className="sr-only">{english ? "Has notes" : "有备注"}</span></span>}</span>}
       </button>
     </article>;
   }
@@ -223,6 +225,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
     {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} submitDisabled={preview} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className="editor-card" onSubmit={submit}>{preview&&<FormPreviewNotice/>}
       <label className="field wide quick-title"><span>{english ? "Task" : "任务内容"}</span><input required maxLength={160} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
+      {draft.completedOn!==undefined&&<label className="field wide"><span>{english?"Completion date":"完成日期"}</span><input type="date" required max={dateInEvaOrbit()} value={draft.completedOn} onChange={event=>setDraft({...draft,completedOn:event.target.value})}/></label>}
       <div className="quick-date-field"><span>{english ? "Due" : "截止日期"}</span><div>{([['today',english ? 'Today' : '今天'],['tomorrow',english ? 'Tomorrow' : '明天'],['week',english ? 'This week' : '本周'],['none',english ? 'No due date' : '不设日期']] as const).map(([value,label])=><button type="button" key={value} onClick={()=>quickDate(value)}>{label}</button>)}</div>{draft.dueDate&&<small>{english ? `Due ${draft.dueDate}${draft.dueTime ? ` at ${draft.dueTime}` : ""}` : `截止 ${draft.dueDate}${draft.dueTime ? ` ${draft.dueTime}` : ""}`}</small>}</div>
       <button type="button" className="more-toggle" onClick={()=>setShowMore(!showMore)}>{showMore ? (english ? "Fewer settings" : "收起设置") : (english ? "More settings" : "更多设置")} <span>›</span></button>
       {showMore && <div className="form-grid advanced-fields">

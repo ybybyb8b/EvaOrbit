@@ -1,8 +1,10 @@
 import "server-only";
 
 import { ConflictError } from "../errors";
+import { completionDateOnly, ValidationError } from "../validation";
+import { dateInEvaOrbit, zonedDateTimeToUtc } from "../time";
 import { appleOwnsInitialNotification, effectiveDueAt, nextTrackerNotification, reminderActionPatch, selectDueReminders, snoozeUntil, trackerReminderNextDueAt, trackerReminderShouldNotify } from "../reminder-engine";
-import { reminderSourceDefinition, reminderSourceLabel } from "../reminder-source-registry";
+import { canCorrectReminderCompletion, reminderSourceDefinition, reminderSourceLabel } from "../reminder-source-registry";
 import { getRepository } from "../repositories";
 import type { NewReminder } from "../repositories/types";
 import type { DueReminder, Reminder, ScheduledNotification } from "../types";
@@ -122,29 +124,65 @@ async function advanceTrackerReminder(reminder: Reminder, action: "completed" | 
 }
 
 export async function completeReminder(id: number, actedAt = new Date(), expected: RoutineCompletionExpectation = {}) {
+  if (!expected || typeof expected!=="object" || Array.isArray(expected)) throw new ValidationError("完成请求格式不正确");
+  if (!Number.isFinite(actedAt.getTime())) throw new ValidationError("完成操作时间不正确");
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (reminder?.scheduleType === "one_time" && reminder.status === "completed" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) return reminder;
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
   const source = reminderSourceDefinition(reminder.sourceType);
-  if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await completeCatRoutine(reminder.sourceId, actedAt, expected); return repository.getReminder(id); }
+  if (source.projectionOwner === "cat_routine" && reminder.sourceId) {
+    const result=await completeCatRoutine(reminder.sourceId,actedAt,expected);
+    const updated=await repository.getReminder(id);
+    return updated&&{...updated,completedOn:result.routine?.lastCompletedOn};
+  }
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "completed", actedAt);
   if(source.projectionOwner==="subscription"&&reminder.sourceId){await recordSubscriptionPaymentFromReminder(reminder.sourceId,actedAt);await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});return repository.getReminder(id);}
   if (source.projectionOwner === "task" && reminder.sourceId) {
-    await repository.createReminderOccurrence({reminderId:id,action:"completed",scheduledFor:effectiveDueAt(reminder)??reminder.startsAt,actedAt:actedAt.toISOString(),createdEventId:null});
-    await completeTaskFromReminder(reminder.sourceId);
+    const completedOn = expected.completedOn === undefined ? dateInEvaOrbit(actedAt) : completionDateOnly(expected.completedOn);
+    await completeTaskFromReminder(reminder.sourceId,actedAt,completedOn);
     return repository.getReminder(id);
   }
   let createdEventId: number | null = null;
-  const completionDate = reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour"
-    ? await getRecurrenceCompletionDate(actedAt, reminder.nextDueAt ?? reminder.startsAt, reminder.timezone) : undefined;
-  const completion = reminderActionPatch(reminder, "complete", actedAt, completionDate);
+  const scheduledFor = reminder.nextDueAt ?? reminder.startsAt;
+  const date = expected.completedOn === undefined ? undefined : completionDateOnly(expected.completedOn);
+  const completedOn = date ?? dateInEvaOrbit(actedAt);
+  const scheduleOn = date ?? (reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour"
+    ? await getRecurrenceCompletionDate(actedAt,scheduledFor,reminder.timezone) : undefined);
+  const completion = reminderActionPatch(reminder, "complete", actedAt, scheduleOn);
   if ((reminder.scheduleType === "interval" || reminder.scheduleType === "one_time") && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) {
     const previous = reminder.scheduleType === "one_time" ? (await repository.listCatEvents(reminder.targetType === "cat" ? reminder.targetId : null)).find(item => item.sourceType === "reminder" && item.sourceId === reminder.id) : undefined;
-    const event = previous ?? await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: actedAt.toISOString(), occurredHasExplicitTime: true, title: reminder.title, note: reminder.note, sourceType: "reminder", sourceId: reminder.id });
+    const event = previous ?? await repository.createCatEvent({ petId: reminder.targetType === "cat" ? reminder.targetId : null, eventType: reminder.targetType === "cat" ? "care" : "cleaning", occurredAt: zonedDateTimeToUtc(completedOn,"12:00"), occurredHasExplicitTime: false, title: reminder.title, note: reminder.note, sourceType: "reminder", sourceId: reminder.id });
     createdEventId = event.id;
   }
-  await repository.createReminderOccurrence({ reminderId: id, action: "completed", scheduledFor: reminder.nextDueAt ?? reminder.startsAt, actedAt: actedAt.toISOString(), createdEventId });
-  return repository.updateReminder(id, { ...completion, status: reminder.scheduleType === "one_time" ? "completed" : "scheduled", sentAt: reminder.scheduleType === "one_time" ? reminder.sentAt : null, lastNotifiedAt: reminder.scheduleType === "one_time" ? reminder.lastNotifiedAt : null });
+  await repository.createReminderOccurrence({ reminderId: id, action: "completed", scheduledFor, actedAt: actedAt.toISOString(), completedOn, createdEventId });
+  const updated=await repository.updateReminder(id, { ...completion, status: reminder.scheduleType === "one_time" ? "completed" : "scheduled", sentAt: reminder.scheduleType === "one_time" ? reminder.sentAt : null, lastNotifiedAt: reminder.scheduleType === "one_time" ? reminder.lastNotifiedAt : null });
+  return updated&&{...updated,completedOn};
+}
+
+export async function correctReminderCompletion(id: number, occurrenceId: number, value: unknown) {
+  const completedOn = completionDateOnly(value);
+  const repository = await getRepository();
+  const [reminder, occurrence] = await Promise.all([repository.getReminder(id),repository.getReminderOccurrence(id,occurrenceId)]);
+  if (!reminder || occurrence?.action !== "completed" || occurrence.createdEventId !== null
+    || !canCorrectReminderCompletion(reminder)) throw new ConflictError("这条提醒完成记录无法在此更正");
+  let schedule: { expectedNextDueAt: string | null; nextDueAt: string | null; isActive: boolean } | undefined;
+  if (reminder.scheduleType === "interval" && reminder.intervalUnit !== "hour" && reminder.status !== "cancelled" && !reminder.snoozedUntil
+    && Date.parse(reminder.lastCompletedAt ?? "") === Date.parse(occurrence.actedAt)) {
+    const actedAt = new Date(occurrence.actedAt);
+    const original = { ...reminder, nextDueAt: occurrence.scheduledFor };
+    const originalDate = await getRecurrenceCompletionDate(actedAt,occurrence.scheduledFor,reminder.timezone);
+    const matchesCurrent = [originalDate,occurrence.completedOn].some(date=>{
+      if(!date)return false;
+      const {nextDueAt}=reminderActionPatch(original,"complete",actedAt,date);
+      return nextDueAt===reminder.nextDueAt||Date.parse(nextDueAt??"")===Date.parse(reminder.nextDueAt??"");
+    });
+    if (matchesCurrent) {
+      const { nextDueAt, isActive } = reminderActionPatch(original,"complete",actedAt,completedOn);
+      schedule = { expectedNextDueAt: reminder.nextDueAt, nextDueAt, isActive };
+    }
+  }
+  if (!await repository.correctReminderCompletion(id,occurrenceId,completedOn,schedule)) throw new ConflictError("提醒已变化，请刷新后重试");
+  return { completedOn };
 }
 
 export async function skipReminder(id: number, actedAt = new Date()) {

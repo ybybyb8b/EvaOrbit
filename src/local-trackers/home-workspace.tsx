@@ -38,8 +38,9 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
   const dataSource=useMemo<HomeTimelineProps["dataSource"]>(()=>({
     async read<T>(_scope:string,url:string,signal:AbortSignal,onCached:(data:T)=>void,force=false):Promise<T>{
       const day=/^\/api\/home-day\?date=(\d{4}-\d{2}-\d{2})$/.exec(url),month=/^\/api\/timeline\?month=(\d{4}-\d{2})$/.exec(url);
-      if(!day&&!month)throw new Error("Home request refused");
-      const kind=day?"day":"month",key=(day??month)![1];
+      const due=url==="/api/reminders/due";
+      if(!day&&!month&&!due)throw new Error("Home request refused");
+      const kind=due?"due":day?"day":"month",key=due?"current":(day??month)![1];
       const cached=await resources(kind,key);signal.throwIfAborted();
       if(cached){onCached(cached.data as T);if(!navigator.onLine||!force&&Date.now()-Date.parse(cached.capturedAt)<60_000)return cached.data as T;}
       const fresh=await resources(kind,key,true);signal.throwIfAborted();

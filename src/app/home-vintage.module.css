@@ -113,6 +113,8 @@
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-snooze) { display:flex;gap:8px;flex-wrap:wrap;margin-top:10px; }
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-snooze label) { width:100%;display:grid;gap:6px;font-size:12px;color:var(--text-secondary); }
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-snooze input) { min-width:0;max-width:100%;min-height:40px;background:var(--surface-raised);color:var(--text-primary);border:1px solid var(--border-control);border-radius:8px;padding:6px;font:inherit; }
+:global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-completion-form) { margin-inline-start:28px; }
+:global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-completion-form input) { width:100%;font-size:16px; }
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(button:disabled),:global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(input:disabled) { cursor:default;opacity:.5; }
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.home-calendar-card > .home-day-timeline) { background:var(--surface-card);box-shadow:none; }
 @media(min-width:1000px) {

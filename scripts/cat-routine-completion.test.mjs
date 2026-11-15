@@ -13,7 +13,7 @@ test("routine completion deduplicates retries, competing requests and stale Appl
   const result=spawnSync(process.execPath,["--experimental-loader",pathToFileURL(path.resolve("scripts/typescript-test-loader.mjs")).href,"--input-type=module","--eval",`
    import assert from "node:assert/strict";
    import {DatabaseSync} from "node:sqlite";
-   import {createPet} from "./src/lib/services/cats.ts";
+   import {createPet,correctCatCompletion,undoCatRoutineCompletion} from "./src/lib/services/cats.ts";
    import {createCatRoutine,completeCatRoutine} from "./src/lib/services/cat-routine.ts";
    import {completeReminder} from "./src/lib/services/reminder.ts";
    import {parsePet,parseCatRoutine} from "./src/lib/cats-validation.ts";
@@ -46,6 +46,25 @@ test("routine completion deduplicates retries, competing requests and stale Appl
    assert.equal((await repo.listCatEvents(pet.id)).length,3);
    const occurrences=await repo.listReminderOccurrences({from:"2026-11-03T00:00:00Z",to:"2026-11-07T00:00:00Z"});
    assert.equal(occurrences.filter(item=>item.reminderId===routine.reminderId).length,3);
+   const events=await repo.listCatEvents(pet.id);
+   const latestEventId=(await repo.getCatRoutine(routine.id)).undoableEventId;
+   const latest=events.find(event=>event.id===latestEventId);
+   assert.equal(latest.occurredHasExplicitTime,false);
+   await assert.rejects(undoCatRoutineCompletion(routine.id,events.at(-1).id),/无法撤销/);
+   await correctCatCompletion(events.at(-1).id,"2026-11-02");
+   assert.equal((await repo.getCatRoutine(routine.id)).nextDueDate,"2026-11-06","editing an older record keeps the current cycle");
+   await undoCatRoutineCompletion(routine.id,latest.id);
+   assert.equal((await repo.getCatRoutine(routine.id)).nextDueDate,"2026-11-05");
+   assert.equal(await repo.getCatEvent(latest.id),null);
+   assert.equal((await repo.listReminderOccurrences({from:"2026-11-05T00:00:00Z",to:"2026-11-06T00:00:00Z"})).length,0);
+   const another=await createCatRoutine(parseCatRoutine({scope:"cat",petId:pet.id,title:"清洁",intervalValue:7,intervalUnit:"day",firstDueDate:"2026-11-04",configuredReminderTime:"10:00"}));
+   const done=await completeCatRoutine(another.id,new Date("2026-11-05T10:00:00Z"));
+   assert.equal(done.routine.nextDueDate,"2026-11-12");
+   await correctCatCompletion(done.event.id,"2026-11-04");
+   assert.equal((await repo.getCatRoutine(another.id)).nextDueDate,"2026-11-11");
+   assert.equal((await repo.getReminder(another.reminderId)).nextDueAt,"2026-11-11T02:00:00.000Z");
+   await undoCatRoutineCompletion(another.id,done.event.id);
+   assert.equal((await repo.getCatRoutine(another.id)).nextDueDate,"2026-11-04");
   `],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"test.db"),VERCEL:""}});
   assert.equal(result.status,0,result.stderr||result.stdout);
  }finally{rmSync(directory,{recursive:true,force:true,maxRetries:5,retryDelay:50});}
@@ -80,5 +99,45 @@ test("Postgres completion migration preserves history, rejects stale/cross-accou
   assert.equal((await db.query("select count(*)::int as n from cat_events")).rows[0].n,2);
   assert.equal((await db.query("select count(*)::int as n from reminder_occurrences")).rows[0].n,1);
   assert.equal((await db.query("select next_due_date::text as d from cat_routines")).rows[0].d,"2026-11-04");
+  await db.exec(`
+    drop trigger reject_reminder on reminders;
+    create table tasks(id bigint primary key,user_id uuid);
+    alter table cat_routines add column recurrence_mode text default 'completion',add column interval_value integer default 1,
+      add column interval_unit text default 'day',add column configured_reminder_time time default '23:00',add column timezone text default 'Asia/Shanghai';
+    alter table cat_events add column created_at timestamptz default now(),add column updated_at timestamptz default now();
+    update reminders set snoozed_until='2026-11-04T16:30:00Z';
+  `);
+  const completionDates=readFileSync("supabase/migrations/202611110001_completion_dates.sql","utf8");
+  await db.exec(completionDates);
+  assert.equal((await db.query("select occurred_has_explicit_time from cat_events where source_type='cat_routine'")).rows[0].occurred_has_explicit_time,false);
+  const newClaim=()=>db.query("select complete_cat_routine_occurrence(5,'2026-11-04T15:00:00Z','2026-11-03T16:39:17Z','2026-11-05T15:01:00Z','2026-11-05','2026-11-06','2026-11-06T15:00:00Z','2026-11-05','2026-11-05T04:00:00Z','2026-11-03') as result");
+  const claims=await Promise.all([newClaim(),newClaim()]);
+  assert.equal(claims.filter(claim=>claim.rows[0].result).length,1);
+  const result=claims.find(claim=>claim.rows[0].result).rows[0].result;
+  const eventId=result.event.id;
+  assert.equal(result.event.occurred_has_explicit_time,false);
+  assert.equal(result.routine.last_completed_on,"2026-11-05");
+  const correction={completedOn:"2026-11-04",occurredAt:"2026-11-04T04:00:00Z",occurredHasExplicitTime:false};
+  const edit=()=>db.query("select change_cat_completion($1,$2::jsonb) as result",[eventId,JSON.stringify(correction)]);
+  const undo=()=>db.query("select change_cat_completion($1,null) as result",[eventId]);
+  await db.exec("set test.uid='00000000-0000-4000-8000-000000000002'");
+  assert.equal((await edit()).rows[0].result,null);
+  assert.equal((await undo()).rows[0].result,null);
+  await db.exec(`set test.uid='${owner}'`);
+  assert.equal((await edit()).rows[0].result.id,eventId);
+  assert.equal((await db.query("select next_due_date::text as d from cat_routines")).rows[0].d,"2026-11-05");
+  assert.equal((await db.query("select completed_on::text as d from reminder_occurrences where created_event_id=$1",[eventId])).rows[0].d,"2026-11-04");
+  assert.equal((await undo()).rows[0].result.id,eventId);
+  assert.equal((await db.query("select next_due_date::text as d from cat_routines")).rows[0].d,"2026-11-04");
+  assert.equal((await db.query("select count(*)::int as n from reminder_occurrences")).rows[0].n,1);
+  assert.equal((await db.query("select snoozed_until from reminders")).rows[0].snoozed_until.toISOString(),"2026-11-04T16:30:00.000Z");
+  const standalone=await db.query("insert into reminder_occurrences(user_id,reminder_id,action,scheduled_for,acted_at,completed_on) values($1,27,'completed','2026-11-04T15:00:00Z','2026-11-05T15:00:00Z','2026-11-05') returning id",[owner]);
+  const occurrenceId=standalone.rows[0].id;
+  const move=()=>db.query("select correct_reminder_completion(27,$1,'2026-11-04',null) as saved",[occurrenceId]);
+  await db.exec("set test.uid='00000000-0000-4000-8000-000000000002'");
+  assert.equal((await move()).rows[0].saved,false);
+  await db.exec(`set test.uid='${owner}'`);
+  assert.equal((await move()).rows[0].saved,true);
+  assert.equal((await db.query("select completed_on::text as d from reminder_occurrences where id=$1",[occurrenceId])).rows[0].d,"2026-11-04");
  }finally{await db.close();}
 });

@@ -6,6 +6,7 @@ export interface Task {
   notes: string;
   completed: boolean;
   completedAt: string | null;
+  completedOn?: string | null;
   dueDate: string | null;
   dueTime: string | null;
   reminderId: number | null;
@@ -1261,6 +1262,8 @@ export interface CatRoutine {
   timezone: string;
   firstDueAt: string;
   lastCompletedAt: string | null;
+  lastCompletedOn?: string | null;
+  undoableEventId?: number | null;
   nextDueAt: string;
   reminderLeadMinutes: number;
   repeatWhileOverdue: boolean;
@@ -1308,6 +1311,7 @@ export interface ReminderOccurrence {
   action: ReminderOccurrenceAction;
   scheduledFor: string;
   actedAt: string;
+  completedOn?: string | null;
   createdEventId: number | null;
   createdAt: string;
 }

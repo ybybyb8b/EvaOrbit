@@ -16,7 +16,7 @@ try{
  server=await createServer({configFile:false,root:process.cwd(),define:{'process.env.EVAORBIT_TIME_ZONE':JSON.stringify('Asia/Shanghai')},optimizeDeps:{entries:[path.join(directory,'index.html')],include:['react','react-dom','react-dom/client','react/jsx-runtime','react/jsx-dev-runtime','reicon-react']},resolve:{alias:{'@':path.resolve('src')}},esbuild:{jsx:'automatic'},cacheDir:path.join(directory,'vite-cache'),server:{host:'127.0.0.1',port,strictPort:true,watch:{ignored:['**/tmp/**']}}});await server.listen();
  browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage({viewport:{width:402,height:874}});page.on('pageerror',e=>{errors.push(String(e));console.log('PAGE ERROR',String(e));});page.on('console',m=>{if(m.type()==='error')if(!m.text().includes('status of 500'))console.log('BROWSER',m.text());});
  await page.clock.setFixedTime(new Date('2026-10-31T16:00:00Z'));
- await page.route('**/api/**',async route=>{requests.push({path:new URL(route.request().url()).pathname,body:route.request().postDataJSON()});const answer=await new Promise(resolve=>pending.push(resolve));await route.fulfill({status:answer.status??200,json:answer.body??{ok:true}});});
+ await page.route('**/api/**',async route=>{requests.push({path:new URL(route.request().url()).pathname,method:route.request().method(),body:route.request().postDataJSON()});const answer=await new Promise(resolve=>pending.push(resolve));await route.fulfill({status:answer.status??200,json:answer.body??{ok:true}});});
  page.setDefaultTimeout(15000);await page.goto('http://127.0.0.1:'+port+'/'+path.relative(process.cwd(),directory).replaceAll('\\','/')+'/index.html');await page.locator('.vintage-task-list').waitFor();await page.evaluate(()=>document.fonts.ready);
  const row=title=>page.locator('.vintage-task-list > li').filter({has:page.locator('strong',{hasText:title})});
  assert.equal(await row('Read a chapter').getAttribute('data-due'),'true');
@@ -31,7 +31,7 @@ try{
  assert.equal(await care.getAttribute('data-completed'),'true');assert.equal(await care.getAttribute('aria-busy'),'true');
  await page.evaluate(data=>window.setFixture(data),structuredClone(base));assert.equal(await care.evaluate(e=>e===window.originalCare),true);
  assert.equal(pending.length,1);pending.shift()({});await page.waitForFunction(()=>window.changed===1);await page.waitForFunction(()=>!document.querySelector('li[aria-busy="true"]'));
- const refreshed=structuredClone(base);refreshed.reminders.shift();refreshed.completedItems.push({key:'source:cat_routine:7:2026-11-01T00:00:00.000Z',title:'Clean litter box',href:'/cats',completedAt:'2026-11-01T01:00:00.000Z',hasExplicitTime:true});
+ const refreshed=structuredClone(base);refreshed.reminders.shift();refreshed.completedItems.push({key:'source:cat_routine:7:2026-11-01T00:00:00.000Z',title:'Clean litter box',href:'/cats',completedAt:'2026-11-01T04:00:00.000Z',hasExplicitTime:false,correction:{kind:'cat',eventId:100,routineId:7,canUndo:true}});
  await page.evaluate(data=>window.setFixture(data),refreshed);assert.equal(await care.count(),1);assert.equal(await care.evaluate(e=>e===window.originalCare),true);const after=await care.boundingBox();assert.equal(after.y,before.y);assert.equal(after.height,before.height);
  const plain=row('Read a chapter');await plain.getByRole('checkbox').check();assert.equal(await plain.getAttribute('data-completed'),'true');await page.waitForFunction(()=>document.querySelector('li[aria-busy="true"]'));assert.equal(pending.length,1);pending.shift()({status:500,body:{error:'Synthetic save failure'}});await page.waitForFunction(()=>!document.querySelector('li[aria-busy="true"]'));assert.equal(await plain.getByRole('checkbox').isChecked(),false);
  await plain.getByRole('checkbox').check();assert.equal(pending.length,1);pending.shift()({body:{completed:true,completedAt:'2026-11-01T02:00:00Z'}});await page.waitForFunction(()=>window.changed===2);await page.waitForFunction(()=>!document.querySelector('li[aria-busy="true"]'));
@@ -42,9 +42,29 @@ try{
  await page.evaluate(data=>window.setFixture(data),refreshed);
  for(const width of [320,402,1280]){await page.setViewportSize({width,height:874});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'tmp/home-task-completion-'+width+'.png',fullPage:true});}
  await page.emulateMedia({reducedMotion:'reduce'});assert.equal(await care.locator('.vintage-quick-complete .icon').last().evaluate(e=>getComputedStyle(e).transform),'none');assert.deepEqual(errors,[]);assert.equal(requests.length,5);
+ assert.equal(await task.locator('time').count(),0);
+ await task.getByRole('button',{name:'Completion options for Water the plants'}).click();
+ await task.getByLabel('Completion date').fill('2026-10-31');
+ for(const width of [320,402,1280]){
+   await page.setViewportSize({width,height:874});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   await page.screenshot({path:'tmp/home-task-date-editor-'+width+'.png',fullPage:true});
+ }
+ await task.getByRole('button',{name:'Save date'}).click();
+ assert.deepEqual(requests.at(-1),{path:'/api/tasks/2',method:'PATCH',body:{completedOn:'2026-10-31'}});
+ pending.shift()({});await task.waitFor({state:'detached'});
+ await care.getByRole('button',{name:'Completion options for Clean litter box'}).click();
+ await care.getByRole('button',{name:'Undo completion'}).click();
+ assert.deepEqual(requests.at(-1),{path:'/api/cats/routines/7',method:'PATCH',body:{undoEventId:100}});
+ pending.shift()({});await care.waitFor({state:'detached'});
+ await page.evaluate(data=>window.setFixture(data),{...refreshed,completedItems:[],reminders:[base.reminders[0]]});
+ const restored=care.getByRole('button',{name:'Complete Clean litter box',exact:true,pressed:false});
+ await restored.click();
+ pending.shift()({body:{completedOn:'2026-10-31'}});
+ await care.waitFor({state:'detached'});
  await page.evaluate(data=>window.setFixture(data),{...base,date:'2026-10-31',reminders:[],tasks:[base.tasks[0],{...base.tasks[1],dueDate:'2026-10-30'}]});
  await row('Water the plants').waitFor({state:'detached'});
  assert.equal(await row('Read a chapter').count(),1,'a stale Today snapshot keeps only its own open tasks in history');
  assert.equal(await row('Read a chapter').getAttribute('data-due'),'true');
- console.log(JSON.stringify({result:'PASS',checks:['same DOM row and position through pending, success and snapshot refresh','no duplicate completion','explicit failure rollback','ordinary task, reopening and reminder-owned task','new recurrence stays actionable','320/402/1280 layout','reduced motion'],requests:requests.length,realDataWrites:0,deviceVerified:false}));
+ console.log(JSON.stringify({result:'PASS',checks:['same DOM row and position through pending, success and snapshot refresh','no duplicate completion','explicit failure rollback','ordinary task, reopening and reminder-owned task','date correction without a completion clock','undo restores the original occurrence','new recurrence stays actionable','320/402/1280 layout','reduced motion'],requests:requests.length,realDataWrites:0,deviceVerified:false}));
 }catch(error){console.error(error);throw error;}finally{await browser?.close();await server?.close();const {createServer:probeServer}=await import('node:net');await new Promise((resolve,reject)=>{const probe=probeServer();probe.once('error',reject);probe.listen(port,'127.0.0.1',()=>probe.close(error=>error?reject(error):resolve()));});}

@@ -13,11 +13,22 @@ export function addReminderInterval(value: string | Date, amount: number, unit: 
 
 type RoutineSchedule = Pick<CatRoutine, "intervalValue" | "intervalUnit" | "recurrenceMode" | "anchorDate" | "nextDueDate" | "configuredReminderTime" | "timezone">;
 
+export function catUndoEventId(row: Record<string, unknown>) {
+  if (!row.enabled || !row.completion_undo) return null;
+  const receipt = (typeof row.completion_undo === "string" ? JSON.parse(row.completion_undo) : row.completion_undo) as { eventId: number; nextDueAt: string };
+  return Date.parse(receipt.nextDueAt) === Date.parse(String(row.next_due_at)) ? receipt.eventId : null;
+}
+
 export function catRoutineCompletionPatch(routine: RoutineSchedule, actedAt = new Date(), completedDate = recurrenceCompletionDate(actedAt, zonedDateTimeToUtc(routine.nextDueDate, routine.configuredReminderTime, routine.timezone), routine.timezone)) {
-  const plannedNextDate = addCalendarInterval(routine.nextDueDate, routine.intervalValue, routine.intervalUnit);
-  const reanchor = routine.recurrenceMode === "completion" || completedDate >= plannedNextDate;
-  const anchorDate = reanchor ? completedDate : routine.anchorDate;
-  const nextDueDate = reanchor ? addCalendarInterval(completedDate, routine.intervalValue, routine.intervalUnit) : plannedNextDate;
+  const completionBased = routine.recurrenceMode === "completion";
+  const anchorDate = completionBased ? completedDate : routine.anchorDate;
+  const baseDate = completionBased ? completedDate : routine.nextDueDate;
+  let step = routine.intervalValue;
+  let nextDueDate = addCalendarInterval(baseDate,step,routine.intervalUnit);
+  while (nextDueDate <= completedDate) {
+    step += routine.intervalValue;
+    nextDueDate = addCalendarInterval(baseDate,step,routine.intervalUnit);
+  }
   return { lastCompletedAt: actedAt.toISOString(), anchorDate, nextDueDate, nextDueAt: zonedDateTimeToUtc(nextDueDate, routine.configuredReminderTime, routine.timezone) };
 }
 export function catRoutineSkipPatch(routine: Pick<CatRoutine, "nextDueDate" | "intervalValue" | "intervalUnit" | "configuredReminderTime" | "timezone">) {

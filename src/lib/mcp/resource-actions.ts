@@ -95,7 +95,7 @@ export const resourceActionSchemas: Record<string, Record<string, ResourceAction
     restore: action(),
   },
   inbox: { mark_processed: action(), archive: action(), restore: action() },
-  task: { complete: action(), reopen: action() },
+  task: { complete: action({completed_on:date}), reopen: action() },
   relation_person: { archive: action(), restore: action() },
   relation_event: {
     settle_advance: {
@@ -162,12 +162,12 @@ export const resourceActionSchemas: Record<string, Record<string, ResourceAction
     delete_reminder: action({ child_id: childId }, ["child_id"], "deleted and child id; cancels the projected reminder."),
   },
   cat_routine: {
-    complete: action({ acted_at: actedAt }, [], "Updated routine and recorded completion."),
+    complete: action({ completed_on:date, acted_at:actedAt }, [], "Updated routine and recorded completion."),
     skip: action({ acted_at: actedAt }, [], "Updated routine and recorded skip."),
     archive: action({}, [], "archived and routine id."),
   },
   reminder: {
-    complete: action({ acted_at: actedAt }, [], "Owner-dependent result; may complete a Task, record a recurring payment, acknowledge manual membership expiry without payment, or advance a routine."),
+    complete: action({ completed_on:{...date,description:"Completion date for Tasks, Cat Routines and standalone reminders."}, acted_at:actedAt }, [], "Owner-dependent result; may complete a Task, record a recurring payment, acknowledge manual membership expiry without payment, or advance a routine."),
     skip: action({ acted_at: actedAt }, [], "Owner-dependent skip result."),
     snooze: action({
       choice: { type: "string", enum: ["later_today", "tomorrow", "custom"], description: "Snooze choice." },

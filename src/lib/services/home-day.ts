@@ -23,7 +23,7 @@ export async function getHomeDayOverview(date?: string, options: { readOnly?: bo
     repository.listTasks("all", date, range, includeOverdue),
     repository.listDailyJournalEntries({ date, limit: 100 }),
     getHealthKitSleepSamples(date),
-    repository.listReminderOccurrences(range),
+    repository.listReminderOccurrences(range,date),
     repository.listPets(),
   ]);
   const reminderIds = [...new Set(occurrences.map(item => item.reminderId))];
@@ -35,15 +35,19 @@ export async function getHomeDayOverview(date?: string, options: { readOnly?: bo
     const record = reminderRecords.find(item => item?.reminder.id === occurrence.reminderId);
     return record ? [{...record, occurrence}] : [];
   });
+  const routineIds = new Set(timeline.events.flatMap(event =>
+    event.sourceType==="cat" && event.metadata.sourceType==="cat_routine" && typeof event.metadata.sourceId==="number" ? [event.metadata.sourceId] : []));
+  const routines = await Promise.all([...routineIds].map(id => repository.getCatRoutine(id)));
+  const undoableEvents = new Set(routines.flatMap(routine => routine?.undoableEventId ? [routine.undoableEventId] : []));
   const { calendarEvents, calendarInterpretation } = timeline;
   const calendar = summarizeCalendarActivity(calendarEvents, date, calendarInterpretation);
   return {
     date,
     events: timeline.events,
-    tasks: tasks.filter((task) => task.completed && task.completedAt ? dateInEvaOrbit(new Date(task.completedAt)) === date : !task.completed || task.dueDate === date)
+    tasks: tasks.filter((task) => task.completed && task.completedOn ? task.completedOn === date : !task.completed || task.dueDate === date)
       .sort((a, b) => Number(a.completed) - Number(b.completed) || (priorities[a.priority] ?? 9) - (priorities[b.priority] ?? 9) || (!a.completed ? (a.dueDate ?? "").localeCompare(b.dueDate ?? "") : 0) || (a.dueTime ?? "99:99").localeCompare(b.dueTime ?? "99:99") || a.id - b.id)
-      .map(({ id, title, completed, completedAt, dueDate, dueTime, priority }) => ({ id, title, completed, completedAt, dueDate, dueTime, priority })),
-    completedItems: homeCompletions(date, completionRecords, timeline.events, new Map(pets.map(pet => [pet.id,pet.name]))),
+      .map(({ id, title, completed, completedAt, completedOn, dueDate, dueTime, priority }) => ({ id, title, completed, completedAt, completedOn, dueDate, dueTime, priority })),
+    completedItems: homeCompletions(date, completionRecords, timeline.events, new Map(pets.map(pet => [pet.id,pet.name])), undoableEvents),
     meals: homeMeals(timeline.mealEvents),
     journal,
     calendarInterpretation,

@@ -64,7 +64,7 @@
 
 - **Timeline 关联规则**：`/settings/timeline-association` 管理账户偏好 `ui_preferences.timeline_association`；[匹配与投影](../src/lib/timeline-association.ts) 由 [读取服务](../src/lib/services/timeline-association.ts) 接入 Home 日/月及 Timeline。首期仅 Calendar ↔ 指定 Tracker；完整 ID 分页、双向唯一匹配、跨日投影，仅影响展示。餐次算法保持独立，原始记录和统计不变。Web／本地共享设置与详情，未同步 Tracker 不参与服务端投影。契约与发布顺序见 [Timeline 关联规则](TIMELINE_ASSOCIATION.md)。
 
-- **完成事项汇总**：Home 按实际完成日期读取普通 Tasks 与 Reminder occurrence，复用 Timeline 中的护理、家务、订阅付款和用药事实。`home-completions.ts` 按来源身份去重，完成项与当前待处理提醒分开，跳过／稍后不计完成；Web 与本地快照共享 DTO，旧快照缺少 `completedItems` 时兼容为空。
+- **完成事项汇总**：Home 按完成日期读取普通 Tasks 与 Reminder occurrence，复用 Timeline 中的护理、家务、订阅付款和用药事实。`home-completions.ts` 按来源身份去重。普通任务可取消勾选，完成日期可更正，Tracker 提醒显示为已处理。Web 与本地快照共享 DTO，兼容旧快照。
 
 - **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 使用账户隔离快照，表单复用在线业务请求，跨模块链接由 [本地路由](../src/local-trackers/routes.tsx) 转入已迁移模块。
 - **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。只读接口独立于 Tracker 同步协议及迁移；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
@@ -155,7 +155,7 @@ Hermes 聊天外观由 Web 与 Host 共用。头像与背景按账户保存在�
 - **本地只读阶段**：[TasksContent](../src/app/tasks/tasks-content.tsx) 由 Web 路由与本地 Host 共同使用；日期、提醒和完成状态直接读取原业务投影，预览表单不完成任务、不协调提醒、不触发 EventKit。与 Projects/Lucius 共用 [WorkspaceDataProvider](../src/components/workspace-data-context.tsx) 和账户隔离快照；容量与验收见 [本地阶段](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[tasks/](../src/app/tasks/)、[task 服务](../src/lib/services/task.ts)；`tasks`、`task_reminders`；`/api/tasks`，MCP `task`。
-- **依赖与决定**：到期日期、明确到期时间和提醒规则分别处理；模块拥有的 Reminder 由 Task 服务协调，完成/重开走业务操作。Apple Reminders 同步通过 EventKit，不能把 MCP 本地写入等同于设备同步完成；Home 聚合任务列表。
+- **依赖与决定**：到期日期、明确到期时间和提醒规则分别处理。完成日期使用 `completed_on`，既有 `completed_at` 兼容旧记录并供 Apple Reminders 同步。Task 服务在完成／重开时协调所属提醒，Home 按完成日期聚合。
 - **详文**：[MCP Task 与 Reminder 边界](../src/lib/mcp/README.md)、[EventKit 偏好恢复](EVENTKIT_ACCOUNT_PREFERENCES.md)。
 
 ## Trackers
@@ -185,7 +185,7 @@ Hermes 聊天外观由 Web 与 Host 共用。头像与背景按账户保存在�
 
 - **职责与入口**：[cats/](../src/app/cats/)、[cats 服务](../src/lib/services/cats.ts)、[cat-routine.ts](../src/lib/services/cat-routine.ts)、[cat-food.ts](../src/lib/services/cat-food.ts)。
 - **数据与接口**：`pets`、`cat_events`、`cat_symptoms`、`vet_visits`、`cat_medications`、`cat_measurements`、`cat_routines`、`cat_food_items`、`cat_food_purchases`；`/api/cats/*`；MCP `cat_pet`、`cat_record`、`cat_routine`。
-- **周期完成一致性**：Routine 按生活日去重；页面及 Apple 回写携带到期与完成水位，旧请求不能消费下一期。Repository 原子完成同时写入护理、执行记录、周期和提醒；Supabase 依赖 `complete_cat_routine_occurrence` RPC。
+- **周期完成一致性**：Routine 按生活日去重，护理完成记录默认只有日期。页面及 Apple 回写携带到期与完成水位，旧请求不能消费下一期。Repository 在同一事务写入护理、执行记录、周期和提醒。更正最近一期会调整按完成日期推算的下次到期，固定周期沿用原计划。撤销最近一期通过事务恢复完成前的排程及提醒状态。
 - **依赖与决定**：Routine 通过 Reminder 周期执行，归档与永久删除不同；保留已生成护理记录与投递快照。猫咪删除兼容入口实际为归档。猫食品库存独立于人的 Food Library，不能合并；护理/健康事件进入 Timeline。
 - **详文**：[MCP 生命周期与按 kind 字段](../src/lib/mcp/README.md)、[提醒契约](../MCP.md)。
 

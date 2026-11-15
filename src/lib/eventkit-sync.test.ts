@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { appleReminderPayload,appleReminderSnapshot,eventKitCalendarReadModes,eventKitCalendarSyncRange,eventKitEventRangeValid,eventKitHasNextOccurrence,eventKitImportsUnlinked,eventKitLinkScope,eventKitMissingAppleAction,eventKitNotificationOwner,eventKitReminderDomain,eventKitReminderMatches,eventKitSourceEnabled,eventKitTaskNeedsAppleMirror,mergeEventKitSnapshots,reminderSnapshot,runEventKitSyncSingleFlight,taskSnapshot } from "./eventkit-sync.ts";
 import type { Reminder,Task } from "./types.ts";
-import { eventKitRoutineCompletionExpectation } from "./eventkit-sync.ts";
+import { eventKitReminderCompletedSince,eventKitRoutineCompletionExpectation } from "./eventkit-sync.ts";
 
 test("Apple routine completions carry the occurrence rather than a snoozed delivery time",()=>{
  const reminder={sourceType:"cat_routine",nextDueAt:"2026-11-03T15:00:00Z",snoozedUntil:"2026-11-04T02:00:00Z",lastCompletedAt:"2026-11-02T17:00:00Z",timezone:"Asia/Shanghai",dueHasExplicitTime:true,status:"scheduled"} as Reminder;
@@ -12,6 +12,13 @@ test("Apple routine completions carry the occurrence rather than a snoozed deliv
  assert.deepEqual(eventKitRoutineCompletionExpectation(reminder,{dueDate:"2026-11-04",dueTime:"10:00",eoLastCompletedAt:null}),{expectedLastCompletedAt:null},"legacy snoozes cannot masquerade as the routine Due");
  assert.deepEqual(eventKitRoutineCompletionExpectation({...reminder,snoozedUntil:null},{dueDate:"2026-11-03",dueTime:"23:00"}),{expectedNextDueAt:"2026-11-03T15:00:00.000Z"});
  assert.deepEqual(eventKitRoutineCompletionExpectation({...reminder,sourceType:null},base),{});
+});
+
+test("undoing a routine restores the Apple due without completing the next mirror",()=>{
+ const reminder={sourceType:"cat_routine",isActive:true,nextDueAt:"2026-11-03T15:00:00Z",lastCompletedAt:"2026-11-02T17:00:00Z",status:"scheduled"} as Reminder;
+ assert.equal(eventKitReminderCompletedSince(reminder,{eoLastCompletedAt:"2026-11-03T17:00:00Z"}),false);
+ assert.equal(eventKitReminderCompletedSince(reminder,{eoLastCompletedAt:"2026-11-01T17:00:00Z"}),true);
+ assert.equal(eventKitReminderCompletedSince(reminder,{eoLastCompletedAt:null}),true);
 });
 
 test("three-way reconcile merges non-overlapping fields",()=>{const base={title:"Dentist",notes:"",startAt:"2026-09-21T02:00:00Z"},eo={...base,notes:"bring card"},apple={...base,startAt:"2026-09-21T03:00:00Z"},result=mergeEventKitSnapshots(base,eo,apple);assert.deepEqual(result.conflicts,[]);assert.equal(result.merged.notes,"bring card");assert.equal(result.merged.startAt,"2026-09-21T03:00:00.000Z");});

@@ -7,7 +7,8 @@ import { mergePlaceAddress } from "./place-menu";
 import { DatabaseSync } from "node:sqlite";
 import { createSqliteEvaStore } from "./repositories/eva-sqlite";
 import { randomUUID } from "node:crypto";
-import { shiftDate } from "./time";
+import { addCalendarInterval, dateInEvaOrbit, shiftDate, zonedDateTimeToUtc } from "./time";
+import { catUndoEventId } from "./reminder-engine";
 import { insightReportFromRow, insightVersionFromRow, type InsightReportWrite, type InsightPeriodType } from "./insight-reports";
 import { insightRunFromRow, insightAttemptFromRow, insightAttemptSummaryFromRow, stableInsightJson, type InsightRunClaimInput, type InsightRunClaim } from "./insight-runs";
 import type { InsightSnapshot } from "./insight-reports";
@@ -31,7 +32,7 @@ import type { RelationEventInput } from "./relations";
 import type { CalendarEvent } from "./types";
 import type { CatFoodItem, CatFoodPurchase } from "./types";
 import type { CalendarEventListInput, CalendarEventPatch, NewCalendarEvent } from "./repositories/types";
-import type { CatFoodItemPatch, CatFoodPurchasePatch, NewCatFoodItem, NewCatFoodPurchase } from "./repositories/types";
+import type { CatCompletionEdit, CatFoodItemPatch, CatFoodPurchasePatch, CatRoutineCompletion, NewCatFoodItem, NewCatFoodPurchase } from "./repositories/types";
 import type { DailyJournalEntry } from "./types";
 import type { DailyJournalEntryPatch, DailyJournalListInput, NewDailyJournalEntry } from "./repositories/types";
 import type { AiModelConfigInput, AiProviderInput, AiSettingsInput, ChronicleEntryPatch, ChronicleListInput, FoodDishSearchOptions, FoodLibrarySearchOptions, FoodPlaceSearchOptions, HealthRecordListInput, LuciusDiaryListInput, LuciusDiaryPatch, LuciusPostCommentListInput, LuciusPostCommentPatch, LuciusPostListInput, LuciusPostPatch, LuciusStatePatch, MediaItemPatch, MediaListInput, MemoListInput, MemoPatch, MemoryEntityListInput, MemoryEntityPatch, MemoryFactCandidateListInput, MemoryFactListInput, MemoryFactPatch, MemorySourceListInput, MemorySourcePatch, NewChronicleEntry, NewFoodDish, NewFoodLog, NewFoodPlace, NewHealthRecord, NewLuciusDiaryEntry, NewLuciusPost, NewLuciusPostComment, NewMediaItem, NewMemo, NewMemoryEntity, NewMemoryFact, NewMemoryFactCandidate, NewMemorySource, NewProject, NewProjectItem, NewRelationPerson, NewSubscription, NewSubscriptionPayment, NewTrainingLog, ProjectItemListInput, ProjectItemPatch, ProjectListInput, ProjectPatch, RelationPersonPatch, SubscriptionListInput, SubscriptionPatch, TrainingLogListInput, TrainingLogPatch } from "./repositories/types";
@@ -42,6 +43,7 @@ type TaskRow = {
   notes: string;
   completed: number;
   completed_at: string | null;
+  completed_on: string | null;
   due_date: string | null;
   due_time: string | null;
   reminder_id: number | null;
@@ -1593,6 +1595,7 @@ function taskFromRow(row: TaskRow): Task {
     notes: row.notes,
     completed: Boolean(row.completed),
     completedAt: row.completed_at,
+    completedOn: row.completed_on ?? (row.completed_at ? dateInEvaOrbit(new Date(row.completed_at)) : null),
     dueDate: row.due_date,
     dueTime: row.due_time ? row.due_time.slice(0, 5) : null,
     reminderId: row.reminder_id,
@@ -2024,6 +2027,18 @@ if (!hasV99) database.exec(`BEGIN;
   INSERT INTO migrations(version) VALUES(99);
   COMMIT;`);
 
+const hasV100 = database.prepare("SELECT 1 FROM migrations WHERE version=100").get();
+if (!hasV100) database.exec(`BEGIN;
+  ALTER TABLE tasks ADD COLUMN completed_on TEXT;
+  ALTER TABLE reminder_occurrences ADD COLUMN completed_on TEXT;
+  ALTER TABLE cat_routines ADD COLUMN last_completed_on TEXT;
+  ALTER TABLE cat_routines ADD COLUMN completion_undo TEXT;
+  UPDATE cat_events SET occurred_has_explicit_time=0 WHERE source_type IN ('cat_routine','reminder') AND created_at=updated_at AND occurred_has_explicit_time=1;
+  CREATE INDEX idx_tasks_completed_on ON tasks(completed_on) WHERE completed_on IS NOT NULL;
+  CREATE INDEX idx_reminder_occurrences_completed_on ON reminder_occurrences(completed_on) WHERE completed_on IS NOT NULL;
+  INSERT INTO migrations(version) VALUES(100);
+  COMMIT;`);
+
 export function listTrainingSuggestionExclusions(): import("./types").TrainingSuggestionExclusion[] {
   const rows = database.prepare("SELECT kind,value FROM training_suggestion_exclusions WHERE user_id='local' ORDER BY kind,value").all() as import("./types").TrainingSuggestionExclusion[];
   return rows.map(row => ({ kind: row.kind, value: row.value }));
@@ -2148,10 +2163,10 @@ function aiProviderFromRow(row: AiProviderRow, models: AiModelConfig[] = []): Ai
 }
 
 export function listTasks(filter: "all" | "open" | "done" = "all", dueDate?: string, completedRange?: { from: string; to: string }, includeOverdue = false) {
-  const dates = ["due_date = ?", includeOverdue && "(completed = 0 AND due_date < ?)", completedRange && "(completed = 1 AND completed_at >= ? AND completed_at < ?)"].filter(Boolean);
+  const dates = ["due_date = ?", includeOverdue && "(completed = 0 AND due_date < ?)", completedRange && "(completed = 1 AND (completed_on = ? OR (completed_on IS NULL AND completed_at >= ? AND completed_at < ?)))"].filter(Boolean);
   const conditions = [filter === "open" ? "completed = 0" : filter === "done" ? "completed = 1" : "", dueDate ? `(${dates.join(" OR ")})` : ""].filter(Boolean);
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate, ...(includeOverdue ? [dueDate] : []), ...(completedRange ? [completedRange.from, completedRange.to] : [])] : [])) as TaskRow[]).map(taskFromRow);
+  return (database.prepare(`SELECT * FROM tasks ${where} ORDER BY completed, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, due_date IS NULL, due_date, created_at DESC`).all(...(dueDate ? [dueDate, ...(includeOverdue ? [dueDate] : []), ...(completedRange ? [dueDate, completedRange.from, completedRange.to] : [])] : [])) as TaskRow[]).map(taskFromRow);
 }
 
 export function getTask(id: number) {
@@ -2167,7 +2182,7 @@ export function createTask(input: { title: string; notes: string; dueDate: strin
 export function updateTask(id: number, input: Record<string, unknown>) {
   const columns: string[] = [];
   const values: Array<string | number | null> = [];
-  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", completedAt:"completed_at", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
+  const map: Record<string, string> = { title: "title", notes: "notes", completed: "completed", completedAt:"completed_at", completedOn:"completed_on", dueDate: "due_date", dueTime: "due_time", reminderId: "reminder_id", priority: "priority", tags: "tags" };
   for (const [key, column] of Object.entries(map)) {
     if (input[key] !== undefined) {
       columns.push(`${column} = ?`);
@@ -2177,7 +2192,9 @@ export function updateTask(id: number, input: Record<string, unknown>) {
   }
   if (!columns.length) return getTask(id);
   values.push(id);
-  database.prepare(`UPDATE tasks SET ${columns.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values);
+  const requiresCompleted = input.completedOn !== undefined && input.completed === undefined;
+  const result = database.prepare(`UPDATE tasks SET ${columns.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?${requiresCompleted ? " AND completed=1" : ""}`).run(...values);
+  if (!result.changes) return null;
   return getTask(id);
 }
 
@@ -2810,9 +2827,9 @@ function catSymptomFromRow(row:Record<string,unknown>):CatSymptom{return{id:Numb
 function catVetVisitFromRow(row:Record<string,unknown>):CatVetVisit{return{id:Number(row.id),petId:Number(row.pet_id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:row.occurred_has_explicit_time===undefined?true:Boolean(row.occurred_has_explicit_time),clinic:String(row.clinic??""),doctor:String(row.doctor??""),reason:String(row.reason),symptoms:String(row.symptoms??""),diagnosis:String(row.diagnosis??""),examinations:String(row.examinations??""),treatment:String(row.treatment??""),prescriptions:String(row.prescriptions??""),cost:row.cost===null?null:Number(row.cost),followUpAt:row.follow_up_at?String(row.follow_up_at):null,notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function catMedicationFromRow(row:Record<string,unknown>):CatMedication{return{id:Number(row.id),petId:Number(row.pet_id),name:String(row.name),dose:String(row.dose??""),unit:String(row.unit??""),frequencyText:String(row.frequency_text??""),startedAt:String(row.started_at),startedHasExplicitTime:row.started_has_explicit_time===undefined?true:Boolean(row.started_has_explicit_time),endedAt:row.ended_at?String(row.ended_at):null,endedHasExplicitTime:row.ended_has_explicit_time===undefined?true:Boolean(row.ended_has_explicit_time),reason:String(row.reason??""),active:Boolean(row.active),notes:String(row.notes??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function catMeasurementFromRow(row:Record<string,unknown>):CatMeasurement{return{id:Number(row.id),petId:Number(row.pet_id),occurredAt:String(row.occurred_at),occurredHasExplicitTime:row.occurred_has_explicit_time===undefined?true:Boolean(row.occurred_has_explicit_time),measurementType:String(row.measurement_type),value:Number(row.value),unit:String(row.unit),note:String(row.note??""),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-function catRoutineFromRow(row:Record<string,unknown>):CatRoutine{return{id:Number(row.id),scope:row.scope as CatRoutine["scope"],petId:row.pet_id===null?null:Number(row.pet_id),title:String(row.title),intervalValue:Number(row.interval_value),intervalUnit:row.interval_unit as CatRoutine["intervalUnit"],recurrenceMode:(row.recurrence_mode??"completion") as CatRoutine["recurrenceMode"],anchorDate:String(row.anchor_date),firstDueDate:String(row.first_due_date),nextDueDate:String(row.next_due_date),configuredReminderTime:String(row.configured_reminder_time).slice(0,5),timezone:String(row.timezone??"Asia/Shanghai"),firstDueAt:String(row.first_due_at),lastCompletedAt:row.last_completed_at?String(row.last_completed_at):null,nextDueAt:String(row.next_due_at),reminderLeadMinutes:Number(row.reminder_lead_minutes??0),repeatWhileOverdue:Boolean(row.repeat_while_overdue),notes:String(row.notes??""),enabled:Boolean(row.enabled),reminderId:row.reminder_id===null?null:Number(row.reminder_id),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
+function catRoutineFromRow(row:Record<string,unknown>):CatRoutine{return{id:Number(row.id),scope:row.scope as CatRoutine["scope"],petId:row.pet_id===null?null:Number(row.pet_id),title:String(row.title),intervalValue:Number(row.interval_value),intervalUnit:row.interval_unit as CatRoutine["intervalUnit"],recurrenceMode:(row.recurrence_mode??"completion") as CatRoutine["recurrenceMode"],anchorDate:String(row.anchor_date),firstDueDate:String(row.first_due_date),nextDueDate:String(row.next_due_date),configuredReminderTime:String(row.configured_reminder_time).slice(0,5),timezone:String(row.timezone??"Asia/Shanghai"),firstDueAt:String(row.first_due_at),lastCompletedAt:row.last_completed_at?String(row.last_completed_at):null,lastCompletedOn:row.last_completed_on?String(row.last_completed_on):null,undoableEventId:catUndoEventId(row),nextDueAt:String(row.next_due_at),reminderLeadMinutes:Number(row.reminder_lead_minutes??0),repeatWhileOverdue:Boolean(row.repeat_while_overdue),notes:String(row.notes??""),enabled:Boolean(row.enabled),reminderId:row.reminder_id===null?null:Number(row.reminder_id),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function reminderFromRow(row:Record<string,unknown>):Reminder{return{id:Number(row.id),title:String(row.title),targetType:row.target_type as Reminder["targetType"],targetId:row.target_id===null?null:Number(row.target_id),sourceType:row.source_type?String(row.source_type):null,sourceId:row.source_id===null?null:Number(row.source_id),scheduleType:row.schedule_type as Reminder["scheduleType"],startsAt:String(row.starts_at),nextDueAt:row.next_due_at?String(row.next_due_at):null,overdueAfter:row.overdue_after?String(row.overdue_after):null,dueHasExplicitTime:row.due_has_explicit_time===undefined?true:Boolean(row.due_has_explicit_time),intervalValue:row.interval_value===null?null:Number(row.interval_value),intervalUnit:row.interval_unit as Reminder["intervalUnit"],timesOfDay:jsonValue(row.times_of_day,[]),endsAt:row.ends_at?String(row.ends_at):null,timezone:String(row.timezone),note:String(row.note??""),leadTimeMinutes:Number(row.lead_time_minutes??0),repeatWhileOverdue:Boolean(row.repeat_while_overdue),deliveryChannel:(row.delivery_channel??"pwa") as Reminder["deliveryChannel"],status:(row.status??"scheduled") as Reminder["status"],sentAt:row.sent_at?String(row.sent_at):null,cancelledAt:row.cancelled_at?String(row.cancelled_at):null,isActive:Boolean(row.is_active),lastCompletedAt:row.last_completed_at?String(row.last_completed_at):null,snoozedUntil:row.snoozed_until?String(row.snoozed_until):null,lastNotifiedAt:row.last_notified_at?String(row.last_notified_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-function reminderOccurrenceFromRow(row:Record<string,unknown>):ReminderOccurrence{return{id:Number(row.id),reminderId:Number(row.reminder_id),action:row.action as ReminderOccurrence["action"],scheduledFor:String(row.scheduled_for),actedAt:String(row.acted_at),createdEventId:row.created_event_id===null?null:Number(row.created_event_id),createdAt:String(row.created_at)};}
+function reminderOccurrenceFromRow(row:Record<string,unknown>):ReminderOccurrence{return{id:Number(row.id),reminderId:Number(row.reminder_id),action:row.action as ReminderOccurrence["action"],scheduledFor:String(row.scheduled_for),actedAt:String(row.acted_at),completedOn:row.completed_on?String(row.completed_on):null,createdEventId:row.created_event_id===null?null:Number(row.created_event_id),createdAt:String(row.created_at)};}
 function notificationDeliveryFromRow(row:Record<string,unknown>):NotificationDelivery{return{id:Number(row.id),reminderId:row.reminder_id===null?null:Number(row.reminder_id),title:String(row.title),sourceType:row.source_type?String(row.source_type):null,sourceId:row.source_id===null?null:Number(row.source_id),targetType:row.target_type as NotificationDelivery["targetType"],targetId:row.target_id===null?null:Number(row.target_id),scheduledAt:String(row.scheduled_at),scheduledHasExplicitTime:row.scheduled_has_explicit_time===undefined?true:Boolean(row.scheduled_has_explicit_time),sentAt:row.sent_at?String(row.sent_at):null,status:row.status as NotificationDelivery["status"],createdAt:String(row.created_at)};}
 function mealReminderRuleFromRow(row:Record<string,unknown>):MealReminderRule{return{mealType:row.meal_type as MealReminderRule["mealType"],remindAt:String(row.remind_at),enabled:Boolean(row.enabled),updatedAt:String(row.updated_at)};}
 function pushSubscriptionFromRow(row:Record<string,unknown>):PushSubscriptionRecord{return{id:Number(row.id),endpoint:String(row.endpoint),p256dh:String(row.p256dh),auth:String(row.auth),createdAt:String(row.created_at),lastUsedAt:String(row.last_used_at)};}
@@ -2864,22 +2881,86 @@ export function deleteCatMeasurement(id:number){return database.prepare("DELETE 
 
 export function listCatRoutines(input:{scope?:string;petId?:number|null;enabledOnly?:boolean}={}){const c:string[]=[],v:Array<string|number>=[];if(input.scope){c.push("scope=?");v.push(input.scope);}if(input.petId===null)c.push("pet_id IS NULL");else if(typeof input.petId==="number"){c.push("pet_id=?");v.push(input.petId);}if(input.enabledOnly)c.push("enabled=1");return(database.prepare(`SELECT * FROM cat_routines ${c.length?`WHERE ${c.join(" AND ")}`:""} ORDER BY enabled DESC,next_due_at,id`).all(...v) as Record<string,unknown>[]).map(catRoutineFromRow);}
 export function getCatRoutine(id:number){const row=database.prepare("SELECT * FROM cat_routines WHERE id=?").get(id) as Record<string,unknown>|undefined;return row?catRoutineFromRow(row):null;}
-export function completeCatRoutineOccurrence(id:number, expected:Pick<CatRoutine,"nextDueAt"|"lastCompletedAt">, completion:Pick<CatRoutine,"lastCompletedAt"|"anchorDate"|"nextDueDate"|"nextDueAt">){
+type CatCompletionUndo = {
+  eventId: number;
+  nextDueAt: string;
+  previousCompletedOn: string | null;
+  before: Pick<CatRoutine, "anchorDate" | "nextDueDate" | "nextDueAt" | "lastCompletedAt" | "lastCompletedOn">;
+  reminder: Pick<Reminder, "id" | "nextDueAt" | "lastCompletedAt" | "status" | "sentAt" | "cancelledAt" | "snoozedUntil" | "lastNotifiedAt" | "isActive"> | null;
+};
+
+function readCatCompletionUndo(id: number) {
+  const row = database.prepare("SELECT completion_undo FROM cat_routines WHERE id=?").get(id) as { completion_undo: string | null } | undefined;
+  return row?.completion_undo ? JSON.parse(row.completion_undo) as CatCompletionUndo : null;
+}
+
+export function completeCatRoutineOccurrence(id:number, expected:Pick<CatRoutine,"nextDueAt"|"lastCompletedAt">, completion:CatRoutineCompletion){
   database.exec("BEGIN IMMEDIATE");
   try {
     const routine=getCatRoutine(id);
-    if(!routine?.enabled || routine.nextDueAt!==expected.nextDueAt || routine.lastCompletedAt!==expected.lastCompletedAt){database.exec("ROLLBACK");return null;}
-    const event=createCatEvent({petId:routine.scope==="cat"?routine.petId:null,eventType:routine.scope==="cat"?"care":"cleaning",occurredAt:completion.lastCompletedAt!,occurredHasExplicitTime:true,title:routine.title,note:routine.notes,sourceType:"cat_routine",sourceId:id});
-    const updated=updateCatRoutine(id,completion)!;
-    if(routine.reminderId){
-      createReminderOccurrence({reminderId:routine.reminderId,action:"completed",scheduledFor:routine.nextDueAt,actedAt:completion.lastCompletedAt!,createdEventId:event.id});
-      if(!updateReminder(routine.reminderId,{nextDueAt:completion.nextDueAt,lastCompletedAt:completion.lastCompletedAt,status:"scheduled",sentAt:null,cancelledAt:null,snoozedUntil:null,lastNotifiedAt:null,isActive:true})) throw new Error("Routine reminder not found");
+    if(!routine?.enabled || routine.nextDueAt!==expected.nextDueAt || routine.lastCompletedAt!==expected.lastCompletedAt
+      || (routine.lastCompletedOn && routine.lastCompletedOn >= completion.completedOn)){database.exec("ROLLBACK");return null;}
+    const reminder = routine.reminderId ? getReminder(routine.reminderId) : null;
+    if (routine.reminderId && !reminder) throw new Error("Routine reminder not found");
+    const { completedOn, occurredAt, previousCompletedOn, ...schedule } = completion;
+    const event=createCatEvent({petId:routine.scope==="cat"?routine.petId:null,eventType:routine.scope==="cat"?"care":"cleaning",occurredAt,occurredHasExplicitTime:false,title:routine.title,note:routine.notes,sourceType:"cat_routine",sourceId:id});
+    const { anchorDate, nextDueDate, nextDueAt, lastCompletedAt, lastCompletedOn } = routine;
+    const before = { anchorDate, nextDueDate, nextDueAt, lastCompletedAt, lastCompletedOn };
+    const previousReminder = reminder && {
+      id: reminder.id, nextDueAt: reminder.nextDueAt, lastCompletedAt: reminder.lastCompletedAt, status: reminder.status,
+      sentAt: reminder.sentAt, cancelledAt: reminder.cancelledAt, snoozedUntil: reminder.snoozedUntil,
+      lastNotifiedAt: reminder.lastNotifiedAt, isActive: reminder.isActive,
+    };
+    const receipt: CatCompletionUndo = { eventId:event.id, nextDueAt:schedule.nextDueAt, previousCompletedOn, before, reminder:previousReminder };
+    const updated=updateCatRoutine(id,{...schedule,lastCompletedOn:completedOn,completionUndo:JSON.stringify(receipt)})!;
+    if(reminder){
+      createReminderOccurrence({reminderId:reminder.id,action:"completed",scheduledFor:routine.nextDueAt,actedAt:schedule.lastCompletedAt!,completedOn,createdEventId:event.id});
+      updateReminder(reminder.id,{nextDueAt:schedule.nextDueAt,lastCompletedAt:schedule.lastCompletedAt,status:"scheduled",sentAt:null,cancelledAt:null,snoozedUntil:null,lastNotifiedAt:null,isActive:true});
     }
     database.exec("COMMIT");return {routine:updated,event};
   }catch(error){database.exec("ROLLBACK");throw error;}
 }
+
+export function changeCatCompletion(eventId: number, edit: CatCompletionEdit | { deleteHistory: true } | null) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const event = getCatEvent(eventId);
+    if (!event || !["cat_routine","reminder"].includes(event.sourceType ?? "")) { database.exec("ROLLBACK"); return null; }
+    const routine = event.sourceType === "cat_routine" && event.sourceId ? getCatRoutine(event.sourceId) : null;
+    const receipt = routine ? readCatCompletionUndo(routine.id) : null;
+    const reminder = routine?.reminderId ? getReminder(routine.reminderId) : null;
+    const latest = routine?.enabled && receipt?.eventId === eventId && Date.parse(receipt.nextDueAt) === Date.parse(routine.nextDueAt)
+      && (!routine.reminderId && !receipt.reminder || (reminder?.isActive && reminder.id === receipt.reminder?.id && reminder.nextDueAt === routine.nextDueAt
+        && reminder.lastCompletedAt === routine.lastCompletedAt && !reminder.snoozedUntil));
+    const deleting = !edit || "deleteHistory" in edit;
+    if (deleting) {
+      if (!edit && !latest) { database.exec("ROLLBACK"); return null; }
+      database.prepare("DELETE FROM reminder_occurrences WHERE created_event_id=? AND action='completed'").run(eventId);
+      deleteCatEvent(eventId);
+      if(latest){
+        updateCatRoutine(routine.id,{...receipt.before,completionUndo:null});
+        if (receipt.reminder) updateReminder(receipt.reminder.id,receipt.reminder);
+      }
+    } else {
+      const { completedOn, ...patch } = edit;
+      if (latest && completedOn !== routine.lastCompletedOn) {
+        if (receipt.previousCompletedOn && completedOn <= receipt.previousCompletedOn) { database.exec("ROLLBACK"); return null; }
+        if (routine.recurrenceMode === "completion") {
+          const nextDueDate = addCalendarInterval(completedOn,routine.intervalValue,routine.intervalUnit);
+          const nextDueAt = zonedDateTimeToUtc(nextDueDate,routine.configuredReminderTime,routine.timezone);
+          updateCatRoutine(routine.id,{lastCompletedOn:completedOn,anchorDate:completedOn,nextDueDate,nextDueAt,completionUndo:JSON.stringify({...receipt,nextDueAt})});
+          if (reminder) updateReminder(reminder.id,{nextDueAt,status:"scheduled",sentAt:null,lastNotifiedAt:null});
+        } else updateCatRoutine(routine.id,{lastCompletedOn:completedOn});
+      }
+      updateCatEvent(eventId,patch);
+      database.prepare("UPDATE reminder_occurrences SET completed_on=? WHERE created_event_id=? AND action='completed'").run(completedOn,eventId);
+    }
+    database.exec("COMMIT");
+    return deleting ? event : getCatEvent(eventId);
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
 export function createCatRoutine(input:Omit<CatRoutine,"id"|"lastCompletedAt"|"createdAt"|"updatedAt">){const r=database.prepare("INSERT INTO cat_routines(scope,pet_id,title,interval_value,interval_unit,recurrence_mode,anchor_date,first_due_date,next_due_date,configured_reminder_time,timezone,first_due_at,next_due_at,reminder_lead_minutes,repeat_while_overdue,notes,enabled,reminder_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.scope,input.petId,input.title,input.intervalValue,input.intervalUnit,input.recurrenceMode,input.anchorDate,input.firstDueDate,input.nextDueDate,input.configuredReminderTime,input.timezone,input.firstDueAt,input.nextDueAt,input.reminderLeadMinutes,Number(input.repeatWhileOverdue),input.notes,Number(input.enabled),input.reminderId);return getCatRoutine(Number(r.lastInsertRowid))!;}
-export function updateCatRoutine(id:number,input:Record<string,unknown>){updateCatsRow("cat_routines",id,input,{scope:"scope",petId:"pet_id",title:"title",intervalValue:"interval_value",intervalUnit:"interval_unit",recurrenceMode:"recurrence_mode",anchorDate:"anchor_date",firstDueDate:"first_due_date",nextDueDate:"next_due_date",configuredReminderTime:"configured_reminder_time",timezone:"timezone",firstDueAt:"first_due_at",lastCompletedAt:"last_completed_at",nextDueAt:"next_due_at",reminderLeadMinutes:"reminder_lead_minutes",repeatWhileOverdue:"repeat_while_overdue",notes:"notes",enabled:"enabled",reminderId:"reminder_id"},[],["enabled","repeatWhileOverdue"]);return getCatRoutine(id);}
+export function updateCatRoutine(id:number,input:Record<string,unknown>){updateCatsRow("cat_routines",id,input,{scope:"scope",petId:"pet_id",title:"title",intervalValue:"interval_value",intervalUnit:"interval_unit",recurrenceMode:"recurrence_mode",anchorDate:"anchor_date",firstDueDate:"first_due_date",nextDueDate:"next_due_date",configuredReminderTime:"configured_reminder_time",timezone:"timezone",firstDueAt:"first_due_at",lastCompletedAt:"last_completed_at",lastCompletedOn:"last_completed_on",completionUndo:"completion_undo",nextDueAt:"next_due_at",reminderLeadMinutes:"reminder_lead_minutes",repeatWhileOverdue:"repeat_while_overdue",notes:"notes",enabled:"enabled",reminderId:"reminder_id"},[],["enabled","repeatWhileOverdue"]);return getCatRoutine(id);}
 export function deleteCatRoutine(id:number){return database.prepare("DELETE FROM cat_routines WHERE id=?").run(id).changes>0;}
 export function archiveCatRoutine(id:number){return database.prepare("UPDATE cat_routines SET enabled=0,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(id).changes>0;}
 
@@ -2888,10 +2969,29 @@ export function getReminder(id:number){const row=database.prepare("SELECT * FROM
 export function createReminder(input:Omit<Reminder,"id"|"overdueAfter"|"lastCompletedAt"|"snoozedUntil"|"lastNotifiedAt"|"sentAt"|"cancelledAt"|"createdAt"|"updatedAt">&{overdueAfter?:string|null}){const r=database.prepare("INSERT INTO reminders(title,target_type,target_id,source_type,source_id,schedule_type,starts_at,next_due_at,overdue_after,due_has_explicit_time,interval_value,interval_unit,times_of_day,ends_at,timezone,note,lead_time_minutes,repeat_while_overdue,delivery_channel,status,is_active) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(input.title,input.targetType,input.targetId,input.sourceType,input.sourceId,input.scheduleType,input.startsAt,input.nextDueAt,input.overdueAfter??null,Number(input.dueHasExplicitTime),input.intervalValue,input.intervalUnit,JSON.stringify(input.timesOfDay),input.endsAt,input.timezone,input.note,input.leadTimeMinutes,Number(input.repeatWhileOverdue),input.deliveryChannel??"pwa",input.status,Number(input.isActive));return getReminder(Number(r.lastInsertRowid))!;}
 export function updateReminder(id:number,input:Record<string,unknown>){updateCatsRow("reminders",id,input,{title:"title",targetType:"target_type",targetId:"target_id",sourceType:"source_type",sourceId:"source_id",scheduleType:"schedule_type",startsAt:"starts_at",nextDueAt:"next_due_at",overdueAfter:"overdue_after",dueHasExplicitTime:"due_has_explicit_time",intervalValue:"interval_value",intervalUnit:"interval_unit",timesOfDay:"times_of_day",endsAt:"ends_at",timezone:"timezone",note:"note",leadTimeMinutes:"lead_time_minutes",repeatWhileOverdue:"repeat_while_overdue",deliveryChannel:"delivery_channel",status:"status",sentAt:"sent_at",cancelledAt:"cancelled_at",isActive:"is_active",lastCompletedAt:"last_completed_at",snoozedUntil:"snoozed_until",lastNotifiedAt:"last_notified_at"},["timesOfDay"],["isActive","dueHasExplicitTime","repeatWhileOverdue"]);return getReminder(id);}
 export function deleteReminder(id:number){return database.prepare("DELETE FROM reminders WHERE id=?").run(id).changes>0;}
-export function listReminderOccurrences(range: { from: string; to: string }) {
-  return (database.prepare("SELECT * FROM reminder_occurrences WHERE action = 'completed' AND acted_at >= ? AND acted_at < ? ORDER BY acted_at, id").all(range.from, range.to) as Record<string, unknown>[]).map(reminderOccurrenceFromRow);
+export function listReminderOccurrences(range: { from: string; to: string }, date?: string) {
+  const filter = date ? "(completed_on=? OR (completed_on IS NULL AND acted_at>=? AND acted_at<?))" : "acted_at>=? AND acted_at<?";
+  return (database.prepare(`SELECT * FROM reminder_occurrences WHERE action='completed' AND ${filter} ORDER BY acted_at,id`).all(...(date?[date]:[]),range.from,range.to) as Record<string, unknown>[]).map(reminderOccurrenceFromRow);
 }
-export function createReminderOccurrence(input:Omit<ReminderOccurrence,"id"|"createdAt">){const r=database.prepare("INSERT INTO reminder_occurrences(reminder_id,action,scheduled_for,acted_at,created_event_id) VALUES(?,?,?,?,?)").run(input.reminderId,input.action,input.scheduledFor,input.actedAt,input.createdEventId);return reminderOccurrenceFromRow(database.prepare("SELECT * FROM reminder_occurrences WHERE id=?").get(Number(r.lastInsertRowid)) as Record<string,unknown>);}
+export function createReminderOccurrence(input:Omit<ReminderOccurrence,"id"|"createdAt">){const r=database.prepare("INSERT INTO reminder_occurrences(reminder_id,action,scheduled_for,acted_at,completed_on,created_event_id) VALUES(?,?,?,?,?,?)").run(input.reminderId,input.action,input.scheduledFor,input.actedAt,input.completedOn??null,input.createdEventId);return reminderOccurrenceFromRow(database.prepare("SELECT * FROM reminder_occurrences WHERE id=?").get(Number(r.lastInsertRowid)) as Record<string,unknown>);}
+export function getReminderOccurrence(reminderId: number, occurrenceId: number) {
+  const row = database.prepare("SELECT * FROM reminder_occurrences WHERE id=? AND reminder_id=?").get(occurrenceId,reminderId);
+  return row ? reminderOccurrenceFromRow(row) : null;
+}
+export function correctReminderCompletion(reminderId: number, occurrenceId: number, completedOn: string, schedule?: { expectedNextDueAt: string | null; nextDueAt: string | null; isActive: boolean }) {
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const occurrence = getReminderOccurrence(reminderId,occurrenceId);
+    const reminder = getReminder(reminderId);
+    if (!reminder || occurrence?.action !== "completed" || occurrence.createdEventId !== null
+      || (schedule && (reminder.status==="cancelled" || reminder.lastCompletedAt !== occurrence.actedAt || reminder.nextDueAt !== schedule.expectedNextDueAt || reminder.snoozedUntil))) {
+      database.exec("ROLLBACK"); return false;
+    }
+    if (schedule) updateReminder(reminderId,{nextDueAt:schedule.nextDueAt,isActive:schedule.isActive,status:"scheduled",sentAt:null,lastNotifiedAt:null});
+    database.prepare("UPDATE reminder_occurrences SET completed_on=? WHERE id=?").run(completedOn,occurrenceId);
+    database.exec("COMMIT"); return true;
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
 
 function relationPersonFromRow(row:Record<string,unknown>):RelationPerson{return{id:Number(row.id),name:String(row.name),nickname:row.nickname?String(row.nickname):null,relationLabel:row.relation_label?String(row.relation_label):null,closenessRank:row.closeness_rank===null||row.closeness_rank===undefined?null:Number(row.closeness_rank) as RelationPerson["closenessRank"],relationshipStatus:(row.relationship_status??"active") as RelationPerson["relationshipStatus"],photoPath:row.photo_path?String(row.photo_path):null,birthday:row.birthday?String(row.birthday):null,likes:row.likes?String(row.likes):null,avoid:row.avoid?String(row.avoid):null,note:row.note?String(row.note):null,archivedAt:row.archived_at?String(row.archived_at):null,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
 function relationEventFromRow(row:Record<string,unknown>):RelationEvent{const id=Number(row.id);const parties=(database.prepare("SELECT * FROM relation_event_parties WHERE event_id=? ORDER BY id").all(id) as Record<string,unknown>[]).map(p=>({id:Number(p.id),partyType:p.party_type as "self"|"person",personId:p.person_id===null?null:Number(p.person_id),shareAmountMinor:p.share_amount_minor===null?null:Number(p.share_amount_minor),paidAmountMinor:p.paid_amount_minor===null?null:Number(p.paid_amount_minor)}));const items=(database.prepare("SELECT * FROM relation_event_items WHERE event_id=? ORDER BY sort_order,id").all(id) as Record<string,unknown>[]).map(i=>({id:Number(i.id),label:String(i.label),amountMinor:Number(i.amount_minor),sortOrder:Number(i.sort_order)}));const flows=(database.prepare("SELECT * FROM relation_event_flows WHERE event_id=? ORDER BY id").all(id) as Record<string,unknown>[]).map(f=>({id:Number(f.id),fromPartyId:Number(f.from_party_id),toPartyId:Number(f.to_party_id),flowType:f.flow_type as RelationEvent["flows"][number]["flowType"],amountMinor:Number(f.amount_minor),settlesFlowId:f.settles_flow_id===null?null:Number(f.settles_flow_id),note:f.note?String(f.note):null}));return{id,eventType:row.event_type as RelationEvent["eventType"],title:String(row.title),note:row.note?String(row.note):null,occurredAt:String(row.occurred_at),occurredHasExplicitTime:Boolean(row.occurred_has_explicit_time),currency:"CNY",totalAmountMinor:row.total_amount_minor===null?null:Number(row.total_amount_minor),isInPerson:row.is_in_person===null?null:Boolean(row.is_in_person),parties,items,flows,createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}

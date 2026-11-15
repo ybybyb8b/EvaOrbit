@@ -23,8 +23,8 @@ test("one-time cat and household care leaves a completion record and a retry doe
         await reminders.completeReminder(reminder.id,new Date('2026-10-17T10:31:00Z'));
         const events = db.listCatEvents(targetType==='cat'?pet.id:null).filter(item=>item.sourceType==='reminder'&&item.sourceId===reminder.id);
         assert.equal(events.length,1);
-        assert.equal(events[0].occurredAt,'2026-10-17T10:30:00.000Z');
-        assert.equal(events[0].occurredHasExplicitTime,true);
+        assert.equal(events[0].occurredAt,'2026-10-17T04:00:00.000Z');
+        assert.equal(events[0].occurredHasExplicitTime,false);
         assert.equal(events[0].eventType,targetType==='cat'?'care':'cleaning');
       }
       const course = await reminders.createReminder(parse.parseReminder({title:'Medication',targetType:'cat',targetId:pet.id,scheduleType:'course',nextDueAt:'2026-10-17T09:00:00Z',intervalValue:12,intervalUnit:'hour'}));

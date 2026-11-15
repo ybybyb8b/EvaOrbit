@@ -17,7 +17,7 @@ function dueLabel(item:DueReminder){if(item.overdueMs<60_000)return"Now";const d
 
 const occurrenceKey=(item:DueReminder)=>`${item.id}:${Date.parse(item.dueAt)}`;
 
-export function useDueReminderActions(items:DueReminder[],readOnly:boolean,onChanged?:()=>void){
+export function useDueReminderActions(items:DueReminder[],readOnly:boolean,onChanged?:(completedOn?:string)=>void){
   const businessFetch=useBusinessRequest();
   const [error,setError]=useState("");
   const [busy,setBusy]=useState<number|null>(null);const [snoozing,setSnoozing]=useState<number|null>(null);const [dismissed,setDismissed]=useState<string[]>([]);const [promoted,setPromoted]=useState<number|null>(null);const remaining=items.filter(item=>!dismissed.includes(occurrenceKey(item)));
@@ -35,10 +35,13 @@ export function useDueReminderActions(items:DueReminder[],readOnly:boolean,onCha
     const item=remaining.find(value=>value.id===id);if(readOnly||busy!==null||!item)return false;setBusy(id);setError("");
     try{const response=await businessFetch(`/api/reminders/${id}/${name}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(name==="complete"&&item.sourceType==="cat_routine"?{expectedNextDueAt:item.nextDueAt,expectedLastCompletedAt:item.lastCompletedAt}:body??{})});
       if(!response.ok)throw new Error(await responseError(response,"Could not update reminder."));
-      playNativeHaptic(name==="complete"?"success":"selection");setSnoozing(null);if(id===remaining[0]?.id)setPromoted(remaining.find(item=>item.id!==id)?.id??null);setDismissed(current=>[...current,occurrenceKey(item)]);onChanged?.();try{await reconcileNativeNotifications();}catch{/* Web delivery remains active. */}return true;
+      const saved=name==="complete"?await response.json().catch(()=>null) as {completedOn?:unknown}|null:null;
+      const completedOn=typeof saved?.completedOn==="string"?saved.completedOn:undefined;
+      playNativeHaptic(name==="complete"?"success":"selection");setSnoozing(null);if(id===remaining[0]?.id)setPromoted(remaining.find(item=>item.id!==id)?.id??null);setDismissed(current=>[...current,occurrenceKey(item)]);onChanged?.(completedOn);try{await reconcileNativeNotifications();}catch{/* Web delivery remains active. */}return {completedOn};
     }catch(reason){setError(reason instanceof Error?reason.message:"Could not update reminder.");playNativeHaptic("error");return false;}finally{setBusy(null);}
   }
-  return {error,busy,snoozing,setSnoozing,remaining,promoted,action};
+  function restore(item:DueReminder){setDismissed(current=>current.filter(key=>key!==occurrenceKey(item)));}
+  return {error,busy,snoozing,setSnoozing,remaining,promoted,action,restore};
 }
 
 export function DueRemindersView({items,limit,onChanged,compact=false,readOnly=false,LinkComponent=PlainLink}:{items:DueReminder[];limit?:number;onChanged?:()=>void;compact?:boolean;readOnly?:boolean;LinkComponent?:ComponentType<HomeLinkProps>}){

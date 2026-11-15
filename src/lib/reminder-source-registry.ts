@@ -39,6 +39,13 @@ export function reminderSourceDefinition(sourceType: string | null | undefined) 
   return bySourceType.get(sourceType ?? null) ?? unknownSource;
 }
 
+export function canCorrectReminderCompletion(reminder: { sourceType: string | null; targetType: string }) {
+  const owner = reminderSourceDefinition(reminder.sourceType).projectionOwner;
+  return (owner === "reminder" || owner === "unknown")
+    && !["tracker","task","subscription"].includes(reminder.targetType)
+    && reminder.sourceType !== "medication";
+}
+
 export function reminderSourceAllows(sourceType: string | null | undefined, channel: ReminderDeliveryChannel) {
   return reminderSourceDefinition(sourceType).channels.includes(channel);
 }

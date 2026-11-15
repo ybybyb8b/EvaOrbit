@@ -60,7 +60,8 @@ export function reminderSnapshot(reminder:Reminder):Item{const due=reminder.snoo
 export function eventKitReminderCompletedSince(reminder:Reminder,base:Item){
   if(!eventKitHasNextOccurrence(reminder)||base.completed||!reminder.lastCompletedAt)return false;
   const completedAt=new Date(reminder.lastCompletedAt).toISOString();
-  if(Object.hasOwn(base,"eoLastCompletedAt"))return completedAt!==base.eoLastCompletedAt;
+  // Undo restores the earlier watermark and reschedules the current mirror.
+  if(Object.hasOwn(base,"eoLastCompletedAt"))return base.eoLastCompletedAt===null||Date.parse(completedAt)>Date.parse(String(base.eoLastCompletedAt));
   // Legacy baselines lack a completion watermark. Only infer a late completion
   // when the old Due has passed and EO has already moved to another occurrence.
   const completed=dayTime(completedAt,reminder.timezone),next=reminderSnapshot(reminder);

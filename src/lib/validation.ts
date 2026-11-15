@@ -44,6 +44,12 @@ export function dateOnly(value: unknown, field = "日期") {
   return value;
 }
 
+export function completionDateOnly(value: unknown) {
+  const date = dateOnly(value, "完成日期");
+  if (date > dateInEvaOrbit()) throw new ValidationError("完成日期不能晚于今天");
+  return date;
+}
+
 const mediaTypes = ["movie", "tv", "anime", "documentary", "other"] as const;
 const mediaStatuses = ["planned", "watching", "completed", "paused", "dropped"] as const;
 const mediaRatingPattern = /^(goat|dope|mid|nope|shit)[+-]?$/;
@@ -492,6 +498,7 @@ export function parseTaskPatch(value: unknown) {
         : typeof body.completed === "boolean"
           ? body.completed
           : (() => { throw new ValidationError("完成状态格式不正确"); })(),
+    completedOn: body.completedOn === undefined ? undefined : completionDateOnly(body.completedOn),
     dueDate: dueDate(body.dueDate),
     dueTime: taskDueTime(body.dueTime),
     priority: priority(body.priority),

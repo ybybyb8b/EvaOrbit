@@ -30,11 +30,11 @@ function overdue(item: DueReminder, english: boolean) {
   return english ? `${value} ${days ? value===1?"day":"days" : hours ? value===1?"hour":"hours" : value===1?"minute":"minutes"} overdue` : `逾期 ${value} ${days?"天":hours?"小时":"分钟"}`;
 }
 
-export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAvailable=true,date,readOnly,english,LinkComponent:Link,onChanged}:{tasks:HomeDayOverview["tasks"];completedItems?:HomeCompletedItem[];reminders:DueReminder[];remindersAvailable?:boolean;date:string;readOnly:boolean;english:boolean;LinkComponent:ComponentType<HomeLinkProps>;onChanged:()=>void}) {
+export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAvailable=true,date,readOnly,english,LinkComponent:Link,onChanged}:{tasks:HomeDayOverview["tasks"];completedItems?:HomeCompletedItem[];reminders:DueReminder[];remindersAvailable?:boolean;date:string;readOnly:boolean;english:boolean;LinkComponent:ComponentType<HomeLinkProps>;onChanged:(completedOn?:string)=>void}) {
   const request=useBusinessRequest();
-  const {remaining,error,busy,snoozing,setSnoozing,action}=useDueReminderActions(reminders,readOnly,onChanged);
+  const {remaining,error,busy,snoozing,setSnoozing,action,restore}=useDueReminderActions(reminders,readOnly,onChanged);
   type Task = HomeDayOverview["tasks"][number];
-  type LocalReminder = {item:DueReminder;completedAt:string;saving:boolean};
+  type LocalReminder = {item:DueReminder;saving:boolean};
   const [localTasks,setLocalTasks]=useState<Record<number,Task&{saving:boolean}>>({});
   const [localReminders,setLocalReminders]=useState<Record<number,LocalReminder>>({});
   const [rowOrder,setRowOrder]=useState<string[]|null>(null);
@@ -43,15 +43,16 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   const [rowHeights,setRowHeights]=useState<Record<string,number>>({});
   useEffect(()=>{const reset=()=>setRowHeights({});window.addEventListener("resize",reset);return()=>window.removeEventListener("resize",reset);},[]);
   const [openActions,setOpenActions]=useState<string|null>(null);
+  const [completionEditor,setCompletionEditor]=useState<{key:string;date:string}|null>(null);
+  const [completionBusy,setCompletionBusy]=useState(false);
+  const [hiddenCompletions,setHiddenCompletions]=useState<HomeCompletedItem[]>([]);
   const [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{const tick=()=>setNow(Date.now());const timer=window.setInterval(tick,60_000);window.addEventListener("focus",tick);return()=>{window.clearInterval(timer);window.removeEventListener("focus",tick);};},[]);
   const today=dateInEvaOrbit(new Date(now));
   const [taskBusy,setTaskBusy]=useState<number|null>(null),[taskError,setTaskError]=useState("");
   const remembered=Object.values(localReminders);
   const localCompletion=(item:DueReminder)=>{
-    const local=localReminders[item.id];if(local?.item.dueAt!==item.dueAt)return undefined;
-    const confirmed=completedItems.find(completion=>homeReminderCompletionMatches(item,completion));
-    return confirmed?{...local,completedAt:confirmed.completedAt}:local;
+    const local=localReminders[item.id];return local?.item.dueAt===item.dueAt?local:undefined;
   };
   // Retain the completed occurrence; a newly due recurrence is a different row.
   const future=remaining.filter(item=>localReminders[item.id]&& !localCompletion(item));
@@ -60,7 +61,9 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   const taskMap=new Map(tasks.map(task=>[task.id,{...task,...localTasks[task.id]}]));
   for(const task of Object.values(localTasks))if(!taskMap.has(task.id))taskMap.set(task.id,task);
   // A day cached while it was Today can still contain open tasks from earlier dates.
-  const visibleTasks=[...taskMap.values()].filter(task=>task.completed||localTasks[task.id]?.saving||task.dueDate===undefined||task.dueDate===date||date===today&&task.dueDate!==null&&task.dueDate<date);
+  const visibleTasks=[...taskMap.values()].filter(task=>localTasks[task.id]?.saving||(
+    task.completed ? !task.completedOn||task.completedOn===date
+      : task.dueDate===undefined||task.dueDate===date||date===today&&task.dueDate!==null&&task.dueDate<date));
   const rows=[...homeTaskItems(visibleTasks,visibleReminders),...homeTaskItems([],future)].map(row=>{
     const task=row.task, dueDate=task?.dueDate===undefined?(task?date:null):task.dueDate;
     const taskDue=Boolean(!task?.completed&&dueDate&&(task?.dueTime?Date.parse(zonedDateTimeToUtc(dueDate,task.dueTime))<=now:dueDate<today));
@@ -70,7 +73,9 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   });
   const complete=(row:typeof rows[number])=>row.task?row.task.completed:Boolean(row.reminders.length&&row.reminders.every(item=>localCompletion(item)));
   const pending=(row:typeof rows[number])=>Boolean(row.task&&localTasks[row.task.id]?.saving||row.reminders.some(item=>localCompletion(item)?.saving));
-  const history=completedItems.filter(item=>!remembered.some(saved=>homeReminderCompletionMatches(saved.item,item)));
+  const completionVisible=(item:HomeCompletedItem)=>!hiddenCompletions.some(hidden=>hidden.key===item.key&&hidden.completedAt===item.completedAt
+    && (hidden.correction?.kind!=="cat"||item.correction?.kind==="cat"&&hidden.correction.eventId===item.correction.eventId));
+  const history=completedItems.filter(item=>completionVisible(item)&&!remembered.some(saved=>homeReminderCompletionMatches(saved.item,item)));
   const entries=[...rows.map(row=>({key:row.key,row,completion:null})),...history.map(completion=>({key:"completed:"+completion.key,row:null,completion}))];
   if(rowOrder){const positions=new Map(rowOrder.map((key,index)=>[key,index]));entries.sort((a,b)=>(positions.get(a.key)??Infinity)-(positions.get(b.key)??Infinity));}
   const pinOrder=()=>{
@@ -83,16 +88,16 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
   async function toggle(id:number,completed:boolean) {
     if(readOnly||writeLock.current||busy!==null)return;
     const task=taskMap.get(id);if(!task)return;
-    writeLock.current=true;pinOrder();setTaskBusy(id);setTaskError("");
+    writeLock.current=true;pinOrder();setTaskBusy(id);setTaskError("");setCompletionEditor(null);
     const previous=localTasks[id];
-    const changed={...task,completed,completedAt:completed?new Date().toISOString():null,saving:true};
+    const changed={...task,completed,completedOn:completed?dateInEvaOrbit():null,completedAt:null,saving:true};
     setLocalTasks(current=>({...current,[id]:changed}));
     try {
       const response=await request(`/api/tasks/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({completed})});
       if(!response.ok)throw new Error(await responseError(response,english?"Could not update task.":"任务更新失败。"));
       const saved=await response.json().catch(()=>null) as Task|null;
-      setLocalTasks(current=>({...current,[id]:{...changed,completedAt:saved?.completedAt??changed.completedAt,saving:false}}));
-      onChanged();playNativeHaptic(completed?"success":"selection");
+      setLocalTasks(current=>({...current,[id]:{...changed,completedAt:saved?.completedAt??null,completedOn:saved?.completedOn??changed.completedOn,saving:false}}));
+      onChanged(completed?(saved?.completedOn??changed.completedOn??undefined):undefined);playNativeHaptic(completed?"success":"selection");
       void reconcileNativeNotifications().catch(()=>{});
     } catch(reason) {
       setLocalTasks(current=>{const next={...current};if(previous)next[id]=previous;else delete next[id];return next;});
@@ -103,20 +108,83 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
     if(readOnly||writeLock.current||busy!==null)return;
     if(name!=="complete"){await action(id,name,body);return;}
     const item=remaining.find(value=>value.id===id);if(!item)return;
+    if(item.targetType==="task"&&item.targetId&&taskMap.has(item.targetId)){
+      setOpenActions(null);
+      await toggle(item.targetId,true);
+      return;
+    }
     writeLock.current=true;pinOrder();setOpenActions(null);
-    const saved={item,completedAt:new Date().toISOString(),saving:true};
+    const saved={item,saving:true};
     setLocalReminders(current=>({...current,[id]:saved}));
-    const task=item.targetType==="task"&&item.targetId?taskMap.get(item.targetId):undefined,previous=task&&localTasks[task.id];
-    if(task)setLocalTasks(current=>({...current,[task.id]:{...task,completed:true,completedAt:saved.completedAt,saving:true}}));
     const success=await action(id,name,body);
-    if(success){
+    if(success&&(success.completedOn??today)===date){
       setLocalReminders(current=>({...current,[id]:{...saved,saving:false}}));
-      if(task)setLocalTasks(current=>({...current,[task.id]:{...task,completed:true,completedAt:saved.completedAt,saving:false}}));
     }else{
       setLocalReminders(current=>{const next={...current};delete next[id];return next;});
-      if(task)setLocalTasks(current=>{const next={...current};if(previous)next[task.id]=previous;else delete next[task.id];return next;});
     }
     writeLock.current=false;
+  }
+  async function changeCompletion(task:Task|undefined,completion:HomeCompletedItem|undefined,completedOn:string|null) {
+    if(readOnly||writeLock.current||busy!==null)return;
+    const correction=completion?.correction;
+    let url:string, payload:Record<string,unknown>;
+    if(task&&completedOn){url=`/api/tasks/${task.id}`;payload={completedOn};}
+    else if(correction?.kind==="cat"){
+      if(completedOn){url=`/api/cats/records/event/${correction.eventId}`;payload={completedOn};}
+      else if(correction.canUndo&&correction.routineId){url=`/api/cats/routines/${correction.routineId}`;payload={undoEventId:correction.eventId};}
+      else return;
+    }else if(correction?.kind==="reminder"&&completedOn){
+      url=`/api/reminders/${correction.reminderId}`;payload={occurrenceId:correction.occurrenceId,completedOn};
+    }else return;
+    writeLock.current=true;
+    setCompletionBusy(true);setTaskError("");
+    try{
+      const response=await request(url,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      if(!response.ok)throw new Error(await responseError(response,english?"Could not update completion.":"无法更新完成记录。"));
+      if(correction?.kind==="reminder"){
+        const saved=await response.json().catch(()=>null) as {completedOn?:string}|null;
+        if(saved?.completedOn!==completedOn)throw new Error(english?"Could not update completion.":"无法更新完成记录。");
+      }
+      if(task&&completedOn)setLocalTasks(current=>({...current,[task.id]:{...task,completedOn,saving:false}}));
+      if(completion){
+        if(!completedOn){
+          const rememberedItem=remembered.find(saved=>homeReminderCompletionMatches(saved.item,completion))?.item;
+          if(rememberedItem)restore(rememberedItem);
+        }
+        setHiddenCompletions(current=>[...current,completion]);
+        setLocalReminders(current=>Object.fromEntries(Object.entries(current).filter(([,saved])=>!homeReminderCompletionMatches(saved.item,completion))));
+      }
+      setCompletionEditor(null);onChanged(completedOn??undefined);playNativeHaptic("success");
+      void reconcileNativeNotifications().catch(()=>{});
+    }catch(reason){
+      setTaskError(reason instanceof Error?reason.message:english?"Could not update completion.":"无法更新完成记录。");
+      playNativeHaptic("error");
+    }finally{writeLock.current=false;setCompletionBusy(false);}
+  }
+  function completionMenu(key:string,title:string) {
+    return <button type="button" className="vintage-more" aria-label={english?`Completion options for ${title}`:`完成记录操作：${title}`}
+      aria-expanded={completionEditor?.key===key} disabled={completionBusy||taskBusy!==null||busy!==null}
+      onClick={()=>{setOpenActions(null);setTaskError("");setCompletionEditor(completionEditor?.key===key?null:{key,date});}}>
+      <ReiconGlyph name="more" className="icon"/>
+    </button>;
+  }
+  function completionForm(key:string,task?:Task,completion?:HomeCompletedItem) {
+    if(completionEditor?.key!==key)return null;
+    const canUndo=completion?.correction?.kind==="cat"&&completion.correction.canUndo;
+    return <form className="vintage-completion-form vintage-snooze" onSubmit={event=>{
+      event.preventDefault();void changeCompletion(task,completion,completionEditor.date);
+    }}>
+      <label><span>{english?"Completion date":"完成日期"}</span>
+        <input type="date" required max={today} value={completionEditor.date} disabled={completionBusy}
+          onChange={event=>setCompletionEditor({key,date:event.target.value})}/>
+      </label>
+      <button type="submit" disabled={completionBusy||!completionEditor.date||completionEditor.date===date}>
+        {completionBusy?(english?"Saving…":"保存中…"):(english?"Save date":"保存日期")}
+      </button>
+      {canUndo&&<button type="button" disabled={completionBusy} onClick={()=>void changeCompletion(undefined,completion,null)}>
+        {english?"Undo completion":"撤销完成"}
+      </button>}
+    </form>;
   }
   return <article className="home-day-pane home-tasks-pane">
     <header><Checklist size={19} weight="Outline" aria-hidden="true"/><h3><Link href="/tasks">{english?"Tasks":"任务"}</Link></h3><small className="vintage-task-count">{dueCount>0?english?`${dueCount} due`:`${dueCount} 到期`:english?`${entries.length} items`:`${entries.length} 项`}</small><small aria-label={english?"Completed / total":"已完成 / 总数"}>{doneCount}/{entries.length}</small></header>
@@ -124,24 +192,26 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
     {!remindersAvailable&&<p className="vintage-live-label">{english?"Reminder snapshot unavailable. Connect to refresh.":"提醒快照不可用，请联网刷新。"}</p>}
     <ErrorNotice>{error||taskError}</ErrorNotice>
     {entries.length===0?<p className="home-pane-empty">{english?"No tasks or reminders due":"没有待处理任务或提醒"}</p>:<ul ref={listRef} className="vintage-task-list">{entries.map(({key,row,completion})=>{
-      if(completion)return <li key={key} data-completed="true"><div className="vintage-task-title"><CheckCircle className="vintage-completed-check" size={20} weight="Outline" aria-hidden="true"/><strong><Link href={completion.href}>{completion.title}</Link></strong><Link className="vintage-more" href={completion.href}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"View record":"查看记录"}</span></Link></div><div className="vintage-task-meta"><span>{english?"Completed":"已完成"}</span>{completion.hasExplicitTime&&<time>{completionTime(completion.completedAt)}</time>}</div></li>;
+      if(completion)return <li key={key} data-completed="true"><div className="vintage-task-title"><CheckCircle className="vintage-completed-check" size={20} weight="Outline" aria-hidden="true"/><strong><Link href={completion.href}>{completion.title}</Link></strong>{completion.correction&&!readOnly?completionMenu(key,completion.title):<Link className="vintage-more" href={completion.href}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"View record":"查看记录"}</span></Link>}</div><div className="vintage-task-meta"><span>{completion.handled?(english?"Handled":"已处理"):(english?"Completed":"已完成")}</span>{completion.hasExplicitTime&&<time>{completionTime(completion.completedAt)}</time>}</div>{completionForm(key,undefined,completion)}</li>;
       if(!row)return null;
       const done=complete(row),saving=pending(row);
       const task=row.task, title=task?.title??homeReminderTitle(row.reminders[0]), due=!done&&row.due;
+      const confirmed=done&&!task?completedItems.find(item=>completionVisible(item)&&row.reminders.some(reminder=>homeReminderCompletionMatches(reminder,item))):undefined;
       const {dueDate,taskDue}=row, showDate=dueDate&&(taskDue||dueDate!==date), hasReminders=row.reminders.length>0;
       const taskStatus=saving?(english?"Saving…":"保存中…"):done?(english?"Completed":"已完成"):
         taskDue?(dueDate&&dueDate<today?(english?"Overdue":"已逾期"):(english?"Due":"已到期")):(english?"Pending":"待处理");
       return <li key={key} data-row-key={key} style={{minHeight:rowHeights[key]}} data-due={due} data-completed={done||undefined} aria-busy={saving||undefined}>
-        <div className="vintage-task-title">{task?<label className="vintage-task-check"><input type="checkbox" aria-label={english?`${task.completed?"Reopen":"Complete"} ${task.title}`:`${task.completed?"重新打开":"完成"} ${task.title}`} checked={task.completed} disabled={readOnly||taskBusy!==null||busy!==null} onChange={event=>void toggle(task.id,event.target.checked)}/><span aria-hidden="true"><Icon name="check"/></span></label>:row.reminders.length===1||done?<button type="button" className="vintage-quick-complete" aria-pressed={done} disabled={readOnly||done||busy!==null||taskBusy!==null} aria-label={`${row.reminders[0].targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")} ${row.reminders[0].title}`} onClick={()=>void performReminderAction(row.reminders[0].id,"complete")}><span><Icon name="check"/></span></button>:<span className="vintage-due-mark" aria-hidden="true"/>}
+        <div className="vintage-task-title">{task?<label className="vintage-task-check"><input type="checkbox" aria-label={english?`${task.completed?"Reopen":"Complete"} ${task.title}`:`${task.completed?"取消完成":"完成"} ${task.title}`} checked={task.completed} disabled={readOnly||completionBusy||taskBusy!==null||busy!==null} onChange={event=>void toggle(task.id,event.target.checked)}/><span aria-hidden="true"><Icon name="check"/></span></label>:row.reminders.length===1||done?<button type="button" className="vintage-quick-complete" aria-pressed={done} disabled={readOnly||completionBusy||done||busy!==null||taskBusy!==null} aria-label={`${row.reminders[0].targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")} ${row.reminders[0].title}`} onClick={()=>void performReminderAction(row.reminders[0].id,"complete")}><span><Icon name="check"/></span></button>:<span className="vintage-due-mark" aria-hidden="true"/>}
           <strong>{task?<Link href={`/tasks?taskId=${task.id}`}>{task.title}</Link>:title}</strong>
-          {row.reminders.length>0&&!done&&<button type="button" className="vintage-more" aria-label={`${english?"Actions for":"操作"} ${title}`} aria-expanded={openActions===row.key} onClick={()=>{setOpenActions(openActions===row.key?null:row.key);setSnoozing(null);}}><ReiconGlyph name="more" className="icon"/></button>}{row.reminders.length===0&&task&&<Link className="vintage-more" href={`/tasks?taskId=${task.id}`}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"Task details":"任务详情"}</span></Link>}
+          {done&&!readOnly&&(task||confirmed?.correction)?completionMenu(key,title):row.reminders.length>0&&!done?<button type="button" className="vintage-more" aria-label={`${english?"Actions for":"操作"} ${title}`} aria-expanded={openActions===row.key} onClick={()=>{setCompletionEditor(null);setOpenActions(openActions===row.key?null:row.key);setSnoozing(null);}}><ReiconGlyph name="more" className="icon"/></button>:row.reminders.length===0&&task?<Link className="vintage-more" href={`/tasks?taskId=${task.id}`}><ReiconGlyph name="more" className="icon"/><span className="sr-only">{english?"Task details":"任务详情"}</span></Link>:null}
         </div>
-        {task&&(!hasReminders||!done&&dueDate&&(showDate||task.dueTime))&&<div className="vintage-task-meta"><span className={taskDue&&!saving?"vintage-overdue":undefined}>{taskStatus}</span>{done&&task.completedAt?<time>{completionTime(task.completedAt)}</time>:!done&&dueDate&&(showDate||task.dueTime)&&<time dateTime={dueDate+(task.dueTime?`T${task.dueTime}`:"")}>{[showDate&&dueDate,task.dueTime].filter(Boolean).join(" ")}</time>}</div>}
+        {task&&(!hasReminders||!done&&dueDate&&(showDate||task.dueTime))&&<div className="vintage-task-meta"><span className={taskDue&&!saving?"vintage-overdue":undefined}>{taskStatus}</span>{!done&&dueDate&&(showDate||task.dueTime)&&<time dateTime={dueDate+(task.dueTime?`T${task.dueTime}`:"")}>{[showDate&&dueDate,task.dueTime].filter(Boolean).join(" ")}</time>}</div>}
         {row.reminders.map(item=><div className="vintage-reminder" key={item.id} data-completed={done||Boolean(localCompletion(item))||undefined}>
-          <div className="vintage-task-meta"><span className={done||localCompletion(item)?undefined:"vintage-overdue"}>{localCompletion(item)?.saving||saving?(english?"Saving…":"保存中…"):done||localCompletion(item)?(english?"Completed":"已完成"):overdue(item,english)}</span><time>{done||localCompletion(item)?completionTime(localCompletion(item)?.completedAt??task?.completedAt??new Date().toISOString()):reminderDate(item,english)}</time>{row.reminders.length>1&&<span>{item.title}</span>}</div>
+          <div className="vintage-task-meta"><span className={done||localCompletion(item)?undefined:"vintage-overdue"}>{localCompletion(item)?.saving||saving?(english?"Saving…":"保存中…"):done||localCompletion(item)?item.targetType==="tracker"?(english?"Handled":"已处理"):(english?"Completed":"已完成"):overdue(item,english)}</span>{!done&&!localCompletion(item)?<time>{reminderDate(item,english)}</time>:confirmed?.hasExplicitTime?<time>{completionTime(confirmed.completedAt)}</time>:null}{row.reminders.length>1&&<span>{item.title}</span>}</div>
           {openActions===row.key&&!localCompletion(item)&&<div className="vintage-reminder-actions"><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"complete")}>{item.targetType==="subscription"?(english?"Paid":"已扣款"):(english?"Complete":"完成")}</button><button type="button" disabled={readOnly||busy!==null} aria-expanded={snoozing===item.id} onClick={()=>setSnoozing(snoozing===item.id?null:item.id)}>{english?"Snooze":"稍后"}</button><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"skip")}>{item.targetType==="subscription"?(english?"Skip cycle":"跳过本期"):(english?"Skip":"跳过")}</button></div>}
           {snoozing===item.id&&!localCompletion(item)&&<div className="vintage-snooze"><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"snooze",{choice:"later_today"})}>{english?"Later today":"今天稍后"}</button><button type="button" disabled={readOnly||busy!==null} onClick={()=>void performReminderAction(item.id,"snooze",{choice:"tomorrow"})}>{english?"Tomorrow":"明天"}</button><label>{english?"Custom":"自定义"}<input type="datetime-local" disabled={readOnly||busy!==null} onChange={event=>event.target.value&&void performReminderAction(item.id,"snooze",{choice:"custom",custom:new Date(event.target.value).toISOString()})}/></label></div>}
         </div>)}
+        {done&&completionForm(key,task,confirmed)}
       </li>;
     })}</ul>}
   </article>;

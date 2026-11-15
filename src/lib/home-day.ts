@@ -59,13 +59,16 @@ export interface HomeSleepSummary {
   records: Array<{ id: number; title: string; startAt: string; endAt: string; durationMinutes: number; notes: string }>;
 }
 
-export type HomeCompletedItem = { key: string; title: string; href: string; completedAt: string; hasExplicitTime: boolean };
+export type HomeCompletedItem = {
+  key: string; title: string; href: string; completedAt: string; hasExplicitTime: boolean; handled?: boolean;
+  correction?: { kind: "cat"; eventId: number; routineId?: number; canUndo?: boolean } | { kind: "reminder"; reminderId: number; occurrenceId: number };
+};
 
 export interface HomeDayOverview {
   date: string;
   events: TimelineEvent[];
   // Snapshots created before overdue tasks were included omit dueDate.
-  tasks: Array<{ id: number; title: string; completed: boolean; completedAt?: string | null; dueDate?: string | null; dueTime: string | null; priority: string }>;
+  tasks: Array<{ id: number; title: string; completed: boolean; completedAt?: string | null; completedOn?: string | null; dueDate?: string | null; dueTime: string | null; priority: string }>;
   completedItems?: HomeCompletedItem[];
   meals: Array<{ mealType: string; title: string; detail: string | null }>;
   journal: DailyJournalEntry[];
