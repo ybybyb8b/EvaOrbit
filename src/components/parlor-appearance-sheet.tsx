@@ -63,6 +63,10 @@ export function ParlorAppearanceSheet({ appearance, english, onClose }: {
   english: boolean;
   onClose: () => void;
 }) {
+  return <FormSheet title={english?"Chat appearance":"聊天外观"} dirty={false} onClose={onClose}><ParlorAppearanceControls appearance={appearance} english={english}/></FormSheet>;
+}
+
+export function ParlorAppearanceControls({appearance,english}:{appearance:ReturnType<typeof useParlorAppearance>;english:boolean}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const segmentId = useId();
@@ -75,8 +79,8 @@ export function ParlorAppearanceSheet({ appearance, english, onClose }: {
 
   async function change(kind: ParlorAppearanceImage, file: File | null) {
     setError("");
-    if (file && (!parlorImageTypes.split(",").includes(file.type) || file.size > parlorImageLimit)) {
-      setError(t("Choose a JPG, PNG, or WebP image under 20 MB.", "请选择 20 MB 以内的 JPG、PNG 或 WebP 图片。"));
+    if (file && ((!file.type.startsWith("image/")&&!/\.(png|jpe?g|webp|heic|heif|avif)$/i.test(file.name)) || file.size > parlorImageLimit)) {
+      setError(t("Choose an image under 20 MB.", "请选择 20 MB 以内的图片。"));
       return;
     }
     setBusy(true);
@@ -94,14 +98,12 @@ export function ParlorAppearanceSheet({ appearance, english, onClose }: {
     }
   }
 
-  return <FormSheet title={t("Chat appearance", "聊天外观")} busy={busy} dirty={false} onClose={onClose}>
-    <div className={styles.appearanceList}>
+  return <div className={styles.appearanceList}>
       <label className={styles.appearanceToggle}>
         <span>
           <strong id={segmentId}>{t("Split replies into bubbles", "自动分段气泡")}</strong>
-          <small id={`${segmentId}-hint`}>{t("Show replies in separate bubbles by paragraph or block.", "按段落或内容块拆分回复。")}</small>
         </span>
-        <input type="checkbox" role="switch" className="toggle-switch" aria-labelledby={segmentId} aria-describedby={`${segmentId}-hint`}
+        <input type="checkbox" role="switch" className="toggle-switch" aria-labelledby={segmentId}
           checked={appearance.segmentReplies} disabled={!appearance.ready || busy}
           onChange={event => {
             setError("");
@@ -129,8 +131,6 @@ export function ParlorAppearanceSheet({ appearance, english, onClose }: {
           </div>
         </div>;
       })}
-      <small>{t("Appearance is saved on this device.", "聊天外观设置保存在当前设备。")}</small>
       {error && <ErrorNotice inline>{error}</ErrorNotice>}
-    </div>
-  </FormSheet>;
+    </div>;
 }

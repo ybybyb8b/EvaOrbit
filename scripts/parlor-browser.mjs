@@ -20,6 +20,10 @@ try{
     await page.screenshot({path:`${output}/${prefix}-welcome.png`,fullPage:true});
     await page.getByLabel('消息内容',{exact:true}).fill('我今天有点分身乏术，工作、家务和学习都挤在一起。你会怎么帮我理清？');
     await page.getByRole('button',{name:'发送',exact:true}).click();
+    await page.locator('[data-parlor-waiting]').waitFor();
+    assert.equal(await page.locator('[data-role="assistant"] [data-chat-bubble]').count(),0,'no empty reply bubble before first token');
+    assert.equal(await page.getByRole('button',{name:'回答用量详情'}).count(),0,'no usage placeholder before first token');
+    await page.screenshot({path:`${output}/${prefix}-waiting.png`,fullPage:true});
     await page.getByText('先别急着和整张待办清单决斗。',{exact:false}).waitFor();
     const first=await page.locator('[data-role="assistant"]').innerText();
     await page.getByText('我们先从那里下手，如何？',{exact:false}).waitFor();
@@ -45,6 +49,14 @@ try{
     for(const name of ['Providers & Models','Personas','Memory','Context','Group Chat','Tools & Permissions','Usage & Cost','Data & Privacy'])await page.getByRole('button',{name:new RegExp(name)}).waitFor();
     await page.getByRole('button',{name:/Personas/}).click();
     await page.getByRole('heading',{name:'Sebastian',exact:true}).waitFor();
+    await page.getByRole('button',{name:'更换人格头像',exact:true}).click();
+    const choosing=page.waitForEvent('filechooser');
+    await page.getByText('选择图片',{exact:true}).first().click();
+    await (await choosing).setFiles('public/images/lucius-portrait.png');
+    await page.getByRole('button',{name:'恢复人格头像',exact:true}).waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
+    await page.getByRole('dialog').waitFor({state:'detached'});
+    await page.waitForFunction(()=>document.querySelector('[aria-label="更换人格头像"] span')?.style.backgroundImage.includes('blob:'));
     await page.screenshot({path:`${output}/${prefix}-persona.png`,fullPage:true});
     const promptDisclosure=page.getByRole('button',{name:'身份与系统提示词',exact:true});
     assert.equal(await promptDisclosure.getAttribute('aria-expanded'),'false');
@@ -63,6 +75,8 @@ try{
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.reload();await page.getByRole('button',{name:/Parlor ·/}).click();
     await page.getByRole('heading',{name:'Sebastian Test',exact:true}).waitFor();
+    await page.getByRole('button',{name:'切换人格',exact:true}).locator('img').waitFor();
+    await page.waitForFunction(()=>document.querySelector('[aria-label="切换人格"] img')?.naturalWidth>0);
     await page.getByLabel('消息内容',{exact:true}).fill('stop: keep this partial output');
     await page.getByRole('button',{name:'发送',exact:true}).click();
     await page.locator('[data-role="assistant"]').last().getByText('先别急着和整张待办清单决斗。',{exact:false}).waitFor();
@@ -73,7 +87,7 @@ try{
     assert.match(await page.locator('[data-role="assistant"]').last().innerText(),/先别急着/);
     await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();
     await page.getByRole('button',{name:/Providers & Models/}).click();
-    await page.getByText('Parlor 由本机直接连接模型。',{exact:false}).waitFor();
+    await page.getByRole('heading',{name:'Providers & Models',exact:true}).waitFor();
     await page.getByLabel('名称',{exact:true}).fill('Local mock renamed');
     await page.getByRole('button',{name:'保存到本机',exact:true}).click();
     await page.getByText('已保存到本机',{exact:true}).waitFor();
@@ -81,11 +95,9 @@ try{
     const priceDisclosure=page.getByRole('button',{name:'可选：每百万 Token 价格',exact:true});
     await priceDisclosure.click();assert.equal(await priceDisclosure.getAttribute('aria-expanded'),'true');
     await page.getByRole('button',{name:'返回 Parlor 设置',exact:true}).click();
-    await page.getByRole('button',{name:/Data & Privacy/}).click();
-    await page.getByRole('button',{name:'聊天外观与头像',exact:true}).click();
+    await page.getByRole('button',{name:/聊天外观/}).click();
     const segmentation=page.getByRole('switch',{name:'自动分段气泡',exact:true});
     await segmentation.check();assert(await segmentation.isChecked());
-    await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.getByRole('button',{name:'返回 Parlor 设置',exact:true}).click();
     await page.locator('[data-parlor-settings] .page-back-button').click();
     await page.locator('[data-role="assistant"]').first().locator('[data-segment]').nth(1).waitFor();
@@ -93,7 +105,7 @@ try{
     await page.locator('[data-role="assistant"]').first().locator('[data-segment]').nth(1).waitFor();
     await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();
     await page.getByRole('button',{name:/Memory/}).click();
-    await page.getByText('此版本尚未启用',{exact:true}).waitFor();
+    await page.getByText('尚未开放',{exact:true}).waitFor();
     if(!mobile){await page.getByRole('link',{name:'设置',exact:true}).click();await page.getByRole('button',{name:'Parlor 人格、模型与会话偏好',exact:true}).click();await page.locator('[data-parlor-settings]').waitFor();}
     // Simulate a previously bound model being removed from Provider settings.
     await page.evaluate(()=>{const state=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));state.persona.providerId=state.providers[0].id;state.persona.modelId='removed-model';sessionStorage.setItem('eo-eva-synthetic-state',JSON.stringify(state));});
@@ -114,5 +126,5 @@ try{
   await page.goto('http://127.0.0.1:4187/?legacy=1');await page.getByRole('button',{name:/Parlor ·/}).click();
   await page.getByRole('heading',{name:'Parlor',exact:true}).waitFor();
   await page.getByText('Parlor requires the updated local Native Host.',{exact:true}).waitFor();await context.close();
-  console.log(JSON.stringify({results,unsupportedHostNotice:true,segmentationPersisted:true,screenshots:14}));
+  console.log(JSON.stringify({results,unsupportedHostNotice:true,segmentationPersisted:true,avatarUploadAndReload:true,noEmptyReplyBubble:true,screenshots:16}));
 }finally{await browser.close();}

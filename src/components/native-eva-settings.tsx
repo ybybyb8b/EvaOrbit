@@ -34,7 +34,6 @@ export function NativeEvaSettings({accountId,onSaved}:{accountId:string;onSaved?
   }
   function modelField(index:number,patch:Partial<EvaModel>){setDraft(current=>({...current,models:current.models.map((m,i)=>i===index?{...m,...patch}:m)}));}
   return <div className="provider-settings" data-native-eva-settings>
-    <p>{t("Parlor connects directly from this device. Re-enter your API Key; existing Web keys are not imported.","Parlor 由本机直接连接模型。请重新输入 API Key，网页版密钥不会自动导入。")}</p>
     {error&&<ParlorErrorNotice inline error={error}/>}
     {loading?<p role="status">{t("Loading local settings…","正在读取本机配置…")}</p>:<>
     {active&&<p role="status">{t("Stop the active response before changing providers.","请先停止正在生成的回答，再修改配置。")}</p>}
@@ -60,7 +59,6 @@ export function NativeEvaSettings({accountId,onSaved}:{accountId:string;onSaved?
         </div>)}
         <button type="button" className="text-button" disabled={draft.models.length>=50} onClick={()=>setDraft({...draft,models:[...draft.models,blankModel()]})}>{t("Add model","添加模型")}</button>
         <label className="field"><span>{t("Price currency","价格币种")}</span><input pattern="[A-Z]{3}" required maxLength={3} value={draft.currency} onChange={e=>setDraft({...draft,currency:e.target.value.toUpperCase()})}/></label>
-        <p><small>{t("Blank prices and missing usage are shown as unknown. No connection test or model request runs when saving.","价格留空、未返回的用量均显示未知。保存配置不会测试连接或请求模型。")}</small></p>
         <button className="button primary" type="submit">{busy?t("Saving…","保存中…"):t("Save on device","保存到本机")}</button>
         {existing&&<button className="text-button" type="button" onClick={async()=>{
           if(!window.confirm(t("Delete this provider and its local Key? Chat history is kept.","删除此服务商及其本机密钥？聊天历史会保留。")))return;

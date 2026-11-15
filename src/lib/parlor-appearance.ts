@@ -48,7 +48,7 @@ export async function saveParlorAppearanceImage(scope: string, kind: ParlorAppea
   }
 }
 
-export const parlorImageTypes = "image/jpeg,image/png,image/webp";
+export const parlorImageTypes = "image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif";
 export const parlorImageLimit = 20 * 1024 * 1024;
 
 export async function prepareParlorAppearanceImage(file: File, kind: ParlorAppearanceImage): Promise<Blob> {

@@ -89,16 +89,16 @@
 .systemNoticeIcon { flex:none; display:grid; place-items:center; width:15px; height:15px; align-self:flex-start; margin-top:2px; font-size:13px; line-height:1; }
 .systemNoticeIcon svg { width:13px; height:13px; }
 .systemNotice p { min-width:0; margin:0; white-space:pre-wrap; }
-.bubble { --parlor-bubble-color:var(--surface-soft);position:relative;isolation:isolate;min-width:0;padding:16px 20px;border-radius:var(--parlor-bubble-radius);background:var(--parlor-bubble-color);box-shadow:inset 0 0 0 1px rgb(var(--border-rgb) / .112),inset 0 1px 0 rgb(var(--surface-raised-rgb) / .35),0 2px 6px rgb(var(--shadow-rgb) / .049); }
+/* Shade the joined body and tail once so their shared edge cannot form a seam. */
+.bubble { --parlor-bubble-color:var(--surface-soft);position:relative;isolation:isolate;min-width:0;padding:16px 20px;border-radius:var(--parlor-bubble-radius);background:var(--parlor-bubble-color);filter:drop-shadow(0 0 .5px rgb(var(--border-rgb) / .24)) drop-shadow(0 2px 3px rgb(var(--shadow-rgb) / .049)); }
 .bubble[data-segment] { width:fit-content;max-width:100%; }
 .bubble[data-segment] + .bubble[data-segment] { margin-top:8px; }
 .message[data-role=user] .bubble { --parlor-bubble-color:var(--surface-note,var(--surface-soft)); }
 :global(html[data-mode="dark"]) .message[data-role=assistant] .bubble:not([data-note]) {
   --parlor-bubble-color:var(--surface-card);
-  background-image:linear-gradient(var(--surface-raised),var(--parlor-bubble-color));
 }
-:global(html[data-mode="dark"]) .message[data-role=user] .bubble:not([data-note]) { --parlor-bubble-color:var(--parlor-outgoing-surface); }
-.tail { position:absolute;pointer-events:none;left:-6px;bottom:0;width:26px;height:22px;overflow:visible; }.tailFill { fill:var(--parlor-bubble-color); }.tailEdge { fill:none;stroke:rgb(var(--border-rgb) / .112);stroke-width:1; }
+:global(html[data-mode="dark"]) .message[data-role=user] .bubble:not([data-note]) { --parlor-bubble-color:var(--surface-raised); }
+.tail { position:absolute;pointer-events:none;left:-6px;bottom:0;width:26px;height:22px;overflow:visible; }.tailFill { fill:var(--parlor-bubble-color); }
 .message[data-role=user] .tail { left:auto;right:-6px;transform:scaleX(-1); }
 .userText { margin:0;white-space:pre-wrap;line-height:1.85;font-size:calc(1em - 1px); }
 .selectedChoices { margin:0; padding-inline-start:1.2em; font-size:calc(1em - 1px); }

@@ -27,8 +27,8 @@
         state.messages.push({id:crypto.randomUUID(),conversationId:p.conversationId,role:"user",content:p.content,status:"done",createdAt:now,seq:0,requestCount:0});
         const m={id:crypto.randomUUID(),conversationId:p.conversationId,role:"assistant",content:"",status:"streaming",createdAt:now,requestId:p.requestId,providerId:p.providerId,providerName:"Mock Provider",model:provider.models[0],usage:{source:"unknown"},seq:0,requestCount:1,personaId:state.persona.id,personaName:state.persona.name};
         state.messages.push(m);save();
-        const chunks=["先别急着和整张待办清单决斗。","我们把事情分成三类，它们就没那么擅长吓人了。\n\n","**今天非做不可的**，先留一件；","**可以推迟的**，给它一个明确日期；","**只是挂在心上的**，先写下来，不必立刻解决。\n\n","你把最让你惦记的那一件告诉我。","我们先从那里下手，如何？"];let index=0;
-        timer=setInterval(()=>{if(m.status!=="streaming"){clearInterval(timer);return;}if(index<chunks.length)m.content+=chunks[index++];else if(p.content.includes("stop")){return;}else{m.status="done";m.usage={inputTokens:42,outputTokens:76,source:"provider"};clearInterval(timer);}m.seq++;emit(m);},650);
+        const chunks=["先别急着和整张待办清单决斗。","我们把事情分成三类，它们就没那么擅长吓人了。\n\n","**今天非做不可的**，先留一件；","**可以推迟的**，给它一个明确日期；","**只是挂在心上的**，先写下来，不必立刻解决。\n\n","你把最让你惦记的那一件告诉我。","我们先从那里下手，如何？"];let index=-1;
+        timer=setInterval(()=>{if(m.status!=="streaming"){clearInterval(timer);return;}if(index<0){index=0;return;}if(index<chunks.length)m.content+=chunks[index++];else if(p.content.includes("stop")){return;}else{m.status="done";m.usage={inputTokens:42,outputTokens:76,source:"provider"};clearInterval(timer);}m.seq++;emit(m);},650);
         result={requestId:m.requestId,messageId:m.id};
       }else if(method==="ai.cancel"){const m=state.messages.find(m=>m.requestId===p.requestId);if(m?.status==="streaming"){m.status="cancelled";m.seq++;clearInterval(timer);emit(m);}result={requested:true};}
       else if(method==="ai.saveProvider"){const next={...p.provider,hasKey:p.clearKey?false:Boolean(p.apiKey||state.providers.find(x=>x.id===p.provider.id)?.hasKey)};state.providers=state.providers.filter(x=>x.id!==next.id);state.providers.push(next);save();result={saved:true};}
