@@ -84,7 +84,7 @@ final class SIWCRuntime {
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw SIWCFailure.protocolError }
         let media = SIWCMediaType.classify(http.value(forHTTPHeaderField: "Content-Type"))
-        guard (200..<300).contains(http.statusCode), media == .sse else {
+        guard (200..<300).contains(http.statusCode), media == .sse || media == .missing else {
             // Read a bounded error prefix to extract only an allowlisted code. Never show raw JSON/HTML.
             var prefix = Data()
             for try await byte in bytes {
@@ -94,9 +94,12 @@ final class SIWCRuntime {
             }
             throw Self.inferenceFailure(status: http.statusCode, media: media, body: prefix)
         }
-        var parser = AISSEParser(); var textBytes = 0
+        // A missing MIME header is not evidence that the body is invalid. Decode incrementally,
+        // and require actual typed SSE events plus response.completed, never HTTP 200 alone.
+        var parser = AISSEParser(); var textBytes = 0; var frameCount = 0
         func consume(_ frames: [(String, String)]) throws -> Bool {
             for (name, value) in frames {
+                frameCount += 1
                 if name == "error", value.isEmpty { throw SIWCFailure.service("unclassified_error") }
                 let event = try SIWCResponseEvent.decode(value)
                 textBytes += event.delta.utf8.count
@@ -114,7 +117,12 @@ final class SIWCRuntime {
             catch { throw SIWCFailure.eventShape(.utf8) }
             if try consume(frames) { return }
         }
-        if try consume(parser.finish()) { return }
+        let finalFrames: [(String, String)]
+        do { finalFrames = try parser.finish() }
+        catch AIError.tooLarge { throw SIWCFailure.eventShape(.limit) }
+        catch { throw SIWCFailure.eventShape(.utf8) }
+        if try consume(finalFrames) { return }
+        if frameCount == 0 { throw SIWCFailure.eventShape(.notSSE) }
         throw SIWCFailure.interrupted
     }
     static func inferenceFailure(status: Int, media: SIWCMediaType, body: Data) -> SIWCFailure {

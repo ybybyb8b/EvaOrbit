@@ -195,11 +195,39 @@ struct SIWCSubscriptionPoCTests {
         }
         #expect(delivered == 0 && transport.count == 1)
     }
+
+    @Test @MainActor func missingMIMERequiresRealSSEAndCompletion() async throws {
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "mock-access", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
+        let delta = "data: {\"type\":\"response.output_text.delta\",\"delta\":\"你好🫖\"}\r\n\r\n"
+        let completed = "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\r\n\r\n"
+        transport.install { _ in (200, nil, delta + completed) }
+        var text = ""; var done = false
+        try await runtime.infer(model: "mock-only") { text += $0.delta; done = $0.completed }
+        #expect(text == "你好🫖" && done && transport.count == 1)
+
+        for body in ["{\"output_text\":\"not a streamed answer\"}", "<html>not SSE</html>", ""] {
+            transport.install { _ in (200, nil, body) }
+            var delivered = 0
+            do { try await runtime.infer(model: "mock-only") { _ in delivered += 1 }; Issue.record("Non-SSE body was accepted") }
+            catch SIWCFailure.eventShape(let issue) { #expect(issue == .notSSE) }
+            #expect(delivered == 0 && transport.count == 1)
+        }
+        transport.install { _ in (200, nil, delta) }
+        text = ""
+        do { try await runtime.infer(model: "mock-only") { text += $0.delta }; Issue.record("Missing completion was accepted") }
+        catch SIWCFailure.interrupted { #expect(text == "你好🫖") }
+        #expect(transport.count == 1)
+    }
 }
 
 // Each mock session carries an independent random routing ID; parallel tests cannot share handlers.
 private final class SIWCTestTransport {
-    typealias Reply = (Int, String, String)
+    typealias Reply = (Int, String?, String)
     let id = UUID().uuidString
     var configuration: URLSessionConfiguration {
         let config = AIProviderAdapter.configuration(); config.protocolClasses = [SIWCMockURLProtocol.self]
@@ -227,8 +255,9 @@ private final class SIWCMockURLProtocol: URLProtocol {
             }
             let resolved = try #require(handler)
             let reply = try resolved(request)
+            let headers: [String: String] = reply.1.map { ["Content-Type": $0] } ?? [:]
             let response = try #require(HTTPURLResponse(url: #require(request.url), statusCode: reply.0,
-                httpVersion: "HTTP/1.1", headerFields: ["Content-Type": reply.1]))
+                httpVersion: "HTTP/1.1", headerFields: headers))
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(reply.2.utf8)); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }

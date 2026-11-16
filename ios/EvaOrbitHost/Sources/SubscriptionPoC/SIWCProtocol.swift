@@ -54,7 +54,7 @@ enum SIWCMediaType: String {
 }
 enum SIWCEventIssue: String {
     case json = "event_json", type = "event_type", delta = "text_delta",
-         utf8 = "sse_framing", limit = "size_limit"
+         utf8 = "sse_framing", limit = "size_limit", notSSE = "body_not_sse"
 }
 
 enum SIWCProtocol {
