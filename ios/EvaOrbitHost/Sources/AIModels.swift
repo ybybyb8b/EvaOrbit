@@ -1,7 +1,7 @@
 import Foundation
 
 enum AIError: LocalizedError {
-    case invalid, storage, secureStorage, missingKey, busy, stream, truncated, tooLarge, endpointChanged
+    case invalid, storage, secureStorage, missingKey, busy, stream, truncated, tooLarge, endpointChanged, catalog
     case http(Int)
     var errorDescription: String? {
         switch self {
@@ -14,6 +14,7 @@ enum AIError: LocalizedError {
         case .truncated: return "The connection ended before the response completed. Partial text was kept."
         case .tooLarge: return "This conversation or response is too large. Start a new conversation."
         case .endpointChanged: return "Re-enter or clear the API Key when changing the endpoint."
+        case .catalog: return "The provider did not return a supported model directory. You can still enter a Model ID manually."
         case .http(let status): return "Provider HTTP \(status). Check configuration or limits; nothing retries automatically."
         }
     }
@@ -25,6 +26,10 @@ struct AIModel: Codable, Equatable {
     var inputPrice: Double?
     var outputPrice: Double?
     var cachedInputPrice: Double?
+    var contextWindow: Int?
+    var priceSource: String?
+    var priceUpdatedAt: String?
+    var priceEstimateLimited: Bool?
 }
 
 struct AIProvider: Codable, Equatable {
@@ -48,15 +53,22 @@ struct AIProvider: Codable, Equatable {
             for price in [model.inputPrice, model.outputPrice, model.cachedInputPrice].compactMap({ $0 }) {
                 guard price.isFinite, price >= 0, price <= 1_000_000 else { throw AIError.invalid }
             }
+            if let size = model.contextWindow { guard (1...100_000_000).contains(size) else { throw AIError.invalid } }
+            if let source = model.priceSource { guard ["manual", "openrouter"].contains(source) else { throw AIError.invalid } }
+            if let date = model.priceUpdatedAt { guard date.count <= 40 else { throw AIError.invalid } }
         }
     }
 
     func endpoint() throws -> URL {
+        try Self.endpoint(baseURL: baseURL, resource: "chat/completions")
+    }
+
+    static func endpoint(baseURL: String, resource: String) throws -> URL {
         guard var parts = URLComponents(string: baseURL), parts.scheme == "https", let host = parts.host,
               !host.isEmpty, parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
               parts.path.range(of: "[\\\\\u{0000}-\u{0020}]", options: .regularExpression) == nil else { throw AIError.invalid }
         parts.path = parts.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        parts.path = "/" + (parts.path.isEmpty ? "" : parts.path + "/") + "chat/completions"
+        parts.path = "/" + (parts.path.isEmpty ? "" : parts.path + "/") + resource
         guard let url = parts.url else { throw AIError.invalid }
         return url
     }
@@ -68,6 +80,7 @@ struct AIUsage: Codable, Equatable {
     var cachedTokens: Int?
     var source: String = "unknown"
     func cost(model: AIModel) -> Double? {
+        guard model.priceEstimateLimited != true else { return nil }
         guard let input = inputTokens, let output = outputTokens,
               let inputPrice = model.inputPrice, let outputPrice = model.outputPrice else { return nil }
         let cached = min(input, cachedTokens ?? 0)

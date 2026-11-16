@@ -29,6 +29,18 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         window.makeKeyAndVisible()
         self.window = window
 
+        #if DEBUG || PARLOR_SUBSCRIPTION_POC
+        // Explicit experimental package / Xcode opt-in; no web bridge or provider changes.
+        if HostConfiguration.production.localTrackers,
+           ProcessInfo.processInfo.arguments.contains("--parlor-subscription-poc") ||
+           Bundle.main.object(forInfoDictionaryKey: "EvaOrbitSubscriptionPoCEnabled") as? String == "YES" {
+            controller.openDeepLink(URL(string: "evaorbit-trackers-poc://open/ai")!)
+            DispatchQueue.main.async {
+                controller.present(UINavigationController(rootViewController: SIWCViewController()), animated: false)
+            }
+        }
+        #endif
+
         return true
     }
 

@@ -37,6 +37,7 @@ targets:
         CFBundleDisplayName: $(EVAORBIT_DISPLAY_NAME)
         EvaOrbitBaseURL: https://eva-orbit.vercel.app
         EvaOrbitLocalTrackersEnabled: $(EVAORBIT_LOCAL_TRACKERS)
+        EvaOrbitSubscriptionPoCEnabled: $(EVAORBIT_SUBSCRIPTION_POC)
         EvaOrbitTrackerDevelopmentURL: $(EVAORBIT_TRACKER_DEV_URL)
         CFBundleURLTypes:
           - CFBundleURLName: com.evaorbit.nativehost
@@ -65,6 +66,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.evaorbit.nativehost
         EVAORBIT_LOCAL_TRACKERS: "NO"
+        EVAORBIT_SUBSCRIPTION_POC: "NO"
         EVAORBIT_TRACKER_DEV_URL: ""
         EVAORBIT_URL_SCHEME: evaorbit
         EVAORBIT_DISPLAY_NAME: EvaOrbit

@@ -3,9 +3,13 @@ import Foundation
 @MainActor
 final class AIRuntime {
     typealias Stream = (URLRequest, @escaping (AIStreamPart) async throws -> Void) async throws -> Void
+    typealias Catalog = (URLRequest, String) async throws -> AIModelCatalog
     private let store: AIStore
     private let secrets: AISecretStore
     private let stream: Stream
+    private let catalog: Catalog
+    private var catalogTask: Task<AIModelCatalog, Error>?
+    private var catalogAccount: String?
     private var task: Task<Void, Never>?
     private var current: (account: String, message: AIMessage)?
     private var terminalStatus: String?
@@ -15,11 +19,16 @@ final class AIRuntime {
     private var configuring = false
     private var emit: (([String: Any]) -> Void)?
     private var emitAccount: String?
-    nonisolated static let methods: Set<String> = ["ai.getState", "ai.saveProvider", "ai.deleteProvider", "ai.send", "ai.cancel", "ai.deleteConversation", "ai.savePersona"]
+    nonisolated static let methods: Set<String> = ["ai.getState", "ai.saveProvider", "ai.deleteProvider", "ai.send", "ai.cancel", "ai.deleteConversation", "ai.savePersona", "ai.listModels", "ai.cancelModelList"]
 
-    init(store: AIStore, secrets: AISecretStore = AICredentialStore(), stream: Stream? = nil) {
+    init(store: AIStore, secrets: AISecretStore = AICredentialStore(), catalog: Catalog? = nil, stream: Stream? = nil) {
         self.store = store; self.secrets = secrets
         self.stream = stream ?? { request, receive in try await AIProviderAdapter().stream(request, receive: receive) }
+        self.catalog = catalog ?? { request, secret in
+            guard let endpoint = request.url else { throw AIError.invalid }
+            let data = try await AIProviderAdapter().modelDirectory(request)
+            return try AIModelCatalog.decode(data, endpoint: endpoint, secret: secret)
+        }
     }
 
     func interrupt() {
@@ -27,6 +36,7 @@ final class AIRuntime {
         terminalStatus = "interrupted"
         emit = nil // Old account / document receives no later token events.
         task?.cancel()
+        catalogTask?.cancel()
     }
 
     func handle(_ method: String, account: String, parameters: [String: Any], emit: @escaping ([String: Any]) -> Void) async throws -> Any {
@@ -34,6 +44,11 @@ final class AIRuntime {
         self.emit = emit
         emitAccount = account
         switch method {
+        case "ai.listModels":
+            return try await listModels(account: account, parameters: parameters)
+        case "ai.cancelModelList":
+            if catalogAccount == account { epoch += 1; catalogTask?.cancel() }
+            return ["requested": true]
         case "ai.getState":
             var providers: [[String: Any]] = []
             for provider in try await store.providers(account) {
@@ -52,7 +67,7 @@ final class AIRuntime {
             if let active = current, active.account == account { result["active"] = try aiJSON(active.message) }
             return result
         case "ai.savePersona":
-            guard !preparing && !configuring && task == nil else { throw AIError.busy }
+            guard !preparing && !configuring && task == nil && catalogTask == nil else { throw AIError.busy }
             configuring = true
             defer { configuring = false }
             guard let raw = parameters["persona"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: raw), data.count <= 65536,
@@ -64,12 +79,12 @@ final class AIRuntime {
             try await store.savePersona(persona, account: account)
             return ["saved": true]
         case "ai.saveProvider":
-            guard !preparing && !configuring && task == nil else { throw AIError.busy }
+            guard !preparing && !configuring && task == nil && catalogTask == nil else { throw AIError.busy }
             configuring = true
             defer { configuring = false }
             guard let raw = parameters["provider"] as? [String: Any],
                   !raw.keys.contains("apiKey"), let data = try? JSONSerialization.data(withJSONObject: raw),
-                  data.count <= 32768, let provider = try? JSONDecoder().decode(AIProvider.self, from: data) else { throw AIError.invalid }
+                  data.count <= 128 * 1024, let provider = try? JSONDecoder().decode(AIProvider.self, from: data) else { throw AIError.invalid }
             try provider.validate()
             let old = try await store.providers(account).first { $0.id == provider.id }
             let key = parameters["apiKey"] as? String
@@ -89,7 +104,7 @@ final class AIRuntime {
             }
             return ["saved": true]
         case "ai.deleteProvider":
-            guard !preparing && !configuring && task == nil else { throw AIError.busy }
+            guard !preparing && !configuring && task == nil && catalogTask == nil else { throw AIError.busy }
             configuring = true
             defer { configuring = false }
             guard let id = parameters["providerId"] as? String, UUID(uuidString: id) != nil else { throw AIError.invalid }
@@ -113,8 +128,41 @@ final class AIRuntime {
         }
     }
 
+    private func listModels(account: String, parameters: [String: Any]) async throws -> Any {
+        guard !preparing && !configuring && task == nil && catalogTask == nil else { throw AIError.busy }
+        configuring = true
+        defer { configuring = false; catalogTask = nil; catalogAccount = nil }
+        catalogAccount = account
+        let generation = epoch
+        guard let providerID = parameters["providerId"] as? String, UUID(uuidString: providerID) != nil,
+              let baseURL = parameters["baseURL"] as? String, baseURL.count <= 500 else { throw AIError.invalid }
+        let endpoint = try AIProvider.endpoint(baseURL: baseURL, resource: "models")
+        let saved = try await store.providers(account).first { $0.id == providerID }
+        let secret: String
+        if let supplied = parameters["apiKey"] as? String { secret = supplied }
+        else {
+            guard let saved else { throw AIError.missingKey }
+            guard try AIProvider.endpoint(baseURL: saved.baseURL, resource: "models") == endpoint else { throw AIError.endpointChanged }
+            guard let stored = try secrets.read(account: account, provider: providerID) else { throw AIError.missingKey }
+            secret = stored
+        }
+        guard !secret.isEmpty, secret.utf8.count <= 4096,
+              !secret.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) else { throw AIError.invalid }
+        guard generation == epoch else { throw CancellationError() }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"; request.httpShouldHandleCookies = false; request.timeoutInterval = 25
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer " + secret, forHTTPHeaderField: "Authorization")
+        let fetch = catalog
+        let operation = Task { try await fetch(request, secret) }
+        catalogTask = operation; catalogAccount = account
+        let result = try await operation.value
+        guard generation == epoch && !operation.isCancelled else { throw CancellationError() }
+        return try aiJSON(result)
+    }
+
     private func send(account: String, parameters: [String: Any]) async throws -> Any {
-        guard task == nil && !preparing && !configuring else { throw AIError.busy }
+        guard task == nil && !preparing && !configuring && catalogTask == nil else { throw AIError.busy }
         preparing = true
         defer { preparing = false; preparingRequest = nil }
         let generation = epoch
@@ -155,7 +203,7 @@ final class AIRuntime {
         let user = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "user", content: content, status: "done", createdAt: timestamp)
         let assistant = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "assistant", content: "", status: "streaming", createdAt: timestamp,
                                   requestId: requestID, providerId: providerID, providerName: provider.name, model: model,
-                                  currency: provider.currency, priceUpdatedAt: provider.priceUpdatedAt, usage: AIUsage(), requestCount: 1,
+                                  currency: provider.currency, priceUpdatedAt: model.priceUpdatedAt ?? provider.priceUpdatedAt, usage: AIUsage(), requestCount: 1,
                                   personaId: persona.id, personaName: persona.name)
         // Reserve before awaiting storage: a second bridge send cannot enter while begin() is suspended.
         current = (account, assistant)

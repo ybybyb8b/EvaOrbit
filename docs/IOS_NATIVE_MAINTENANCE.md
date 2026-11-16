@@ -1,5 +1,17 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Parlor SIWC 独立 PoC（未编译／未授权验证）
+
+用户随后已授权本批测试分支提交、推送及手动构建。新增 workflow 参数 `subscription_poc`（默认 false），仅 `workflow_dispatch` + `codex/parlor-native-test` + `local_trackers=true` 允许启用；原 Release / iphoneos 签名链传 `PARLOR_SUBSCRIPTION_POC` 与 `EVAORBIT_SUBSCRIPTION_POC=YES`，Info.plist 保存显式实验标记，安装后启动直接打开面板，无需 Xcode 参数。源码编译门为 `DEBUG || PARLOR_SUBSCRIPTION_POC`，普通 Release 仍无模块。构建隔离／Bash 参数测试覆盖普通包、实验包及拒绝在线 Host／其他分支／push。是否已编译以对应 Actions 结果为准；用户按原约定查看进程，代理不自动 watch。下段保留初始调查状态，以本段为最新构建约定。
+
+`Sources/SubscriptionPoC` 只在 Debug 编译，本地 Host 显式启动参数 `--parlor-subscription-poc` 打开独立原生面板，关闭后返回 `/ai`。系统 AuthenticationServices 浏览器配合 Network 回环监听遵循 SIWC HTTP `127.0.0.1` 回调，CryptoKit/Security 处理 PKCE、验签与独立 Keychain；这套 iOS 回调组合仍是待真机证实的实验。复用现有无 Cookie session policy、重定向拒绝和 SSE byte framing，不进入 Provider／Bridge／SQLite，不改变 entitlement、Info.plist、Bundle ID、scheme 或签名安装链。普通 Release 无实验入口和模块。本轮不打包、CI、发布或真实账号请求；下一步需 Xcode 编译／测试和用户官方页面授权。详见 [实验报告与阻塞](PARLOR_SUBSCRIPTION_POC.md)。
+
+## Parlor 模型目录（本地源码，待下批原生验收）
+
+本轮新增可选 `ai.listModels` / `ai.cancelModelList`，仍经原 Bridge 主 frame / origin / 账户 / generation 校验；基础聊天能力集合不增加要求，旧 Host 继续手动配置。目录请求只对已验证的 HTTPS Base URL 固定追加 `models`，使用用户本次输入的临时 Key，或同一账户、Provider、规范化端点匹配的 Keychain Key。地址变化不静默转发旧 Key，不携带 EO Cookie / credential cache，不跟随重定向、不自动重试。
+
+目录 GET 可取消，切后台／账户中断及页面卸载会取消；30 秒资源超时，最多 4 MiB / 5000 项，只输出安全模型字段。目录读取不创建聊天、计费请求或保存 Key；选定模型由既有配置保存通道写入。JSON 增加可选报价来源、获取时间、上下文与额外计费标记，旧配置兼容，`ai.sqlite3` schema 仍为 v2；无新表、framework、权限或 entitlement。OpenRouter 官方 HTTPS 默认端口的 `/api/v1/models` 才按其明确单位解析价格；条件／额外收费的总费用保持未知。用户已要求本批不提交、推送、发布或打包；Swift 编译及真机检查待统一授权的新包。见 [模型目录契约](PARLOR_MODEL_CATALOG.md)。
+
 ## Parlor Native-only 测试分支
 
 用户已授权在 `codex/parlor-native-test` 提交、推送并以 `local_trackers=true` 打包。该分支禁用 Vercel 部署并禁止 push 自动构建普通线上 Host；使用手动 workflow_dispatch，只构建独立本地包，不切换生产 Web 构建分支。Hermes 连接 API、通知回调、插件、本地后备入口及业务白名单已移除，保留消息渲染、分段气泡、头像背景和设备偏好。既有 SQL 迁移／服务端历史数据不删除、不执行迁移。以下早期 Hermes 接入段落仅为历史。

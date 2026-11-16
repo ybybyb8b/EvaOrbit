@@ -113,4 +113,26 @@ final class AIProviderAdapter: NSObject, URLSessionTaskDelegate {
         }
         throw AIError.truncated
     }
+
+    // A read-only directory request, with the same cookie and redirect isolation as inference.
+    func modelDirectory(_ request: URLRequest) async throws -> Data {
+        let configuration = testConfiguration ?? Self.configuration()
+        configuration.timeoutIntervalForResource = 30
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        return try await withTaskCancellationHandler(operation: {
+            let (bytes, response) = try await session.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else { throw AIError.catalog }
+            guard (200..<300).contains(http.statusCode) else { throw AIError.http(http.statusCode) }
+            guard http.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("application/json") == true else { throw AIError.catalog }
+            guard response.expectedContentLength <= Int64(AIModelCatalog.maxBytes) else { throw AIError.tooLarge }
+            var data = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                guard data.count < AIModelCatalog.maxBytes else { throw AIError.tooLarge }
+                data.append(byte)
+            }
+            return data
+        }, onCancel: { session.invalidateAndCancel() })
+    }
 }

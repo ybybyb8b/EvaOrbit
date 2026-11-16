@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+SIWC 手机实验包已获用户本批构建授权：在 `codex/parlor-native-test` 手动运行原 iOS workflow，设 `local_trackers=true`、`subscription_poc=true`。保持 Release / iphoneos / ad-hoc 签名和既有 xtool 安装链，只在该包显式编译实验模块并保存默认关闭的 Info.plist 开关；手机启动直接打开测试面板。普通包不受影响；此说明不代表 CI 已成功或真机授权通过。旧段落的 Debug-only 说明是最初源码状态，现以此处为准。
+
+Parlor SIWC 实验仅 Debug 本地 Host 加 `--parlor-subscription-poc` 后出现，普通 Release IPA 不包含模块或入口。未改变既有签名安装链，本轮未打包或运行 CI；Xcode、iOS 回环回调和用户 Plus 授权／推理均未验证。不要用已有 Release IPA 作为本实验已上机的证据。下一步及条件见 [独立 PoC 报告](PARLOR_SUBSCRIPTION_POC.md)。
+
 Project Ideas 发布顺序：先应用 `202611040001_project_item_ideas.sql` 并部署 Web/API，再按本文原链路重建、重签和覆盖安装本地 IPA。原生 Workspace 缓存需接受 `idea` 和独立 `ideaCount`；旧 IPA 对含 Ideas 的新快照会拒绝并保留旧缓存。没有新增 Bridge、权限、framework、entitlement 或签名链变化；本轮不发布、不打包，Swift XCTest／真机尚未执行。
 
 Timeline 关联规则为既有 `settings.configuration` 增加精确 GET/PUT `/api/timeline-association` 白名单。确认发布后，先应用配套迁移与 Web/API，再依照本文原链路重建、重签和覆盖安装本地 IPA；旧 IPA 可在 Web 管理规则，原 Home 快照通道仍可展示服务端关联。无新 Bridge 方法、权限、framework、entitlement 或签名链变化；新增 XCTest 仍待 macOS／真机。详见 [关联规则契约](TIMELINE_ASSOCIATION.md)。

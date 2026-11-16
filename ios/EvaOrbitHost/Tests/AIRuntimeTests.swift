@@ -22,6 +22,96 @@ private final class MemoryAISecrets: AISecretStore {
     func remove(account: String, provider: String) throws { values.removeValue(forKey: account + provider) }
 }
 
+@Suite("Native model directory")
+struct AIModelCatalogTests {
+    private func decode(_ rows: [[String: Any]], official: Bool = true) throws -> AIModelCatalog {
+        try AIModelCatalog.decode(JSONSerialization.data(withJSONObject: ["data": rows]),
+                                  endpoint: URL(string: official ? "https://openrouter.ai/api/v1/models" : "https://mock.example.invalid/v1/models")!, secret: "test-secret")
+    }
+    @Test func directoryPricesHaveExplicitUnitsAndZeroIsNotUnknown() throws {
+        let result = try decode([
+            ["id": "vendor/chat", "name": "Chat", "context_length": 128000, "pricing": ["prompt": "0.0000025", "completion": "0.00001", "input_cache_read": "0"]],
+            ["id": "vendor/unknown", "pricing": ["prompt": "-1", "completion": true]],
+            ["id": "vendor/chat"],
+            ["id": "images", "architecture": ["output_modalities": ["image"]]],
+            ["id": "secret", "name": "test-secret"]
+        ])
+        #expect(result.models.count == 2)
+        #expect(result.models[0].model.inputPrice == 2.5)
+        #expect(result.models[0].model.outputPrice == 10)
+        #expect(result.models[0].model.cachedInputPrice == 0)
+        #expect(result.models[0].model.contextWindow == 128000)
+        #expect(result.models[1].model.inputPrice == nil)
+        #expect(result.models[1].model.outputPrice == nil)
+        #expect(result.currency == "USD")
+    }
+    @Test func compatibleNamesDoNotEstablishPricingUnitsAndExtraFeesPreventFalseTotals() throws {
+        let row: [String: Any] = ["id": "chat", "pricing": ["prompt": "0.000001", "completion": "0.000002", "request": "0.01"]]
+        let generic = try decode([row], official: false)
+        #expect(generic.models[0].model.inputPrice == nil)
+        let official = try decode([row])
+        #expect(official.models[0].model.inputPrice == 1)
+        #expect(official.models[0].model.priceEstimateLimited == true)
+        #expect(AIUsage(inputTokens: 100, outputTokens: 20).cost(model: official.models[0].model) == nil)
+        #expect(throws: AIError.self) { try AIModelCatalog.decode(Data("{\"error\":\"test-secret\"}".utf8), endpoint: URL(string: "https://mock.example.invalid/v1/models")!, secret: "test-secret") }
+    }
+    @Test func longFineTuneIDsSurviveDisplayNameLimitsAndUnknownNamespacesDoNotCrash() throws {
+        let id = String(repeating: "x", count: 150)
+        let result = try decode([["id": id], ["id": "/"]], official: false)
+        #expect(result.models.count == 2)
+        #expect(result.models[0].model.id == id)
+        #expect(result.models[0].model.name.count == 100)
+        #expect(result.models[1].family.isEmpty)
+    }
+    @MainActor @Test func directoryRequestUsesOnlyProviderCredentialsAndDoesNotMutateModels() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); try secrets.write("catalog-key", account: accountA, provider: providerID)
+        try await store.saveProvider(fixtureProvider(), account: accountA)
+        var requests = 0
+        let runtime = AIRuntime(store: store, secrets: secrets, catalog: { request, secret in
+            requests += 1
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.path == "/v1/models")
+            #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+            #expect(!request.httpShouldHandleCookies)
+            #expect(secret == "catalog-key")
+            return AIModelCatalog(models: [], fetchedAt: aiTimestamp())
+        }, stream: { _, _ in Issue.record("Catalog lookup must not run inference") })
+        let parameters: [String: Any] = ["providerId": providerID, "baseURL": fixtureProvider().baseURL]
+        _ = try await runtime.handle("ai.listModels", account: accountA, parameters: parameters, emit: { _ in })
+        #expect(requests == 1)
+        #expect(try await store.providers(accountA).first?.models.count == 1)
+        do {
+            _ = try await runtime.handle("ai.listModels", account: accountB, parameters: parameters, emit: { _ in })
+            Issue.record("Another account reused a stored key")
+        } catch { #expect(error is AIError) }
+        do {
+            _ = try await runtime.handle("ai.listModels", account: accountA, parameters: ["providerId": providerID, "baseURL": "https://other.example.invalid/v1"], emit: { _ in })
+            Issue.record("A changed endpoint reused a stored key")
+        } catch { #expect(error is AIError) }
+        #expect(requests == 1)
+    }
+    @MainActor @Test(arguments: [true, false]) func directoryRequestIsCancelledWithoutInference(interruption: Bool) async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        var started = false
+        let runtime = AIRuntime(store: store, secrets: MemoryAISecrets(), catalog: { _, _ in
+            started = true
+            try await Task.sleep(nanoseconds: 60_000_000_000)
+            return AIModelCatalog(models: [], fetchedAt: aiTimestamp())
+        })
+        let request = Task { try await runtime.handle("ai.listModels", account: accountA, parameters: ["providerId": providerID, "baseURL": fixtureProvider().baseURL, "apiKey": "draft-key"], emit: { _ in }) }
+        for _ in 0..<100 { if started { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        if interruption { runtime.interrupt() }
+        else {
+            _ = try await runtime.handle("ai.cancelModelList", account: accountB, parameters: [:], emit: { _ in })
+            _ = try await runtime.handle("ai.cancelModelList", account: accountA, parameters: [:], emit: { _ in })
+        }
+        do { _ = try await request.value; Issue.record("Cancelled catalog was delivered") }
+        catch { #expect(error is CancellationError) }
+        #expect(try await store.providers(accountA).isEmpty)
+    }
+}
+
 @Suite("Native Eva SSE")
 struct AIStreamTests {
     @Test func byteSplitsUnicodeCRLFMultilineAndEOF() throws {

@@ -2,21 +2,37 @@
 (() => {
   const accountId="10000000-0000-4000-8000-000000000001";
   const legacy=new URL(location.href).searchParams.has("legacy");
+  const noCatalog=new URL(location.href).searchParams.has("noCatalog");
   const provider={id:"10000000-0000-4000-8000-000000000003",name:"Mock Provider",baseURL:"https://mock.example.invalid/v1",enabled:true,hasKey:true,models:[{id:"mock-text",name:"Mock text"}],currency:"USD",priceUpdatedAt:""};
   let state=JSON.parse(sessionStorage.getItem("eo-eva-synthetic-state")||"null")??{providers:[provider],conversations:[],messages:[]};
   state.persona??={id:"sebastian",name:"Sebastian",chineseName:"塞巴斯蒂安",nickname:"赛巴斯酱",systemPrompt:"你是 Sebastian，EvaOrbit 的 Parlor 中的默认 AI 人格。一位优雅、聪明、可靠的私人执事。沉稳从容，言谈有礼，偶尔带有一点狡黠的幽默感。默认中文，并随用户语言切换。独立判断，不盲目附和；没有工具时不得声称完成业务操作。",preferredAddress:"",humor:"subtle",formality:"natural",closeness:"warm"};
   for(const m of state.messages)if(m.status==="streaming"){m.status="interrupted";m.error="Synthetic restart: partial response preserved.";m.seq++;}
-  let timer;
+  let timer,cancelCatalog;
   const save=()=>sessionStorage.setItem("eo-eva-synthetic-state",JSON.stringify(state));
   const emit=message=>{save();window.dispatchEvent(new CustomEvent("evaorbit:ai",{detail:{accountId,conversationId:message.conversationId,messageId:message.id,requestId:message.requestId,seq:message.seq,eventType:message.status==="streaming"?"progress":"terminal",message:{...message}}}));};
   Object.defineProperty(window,"EvaOrbitNative",{value:{version:1,call:async(method,p={})=>{
     let result={};
-    if(method==="host.getInfo")result={platform:"ios",methods:["host.getInfo","home.readOnlyResource",...(legacy?[]:["ai.getState","ai.send","ai.cancel","ai.saveProvider","ai.deleteProvider","ai.deleteConversation","ai.savePersona"])]};
+    if(method==="host.getInfo")result={platform:"ios",methods:["host.getInfo","home.readOnlyResource",...(legacy?[]:["ai.getState","ai.send","ai.cancel","ai.saveProvider","ai.deleteProvider","ai.deleteConversation","ai.savePersona",...(noCatalog?[]:["ai.listModels","ai.cancelModelList"])])]};
     else if(method==="trackers.getSession")result={accountId,email:"synthetic@example.invalid"};
     else if(method==="home.readOnlyResource")result=null;
     else if(method.startsWith("ai.")){
       if(p.accountId!==accountId)return {ok:false,error:{code:"account_mismatch",message:"Synthetic account mismatch"}};
       if(method==="ai.getState")result={...state,messages:state.messages.filter(m=>m.conversationId===p.conversationId),active:state.messages.find(m=>m.status==="streaming")};
+      else if(method==="ai.cancelModelList"){cancelCatalog?.();result={requested:true};}
+      else if(method==="ai.listModels"){
+        sessionStorage.setItem("eo-catalog-reads",String(Number(sessionStorage.getItem("eo-catalog-reads")||0)+1));
+        const cancelled=await new Promise(resolve=>{const timeout=setTimeout(()=>resolve(false),p.baseURL.includes("slow")?3000:80);cancelCatalog=()=>{clearTimeout(timeout);resolve(true);};});cancelCatalog=undefined;
+        if(cancelled)return {ok:false,error:{code:"cancelled",message:"Directory lookup cancelled"}};
+        if(p.apiKey==="bad-catalog-key")return {ok:false,error:{code:"provider_http_401",message:"Provider HTTP 401"}};
+        const priced=p.baseURL==="https://openrouter.ai/api/v1",fetchedAt=new Date().toISOString();
+        const models=[
+          {model:{id:"alpha/chat-pro",name:"Alpha Pro",contextWindow:128000,inputPrice:2.5,outputPrice:10,cachedInputPrice:.25},family:"alpha",textCapability:"text"},
+          {model:{id:"beta/chat-free",name:"Beta Free",inputPrice:0,outputPrice:0},family:"beta",textCapability:"text"},
+          {model:{id:"alpha/unknown",name:"Alpha Unknown"},family:"alpha",textCapability:"unknown"},
+          ...Array.from({length:1200},(_,i)=>({model:{id:["alpha","beta","gamma","delta"][i%4]+"/model-"+String(i).padStart(4,"0"),name:"Catalog Model "+String(i).padStart(4,"0"),inputPrice:(i+1)/100,outputPrice:(i+1)/25,contextWindow:(i+1)*1000},family:["alpha","beta","gamma","delta"][i%4],textCapability:"text"}))
+        ].map(item=>{if(priced)return {...item,model:{...item.model,priceSource:"openrouter",priceUpdatedAt:fetchedAt}};const {inputPrice,outputPrice,cachedInputPrice,...model}=item.model;return {...item,model};});
+        result={models:p.baseURL.includes("empty")?[]:models,fetchedAt,currency:priced?"USD":undefined};
+      }
       else if(method==="ai.savePersona"){state.persona=p.persona;save();result={saved:true};}
       else if(method==="ai.send"){
         if(state.messages.some(m=>m.status==="streaming"))return {ok:false,error:{code:"busy",message:"Stop the active response first"}};

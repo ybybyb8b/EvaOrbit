@@ -3,7 +3,11 @@ import {rawNativeCall,type NativeHostInfo} from "./native-bridge.ts";
 export const nativeEvaEvent="evaorbit:ai";
 export const nativeEvaMethods=["ai.getState","ai.saveProvider","ai.deleteProvider","ai.send","ai.cancel","ai.deleteConversation","ai.savePersona"] as const;
 export const supportsNativeEva=(info:NativeHostInfo|null)=>nativeEvaMethods.every(method=>info?.methods?.includes(method));
-export type EvaModel={id:string;name:string;inputPrice?:number;outputPrice?:number;cachedInputPrice?:number};
+export const nativeCatalogMethods=["ai.listModels","ai.cancelModelList"] as const;
+export const supportsNativeCatalog=(info:NativeHostInfo|null)=>nativeCatalogMethods.every(method=>info?.methods?.includes(method));
+export type EvaModel={id:string;name:string;inputPrice?:number;outputPrice?:number;cachedInputPrice?:number;contextWindow?:number;priceSource?:"manual"|"openrouter";priceUpdatedAt?:string;priceEstimateLimited?:boolean};
+export type EvaDiscoveredModel={model:EvaModel;family:string;textCapability:"text"|"unknown"};
+export type EvaModelCatalog={models:EvaDiscoveredModel[];fetchedAt:string;currency?:string;partial?:boolean};
 export type EvaProvider={id:string;name:string;baseURL:string;models:EvaModel[];enabled:boolean;currency:string;priceUpdatedAt:string;hasKey?:boolean};
 export type ParlorPersona={id:string;name:string;chineseName:string;nickname:string;systemPrompt:string;preferredAddress:string;humor:"none"|"subtle"|"playful";formality:"casual"|"natural"|"formal";closeness:"reserved"|"warm"|"familiar";providerId?:string;modelId?:string};
 export const sebastianIdentity={id:"sebastian",name:"Sebastian",chineseName:"塞巴斯蒂安",nickname:"赛巴斯酱"} as const;
@@ -22,6 +26,6 @@ export function acceptEvaEvent(raw:unknown,accountId:string,conversationId:strin
   return messages.map(item=>item.id===m.id?m:item);
 }
 
-export function evaCall<T>(accountId:string,method:typeof nativeEvaMethods[number],params:Record<string,unknown>={}) {
+export function evaCall<T>(accountId:string,method:typeof nativeEvaMethods[number]|typeof nativeCatalogMethods[number],params:Record<string,unknown>={}) {
   return rawNativeCall<T>(method,{...params,accountId});
 }

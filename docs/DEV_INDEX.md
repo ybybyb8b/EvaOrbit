@@ -127,6 +127,8 @@
 
 ## Parlor
 
+- **订阅接入独立实验**：[SIWC PoC](PARLOR_SUBSCRIPTION_POC.md) 在 Debug 启动参数或显式 `subscription_poc` 本地测试包中打开原生面板，独立 Keychain／OAuth／Responses，不注册 Provider 或 Bridge。workflow 限制手动测试分支及 `local_trackers=true`；普通 Release 不含模块，正式可用性仍须原生编译及用户真机授权／推理验证。
+
 - **空间与人格**：UI 统一为 Parlor，本地模块标识 `parlor`，继续使用 `/ai` 路径兼容旧链接。默认人格 Sebastian 由独立 [ParlorPersona](../ios/EvaOrbitHost/Sources/ParlorPersona.swift) 与账户隔离的 `ai_personas` 保存；名称、提示词、交流偏好和默认模型不绑定 Runtime。新回答保存当时的人格署名，旧历史不改写。共用 [ParlorSettings](../src/components/parlor-settings.tsx) 集中八类设置，原 `/settings/ai-connection` 兼容转入；未来记忆、群聊、工具仅说明真实边界。见 [Parlor V1](PARLOR_V1.md)。
 
 - **Native Eva（Phase 1A）**：本地安装包通过 `host.getInfo.methods` 检测完整 `ai.*` 能力，首页悬浮入口与 `/ai` 直接使用 [NativeEvaChat](../src/components/native-eva-chat.tsx)；无该能力时提示升级本地 Host。Swift [AIRuntime](../ios/EvaOrbitHost/Sources/AIRuntime.swift) 直连 OpenAI-compatible HTTPS SSE，独立 `ai.sqlite3` 保存账户隔离的配置、会话、消息与请求用量，API Key 仅存独立 Keychain。React 复用 Hermes 消息、Markdown、输入、键盘适配与 Vintage 样式；本地模型设置不复用云端密钥。不导入旧 Hermes 历史。实现与尚待原生验收见 [Phase 1A](NATIVE_EVA_PHASE1A.md)。
@@ -136,6 +138,8 @@
 - **旧纸条兼容**：[EvaWorkbench](../src/components/eva-workbench.tsx)、`eva_settings`／`eva_jobs`／`eva_calls` 和原处理服务仅保留历史记录、迁移及测试兼容；新页面不挂载，旧 API 禁止触发原 AI。旧 `/ai/papers` 转至 Parlor，Home 通用 Log 保留原记录按钮。历史约定见 [后台契约](EVA_WORKBENCH.md)；快捷指令继续后置。
 
 - **本机 AI 配置**：Parlor 设置使用 Native `ai.*` 与独立 Keychain；不调用旧在线 Provider 配置。旧在线配置底层为兼容保留，不作为 Parlor 设置入口。
+
+- **模型目录与报价**：[AIModelCatalog](../ios/EvaOrbitHost/Sources/AIModelCatalog.swift) 解析原生直连 `GET /models`，通过可选能力 `ai.listModels` / `ai.cancelModelList` 获取与取消；旧 Host 保留手填。复用现有 URLSession、Keychain、Bridge 账户安全边界。[NativeModelPicker](../src/components/native-model-picker.tsx) 支持多关键词搜索、厂商／已选／Token 免费筛选、价格与上下文排序和分批显示。仅选中模型保存；OpenRouter 官方目录的 USD/Token 转换为 USD/百万 Token，其他未知格式不猜价，手动报价不覆盖。详见 [模型目录契约](PARLOR_MODEL_CATALOG.md)。
 
 - **职责与入口**：[ai/](../src/app/ai/)、[chat API](../src/app/api/ai/chat/route.ts)、[persona.ts](../src/lib/persona.ts)、[ai-tools.ts](../src/lib/ai-tools.ts)、[Provider 设置](../src/app/settings/ai-providers-settings.tsx)。
 - **数据与接口**：`chat_sessions`、`chat_messages`、`ai_settings`、`ai_providers`、`ai_model_configs`；`/api/ai/*`。

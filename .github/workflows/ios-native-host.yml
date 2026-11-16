@@ -7,6 +7,10 @@ on:
         description: Build the isolated Local-first Tracker PoC
         type: boolean
         default: false
+      subscription_poc:
+        description: Include the experimental SIWC panel (local Host / Parlor test branch only)
+        type: boolean
+        default: false
   # Push source changes freely; package frontend updates on demand via workflow_dispatch.
   push:
     branches-ignore: ["codex/parlor-native-test"]
@@ -28,6 +32,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Validate subscription PoC isolation
+        env:
+          SUBSCRIPTION_POC: ${{ inputs.subscription_poc }}
+          LOCAL_TRACKERS: ${{ inputs.local_trackers }}
+        run: |
+          if [[ "$SUBSCRIPTION_POC" == "true" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$LOCAL_TRACKERS" != "true" || "$GITHUB_REF" != "refs/heads/codex/parlor-native-test" ]]; then
+              echo 'SIWC PoC requires manual dispatch on codex/parlor-native-test with local_trackers=true.' >&2
+              exit 1
+            fi
+          fi
 
       - uses: actions/setup-node@v7
         with:
@@ -60,7 +76,13 @@ jobs:
       # Simulator execution is intentionally omitted; native behavior is accepted on device.
       - name: Build ad-hoc signed device app
         working-directory: ios/EvaOrbitHost
+        env:
+          SUBSCRIPTION_POC: ${{ inputs.subscription_poc }}
         run: |
+          poc_args=()
+          if [[ "$SUBSCRIPTION_POC" == "true" ]]; then
+            poc_args+=("SWIFT_ACTIVE_COMPILATION_CONDITIONS=\$(inherited) PARLOR_SUBSCRIPTION_POC" "EVAORBIT_SUBSCRIPTION_POC=YES")
+          fi
           xcodebuild \
             -project EvaOrbitHost.xcodeproj \
             -scheme EvaOrbitHost \
@@ -79,6 +101,7 @@ jobs:
             EVAORBIT_URL_SCHEME="${{ inputs.local_trackers && 'evaorbit-trackers-poc' || 'evaorbit' }}" \
             EVAORBIT_DISPLAY_NAME="EvaOrbit" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            "${poc_args[@]}" \
             build
 
       - name: Verify entitlements and package IPA
