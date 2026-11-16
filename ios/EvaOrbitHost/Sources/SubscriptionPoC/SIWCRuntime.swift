@@ -120,7 +120,7 @@ final class SIWCRuntime {
     static func inferenceFailure(status: Int, media: SIWCMediaType, body: Data) -> SIWCFailure {
         let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
         let error = json?["error"] as? [String: Any]
-        let rawCode = error?["code"] ?? json?["error"] as? String
+        let rawCode: String? = (error?["code"] as? String) ?? (json?["error"] as? String)
         let code = rawCode.map { SIWCFailure.safeServiceCode($0) }
         return .inferenceHTTP(status, media, code)
     }

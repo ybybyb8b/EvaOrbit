@@ -6,6 +6,8 @@
 
 用户随后已明确要求重新打包本次诊断候选：仅提交／推送 Native 测试分支，手动运行 `local_trackers=true`、`subscription_poc=true`。诊断包覆盖安装后重新选择模型、点击一次最小请求，反馈完整的安全错误文案与截图；无需提供 token 或原始响应。构建状态仍以新 Actions 运行结果为准，不提前宣称已修复真实推理。
 
+诊断包构建 `43814773096` 失败于 `SIWCRuntime.swift` 的错误码可选类型推断：`Any` 无 `map`。修复为两个候选都先转 `String?`，显式限定结果类型；保留原安全白名单与网络行为，随后重建。此编译错误与用户手机上的推理协议错误是不同问题。
+
 本地排障候选（尚未重新编译／打包）：将推理错误拆成固定的响应头／事件 JSON／type／delta／framing／大小限制诊断。非 SSE 或非 2xx 最多读取 16 KiB，只显示数字 HTTP 状态、枚举化响应格式与白名单服务错误码；不输出 header 原文、响应体、token 或 URL。补处理不带 `type` 的错误 JSON，避免将明确服务错误归为成功帧格式问题；仍只接受真正 SSE 和 `response.completed`，不自动重试或改走内部接口。面板错误注明授权／目录／模型请求／退出步骤。新增 2 项 Swift 测试覆盖安全诊断与 HTTP 200 JSON 不能视为推理成功，Windows 未运行；原 Parlor Node 回归 4 项通过。按用户批次约定，本候选未 commit／push／再次打包，需后续原生包展示实际诊断才能继续定位。
 
 2026-11-16 原生编译准备：用户已明确授权提交／推送 `codex/parlor-native-test` 并手动构建测试 IPA。workflow 新增默认关闭的 `subscription_poc`；仅手动运行、此测试分支且 `local_trackers=true` 才允许开启。开启后沿原 Release / iphoneos / ad-hoc 签名链编译 `PARLOR_SUBSCRIPTION_POC`，安装包启动直接打开独立面板，关闭返回 Parlor，无须 Xcode 启动参数。普通构建不含实验模块。编译是否通过以对应 Actions 结果为准，下面调查阶段的“未执行”不是新构建已成功的声明。
