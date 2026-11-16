@@ -9,10 +9,10 @@ try{
   for(const mobile of [true,false]){
     const context=await browser.newContext({viewport:mobile?{width:402,height:874}:{width:1280,height:900},isMobile:mobile,hasTouch:mobile});
     const errors=[],remote=[];
-    context.on('page',page=>{page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!/^(http:\/\/127\.0\.0\.1:4187|data:|blob:)/.test(r.url()))remote.push(r.url());});});
-    await context.addInitScript(()=>{if(location.origin!=='http://127.0.0.1:4187')return;localStorage.setItem('evaorbit.uiLanguage','zh');localStorage.setItem('evaorbit.appearanceMode','light');});
+    context.on('page',page=>{page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!/^(http:\/\/127\.0\.0\.1:(?:4187|4196)|data:|blob:)/.test(r.url()))remote.push(r.url());});});
+    await context.addInitScript(()=>{if(!['http://127.0.0.1:4187','http://127.0.0.1:4196'].includes(location.origin))return;localStorage.setItem('evaorbit.uiLanguage','zh');localStorage.setItem('evaorbit.appearanceMode','light');});
     const page=await context.newPage();page.setDefaultTimeout(15000);
-    await page.goto('http://127.0.0.1:4187/');
+    await page.goto((process.env.PARLOR_PREVIEW_ORIGIN||'http://127.0.0.1:4187')+'/');
     await page.getByRole('button',{name:/Parlor ·/}).click();
     await page.getByRole('heading',{name:'Sebastian',exact:true}).waitFor();
     await page.getByText('初次见面，我是 Sebastian。',{exact:false}).waitFor();
@@ -89,10 +89,10 @@ try{
     await page.getByRole('button',{name:/Providers & Models/}).click();
     await page.getByRole('heading',{name:'Providers & Models',exact:true}).waitFor();
     await page.getByLabel('名称',{exact:true}).fill('Local mock renamed');
-    await page.getByRole('button',{name:'保存到本机',exact:true}).click();
+    await page.getByRole('button',{name:'保存',exact:true}).click();
     await page.getByText('已保存到本机',{exact:true}).waitFor();
     assert.equal(await page.locator('[data-native-eva-settings] select').first().inputValue(),'10000000-0000-4000-8000-000000000003');
-    const priceDisclosure=page.getByRole('button',{name:'可选：每百万 Token 价格',exact:true});
+    const priceDisclosure=page.getByRole('button',{name:'价格 / 百万 Token',exact:true});
     await priceDisclosure.click();assert.equal(await priceDisclosure.getAttribute('aria-expanded'),'true');
     await page.getByRole('button',{name:'返回 Parlor 设置',exact:true}).click();
     await page.getByRole('button',{name:/聊天外观/}).click();
@@ -108,7 +108,7 @@ try{
     await page.getByText('尚未开放',{exact:true}).waitFor();
     if(!mobile){await page.getByRole('link',{name:'设置',exact:true}).click();await page.getByRole('button',{name:'Parlor 人格、模型与会话偏好',exact:true}).click();await page.locator('[data-parlor-settings]').waitFor();}
     // Simulate a previously bound model being removed from Provider settings.
-    await page.evaluate(()=>{const state=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));state.persona.providerId=state.providers[0].id;state.persona.modelId='removed-model';sessionStorage.setItem('eo-eva-synthetic-state',JSON.stringify(state));});
+    await page.evaluate(()=>{const state=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));state.persona.providerId=state.providers[0].id;state.persona.modelId='removed-model';state.personas=state.personas?.map(p=>p.id===state.persona.id?state.persona:p);sessionStorage.setItem('eo-eva-synthetic-state',JSON.stringify(state));});
     await page.reload();await page.getByRole('button',{name:/Parlor ·/}).click();
     await page.getByRole('button',{name:'默认模型不可用，请重新选择默认模型。',exact:true}).waitFor();
     await page.getByLabel('消息内容',{exact:true}).fill('must not silently use another provider');
@@ -123,8 +123,8 @@ try{
     await context.close();
   }
   const context=await browser.newContext(),page=await context.newPage();
-  await page.goto('http://127.0.0.1:4187/?legacy=1');await page.getByRole('button',{name:/Parlor ·/}).click();
+  await page.goto((process.env.PARLOR_PREVIEW_ORIGIN||'http://127.0.0.1:4187')+'/?legacy=1');await page.getByRole('button',{name:/Parlor ·/}).click();
   await page.getByRole('heading',{name:'Parlor',exact:true}).waitFor();
-  await page.getByText('Parlor requires the updated local Native Host.',{exact:true}).waitFor();await context.close();
+  await page.getByText('Update Host to open Parlor',{exact:true}).waitFor();await context.close();
   console.log(JSON.stringify({results,unsupportedHostNotice:true,segmentationPersisted:true,avatarUploadAndReload:true,noEmptyReplyBubble:true,screenshots:16}));
 }finally{await browser.close();}

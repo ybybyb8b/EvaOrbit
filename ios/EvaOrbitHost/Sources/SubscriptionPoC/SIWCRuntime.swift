@@ -1,12 +1,11 @@
-#if DEBUG || PARLOR_SUBSCRIPTION_POC
 import Foundation
 
-// Direct SIWC Responses client, not a Parlor provider adapter or a Codex subprocess.
+// Direct SIWC Responses client shared by Parlor and the diagnostic panel.
 @MainActor
 final class SIWCRuntime {
     let keychain: SIWCKeychain
     private let testConfiguration: URLSessionConfiguration?
-    private var refreshing = false
+    private var refreshTask: Task<String, Error>?
     private let transport = AIProviderAdapter() // Reuse only its cookie-free session policy / redirect refusal.
     private var session: URLSession {
         URLSession(configuration: testConfiguration ?? AIProviderAdapter.configuration(), delegate: transport, delegateQueue: nil)
@@ -57,13 +56,31 @@ final class SIWCRuntime {
         guard saved.enabled else { throw SIWCFailure.permission }
         if let expiry = saved.expires, expiry > Date().addingTimeInterval(60), let token = saved.access { return token }
         guard let refresh = saved.refresh, let client = saved.client else { throw SIWCFailure.credentials }
-        guard !refreshing else { throw SIWCFailure.protocolError }
-        refreshing = true; defer { refreshing = false }
-        let json = try await token(["grant_type": "refresh_token", "client_id": client,
-                                   "refresh_token": refresh, "resource": SIWCProtocol.resource])
-        try await install(json, into: saved, nonce: nil, requireID: false)
-        guard let value = try keychain.read()?.access else { throw SIWCFailure.credentials }
-        return value
+        if let refreshTask { return try await waitForRefresh(refreshTask) }
+        let operation = Task<String, Error> {
+            let json = try await self.token(["grant_type": "refresh_token", "client_id": client,
+                                           "refresh_token": refresh, "resource": SIWCProtocol.resource])
+            try await self.install(json, into: saved, nonce: nil, requireID: false)
+            guard let value = try self.keychain.read()?.access else { throw SIWCFailure.credentials }
+            return value
+        }
+        refreshTask = operation
+        // Keep rotation alive even when one participant stops waiting. Clear only on completion.
+        Task { _ = try? await operation.value; self.refreshTask = nil }
+        return try await waitForRefresh(operation)
+    }
+    private func waitForRefresh(_ operation: Task<String, Error>) async throws -> String {
+        let waiter = SIWCRefreshWaiter()
+        return try await withTaskCancellationHandler(operation: {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                waiter.install(continuation)
+                Task {
+                    do { waiter.finish(.success(try await operation.value)) }
+                    catch { waiter.finish(.failure(error)) }
+                }
+            }
+        }, onCancel: { Task { @MainActor in waiter.finish(.failure(CancellationError())) } })
     }
     func models() async throws -> [(id: String, name: String)] {
         var request = URLRequest(url: URL(string: SIWCProtocol.resource + "/models")!)
@@ -76,10 +93,15 @@ final class SIWCRuntime {
             return (id, row["display_name"] as? String ?? id)
         }
     }
-    func infer(model: String, receive: @escaping @MainActor (SIWCResponseEvent) -> Void) async throws {
+    func infer(model: String, input: [[String: String]]? = nil, instructions: String? = nil, receive: @escaping @MainActor (SIWCResponseEvent) async throws -> Void) async throws {
         let token = try await access()
         try Task.checkCancellation()
-        let request = try SIWCProtocol.request(model: model, token: token)
+        var request = try SIWCProtocol.request(model: model, token: token)
+        if let input {
+            var body: [String: Any] = ["model": model, "input": input, "store": false, "stream": true]
+            if let instructions { body["instructions"] = instructions }
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
         let session = self.session; defer { session.invalidateAndCancel() }
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw SIWCFailure.protocolError }
@@ -97,14 +119,14 @@ final class SIWCRuntime {
         // A missing MIME header is not evidence that the body is invalid. Decode incrementally,
         // and require actual typed SSE events plus response.completed, never HTTP 200 alone.
         var parser = AISSEParser(); var textBytes = 0; var frameCount = 0
-        func consume(_ frames: [(String, String)]) throws -> Bool {
+        func consume(_ frames: [(String, String)]) async throws -> Bool {
             for (name, value) in frames {
                 frameCount += 1
                 if name == "error", value.isEmpty { throw SIWCFailure.service("unclassified_error") }
                 let event = try SIWCResponseEvent.decode(value)
                 textBytes += event.delta.utf8.count
                 guard textBytes <= 512 * 1024 else { throw SIWCFailure.eventShape(.limit) }
-                receive(event)
+                try await receive(event)
                 if event.completed { return true }
             }
             return false
@@ -115,13 +137,13 @@ final class SIWCRuntime {
             do { frames = try parser.append(byte) }
             catch AIError.tooLarge { throw SIWCFailure.eventShape(.limit) }
             catch { throw SIWCFailure.eventShape(.utf8) }
-            if try consume(frames) { return }
+            if try await consume(frames) { return }
         }
         let finalFrames: [(String, String)]
         do { finalFrames = try parser.finish() }
         catch AIError.tooLarge { throw SIWCFailure.eventShape(.limit) }
         catch { throw SIWCFailure.eventShape(.utf8) }
-        if try consume(finalFrames) { return }
+        if try await consume(finalFrames) { return }
         if frameCount == 0 { throw SIWCFailure.eventShape(.notSSE) }
         throw SIWCFailure.interrupted
     }
@@ -133,6 +155,8 @@ final class SIWCRuntime {
         return .inferenceHTTP(status, media, code)
     }
     func signOut() async throws {
+        // A pending rotation must settle before revocation, so it cannot reinstall credentials later.
+        if let refreshTask { _ = try? await refreshTask.value }
         let saved = try connection()
         var remoteConfirmed = saved.refresh == nil
         if let refresh = saved.refresh, let client = saved.client {
@@ -177,4 +201,19 @@ final class SIWCRuntime {
         return data
     }
 }
-#endif
+
+// Each participant can stop waiting without cancelling a shared token rotation.
+@MainActor
+private final class SIWCRefreshWaiter {
+    private var continuation: CheckedContinuation<String, Error>?
+    private var result: Result<String, Error>?
+    func install(_ continuation: CheckedContinuation<String, Error>) {
+        if let result { continuation.resume(with: result) }
+        else { self.continuation = continuation }
+    }
+    func finish(_ result: Result<String, Error>) {
+        guard self.result == nil else { return }
+        self.result = result
+        continuation?.resume(with: result); continuation = nil
+    }
+}

@@ -19,3 +19,28 @@
 .directoryActions button { min-height:44px; }
 .modelHeading { display:flex;align-items:center;justify-content:space-between;gap:12px; }
 .modelHeading h3 { margin:0; }
+
+.page { display:grid;gap:28px;min-width:0;max-width:880px; }
+.connections { display:flex;gap:12px; }
+.connection { flex:1;display:flex;align-items:center;justify-content:center;gap:10px;text-align:center;padding:16px;border:0;border-radius:12px;background:var(--surface-soft);color:var(--text-secondary);box-shadow:var(--parlor-key-depth);cursor:pointer;min-width:0;min-height:56px; }
+.connection[aria-selected="true"] { color:var(--accent-primary);background:var(--surface-accent-soft);box-shadow:var(--parlor-control-depth); }
+.connection strong { font-size:16px;font-weight:500; }
+.connection small { font-size:12px;font-variant-numeric:tabular-nums; }
+.connection:focus-visible { outline:2px solid var(--focus-ring);outline-offset:3px; }
+.connection:hover:not(:disabled) { color:var(--accent-primary); }
+.connection:disabled { opacity:.6;cursor:wait; }
+.apiPanel,.subscription { display:grid;gap:24px;min-width:0; }
+.editor { margin:0;padding:0;min-width:0; }
+.apiHeading,.subscriptionHeader { display:flex;gap:16px;align-items:center;justify-content:space-between; }
+.apiHeading h2,.subscriptionHeader h2 { margin:0;font-size:24px;font-weight:500; }
+.subscriptionHeader p { margin:6px 0 0;color:var(--text-secondary);font-size:13px; }
+.subscriptionHeader { justify-content:flex-start; }
+.subscriptionHeader img { filter:var(--parlor-logo-filter,none); }
+.subscriptionModels { display:grid;gap:8px; }
+.subscriptionModels h3 { margin:8px 0;font-size:17px;font-weight:500; }
+.subscriptionModels h3 small { margin-left:8px;color:var(--text-secondary); }
+.subscriptionModels > div { display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 0; }
+.subscriptionModels strong { font-weight:500; }
+.subscriptionModels span { color:var(--text-secondary);font-size:12px;overflow-wrap:anywhere; }
+.subscriptionModels button { margin-inline-start:auto; }
+@media(max-width:600px) { .connection { padding:12px; }.apiHeading h2 { font-size:22px; } }

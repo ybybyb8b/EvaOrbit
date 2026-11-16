@@ -196,6 +196,29 @@ struct SIWCSubscriptionPoCTests {
         #expect(delivered == 0 && transport.count == 1)
     }
 
+    @Test @MainActor func parlorHistoryAndPersonaUseResponsesWithoutAPIPrices() async throws {
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "mock-access", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        transport.install { request in
+            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            #expect(body["instructions"] as? String == "Persona prompt")
+            let input = try #require(body["input"] as? [[String: String]])
+            #expect(input.map { $0["role"] ?? "" } == ["user", "assistant", "user"])
+            #expect(input.last?["content"] == "Next question")
+            #expect(body["store"] as? Bool == false)
+            return (200, "text/event-stream", "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":12,\"output_tokens\":4}}}\n\n")
+        }
+        let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
+        var usage: AIUsage?
+        try await runtime.infer(model: "mock-only", input: [["role": "user", "content": "Earlier"], ["role": "assistant", "content": "Reply"], ["role": "user", "content": "Next question"]], instructions: "Persona prompt") { usage = $0.tokenUsage }
+        #expect(usage?.inputTokens == 12 && usage?.outputTokens == 4)
+        #expect(usage?.cost(model: AIModel(id: "mock-only", name: "Mock")) == nil)
+        #expect(transport.count == 1)
+    }
+
     @Test @MainActor func missingMIMERequiresRealSSEAndCompletion() async throws {
         let keychain = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
         defer { try? keychain.remove() }
@@ -223,6 +246,87 @@ struct SIWCSubscriptionPoCTests {
         catch SIWCFailure.interrupted { #expect(text == "你好🫖") }
         #expect(transport.count == 1)
     }
+    @Test @MainActor func concurrentParticipantsShareOneRotatingRefresh() async throws {
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.parallel-refresh." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "expired", refresh: "old-refresh", expires: Date().addingTimeInterval(-1), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        transport.install { request in
+            #expect(request.url?.path == "/api/accounts/oauth/token")
+            return (200, "application/json", "{\"access_token\":\"new-access\",\"refresh_token\":\"rotated-refresh\",\"token_type\":\"bearer\",\"expires_in\":3600}")
+        }
+        let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
+        async let first = runtime.access()
+        async let second = runtime.access()
+        let (firstToken, secondToken) = try await (first, second)
+        #expect(firstToken == "new-access" && secondToken == "new-access" && transport.count == 1)
+        #expect(try keychain.read()?.refresh == "rotated-refresh")
+    }
+
+    @Test @MainActor func cancellingOneRefreshWaiterKeepsPeerAndRotation() async throws {
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.refresh-waiter." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "expired", refresh: "old-refresh", expires: Date().addingTimeInterval(-1), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        transport.install { _ in
+            Thread.sleep(forTimeInterval: 0.2)
+            return (200, "application/json", "{\"access_token\":\"new-access\",\"refresh_token\":\"rotated-refresh\",\"token_type\":\"bearer\",\"expires_in\":3600}")
+        }
+        let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
+        let first = Task { try await runtime.access() }
+        let second = Task { try await runtime.access() }
+        try await Task.sleep(nanoseconds: 30_000_000)
+        first.cancel()
+        do { _ = try await first.value; Issue.record("Cancelled participant kept waiting") }
+        catch { #expect(error is CancellationError) }
+        #expect(try await second.value == "new-access")
+        #expect(transport.count == 1)
+        #expect(try keychain.read()?.refresh == "rotated-refresh")
+    }
+
+    @Test @MainActor func mixedSubscriptionAndAPIGroupUsesSeparateTransportsAndUsage() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("siwc-group-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try AIStore(path: directory.appendingPathComponent("ai.sqlite3").path)
+        let account = "50000000-0000-4000-8000-000000000001"
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.group." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "mock-siwc-only", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        transport.install { request in
+            #expect(request.url?.absoluteString == "https://api.openai.com/v1/responses")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-siwc-only")
+            return (200, "text/event-stream", "data: {\"type\":\"response.output_text.delta\",\"delta\":\"subscription response\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":21,\"output_tokens\":7}}}\n\n")
+        }
+        let apiID = "50000000-0000-4000-8000-000000000002"
+        let model = AIModel(id: "mock-text", name: "Mock")
+        try await store.saveProvider(AIProvider(id: apiID, name: "API", baseURL: "https://api.example.invalid/v1", models: [model], currency: "USD", priceUpdatedAt: "", enabled: true), account: account)
+        try await store.saveProvider(AIProvider(id: AIRuntime.subscriptionID, name: "ChatGPT", baseURL: SIWCProtocol.resource, models: [model], currency: "USD", priceUpdatedAt: "", enabled: true), account: account)
+        var sebastian = ParlorPersona.sebastian; sebastian.providerId = apiID; sebastian.modelId = model.id
+        var ada = sebastian; ada.id = UUID().uuidString; ada.name = "Ada"; ada.providerId = AIRuntime.subscriptionID
+        try await store.savePersona(sebastian, account: account); try await store.savePersona(ada, account: account)
+        var apiRequests = 0
+        let runtime = AIRuntime(store: store, secrets: SIWCGroupSecrets(), subscriptionFactory: { _ in SIWCRuntime(keychain: keychain, configuration: transport.configuration) }) { request, receive in
+            apiRequests += 1
+            #expect(request.url?.host == "api.example.invalid")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-api-only")
+            try await receive(.init(delta: "API response", usage: AIUsage(inputTokens: 11, outputTokens: 3, source: "provider"), done: true))
+        }
+        let id = UUID().uuidString
+        _ = try await runtime.handle("ai.saveGroup", account: account, parameters: ["conversationId": id, "title": "Mixed", "personaIds": [sebastian.id, ada.id]], emit: { _ in })
+        _ = try await runtime.handle("ai.groupSend", account: account, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in })
+        for _ in 0..<300 { if try await store.messages(id, account: account).filter({ $0.status == "done" }).count == 3 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        let replies = try await store.messages(id, account: account).filter { $0.role == "assistant" }
+        #expect(replies.count == 2 && replies.allSatisfy { $0.status == "done" })
+        #expect(replies[0].usage?.inputTokens == 11 && replies[1].usage?.inputTokens == 21)
+        #expect(replies[0].providerId == apiID && replies[1].providerId == AIRuntime.subscriptionID)
+        #expect(replies[1].cost == nil && apiRequests == 1 && transport.count == 1)
+    }
+
 }
 
 // Each mock session carries an independent random routing ID; parallel tests cannot share handlers.
@@ -265,3 +369,9 @@ private final class SIWCMockURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 #endif
+
+private final class SIWCGroupSecrets: AISecretStore {
+    func read(account: String, provider: String) throws -> String? { "mock-api-only" }
+    func write(_ value: String, account: String, provider: String) throws {}
+    func remove(account: String, provider: String) throws {}
+}

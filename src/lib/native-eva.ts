@@ -8,11 +8,17 @@ export const supportsNativeCatalog=(info:NativeHostInfo|null)=>nativeCatalogMeth
 export type EvaModel={id:string;name:string;inputPrice?:number;outputPrice?:number;cachedInputPrice?:number;contextWindow?:number;priceSource?:"manual"|"openrouter";priceUpdatedAt?:string;priceEstimateLimited?:boolean};
 export type EvaDiscoveredModel={model:EvaModel;family:string;textCapability:"text"|"unknown"};
 export type EvaModelCatalog={models:EvaDiscoveredModel[];fetchedAt:string;currency?:string;partial?:boolean};
-export type EvaProvider={id:string;name:string;baseURL:string;models:EvaModel[];enabled:boolean;currency:string;priceUpdatedAt:string;hasKey?:boolean};
-export type ParlorPersona={id:string;name:string;chineseName:string;nickname:string;systemPrompt:string;preferredAddress:string;humor:"none"|"subtle"|"playful";formality:"casual"|"natural"|"formal";closeness:"reserved"|"warm"|"familiar";providerId?:string;modelId?:string};
+export const nativeSubscriptionMethods=["ai.subscriptionLogin","ai.subscriptionLogout","ai.subscriptionModels"] as const;
+export type EvaProvider={connectionType?:"api"|"subscription";id:string;name:string;baseURL:string;models:EvaModel[];enabled:boolean;currency:string;priceUpdatedAt:string;hasKey?:boolean};
+export const nativeGroupMethods=["ai.saveGroup","ai.groupSend","ai.groupCancel","ai.groupRegenerate"] as const;
+export const nativeDiscussionMethods=["ai.discussionControl","ai.discussionIntervene","ai.discussionSummarize"] as const;
+export type EvaDiscussion={id:string;conversationId:string;status:"running"|"paused"|"interrupted"|"completed"|"ended"|"summarizing";roundsStarted:number;maxRounds:number;suspendedPersonaIds:string[];revision:number;error?:string};
+export const evaIsBusy=(state:EvaState)=>Boolean(state.active||state.activeMessages?.length||state.discussions?.some(d=>d.status==="running"||d.status==="summarizing"));
+export type EvaGroup={id:string;title:string;participants:ParlorPersona[];mode:"parallel"|"discussion";maxRounds?:number};
+export type ParlorPersona={avatarDataURL?:string;id:string;name:string;chineseName:string;nickname:string;systemPrompt:string;preferredAddress:string;humor:"none"|"subtle"|"playful";formality:"casual"|"natural"|"formal";closeness:"reserved"|"warm"|"familiar";providerId?:string;modelId?:string};
 export const sebastianIdentity={id:"sebastian",name:"Sebastian",chineseName:"塞巴斯蒂安",nickname:"赛巴斯酱"} as const;
-export type EvaMessage={id:string;conversationId:string;role:"user"|"assistant";content:string;status:"streaming"|"done"|"failed"|"cancelled"|"interrupted";createdAt:string;requestId?:string;providerId?:string;providerName?:string;personaId?:string;personaName?:string;model?:EvaModel;currency?:string;priceUpdatedAt?:string;usage?:{inputTokens?:number;outputTokens?:number;cachedTokens?:number;source:string};cost?:number;error?:string;seq:number;requestCount:number};
-export type EvaState={providers:EvaProvider[];persona:ParlorPersona;conversations:{id:string;title:string;updatedAt:string}[];messages:EvaMessage[];active?:EvaMessage};
+export type EvaMessage={discussionId?:string;discussionRound?:number;purpose?:"discussion"|"summary";roundId?:string;supersedesId?:string;personaAvatar?:string;id:string;conversationId:string;role:"user"|"assistant";content:string;status:"streaming"|"done"|"failed"|"cancelled"|"interrupted";createdAt:string;requestId?:string;providerId?:string;providerName?:string;personaId?:string;personaName?:string;model?:EvaModel;currency?:string;priceUpdatedAt?:string;usage?:{inputTokens?:number;outputTokens?:number;cachedTokens?:number;source:string};cost?:number;error?:string;seq:number;requestCount:number};
+export type EvaState={discussions?:EvaDiscussion[];personas?:ParlorPersona[];groups?:EvaGroup[];activeMessages?:EvaMessage[];subscriptionConnected?:boolean;providers:EvaProvider[];persona:ParlorPersona;conversations:{id:string;title:string;updatedAt:string}[];messages:EvaMessage[];active?:EvaMessage};
 export type EvaEvent={accountId:string;conversationId:string;messageId:string;requestId:string;seq:number;eventType:"progress"|"terminal";message:EvaMessage};
 
 export function acceptEvaEvent(raw:unknown,accountId:string,conversationId:string,messages:readonly EvaMessage[]):EvaMessage[]|null {
@@ -26,6 +32,6 @@ export function acceptEvaEvent(raw:unknown,accountId:string,conversationId:strin
   return messages.map(item=>item.id===m.id?m:item);
 }
 
-export function evaCall<T>(accountId:string,method:typeof nativeEvaMethods[number]|typeof nativeCatalogMethods[number],params:Record<string,unknown>={}) {
+export function evaCall<T>(accountId:string,method:typeof nativeEvaMethods[number]|typeof nativeCatalogMethods[number]|typeof nativeSubscriptionMethods[number]|typeof nativeGroupMethods[number]|typeof nativeDiscussionMethods[number],params:Record<string,unknown>={}) {
   return rawNativeCall<T>(method,{...params,accountId});
 }

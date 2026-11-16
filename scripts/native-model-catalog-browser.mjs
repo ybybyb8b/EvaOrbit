@@ -7,14 +7,14 @@ await fs.mkdir('tmp/model-catalog',{recursive:true});
 try{
  for(const width of [402,1280]){
   const context=await browser.newContext({viewport:{width,height:900},isMobile:width===402,hasTouch:width===402});
-  const errors=[],remote=[];context.on('page',p=>{p.on('pageerror',e=>errors.push(e.message));p.on('request',r=>{if(!/^(http:\/\/127\.0\.0\.1:4187|blob:|data:)/.test(r.url()))remote.push(r.url());});});
-  await context.addInitScript(()=>{if(location.origin==='http://127.0.0.1:4187')localStorage.setItem('evaorbit.uiLanguage','zh');});
+  const errors=[],remote=[];context.on('page',p=>{p.on('pageerror',e=>errors.push(e.message));p.on('request',r=>{if(!/^(http:\/\/127\.0\.0\.1:(?:4187|4196)|blob:|data:)/.test(r.url()))remote.push(r.url());});});
+  await context.addInitScript(()=>{if(['http://127.0.0.1:4187','http://127.0.0.1:4196'].includes(location.origin))localStorage.setItem('evaorbit.uiLanguage','zh');});
   const page=await context.newPage();page.setDefaultTimeout(15000);
-  async function settings(url='http://127.0.0.1:4187/'){
+  async function settings(url=(process.env.PARLOR_PREVIEW_ORIGIN||'http://127.0.0.1:4187')+'/'){
    await page.goto(url);await page.getByRole('button',{name:/Parlor ·/}).click();await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();await page.getByRole('button',{name:/Providers & Models/}).click();
   }
   await settings();
-  const provider=page.locator('[data-native-eva-settings] > label select');
+  const provider=page.locator('[data-native-eva-settings] section > label select');
   await provider.selectOption('new');await page.getByLabel('名称',{exact:true}).fill('Directory test');
   const base=page.getByLabel('API Base URL（HTTPS）',{exact:true}),key=page.getByLabel('API Key',{exact:false});
   await base.fill('https://openrouter.ai/api/v1');await key.fill('fake-catalog-test');
@@ -38,9 +38,9 @@ try{
   await page.screenshot({path:`tmp/model-catalog/${width}-selected.png`});
   await dialog.getByRole('button',{name:'使用 2 个模型',exact:true}).click();await dialog.waitFor({state:'detached'});
   const ids=page.getByLabel('Model ID',{exact:true});assert.equal(await ids.count(),2);assert.equal(await ids.first().inputValue(),'alpha/chat-pro');
-  const pricing=page.getByRole('button',{name:'可选：每百万 Token 价格',exact:true}).first();await pricing.click();
+  const pricing=page.getByRole('button',{name:'价格 / 百万 Token',exact:true}).first();await pricing.click();
   assert.equal(await page.getByLabel('输入',{exact:true}).first().inputValue(),'2.5');assert.equal(await page.getByLabel('输出',{exact:true}).first().inputValue(),'10');
-  await page.getByRole('button',{name:'保存到本机',exact:true}).click();await page.getByText('已保存到本机',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'保存',exact:true}).click();await page.getByText('已保存到本机',{exact:true}).waitFor();
   assert.equal(await key.inputValue(),'');
   assert(!(await page.evaluate(()=>sessionStorage.getItem('eo-eva-synthetic-state'))).includes('fake-catalog-test'));
   await page.getByLabel('输入',{exact:true}).first().fill('7');
@@ -62,7 +62,7 @@ try{
   assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state')).messages.length),0,'directory discovery never starts inference');
   console.log({width,longList:true,search:true,filter:true,pricing:true,currency:true,manualPreserved:true,persistence:true,cancel:true,error:true,remoteRequests:0});await context.close();
  }
- const context=await browser.newContext();await context.addInitScript(()=>{if(location.origin==='http://127.0.0.1:4187')localStorage.setItem('evaorbit.uiLanguage','zh');});const page=await context.newPage();
- await page.goto('http://127.0.0.1:4187/?noCatalog=1');await page.getByRole('button',{name:/Parlor ·/}).click();await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();await page.getByRole('button',{name:/Providers & Models/}).click();
- assert(await page.getByRole('button',{name:'获取模型',exact:true}).isDisabled());await page.getByText('更新本地 Host 后可获取模型；当前仍可手动填写。',{exact:true}).waitFor();await context.close();
+ const context=await browser.newContext();await context.addInitScript(()=>{if(['http://127.0.0.1:4187','http://127.0.0.1:4196'].includes(location.origin))localStorage.setItem('evaorbit.uiLanguage','zh');});const page=await context.newPage();
+ await page.goto((process.env.PARLOR_PREVIEW_ORIGIN||'http://127.0.0.1:4187')+'/?noCatalog=1');await page.getByRole('button',{name:/Parlor ·/}).click();await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();await page.getByRole('button',{name:/Providers & Models/}).click();
+ assert(await page.getByRole('button',{name:'获取模型',exact:true}).isDisabled());await page.getByText('获取模型需更新 Host',{exact:true}).waitFor();await context.close();
 }finally{await browser.close();}

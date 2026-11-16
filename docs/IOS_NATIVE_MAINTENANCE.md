@@ -1,5 +1,13 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Parlor Group Chat 源码候选
+
+`ai.sqlite3` 幂等升级 v4，追加账户隔离 `ai_groups`／`ai_rounds`／`ai_discussions`，不重建旧表；用户消息、参与者占位回答和冻结上下文同一事务保存。`ai.saveGroup`／`ai.groupSend`／`ai.groupCancel`／`ai.groupRegenerate` 是可选 Bridge v1 能力，继续复用主 frame、origin、account generation 校验。Discussion 复用同轮并行任务，轮间等待后冻结新上下文，预算默认 3／上限 5 轮；可选 `ai.discussionControl`／`ai.discussionIntervene`／`ai.discussionSummarize` 支持暂停、插话、结束与总结，恢复为 interrupted 且不自动启动推理。群聊参与者使用独立任务与请求 ID，单个错误不取消其他任务；后台或切换账户取消全部，保留已持久化输出。多人格复用既有 Persona 表，API/订阅复用同一 transport 边界；SIWC 同账户共享旋转令牌刷新，不共用推理请求。没有新增 framework、Info.plist、entitlement、权限、签名或安装链变化。不通过 EO 服务端推理。本轮不提交／推送／部署／打包；Windows 测试不等于 Swift 编译或真机验收。详见 [实现与验收记录](PARLOR_GROUP_CHAT.md)。
+
+## Parlor 订阅 Provider 整合候选
+
+SIWC 核心协议／浏览器／Runtime 进入普通产品编译，独立实验面板仍受原 PoC 开关控制。新增账户绑定 ai.subscriptionLogin / ai.subscriptionLogout / ai.subscriptionModels，沿用 Bridge v1 安全门，凭据按 EO account 分区，不导入 PoC profile。与 API 共用聊天持久化及中断，Responses 直连官方。没有新增权限、framework、Info.plist 或 entitlement，不改签名安装链。本轮不提交、不打包，Swift 编译和真机待新 IPA，详见 [整合边界](PARLOR_SUBSCRIPTION_PROVIDER.md)。
+
 ## Parlor SIWC 独立 PoC（未编译／未授权验证）
 
 用户随后已授权本批测试分支提交、推送及手动构建。新增 workflow 参数 `subscription_poc`（默认 false），仅 `workflow_dispatch` + `codex/parlor-native-test` + `local_trackers=true` 允许启用；原 Release / iphoneos 签名链传 `PARLOR_SUBSCRIPTION_POC` 与 `EVAORBIT_SUBSCRIPTION_POC=YES`，Info.plist 保存显式实验标记，安装后启动直接打开面板，无需 Xcode 参数。源码编译门为 `DEBUG || PARLOR_SUBSCRIPTION_POC`，普通 Release 仍无模块。构建隔离／Bash 参数测试覆盖普通包、实验包及拒绝在线 Host／其他分支／push。是否已编译以对应 Actions 结果为准；用户按原约定查看进程，代理不自动 watch。下段保留初始调查状态，以本段为最新构建约定。

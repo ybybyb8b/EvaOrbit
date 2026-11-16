@@ -71,7 +71,7 @@ export function ParlorActivity({scope,supported,inConversation=false,onNavigate}
     drag.current = null; setDragging(false);
   }
 
-  const thinking=data?.active?.status==="streaming",online=Boolean(data?.providers.some(p=>p.enabled&&p.hasKey));
+  const thinking=data?.active?.status==="streaming"||Boolean(data?.activeMessages?.length||data?.discussions?.some(d=>d.status==="running"||d.status==="summarizing")),online=Boolean(data?.providers.some(p=>p.enabled&&(p.hasKey||p.connectionType==="subscription")));
   const label=!supported?t("Update Host","需要新版 Host"):error?t("Needs attention","有情况需要查看"):thinking?t("Working…","正在处理…"):!data?t("Checking…","正在检查…"):online?t("Ready","已就绪"):t("Configure a model","配置模型");
   const tone=error?"error":thinking?"thinking":online?"online":"offline";
   useEffect(()=>{const show=setTimeout(()=>setHint(true),0),hide=setTimeout(()=>setHint(false),3800);return()=>{clearTimeout(show);clearTimeout(hide);};},[tone]);
@@ -79,7 +79,7 @@ export function ParlorActivity({scope,supported,inConversation=false,onNavigate}
   function navigate(id?:string){setOpen(false);onNavigate(id?`/ai?conversation=${id}`:"/ai");}
   return <>
     <button ref={button} type="button" className={styles.floating} data-parlor-activity data-native-eva={supported||undefined} data-tone={tone} data-dragging={dragging} hidden={inConversation||covered||!position.x} style={{transform:`translate3d(${position.x}px,${position.y}px,0)`}} aria-label={`Parlor · ${label}`} title={t("Open Parlor. Press and hold for status.","打开 Parlor，长按查看状态。")}
-      onPointerDown={event=>{if(event.button!==0)return;drag.current={x:event.clientX,y:event.clientY,startX:position.x,startY:position.y,startedAt:event.timeStamp,moved:false};suppress.current=false;event.currentTarget.setPointerCapture(event.pointerId);setDragging(true);}} onPointerMove={move} onPointerUp={event=>release(event)} onPointerCancel={event=>release(event,true)} onContextMenu={event=>{event.preventDefault();if(!drag.current)showStatus();}} onClick={event=>{if(suppress.current&&event.detail!==0){suppress.current=false;return;}navigate(data?.active?.conversationId);}}>
+      onPointerDown={event=>{if(event.button!==0)return;drag.current={x:event.clientX,y:event.clientY,startX:position.x,startY:position.y,startedAt:event.timeStamp,moved:false};suppress.current=false;event.currentTarget.setPointerCapture(event.pointerId);setDragging(true);}} onPointerMove={move} onPointerUp={event=>release(event)} onPointerCancel={event=>release(event,true)} onContextMenu={event=>{event.preventDefault();if(!drag.current)showStatus();}} onClick={event=>{if(suppress.current&&event.detail!==0){suppress.current=false;return;}navigate(data?.active?.conversationId??data?.activeMessages?.[0]?.conversationId??data?.discussions?.find(d=>d.status==="running"||d.status==="summarizing")?.conversationId);}}>
       <span className={styles.mark}><Icon name="ai" variant="stroke"/></span><span className={styles.statusDot}/>{thinking&&<span className={styles.dots} aria-hidden="true"><i/><i/><i/></span>}{error&&<span className={styles.badge}>!</span>}<span className={styles.label} data-visible={hint} data-left={position.x<100}>{label}</span>
     </button>
     <span className={styles.live} role="status" aria-live="polite">{inConversation||!thinking?"":`Parlor · ${label}`}</span>

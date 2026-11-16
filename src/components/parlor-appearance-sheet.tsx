@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { parlorAppearanceImages, parlorImageLimit, parlorImageTypes, prepareParlorAppearanceImage, readParlorAppearance, saveParlorAppearanceImage, type ParlorAppearanceImage } from "@/lib/parlor-appearance";
+import { parlorAppearanceImages, parlorImageLimit, parlorImageTypes, prepareParlorAppearanceImage, readParlorAppearance, saveParlorAppearanceImage, type ParlorAppearanceImage,normalizeParlorAvatarPlacement,type ParlorAvatarPlacement,normalizeParlorBubbleStyle,type ParlorBubbleStyle } from "@/lib/parlor-appearance";
 import { ErrorNotice } from "./error-notice";
 import { FormSheet } from "./form-sheet";
 import styles from "./parlor-chat.module.css";
 
+const bubbleStyleKey = (scope: string) => `evaorbit.parlor.bubbleStyle:${scope}`;
+const avatarPlacementKey = (scope: string) => `evaorbit.parlor.avatarPlacement:${scope}`;
 const segmentRepliesKey = (scope: string) => `evaorbit.hermes.segmentReplies:${scope}`;
 
 export function useParlorAppearance(scope: string | null) {
@@ -14,6 +16,8 @@ export function useParlorAppearance(scope: string | null) {
   const [images, setImages] = useState<typeof urls.current>({});
   const [ready, setReady] = useState(false);
   const [segmentReplies, setSegmentReplies] = useState(false);
+  const [bubbleStyle,setBubbleStyle] = useState<ParlorBubbleStyle>("vintage");
+  const [avatarPlacement,setAvatarPlacement] = useState<ParlorAvatarPlacement>("last");
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -28,6 +32,8 @@ export function useParlorAppearance(scope: string | null) {
       if (!active) return;
       try { setSegmentReplies(Boolean(scope && localStorage.getItem(segmentRepliesKey(scope)) === "true")); }
       catch { setSegmentReplies(false); }
+      try { setAvatarPlacement(normalizeParlorAvatarPlacement(scope&&localStorage.getItem(avatarPlacementKey(scope)))); } catch { setAvatarPlacement("last"); }
+      try { setBubbleStyle(normalizeParlorBubbleStyle(scope&&localStorage.getItem(bubbleStyleKey(scope)))); } catch { setBubbleStyle("vintage"); }
       setReady(true);
     });
     return () => {
@@ -55,7 +61,17 @@ export function useParlorAppearance(scope: string | null) {
     setSegmentReplies(enabled);
   }
 
-  return { images, ready, save, segmentReplies, saveSegmentReplies };
+  function saveAvatarPlacement(value: string) {
+    if(!scope)return;
+    const next=normalizeParlorAvatarPlacement(value);
+    localStorage.setItem(avatarPlacementKey(scope),next);setAvatarPlacement(next);
+  }
+  function saveBubbleStyle(value: string) {
+    if(!scope)return;
+    const next=normalizeParlorBubbleStyle(value);
+    localStorage.setItem(bubbleStyleKey(scope),next);setBubbleStyle(next);
+  }
+  return { images, ready, save, segmentReplies, saveSegmentReplies,avatarPlacement,saveAvatarPlacement,bubbleStyle,saveBubbleStyle };
 }
 
 export function ParlorAppearanceSheet({ appearance, english, onClose }: {
@@ -99,6 +115,7 @@ export function ParlorAppearanceControls({appearance,english}:{appearance:Return
   }
 
   return <div className={styles.appearanceList}>
+      <label className="field"><span>{t("Bubble style","气泡样式")}</span><select value={appearance.bubbleStyle} disabled={!appearance.ready||busy} onChange={event=>{setError("");try{appearance.saveBubbleStyle(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="vintage">Vintage</option><option value="frosted">{t("Frosted glass","磨砂玻璃")}</option></select></label>
       <label className={styles.appearanceToggle}>
         <span>
           <strong id={segmentId}>{t("Split replies into bubbles", "自动分段气泡")}</strong>
@@ -111,6 +128,7 @@ export function ParlorAppearanceControls({appearance,english}:{appearance:Return
             catch { setError(t("Could not save this setting on this device.", "无法在当前设备保存此设置。")); }
           }} />
       </label>
+      <label className="field"><span>{t("Single-chat avatar position","单聊头像位置")}</span><select value={appearance.avatarPlacement} disabled={!appearance.ready||busy} onChange={event=>{setError("");try{appearance.saveAvatarPlacement(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="first">{t("First bubble","首个气泡")}</option><option value="last">{t("Last bubble","末个气泡")}</option><option value="all">{t("Every bubble","每个气泡")}</option></select></label>
       {parlorAppearanceImages.map(kind => {
         const url = appearance.images[kind];
         return <div className={styles.appearanceRow} key={kind}>

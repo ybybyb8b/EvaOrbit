@@ -14,7 +14,7 @@ export function LocalAiChat({scope,path,back,navigate,providerRequest}:{scope:st
   const {supported}=useNativeEva();
   const url=new URL(path,"https://eo.invalid"),conversation=url.searchParams.get("conversation")??undefined;
   if(supported===null)return <PageLoading title="对话" englishTitle="conversation"/>;
-  if(url.pathname==="/ai/settings")return <ParlorSettings accountId={scope} back={back} initialSection={url.searchParams.get("section")??""} providerRequest={providerRequest}/>;
+  if(url.pathname==="/ai/settings")return <ParlorSettings onConversation={id=>navigate(`/ai?conversation=${id}`)} accountId={scope} back={back} initialSection={url.searchParams.get("section")??""} providerRequest={providerRequest}/>;
   if(supported)return <NativeEvaChat key={scope} accountId={scope} back={back} initialConversationId={conversation} onSettings={section=>navigate(`/ai/settings${section?`?section=${section}`:""}`)}/>;
   return <ParlorUnavailable back={back}/>;
 }

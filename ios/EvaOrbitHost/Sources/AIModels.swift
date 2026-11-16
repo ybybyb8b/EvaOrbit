@@ -116,6 +116,12 @@ struct AIMessage: Codable {
     var requestCount: Int = 0
     var personaId: String?
     var personaName: String?
+    var personaAvatar: String?
+    var roundId: String?
+    var supersedesId: String?
+    var discussionId: String?
+    var discussionRound: Int?
+    var purpose: String?
 }
 
 func aiTimestamp() -> String { ISO8601DateFormatter().string(from: Date()) }

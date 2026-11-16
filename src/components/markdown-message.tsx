@@ -54,7 +54,7 @@ function groupMarkdownBlocks() {
     }
     if (group.length) groups.push(group);
     tree.children = groups.map((children, index) => ({
-      type: "element", tagName: "div", properties: { dataMarkdownLast: index === groups.length - 1 }, children,
+      type: "element", tagName: "div", properties: { dataMarkdownFirst: index === 0, dataMarkdownLast: index === groups.length - 1 }, children,
     }));
   };
 }
@@ -62,7 +62,7 @@ function groupMarkdownBlocks() {
 export function MarkdownMessage({ content, offlineMedia = false, renderBlock }: {
   content: string;
   offlineMedia?: boolean;
-  renderBlock?: (children: ReactNode, last: boolean) => ReactNode;
+  renderBlock?: (children: ReactNode, last: boolean, first: boolean) => ReactNode;
 }) {
   const renderedContent = useDeferredValue(content);
   const markdown = (
@@ -73,7 +73,7 @@ export function MarkdownMessage({ content, offlineMedia = false, renderBlock }: 
       urlTransform={safeMarkdownUrl}
       components={{
         ...(renderBlock ? { div: ({ children, node }) => renderBlock(
-          <div className="markdown-content">{children}</div>, node?.properties.dataMarkdownLast === true,
+          <div className="markdown-content">{children}</div>, node?.properties.dataMarkdownLast === true, node?.properties.dataMarkdownFirst === true,
         ) } : {}),
         a: offlineMedia ? ({children}) => <span>{children}</span> : Link,
         ...(offlineMedia ? {img: ({alt}: {alt?:string}) => <span className="chronicle-offline-image">{alt || "Image"} · Image unavailable offline</span>} : {}),

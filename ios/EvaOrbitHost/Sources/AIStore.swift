@@ -23,7 +23,7 @@ actor AIStore {
             guard sqlite3_prepare_v2(opened, "PRAGMA user_version", -1, &statement, nil) == SQLITE_OK else { throw AIError.storage }
             let version = sqlite3_step(statement) == SQLITE_ROW ? sqlite3_column_int(statement, 0) : -1
             sqlite3_finalize(statement)
-            guard (0...2).contains(version) else { throw AIError.storage }
+            guard (0...4).contains(version) else { throw AIError.storage }
             let migration = """
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=FULL;
@@ -42,6 +42,22 @@ actor AIStore {
             COMMIT;
             """
             guard sqlite3_exec(opened, personaMigration, nil, nil, nil) == SQLITE_OK else { throw AIError.storage }
+            let groupMigration = """
+            BEGIN IMMEDIATE;
+            CREATE TABLE IF NOT EXISTS ai_groups(account_id TEXT NOT NULL,id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(account_id,id));
+            CREATE TABLE IF NOT EXISTS ai_rounds(account_id TEXT NOT NULL,id TEXT NOT NULL,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(account_id,id));
+            PRAGMA user_version=3;
+            COMMIT;
+            """
+            guard sqlite3_exec(opened, groupMigration, nil, nil, nil) == SQLITE_OK else { throw AIError.storage }
+            let discussionMigration = """
+            BEGIN IMMEDIATE;
+            CREATE TABLE IF NOT EXISTS ai_discussions(account_id TEXT NOT NULL,conversation_id TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(account_id,conversation_id));
+            UPDATE ai_discussions SET payload=json_set(payload,'$.status','interrupted','$.revision',json_extract(payload,'$.revision')+1) WHERE json_extract(payload,'$.status') IN ('running','summarizing');
+            PRAGMA user_version=4;
+            COMMIT;
+            """
+            guard sqlite3_exec(opened, discussionMigration, nil, nil, nil) == SQLITE_OK else { throw AIError.storage }
             // Only a newly opened store recovers orphaned requests. Reading a mounted UI never interrupts live work.
             let recovery = """
             UPDATE ai_messages SET status='interrupted',payload=json_set(payload,'$.status','interrupted','$.error','The App closed during this response. Partial text was kept; nothing was retried.','$.seq',json_extract(payload,'$.seq')+1) WHERE status='streaming';
@@ -88,8 +104,48 @@ actor AIStore {
         try savePersona(persona, account: account)
         return persona
     }
+    func personas(_ account: String) throws -> [ParlorPersona] {
+        try documents("SELECT payload FROM ai_personas WHERE account_id=? ORDER BY CASE WHEN id='sebastian' THEN 0 ELSE 1 END,rowid", [account], as: ParlorPersona.self)
+    }
+    func groups(_ account: String) throws -> [AIGroup] {
+        try documents("SELECT payload FROM ai_groups WHERE account_id=? ORDER BY rowid DESC", [account], as: AIGroup.self)
+    }
+    func saveGroup(_ group: AIGroup, account: String) throws {
+        try group.validate()
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("INSERT INTO ai_conversations(account_id,id,title,updated_at) VALUES(?,?,?,?) ON CONFLICT(account_id,id) DO UPDATE SET title=excluded.title,updated_at=excluded.updated_at", [account, group.id, group.title, aiTimestamp()])
+            try execute("INSERT INTO ai_groups(account_id,id,payload) VALUES(?,?,?) ON CONFLICT(account_id,id) DO UPDATE SET payload=excluded.payload", [account, group.id, try encoded(group)])
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+    func round(_ id: String, account: String) throws -> AIGroupRound? {
+        try documents("SELECT payload FROM ai_rounds WHERE account_id=? AND id=?", [account, id], as: AIGroupRound.self).first
+    }
+    func beginRound(_ round: AIGroupRound, user: AIMessage?, assistants: [AIMessage], account: String, saveSnapshot: Bool = false, discussion: AIGroupDiscussion? = nil, insertSnapshot: Bool = true) throws {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            if let discussion { try saveDiscussion(discussion, account: account) }
+            if insertSnapshot && (user != nil || saveSnapshot) {
+                try execute("INSERT INTO ai_rounds(account_id,id,conversation_id,payload) VALUES(?,?,?,?)", [account, round.id, round.conversationId, try encoded(round)])
+            }
+            for message in (user.map { [$0] } ?? []) + assistants {
+                try execute("INSERT INTO ai_messages(account_id,id,conversation_id,status,payload) VALUES(?,?,?,?,?)", [account, message.id, message.conversationId, message.status, try encoded(message)])
+            }
+            try execute("UPDATE ai_conversations SET updated_at=? WHERE account_id=? AND id=?", [aiTimestamp(), account, round.conversationId])
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+    func discussions(_ account: String) throws -> [AIGroupDiscussion] {
+        try documents("SELECT payload FROM ai_discussions WHERE account_id=?", [account], as: AIGroupDiscussion.self)
+    }
+    func saveDiscussion(_ value: AIGroupDiscussion, account: String) throws {
+        try execute("INSERT INTO ai_discussions(account_id,conversation_id,payload) VALUES(?,?,?) ON CONFLICT(account_id,conversation_id) DO UPDATE SET payload=excluded.payload WHERE json_extract(ai_discussions.payload,'$.id')<>json_extract(excluded.payload,'$.id') OR json_extract(ai_discussions.payload,'$.revision')<=json_extract(excluded.payload,'$.revision')", [account, value.conversationId, try encoded(value)])
+    }
     func savePersona(_ persona: ParlorPersona, account: String) throws {
         try persona.validate()
+        let existing = try personas(account)
+        guard existing.count < 50 || existing.contains(where: { $0.id == persona.id }) else { throw AIError.tooLarge }
         try execute("INSERT INTO ai_personas(account_id,id,payload) VALUES(?,?,?) ON CONFLICT(account_id,id) DO UPDATE SET payload=excluded.payload", [account, persona.id, try encoded(persona)])
     }
     func saveProvider(_ provider: AIProvider, account: String) throws {
@@ -100,6 +156,11 @@ actor AIStore {
     }
     func deleteProvider(_ id: String, account: String) throws {
         try execute("DELETE FROM ai_providers WHERE account_id=? AND id=?", [account, id])
+    }
+    func hasConversation(_ id: String, account: String) throws -> Bool {
+        let query = try statement("SELECT 1 FROM ai_conversations WHERE account_id=? AND id=?", [account, id])
+        defer { sqlite3_finalize(query) }
+        return sqlite3_step(query) == SQLITE_ROW
     }
     func conversations(_ account: String) throws -> [AIConversation] {
         // Keep the first version bounded. No history is deleted when the list reaches its display limit.
@@ -138,6 +199,9 @@ actor AIStore {
         try execute("BEGIN IMMEDIATE")
         do {
             try execute("DELETE FROM ai_messages WHERE account_id=? AND conversation_id=?", [account, id])
+            try execute("DELETE FROM ai_discussions WHERE account_id=? AND conversation_id=?", [account, id])
+            try execute("DELETE FROM ai_groups WHERE account_id=? AND id=?", [account, id])
+            try execute("DELETE FROM ai_rounds WHERE account_id=? AND conversation_id=?", [account, id])
             try execute("DELETE FROM ai_conversations WHERE account_id=? AND id=?", [account, id])
             try execute("COMMIT")
         } catch { try? execute("ROLLBACK"); throw AIError.storage }

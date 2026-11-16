@@ -127,7 +127,11 @@
 
 ## Parlor
 
-- **订阅接入独立实验**：[SIWC PoC](PARLOR_SUBSCRIPTION_POC.md) 在 Debug 启动参数或显式 `subscription_poc` 本地测试包中打开原生面板，独立 Keychain／OAuth／Responses，不注册 Provider 或 Bridge。workflow 限制手动测试分支及 `local_trackers=true`；普通 Release 不含模块，正式可用性仍须原生编译及用户真机授权／推理验证。
+- **多人格群聊（源码候选）**：[Group Chat](PARLOR_GROUP_CHAT.md) 在既有 Native `AIRuntime`、`AIStore` 与 `ai.sqlite3` v4 内实现 2–8 人格 Parallel / Discussion；每轮原子保存一致上下文／配置快照及独立占位回答，Discussion 采用同轮并行／轮间互读的有界调度，支持插话、暂停／继续／结束与指定人格总结；新增 ai_discussions 保存预算及恢复状态。单独停止／重生成与全部取消共用既有流式传输、账户门和消息事件。`ai_personas` 支持 Sebastian 及 UUID 人格，保留默认人格与旧消息。订阅与 API 共用传输调度，模型仍在本机直连；旧 Host 经可选方法检测保留单聊。尚未 macOS 编译／真机验收。
+
+- **订阅接入候选**：[Provider 整合](PARLOR_SUBSCRIPTION_PROVIDER.md) 将已验证 SIWC 协议接入 `AIRuntime`，与 API 并列管理；登录按 EO 账户隔离 Keychain，经原 Bridge 调用并复用本地聊天持久化。尚未原生编译／真机验收，不代表正式发布。
+
+- **订阅接入独立实验（历史）**：[SIWC PoC](PARLOR_SUBSCRIPTION_POC.md) 在 Debug 启动参数或显式 `subscription_poc` 本地测试包中打开原生面板，独立 Keychain／OAuth／Responses，不注册 Provider 或 Bridge。workflow 限制手动测试分支及 `local_trackers=true`；普通 Release 不含模块，正式可用性仍须原生编译及用户真机授权／推理验证。
 
 - **空间与人格**：UI 统一为 Parlor，本地模块标识 `parlor`，继续使用 `/ai` 路径兼容旧链接。默认人格 Sebastian 由独立 [ParlorPersona](../ios/EvaOrbitHost/Sources/ParlorPersona.swift) 与账户隔离的 `ai_personas` 保存；名称、提示词、交流偏好和默认模型不绑定 Runtime。新回答保存当时的人格署名，旧历史不改写。共用 [ParlorSettings](../src/components/parlor-settings.tsx) 集中八类设置，原 `/settings/ai-connection` 兼容转入；未来记忆、群聊、工具仅说明真实边界。见 [Parlor V1](PARLOR_V1.md)。
 

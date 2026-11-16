@@ -13,6 +13,7 @@ struct ParlorPersona: Codable, Equatable {
     var closeness: String
     var providerId: String?
     var modelId: String?
+    var avatarDataURL: String?
 
     static let sebastian = ParlorPersona(
         id: "sebastian", name: "Sebastian", chineseName: "塞巴斯蒂安", nickname: "赛巴斯酱",
@@ -28,12 +29,18 @@ struct ParlorPersona: Codable, Equatable {
         """, preferredAddress: "", humor: "subtle", formality: "natural", closeness: "warm")
 
     func validate() throws {
-        guard id == Self.sebastian.id, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard (id == Self.sebastian.id || UUID(uuidString: id) != nil), !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               name.count <= 80, chineseName.count <= 80, nickname.count <= 80,
               !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, systemPrompt.count <= 16000,
               preferredAddress.count <= 80, ["none", "subtle", "playful"].contains(humor),
               ["casual", "natural", "formal"].contains(formality), ["reserved", "warm", "familiar"].contains(closeness),
               (providerId == nil) == (modelId == nil) else { throw AIError.invalid }
+        if let avatarDataURL {
+            guard avatarDataURL.utf8.count <= 256 * 1024,
+                  ["data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"].contains(where: { avatarDataURL.hasPrefix($0) }),
+                  let comma = avatarDataURL.firstIndex(of: ","),
+                  Data(base64Encoded: String(avatarDataURL[avatarDataURL.index(after: comma)...])) != nil else { throw AIError.invalid }
+        }
     }
 
     var runtimePrompt: String {

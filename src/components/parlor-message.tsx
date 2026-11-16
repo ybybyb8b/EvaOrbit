@@ -1,19 +1,31 @@
 "use client";
-import {useId} from "react";
+import type {ReactNode} from "react";
 import type {EvaMessage} from "@/lib/native-eva";
+import type {ParlorAvatarPlacement} from "@/lib/parlor-appearance";
 import {MarkdownMessage} from "./markdown-message";
 import styles from "./parlor-chat.module.css";
 
-export function ParlorMessageBody({message,showTail=true,segmentReplies=false}:{message:Pick<EvaMessage,"role"|"content">;showTail?:boolean;segmentReplies?:boolean}) {
-  const tailMask=useId();
-  if(!message.content.trim())return null;
-  const tail = showTail && <svg className={styles.tail} data-bubble-tail viewBox="0 0 26 22" aria-hidden="true" focusable="false">
-    <defs><mask id={tailMask} maskUnits="userSpaceOnUse" x="-1" y="-1" width="28" height="24"><rect x="-1" y="-1" width="28" height="24" fill="white" /><rect x="6" y="-100" width="1000" height="122" rx="18" fill="black" /></mask></defs>
-    <g mask={`url(#${tailMask})`}>
-      <path className={styles.tailFill} d="M26 0C22 10 15 19 0 22C7 16 9 9 7 0Z" />
-    </g>
-  </svg>;
+export function ParlorAssistantLayout({group,hasAvatar,header,children,footer}:{group:boolean;hasAvatar:boolean;header?:ReactNode;children:ReactNode;footer:ReactNode}) {
+  return <div className={styles.assistantFrame} data-parlor-assistant-frame data-mode={group?"group":"single"} data-avatar={hasAvatar}>
+    {header&&<div className={styles.assistantInfo} data-parlor-message-header>{header}</div>}
+    <div className={styles.assistantContent} data-parlor-message-content>{children}</div>
+    <div className={styles.assistantInfo} data-parlor-message-info>{footer}</div>
+  </div>;
+}
 
+export function ParlorMessageBody({message,segmentReplies=false,avatar,avatarPlacement="last",showAvatar=true}:{message:Pick<EvaMessage,"role"|"content">;segmentReplies?:boolean;avatar?:string;avatarPlacement?:ParlorAvatarPlacement;showAvatar?:boolean}) {
+  if(!message.content.trim())return null;
   const segmented=segmentReplies&&message.role==="assistant";
-  return segmented?<MarkdownMessage content={message.content} renderBlock={(children,last)=><div className={styles.bubble} data-chat-bubble data-segment>{last&&tail}{children}</div>}/>:<div className={styles.bubble} data-chat-bubble>{tail}{message.role==="assistant"?<MarkdownMessage content={message.content}/>:<p className={styles.userText}>{message.content}</p>}</div>;
+  function bubble(children:ReactNode,last:boolean,first:boolean){
+    const show=Boolean(avatar&&showAvatar&&(avatarPlacement==="all"||avatarPlacement==="first"&&first||avatarPlacement==="last"&&last));
+    return <div className={styles.bubbleRow} data-parlor-bubble-row>
+      {show&&(
+        // eslint-disable-next-line @next/next/no-img-element -- Device-local resized persona avatar.
+        <img className={styles.bubbleAvatar} data-parlor-bubble-avatar src={avatar} width={28} height={28} alt=""/>
+      )}
+      <div className={styles.bubble} data-chat-bubble data-segment={segmented||undefined}>{children}</div>
+    </div>;
+  }
+  if(message.role==="user")return <div className={styles.bubble} data-chat-bubble><p className={styles.userText}>{message.content}</p></div>;
+  return segmented?<MarkdownMessage content={message.content} renderBlock={bubble}/>:bubble(<MarkdownMessage content={message.content}/>,true,true);
 }

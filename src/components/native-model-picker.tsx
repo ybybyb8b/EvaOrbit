@@ -28,7 +28,7 @@ export function NativeModelPicker({catalog,models,english,onApply,onClose}:{cata
         <label className={styles.toggle}><input type="checkbox" checked={freeOnly} onChange={e=>{setFreeOnly(e.target.checked);setLimit(50);}}/>{t("Free token rates","Token 免费")}</label>
       </div>
       <p className={styles.catalogSummary} aria-live="polite">{t(`${results.length} matches · ${selected.size}/50 selected`,`${results.length} 个结果 · 已选 ${selected.size}/50`)}{catalog.currency&&` · ${catalog.currency} / ${t("1M tokens · directory quote","百万 Token · 目录报价")}`}</p>
-      {catalog.partial&&<p className={styles.catalogSummary}>{t("This provider returned a partial list. Missing models can be entered manually.","服务商只返回了部分清单，缺少的模型可手动填写。")}</p>}
+      {catalog.partial&&<p className={styles.catalogSummary}>{t("Partial list","部分清单")}</p>}
       <div className={styles.catalogList}>
         {results.slice(0,limit).map(({model,family,textCapability})=><label className={styles.catalogRow} key={model.id}>
           <input type="checkbox" aria-label={t(`Select ${model.id}`,`选择 ${model.id}`)} checked={selected.has(model.id)} disabled={!selected.has(model.id)&&selected.size>=50} onChange={event=>setSelected(current=>{const next=new Set(current);if(event.target.checked)next.add(model.id);else next.delete(model.id);return next;})}/>
@@ -37,7 +37,7 @@ export function NativeModelPicker({catalog,models,english,onApply,onClose}:{cata
             <small>{!available.has(model.id)?t("Not in this list · saved pricing kept","清单未返回 · 保留已存计价"):model.inputPrice===undefined&&model.outputPrice===undefined?t("Pricing unavailable","价格未知"):`${t("In","输入")} ${money(model.inputPrice)} · ${t("Out","输出")} ${money(model.outputPrice)}`}{model.priceEstimateLimited&&` · ${t("Conditional / extra charges","条件或额外计费")}`}</small>
           </span>
         </label>)}
-        {!results.length&&<p className={styles.catalogSummary}>{t("No matches. Try another keyword or filter.","没有匹配结果，试试其他关键词或筛选条件。")}</p>}
+        {!results.length&&<p className={styles.catalogSummary}>{t("No matches","无匹配模型")}</p>}
       </div>
       {results.length>limit&&<button className="text-button" type="button" onClick={()=>setLimit(value=>value+50)}>{t("Show 50 more","再显示 50 个")}</button>}
     </form>

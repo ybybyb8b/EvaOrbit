@@ -330,3 +330,221 @@ struct AIRuntimeTests {
         #expect(requests == 1)
     }
 }
+
+@Suite("Parlor parallel groups", .serialized)
+@MainActor
+struct AIGroupRuntimeTests {
+    private func setup(_ store: AIStore, runtime: AIRuntime, secrets: MemoryAISecrets) async throws -> String {
+        var first = fixtureProvider()
+        var second = first; second.id = "30000000-0000-4000-8000-000000000002"; second.name = "Second"; second.baseURL = "https://second.example.invalid/v1"
+        try await store.saveProvider(first, account: accountA); try await store.saveProvider(second, account: accountA)
+        try secrets.write("mock-key-a", account: accountA, provider: first.id); try secrets.write("mock-key-b", account: accountA, provider: second.id)
+        var sebastian = ParlorPersona.sebastian; sebastian.providerId = first.id; sebastian.modelId = "mock-text"
+        var ada = sebastian; ada.id = "40000000-0000-4000-8000-000000000002"; ada.name = "Ada"; ada.providerId = second.id
+        try await store.savePersona(sebastian, account: accountA); try await store.savePersona(ada, account: accountA)
+        let id = UUID().uuidString
+        _ = try await runtime.handle("ai.saveGroup", account: accountA, parameters: ["conversationId": id, "title": "Test group", "personaIds": [sebastian.id, ada.id]], emit: { _ in })
+        return id
+    }
+    private func settled(_ store: AIStore, _ id: String) async throws -> [AIMessage] {
+        for _ in 0..<300 {
+            let messages = try await store.messages(id, account: accountA)
+            if !messages.isEmpty && messages.allSatisfy({ $0.status != "streaming" }) { return messages }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        Issue.record("Group did not settle within bounded wait")
+        return try await store.messages(id, account: accountA)
+    }
+    @Test func independentStreamsShareFrozenContextAndRetryDoesNotDuplicate() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var contexts: [[[String: String]]] = []; var starts = 0
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            let json = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            contexts.append(Array(try #require(json["messages"] as? [[String: String]]).dropFirst())); starts += 1
+            try await receive(.init(delta: "independent partial"))
+            try await Task.sleep(nanoseconds: 100_000_000)
+            try await receive(.init(delta: " done", usage: AIUsage(inputTokens: request.url?.host == "second.example.invalid" ? 22 : 11, outputTokens: 3, source: "provider"), done: true))
+        }
+        let id = try await setup(store, runtime: runtime, secrets: secrets), round = UUID().uuidString
+        let params: [String: Any] = ["conversationId": id, "requestId": round, "content": "Same question"]
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: params, emit: { _ in })
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: params, emit: { _ in })
+        let messages = try await settled(store, id)
+        #expect(starts == 2 && contexts.count == 2 && contexts[0] == contexts[1])
+        #expect(messages.count == 3 && messages.filter { $0.role == "user" }.count == 1)
+        #expect(messages[1].personaName == "Sebastian" && messages[2].personaName == "Ada")
+        #expect(messages[1].usage?.inputTokens == 11 && messages[2].usage?.inputTokens == 22)
+        let retry = UUID().uuidString
+        _ = try await runtime.handle("ai.groupRegenerate", account: accountA, parameters: ["conversationId": id, "messageId": messages[1].id, "requestId": retry], emit: { _ in })
+        _ = try await runtime.handle("ai.groupRegenerate", account: accountA, parameters: ["conversationId": id, "messageId": messages[1].id, "requestId": retry], emit: { _ in })
+        let retried = try await settled(store, id)
+        #expect(starts == 3 && contexts.last == contexts.first)
+        #expect(retried.count == 4 && retried.last?.supersedesId == messages[1].id)
+        let reopened = try AIStore(path: directory.appendingPathComponent("ai.sqlite3").path)
+        #expect(try await reopened.messages(id, account: accountA).map(\.id) == retried.map(\.id))
+        #expect(try await reopened.groups(accountA).first?.participants.count == 2)
+        #expect(try await reopened.groups(accountB).isEmpty)
+    }
+    @Test func oneFailureDoesNotCancelPeersAndPartialOutputIsKept() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets()
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            try await receive(.init(delta: "partial"))
+            if request.url?.host == "second.example.invalid" { throw AIError.http(503) }
+            try await Task.sleep(nanoseconds: 50_000_000)
+            try await receive(.init(delta: " completed", done: true))
+        }
+        let id = try await setup(store, runtime: runtime, secrets: secrets)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in })
+        let messages = try await settled(store, id)
+        #expect(messages[1].status == "done" && messages[2].status == "failed")
+        #expect(messages[2].content == "partial" && messages[2].requestCount == 1)
+    }
+    @Test func stopOneThenAllAndAccountInterruptionKeepDurablePartials() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var starts = 0; var events = 0
+        let runtime = AIRuntime(store: store, secrets: secrets) { _, receive in
+            starts += 1; try await receive(.init(delta: "saved partial")); try await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+        let id = try await setup(store, runtime: runtime, secrets: secrets)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in events += 1 })
+        for _ in 0..<100 { if starts == 2 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        let drafts = try await store.messages(id, account: accountA)
+        _ = try await runtime.handle("ai.groupCancel", account: accountA, parameters: ["conversationId": id, "messageId": drafts[1].id], emit: { _ in events += 1 })
+        for _ in 0..<100 { if try await store.messages(id, account: accountA)[1].status == "cancelled" { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        let oneStopped = try await store.messages(id, account: accountA)
+        #expect(oneStopped[1].status == "cancelled" && oneStopped[2].status == "streaming")
+        let before = events; runtime.interrupt()
+        _ = try await runtime.handle("ai.getState", account: accountB, parameters: [:], emit: { _ in events += 1 })
+        let messages = try await settled(store, id)
+        #expect(messages[2].status == "interrupted" && messages[2].content == "saved partial")
+        #expect(events == before)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Again"], emit: { _ in })
+        _ = try await runtime.handle("ai.groupCancel", account: accountA, parameters: ["conversationId": id], emit: { _ in })
+        let allStopped = try await settled(store, id)
+        #expect(allStopped.suffix(2).allSatisfy { $0.status == "cancelled" })
+    }
+    private func discussionSetup(_ store: AIStore, runtime: AIRuntime, secrets: MemoryAISecrets, rounds: Int = 3) async throws -> String {
+        let id = try await setup(store, runtime: runtime, secrets: secrets)
+        let group = try #require(await store.groups(accountA).first)
+        _ = try await runtime.handle("ai.saveGroup", account: accountA, parameters: ["conversationId": id, "title": "Discussion", "personaIds": group.participants.map(\.id), "mode": "discussion", "maxRounds": rounds], emit: { _ in })
+        return id
+    }
+    private func discussionSettled(_ store: AIStore, _ id: String) async throws -> [AIMessage] {
+        for _ in 0..<500 {
+            let state = try await store.discussions(accountA).first(where: { $0.conversationId == id })
+            if let state, !["running", "summarizing"].contains(state.status) { return try await settled(store, id) }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        Issue.record("Discussion exceeded its bounded wait")
+        return try await store.messages(id, account: accountA)
+    }
+    @Test func discussionFreezesEachRoundReadsPeersAndHonorsCapAndReplay() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var contexts: [[[String: String]]] = []
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            contexts.append(Array(try #require(body["messages"] as? [[String: String]]).dropFirst()))
+            let who = request.url?.host == "second.example.invalid" ? "Ada" : "Sebastian"
+            try await receive(.init(delta: who + " viewpoint"))
+            try await Task.sleep(nanoseconds: 20_000_000)
+            try await receive(.init(usage: AIUsage(inputTokens: who == "Ada" ? 22 : 11, outputTokens: 3, source: "provider"), done: true))
+        }
+        let id = try await discussionSetup(store, runtime: runtime, secrets: secrets)
+        let parameters: [String: Any] = ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"]
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: parameters, emit: { _ in })
+        let messages = try await discussionSettled(store, id)
+        #expect(contexts.count == 6 && messages.count == 7)
+        for round in 0..<3 { #expect(contexts[round * 2] == contexts[round * 2 + 1]) }
+        #expect(contexts[2].contains(where: { ($0["content"] ?? "").contains("[Ada] Ada viewpoint") }))
+        #expect(contexts[2].contains(where: { ($0["content"] ?? "").contains("[Sebastian] Sebastian viewpoint") }))
+        #expect(messages.filter { $0.discussionRound == 3 }.count == 2)
+        #expect(messages.filter { $0.personaName == "Ada" }.allSatisfy { $0.usage?.inputTokens == 22 })
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: parameters, emit: { _ in })
+        #expect(contexts.count == 6)
+        let summary: [String: Any] = ["conversationId": id, "requestId": UUID().uuidString, "personaId": "40000000-0000-4000-8000-000000000002"]
+        _ = try await runtime.handle("ai.discussionSummarize", account: accountA, parameters: summary, emit: { _ in })
+        let summarized = try await discussionSettled(store, id)
+        #expect(summarized.last?.purpose == "summary" && summarized.last?.personaName == "Ada")
+        #expect(summarized.last?.usage?.inputTokens == 22)
+        _ = try await runtime.handle("ai.discussionSummarize", account: accountA, parameters: summary, emit: { _ in })
+        #expect(contexts.count == 7)
+        let reopened = try AIStore(path: directory.appendingPathComponent("ai.sqlite3").path)
+        #expect(try await reopened.messages(id, account: accountA).map(\.id) == summarized.map(\.id))
+        #expect(try await reopened.discussions(accountB).isEmpty)
+    }
+    @Test func discussionInterjectionDrainsPartialRoundAndCannotResetBudget() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var hold = true; var contexts: [[[String: String]]] = []
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            contexts.append(Array(try #require(body["messages"] as? [[String: String]]).dropFirst()))
+            try await receive(.init(delta: "partial viewpoint"))
+            while hold { try await Task.sleep(nanoseconds: 10_000_000) }
+            try await receive(.init(done: true))
+        }
+        let id = try await discussionSetup(store, runtime: runtime, secrets: secrets, rounds: 2)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in })
+        for _ in 0..<100 { if contexts.count == 2 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        let intervene: [String: Any] = ["conversationId": id, "requestId": UUID().uuidString, "content": "Focus on the budget"]
+        _ = try await runtime.handle("ai.discussionIntervene", account: accountA, parameters: intervene, emit: { _ in })
+        hold = false
+        let messages = try await discussionSettled(store, id)
+        #expect(messages.filter { $0.role == "user" }.count == 2)
+        #expect(messages.filter { $0.status == "cancelled" }.count == 2)
+        #expect(contexts.count == 4 && contexts[2] == contexts[3])
+        #expect(contexts[2].contains(where: { $0["content"] == "Focus on the budget" }))
+        #expect(contexts[2].contains(where: { ($0["content"] ?? "").contains("incomplete") }))
+        _ = try await runtime.handle("ai.discussionIntervene", account: accountA, parameters: intervene, emit: { _ in })
+        #expect(contexts.count == 4)
+        #expect(try await store.discussions(accountA).first?.roundsStarted == 2)
+    }
+    @Test func discussionFailureSuspendsOnlyFailedPersonaAndExplicitRetryUsesOriginalContext() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var fail = true; var starts = 0
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            starts += 1; try await receive(.init(delta: "partial"))
+            if fail && request.url?.host == "second.example.invalid" { throw AIError.http(503) }
+            try await receive(.init(done: true))
+        }
+        let id = try await discussionSetup(store, runtime: runtime, secrets: secrets)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in })
+        let messages = try await discussionSettled(store, id)
+        #expect(starts == 4 && messages.filter { $0.personaName == "Ada" }.count == 1)
+        #expect(messages.filter { $0.personaName == "Sebastian" }.count == 3)
+        let failed = try #require(messages.first(where: { $0.status == "failed" }))
+        fail = false
+        _ = try await runtime.handle("ai.groupRegenerate", account: accountA, parameters: ["conversationId": id, "messageId": failed.id, "requestId": UUID().uuidString], emit: { _ in })
+        let retried = try await settled(store, id)
+        #expect(retried.last?.supersedesId == failed.id && retried.last?.roundId == failed.roundId)
+        #expect(starts == 5 && retried.last?.status == "done")
+    }
+
+    @Test func discussionIndividualStopPauseContinueAndEndNeverRestartCancelledWork() async throws {
+        let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets(); var starts = 0
+        let runtime = AIRuntime(store: store, secrets: secrets) { _, receive in
+            starts += 1; try await receive(.init(delta: "kept partial"))
+            try await Task.sleep(nanoseconds: 60_000_000_000)
+        }
+        let id = try await discussionSetup(store, runtime: runtime, secrets: secrets)
+        _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"], emit: { _ in })
+        for _ in 0..<100 { if starts == 2 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        let first = try #require(await store.messages(id, account: accountA).first(where: { $0.personaName == "Sebastian" }))
+        _ = try await runtime.handle("ai.groupCancel", account: accountA, parameters: ["conversationId": id, "messageId": first.id], emit: { _ in })
+        for _ in 0..<100 { if try await store.messages(id, account: accountA).first(where: { $0.id == first.id })?.status == "cancelled" { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        #expect(try await store.messages(id, account: accountA).last?.status == "streaming")
+        _ = try await runtime.handle("ai.discussionControl", account: accountA, parameters: ["conversationId": id, "action": "pause"], emit: { _ in })
+        let paused = try await settled(store, id)
+        #expect(paused.filter { $0.role == "assistant" }.allSatisfy { $0.status == "cancelled" && $0.content == "kept partial" })
+        #expect(try await store.discussions(accountA).first?.status == "paused")
+        _ = try await runtime.handle("ai.discussionControl", account: accountA, parameters: ["conversationId": id, "action": "continue"], emit: { _ in })
+        for _ in 0..<100 { if starts == 4 { break }; try await Task.sleep(nanoseconds: 10_000_000) }
+        _ = try await runtime.handle("ai.discussionControl", account: accountA, parameters: ["conversationId": id, "action": "end"], emit: { _ in })
+        _ = try await settled(store, id)
+        #expect(try await store.discussions(accountA).first?.status == "ended")
+        #expect(try await store.discussions(accountA).first?.roundsStarted == 2)
+        #expect(starts == 4)
+    }
+
+}

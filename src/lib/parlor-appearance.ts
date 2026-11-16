@@ -1,3 +1,9 @@
+export type ParlorBubbleStyle = "vintage" | "frosted";
+export const normalizeParlorBubbleStyle = (value: unknown): ParlorBubbleStyle => value === "frosted" ? "frosted" : "vintage";
+
+export type ParlorAvatarPlacement = "first" | "last" | "all";
+export const normalizeParlorAvatarPlacement = (value: unknown): ParlorAvatarPlacement => value === "first" || value === "all" ? value : "last";
+
 export type ParlorAppearanceImage = "assistant" | "user" | "wallpaper";
 export const parlorAppearanceImages: ParlorAppearanceImage[] = ["assistant", "user", "wallpaper"];
 

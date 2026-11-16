@@ -1,9 +1,8 @@
-#if DEBUG || PARLOR_SUBSCRIPTION_POC
 import Foundation
 import CryptoKit
 import Security
 
-// Independent, opt-in experiment. Never imported by AIRuntime or the JS bridge.
+// Shared SIWC protocol for Parlor; credentials never cross the JS bridge.
 enum SIWCFailure: LocalizedError {
     case invalidCallback, invalidIdentity, permission, credentials, cancelled, timeout, interrupted, protocolError
     case http(Int), service(String)
@@ -179,6 +178,7 @@ struct SIWCResponseEvent {
     var delta = ""
     var completed = false
     var usage: String?
+    var tokenUsage: AIUsage?
     static func decode(_ data: String) throws -> Self {
         guard let json = try? JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any] else {
             throw SIWCFailure.eventShape(.json)
@@ -195,7 +195,7 @@ struct SIWCResponseEvent {
             let counts = response["usage"] as? [String: Any]
             let input = (counts?["input_tokens"] as? NSNumber)?.intValue
             let output = (counts?["output_tokens"] as? NSNumber)?.intValue
-            return Self(completed: true, usage: "输入 \(input.map(String.init) ?? "未知") / 输出 \(output.map(String.init) ?? "未知") tokens；订阅额度计费以 ChatGPT Usage 为准")
+            return Self(completed: true, usage: "输入 \(input.map(String.init) ?? "未知") / 输出 \(output.map(String.init) ?? "未知") tokens；订阅额度计费以 ChatGPT Usage 为准", tokenUsage: AIUsage(inputTokens: input, outputTokens: output, source: "provider"))
         case "response.failed", "error":
             let response = json["response"] as? [String: Any]
             let error = (response?["error"] ?? json["error"]) as? [String: Any]
@@ -249,4 +249,3 @@ enum SIWCIdentity {
         return subject
     }
 }
-#endif

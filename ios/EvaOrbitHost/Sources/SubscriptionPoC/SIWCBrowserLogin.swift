@@ -1,4 +1,3 @@
-#if DEBUG || PARLOR_SUBSCRIPTION_POC
 import UIKit
 import AuthenticationServices
 import Network
@@ -123,4 +122,3 @@ final class SIWCBrowserLogin: NSObject, ASWebAuthenticationPresentationContextPr
         continuation.resume(with: result)
     }
 }
-#endif
