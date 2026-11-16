@@ -43,7 +43,7 @@ final class SIWCViewController: UIViewController, UIAdaptivePresentationControll
         let stop = UIButton(type: .system); stop.setTitle("停止", for: .normal)
         stop.addAction(UIAction { [weak self] _ in self?.stop() }, for: .touchUpInside); stack.addArrangedSubview(stop)
         add("退出并撤销会话", to: stack) { [weak self] in
-            self?.run {
+            self?.run(stage: "退出") {
                 guard let self else { return }
                 defer { self.models = []; self.selectedModel = nil; self.modelButton.menu = nil; self.modelButton.setTitle("先读取模型，再选择", for: .normal) }
                 try await self.runtime.signOut()
@@ -71,7 +71,7 @@ final class SIWCViewController: UIViewController, UIAdaptivePresentationControll
         button.addAction(UIAction { _ in action() }, for: .touchUpInside)
         stack.addArrangedSubview(button); actions.append(button)
     }
-    private func run(_ work: @escaping @MainActor () async throws -> Void) {
+    private func run(stage: String, _ work: @escaping @MainActor () async throws -> Void) {
         guard operation == nil else { return }
         actions.forEach { $0.isEnabled = false }
         operation = Task { [weak self] in
@@ -82,13 +82,13 @@ final class SIWCViewController: UIViewController, UIAdaptivePresentationControll
                     self?.status.text = "已取消；部分输出保留，不自动重试"
                 } else {
                     // Never display arbitrary error descriptions, response bodies, auth URLs or credentials.
-                    self?.status.text = (error as? SIWCFailure)?.errorDescription ?? "网络或协议错误；未自动重试"
+                    self?.status.text = stage + "失败：" + ((error as? SIWCFailure)?.errorDescription ?? "网络或协议错误；未自动重试")
                 }
             }
         }
     }
     private func signIn() {
-        run { [weak self] in
+        run(stage: "授权") { [weak self] in
             guard let self else { return }
             let saved = try self.runtime.connection()
             self.status.text = "等待官方登录与订阅权限授权（最多 3 分钟）"
@@ -104,7 +104,7 @@ final class SIWCViewController: UIViewController, UIAdaptivePresentationControll
         }
     }
     private func loadModels() {
-        run { [weak self] in
+        run(stage: "读取模型") { [weak self] in
             guard let self else { return }
             self.status.text = "读取账户模型目录"
             self.models = try await self.runtime.models()
@@ -120,7 +120,7 @@ final class SIWCViewController: UIViewController, UIAdaptivePresentationControll
     }
     private func send() {
         guard let model = selectedModel, models.contains(where: { $0.id == model }) else { status.text = "请先读取并选择当前账户模型"; return }
-        run { [weak self] in
+        run(stage: "模型请求") { [weak self] in
             guard let self else { return }
             self.response.text = ""; self.status.text = "请求已发送，等待流式输出"
             let start = Date(); var firstDelta: Date?; var deltas = 0

@@ -49,6 +49,26 @@ struct SIWCSubscriptionPoCTests {
         #expect(throws: (any Error).self) { try SIWCResponseEvent.decode("[DONE]") }
     }
 
+    @Test @MainActor func safeInferenceDiagnostics() throws {
+        #expect(SIWCMediaType.classify("text/event-stream; charset=utf-8") == .sse)
+        #expect(SIWCMediaType.classify("application/problem+json") == .json)
+        #expect(SIWCMediaType.classify(nil) == .missing)
+        let secret = "mock-secret-never-show"
+        let body = Data("{\"error\":{\"code\":\"subscription_sharing_usage_unavailable\",\"message\":\"\(secret)\"}}".utf8)
+        let error = SIWCRuntime.inferenceFailure(status: 200, media: .json, body: body)
+        #expect(error.errorDescription?.contains("inference.headers") == true)
+        #expect(error.errorDescription?.contains("HTTP 200") == true)
+        #expect(error.errorDescription?.contains("subscription_sharing_usage_unavailable") == true)
+        #expect(error.errorDescription?.contains(secret) == false)
+        let html = SIWCRuntime.inferenceFailure(status: 403, media: .html, body: Data(secret.utf8))
+        #expect(html.errorDescription?.contains("HTML") == true)
+        #expect(html.errorDescription?.contains(secret) == false)
+        do { _ = try SIWCResponseEvent.decode(String(decoding: body, as: UTF8.self)); Issue.record("Untyped error was accepted") }
+        catch SIWCFailure.service(let code) { #expect(code == "subscription_sharing_usage_unavailable") }
+        do { _ = try SIWCResponseEvent.decode("{\"type\":\"response.output_text.delta\"}"); Issue.record("Missing delta was accepted") }
+        catch SIWCFailure.eventShape(let issue) { #expect(issue == .delta) }
+    }
+
     @Test func keychainLifecycleAndProfileIsolation() throws {
         let a = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
         let b = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
@@ -158,6 +178,22 @@ struct SIWCSubscriptionPoCTests {
         do { try await cancelled.value; Issue.record("Cancelled request completed") }
         catch { #expect(error is CancellationError || (error as? URLError)?.code == .cancelled) }
         #expect(transport.count <= count + 1)
+    }
+
+    @Test @MainActor func mockNonSSESuccessMustNotCountAsInference() async throws {
+        let keychain = SIWCKeychain(service: "com.evaorbit.test.siwc." + UUID().uuidString)
+        defer { try? keychain.remove() }
+        let transport = SIWCTestTransport(); defer { transport.remove() }
+        try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
+            access: "mock-access", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
+        transport.install { _ in (200, "application/json", "{\"error\":{\"code\":\"subscription_sharing_usage_unavailable\",\"message\":\"mock-secret-never-show\"}}") }
+        let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
+        var delivered = 0
+        do { try await runtime.infer(model: "mock-only") { _ in delivered += 1 }; Issue.record("Non-SSE counted as success") }
+        catch SIWCFailure.inferenceHTTP(let status, let media, let code) {
+            #expect(status == 200 && media == .json && code == "subscription_sharing_usage_unavailable")
+        }
+        #expect(delivered == 0 && transport.count == 1)
     }
 }
 

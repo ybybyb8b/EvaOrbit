@@ -82,15 +82,25 @@ final class SIWCRuntime {
         let request = try SIWCProtocol.request(model: model, token: token)
         let session = self.session; defer { session.invalidateAndCancel() }
         let (bytes, response) = try await session.bytes(for: request)
-        try check(response)
-        guard (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")?.lowercased().contains("text/event-stream") == true else { throw SIWCFailure.protocolError }
+        guard let http = response as? HTTPURLResponse else { throw SIWCFailure.protocolError }
+        let media = SIWCMediaType.classify(http.value(forHTTPHeaderField: "Content-Type"))
+        guard (200..<300).contains(http.statusCode), media == .sse else {
+            // Read a bounded error prefix to extract only an allowlisted code. Never show raw JSON/HTML.
+            var prefix = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                if prefix.count >= 16 * 1024 { break }
+                prefix.append(byte)
+            }
+            throw Self.inferenceFailure(status: http.statusCode, media: media, body: prefix)
+        }
         var parser = AISSEParser(); var textBytes = 0
         func consume(_ frames: [(String, String)]) throws -> Bool {
             for (name, value) in frames {
                 if name == "error", value.isEmpty { throw SIWCFailure.service("unclassified_error") }
                 let event = try SIWCResponseEvent.decode(value)
                 textBytes += event.delta.utf8.count
-                guard textBytes <= 512 * 1024 else { throw SIWCFailure.protocolError }
+                guard textBytes <= 512 * 1024 else { throw SIWCFailure.eventShape(.limit) }
                 receive(event)
                 if event.completed { return true }
             }
@@ -98,10 +108,21 @@ final class SIWCRuntime {
         }
         for try await byte in bytes {
             try Task.checkCancellation()
-            if try consume(parser.append(byte)) { return }
+            let frames: [(String, String)]
+            do { frames = try parser.append(byte) }
+            catch AIError.tooLarge { throw SIWCFailure.eventShape(.limit) }
+            catch { throw SIWCFailure.eventShape(.utf8) }
+            if try consume(frames) { return }
         }
         if try consume(parser.finish()) { return }
         throw SIWCFailure.interrupted
+    }
+    static func inferenceFailure(status: Int, media: SIWCMediaType, body: Data) -> SIWCFailure {
+        let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
+        let error = json?["error"] as? [String: Any]
+        let rawCode = error?["code"] ?? json?["error"] as? String
+        let code = rawCode.map { SIWCFailure.safeServiceCode($0) }
+        return .inferenceHTTP(status, media, code)
     }
     func signOut() async throws {
         let saved = try connection()

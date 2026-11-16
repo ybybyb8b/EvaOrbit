@@ -7,6 +7,8 @@ import Security
 enum SIWCFailure: LocalizedError {
     case invalidCallback, invalidIdentity, permission, credentials, cancelled, timeout, interrupted, protocolError
     case http(Int), service(String)
+    case inferenceHTTP(Int, SIWCMediaType, String?)
+    case eventShape(SIWCEventIssue)
     var errorDescription: String? {
         switch self {
         case .invalidCallback: return "OAuth 回调校验失败。"
@@ -19,15 +21,40 @@ enum SIWCFailure: LocalizedError {
         case .protocolError: return "服务响应格式不符合 PoC 协议。"
         case .http(let status): return "OpenAI HTTP \(status)；未自动重试。"
         case .service(let code): return "OpenAI：\(code)；未自动重试。"
+        case .inferenceHTTP(let status, let media, let code):
+            return "[SIWC:inference.headers] HTTP \(status) · \(media.rawValue)" +
+                (code.map { " · \($0)" } ?? "") + "；未收到有效 SSE，未自动重试。"
+        case .eventShape(let issue): return "[SIWC:inference.\(issue.rawValue)] 流式事件校验失败；部分输出保留，未自动重试。"
         }
     }
     // Only known codes can enter status text. Provider descriptions can contain secrets.
     static func serviceError(_ raw: Any?) -> SIWCFailure {
+        .service(safeServiceCode(raw))
+    }
+    static func safeServiceCode(_ raw: Any?) -> String {
         let allowed: Set<String> = ["access_denied", "invalid_grant", "invalid_scope", "invalid_client",
             "subscription_sharing_usage_limit_exceeded", "subscription_sharing_usage_unavailable",
             "rate_limit_exceeded", "model_not_found", "insufficient_quota"]
-        return .service((raw as? String).flatMap { allowed.contains($0) ? $0 : nil } ?? "unclassified_error")
+        return (raw as? String).flatMap { allowed.contains($0) ? $0 : nil } ?? "unclassified_error"
     }
+}
+
+// Only fixed enums / numeric HTTP status enter diagnostics, never arbitrary headers or response bodies.
+enum SIWCMediaType: String {
+    case sse = "SSE", json = "JSON", html = "HTML", text = "文本", missing = "Content-Type 缺失", other = "其他格式"
+    static func classify(_ header: String?) -> Self {
+        guard let header else { return .missing }
+        let mime = header.split(separator: ";", maxSplits: 1).first.map(String.init)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if mime == "text/event-stream" { return .sse }
+        if mime == "application/json" || mime.hasSuffix("+json") { return .json }
+        if mime == "text/html" { return .html }
+        if mime == "text/plain" { return .text }
+        return .other
+    }
+}
+enum SIWCEventIssue: String {
+    case json = "event_json", type = "event_type", delta = "text_delta",
+         utf8 = "sse_framing", limit = "size_limit"
 }
 
 enum SIWCProtocol {
@@ -153,11 +180,15 @@ struct SIWCResponseEvent {
     var completed = false
     var usage: String?
     static func decode(_ data: String) throws -> Self {
-        guard let json = try JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any],
-              let type = json["type"] as? String else { throw SIWCFailure.protocolError }
+        guard let json = try? JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any] else {
+            throw SIWCFailure.eventShape(.json)
+        }
+        // An error envelope may omit an event type. Do not mistake it for a malformed success event.
+        if let error = json["error"] as? [String: Any] { throw SIWCFailure.serviceError(error["code"]) }
+        guard let type = json["type"] as? String else { throw SIWCFailure.eventShape(.type) }
         switch type {
         case "response.output_text.delta":
-            guard let delta = json["delta"] as? String else { throw SIWCFailure.protocolError }
+            guard let delta = json["delta"] as? String else { throw SIWCFailure.eventShape(.delta) }
             return Self(delta: delta)
         case "response.completed":
             guard let response = json["response"] as? [String: Any], response["status"] as? String == "completed" else { throw SIWCFailure.interrupted }
