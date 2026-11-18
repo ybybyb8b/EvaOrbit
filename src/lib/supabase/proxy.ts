@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
+import { MCP_RESOURCE } from "../mcp-identity";
 
 function unauthorized(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
@@ -32,7 +33,9 @@ export async function updateSession(request: NextRequest) {
   const claims = data?.claims;
   const email = typeof claims?.email === "string" ? claims.email.toLocaleLowerCase() : "";
   const expectedEmail = allowedEmail();
-  const authorized = Boolean(claims?.sub) && Boolean(expectedEmail) && isAllowedAccountEmail(email);
+  const authorized = Boolean(claims?.sub) && !claims?.client_id
+    && ![claims?.aud].flat().includes(MCP_RESOURCE)
+    && Boolean(expectedEmail) && isAllowedAccountEmail(email);
   const isLogin = request.nextUrl.pathname === "/login";
 
   if (!authorized && !isLogin) return unauthorized(request);

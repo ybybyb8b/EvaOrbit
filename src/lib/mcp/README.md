@@ -1,9 +1,11 @@
 # MCP boundary
 
-The remote MCP endpoint is authenticated and runs all operations inside the
-request's per-user repository context. Only the 8 generic tools are registered;
-dedicated Food/Drink and Tracker tools are removed. Generic tools route through the server-side Resource Registry;
-they never accept table names or expose arbitrary database CRUD.
+The remote MCP endpoint checks credentials and connection permissions before
+opening the user's Repository over the guarded Data API channel. The eight
+generic tool contracts share the resource registry. Discovery and execution
+apply the current connection policy. The registry semantics below describe
+business capabilities, including operations reserved for the user interface.
+See [Agent access and cutover](../../../docs/AGENT_ACCESS.md).
 
 Each registered resource declares capabilities and a public schema, validates
 create/update payloads strictly, documents its update mode, and delegates

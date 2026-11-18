@@ -58,7 +58,8 @@ test("review follows meal types, detects record edits, queues safe reanalysis an
  try{
  const backup=path.join(directory,"review-backup.json");const program=String.raw`
  import fs from 'node:fs';import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow}from'./src/lib/data-backup.ts';import assert from 'node:assert/strict';import{randomUUID}from'node:crypto';import{DatabaseSync}from'node:sqlite';
- import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';import{createFoodLog,updateFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
+ import{getRepository}from'./src/lib/repositories/index.ts';
+      import{withFixtureRepository as withMcpRequestRepository}from'./scripts/mcp-business-fixture.mjs';import{createFoodLog,updateFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
  import{getInsightDayReview,getInsightReportDetail,generateRuleInsightReport,publishInsightReport}from'./src/lib/services/insight-reports.ts';import{getInsightContext}from'./src/lib/services/insight-context.ts';
  import{startInsightRun,completeInsightRun,requestInsightAnalysis,getInsightRunStatus,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';import{readableInsightFindings}from'./src/lib/insight-review.ts';
  import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';const resourceRegistry=createResourceRegistry({insightReport:{get:getInsightReportDetail}});

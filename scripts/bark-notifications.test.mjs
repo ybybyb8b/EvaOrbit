@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 test("missing Bark storage returns an actionable initialization error", () => {
   const result = spawnSync(process.execPath, ["--experimental-loader", "./scripts/typescript-test-loader.mjs", "--input-type=module", "--eval", `
     import assert from "node:assert/strict";
-    import {createMcpSupabaseRepository} from "./src/lib/repositories/supabase.ts";
+    import {makeSupabaseFixture as createMcpSupabaseRepository} from "./scripts/mcp-business-fixture.mjs";
     import {HttpError} from "./src/lib/errors.ts";
     const repository=await createMcpSupabaseRepository("test","owner");
     for(const code of ["PGRST205","PGRST204","42P01","42703"]){

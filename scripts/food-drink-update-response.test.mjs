@@ -7,7 +7,7 @@ import path from "node:path";
 test("Supabase food and drink creates and updates hydrate committed associations rather than mutation snapshots",()=>{
  const program=String.raw`
   import assert from "node:assert/strict";
-  import {createMcpSupabaseRepository} from "./src/lib/repositories/supabase.ts";
+  import {makeSupabaseFixture as createMcpSupabaseRepository} from "./scripts/mcp-business-fixture.mjs";
   const base={id:1,occurred_at:"2026-10-04T12:00:00+08:00",occurred_has_explicit_time:false,food_place_id:null,created_at:"2026-10-04",updated_at:"2026-10-04",confidence:"low",estimated_kcal:null,kcal_min:null,kcal_max:null};
   const rows={food_logs:{...base,title:"晚餐",meal_type:"dinner",scene:"restaurant",food_dish_ids:[],food_dish_id:null},drink_logs:{...base,name:"茶",brand:"",drink_type:"tea",drink_menu_id:null,sugar_level:"无糖",temperature:"hot",volume_ml:null,caffeine_mg:null,food_library_id:null,notes:""}};
   const requests=[];

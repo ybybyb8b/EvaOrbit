@@ -5,7 +5,7 @@ import { completionDateOnly, ValidationError } from "../validation";
 import { dateInEvaOrbit, zonedDateTimeToUtc } from "../time";
 import { appleOwnsInitialNotification, effectiveDueAt, nextTrackerNotification, reminderActionPatch, selectDueReminders, snoozeUntil, trackerReminderNextDueAt, trackerReminderShouldNotify } from "../reminder-engine";
 import { canCorrectReminderCompletion, reminderSourceDefinition, reminderSourceLabel } from "../reminder-source-registry";
-import { getRepository } from "../repositories";
+import { getRepository, isMcpRequest } from "../repositories";
 import type { NewReminder } from "../repositories/types";
 import type { DueReminder, Reminder, ScheduledNotification } from "../types";
 import { completeCatRoutine, skipCatRoutineOccurrence, type RoutineCompletionExpectation } from "./cat-routine";
@@ -29,6 +29,14 @@ async function validateTarget(input: NewReminder) {
   if (input.targetType === "cat" && (!input.targetId || !await repository.getPet(input.targetId))) throw new ConflictError("Cat not found.");
   if (input.targetType === "cat_food" && (!input.targetId || !await repository.getCatFoodItem(input.targetId))) throw new ConflictError("Cat food not found.");
   if (input.targetType === "tracker" && (!input.targetId || !await repository.getTracker(input.targetId))) throw new ConflictError("Tracker not found.");
+}
+
+function assertReminderActionAccess(reminder: Reminder, creatingCareRecord = false) {
+  if (!isMcpRequest()) return;
+  if (reminder.sourceType !== null || reminder.targetType === "subscription"
+    || (creatingCareRecord && ["cat","cat_household"].includes(reminder.targetType))) {
+    throw new ConflictError("Use the owning resource or EvaOrbit to act on this reminder.");
+  }
 }
 
 export async function listReminders(input: { targetType?: string; targetId?: number | null; activeOnly?: boolean } = {}) { return (await getRepository()).listReminders(input); }
@@ -127,6 +135,7 @@ export async function completeReminder(id: number, actedAt = new Date(), expecte
   if (!expected || typeof expected!=="object" || Array.isArray(expected)) throw new ValidationError("完成请求格式不正确");
   if (!Number.isFinite(actedAt.getTime())) throw new ValidationError("完成操作时间不正确");
   const repository = await getRepository(), reminder = await repository.getReminder(id);
+  if (reminder) assertReminderActionAccess(reminder, true);
   if (reminder?.scheduleType === "one_time" && reminder.status === "completed" && (reminder.targetType === "cat" || reminder.targetType === "cat_household")) return reminder;
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
   const source = reminderSourceDefinition(reminder.sourceType);
@@ -188,6 +197,7 @@ export async function correctReminderCompletion(id: number, occurrenceId: number
 export async function skipReminder(id: number, actedAt = new Date()) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
+  assertReminderActionAccess(reminder);
   const source = reminderSourceDefinition(reminder.sourceType);
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) return skipCatRoutineOccurrence(reminder.sourceId, actedAt);
   if (source.projectionOwner === "tracker") return advanceTrackerReminder(reminder, "skipped", actedAt);
@@ -201,6 +211,7 @@ export async function skipReminder(id: number, actedAt = new Date()) {
 export async function snoozeReminder(id: number, choice: "later_today" | "tomorrow" | "custom", custom?: string, now = new Date()) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (!reminder?.isActive) throw new ConflictError("Reminder not found or inactive.");
+  assertReminderActionAccess(reminder);
   const source = reminderSourceDefinition(reminder.sourceType), snoozedUntil = snoozeUntil(choice, now, custom, reminder.timezone);
   const deadline = await periodMedicationSnoozeDeadline(reminder, now);
   if (source.domainRule === "period_medication" && (!deadline || snoozedUntil >= deadline)) throw new ConflictError("Snooze time must remain inside the current reminder window.");

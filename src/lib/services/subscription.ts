@@ -50,9 +50,11 @@ export async function catchUpAutomaticSubscriptionPayments(now=new Date(),subscr
   }
 }
 
-export async function listSubscriptions(input:SubscriptionListInput={}){await catchUpAutomaticSubscriptionPayments();return(await getRepository()).listSubscriptions(input);}
+export async function listSubscriptionsReadOnly(input:SubscriptionListInput={}){return(await getRepository()).listSubscriptions(input);}
+export async function listSubscriptions(input:SubscriptionListInput={}){await catchUpAutomaticSubscriptionPayments();return listSubscriptionsReadOnly(input);}
 export async function getSubscription(id:number){await catchUpAutomaticSubscriptionPayments(new Date(),id);return(await getRepository()).getSubscription(id);}
-export async function getSubscriptionDetail(id:number){await catchUpAutomaticSubscriptionPayments(new Date(),id);const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription)return null;const[payments,priceChanges]=await Promise.all([repository.listSubscriptionPayments(id),repository.listSubscriptionPriceChanges(id)]);return{...subscription,payments,priceChanges};}
+export async function getSubscriptionDetailReadOnly(id:number){const repository=await getRepository(),subscription=await repository.getSubscription(id);if(!subscription)return null;const[payments,priceChanges]=await Promise.all([repository.listSubscriptionPayments(id),repository.listSubscriptionPriceChanges(id)]);return{...subscription,payments,priceChanges};}
+export async function getSubscriptionDetail(id:number){await catchUpAutomaticSubscriptionPayments(new Date(),id);return getSubscriptionDetailReadOnly(id);}
 export async function createSubscription(input:NewSubscription){const item=await(await getRepository()).createSubscription(input);await catchUpAutomaticSubscriptionPayments(new Date(),item.id);await reconcileSubscriptionReminder(item.id);return await (await getRepository()).getSubscription(item.id)??item;}
 export async function updateSubscription(id:number,input:SubscriptionPatch,effectiveOn=dateInEvaOrbit()){
   const repository=await getRepository(),before=await repository.getSubscription(id);

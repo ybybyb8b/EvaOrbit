@@ -11,11 +11,11 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
   const loader = pathToFileURL(path.join(process.cwd(), "scripts/typescript-test-loader.mjs")).href;
   const program = String.raw`
     import assert from "node:assert/strict";
-    import {mcpHandler} from "./src/lib/mcp/server.ts";
+    import {mcpHandler} from "./scripts/mcp-business-fixture.mjs";
     import {DatabaseSync} from "node:sqlite";
     import {deleteCatRoutine} from "./src/lib/services/cat-routine.ts";
     import {promoteMemoryFactCandidate,rejectMemoryFactCandidate,proposeMemoryFactCandidate} from "./src/lib/services/memory-graph.ts";
-    import {withMcpRequestRepository} from "./src/lib/repositories/index.ts";
+    import {withFixtureRepository as withMcpRequestRepository} from "./scripts/mcp-business-fixture.mjs";
     let requestId=0;
     async function rpc(method,params={}) {
       return withMcpRequestRepository({userId:"local",accessToken:"isolated-test"},async()=>{

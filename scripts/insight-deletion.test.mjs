@@ -40,7 +40,8 @@ test('SQLite/Web service deletion hides all versions, keeps cross-report referen
  try{
   run(String.raw`
    import fs from 'node:fs';import assert from 'node:assert/strict';import{randomUUID}from'node:crypto';import{DatabaseSync}from'node:sqlite';
-   import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';import{createFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
+   import{getRepository}from'./src/lib/repositories/index.ts';
+      import{withFixtureRepository as withMcpRequestRepository}from'./scripts/mcp-business-fixture.mjs';import{createFoodLog}from'./src/lib/services/food.ts';import{parseNewFoodLog}from'./src/lib/validation.ts';
    import{getInsightContext}from'./src/lib/services/insight-context.ts';import{startInsightRun,completeInsightRun,requestInsightAnalysis,getInsightRunStatus,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';
    import{generateRuleInsightReport,deleteInsightReport,getInsightReportDetail,getInsightDayReview,listInsightReports,publishInsightReport}from'./src/lib/services/insight-reports.ts';
    import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';const resourceRegistry=createResourceRegistry({insightReport:{get:getInsightReportDetail}});import{BACKUP_TABLES,BACKUP_VERSION,BACKUP_SCHEMA_VERSION,sanitizeExportRow}from'./src/lib/data-backup.ts';

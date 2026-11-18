@@ -10,6 +10,7 @@ test('local AI settings reject a switched authenticated account before the API r
   '@supabase/ssr':{createServerClient:()=>({auth:{getClaims:async()=>({data:{claims}})}})},
   'next/server':{NextResponse:{next:()=>new Response(null),json:(...args)=>Response.json(...args),redirect:url=>Response.redirect(url)}},
   '../config':{usesSupabase:()=>true,isAllowedAccountEmail:email=>email==='canary@example.invalid',allowedEmail:()=> 'canary@example.invalid',supabaseConfig:()=>({url:'https://canary.invalid',publishableKey:'fake'})},
+  '../mcp-identity':{MCP_RESOURCE:'https://eva-orbit.vercel.app/api/mcp'},
  };
  const exports={};new Function('require','exports',source)(name=>{assert(name in imports,name);return imports[name];},exports);
  const request=(account,path='/api/ai/providers')=>({nextUrl:new URL('https://canary.invalid'+path),url:'https://canary.invalid'+path,headers:new Headers(account?{'X-EvaOrbit-Account':account}:{}),cookies:{getAll:()=>[],set(){}}});
@@ -23,5 +24,9 @@ test('local AI settings reject a switched authenticated account before the API r
   assert.equal((await exports.updateSession(request('account-b',path))).status,409,'Cloud preferences reject a switched account before writing');
   assert.equal((await exports.updateSession(request(undefined,path))).status,200,'Existing Web preference forms remain compatible');
  }
+ claims={sub:'account-a',email:'canary@example.invalid',client_id:'external-client'};
+ assert.equal((await exports.updateSession(request('account-a'))).status,401);
+ claims={sub:'account-a',email:'canary@example.invalid',aud:['https://eva-orbit.vercel.app/api/mcp']};
+ assert.equal((await exports.updateSession(request('account-a'))).status,401);
  claims={};assert.equal((await exports.updateSession(request('account-a'))).status,401);
 });

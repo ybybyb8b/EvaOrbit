@@ -127,6 +127,8 @@
 
 ## Parlor
 
+- **EvaOrbit 单聊操作（候选）**：发送前逐条开启「使用 EvaOrbit」。Native 用当前模型选取一个有界操作，查询同账户的待办、日期范围内的 EvaOrbit 日程，或当前人格的本地记忆。查询结果仅选取回答所需字段并作为数据传给当前模型。新增任务与 Inbox 速记需在原生确认中核对准确内容，成功由 App 出回执。仍经既有账户桥接；无新远端工具令牌或业务离线队列。详见 [设置与原生权限](SETTINGS_LOCAL_SHARED.md)。
+
 - **本地人格记忆基础（源码候选）**：[Phase A](PARLOR_MEMORY_PHASE_A.md) 在独立 AIStore v6 增加账户／人格隔离的版本化记忆及会话归属；旧历史仅在证据完整唯一时回填，群聊保持公共结构。Memory 设置支持手动 CRUD、来源和版本；Privacy 提供当前账户独立备份／校验恢复，复用 SQLite online backup 与原生分享。删除清理版本正文和相关内部副本。八个可选 Native 方法兼容旧 Host；Phase A 单阶段没有模型记忆读取；下方 Phase B 已增加本地读取，Echo、自动提取与压缩尚未启用。Swift 编译与真机待验收。
 - **本地上下文管理（Phase A/B 合并源码候选）**：[Phase B](PARLOR_MEMORY_PHASE_B.md) 将 AIStore 升级至 v7；按实际模型窗口组装摘要、待办、完整近期轮次及相关人格记忆，公共快照与私人引用独立。Parallel 冻结同轮公共输入，Discussion 继承已完成轮次；分页读取替代固定历史长度。Context 设置手动管理摘要版本与水位，备份 v2 支持引用及 ordinal 重映射；无新增推理、Echo 或远端存储。旧 Host 通过可选能力兼容；Swift 与真机验证待后续安排。
 - **自动记忆批处理（Phase A/B/C 合并源码候选）**：[Phase C](PARLOR_MEMORY_PHASE_C.md) 在 AIStore v8 增加人格级模型/触发配置、任务/尝试及审核提案，默认关闭。复用 Native 传输与实际 dispatch/Usage，单人格每批合并提取和摘要；公共群聊输入不含已有私有记忆，本地分别去重与审核。新聊天抢占、未知请求不自动重发，有效缓存可零推理本地重试。独立备份 v3 保留任务和来源，恢复关闭自动处理；尚未 Swift 编译/真机验收，未接 Echo。
@@ -262,9 +264,9 @@ Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好�
 ## MCP
 
 - **职责与入口**：[route.ts](../src/app/api/mcp/route.ts)、[server.ts](../src/lib/mcp/server.ts)、[resource-registry.ts](../src/lib/mcp/resource-registry.ts)、[服务适配](../src/lib/mcp/resource-registry.server.ts)。
-- **数据与接口**：无独立业务数据表；OAuth 认证后进入当前用户 Repository 上下文，通用工具分派到前述资源与服务。
+- **数据与接口**：[AI 访问管理](../src/app/settings/ai-access/) 管理账户内每个 OAuth 连接的权限、暂停、撤销和审计。OAuth 身份经请求级授权后，通过受控的 Data API 通道进入当前用户 Repository。Projects、Tracker、Inbox 的对象范围在读取时生效，外部 OAuth 凭据直连 Data API、RPC 与受保护 Storage 被拒绝。
 - **依赖与决定**：只注册八个通用工具，资源逐个显式注册，禁止任意表 CRUD。能力、字段、actions 和更新模式由 registry 决定；新增业务表不等于自动开放 MCP。检索不授权持久写入；个人记忆须有用户明确请求。
-- **详文**：[远程 MCP 配置与契约](../MCP.md)、[服务边界与兼容限制](../src/lib/mcp/README.md)。
+- **详文**：[AI 访问与发布顺序](AGENT_ACCESS.md)、[远程 MCP 配置与契约](../MCP.md)、[服务边界与兼容限制](../src/lib/mcp/README.md)。
 
 ## Native
 

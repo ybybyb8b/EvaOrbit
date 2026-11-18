@@ -59,8 +59,8 @@ test("food portions persist through CRUD, migrations, library updates, summaries
       db.removeFoodLibraryItem(a.id);
       const legacyEdit=await food.updateFoodLog(legacy.id,parseFoodLogPatch({foodLibraryItems:[portions[0]],foodKcalMode:"manual",estimatedKcal:70}));assert.equal(legacyEdit.estimatedKcal,70);
       await food.deleteFoodLog(saved.id);
-      const {mcpHandler}=await import("./src/lib/mcp/server.ts");
-      const {withMcpRequestRepository}=await import("./src/lib/repositories/index.ts");
+      const {mcpHandler}=await import("./scripts/mcp-business-fixture.mjs");
+      const {withFixtureRepository:withMcpRequestRepository}=await import("./scripts/mcp-business-fixture.mjs");
       const c=db.upsertFoodLibraryItem(parseFoodLibraryItem({name:"MCP 份量",referenceType:"per_serving",servingKcal:180}));
       const mcp=await withMcpRequestRepository({userId:"local",accessToken:"isolated"},async()=>{
         const response=await mcpHandler.fetch(new Request("http://localhost/api/mcp",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json, text/event-stream","MCP-Protocol-Version":"2025-03-26"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"eo_create",arguments:{resource:"food_log",data:{title:"MCP 食品",food_kcal_mode:"auto",food_library_items:[{food_library_id:c.id,quantity:0.5,unit:"serving"}]}}}})}));

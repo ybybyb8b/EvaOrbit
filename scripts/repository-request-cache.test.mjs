@@ -20,7 +20,7 @@ test('server renders share repository identity and reads only within the current
       if(name==='node:async_hooks')return {AsyncLocalStorage};
       if(name==='react')return React;
       if(name==='../config')return {usesSupabase:()=>true};
-      if(name==='./supabase')return {createSupabaseRepository,createMcpSupabaseRepository:async(token,userId)=>({owner:userId})};
+      if(name==='./supabase')return {createSupabaseRepository,createMcpSupabaseRepository:(client,userId,scope)=>({owner:userId,client,scope})};
       throw Error(name);
     };
     const exports={};
@@ -43,8 +43,9 @@ test('server renders share repository identity and reads only within the current
       assert.equal((await next.getCalendarInterpretation()).user,'bob');assert.equal(reads,2);
       assert.equal((await a.getTimelineAssociation()).user,'alice');
       assert.equal((await next.getTimelineAssociation()).user,'bob');
-      await exports.withMcpRequestRepository({accessToken:'test-token',userId:'mcp-user'},async()=>{
-        assert.equal((await exports.getRepository()).owner,'mcp-user');
+      const client={trusted:true},scope={projectIds:[1]};
+      await exports.withMcpRequestRepository({accessToken:'test-token',userId:'mcp-user',clientId:'agent'},client,scope,async()=>{
+        assert.deepEqual(await exports.getRepository(),{owner:'mcp-user',client,scope});
       });
       assert.equal((await exports.getRepository()).owner,'bob');
     } finally {internals.A=previous;}

@@ -5,7 +5,7 @@ import test from "node:test";
 test("Supabase Source PATCH preserves omission and sends explicit JSON nulls", () => {
   const program = String.raw`
     import assert from "node:assert/strict";
-    import { createMcpSupabaseRepository } from "./src/lib/repositories/supabase.ts";
+    import { makeSupabaseFixture as createMcpSupabaseRepository } from "./scripts/mcp-business-fixture.mjs";
     const patches = [];
     globalThis.fetch = async (input, options) => {
       const url = new URL(input);

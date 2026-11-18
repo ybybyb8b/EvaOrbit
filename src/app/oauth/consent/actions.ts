@@ -12,6 +12,16 @@ async function decide(formData: FormData, action: "approve" | "deny") {
   const id = authorizationId(formData);
   if (!id) redirect("/oauth/consent?error=invalid_request");
   const supabase = await createSupabaseServerClient();
+  if (action === "approve") {
+    const { data: details, error } = await supabase.auth.oauth.getAuthorizationDetails(id);
+    if (error || !details) redirect(`/oauth/consent?authorization_id=${encodeURIComponent(id)}&error=consent_failed`);
+    if (!("authorization_id" in details)) redirect(details.redirect_url);
+    const { error: connectionError } = await supabase.from("agent_connections").upsert({
+      client_id: details.client.id,
+      name: details.client.name?.trim().slice(0, 100) || "AI Agent",
+    }, { onConflict: "user_id,client_id", ignoreDuplicates: true });
+    if (connectionError) redirect(`/oauth/consent?authorization_id=${encodeURIComponent(id)}&error=consent_failed`);
+  }
   const result = action === "approve"
     ? await supabase.auth.oauth.approveAuthorization(id, { skipBrowserRedirect: true })
     : await supabase.auth.oauth.denyAuthorization(id, { skipBrowserRedirect: true });

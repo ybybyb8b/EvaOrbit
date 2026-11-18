@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-export const MCP_RESOURCE = "https://eva-orbit.vercel.app/api/mcp";
+import { MCP_RESOURCE } from "./mcp-identity.ts";
+export { MCP_RESOURCE };
 export const MCP_RESOURCE_METADATA_URL = "https://eva-orbit.vercel.app/.well-known/oauth-protected-resource";
 export const MCP_REQUIRED_SCOPE = "openid";
 
@@ -27,7 +28,7 @@ type CachedJwks = {
 export type McpOAuthIdentity = {
   accessToken: string;
   userId: string;
-  clientId?: string;
+  clientId: string;
 };
 
 export class McpOAuthError extends Error {
@@ -154,5 +155,7 @@ export async function verifySupabaseMcpAccessToken(input: {
   if (!scopeIncludesRequiredScope(claims.scope)) throw new McpOAuthError("required_scope_missing");
   if (!USER_ID_PATTERN.test(userId)) throw new McpOAuthError("subject_invalid");
 
-  return { accessToken: input.token, userId, ...(typeof claims.client_id === "string" ? { clientId: claims.client_id.slice(0,190) } : {}) };
+  const clientId = typeof claims.client_id === "string" ? claims.client_id : "";
+  if (!USER_ID_PATTERN.test(clientId)) throw new McpOAuthError("client_id_invalid");
+  return { accessToken: input.token, userId, clientId: clientId.toLowerCase() };
 }

@@ -3,6 +3,8 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { cache } from "react";
 import { usesSupabase } from "../config";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AgentDataScope } from "./supabase";
 import type { McpOAuthIdentity } from "../mcp-oauth";
 import type { EvaOrbitRepository } from "./types";
 
@@ -51,11 +53,6 @@ export async function getRepository(): Promise<EvaOrbitRepository> {
   }
   const { sqliteRepository } = await import("./sqlite");
   return sqliteRepository;
-}
-
-export async function withMcpRepository<T>(action: () => Promise<T>): Promise<T> {
-  if (!repositoryContext.getStore()) throw new Error("MCP repository is not initialized for this request");
-  return action();
 }
 
 // Audited Home aggregation reads. No command method can escape through a nested service.
@@ -134,11 +131,16 @@ export async function withRelationsReadOnlyRepository<T>(action:()=>Promise<T>):
   }}),action);
 }
 
-export async function withMcpRequestRepository<T>(identity: McpOAuthIdentity, action: () => Promise<T>): Promise<T> {
-  const repository = usesSupabase()
-    ? await import("./supabase").then(({ createMcpSupabaseRepository }) => createMcpSupabaseRepository(identity.accessToken, identity.userId))
-    : await import("./sqlite").then(({ sqliteRepository }) => sqliteRepository);
-  return mcpClientContext.run(identity.clientId ? "mcp:"+identity.clientId : "mcp", () => repositoryContext.run(repository, action));
+export async function withMcpRequestRepository<T>(
+  identity: McpOAuthIdentity, client: SupabaseClient, scope: AgentDataScope, action: () => Promise<T>,
+): Promise<T> {
+  const { createMcpSupabaseRepository } = await import("./supabase");
+  const repository = createMcpSupabaseRepository(client, identity.userId, scope);
+  return withMcpRepositoryContext(identity.clientId, repository, action);
+}
+
+export function withMcpRepositoryContext<T>(clientId: string | undefined, repository: EvaOrbitRepository, action: () => T) {
+  return mcpClientContext.run(clientId ? "mcp:" + clientId : "mcp", () => repositoryContext.run(repository, action));
 }
 
 // Media caching has no command or upload capability. Refuse capped history.

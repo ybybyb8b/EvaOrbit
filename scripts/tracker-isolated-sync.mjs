@@ -20,11 +20,11 @@ function loopback(raw) {
 if (process.argv.includes('--mcp')) {
   loopback(process.env.SUPABASE_URL);
   const input = JSON.parse(await new Promise(resolve => { let data=''; process.stdin.setEncoding('utf8'); process.stdin.on('data',chunk=>data+=chunk); process.stdin.on('end',()=>resolve(data)); }));
-  const { withMcpRequestRepository } = await import('../src/lib/repositories/index.ts');
-  const { mcpHandler } = await import('../src/lib/mcp/server.ts');
+  const { withFixtureRepository: withMcpRequestRepository } = await import('./mcp-business-fixture.mjs');
+  const { mcpHandler } = await import('./mcp-business-fixture.mjs');
   try {
-    // Authenticate using a real local Auth JWT. Exercise the production MCP
-    // handler/repository/RLS; hosted OAuth consent and audience issuance are separate.
+    // Use a real local Auth JWT for the domain contract and Repository/RLS.
+    // The external Agent boundary is exercised separately.
     const result = await withMcpRequestRepository({userId:input.userId,accessToken:input.token}, async () => {
       const response = await mcpHandler.fetch(new Request('http://127.0.0.1/api/mcp', {method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream','MCP-Protocol-Version':'2025-03-26'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:input.name,arguments:input.arguments}})}));
       assert.equal(response.status,200);

@@ -25,7 +25,7 @@ import { createResourceRegistry } from "./resource-registry";
 import { getMemoryContext } from "../services/memory-context";
 import { getPlaceLibraryItems,createFoodDish,createFoodPlace,getFoodDish,getFoodPlace,listFoodDishes,listFoodPlaces,removeFoodDish,removeFoodPlace,updateFoodDish,updateFoodPlace } from "../services/food";
 import { createMemoryEntity,createMemorySource,deleteMemorySource,getMemoryEntityDetail,getMemoryFactDetail,getMemorySource,invalidateMemoryFact,pageMemory,mergeMemoryEntities,restoreMemoryFact,setMemoryEntityArchived,updateMemoryEntity,updateMemoryFact,updateMemorySource } from "../services/memory-graph";
-import { createSubscription, getSubscriptionDetail, listSubscriptions, updateSubscriptionPaymentDate, recordSubscriptionPurchase, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
+import { createSubscription, getSubscriptionDetailReadOnly, listSubscriptionsReadOnly, updateSubscriptionPaymentDate, recordSubscriptionPurchase, recordSubscriptionPayment, setSubscriptionStatus, updateSubscription } from "../services/subscription";
 import { createTask, deleteTask, getTask, listTasks, updateTask } from "../services/evaorbit";
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
@@ -61,7 +61,7 @@ export const resourceRegistry = createResourceRegistry({
   catRoutine: { search: listCatRoutines, get: getCatRoutine, create: createCatRoutine, update: updateCatRoutine, complete: completeCatRoutine, skip: skipCatRoutineOccurrence, archive: archiveCatRoutine, delete: deleteCatRoutine },
   reminder: { search: listReminders, create: createReminder, update: updateReminder, delete: deleteReminder, complete: completeReminder, skip: skipReminder, snooze: snoozeReminder },
   softwareLibrary:{search:listSoftwareLibrary,get:getSoftwareLibraryEntry,create:createSoftwareLibraryEntry,update:updateSoftwareLibraryEntry},
-  subscription: { updatePaymentDate:updateSubscriptionPaymentDate,search: listSubscriptions, get: getSubscriptionDetail, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment, recordPurchase: recordSubscriptionPurchase },
+  subscription: { updatePaymentDate:updateSubscriptionPaymentDate,search: listSubscriptionsReadOnly, get: getSubscriptionDetailReadOnly, create: createSubscription, update: updateSubscription, setStatus: setSubscriptionStatus, recordPayment: recordSubscriptionPayment, recordPurchase: recordSubscriptionPurchase },
   project: { search: listProjects, get: getProject, create: createProject, update: updateProject },
   projectItem: { search: listProjectItems, get: getProjectItem, create: createProjectItem, update: updateProjectItem },
   relationPerson:{search:listRelationPeople,get:getRelationPersonDetail,create:createRelationPerson,update:updateRelationPerson},

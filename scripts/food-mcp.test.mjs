@@ -11,8 +11,8 @@ test("MCP Food tools support location fields, search and multiple-dish CRUD end 
   const loader = pathToFileURL(path.join(process.cwd(), "scripts/typescript-test-loader.mjs")).href;
   const program = String.raw`
     import assert from "node:assert/strict";
-    import {mcpHandler} from "./src/lib/mcp/server.ts";
-    import {withMcpRequestRepository} from "./src/lib/repositories/index.ts";
+    import {mcpHandler} from "./scripts/mcp-business-fixture.mjs";
+    import {withFixtureRepository as withMcpRequestRepository} from "./scripts/mcp-business-fixture.mjs";
     let requestId=0;
     async function rpc(method,params={}) {
       return withMcpRequestRepository({userId:"local",accessToken:"isolated-test"},async()=>{

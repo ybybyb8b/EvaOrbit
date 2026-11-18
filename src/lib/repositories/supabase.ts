@@ -8,11 +8,12 @@ import { trackerFromRow, trackerFieldFromRow, trackerEntryFromRow } from "../tra
 import { mergePlaceAddress } from "../place-menu";
 import { parseMemorySourceDraft, parseMemorySourcePatch } from "../memory-graph-validation";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { encryptAiApiKey, resolveAiApiKey } from "../ai-secret";
 import { maskApiKey } from "../ai-provider";
 import { normalizeHomeModuleOrder, type HomeModuleId } from "../home-modules";
-import { isAllowedAccountEmail, allowedEmail, supabaseConfig } from "../config";
+import { isAllowedAccountEmail, allowedEmail } from "../config";
+import { canChangeProjectStatus } from "../mcp/agent-policy";
 import { ConflictError, HttpError } from "../errors";
 import { defaultCalendarInterpretation, parseCalendarInterpretation } from "../calendar-interpretation";
 import { defaultTimelineAssociation, parseTimelineAssociation } from "../timeline-association";
@@ -247,7 +248,13 @@ async function oneSession(client: SupabaseClient, row: Row) {
   return sessionFromRow(row, latest?.content ? String(latest.content) : "", count ?? 0);
 }
 
-function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrbitRepository {
+export type AgentDataScope = {
+  projectIds?: number[];
+  trackerIds?: number[];
+  inboxClientId?: string;
+  requestId?: string;
+};
+function buildSupabaseRepository(client: SupabaseClient, userId: string, agent?: AgentDataScope): EvaOrbitRepository {
   const catList = async <T>(table:string, mapper:(row:Row)=>T, petId:number|null|undefined, timeColumn="occurred_at") => { let request=client.from(table).select("*");if(petId===null)request=request.is("pet_id",null);else if(typeof petId==="number")request=request.eq("pet_id",petId);const{data,error}=await request.order(timeColumn,{ascending:false}).order("id",{ascending:false});fail(error,`读取 ${table}`);return(data as Row[]).map(mapper); };
   const catUpdate = async <T>(table:string,id:number,input:Record<string,unknown>,map:Record<string,string>,mapper:(row:Row)=>T) => {const patch=mappedPatch(input,map);if(!Object.keys(patch).length){const{data,error}=await client.from(table).select("*").eq("id",id).maybeSingle();fail(error,`读取 ${table}`);return data?mapper(data):null;}const{data,error}=await client.from(table).update(patch).eq("id",id).select().maybeSingle();fail(error,`更新 ${table}`);return data?mapper(data):null;};
   const runtimeSettings = async (modelConfigId: number | null = null) => {
@@ -699,12 +706,27 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
       fail(sessionError, "更新会话"); return messageFromRow(data);
     },
     async listInbox(status = "inbox") {
-      let request = client.from("inbox_items").select("*"); if (status !== "all") request = request.eq("status", status);
+      let request = client.from("inbox_items").select("*");
+      if (agent?.inboxClientId) request = request.eq("agent_client_id", agent.inboxClientId);
+      if (status !== "all") request = request.eq("status", status);
       const { data, error } = await request.order("created_at", { ascending: false }).order("id", { ascending: false }); fail(error,"读取 Inbox"); return (data as Row[]).map(inboxFromRow);
     },
-    async getInboxItem(id) { const {data,error}=await client.from("inbox_items").select("*").eq("id",id).maybeSingle();fail(error,"读取 Inbox");return data?inboxFromRow(data):null; },
-    async createInboxItem(input) { const {data,error}=await client.from("inbox_items").insert({user_id:userId,content:input.content,source:input.source}).select().single();fail(error,"写入 Inbox");return inboxFromRow(data); },
-    async updateInboxItem(id,input) { const patch=mappedPatch(input,{content:"content",status:"status",processedAt:"processed_at",convertedType:"converted_type",convertedId:"converted_id"});if(!Object.keys(patch).length)return repository.getInboxItem(id);const{data,error}=await client.from("inbox_items").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Inbox");return data?inboxFromRow(data):null; },
+    async getInboxItem(id) {
+      let query = client.from("inbox_items").select("*").eq("id",id);
+      if (agent?.inboxClientId) query = query.eq("agent_client_id",agent.inboxClientId);
+      const {data,error}=await query.maybeSingle();fail(error,"读取 Inbox");return data?inboxFromRow(data):null; },
+    async createInboxItem(input) {
+      if (agent) {
+        const {data,error}=await client.rpc("evaorbit_agent_capture", { p_content:input.content,p_request_id:agent.requestId ?? null });
+        if (error?.code === "23505") throw new ConflictError("This request_id was already used with different Inbox content.");
+        fail(error,"写入 Inbox");
+        if (!data?.id) throw new ConflictError("The Inbox record for this request was removed.");
+        return inboxFromRow(data);
+      }
+      const {data,error}=await client.from("inbox_items").insert({user_id:userId,content:input.content,source:input.source}).select().single();fail(error,"写入 Inbox");return inboxFromRow(data); },
+    async updateInboxItem(id,input) { const patch=mappedPatch(input,{content:"content",status:"status",processedAt:"processed_at",convertedType:"converted_type",convertedId:"converted_id"});if(!Object.keys(patch).length)return repository.getInboxItem(id);let query=client.from("inbox_items").update(patch).eq("id",id);
+      if(agent?.inboxClientId)query=query.eq("agent_client_id",agent.inboxClientId);
+      const{data,error}=await query.select().maybeSingle();fail(error,"更新 Inbox");return data?inboxFromRow(data):null; },
     async deleteInboxItem(id){const{data,error}=await client.from("inbox_items").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Inbox");return Boolean(data);},
     async listFoodLogs(input={}) { let request=client.from("food_logs").select("*,food_places(name,branch,city,location,address),food_dishes(name)");if(input.query){const pattern=postgrestQuoted(`%${input.query.replace(/[\\%_]/g,"\\$&")}%`);request=request.or(`search_text.ilike.${pattern}`);}if(input.mealType)request=request.eq("meal_type",input.mealType);if(input.from)request=request.gte("occurred_at",input.from);if(input.to)request=request.lt("occurred_at",input.to);if(input.foodPlaceId)request=request.contains("food_place_ids",[input.foodPlaceId]);if(input.foodDishId)request=request.contains("food_dish_ids",[input.foodDishId]);const limit=Math.min(Math.max(input.limit??500,1),500);const{data,error}=await request.order("occurred_at",{ascending:false}).order("id",{ascending:false}).limit(limit);fail(error,"读取饮食记录");return attachFoodDishes((data as Row[]).map(foodFromRow));},
     async getFoodLog(id){const{data,error}=await client.from("food_logs").select("*,food_places(name,branch,city,location,address),food_dishes(name)").eq("id",id).maybeSingle();fail(error,"读取饮食记录");return data?(await attachFoodDishes([foodFromRow(data)]))[0]:null;},
@@ -790,14 +812,21 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async createDailyJournalEntry(input){const{data,error}=await client.from("daily_journal_entries").insert({user_id:userId,date:input.date,content:input.content,mood_score:input.moodScore,energy_level:input.energyLevel,has_full_diary:input.hasFullDiary,emotion:input.emotion}).select().single();fail(error,"创建今日一记");return dailyJournalEntryFromRow(data);},
     async updateDailyJournalEntry(id,input:DailyJournalEntryPatch){const patch=mappedPatch(input,{date:"date",content:"content",moodScore:"mood_score",energyLevel:"energy_level",hasFullDiary:"has_full_diary",emotion:"emotion"});if(!Object.keys(patch).length)return repository.getDailyJournalEntry(id);const{data,error}=await client.from("daily_journal_entries").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新今日一记");return data?dailyJournalEntryFromRow(data):null;},
     async deleteDailyJournalEntry(id){const{data,error}=await client.from("daily_journal_entries").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除今日一记");return Boolean(data);},
-    async listProjects(input={}){let request=client.from("projects").select("*,project_items(status)");if(input.query)request=request.or(`name.ilike.${postgrestQuoted(`%${input.query}%`)},description.ilike.${postgrestQuoted(`%${input.query}%`)}`);if(input.status)request=request.eq("status",input.status);const{data,error}=await request.order("updated_at",{ascending:false}).order("id",{ascending:false}).limit(Math.min(Math.max(input.limit??100,1),200));fail(error,"读取 Projects");return(data as Row[]).map((row)=>{const items:unknown[]=Array.isArray(row.project_items)?row.project_items:[];return projectFromRow({...row,doing_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="doing").length,idea_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="idea").length,to_solve_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="to_solve").length});});},
-    async getProject(id){const{data,error}=await client.from("projects").select("*,project_items(status)").eq("id",id).maybeSingle();fail(error,"读取 Project");if(!data)return null;const items:unknown[]=Array.isArray(data.project_items)?data.project_items:[];return projectFromRow({...data,doing_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="doing").length,idea_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="idea").length,to_solve_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="to_solve").length});},
+    async listProjects(input={}){let request=client.from("projects").select("*,project_items(status)");if(agent?.projectIds)request=request.in("id",agent.projectIds);if(input.query)request=request.or(`name.ilike.${postgrestQuoted(`%${input.query}%`)},description.ilike.${postgrestQuoted(`%${input.query}%`)}`);if(input.status)request=request.eq("status",input.status);const{data,error}=await request.order("updated_at",{ascending:false}).order("id",{ascending:false}).limit(Math.min(Math.max(input.limit??100,1),200));fail(error,"读取 Projects");return(data as Row[]).map((row)=>{const items:unknown[]=Array.isArray(row.project_items)?row.project_items:[];return projectFromRow({...row,doing_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="doing").length,idea_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="idea").length,to_solve_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="to_solve").length});});},
+    async getProject(id){if(agent?.projectIds&&!agent.projectIds.includes(id))return null;const{data,error}=await client.from("projects").select("*,project_items(status)").eq("id",id).maybeSingle();fail(error,"读取 Project");if(!data)return null;const items:unknown[]=Array.isArray(data.project_items)?data.project_items:[];return projectFromRow({...data,doing_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="doing").length,idea_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="idea").length,to_solve_count:items.filter((item:unknown)=>item&&typeof item==="object"&&(item as Row).status==="to_solve").length});},
     async createProject(input){const{data,error}=await client.from("projects").insert({user_id:userId,name:input.name,description:input.description,status:input.status}).select().single();fail(error,"创建 Project");return projectFromRow(data);},
     async updateProject(id,input:ProjectPatch){const patch=mappedPatch(input,{name:"name",description:"description",status:"status"});const{data,error}=await client.from("projects").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Project");return data?projectFromRow(data):null;},
-    async listProjectItems(input={}){let request=client.from("project_items").select("*,projects!inner(name)");if(input.projectId)request=request.eq("project_id",input.projectId);if(input.project)request=request.eq("projects.name",input.project);if(input.status)request=request.eq("status",input.status);if(input.type)request=request.eq("type",input.type);if(input.module)request=request.eq("module",input.module);if(input.query){const pattern=postgrestQuoted(`%${input.query}%`);request=request.or(`title.ilike.${pattern},description.ilike.${pattern},resolution.ilike.${pattern}`);}const{data,error}=await request.order("updated_at",{ascending:false}).order("id",{ascending:false}).limit(Math.min(Math.max(input.limit??100,1),200));fail(error,"读取 Project Items");return(data as Row[]).map((row)=>projectItemFromRow({...row,project_name:(row.projects as Row|undefined)?.name}));},
-    async getProjectItem(id){const{data,error}=await client.from("project_items").select("*,projects(name)").eq("id",id).maybeSingle();fail(error,"读取 Project Item");return data?projectItemFromRow({...data,project_name:(data.projects as Row|undefined)?.name}):null;},
+    async listProjectItems(input={}){let request=client.from("project_items").select("*,projects!inner(name)");if(agent?.projectIds)request=request.in("project_id",agent.projectIds);if(input.projectId)request=request.eq("project_id",input.projectId);if(input.project)request=request.eq("projects.name",input.project);if(input.status)request=request.eq("status",input.status);if(input.type)request=request.eq("type",input.type);if(input.module)request=request.eq("module",input.module);if(input.query){const pattern=postgrestQuoted(`%${input.query}%`);request=request.or(`title.ilike.${pattern},description.ilike.${pattern},resolution.ilike.${pattern}`);}const{data,error}=await request.order("updated_at",{ascending:false}).order("id",{ascending:false}).limit(Math.min(Math.max(input.limit??100,1),200));fail(error,"读取 Project Items");return(data as Row[]).map((row)=>projectItemFromRow({...row,project_name:(row.projects as Row|undefined)?.name}));},
+    async getProjectItem(id){
+      let request=client.from("project_items").select("*,projects(name)").eq("id",id);
+      if(agent?.projectIds)request=request.in("project_id",agent.projectIds);
+      const{data,error}=await request.maybeSingle();fail(error,"读取 Project Item");return data?projectItemFromRow({...data,project_name:(data.projects as Row|undefined)?.name}):null;},
     async createProjectItem(input){const now=new Date().toISOString();const life=input.status==="doing"?{started_at:now}:input.status==="done"?{completed_at:now}:input.status==="verified"?{completed_at:now,verified_at:now}:{};const{data,error}=await client.from("project_items").insert({user_id:userId,project_id:input.projectId,title:input.title,description:input.description,type:input.type,status:input.status,module:input.module,priority:input.priority,next_step:input.nextStep,resolution:input.resolution,...life}).select().single();fail(error,"创建 Project Item");await client.from("projects").update({updated_at:now}).eq("id",input.projectId);return projectItemFromRow(data);},
-    async updateProjectItem(id,input:ProjectItemPatch){const existing=await repository.getProjectItem(id);if(!existing)return null;const now=new Date().toISOString();const life=input.status==="doing"&&!existing.startedAt?{started_at:now}:input.status==="done"&&!existing.completedAt?{completed_at:now}:input.status==="verified"?{...(existing.completedAt?{}:{completed_at:now}),...(existing.verifiedAt?{}:{verified_at:now})}:{};const patch={...mappedPatch(input,{projectId:"project_id",title:"title",description:"description",type:"type",status:"status",module:"module",priority:"priority",nextStep:"next_step",resolution:"resolution"}),...life};const{data,error}=await client.from("project_items").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Project Item");await client.from("projects").update({updated_at:now}).in("id",[existing.projectId,input.projectId??existing.projectId]);return data?projectItemFromRow(data):null;},
+    async updateProjectItem(id,input:ProjectItemPatch){const existing=await repository.getProjectItem(id);if(!existing)return null;
+      if(agent&&!canChangeProjectStatus(existing.status,input.status))throw new ConflictError("This project status change requires the owner.");
+      const now=new Date().toISOString();const life=input.status==="doing"&&!existing.startedAt?{started_at:now}:input.status==="done"&&!existing.completedAt?{completed_at:now}:input.status==="verified"?{...(existing.completedAt?{}:{completed_at:now}),...(existing.verifiedAt?{}:{verified_at:now})}:{};const patch={...mappedPatch(input,{projectId:"project_id",title:"title",description:"description",type:"type",status:"status",module:"module",priority:"priority",nextStep:"next_step",resolution:"resolution"}),...life};let request=client.from("project_items").update(patch).eq("id",id);
+      if(agent)request=request.eq("project_id",existing.projectId).eq("status",existing.status);
+      const{data,error}=await request.select().maybeSingle();fail(error,"更新 Project Item");if(!data)return null;await client.from("projects").update({updated_at:now}).in("id",[existing.projectId,input.projectId??existing.projectId]);return data?projectItemFromRow(data):null;},
     async listSubscriptions(input={}){let request=client.from("subscriptions").select("*,subscription_payments(*),subscription_price_changes(*)");if(input.query)request=request.ilike("name",`%${input.query}%`);if(input.status)request=request.eq("status",input.status);const{data,error}=await request.order("next_renewal_on").order("id").limit(Math.min(Math.max(input.limit??200,1),500));fail(error,"读取订阅");return(data as Row[]).map(subscriptionFromRow);},
     async getSubscription(id){const{data,error}=await client.from("subscriptions").select("*,subscription_payments(*),subscription_price_changes(*)").eq("id",id).maybeSingle();fail(error,"读取订阅");return data?subscriptionFromRow(data):null;},
     async createSubscription(input){const{data,error}=await client.from("subscriptions").insert({user_id:userId,mode:input.mode??"recurring",expires_on:input.expiresOn??null,name:input.name,current_amount_minor:input.currentAmountMinor,currency:input.currency,billing_interval_value:input.billingIntervalValue,billing_interval_unit:input.billingIntervalUnit,started_on:input.startedOn,next_renewal_on:input.nextRenewalOn,status:input.status??"active",auto_renew:input.autoRenew,reminder_enabled:input.reminderEnabled,reminder_days_before:input.reminderDaysBefore,reminder_time:input.reminderTime,notes:input.notes}).select().single();fail(error,"创建订阅");return subscriptionFromRow(data);},
@@ -849,8 +878,11 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string): EvaOrb
     async createDrinkLimit(input){const{data,error}=await client.from("drink_limits").insert({user_id:userId,name:input.name,target_type:input.targetType,period:input.period,limit_value:input.limitValue,enabled:input.enabled}).select().single();fail(error,"创建饮品限制");return limitFromRow(data);},
     async updateDrinkLimit(id,input){const patch=mappedPatch(input,{name:"name",targetType:"target_type",period:"period",limitValue:"limit_value",enabled:"enabled"});const{data,error}=await client.from("drink_limits").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新饮品限制");return data?limitFromRow(data):null;},
     async deleteDrinkLimit(id){const{data,error}=await client.from("drink_limits").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除饮品限制");return Boolean(data);},
-    async listTrackers(){const{data,error}=await client.from("trackers").select("*").order("group_name").order("name");fail(error,"读取 Trackers");return(data as Row[]).map(trackerFromRow);},
-    async getTracker(id){const{data,error}=await client.from("trackers").select("*").eq("id",id).maybeSingle();fail(error,"读取 Tracker");return data?trackerFromRow(data):null;},
+    async listTrackers(){
+      let request=client.from("trackers").select("*");
+      if(agent?.trackerIds)request=request.in("id",agent.trackerIds);
+      const{data,error}=await request.order("group_name").order("name");fail(error,"读取 Trackers");return(data as Row[]).map(trackerFromRow);},
+    async getTracker(id){if(agent?.trackerIds&&!agent.trackerIds.includes(id))return null;const{data,error}=await client.from("trackers").select("*").eq("id",id).maybeSingle();fail(error,"读取 Tracker");return data?trackerFromRow(data):null;},
     async createTracker(input){const{data,error}=await client.from("trackers").insert({user_id:userId,name:input.name,icon:input.icon,icon_type:input.iconType,icon_value:input.iconValue,group_name:input.groupName,time_type:"point",quick_capture_enabled:input.quickCaptureEnabled,stats_config:input.statsConfig}).select().single();fail(error,"创建 Tracker");return trackerFromRow(data);},
     async updateTracker(id,input){const patch=mappedPatch(input,{name:"name",icon:"icon",iconType:"icon_type",iconValue:"icon_value",groupName:"group_name",quickCaptureEnabled:"quick_capture_enabled",statsConfig:"stats_config",archivedAt:"archived_at"});if(!Object.keys(patch).length)return repository.getTracker(id);const{data,error}=await client.from("trackers").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Tracker");return data?trackerFromRow(data):null;},
     async deleteTracker(id){const{data,error}=await client.from("trackers").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Tracker");return Boolean(data);},
@@ -990,11 +1022,6 @@ export async function createSupabaseRepository(): Promise<EvaOrbitRepository> {
   return buildSupabaseRepository(client, await identity(client));
 }
 
-export async function createMcpSupabaseRepository(accessToken: string, userId: string): Promise<EvaOrbitRepository> {
-  const { url, publishableKey } = supabaseConfig();
-  const client = createClient(url, publishableKey, {
-    accessToken: async () => accessToken,
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-  return buildSupabaseRepository(client, userId);
+export function createMcpSupabaseRepository(client: SupabaseClient, userId: string, scope: AgentDataScope) {
+  return buildSupabaseRepository(client, userId, scope);
 }

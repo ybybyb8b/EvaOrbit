@@ -34,22 +34,20 @@ export default async function OAuthConsentPage({ searchParams }: { searchParams:
   }
   if (!("authorization_id" in data)) redirect(data.redirect_url);
 
-  const scopes = data.scope.split(/\s+/).filter(Boolean);
   return <main className="login-page"><section className="login-card">
     <span className="brand-mark login-mark"><span /></span>
     <span className="eyebrow">CONNECT EVAORBIT</span>
-    <h1>Allow {data.client.name || "ChatGPT"}?</h1>
-    <p>This lets the app use EvaOrbit’s MCP tools as your signed-in account.</p>
-    {scopes.length > 0 && <p><small>Requested access: {scopes.join(", ")}</small></p>}
+    <h1>连接 {data.client.name || "AI 助手"}？</h1>
+    <p>连接后，在 EvaOrbit 的「AI 访问管理」中选择它能查看和处理的内容。新连接默认没有业务权限。</p>
     {params.error && <ErrorNotice>The authorization could not be completed. Please try again.</ErrorNotice>}
     <div className="form-actions">
       <form action={approveAuthorization}>
         <input type="hidden" name="authorization_id" value={data.authorization_id} />
-        <button className="button primary" type="submit">Allow</button>
+        <button className="button primary" type="submit">连接</button>
       </form>
       <form action={denyAuthorization}>
         <input type="hidden" name="authorization_id" value={data.authorization_id} />
-        <button className="button secondary" type="submit">Deny</button>
+        <button className="button secondary" type="submit">拒绝</button>
       </form>
     </div>
   </section></main>;

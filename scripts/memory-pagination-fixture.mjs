@@ -15,8 +15,8 @@ const tableCounts = { memo: 205, entity: 205, fact: 205, source: 410, candidate:
 
 let requestId = 0;
 async function callMcp(userId, name, args = {}) {
-  const { mcpHandler } = await import("../src/lib/mcp/server.ts");
-  const { withMcpRequestRepository } = await import("../src/lib/repositories/index.ts");
+  const { mcpHandler } = await import("./mcp-business-fixture.mjs");
+  const { withFixtureRepository: withMcpRequestRepository } = await import("./mcp-business-fixture.mjs");
   return withMcpRequestRepository({ userId, accessToken: "fixture-" + userId }, async () => {
     const response = await mcpHandler.fetch(new Request("http://localhost/api/mcp", {
       method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-03-26" },
@@ -317,7 +317,7 @@ if (isSqlite) {
         [p_resource, p_filters, p_order, p_after, p_limit]);
       return Response.json(rows.map(row => row.row));
     };
-    const { createMcpSupabaseRepository } = await import("../src/lib/repositories/supabase.ts");
+    const { makeSupabaseFixture: createMcpSupabaseRepository } = await import("./mcp-business-fixture.mjs");
     const repo = await createMcpSupabaseRepository("offline", owner);
     await contract(repo);
     await pg.exec("reset role");

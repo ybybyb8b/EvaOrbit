@@ -74,7 +74,8 @@ test("real SQLite + MCP Agent cycle binds evidence, replays writes, tracks delay
   try{
     const code=String.raw`
       import assert from 'node:assert/strict';import fs from 'node:fs';import{randomUUID}from'node:crypto';import{DatabaseSync}from'node:sqlite';
-      import{getRepository,withMcpRequestRepository}from'./src/lib/repositories/index.ts';
+      import{getRepository}from'./src/lib/repositories/index.ts';
+      import{withFixtureRepository as withMcpRequestRepository}from'./scripts/mcp-business-fixture.mjs';
       import{createResourceRegistry}from'./src/lib/mcp/resource-registry.ts';import{getInsightReportDetail}from'./src/lib/services/insight-reports.ts';
       import{getInsightContext}from'./src/lib/services/insight-context.ts';
       import{getInsightRunStatus,startInsightRun,completeInsightRun,failInsightRun,listInsightRunStatus}from'./src/lib/services/insight-runs.ts';

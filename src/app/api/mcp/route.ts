@@ -1,7 +1,7 @@
 import { authenticateMcpRequest, McpAuthConfigurationError, mcpUnauthorized } from "@/lib/mcp/auth";
 import { mcpHandler } from "@/lib/mcp/server";
 import { McpOAuthError } from "@/lib/mcp-oauth";
-import { withMcpRequestRepository } from "@/lib/repositories";
+import { withAgentRequest } from "@/lib/mcp/agent-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const identity = await authenticateMcpRequest(request);
     console.info("[mcp-oauth-diagnostic]", { stage: "token_validated" });
-    return await withMcpRequestRepository(identity, () => mcpHandler.fetch(request));
+    return await withAgentRequest(identity, () => mcpHandler.fetch(request));
   } catch (error) {
     if (error instanceof McpAuthConfigurationError) {
       return new Response(JSON.stringify({ error: "MCP server is not configured." }), {

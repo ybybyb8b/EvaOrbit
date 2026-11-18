@@ -74,7 +74,8 @@ test("actual SQLite and service reads reject writes, preserve subscriptions and 
     run(String.raw`
       import assert from 'node:assert/strict';
       import {DatabaseSync} from 'node:sqlite';
-      import {getRepository,withInsightsReadOnlyRepository,withMcpRequestRepository} from './src/lib/repositories/index.ts';
+      import {getRepository,withInsightsReadOnlyRepository} from './src/lib/repositories/index.ts';
+      import {withFixtureRepository as withMcpRequestRepository} from './scripts/mcp-business-fixture.mjs';
       import {getInsightContext} from './src/lib/services/insight-context.ts';
       import {resourceRegistry} from './src/lib/mcp/resource-registry.server.ts';
       import {createSubscription} from './src/lib/db.ts';
