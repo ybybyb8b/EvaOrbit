@@ -267,7 +267,8 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         }
         let configuration = Self.businessConfiguration(echo: echo)
         if let protocolClasses { configuration.protocolClasses = protocolClasses }
-        let connection = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
+        let reader = BusinessResponseReader()
+        let connection = URLSession(configuration: configuration, delegate: reader, delegateQueue: nil)
         let requestID = UUID()
         businessSessions[requestID] = connection
         defer {
@@ -276,11 +277,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         }
         let data: Data, http: HTTPURLResponse
         do {
-            (data, http) = try await withTaskCancellationHandler {
-                try await Self.readBusinessResponse(outgoing, using: connection)
-            } onCancel: {
-                connection.invalidateAndCancel()
-            }
+            (data, http) = try await reader.load(outgoing, using: connection)
         }
         catch {
             guard expectedGeneration == generation else { throw TrackerLocalError.account }
@@ -306,28 +303,6 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         configuration.timeoutIntervalForRequest = echo ? 5 : 20
         if echo { configuration.timeoutIntervalForResource = 8 }
         return configuration
-    }
-    nonisolated static func readBusinessResponse(_ request: URLRequest, using connection: URLSession) async throws -> (Data, HTTPURLResponse) {
-        let operation = "\(request.httpMethod ?? "GET") \(request.url?.path ?? "/")"
-        let (bytes, response) = try await connection.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "\(operation) · HTTP response") }
-        guard !(300..<400).contains(http.statusCode) else { throw NativeDiagnosticFailure(code: "http_redirect_blocked", message: "\(operation) · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.") }
-        let limit = 8 * 1024 * 1024
-        let tooLarge = NativeDiagnosticFailure(code: "response_too_large", message: "\(operation) · HTTP \(http.statusCode): Response exceeds the 8 MiB limit.")
-        // This session belongs to one request. Cancel on either the declared or streamed limit.
-        guard http.expectedContentLength <= Int64(limit) else {
-            connection.invalidateAndCancel()
-            throw tooLarge
-        }
-        var data = Data()
-        for try await byte in bytes {
-            guard data.count < limit else {
-                connection.invalidateAndCancel()
-                throw tooLarge
-            }
-            data.append(byte)
-        }
-        return (data, http)
     }
     // Explicit online settings only; never persists a key or enqueues a request.
     func aiConfiguration(accountId: String, path: String, method: String, body: Any?, settings: Bool = false) async throws -> Any {
@@ -637,4 +612,82 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
     // Never forward session cookies or request bodies through an HTTP redirect.
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+}
+
+// One reader and one task per ephemeral session. URLSession delivers response and body
+// callbacks on its serial delegate queue, and the stream delivers the result to the caller.
+final class BusinessResponseReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let limit = 8 * 1024 * 1024
+    private let results: AsyncThrowingStream<(Data, HTTPURLResponse), any Error>
+    private let completion: AsyncThrowingStream<(Data, HTTPURLResponse), any Error>.Continuation
+    private var response: HTTPURLResponse?
+    private var failure: NativeDiagnosticFailure?
+    private var body = Data()
+    private var operation = ""
+
+    override init() {
+        var continuation: AsyncThrowingStream<(Data, HTTPURLResponse), any Error>.Continuation!
+        results = AsyncThrowingStream(bufferingPolicy: .bufferingNewest(1)) { continuation = $0 }
+        completion = continuation
+        super.init()
+    }
+
+    @MainActor func load(_ request: URLRequest, using session: URLSession) async throws -> (Data, HTTPURLResponse) {
+        try Task.checkCancellation()
+        operation = "\(request.httpMethod ?? "GET") \(request.url?.path ?? "/")"
+        let task = session.dataTask(with: request)
+        task.resume()
+        return try await withTaskCancellationHandler {
+            var iterator = results.makeAsyncIterator()
+            guard let result = try await iterator.next() else { throw CancellationError() }
+            return result
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        guard let http = response as? HTTPURLResponse else {
+            failure = NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "\(operation) · HTTP response")
+            completionHandler(.cancel)
+            return
+        }
+        self.response = http
+        if (300..<400).contains(http.statusCode) {
+            failure = .init(code: "http_redirect_blocked", message: "\(operation) · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.")
+        } else {
+            let declared = http.value(forHTTPHeaderField: "Content-Length").flatMap { Int64($0) } ?? http.expectedContentLength
+            if declared > Int64(limit) { failure = sizeFailure(status: http.statusCode) }
+        }
+        completionHandler(failure == nil ? .allow : .cancel)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard failure == nil else { return }
+        guard data.count <= limit - body.count else {
+            failure = sizeFailure(status: response?.statusCode ?? 0)
+            dataTask.cancel()
+            return
+        }
+        body.append(data)
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        if let failure { completion.finish(throwing: failure) }
+        else if let error { completion.finish(throwing: error) }
+        else if let response {
+            completion.yield((body, response))
+            completion.finish()
+        } else { completion.finish(throwing: TrackerLocalError.invalid) }
+    }
+
+    private func sizeFailure(status: Int) -> NativeDiagnosticFailure {
+        .init(code: "response_too_large", message: "\(operation) · HTTP \(status): Response exceeds the 8 MiB limit.")
+    }
 }

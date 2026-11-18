@@ -160,6 +160,7 @@ struct AIMemoryProcessingTests {
         await processor.yield()
         fail = false; try await processor.retry(account: processingAccount, persona: "sebastian", id: id)
         let done = try await settled(store, id: id)
+        try #require(done.attempts.count == 2)
         #expect(done.requestCount == 2 && calls == 2 && done.attempts[0].usage.inputTokens == nil)
         #expect(done.attempts[1].usage.inputTokens == 71 && done.attempts[1].cost != nil)
         processor.schedule(account: processingAccount, conversation: conversation)

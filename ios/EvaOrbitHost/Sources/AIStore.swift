@@ -33,6 +33,7 @@ actor AIStore {
             CREATE TABLE IF NOT EXISTS ai_conversations(account_id TEXT NOT NULL,id TEXT NOT NULL,title TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(account_id,id));
             CREATE TABLE IF NOT EXISTS ai_messages(ordinal INTEGER PRIMARY KEY AUTOINCREMENT,account_id TEXT NOT NULL,id TEXT NOT NULL,conversation_id TEXT NOT NULL,status TEXT NOT NULL,payload TEXT NOT NULL,UNIQUE(account_id,id));
             CREATE INDEX IF NOT EXISTS ai_message_conversation ON ai_messages(account_id,conversation_id,ordinal);
+            CREATE INDEX IF NOT EXISTS ai_message_replacement ON ai_messages(account_id,conversation_id,json_extract(payload,'$.supersedesId'));
             COMMIT;
             """
             guard sqlite3_exec(opened, migration, nil, nil, nil) == SQLITE_OK else { throw AIError.storage }

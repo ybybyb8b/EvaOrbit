@@ -109,6 +109,8 @@ struct AIContextBudgetTests {
         let plan = try assemble(history, participants: [contextParticipant(window: 4096)])
         #expect(!plan.publicMessages.description.contains("HUGE"))
         #expect(plan.publicMessages.last?["content"] == "Plan a quiet walk")
+        // Use normal history for the byte-limit case so the newest turn does not consume the token budget first.
+        history = contextHistory(2)
         var summary = contextSummary(history, content: String(repeating: "\u{02}", count: 32000))
         summary.unresolved = Array(repeating: String(repeating: "\u{03}", count: 1000), count: 32); summary.contentHash = summary.semanticHash
         var persona = contextPersona(); persona.systemPrompt = String(repeating: "\u{01}", count: 12000)

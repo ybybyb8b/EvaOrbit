@@ -97,8 +97,13 @@ extension AIStore {
     func saveMemory(_ draft: AIPersonaMemory, expectedVersion: Int, persona: String, account: String, transaction: Bool = true) throws -> AIPersonaMemory {
         try requirePersona(persona, account: account)
         guard draft.accountId == account, draft.personaId == persona, draft.status == .active else { throw AIError.invalid }
-        try draft.validate()
-        for source in draft.sources {
+        let old = try memoryVersions(draft.id, persona: persona, account: account).first
+        guard (old?.version ?? 0) == expectedVersion, old == nil || old?.status == .active else { throw AIError.staleMemory }
+        var saved = draft
+        saved.version = expectedVersion + 1
+        saved.createdAt = old?.createdAt ?? aiTimestamp(); saved.updatedAt = aiTimestamp()
+        try saved.validate()
+        for source in saved.sources {
             if let id = source.messageId, (try? contextScope(source.conversationId, persona: persona, account: account)) != nil {
                 guard let row = try contextRecord(id, conversation: source.conversationId, account: account), row.message.content.contains(source.excerpt) else { throw AIError.invalid }
                 continue
@@ -106,12 +111,6 @@ extension AIStore {
             let history = try memorySources(source.conversationId, persona: persona, account: account)
             guard history.contains(where: { (source.messageId == nil || $0.id == source.messageId) && $0.content.contains(source.excerpt) }) else { throw AIError.invalid }
         }
-        let old = try memoryVersions(draft.id, persona: persona, account: account).first
-        guard (old?.version ?? 0) == expectedVersion, old == nil || old?.status == .active else { throw AIError.staleMemory }
-        var saved = draft
-        saved.version = expectedVersion + 1
-        saved.createdAt = old?.createdAt ?? aiTimestamp(); saved.updatedAt = aiTimestamp()
-        try saved.validate()
         if transaction { try execute("BEGIN IMMEDIATE") }
         do {
             if var old {

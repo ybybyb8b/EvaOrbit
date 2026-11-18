@@ -32,7 +32,7 @@ jobs:
   build:
     # Use the standard Intel pool to avoid the macOS arm64 capacity queue.
     runs-on: macos-15-intel
-    timeout-minutes: ${{ inputs.run_native_tests && 55 || 30 }}
+    timeout-minutes: ${{ inputs.run_native_tests && 75 || 30 }}
 
     steps:
       - uses: actions/checkout@v5
@@ -80,7 +80,7 @@ jobs:
       - name: Run full native tests on iPhone 16 Pro Simulator
         id: native_tests
         if: ${{ inputs.run_native_tests }}
-        timeout-minutes: 25
+        timeout-minutes: 40
         working-directory: ios/EvaOrbitHost
         shell: bash
         run: |

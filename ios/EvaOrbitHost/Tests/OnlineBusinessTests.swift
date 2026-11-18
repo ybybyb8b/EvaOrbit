@@ -24,16 +24,21 @@ private final class BusinessURLProtocol: URLProtocol {
 }
 
 final class OnlineBusinessTests: XCTestCase {
+    @MainActor private func read(_ request: URLRequest, configuration: URLSessionConfiguration) async throws -> (Data, HTTPURLResponse) {
+        let reader = BusinessResponseReader()
+        let session = URLSession(configuration: configuration, delegate: reader, delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        return try await reader.load(request, using: session)
+    }
+
     @MainActor func testBusinessResponseRejectsOversizedHeaderWithoutWaitingForTheBody() async throws {
         let url = URL(string: "https://\(UUID().uuidString.lowercased()).example.invalid/api/memory-graph")!
         BusinessURLProtocol.setHandler({ $0.respond(headers: ["Content-Length": "8388609"]) }, for: url)
         defer { BusinessURLProtocol.setHandler(nil, for: url) }
         let configuration = TrackerLocalController.businessConfiguration(echo: true)
         configuration.protocolClasses = [BusinessURLProtocol.self]
-        let session = URLSession(configuration: configuration)
-        defer { session.invalidateAndCancel() }
         do {
-            _ = try await TrackerLocalController.readBusinessResponse(URLRequest(url: url), using: session)
+            _ = try await read(URLRequest(url: url), configuration: configuration)
             XCTFail("An oversized header must fail before the server sends its body")
         } catch let diagnostic as NativeDiagnosticFailure {
             XCTAssertEqual(diagnostic.code, "response_too_large")
@@ -56,10 +61,8 @@ final class OnlineBusinessTests: XCTestCase {
             defer { BusinessURLProtocol.setHandler(nil, for: url) }
             let configuration = TrackerLocalController.businessConfiguration(echo: true)
             configuration.protocolClasses = [BusinessURLProtocol.self]
-            let session = URLSession(configuration: configuration)
-            defer { session.invalidateAndCancel() }
             do {
-                let (body, _) = try await TrackerLocalController.readBusinessResponse(URLRequest(url: url), using: session)
+                let (body, _) = try await read(URLRequest(url: url), configuration: configuration)
                 XCTAssertEqual(extra, 0)
                 XCTAssertEqual(body.count, limit)
             } catch let diagnostic as NativeDiagnosticFailure {
@@ -129,21 +132,21 @@ final class OnlineBusinessTests: XCTestCase {
             }
         }, for: base)
         defer { BusinessURLProtocol.setHandler(nil, for: base) }
-        let controller = TrackerLocalController(baseURL: base, database: try TrackerLocalDatabase(path: ":memory:"))
-        let session = URLSession(configuration: configuration, delegate: controller, delegateQueue: nil)
+        let reader = BusinessResponseReader()
+        let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         let redirect = URLRequest(url: base.appendingPathComponent("redirect"))
         let other = URLRequest(url: URL(string: "https://redirect.example.invalid/")!)
         let response = HTTPURLResponse(url: redirect.url!, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: nil)!
-        controller.urlSession(session, task: session.dataTask(with: redirect), willPerformHTTPRedirection: response, newRequest: other) { XCTAssertNil($0) }
+        reader.urlSession(session, task: session.dataTask(with: redirect), willPerformHTTPRedirection: response, newRequest: other) { XCTAssertNil($0) }
         do {
-            _ = try await TrackerLocalController.readBusinessResponse(redirect, using: session)
+            _ = try await read(redirect, configuration: configuration)
             XCTFail("Redirected responses must be rejected")
         } catch let diagnostic as NativeDiagnosticFailure {
             XCTAssertEqual(diagnostic.code, "http_redirect_blocked")
         }
         do {
-            _ = try await TrackerLocalController.readBusinessResponse(URLRequest(url: base.appendingPathComponent("timeout")), using: session)
+            _ = try await read(URLRequest(url: base.appendingPathComponent("timeout")), configuration: configuration)
             XCTFail("Timeout must propagate to the caller")
         } catch {
             XCTAssertEqual(NativeDiagnostics.describe(error).code, "network_timeout")
