@@ -45,17 +45,28 @@ extension AIStore {
         let destination = directory.appendingPathComponent(UUID().uuidString + ".sqlite3")
         var handle: OpaquePointer?
         guard sqlite3_open_v2(destination.path, &handle, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let handle else { throw AIError.storage }
-        defer { sqlite3_close(handle) }
-        guard let backup = sqlite3_backup_init(handle, "main", database, "main") else { throw AIError.storage }
-        let copied = sqlite3_backup_step(backup, -1), finished = sqlite3_backup_finish(backup)
-        guard copied == SQLITE_DONE, finished == SQLITE_OK else { throw AIError.storage }
-        // A backup is a standalone snapshot. Do not leave WAL sidecars with copies of private data.
-        guard sqlite3_exec(handle, "PRAGMA journal_mode=DELETE", nil, nil, nil) == SQLITE_OK else { throw AIError.storage }
-        var check: OpaquePointer?
-        guard sqlite3_prepare_v2(handle, "PRAGMA quick_check", -1, &check, nil) == SQLITE_OK else { throw AIError.storage }
-        defer { sqlite3_finalize(check) }
-        guard sqlite3_step(check) == SQLITE_ROW, let text = sqlite3_column_text(check, 0), String(cString: text) == "ok" else { throw AIError.storage }
+        do {
+            defer { sqlite3_close(handle) }
+            guard let backup = sqlite3_backup_init(handle, "main", database, "main") else { throw AIError.storage }
+            let copied = sqlite3_backup_step(backup, -1), finished = sqlite3_backup_finish(backup)
+            guard copied == SQLITE_DONE, finished == SQLITE_OK else { throw AIError.storage }
+            // Switching from WAL to DELETE checkpoints before closing the standalone backup.
+            for (sql, expected) in [("PRAGMA journal_mode=DELETE", "delete"), ("PRAGMA quick_check", "ok")] {
+                var check: OpaquePointer?
+                guard sqlite3_prepare_v2(handle, sql, -1, &check, nil) == SQLITE_OK else { throw AIError.storage }
+                defer { sqlite3_finalize(check) }
+                guard sqlite3_step(check) == SQLITE_ROW, let text = sqlite3_column_text(check, 0), String(cString: text) == expected else { throw AIError.storage }
+            }
+        }
+        try removeBackupSidecars(destination)
         try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: destination.path)
+    }
+
+    private static func removeBackupSidecars(_ file: URL) throws {
+        for suffix in ["-wal", "-shm", "-journal"] {
+            let sidecar = URL(fileURLWithPath: file.path + suffix)
+            if FileManager.default.fileExists(atPath: sidecar.path) { try FileManager.default.removeItem(at: sidecar) }
+        }
     }
 
     func purgeSafetyBackups(account: String, personaID: String? = nil, memoryID: String? = nil, conversationID: String? = nil) throws {
@@ -97,7 +108,10 @@ extension AIStore {
             sqlite3_finalize(query); sqlite3_close(handle)
             guard valid else { throw AIError.storage }
             // v5 migration backups have no memory table and cannot contain memory bodies.
-            if contains { try FileManager.default.removeItem(at: file) }
+            if contains {
+                try FileManager.default.removeItem(at: file)
+                try Self.removeBackupSidecars(file)
+            }
         }
     }
 

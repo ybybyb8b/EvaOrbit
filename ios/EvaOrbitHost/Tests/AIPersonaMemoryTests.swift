@@ -33,7 +33,7 @@ struct AIPersonaMemoryTests {
         #expect(metadata.first(where: { $0.id == groupID })?.ownership == "group")
         #expect(try await migrated.messages(reliable, account: memoryAccount).first?.content == "Original history")
         let backups = try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("SafetyBackups").path)
-        #expect(backups.count == 1)
+        #expect(backups.count == 1, "Backup directory contents: \(backups)")
         let reopened = try AIStore(path: path)
         #expect(try await reopened.conversations(memoryAccount).count == 3)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("SafetyBackups").path).count == 1)
@@ -167,7 +167,7 @@ struct AIPersonaMemoryTests {
         let document = try await store.exportBackup(account: memoryAccount)
         try await store.restoreBackup(document, account: memoryAccount)
         let backups = try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("SafetyBackups").path)
-        try #require(backups.count == 1)
+        try #require(backups.count == 1, "Backup directory contents: \(backups)")
         let snapshotPath = directory.appendingPathComponent("SafetyBackups").appendingPathComponent(backups[0]).path
         do {
             var db: OpaquePointer?

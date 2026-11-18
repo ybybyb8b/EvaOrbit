@@ -130,23 +130,13 @@ struct SIWCSubscriptionPoCTests {
         transport.install { request in
             switch request.url?.path {
             case "/api/accounts/oauth/token":
-                var bytes = request.httpBody ?? Data()
-                if bytes.isEmpty, let stream = request.httpBodyStream {
-                    stream.open(); defer { stream.close() }
-                    var buffer = [UInt8](repeating: 0, count: 1024)
-                    while stream.hasBytesAvailable {
-                        let count = stream.read(&buffer, maxLength: buffer.count)
-                        if count <= 0 { break }
-                        bytes.append(contentsOf: buffer.prefix(count))
-                    }
-                }
-                let body = String(data: bytes, encoding: .utf8) ?? ""
-                #expect(body.contains("mock-old-refresh")); #expect(body.contains("client_id=oaiapp_test"))
-                #expect(!body.contains("dynamic_agent_client"))
+                let body = String(decoding: try SIWCTestTransport.body(of: request), as: UTF8.self)
+                guard body.contains("mock-old-refresh"), body.contains("client_id=oaiapp_test"),
+                      !body.contains("dynamic_agent_client") else { throw SIWCFailure.protocolError }
                 return (200, "application/json", "{\"access_token\":\"mock-new-access\",\"refresh_token\":\"mock-new-refresh\",\"token_type\":\"Bearer\",\"expires_in\":3600}")
             case "/v1/responses":
-                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-new-access")
-                #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+                guard request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-new-access",
+                      request.value(forHTTPHeaderField: "Cookie") == nil else { throw SIWCFailure.protocolError }
                 return (200, "text/event-stream", "data: {\"type\":\"response.output_text.delta\",\"delta\":\"mock-success\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n")
             default: throw SIWCFailure.protocolError
             }
@@ -204,13 +194,13 @@ struct SIWCSubscriptionPoCTests {
         try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
             access: "mock-access", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
         transport.install { request in
-            let data = try #require(request.httpBody)
-            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            #expect(body["instructions"] as? String == "Persona prompt")
-            let input = try #require(body["input"] as? [[String: String]])
-            #expect(input.map { $0["role"] ?? "" } == ["user", "assistant", "user"])
-            #expect(input.last?["content"] == "Next question")
-            #expect(body["store"] as? Bool == false)
+            let data = try SIWCTestTransport.body(of: request)
+            guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  body["instructions"] as? String == "Persona prompt",
+                  let input = body["input"] as? [[String: String]],
+                  input.map({ $0["role"] ?? "" }) == ["user", "assistant", "user"],
+                  input.last?["content"] == "Next question",
+                  body["store"] as? Bool == false else { throw SIWCFailure.protocolError }
             return (200, "text/event-stream", "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":12,\"output_tokens\":4}}}\n\n")
         }
         let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
@@ -255,7 +245,7 @@ struct SIWCSubscriptionPoCTests {
         try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
             access: "expired", refresh: "old-refresh", expires: Date().addingTimeInterval(-1), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
         transport.install { request in
-            #expect(request.url?.path == "/api/accounts/oauth/token")
+            guard request.url?.path == "/api/accounts/oauth/token" else { throw SIWCFailure.protocolError }
             return (200, "application/json", "{\"access_token\":\"new-access\",\"refresh_token\":\"rotated-refresh\",\"token_type\":\"bearer\",\"expires_in\":3600}")
         }
         let runtime = SIWCRuntime(keychain: keychain, configuration: transport.configuration)
@@ -300,8 +290,8 @@ struct SIWCSubscriptionPoCTests {
         try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
             access: "mock-siwc-only", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
         transport.install { request in
-            #expect(request.url?.absoluteString == "https://api.openai.com/v1/responses")
-            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-siwc-only")
+            guard request.url?.absoluteString == "https://api.openai.com/v1/responses",
+                  request.value(forHTTPHeaderField: "Authorization") == "Bearer mock-siwc-only" else { throw SIWCFailure.protocolError }
             return (200, "text/event-stream", "data: {\"type\":\"response.output_text.delta\",\"delta\":\"subscription response\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":21,\"output_tokens\":7}}}\n\n")
         }
         let apiID = "50000000-0000-4000-8000-000000000002"
@@ -334,6 +324,20 @@ struct SIWCSubscriptionPoCTests {
 // Each mock session carries an independent random routing ID; parallel tests cannot share handlers.
 private final class SIWCTestTransport {
     typealias Reply = (Int, String?, String)
+    static func body(of request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { throw SIWCFailure.protocolError }
+        stream.open()
+        defer { stream.close() }
+        var result = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count == 0 { return result }
+            guard count > 0 else { throw stream.streamError ?? SIWCFailure.protocolError }
+            result.append(contentsOf: buffer.prefix(count))
+        }
+    }
     let id = UUID().uuidString
     var configuration: URLSessionConfiguration {
         let config = AIProviderAdapter.configuration(); config.protocolClasses = [SIWCMockURLProtocol.self]
@@ -359,12 +363,11 @@ private final class SIWCMockURLProtocol: URLProtocol {
             let handler = Self.lock.withLock { () -> ((URLRequest) throws -> SIWCTestTransport.Reply)? in
                 Self.counts[id, default: 0] += 1; return Self.handlers[id]
             }
-            let resolved = try #require(handler)
+            guard let resolved = handler, let url = request.url else { throw SIWCFailure.protocolError }
             let reply = try resolved(request)
             let headers: [String: String] = reply.1.map { ["Content-Type": $0] } ?? [:]
-            let url = try #require(request.url)
-            let response = try #require(HTTPURLResponse(url: url, statusCode: reply.0,
-                httpVersion: "HTTP/1.1", headerFields: headers))
+            guard let response = HTTPURLResponse(url: url, statusCode: reply.0,
+                httpVersion: "HTTP/1.1", headerFields: headers) else { throw SIWCFailure.protocolError }
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(reply.2.utf8)); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }

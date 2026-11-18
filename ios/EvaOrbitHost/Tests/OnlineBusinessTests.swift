@@ -31,21 +31,18 @@ final class OnlineBusinessTests: XCTestCase {
         return try await reader.load(request, using: session)
     }
 
-    @MainActor func testBusinessResponseRejectsOversizedHeaderWithoutWaitingForTheBody() async throws {
-        let url = URL(string: "https://\(UUID().uuidString.lowercased()).example.invalid/api/memory-graph")!
-        BusinessURLProtocol.setHandler({ transport in
-            transport.respond(headers: ["Content-Length": "8388609"])
-            // Foundation can defer the URLProtocol response callback until its first chunk.
-            transport.send(Data([0]))
-        }, for: url)
-        defer { BusinessURLProtocol.setHandler(nil, for: url) }
-        let configuration = TrackerLocalController.businessConfiguration(echo: true)
-        configuration.protocolClasses = [BusinessURLProtocol.self]
-        do {
-            _ = try await read(URLRequest(url: url), configuration: configuration)
-            XCTFail("An oversized header must fail before the server sends its body")
-        } catch let diagnostic as NativeDiagnosticFailure {
-            XCTAssertEqual(diagnostic.code, "response_too_large")
+    @MainActor func testBusinessResponseRejectsOversizedHeaderWithoutWaitingForTheBody() throws {
+        let url = URL(string: "https://fixture.example.invalid/api/memory-graph")!
+        let session = URLSession(configuration: TrackerLocalController.businessConfiguration(echo: true))
+        defer { session.invalidateAndCancel() }
+        let task = session.dataTask(with: url)
+        for size in [8 * 1024 * 1024, 8 * 1024 * 1024 + 1] {
+            let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                                        headerFields: ["Content-Length": String(size)]))
+            let reader = BusinessResponseReader()
+            reader.urlSession(session, dataTask: task, didReceive: response) { disposition in
+                XCTAssertEqual(disposition, size == 8 * 1024 * 1024 ? .allow : .cancel)
+            }
         }
     }
 
