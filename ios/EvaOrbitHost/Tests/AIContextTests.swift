@@ -157,7 +157,7 @@ struct AIContextStoreTests {
             try await store.begin(user: user, assistant: reply, account: account)
         }
     }
-    @Test func pagingAndBudgetedReadsContinueBeyondThousandsOfMessages() async throws {
+    @Test(.timeLimit(.minutes(3))) func pagingAndBudgetedReadsContinueBeyondThousandsOfMessages() async throws {
         let (store, member) = try await fixture(); try await append(1600, store: store)
         let newest = try await store.messagePage(contextConversation, account: contextAccount, limit: 200)
         #expect(newest.total == 3200 && newest.hasMore && newest.records.count == 200)

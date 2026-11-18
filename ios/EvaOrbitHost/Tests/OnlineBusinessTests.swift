@@ -33,7 +33,11 @@ final class OnlineBusinessTests: XCTestCase {
 
     @MainActor func testBusinessResponseRejectsOversizedHeaderWithoutWaitingForTheBody() async throws {
         let url = URL(string: "https://\(UUID().uuidString.lowercased()).example.invalid/api/memory-graph")!
-        BusinessURLProtocol.setHandler({ $0.respond(headers: ["Content-Length": "8388609"]) }, for: url)
+        BusinessURLProtocol.setHandler({ transport in
+            transport.respond(headers: ["Content-Length": "8388609"])
+            // Foundation can defer the URLProtocol response callback until its first chunk.
+            transport.send(Data([0]))
+        }, for: url)
         defer { BusinessURLProtocol.setHandler(nil, for: url) }
         let configuration = TrackerLocalController.businessConfiguration(echo: true)
         configuration.protocolClasses = [BusinessURLProtocol.self]

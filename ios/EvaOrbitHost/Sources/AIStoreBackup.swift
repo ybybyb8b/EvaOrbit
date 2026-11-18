@@ -49,6 +49,8 @@ extension AIStore {
         guard let backup = sqlite3_backup_init(handle, "main", database, "main") else { throw AIError.storage }
         let copied = sqlite3_backup_step(backup, -1), finished = sqlite3_backup_finish(backup)
         guard copied == SQLITE_DONE, finished == SQLITE_OK else { throw AIError.storage }
+        // A backup is a standalone snapshot. Do not leave WAL sidecars with copies of private data.
+        guard sqlite3_exec(handle, "PRAGMA journal_mode=DELETE", nil, nil, nil) == SQLITE_OK else { throw AIError.storage }
         var check: OpaquePointer?
         guard sqlite3_prepare_v2(handle, "PRAGMA quick_check", -1, &check, nil) == SQLITE_OK else { throw AIError.storage }
         defer { sqlite3_finalize(check) }

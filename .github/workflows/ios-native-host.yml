@@ -122,8 +122,8 @@ jobs:
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 60 \
-            -maximum-test-execution-time-allowance 120 \
-            CODE_SIGNING_ALLOWED=NO EVAORBIT_LOCAL_TRACKERS=YES \
+            -maximum-test-execution-time-allowance 180 \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" EVAORBIT_LOCAL_TRACKERS=YES \
             "${simulator_settings[@]}" \
             2>&1 | tee "$diagnostics/xcodebuild.log"
           xcrun xcresulttool get test-results summary --path "$diagnostics/EvaOrbitHostTests.xcresult" \

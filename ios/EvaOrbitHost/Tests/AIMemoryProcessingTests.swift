@@ -29,10 +29,10 @@ struct AIMemoryProcessingTests {
         job.status = "running"; job.attempts = [.init(startedAt: aiTimestamp(), dispatched: true)]
         try await store.writeJob(job); return job
     }
-    private func settled(_ store: AIStore, id: String) async throws -> AIMemoryJob {
+    private func settled(_ store: AIStore, id: String, minimumAttempts: Int = 0, ignoring status: String? = nil) async throws -> AIMemoryJob {
         for _ in 0..<200 {
             let job = try await store.processingJob(id, persona: "sebastian", account: processingAccount)
-            if !["queued", "running"].contains(job.status) { return job }
+            if !["queued", "running"].contains(job.status), job.status != status, job.attempts.count >= minimumAttempts { return job }
             try await Task.sleep(nanoseconds: 10_000_000)
         }
         throw AIError.busy
@@ -159,7 +159,7 @@ struct AIMemoryProcessingTests {
         #expect(try await settled(store, id: id).status == "failed" && calls == 1)
         await processor.yield()
         fail = false; try await processor.retry(account: processingAccount, persona: "sebastian", id: id)
-        let done = try await settled(store, id: id)
+        let done = try await settled(store, id: id, minimumAttempts: 2)
         try #require(done.attempts.count == 2)
         #expect(done.requestCount == 2 && calls == 2 && done.attempts[0].usage.inputTokens == nil)
         #expect(done.attempts[1].usage.inputTokens == 71 && done.attempts[1].cost != nil)
@@ -231,7 +231,7 @@ struct AIMemoryProcessingTests {
         var calls = 0
         let processor = AIMemoryProcessor(store: store, transport: { _, _, _, _ in calls += 1; throw AIError.stream }, idle: { true }, changed: { _ in })
         try await processor.retry(account: processingAccount, persona: "sebastian", id: job.id)
-        let finished = try await settled(store, id: job.id)
+        let finished = try await settled(store, id: job.id, ignoring: "interrupted")
         #expect(finished.status == "completed" && finished.requestCount == 1 && calls == 0)
         #expect(try await store.conversationContext(conversation, scope: "sebastian", account: processingAccount)?.processingInputHash == job.inputHash)
     }

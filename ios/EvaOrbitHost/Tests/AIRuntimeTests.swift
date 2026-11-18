@@ -186,6 +186,7 @@ struct AIRuntimeTests {
         let conversation = UUID().uuidString
         let user = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "user", content: "hello", status: "done", createdAt: aiTimestamp())
         let draft = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "assistant", content: "partial 你好", status: "streaming", createdAt: aiTimestamp(), requestId: UUID().uuidString, personaId: "sebastian")
+        _ = try await store.defaultPersona(accountA)
         try await store.saveProvider(fixtureProvider(), account: accountA)
         try await store.begin(user: user, assistant: draft, account: accountA)
         #expect(try await store.messages(conversation, account: accountB).isEmpty)
@@ -502,7 +503,7 @@ struct AIGroupRuntimeTests {
         let parameters: [String: Any] = ["conversationId": id, "requestId": UUID().uuidString, "content": "Question"]
         _ = try await runtime.handle("ai.groupSend", account: accountA, parameters: parameters, emit: { _ in })
         let messages = try await discussionSettled(store, id)
-        #expect(contexts.count == 6 && messages.count == 7)
+        try #require(contexts.count == 6 && messages.count == 7)
         for round in 0..<3 { #expect(contexts[round * 2] == contexts[round * 2 + 1]) }
         #expect(contexts[2].contains(where: { ($0["content"] ?? "").contains("[Ada] Ada viewpoint") }))
         #expect(contexts[2].contains(where: { ($0["content"] ?? "").contains("[Sebastian] Sebastian viewpoint") }))
@@ -510,10 +511,11 @@ struct AIGroupRuntimeTests {
         let rounds = try await store.documents("SELECT payload FROM ai_rounds WHERE account_id=? AND conversation_id=?", [accountA, id], as: AIGroupRound.self)
         #expect(rounds.count == 3 && rounds.allSatisfy { $0.publicContextId != nil && $0.context.isEmpty })
         for round in rounds {
-            let replies = messages.filter { $0.roundId == round.id }
+            let replies = messages.filter { $0.roundId == round.id && $0.role == "assistant" }
             #expect(replies.allSatisfy { $0.contextSnapshotId != nil && $0.contextBudget != nil })
             for reply in replies {
-                let receipt = try #require(await store.contextSnapshot(reply.contextSnapshotId!, conversation: id, account: accountA))
+                let snapshotId = try #require(reply.contextSnapshotId)
+                let receipt = try #require(await store.contextSnapshot(snapshotId, conversation: id, account: accountA))
                 #expect(receipt.publicSnapshotId == round.publicContextId && receipt.messages.isEmpty)
             }
         }

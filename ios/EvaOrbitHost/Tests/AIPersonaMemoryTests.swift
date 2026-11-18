@@ -167,9 +167,21 @@ struct AIPersonaMemoryTests {
         let document = try await store.exportBackup(account: memoryAccount)
         try await store.restoreBackup(document, account: memoryAccount)
         let backups = try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("SafetyBackups").path)
-        #expect(backups.count == 1)
-        let snapshot = try AIStore(path: directory.appendingPathComponent("SafetyBackups").appendingPathComponent(backups[0]).path)
-        #expect(try await snapshot.memories(persona: "sebastian", account: memoryAccount).count == 1)
+        try #require(backups.count == 1)
+        let snapshotPath = directory.appendingPathComponent("SafetyBackups").appendingPathComponent(backups[0]).path
+        do {
+            var db: OpaquePointer?
+            let opened = sqlite3_open_v2(snapshotPath, &db, SQLITE_OPEN_READONLY, nil)
+            defer { sqlite3_close(db) }
+            try #require(opened == SQLITE_OK)
+            var statement: OpaquePointer?
+            let prepared = sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM ai_persona_memories", -1, &statement, nil)
+            defer { sqlite3_finalize(statement) }
+            try #require(prepared == SQLITE_OK)
+            let step = sqlite3_step(statement)
+            try #require(step == SQLITE_ROW)
+            #expect(sqlite3_column_int(statement, 0) == 1)
+        }
         try await store.deleteMemory(saved.id, expectedVersion: saved.version, persona: "sebastian", account: memoryAccount)
         #expect(try FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("SafetyBackups").path).isEmpty)
     }
