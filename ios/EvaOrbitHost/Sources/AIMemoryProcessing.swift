@@ -106,7 +106,15 @@ enum AIMemoryProcessing {
     }
     static func normalized(_ text: String) -> String { text.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined() }
     static func similarity(_ a: String, _ b: String) -> Double {
-        func pairs(_ text: String) -> Set<String> { let c = Array(normalized(text)); return c.count < 2 ? Set(c.map(String.init)) : Set((0..<(c.count - 1)).map { String(c[$0]) + String(c[$0 + 1]) }) }
+        func pairs(_ text: String) -> Set<String> {
+            let characters = Array(normalized(text))
+            if characters.count < 2 { return Set(characters.map { String($0) }) }
+            var result = Set<String>()
+            for (first, second) in zip(characters, characters.dropFirst()) {
+                result.insert(String(first) + String(second))
+            }
+            return result
+        }
         let x = pairs(a), y = pairs(b), union = x.union(y).count
         return union == 0 ? 0 : Double(x.intersection(y).count) / Double(union)
     }
