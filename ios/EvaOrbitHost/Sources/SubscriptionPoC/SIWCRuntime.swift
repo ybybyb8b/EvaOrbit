@@ -93,7 +93,7 @@ final class SIWCRuntime {
             return (id, row["display_name"] as? String ?? id)
         }
     }
-    func infer(model: String, input: [[String: String]]? = nil, instructions: String? = nil, receive: @escaping @MainActor (SIWCResponseEvent) async throws -> Void) async throws {
+    func infer(model: String, input: [[String: String]]? = nil, instructions: String? = nil, dispatch: (() async throws -> Void)? = nil, receive: @escaping @MainActor (SIWCResponseEvent) async throws -> Void) async throws {
         let token = try await access()
         try Task.checkCancellation()
         var request = try SIWCProtocol.request(model: model, token: token)
@@ -103,6 +103,8 @@ final class SIWCRuntime {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         let session = self.session; defer { session.invalidateAndCancel() }
+        try await dispatch?()
+        try Task.checkCancellation()
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw SIWCFailure.protocolError }
         let media = SIWCMediaType.classify(http.value(forHTTPHeaderField: "Content-Type"))

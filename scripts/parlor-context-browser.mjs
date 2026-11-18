@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const {chromium}=await import(process.env.EVAORBIT_PLAYWRIGHT_MODULE||'playwright');
+const origin=process.env.PARLOR_PREVIEW_ORIGIN||'http://127.0.0.1:4187',output='tmp/parlor-context';
+await fs.mkdir(output,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+try{
+  for(const [label,width,height] of [['mobile',402,874],['desktop',1280,900]]){
+    const context=await browser.newContext({viewport:{width,height}}),page=await context.newPage(),errors=[],remote=[];
+    await context.addInitScript(()=>{localStorage.setItem('evaorbit.uiLanguage','zh');localStorage.setItem('evaorbit.appearanceMode','light');});
+    page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+    page.on('request',r=>{if(!r.url().startsWith(origin)&&!/^(blob:|data:)/.test(r.url()))remote.push(r.url());});
+    await page.goto(origin+'/?groupFixture=1&memoryFixture=1&contextFixture=1');
+    await page.getByRole('button',{name:/Parlor ·/}).click();
+    await page.getByRole('button',{name:'历史对话',exact:true}).click();
+    await page.getByRole('button',{name:'长对话 · 周末计划',exact:true}).click();
+    await page.getByText('历史消息 5002：继续讨论周末散步路线和预算。',{exact:true}).waitFor();
+    assert.equal(await page.getByText('历史消息 4802：继续讨论周末散步路线和预算。',{exact:true}).count(),0);
+    await page.getByRole('button',{name:'读取更早消息',exact:true}).click();
+    await page.getByText('历史消息 4802：继续讨论周末散步路线和预算。',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();
+    await page.getByRole('button',{name:'Context',exact:true}).click();
+    const surface=page.locator('[data-parlor-context]');
+    await surface.getByLabel('会话',{exact:true}).selectOption('51000000-0000-4000-8000-000000000001');
+    await surface.getByLabel('会话摘要',{exact:true}).fill('已讨论周末散步路线，偏好安静、有树荫的步道。');
+    await surface.getByLabel('未解决话题与待办',{exact:true}).fill('核实周末天气\n确定出发时间');
+    await surface.getByRole('button',{name:'保存上下文版本',exact:true}).click();
+    await page.getByText('上下文已保存到本机',{exact:true}).waitFor();
+    await surface.getByLabel('摘要版本',{exact:true}).selectOption('1');
+    await surface.getByLabel('会话摘要',{exact:true}).fill('已选定河边步道，出发时间待确认。');
+    await surface.getByRole('button',{name:'保存上下文版本',exact:true}).click();
+    await surface.getByLabel('摘要版本',{exact:true}).locator('option').filter({hasText:'v2'}).waitFor({state:'attached'});
+    await surface.getByRole('button',{name:'版本与覆盖',exact:true}).click();
+    await page.getByText('上下文已保存到本机',{exact:true}).waitFor({state:'hidden'});
+    await page.screenshot({path:`${output}/${label}-context.png`,fullPage:true});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await surface.getByLabel('摘要版本',{exact:true}).selectOption('1');
+    assert(await surface.getByLabel('会话摘要',{exact:true}).isDisabled());
+    await page.getByRole('button',{name:'返回 Parlor 设置',exact:true}).click();
+    await page.getByRole('button',{name:'Memory',exact:true}).click();
+    await page.getByRole('button',{name:'新增记忆',exact:true}).click();
+    const checkbox=page.getByLabel('仅在单聊使用',{exact:true});assert(await checkbox.isChecked());
+    await checkbox.uncheck();await page.getByLabel('记忆正文',{exact:true}).fill('周末路线需事先核实天气。');
+    await page.getByRole('button',{name:'保存记忆',exact:true}).click();
+    await page.locator('[data-parlor-memory]').getByRole('button').filter({hasText:'周末路线需事先核实天气。'}).click();
+    assert.equal(await checkbox.isChecked(),false);
+    await page.screenshot({path:`${output}/${label}-memory-visibility.png`,fullPage:true});
+    const result=await page.evaluate(async()=>{
+      const state=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));
+      const exported=await window.EvaOrbitNative.call('ai.exportBackup',{accountId:'10000000-0000-4000-8000-000000000001'});
+      const restored=exported.ok?await window.EvaOrbitNative.call('ai.restoreBackup',{accountId:'10000000-0000-4000-8000-000000000001',document:exported.result,confirmReplace:true}):null;
+      const after=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));
+      return {versions:state.contexts.map(c=>[c.version,c.status]),exported,restored,restoredContexts:after.contexts,requests:JSON.parse(sessionStorage.getItem('eo-group-requests')||'[]').length};
+    });
+    assert.deepEqual(result.versions,[[1,'superseded'],[2,'active']]);assert.equal(result.requests,0);assert.equal(result.exported.ok,true);assert.equal(result.exported.result.version,4);assert.equal(result.exported.result.payload.contexts.length,2);assert.equal(result.restored.ok,true);assert.equal(result.restoredContexts.length,2);
+    assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);await context.close();
+    console.log(`${label}: 5002-message pagination, summary versions, readonly history, visibility, v2 context backup roundtrip; UI fixture only, 0 inference requests`);
+  }
+  const context=await browser.newContext(),page=await context.newPage();await context.addInitScript(()=>localStorage.setItem('evaorbit.uiLanguage','zh'));
+  await page.goto(origin+'/?noContext=1');await page.getByRole('button',{name:/Parlor ·/}).click();await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();await page.getByRole('button',{name:'Context',exact:true}).click();await page.getByText('更新 Host 后管理会话上下文。',{exact:true}).waitFor();await context.close();
+}finally{await browser.close();}

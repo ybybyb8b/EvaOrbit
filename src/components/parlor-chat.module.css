@@ -63,7 +63,7 @@
 .chat[data-wallpaper] :is(.activity,.scroll > :global(.text-button)) { width:fit-content; padding:3px 8px; border-radius:8px; background:var(--surface-canvas); }
 .chat[data-wallpaper] .empty { text-shadow:0 1px 4px var(--surface-canvas),0 0 8px var(--surface-canvas); }
 .chat[data-wallpaper] .message footer { color:var(--text-primary);text-shadow:0 0 2px var(--surface-canvas),0 1px 4px var(--surface-canvas); }
-.header h1 { margin:0;font:500 24px/1.05 var(--font-editorial-label); }
+.header h1 { margin:0;font:500 24px/1.3 var(--font-editorial-label); }
 .connection { display:flex;align-items:center;gap:5px;border:0;border-radius:5px;background:none;padding:0;color:inherit;text-shadow:inherit;font:inherit;font-size:11px;cursor:pointer;min-height:22px; }
 .connection > span { width:6px;height:6px;border-radius:50%;background:var(--text-tertiary,var(--text-secondary)); }.connection > span[data-online=true] { background:var(--state-success,var(--accent-primary)); }
 .connection > span[data-error=true] { background:var(--state-warning); }

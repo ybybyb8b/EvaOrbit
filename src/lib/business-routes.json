@@ -809,5 +809,12 @@
       "GET",
       "POST"
     ]
+  },
+  {
+    "pattern": "^/api/memory-graph$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
   }
 ]

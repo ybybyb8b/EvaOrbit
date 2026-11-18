@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiError, optionalEnum, optionalLimit } from "@/lib/api";
-import { getMemoryEntityDetail, getMemoryFactDetail, getMemoryGraphSnapshot, pageMemory, proposeMemoryFactCandidate, recallMemory } from "@/lib/services/memory-graph";
+import { getMemoryEntityDetail, getMemoryFactDetail, getMemoryGraphSnapshot, pageMemory, proposeMemoryFactCandidate, recallMemory, getMemoryFactCandidate, listMemoryFactCandidates } from "@/lib/services/memory-graph";
+import { getMemoryContext } from "@/lib/services/memory-context";
 import { ValidationError } from "@/lib/validation";
 import { memoryUuid, parseMemoryEntitySearch, parseMemoryFactSearch } from "@/lib/memory-graph-validation";
 import type { MemoryPageOrder } from "@/lib/memory-pagination";
@@ -12,6 +13,17 @@ export async function GET(request:NextRequest){
   try{
     const params = request.nextUrl.searchParams;
     const query = params.get("q")?.trim() || undefined;
+    const echoHeaders={"Cache-Control":"no-store","X-Parlor-Echo-Protocol":"1"};
+    if(params.get("resource")==="parlor_protocol")return NextResponse.json({protocol:"parlor-echo/1",fullContext:true,candidateLookup:true,manualCandidates:true},{headers:echoHeaders});
+    if(params.get("context")==="1"){
+      if(!query||query.length>160||query.includes("\0"))throw new ValidationError("Echo context requires bounded keywords (1–160 characters).");
+      const maxChars=params.has("max_chars")?optionalLimit(params.get("max_chars"),{max:12000}):6000;
+      return NextResponse.json({protocol:"parlor-echo/1",context:await getMemoryContext({query,limit:optionalLimit(params.get("limit"),{max:8})??4,max_chars:maxChars},request.signal)},{headers:echoHeaders});
+    }
+    if(params.get("resource")==="candidate"&&params.has("request_id")){
+      const requestId=memoryUuid(params.get("request_id"),"request_id"),candidate=(await listMemoryFactCandidates({requestId,limit:1}))[0]??null;
+      return NextResponse.json({protocol:"parlor-echo/1",candidate},{headers:echoHeaders});
+    }
     if (params.has("resource")) {
       const resource = params.get("resource");
       const options = {
@@ -22,6 +34,7 @@ export async function GET(request:NextRequest){
       const param = (key: string) => params.get(key) ?? undefined;
       const uuid = (key: string) => params.has(key) ? memoryUuid(param(key), key) : undefined;
       if (id !== null) {
+        if(resource==="candidate")return NextResponse.json(await getMemoryFactCandidate(memoryUuid(id,"id")),{headers:echoHeaders});
         if (resource !== "entity" && resource !== "fact") throw new ValidationError("Unsupported Memory detail resource.");
         const itemId = memoryUuid(id, "id");
         const item = resource === "entity" ? await getMemoryEntityDetail(itemId, options) : await getMemoryFactDetail(itemId, options);
@@ -68,6 +81,12 @@ export async function GET(request:NextRequest){
 
 export async function POST(request:NextRequest){
   try{
-    return NextResponse.json(await proposeMemoryFactCandidate(await request.json()),{status:201});
+    const value=await request.json();
+    if(value?.protocol==="parlor-echo/1"){
+      const input=value.submission;
+      if(!input?.requestId||input.reviewMode!=="manual")throw new ValidationError("Parlor sharing requires a stable requestId and manual review.");
+      return NextResponse.json({protocol:"parlor-echo/1",candidate:await proposeMemoryFactCandidate(input,"parlor")},{status:201,headers:{"Cache-Control":"no-store","X-Parlor-Echo-Protocol":"1"}});
+    }
+    return NextResponse.json(await proposeMemoryFactCandidate(value),{status:201});
   }catch(error){return apiError(error);}
 }

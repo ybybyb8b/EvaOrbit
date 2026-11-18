@@ -1,8 +1,9 @@
 import Foundation
 
-enum AIError: LocalizedError {
+enum AIError: LocalizedError, Equatable {
     case invalid, storage, secureStorage, missingKey, busy, stream, truncated, tooLarge, endpointChanged, catalog
     case http(Int)
+    case ownership, staleMemory, backupTooLarge, contextCapacity, outputBudget, invalidContext
     var errorDescription: String? {
         switch self {
         case .invalid: return "AI configuration or request is invalid."
@@ -15,6 +16,12 @@ enum AIError: LocalizedError {
         case .tooLarge: return "This conversation or response is too large. Start a new conversation."
         case .endpointChanged: return "Re-enter or clear the API Key when changing the endpoint."
         case .catalog: return "The provider did not return a supported model directory. You can still enter a Model ID manually."
+        case .ownership: return "This conversation needs a confirmed persona. Open Parlor Memory settings to assign it, or start a new conversation."
+        case .staleMemory: return "This memory changed. Reload it before saving."
+        case .backupTooLarge: return "This Parlor backup exceeds the 16 MiB file limit. No partial backup was exported or restored."
+        case .contextCapacity: return "The current message and persona prompt exceed this model's available context. Choose a larger context model or shorten the persona prompt; the current message was kept."
+        case .outputBudget: return "The estimated response budget was reached. The partial answer was kept."
+        case .invalidContext: return "The context source range changed or is incomplete. Reload the conversation and save a new summary at a completed turn boundary."
         case .http(let status): return "Provider HTTP \(status). Check configuration or limits; nothing retries automatically."
         }
     }
@@ -94,6 +101,8 @@ struct AIConversation: Codable {
     var id: String
     var title: String
     var updatedAt: String
+    var ownership: String?
+    var personaId: String?
 }
 
 struct AIMessage: Codable {
@@ -122,6 +131,11 @@ struct AIMessage: Codable {
     var discussionId: String?
     var discussionRound: Int?
     var purpose: String?
+    var contextSnapshotId: String?
+    var contextBudget: AIContextBudget?
+    var contextCoverage: AIContextCoverage?
+    var ordinal: Int64?
+    var replyToMessageId: String?
 }
 
 func aiTimestamp() -> String { ISO8601DateFormatter().string(from: Date()) }

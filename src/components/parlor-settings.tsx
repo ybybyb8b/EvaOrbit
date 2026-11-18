@@ -10,6 +10,8 @@ import {ChevronRight,ArrowLeft2} from "reicon-react";
 import {showActionToast} from "./action-toast";
 import styles from "./parlor.module.css";
 import {ParlorAppearanceSheet,ParlorAppearanceControls,useParlorAppearance} from "./parlor-appearance-sheet";
+import {ParlorContext} from "./parlor-context";
+import {ParlorMemory,ParlorBackup} from "./parlor-memory";
 import {Disclosure} from "./disclosure";
 
 const sections=[
@@ -25,12 +27,12 @@ const sections=[
 ] as const;
 
 export function ParlorSettings({accountId,back,initialSection="",appearance,onConversation}:{accountId?:string|null;back:ReactNode;initialSection?:string;providerRequest?:(path:string,init?:RequestInit)=>Promise<Response>;appearance?:ReactNode;onConversation?:(id:string)=>void}) {
-  const {english}=useLocale(),t=(en:string,zh:string)=>english?en:zh,{supported}=useNativeEva();
+  const {english}=useLocale(),t=(en:string,zh:string)=>english?en:zh,{supported,memoryProcessingSupported}=useNativeEva();
   const native=Boolean(supported&&accountId);
   const [section,setSection]=useState(initialSection),[state,setState]=useState<EvaState|null>(null),[error,setError]=useState("");
   useEffect(()=>{let active=true;const load=()=>{if(native&&accountId)void evaCall<EvaState>(accountId,"ai.getState").then(value=>{if(active)setState(value);}).catch(reason=>{if(active)setError(reason.message);});};const update=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.accountId===accountId&&detail.eventType!=="progress")load();};load();window.addEventListener("evaorbit:ai",update);return()=>{active=false;window.removeEventListener("evaorbit:ai",update);};},[native,accountId]);
   const selected=sections.find(s=>s.id===section);
-  const pending=!["appearance","providers","personas","groups","usage","privacy"].includes(section);
+  const pending=!["appearance","providers","personas","memory","context","groups","usage","privacy"].includes(section);
   return <section className={styles.settingsPage} data-parlor-settings>
     <header className={styles.settingsHeader}>{section?<button className={styles.back} aria-label={t("All Parlor settings","返回 Parlor 设置")} onClick={()=>setSection("")}><ArrowLeft2 className="icon" weight="Outline"/></button>:back}<div><span className={styles.roomLabel}>Parlor</span><h1 data-no-translate>{selected?(selected.id==="appearance"?t(selected.name,selected.zh):selected.name):t("Settings","设置")}</h1></div></header>
     {error&&<ParlorErrorNotice inline error={error}/>}
@@ -41,9 +43,11 @@ export function ParlorSettings({accountId,back,initialSection="",appearance,onCo
       {section==="providers"&&(native&&accountId?<NativeEvaSettings accountId={accountId}/>:<p>{t("Update Host to connect models","更新 Host 后连接模型")}</p>)}
       {section==="personas"&&(native&&accountId?(state?<PersonaManager accountId={accountId} state={state}/>:<p role="status">{t("Loading persona…","正在读取人格…")}</p>):<p>{t("Update Host to edit personas","更新 Host 后编辑人格")}</p>)}
       {section==="groups"&&<div className={styles.groupParticipants}>{state?.groups?.map(group=><button className="button secondary" key={group.id} onClick={()=>onConversation?.(group.id)} disabled={!onConversation}>{group.title} · {group.participants.length} · {group.mode==="discussion"?"Discussion":"Parallel"}</button>)}{!state?.groups?.length&&<p className={styles.caption}>{t("No groups yet","还没有群聊")}</p>}</div>}
+      {section==="memory"&&(native&&accountId&&state?<ParlorMemory accountId={accountId} state={state} onConversation={onConversation}/>:<p>{t("Update Host to manage memories","更新 Host 后管理记忆")}</p>)}
+      {section==="context"&&native&&accountId&&state&&<ParlorContext accountId={accountId} state={state}/>}
       {pending&&<p className={styles.caption}>{t("Not available yet","尚未开放")}</p>}
-      {section==="usage"&&<p className={styles.caption}>{t("Usage is in response details","用量见回答详情")}</p>}
-      {section==="privacy"&&<div className={styles.info}><dl className={styles.storage}><div><dt>{t("Chats & personas","聊天与人格")}</dt><dd>{t("On device","本机")}</dd></div><div><dt>{t("Credentials","凭据")}</dt><dd>Keychain</dd></div></dl>{appearance}</div>}
+      {section==="usage"&&<p className={styles.caption}>{memoryProcessingSupported?t("Chat usage is in response details; memory processing usage is in Memory settings.","聊天用量见回答详情；记忆整理用量见 Memory 设置。"):t("Usage is in response details","用量见回答详情")}</p>}
+      {section==="privacy"&&<div className={styles.info}><dl className={styles.storage}><div><dt>{t("Chats & personas","聊天与人格")}</dt><dd>{t("On device","本机")}</dd></div><div><dt>{t("Credentials","凭据")}</dt><dd>Keychain</dd></div></dl>{appearance}{native&&accountId&&state&&<ParlorBackup accountId={accountId} state={state}/>}</div>}
     </div>}
   </section>;
 }

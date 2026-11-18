@@ -27,7 +27,7 @@ export type MemorySourceDraft = Omit<NewMemorySource, "id" | "factId">;
 export type MemorySourcePatch = Partial<Pick<MemorySource, "sourceRecordId" | "sourceUrl" | "excerpt" | "note">>;
 export type MemorySourceListInput = { factId?: string; sourceResource?: string; sourceRecordId?: string; limit?: number };
 export type NewMemoryFactCandidate = Pick<MemoryFactCandidate, "id" | "proposedFact" | "proposedSources" | "proposedBy" | "proposerModel" | "writtenBy" | "reviewMode"> & { client: string; requestId: string };
-export type MemoryFactCandidateListInput = { status?: MemoryFactCandidateStatus; proposedBy?: MemoryFactCandidateProposer; promotedFactId?: string; limit?: number };
+export type MemoryFactCandidateListInput = { requestId?: string; status?: MemoryFactCandidateStatus; proposedBy?: MemoryFactCandidateProposer; promotedFactId?: string; limit?: number };
 
 export type NewTask = {
   title: string;

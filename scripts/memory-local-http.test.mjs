@@ -4,7 +4,7 @@ import {request as httpRequest} from "node:http";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {spawn,spawnSync} from "node:child_process";
-import {mkdtempSync,readFileSync,writeFileSync,rmSync} from "node:fs";
+import {mkdirSync,mkdtempSync,readFileSync,writeFileSync,rmSync} from "node:fs";
 import {createServer,createConnection} from "node:net";
 import {networkInterfaces,tmpdir} from "node:os";
 import path from "node:path";
@@ -12,11 +12,14 @@ import path from "node:path";
 const pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
 test("real local HTTP listener is loopback-only; proxy rejects remote headers before exempt routes",{timeout:90000},async()=>{
   const dir=mkdtempSync(path.join(tmpdir(),"eo-memory-local-"));
+  const buildRoot=path.resolve("tmp");
+  mkdirSync(buildRoot,{recursive:true});
+  const buildDir=mkdtempSync(path.join(buildRoot,"memory-b01-next-"));
   const port=await new Promise((resolve,reject)=>{const s=createServer();s.once("error",reject);s.listen(0,"127.0.0.1",()=>{const port=s.address().port;s.close(()=>resolve(port));});});
   const saved=new Map(["next-env.d.ts","tsconfig.json"].map(file=>[file,readFileSync(file)]));
   let logs="",exited=false;
   const child=spawn(process.execPath,["scripts/dev-local.mjs","--port",String(port)],{windowsHide:true,stdio:["ignore","pipe","pipe"],
-    env:{...process.env,NODE_ENV:"development",VERCEL:"",EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(dir,"test.db"),EVAORBIT_NEXT_DIST_DIR:"tmp/memory-b01-next"}});
+    env:{...process.env,NODE_ENV:"development",VERCEL:"",EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(dir,"test.db"),EVAORBIT_NEXT_DIST_DIR:path.relative(process.cwd(),buildDir)}});
   child.once("exit",()=>{exited=true;});
   child.once("error",error=>{logs+=error.message;exited=true;});
   for(const stream of [child.stdout,child.stderr])stream.on("data",chunk=>{logs=(logs+chunk).slice(-10000);});
@@ -128,6 +131,23 @@ test("real local HTTP listener is loopback-only; proxy rejects remote headers be
     assert.deepEqual(limitedFacts.map(hit => hit.fact.id), [teaFact]);
     assert.deepEqual(await readJson("/api/memory-graph?q=" + encodeURIComponent("孤立备忘"), true), []);
 
+    const echoProtocol=await readJson("/api/memory-graph?resource=parlor_protocol");
+    assert.equal(echoProtocol.protocol,"parlor-echo/1");
+    const fullEcho=await readJson("/api/memory-graph?context=1&q="+encodeURIComponent("绿茶")+"&max_chars=12000&limit=8");
+    assert.equal(fullEcho.protocol,"parlor-echo/1");
+    for(const key of ["current_facts","historical_facts","unknown_facts","memos","entities","sources","notices"])assert.ok(Array.isArray(fullEcho.context[key]),key);
+    assert.equal(fullEcho.context.version,1);assert.equal(typeof fullEcho.context.context_text,"string");assert.equal(typeof fullEcho.context.coverage.truncated,"boolean");assert.equal(typeof fullEcho.context.coverage.returned_count,"number");
+    assert.equal((await request("/api/memory-graph?context=1&q="+"x".repeat(161))).status,400);
+    const echoRequest=randomUUID(),echoBody={protocol:"parlor-echo/1",submission:{...proposal,reviewMode:"manual",proposedBy:"model",requestId:echoRequest}};
+    const echoFirst=JSON.parse(await(await request("/api/memory-graph",{},echoBody)).text());
+    assert.equal(echoFirst.protocol,"parlor-echo/1");assert.equal(echoFirst.candidate.status,"pending");assert.equal(echoFirst.candidate.client,"parlor");
+    const echoSecond=JSON.parse(await(await request("/api/memory-graph",{},echoBody)).text());assert.equal(echoSecond.candidate.id,echoFirst.candidate.id);
+    const recovered=await readJson("/api/memory-graph?resource=candidate&request_id="+echoRequest);assert.equal(recovered.candidate.id,echoFirst.candidate.id);assert.deepEqual(recovered.candidate.proposedSources,echoFirst.candidate.proposedSources);
+    assert.equal((await readJson("/api/memory-graph?resource=candidate&request_id="+randomUUID())).candidate,null);
+    const unsafe={protocol:"parlor-echo/1",submission:{...echoBody.submission,requestId:randomUUID(),reviewMode:"user_confirmed"}};
+    assert.equal((await request("/api/memory-graph",{},unsafe)).status,400);
+    assert.equal((await request("/api/memory-graph",{}, {...echoBody,submission:{...echoBody.submission,fact:{...proposal.fact,objectValue:"changed"}}})).status,409);
+
     const lan=Object.values(networkInterfaces()).flat().find(address=>address?.family==="IPv4"&&!address.internal)?.address;
     if(lan){
       const connected=await new Promise(resolve=>{
@@ -151,6 +171,7 @@ test("real local HTTP listener is loopback-only; proxy rejects remote headers be
     }
     for(const[file,bytes]of saved)if(!readFileSync(file).equals(bytes))writeFileSync(file,bytes);
     rmSync(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+    rmSync(buildDir,{recursive:true,force:true,maxRetries:10,retryDelay:100});
     assert.equal(listening,false,"test server listener must be closed");
   }
 });

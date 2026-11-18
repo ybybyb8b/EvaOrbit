@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
-import {acceptEvaEvent} from '../src/lib/native-eva.ts';
+import {acceptEvaEvent,evaModelBinding} from '../src/lib/native-eva.ts';
 const source=readFileSync('ios/EvaOrbitHost/Sources/AIStore.swift','utf8');
 const sql=name=>source.match(new RegExp('let '+name+' = """([\\s\\S]*?)"""'))[1];
 test('Parlor v3 preserves v2 data and atomically stores independent group drafts, snapshots and recovery',()=>{
@@ -51,4 +51,26 @@ test('Parlor v4 discussion recovery retains budgets, partials and independent us
  db.prepare(update).run('a','group',JSON.stringify({...run,revision:6}));assert.equal(JSON.parse(db.prepare('SELECT payload FROM ai_discussions').get().payload).status,'interrupted');
  db.prepare(update).run('a','group',JSON.stringify({...run,status:'ended',revision:9}));assert.equal(JSON.parse(db.prepare('SELECT payload FROM ai_discussions').get().payload).status,'ended');
  }finally{db.close();}
+});
+
+test('Parlor v5 model choices preserve existing history, isolate accounts/conversations/personas and upsert atomically',()=>{
+ const db=new DatabaseSync(':memory:');try{
+ for(const name of ['migration','personaMigration','groupMigration','discussionMigration','modelSelectionMigration'])db.exec(sql(name));
+ db.exec(sql('modelSelectionMigration'));assert.equal(db.prepare('PRAGMA user_version').get().user_version,5);
+ db.prepare('INSERT INTO ai_conversations VALUES(?,?,?,?)').run('a','chat','Existing title','date');
+ db.prepare('INSERT INTO ai_messages(account_id,id,conversation_id,status,payload) VALUES(?,?,?,?,?)').run('a','old','chat','done',JSON.stringify({model:{id:'old'},usage:{inputTokens:22}}));
+ const upsert=source.match(/try execute\("(INSERT INTO ai_conversation_models[^"\n]+)"/)[1];
+ const put=(account,conversation,persona,model)=>db.prepare(upsert).run(account,conversation,persona,JSON.stringify({conversationId:conversation,personaId:persona,providerId:'p',modelId:model}));
+ put('a','chat','sebastian','new');put('a','chat','ada','other');put('a','second','sebastian','separate');put('b','chat','sebastian','private');put('a','chat','sebastian','latest');
+ assert.equal(db.prepare('SELECT count(*) n FROM ai_conversation_models').get().n,4);
+ assert.equal(JSON.parse(db.prepare('SELECT payload FROM ai_conversation_models WHERE account_id=? AND conversation_id=? AND persona_id=?').get('a','chat','sebastian').payload).modelId,'latest');
+ assert.deepEqual(JSON.parse(db.prepare('SELECT payload FROM ai_messages').get().payload),{model:{id:'old'},usage:{inputTokens:22}});
+ assert.equal(db.prepare('SELECT title FROM ai_conversations').get().title,'Existing title');
+ }finally{db.close();}
+});
+test('conversation model display resolves saved choice first and never silently replaces an unavailable override',()=>{
+ const persona={id:'sebastian',providerId:'api',modelId:'default'},state={providers:[{id:'api',enabled:true,models:[{id:'default',name:'Default display'}]},{id:'sub',enabled:true,models:[{id:'next',name:'Subscription display'}]}],conversationModels:[]};
+ assert.equal(evaModelBinding(state,persona).model.name,'Default display');
+ state.conversationModels=[{personaId:'sebastian',providerId:'sub',modelId:'next'}];assert.equal(evaModelBinding(state,persona).model.name,'Subscription display');
+ state.providers[1].enabled=false;assert.equal(evaModelBinding(state,persona),undefined);assert.equal(persona.modelId,'default');
 });

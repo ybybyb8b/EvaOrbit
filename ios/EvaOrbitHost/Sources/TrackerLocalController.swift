@@ -5,17 +5,21 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     let database: TrackerLocalDatabase
     private let baseURL: URL
     private let cookies: HTTPCookieStorage
+    private let protocolClasses: [AnyClass]?
     private var activeSession: URLSession?
+    private var businessSessions: [UUID: URLSession] = [:]
     private var generation = 0
+    private var accountChanging = false
     var onAccountChanging: (() -> Void)?
 
     func aiAccountGeneration(_ account: String) async throws -> Int {
-        try await database.requireAccount(account)
-        return generation
+        let expected = generation
+        try await requireAIAccount(account, generation: expected)
+        return expected
     }
     func requireAIAccount(_ account: String, generation expected: Int) async throws {
         try await database.requireAccount(account)
-        guard generation == expected else { throw TrackerLocalError.account }
+        guard !accountChanging, generation == expected else { throw TrackerLocalError.account }
     }
     private var nativeSettingsAccount: String?
     private var nativeOperations = 0
@@ -33,14 +37,16 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         configuration.httpShouldSetCookies = true
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 20
+        if let protocolClasses { configuration.protocolClasses = protocolClasses }
         let created = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         activeSession = created
         return created
     }
 
-    init(baseURL: URL, database: TrackerLocalDatabase) {
+    init(baseURL: URL, database: TrackerLocalDatabase, protocolClasses: [AnyClass]? = nil) {
         self.baseURL = baseURL
         self.database = database
+        self.protocolClasses = protocolClasses
         cookies = HTTPCookieStorage.shared
         super.init()
     }
@@ -92,11 +98,13 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
 
     func signIn(email: String, password: String) async throws -> [String: String] {
+        guard !accountChanging else { throw TrackerLocalError.account }
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before switching accounts.") }
         guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
+        accountChanging = true
+        defer { accountChanging = false }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
-        onAccountChanging?()
-        generation += 1
+        beginAccountChange()
         let expectedGeneration = generation
         guard !email.isEmpty, email.count <= 254, !password.isEmpty, password.count <= 1024 else { throw TrackerLocalError.invalid }
         guard let response = try await request(path: "session", method: "POST", body: ["email": email, "password": password]) as? [String: Any],
@@ -106,17 +114,24 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         return ["accountId": id, "email": email]
     }
     func signOut() async throws {
+        guard !accountChanging else { throw TrackerLocalError.account }
         guard nativeSettingsAccount == nil else { throw TrackerLocalError.network("Close native settings before signing out.") }
         guard nativeOperations == 0 else { throw TrackerLocalError.network("Apple integration is finishing. Try again in a moment.") }
+        accountChanging = true
+        defer { accountChanging = false }
         if let previous = try await database.account()?["accountId"] { _ = try await acceptanceStatus(accountId: previous) }
-        onAccountChanging?()
-        generation += 1
+        beginAccountChange()
         try await database.clearAccount()
         // Local logout must work offline. No business records or queue are erased.
         for cookie in cookies.cookies(for: baseURL) ?? [] { cookies.deleteCookie(cookie) }
+    }
+    private func beginAccountChange() {
+        generation += 1
+        onAccountChanging?()
         activeSession?.invalidateAndCancel()
         activeSession = nil
-        // Recreate the session on next login without losing the durable database.
+        for connection in businessSessions.values { connection.invalidateAndCancel() }
+        businessSessions.removeAll()
     }
     func synchronize(_ body: [String: Any]) async throws -> Any {
         throw TrackerLocalError.readOnly
@@ -212,10 +227,12 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
 
     func businessRequest(accountId: String, path: String, method: String, contentType: String, bodyBase64: String?, offline: Bool, nativeIntegration: Bool = false, authorization: NativeOperationAuthorization? = nil) async throws -> Any {
         guard (nativeIntegration ? Self.allowsNativeAPI(path: path, method: method) : Self.allowsBusinessRequest(path: path, method: method)), baseURL.scheme == "https" else { throw TrackerLocalError.invalid }
-        try await database.requireAccount(accountId)
+        guard !accountChanging else { throw TrackerLocalError.account }
         let expectedGeneration = generation
+        try await requireAIAccount(accountId, generation: expectedGeneration)
+        let echo = path == "/api/memory-graph" || path.hasPrefix("/api/memory-graph?")
         if offline {
-            guard method == "GET" else { throw TrackerLocalError.network("Connect to save. Nothing was uploaded or queued.") }
+            guard !echo, method == "GET" else { throw TrackerLocalError.network("Connect to save. Nothing was uploaded or queued.") }
             let cached = try await database.onlineCache(accountId: accountId, path: path)
             guard expectedGeneration == generation else { throw TrackerLocalError.account }
             return cached
@@ -232,7 +249,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         guard identity["onlineBusinessProtocol"] as? Int == 1 else { throw TrackerLocalError.network("The account-safe online API must be published before saving. Downloaded data is preserved.") }
         guard identity["onlineBusinessTestAccount"] as? Bool == true || identity["onlineBusinessAccountAllowed"] as? Bool == true else { throw TrackerLocalError.network("Online saving is not enabled for this account. Downloaded data and Tracker sync are preserved.") }
         try await database.requireAccount(accountId)
-        guard expectedGeneration == generation, let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL, endpoint.host == baseURL.host, endpoint.scheme == baseURL.scheme, endpoint.port == baseURL.port else { throw TrackerLocalError.account }
+        guard !accountChanging, expectedGeneration == generation, let endpoint = URL(string: path, relativeTo: baseURL)?.absoluteURL, endpoint.host == baseURL.host, endpoint.scheme == baseURL.scheme, endpoint.port == baseURL.port else { throw TrackerLocalError.account }
         var outgoing = URLRequest(url: endpoint)
         outgoing.httpMethod = method
         outgoing.httpShouldHandleCookies = false
@@ -248,31 +265,69 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
             outgoing.setValue(contentType, forHTTPHeaderField: "Content-Type")
             outgoing.httpBody = body
         }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpCookieStorage = nil
-        configuration.urlCache = nil
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.timeoutIntervalForRequest = 20
+        let configuration = Self.businessConfiguration(echo: echo)
+        if let protocolClasses { configuration.protocolClasses = protocolClasses }
         let connection = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
-        defer { connection.invalidateAndCancel() }
-        let networkResult: (Data, URLResponse)
-        do { networkResult = try await connection.data(for: outgoing) }
+        let requestID = UUID()
+        businessSessions[requestID] = connection
+        defer {
+            businessSessions.removeValue(forKey: requestID)
+            connection.invalidateAndCancel()
+        }
+        let data: Data, http: HTTPURLResponse
+        do {
+            (data, http) = try await withTaskCancellationHandler {
+                try await Self.readBusinessResponse(outgoing, using: connection)
+            } onCancel: {
+                connection.invalidateAndCancel()
+            }
+        }
         catch {
+            guard expectedGeneration == generation else { throw TrackerLocalError.account }
+            if let diagnostic = error as? NativeDiagnosticFailure { throw diagnostic }
             throw NativeDiagnostics.capture(error, operation: "\(method) \(endpoint.path) · connection", writeResultUnknown: method != "GET")
         }
-        let (data, response) = networkResult
-        guard let http = response as? HTTPURLResponse else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "\(method) \(endpoint.path) · HTTP response") }
-        guard !(300..<400).contains(http.statusCode) else { throw NativeDiagnosticFailure(code: "http_redirect_blocked", message: "\(method) \(endpoint.path) · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.") }
-        guard data.count <= 8 * 1024 * 1024 else { throw NativeDiagnosticFailure(code: "response_too_large", message: "\(method) \(endpoint.path) · HTTP \(http.statusCode): Response exceeds the 8 MiB limit.") }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         let result: [String: Any] = ["status": http.statusCode, "body": http.statusCode == 204 ? NSNull() : try Self.decodeJSON(data, operation: "\(method) \(endpoint.path) · HTTP \(http.statusCode) response")]
-        if !nativeIntegration, method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
+        if !nativeIntegration, !echo, method == "GET", (200..<300).contains(http.statusCode) { try await database.saveOnlineCache(accountId: accountId, path: path, response: result) }
         // A cache failure cannot turn an acknowledged cloud write into a failed save.
         if method != "GET", (200..<300).contains(http.statusCode) { try? await database.invalidateOnlineCache(accountId: accountId, module: String(path.split(separator: "?")[0].split(separator: "/")[1])) }
         try await database.requireAccount(accountId)
         guard expectedGeneration == generation else { throw TrackerLocalError.account }
         return result
+    }
+    static func businessConfiguration(echo: Bool) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.timeoutIntervalForRequest = echo ? 5 : 20
+        if echo { configuration.timeoutIntervalForResource = 8 }
+        return configuration
+    }
+    nonisolated static func readBusinessResponse(_ request: URLRequest, using connection: URLSession) async throws -> (Data, HTTPURLResponse) {
+        let operation = "\(request.httpMethod ?? "GET") \(request.url?.path ?? "/")"
+        let (bytes, response) = try await connection.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw NativeDiagnostics.capture(TrackerLocalError.invalid, operation: "\(operation) · HTTP response") }
+        guard !(300..<400).contains(http.statusCode) else { throw NativeDiagnosticFailure(code: "http_redirect_blocked", message: "\(operation) · HTTP \(http.statusCode): Redirect refused; reconnect to the configured server.") }
+        let limit = 8 * 1024 * 1024
+        let tooLarge = NativeDiagnosticFailure(code: "response_too_large", message: "\(operation) · HTTP \(http.statusCode): Response exceeds the 8 MiB limit.")
+        // This session belongs to one request. Cancel on either the declared or streamed limit.
+        guard http.expectedContentLength <= Int64(limit) else {
+            connection.invalidateAndCancel()
+            throw tooLarge
+        }
+        var data = Data()
+        for try await byte in bytes {
+            guard data.count < limit else {
+                connection.invalidateAndCancel()
+                throw tooLarge
+            }
+            data.append(byte)
+        }
+        return (data, http)
     }
     // Explicit online settings only; never persists a key or enqueues a request.
     func aiConfiguration(accountId: String, path: String, method: String, body: Any?, settings: Bool = false) async throws -> Any {

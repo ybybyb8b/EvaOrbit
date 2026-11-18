@@ -62,11 +62,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     @MainActor init(hostConfiguration: HostConfiguration, healthKitCoordinator: HealthKitCoordinator, notificationManager: NotificationManager, eventKitSyncEngine: EventKitSyncEngine) {
         self.hostConfiguration = hostConfiguration
+        let controller: TrackerLocalController?
         if hostConfiguration.localTrackers, let database = try? TrackerLocalDatabase.live() {
-            trackerController = TrackerLocalController(baseURL: hostConfiguration.baseURL, database: database)
-        } else { trackerController = nil }
+            controller = TrackerLocalController(baseURL: hostConfiguration.baseURL, database: database)
+        } else { controller = nil }
+        trackerController = controller
         if hostConfiguration.localTrackers, let store = try? AIStore.live() {
-            aiRuntime = AIRuntime(store: store)
+            aiRuntime = AIRuntime(store: store, echoTransport: { [weak controller] account, path, method, body in
+                guard let controller else { throw AIError.invalid }
+                guard let result = try await controller.businessRequest(accountId: account, path: path, method: method, contentType: "application/json", bodyBase64: body.map { Data($0.utf8).base64EncodedString() }, offline: false) as? [String: Any] else { throw AIError.invalidContext }
+                return result
+            })
         } else { aiRuntime = nil }
         self.healthKitCoordinator = healthKitCoordinator
         self.notificationManager = notificationManager
@@ -420,7 +426,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case let aiMethod where AIRuntime.methods.contains(aiMethod):
                     guard let runtime = aiRuntime, let account = parameters["accountId"] as? String else { throw AIError.invalid }
                     let generation = try await controller.aiAccountGeneration(account)
-                    result = try await runtime.handle(aiMethod, account: account, parameters: parameters) { [weak webView, weak controller] event in
+                    let value = try await runtime.handle(aiMethod, account: account, parameters: parameters) { [weak webView, weak controller] event in
                         Task { @MainActor in
                             guard let controller, let webView, let url = webView.url,
                                   self.hostConfiguration.allowsTrackerUI(url),
@@ -429,6 +435,18 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                         }
                     }
                     try await controller.requireAIAccount(account, generation: generation)
+                    if aiMethod == "ai.exportBackup", parameters["share"] as? Bool == true {
+                        guard let presenter = webView?.window?.rootViewController, presenter.presentedViewController == nil else { throw AIError.busy }
+                        let url = FileManager.default.temporaryDirectory.appendingPathComponent("parlor-backup-" + UUID().uuidString + ".json")
+                        let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+                        guard data.count <= 16 * 1024 * 1024 else { throw AIError.backupTooLarge }
+                        try data.write(to: url, options: [.atomic, .completeFileProtection])
+                        let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                        share.popoverPresentationController?.sourceView = webView
+                        share.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: url) }
+                        presenter.present(share, animated: true)
+                        result = ["shared": true]
+                    } else { result = value }
                 case "native.invoke":
                     guard let account = parameters["accountId"] as? String, let target = parameters["method"] as? String,
                           Self.nativeIntegrationMethods.contains(target), let arguments = parameters["arguments"] as? [String: Any] else { throw TrackerLocalError.invalid }

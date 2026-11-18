@@ -11,6 +11,10 @@ on:
         description: Include the experimental SIWC panel (local Host / Parlor test branch only)
         type: boolean
         default: false
+      run_native_tests:
+        description: Run the complete EvaOrbitHostTests suite before building the IPA
+        type: boolean
+        default: false
   # Push source changes freely; package frontend updates on demand via workflow_dispatch.
   push:
     branches-ignore: ["codex/parlor-native-test"]
@@ -28,7 +32,7 @@ jobs:
   build:
     # Use the standard Intel pool to avoid the macOS arm64 capacity queue.
     runs-on: macos-15-intel
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.run_native_tests && 55 || 30 }}
 
     steps:
       - uses: actions/checkout@v5
@@ -73,8 +77,69 @@ jobs:
         working-directory: ios/EvaOrbitHost
         run: xcodegen generate
 
-      # Simulator execution is intentionally omitted; native behavior is accepted on device.
+      - name: Run full native tests on iPhone 16 Pro Simulator
+        id: native_tests
+        if: ${{ inputs.run_native_tests }}
+        timeout-minutes: 25
+        working-directory: ios/EvaOrbitHost
+        shell: bash
+        run: |
+          diagnostics="$RUNNER_TEMP/EvaOrbitHost-Tests"
+          mkdir -p "$diagnostics"
+          xcodebuild -version | tee "$diagnostics/environment.log"
+          xcodebuild -showsdks | tee -a "$diagnostics/environment.log"
+          xcrun simctl list --json runtimes > "$diagnostics/runtimes.json"
+          sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          runtime="$(node - "$sdk" "$diagnostics/runtimes.json" 2> >(tee -a "$diagnostics/environment.log" >&2) <<'NODE'
+          const [sdk, file] = process.argv.slice(2);
+          const { runtimes } = JSON.parse(require("node:fs").readFileSync(file, "utf8"));
+          const majorMinor = value => value.split(".").slice(0, 2).join(".");
+          const runtime = runtimes.find(value => value.isAvailable &&
+            value.identifier.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-") &&
+            majorMinor(value.version) === majorMinor(sdk));
+          if (!runtime) throw new Error(`No available iOS Simulator runtime matches SDK ${sdk}`);
+          console.log(runtime.identifier);
+          NODE
+          )"
+          device="$(xcrun simctl create 'EvaOrbitHost CI' com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro "$runtime" 2> >(tee -a "$diagnostics/environment.log" >&2))"
+          trap 'xcrun simctl shutdown "$device" || true; xcrun simctl delete "$device" || true' EXIT
+          printf 'SDK=%s Runtime=%s Device=%s\n' "$sdk" "$runtime" "$device" | tee -a "$diagnostics/environment.log"
+          xcrun simctl bootstatus "$device" -b 2>&1 | tee "$diagnostics/simulator.log"
+          xcodebuild test \
+            -project EvaOrbitHost.xcodeproj \
+            -scheme EvaOrbitHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$device" \
+            -destination-timeout 60 \
+            -derivedDataPath "$RUNNER_TEMP/EvaOrbitHost-Simulator" \
+            -resultBundlePath "$diagnostics/EvaOrbitHostTests.xcresult" \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 \
+            -maximum-test-execution-time-allowance 120 \
+            CODE_SIGNING_ALLOWED=NO EVAORBIT_LOCAL_TRACKERS=YES \
+            2>&1 | tee "$diagnostics/xcodebuild.log"
+          xcrun xcresulttool get test-results summary --path "$diagnostics/EvaOrbitHostTests.xcresult" \
+            > "$diagnostics/summary.json"
+          node - "$diagnostics/summary.json" <<'NODE'
+          const summary = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8"));
+          if (!(summary.passedTests > 0) || summary.failedTests !== 0 || summary.skippedTests !== 0) {
+            throw new Error("The full native suite must run with no failures or skips");
+          }
+          NODE
+
+      - name: Upload native test diagnostics
+        if: ${{ always() && inputs.run_native_tests && steps.native_tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: EvaOrbitHost-native-tests
+          path: ${{ runner.temp }}/EvaOrbitHost-Tests
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Build ad-hoc signed device app
+        if: ${{ success() && (!inputs.run_native_tests || steps.native_tests.outcome == 'success') }}
         working-directory: ios/EvaOrbitHost
         env:
           SUBSCRIPTION_POC: ${{ inputs.subscription_poc }}

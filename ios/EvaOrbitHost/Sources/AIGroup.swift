@@ -29,6 +29,7 @@ struct AIGroupRound: Codable {
     var discussionId: String?
     var discussionRound: Int?
     var purpose: String?
+    var publicContextId: String?
 }
 
 // A bounded local run. Reopening never automatically restarts billed inference.
@@ -41,4 +42,14 @@ struct AIGroupDiscussion: Codable {
     var suspendedPersonaIds: [String] = []
     var revision: Int = 0
     var error: String?
+}
+
+// A conversation override never changes the persona's default or a saved reply snapshot.
+struct AIConversationModel: Codable {
+    var conversationId: String
+    var personaId: String
+    var providerId: String
+    var modelId: String
+    var provider: AIProvider?
+    var model: AIModel?
 }

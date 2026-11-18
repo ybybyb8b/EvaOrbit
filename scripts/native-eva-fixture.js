@@ -3,17 +3,22 @@
   const accountId="10000000-0000-4000-8000-000000000001";
   const legacy=new URL(location.href).searchParams.has("legacy");
   const noDiscussion=new URL(location.href).searchParams.has("noDiscussion");
+  const noModelSwitch=new URL(location.href).searchParams.has("noModelSwitch");
   const noCatalog=new URL(location.href).searchParams.has("noCatalog");
   const provider={id:"10000000-0000-4000-8000-000000000003",name:"Mock Provider",baseURL:"https://mock.example.invalid/v1",enabled:true,hasKey:true,models:[{id:"mock-text",name:"Mock text"}],currency:"USD",priceUpdatedAt:""};
   let state=JSON.parse(sessionStorage.getItem("eo-eva-synthetic-state")||"null")??{providers:[provider],conversations:[],messages:[]};
   state.persona??={id:"sebastian",name:"Sebastian",chineseName:"塞巴斯蒂安",nickname:"赛巴斯酱",systemPrompt:"你是 Sebastian，EvaOrbit 的 Parlor 中的默认 AI 人格。一位优雅、聪明、可靠的私人执事。沉稳从容，言谈有礼，偶尔带有一点狡黠的幽默感。默认中文，并随用户语言切换。独立判断，不盲目附和；没有工具时不得声称完成业务操作。",preferredAddress:"",humor:"subtle",formality:"natural",closeness:"warm"};
-  state.personas??=[state.persona];state.groups??=[];state.rounds??={};state.discussions??=[];
+  state.personas??=[state.persona];state.groups??=[];state.rounds??={};state.discussions??=[];state.conversationModels??=[];
   for(const d of state.discussions)if(["running","summarizing"].includes(d.status)){d.status="interrupted";d.revision++;}
   if(new URL(location.href).searchParams.has("groupFixture")&&!state.groupSeeded){
     state.groupSeeded=true;
     const sub={...provider,id:"00000000-0000-4000-8000-000000000220",name:"ChatGPT (fixture)",connectionType:"subscription",hasKey:false,models:[{id:"gpt-preview",name:"GPT preview"}]};
     state.providers.push(sub);state.persona={...state.persona,providerId:provider.id,modelId:provider.models[0].id};
     state.personas=[state.persona,{...state.persona,id:"20000000-0000-4000-8000-000000000002",name:"Ada",chineseName:"",nickname:"",systemPrompt:"Independent analytical persona",providerId:sub.id,modelId:sub.models[0].id}];
+  }
+  if(new URL(location.href).searchParams.has("modelFixture")){
+    const source=state.providers.find(p=>p.id===provider.id);
+    if(source&&!source.models.some(m=>m.id==='mock-alt'))source.models.push({id:'mock-alt',name:'Reasoning Display'});
   }
   for(const m of state.messages)if(m.status==="streaming"){m.status="interrupted";m.error="Synthetic restart: partial response preserved.";m.seq++;}
   let timer,cancelCatalog;
@@ -46,12 +51,15 @@
   function stopJobs(conversation,messageId){
     for(const [id,job] of jobs){if(job.message.conversationId!==conversation||(messageId&&messageId!==id))continue;clearInterval(job.timer);job.message.status='cancelled';job.message.seq++;jobs.delete(id);emit(job.message);}
   }
+  function configuredMembers(members,conversation){
+    return members.map(m=>{const choice=state.conversationModels.find(c=>c.conversationId===conversation&&c.personaId===m.id);return choice?{...m,providerId:choice.providerId,modelId:choice.modelId}:structuredClone(m);});
+  }
   function discussionBatch(d,root,requestId,summaryPersona){
     const history=state.messages.filter(m=>m.conversationId===d.conversationId),replaced=new Set(history.map(m=>m.supersedesId));
     const context=history.filter(m=>!replaced.has(m.id)&&(m.role==='user'||m.content)).map(m=>({role:m.role,content:m.role==='assistant'?`[${m.personaName}${m.status==='done'?'':' · incomplete'}] ${m.content}`:m.content}));
     if(summaryPersona)context.push({role:'user',content:'整理当前讨论的共识、分歧、未决事项与可执行结论。'});
     else if(d.roundsStarted>1)context.push({role:'user',content:`讨论第${d.roundsStarted}轮，点名回应其他人格，补充、质疑或反驳。`});
-    const members=root.members.filter(m=>summaryPersona?m.id===summaryPersona:!d.suspendedPersonaIds.includes(m.id));
+    const members=configuredMembers(root.members,d.conversationId).filter(m=>summaryPersona?m.id===summaryPersona:!d.suspendedPersonaIds.includes(m.id));
     const round={id:requestId,conversationId:d.conversationId,content:root.content,members:structuredClone(members),context,discussionId:d.id,discussionRound:summaryPersona?undefined:d.roundsStarted,purpose:summaryPersona?'summary':'discussion'};
     state.rounds[round.id]=round;members.forEach(m=>startMember(m,round,crypto.randomUUID()));changed();
   }
@@ -64,13 +72,33 @@
     d.roundsStarted++;d.revision++;discussionBatch(d,root,crypto.randomUUID());
   }
   Object.defineProperty(window,"EvaOrbitNative",{value:{version:1,call:async(method,p={})=>{
+    const memoryFixture=await import("./parlor-memory-fixture.js");
+    memoryFixture.seedMemoryFixture(state,accountId);
+    const contextFixture=await import("./parlor-context-fixture.js");contextFixture.prepareContextFixture(state,accountId);
+    const echoFixture=await import("./parlor-echo-fixture.js");
+    const echoResult=await echoFixture.handleEchoFixture(method,p,state,accountId);if(echoResult){if(echoResult.ok)save();return echoResult;}
+    const processingFixture=await import("./parlor-processing-fixture.js");
+    const processingResult=await processingFixture.handleProcessingFixture(method,p,state,accountId);if(processingResult){if(processingResult.ok)save();return processingResult;}
+    const contextResult=await contextFixture.handleContextFixture(method,p,state,accountId);if(contextResult){if(contextResult.ok)save();return contextResult;}
+    const memoryResult=await memoryFixture.handleMemoryFixture(method,p,state,accountId);
+    if(memoryResult){if(memoryResult.ok)save();return memoryResult;}
     let result={};
-    if(method==="host.getInfo")result={platform:"ios",methods:["host.getInfo","home.readOnlyResource",...(legacy?[]:[...(noDiscussion?[]:["ai.discussionControl","ai.discussionIntervene","ai.discussionSummarize"]),"ai.saveGroup","ai.groupSend","ai.groupRegenerate","ai.groupCancel","ai.subscriptionLogin","ai.subscriptionLogout","ai.subscriptionModels","ai.getState","ai.send","ai.cancel","ai.saveProvider","ai.deleteProvider","ai.deleteConversation","ai.savePersona",...(noCatalog?[]:["ai.listModels","ai.cancelModelList"])])]};
+    if(method==="host.getInfo")result={platform:"ios",methods:["host.getInfo","home.readOnlyResource",...(legacy?[]:[...(noModelSwitch?[]:["ai.setConversationModel"]),...(noDiscussion?[]:["ai.discussionControl","ai.discussionIntervene","ai.discussionSummarize"]),"ai.saveGroup","ai.groupSend","ai.groupRegenerate","ai.groupCancel","ai.subscriptionLogin","ai.subscriptionLogout","ai.subscriptionModels","ai.getState","ai.send","ai.cancel","ai.saveProvider","ai.deleteProvider","ai.deleteConversation","ai.savePersona",...(noCatalog?[]:["ai.listModels","ai.cancelModelList"])])]};
     else if(method==="trackers.getSession")result={accountId,email:"synthetic@example.invalid"};
     else if(method==="home.readOnlyResource")result=null;
     else if(method.startsWith("ai.")){
       if(p.accountId!==accountId)return {ok:false,error:{code:"account_mismatch",message:"Synthetic account mismatch"}};
-      if(method==="ai.getState")result={...state,messages:state.messages.filter(m=>m.conversationId===p.conversationId),active:state.messages.find(m=>m.status==="streaming"&&!m.roundId),activeMessages:state.messages.filter(m=>m.status==="streaming"&&m.roundId)};
+      if(method==="ai.getState")result={...state,conversationModels:state.conversationModels.filter(c=>c.conversationId===p.conversationId),messages:state.messages.filter(m=>m.conversationId===p.conversationId),active:state.messages.find(m=>m.status==="streaming"&&!m.roundId),activeMessages:state.messages.filter(m=>m.status==="streaming"&&m.roundId)};
+      else if(method==='ai.setConversationModel'){
+        const group=state.groups.find(g=>g.id===p.conversationId),persona=(group?.participants??state.personas).find(x=>x.id===p.personaId),source=state.providers.find(x=>x.id===p.providerId&&x.enabled),model=source?.models.find(x=>x.id===p.modelId);
+        if(!persona||!source||!model||!(source.hasKey||source.connectionType==='subscription'))return {ok:false,error:{code:'invalid',message:'Model unavailable'}};
+        const d=state.discussions.find(d=>d.conversationId===p.conversationId);
+        if(d&&['running','summarizing'].includes(d.status)){d.status=d.status==='running'?'paused':'ended';d.revision++;stopJobs(p.conversationId);}
+        else if(group){for(const job of [...jobs.values()])if(job.message.conversationId===p.conversationId&&job.message.personaId===p.personaId)stopJobs(p.conversationId,job.message.id);}
+        else {const m=state.messages.find(m=>m.conversationId===p.conversationId&&m.status==='streaming'&&!m.roundId);if(m){clearInterval(timer);m.status='cancelled';m.seq++;emit(m);}}
+        state.conversationModels=state.conversationModels.filter(c=>c.conversationId!==p.conversationId||c.personaId!==p.personaId);state.conversationModels.push({conversationId:p.conversationId,personaId:p.personaId,providerId:p.providerId,modelId:p.modelId});
+        if(!state.conversations.some(c=>c.id===p.conversationId))state.conversations.unshift({id:p.conversationId,title:persona.name,updatedAt:new Date().toISOString()});changed();result={saved:true};
+      }
       else if(method==="ai.subscriptionLogin"||method==="ai.subscriptionModels"){
         const sub={...provider,id:"00000000-0000-4000-8000-000000000220",name:"ChatGPT",connectionType:"subscription",hasKey:false,models:[{id:"gpt-preview",name:"Preview model"}]};
         state.providers=state.providers.filter(p=>p.connectionType!=="subscription");state.providers.push(sub);save();result={saved:true};
@@ -107,7 +135,7 @@
           discussionBatch(d,{content:p.content,members:group.participants},p.requestId);return {ok:true,result:{requested:true}};
         }
         const history=state.messages.filter(m=>m.conversationId===group.id),replaced=new Set(history.map(m=>m.supersedesId));
-        const round={id:p.requestId,conversationId:group.id,content:p.content,members:structuredClone(group.participants),context:history.filter(m=>!replaced.has(m.id)&&(m.role==='user'||m.status==='done')).map(m=>({role:m.role,content:m.content})).concat({role:'user',content:p.content})};
+        const round={id:p.requestId,conversationId:group.id,content:p.content,members:configuredMembers(group.participants,group.id),context:history.filter(m=>!replaced.has(m.id)&&(m.role==='user'||m.status==='done')).map(m=>({role:m.role,content:m.content})).concat({role:'user',content:p.content})};
         state.rounds[round.id]=round;state.messages.push({id:crypto.randomUUID(),conversationId:group.id,role:'user',content:p.content,status:'done',createdAt:new Date().toISOString(),seq:0,requestCount:0,roundId:round.id});
         const replies=round.members.map(member=>startMember(member,round,crypto.randomUUID()));save();result={messageIds:replies.map(m=>m.id)};
       }
@@ -147,7 +175,7 @@
         const now=new Date().toISOString();
         state.conversations=state.conversations.filter(c=>c.id!==p.conversationId);state.conversations.unshift({id:p.conversationId,title:p.content.slice(0,60),updatedAt:now});
         state.messages.push({id:crypto.randomUUID(),conversationId:p.conversationId,role:"user",content:p.content,status:"done",createdAt:now,seq:0,requestCount:0});
-        const m={id:crypto.randomUUID(),conversationId:p.conversationId,role:"assistant",content:"",status:"streaming",createdAt:now,requestId:p.requestId,providerId:p.providerId,providerName:state.providers.find(x=>x.id===p.providerId)?.name,model:state.providers.find(x=>x.id===p.providerId)?.models.find(x=>x.id===p.modelId),usage:{source:"unknown"},seq:0,requestCount:1,personaId:state.persona.id,personaName:state.persona.name};
+        const m={id:crypto.randomUUID(),conversationId:p.conversationId,role:"assistant",content:"",status:"streaming",createdAt:now,requestId:p.requestId,providerId:p.providerId,providerName:state.providers.find(x=>x.id===p.providerId)?.name,model:state.providers.find(x=>x.id===p.providerId)?.models.find(x=>x.id===p.modelId),usage:{source:"unknown"},seq:0,requestCount:1,personaId:p.personaId??state.persona.id,personaName:state.personas.find(x=>x.id===p.personaId)?.name??state.persona.name};
         state.messages.push(m);save();
         const chunks=["先别急着和整张待办清单决斗。","我们把事情分成三类，它们就没那么擅长吓人了。\n\n","**今天非做不可的**，先留一件；","**可以推迟的**，给它一个明确日期；","**只是挂在心上的**，先写下来，不必立刻解决。\n\n","你把最让你惦记的那一件告诉我。","我们先从那里下手，如何？"];let index=-1;
         timer=setInterval(()=>{if(m.status!=="streaming"){clearInterval(timer);return;}if(index<0){index=0;return;}if(index<chunks.length)m.content+=chunks[index++];else if(p.content.includes("stop")){return;}else{m.status="done";m.usage={inputTokens:42,outputTokens:76,source:"provider"};clearInterval(timer);}m.seq++;emit(m);},650);
@@ -155,8 +183,14 @@
       }else if(method==="ai.cancel"){const m=state.messages.find(m=>m.requestId===p.requestId);if(m?.status==="streaming"){m.status="cancelled";m.seq++;clearInterval(timer);emit(m);}result={requested:true};}
       else if(method==="ai.saveProvider"){const next={...p.provider,hasKey:p.clearKey?false:Boolean(p.apiKey||state.providers.find(x=>x.id===p.provider.id)?.hasKey)};state.providers=state.providers.filter(x=>x.id!==next.id);state.providers.push(next);save();result={saved:true};}
       else if(method==="ai.deleteProvider"){state.providers=state.providers.filter(x=>x.id!==p.providerId);save();}
-      else if(method==="ai.deleteConversation"){state.messages=state.messages.filter(x=>x.conversationId!==p.conversationId);state.conversations=state.conversations.filter(x=>x.id!==p.conversationId);state.groups=state.groups.filter(x=>x.id!==p.conversationId);state.discussions=state.discussions.filter(x=>x.conversationId!==p.conversationId);save();}
+      else if(method==="ai.deleteConversation"){state.messages=state.messages.filter(x=>x.conversationId!==p.conversationId);state.conversations=state.conversations.filter(x=>x.id!==p.conversationId);state.groups=state.groups.filter(x=>x.id!==p.conversationId);state.discussions=state.discussions.filter(x=>x.conversationId!==p.conversationId);state.conversationModels=state.conversationModels.filter(x=>x.conversationId!==p.conversationId);save();}
     }else return {ok:false,error:{code:"synthetic_unsupported",message:"This capability is unavailable in the synthetic preview"}};
+    if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noMemory"))result.methods.push(...memoryFixture.memoryMethods);
+    if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noProcessing"))result.methods.push(...processingFixture.processingMethods);
+    if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noContext"))result.methods.push(...contextFixture.contextMethods);
+    if(method==="host.getInfo"&&!legacy&&new URL(location.href).searchParams.has("echoFixture"))result.methods.push(...echoFixture.echoMethods);
+    if(method==="ai.getState"){delete result.echoConfig;delete result.echoShares;delete result.echoSnapshots;const page=contextFixture.contextPage(state,p.conversationId);result.messages=page.messages;result.messagePage=page;delete result.contexts;delete result.processingConfigs;delete result.processingJobs;delete result.processingProposals;result.conversation=state.conversations.find(c=>c.id===p.conversationId);result.unassignedConversations=state.conversations.filter(c=>c.ownership==="unresolved");delete result.memories;}
+    if(method==="ai.send"){const c=state.conversations.find(c=>c.id===p.conversationId);if(c){c.ownership="single";c.personaId=p.personaId;save();}}
     return {ok:true,result:JSON.parse(JSON.stringify(result))};
   }},configurable:false,writable:false});
 })();

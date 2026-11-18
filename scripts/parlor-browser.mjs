@@ -40,7 +40,7 @@ try{
     await page.getByRole('dialog').getByText('42',{exact:true}).waitFor();
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.getByRole('button',{name:'切换人格',exact:true}).click();
-    await page.getByRole('dialog').getByText('私人执事 · 默认',{exact:true}).waitFor();
+    await page.locator('[data-persona-choices]').getByRole('button',{name:/Sebastian.*Mock text/}).waitFor();
     assert.equal(await page.getByText('Jarvis',{exact:true}).count(),0,'do not invent available personas');
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();
@@ -75,10 +75,12 @@ try{
     await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.reload();await page.getByRole('button',{name:/Parlor ·/}).click();
     await page.getByRole('heading',{name:'Sebastian Test',exact:true}).waitFor();
-    await page.getByRole('button',{name:'切换人格',exact:true}).locator('img').waitFor();
-    await page.waitForFunction(()=>document.querySelector('[aria-label="切换人格"] img')?.naturalWidth>0);
+    await page.locator('[data-native-eva-chat] > header img').waitFor();
+    await page.waitForFunction(()=>document.querySelector('[data-native-eva-chat] > header img')?.naturalWidth>0);
+    const priorReplies=await page.locator('[data-role="assistant"]').count();
     await page.getByLabel('消息内容',{exact:true}).fill('stop: keep this partial output');
     await page.getByRole('button',{name:'发送',exact:true}).click();
+    await page.waitForFunction(n=>document.querySelectorAll('[data-role="assistant"]').length>n,priorReplies);
     await page.locator('[data-role="assistant"]').last().getByText('先别急着和整张待办清单决斗。',{exact:false}).waitFor();
     await page.getByRole('button',{name:'停止生成',exact:true}).click();
     await page.getByText('已停止 · 已保留部分内容',{exact:true}).waitFor();
@@ -105,18 +107,19 @@ try{
     await page.locator('[data-role="assistant"]').first().locator('[data-segment]').nth(1).waitFor();
     await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();
     await page.getByRole('button',{name:/Memory/}).click();
-    await page.getByText('尚未开放',{exact:true}).waitFor();
+    await page.locator('[data-parlor-memory]').waitFor();await page.getByRole('button',{name:'新增记忆',exact:true}).waitFor();
     if(!mobile){await page.getByRole('link',{name:'设置',exact:true}).click();await page.getByRole('button',{name:'Parlor 人格、模型与会话偏好',exact:true}).click();await page.locator('[data-parlor-settings]').waitFor();}
     // Simulate a previously bound model being removed from Provider settings.
     await page.evaluate(()=>{const state=JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state'));state.persona.providerId=state.providers[0].id;state.persona.modelId='removed-model';state.personas=state.personas?.map(p=>p.id===state.persona.id?state.persona:p);sessionStorage.setItem('eo-eva-synthetic-state',JSON.stringify(state));});
     await page.reload();await page.getByRole('button',{name:/Parlor ·/}).click();
-    await page.getByRole('button',{name:'默认模型不可用，请重新选择默认模型。',exact:true}).waitFor();
+    await page.getByRole('button',{name:'模型不可用 · 重新选择',exact:true}).waitFor();
     await page.getByLabel('消息内容',{exact:true}).fill('must not silently use another provider');
     assert(await page.getByRole('button',{name:'发送',exact:true}).isDisabled());
-    await page.getByRole('button',{name:'默认模型不可用，请重新选择默认模型。',exact:true}).click();
-    const modelBinding=page.getByRole('combobox',{name:/^默认模型/});
-    await modelBinding.selectOption('');await page.getByRole('button',{name:'保存人格',exact:true}).click();
-    await page.getByText('人格已保存到本机',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'模型不可用 · 重新选择',exact:true}).click();
+    await page.locator('.form-sheet-layer[data-state=open] [data-conversation-models]').waitFor();
+    await page.getByRole('dialog').getByRole('button',{name:'Local mock renamed · Mock text',exact:true}).click();
+    await page.getByRole('button',{name:'切换会话模型',exact:true}).getByText('Mock text',{exact:true}).waitFor();
+    assert.equal((await page.evaluate(()=>JSON.parse(sessionStorage.getItem('eo-eva-synthetic-state')))).persona.modelId,'removed-model','conversation recovery preserves persona default');
     const bounds=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth}));assert(bounds.width<=bounds.viewport+1);
     assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
     results.push({mobile,parlor:true,defaultPersona:true,personaPersisted:true,historicalAttribution:true,stream:true,cancelAndReload:true,centralSettings:true,providerSave:true,remoteRequests:0});

@@ -127,7 +127,14 @@
 
 ## Parlor
 
-- **多人格群聊（源码候选）**：[Group Chat](PARLOR_GROUP_CHAT.md) 在既有 Native `AIRuntime`、`AIStore` 与 `ai.sqlite3` v4 内实现 2–8 人格 Parallel / Discussion；每轮原子保存一致上下文／配置快照及独立占位回答，Discussion 采用同轮并行／轮间互读的有界调度，支持插话、暂停／继续／结束与指定人格总结；新增 ai_discussions 保存预算及恢复状态。单独停止／重生成与全部取消共用既有流式传输、账户门和消息事件。`ai_personas` 支持 Sebastian 及 UUID 人格，保留默认人格与旧消息。订阅与 API 共用传输调度，模型仍在本机直连；旧 Host 经可选方法检测保留单聊。尚未 macOS 编译／真机验收。
+- **本地人格记忆基础（源码候选）**：[Phase A](PARLOR_MEMORY_PHASE_A.md) 在独立 AIStore v6 增加账户／人格隔离的版本化记忆及会话归属；旧历史仅在证据完整唯一时回填，群聊保持公共结构。Memory 设置支持手动 CRUD、来源和版本；Privacy 提供当前账户独立备份／校验恢复，复用 SQLite online backup 与原生分享。删除清理版本正文和相关内部副本。八个可选 Native 方法兼容旧 Host；Phase A 单阶段没有模型记忆读取；下方 Phase B 已增加本地读取，Echo、自动提取与压缩尚未启用。Swift 编译与真机待验收。
+- **本地上下文管理（Phase A/B 合并源码候选）**：[Phase B](PARLOR_MEMORY_PHASE_B.md) 将 AIStore 升级至 v7；按实际模型窗口组装摘要、待办、完整近期轮次及相关人格记忆，公共快照与私人引用独立。Parallel 冻结同轮公共输入，Discussion 继承已完成轮次；分页读取替代固定历史长度。Context 设置手动管理摘要版本与水位，备份 v2 支持引用及 ordinal 重映射；无新增推理、Echo 或远端存储。旧 Host 通过可选能力兼容；Swift 与真机验证待后续安排。
+- **自动记忆批处理（Phase A/B/C 合并源码候选）**：[Phase C](PARLOR_MEMORY_PHASE_C.md) 在 AIStore v8 增加人格级模型/触发配置、任务/尝试及审核提案，默认关闭。复用 Native 传输与实际 dispatch/Usage，单人格每批合并提取和摘要；公共群聊输入不含已有私有记忆，本地分别去重与审核。新聊天抢占、未知请求不自动重发，有效缓存可零推理本地重试。独立备份 v3 保留任务和来源，恢复关闭自动处理；尚未 Swift 编译/真机验收，未接 Echo。
+- **可选 Echo 共享记忆（Phase A/B/C/D 合并源码候选）**：[Phase D](PARLOR_MEMORY_PHASE_D.md) 在 AIStore v9 增加召回快照/绑定、独立权限和受控分享回执；直接复用完整 getMemoryContext 与原业务安全通道，Parallel 单次召回、Discussion 冻结，原私人记忆不共享。预览确认后提交人工 Candidate/Source，稳定 requestId 查询与重试；关闭读取撤回缓存正文，失败继续本地聊天。备份 v4 只含召回元数据，恢复关闭读写；不新增远端表、MCP 或推理请求。旧 Host/服务端可降级；尚未 Swift 编译或真机验收。
+
+- **多人格群聊（源码候选）**：[Group Chat](PARLOR_GROUP_CHAT.md) 在既有 Native `AIRuntime`、`AIStore` 与 `ai.sqlite3` v5 内实现 2–8 人格 Parallel / Discussion；每轮原子保存一致上下文／配置快照及独立占位回答，Discussion 采用同轮并行／轮间互读的有界调度，支持插话、暂停／继续／结束与指定人格总结；新增 ai_discussions 保存预算及恢复状态。单独停止／重生成与全部取消共用既有流式传输、账户门和消息事件。`ai_personas` 支持 Sebastian 及 UUID 人格，保留默认人格与旧消息。订阅与 API 共用传输调度，模型仍在本机直连；旧 Host 经可选方法检测保留单聊。尚未 macOS 编译／真机验收。
+
+- **会话模型选择（源码候选）**：[快捷切换](PARLOR_CONVERSATION_MODELS.md) 复用配置与传输，`ai.setConversationModel` 将账户／会话／人格的选择存入同一 AIStore v5 的 ai_conversation_models。单聊顶部显示实际模型；Parallel 切换只停止目标人格，Discussion 先暂停、从下一轮应用；历史与 retry 使用原快照。旧 Host 通过可选能力检测保留聊天，尚待原生编译／真机验收。
 
 - **订阅接入候选**：[Provider 整合](PARLOR_SUBSCRIPTION_PROVIDER.md) 将已验证 SIWC 协议接入 `AIRuntime`，与 API 并列管理；登录按 EO 账户隔离 Keychain，经原 Bridge 调用并复用本地聊天持久化。尚未原生编译／真机验收，不代表正式发布。
 

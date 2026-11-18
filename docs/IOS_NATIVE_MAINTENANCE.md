@@ -1,5 +1,27 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Parlor Echo Shared Memory Phase D 源码候选
+
+AIStore v9 增加账户级 Echo 权限/完整召回缓存、Discussion 冻结绑定与人格分享回执，读取与写入默认关闭。AIEchoClient 经原 TrackerLocalController.businessRequest 的 HTTPS、Session/Cookie、账户、generation、拒绝重定向和大小限制访问 /api/memory-graph；白名单只新增根路径 GET/POST，Echo 请求 5 秒/资源 8 秒，不进入通用在线缓存或离线写队列。完整 getMemoryContext 直接返回，旧简化召回保持不变；群聊一次召回形成公共包，Persona Memory 独立，失败本地降级。分享必须预览和明确确认，始终 manual Candidate，稳定 requestId 查询/幂等重试，重启不自动写入；本地遗忘清理副本但不删除 Echo。备份 v4/schema9 兼容 v1/v2/v3，仅导出 Echo 快照元数据，恢复关闭两项权限；无新远端表、MCP、推理接口、entitlement 或签名安装链变化。Windows SQL/Node、HTTP、React 页面已验证；Swift 编译和真机待统一验收。详见 [Phase D](PARLOR_MEMORY_PHASE_D.md)。
+
+## Parlor Automatic Memory Phase C 源码候选
+
+AIStore v8 增加人格级处理配置、幂等任务与审核提案，默认关闭自动推理。MemoryProcessor 复用 AIRuntime.perform；API 与 SIWC infer 新增可选 dispatch 回调，仅标记已验证凭据后的实际发送边界，不改动认证请求或推理协议字段。新聊天抢占、中断不自动重发；有效结果先校验缓存，支持不发推理的本地重试。单批最多 120 条完整消息，群聊只传公共历史，不传既有人格私有记忆；本地按人格比较、提案审核和版本替代。备份 v3/schema8 保留配置/尝试/提案/摘要任务 Hash，兼容 v1/v2；恢复关闭自动记忆与 Provider。没有新增 entitlement、framework 或后台执行能力，App 挂起后不保证继续；现有安装签名链保持原样。Windows 已运行 SQL/Node 和浏览器夹具验证，尚未编译执行 Swift 测试、真机/真实推理或原生备份恢复验收。详见 [Phase C](PARLOR_MEMORY_PHASE_C.md)。
+
+## Parlor Conversation Context Phase B 源码候选
+
+Phase A/B 合并源码阶段，AIStore v7 新增版本化会话上下文和引用快照，保留 v5/v6 兼容迁移及一致性备份。Context Engine 在 Native 按实际 Model 窗口选择摘要、未解决事项、完整近期轮次及本人格相关记忆；群聊公共输入在启动前冻结，私人数据独立，Discussion 插话与原轮次重生成沿用现有调度。删除/替代后撤回失效引用。可选 ai.messagePage/contextGet/contextSave 沿用既有 Bridge 安全门，旧 Host 保留原功能。导出 v2/schema7 保留摘要和快照，仍可导入 v1/schema6，恢复时按消息 ID 重映射 ordinal 并校验账户和版本。没有增加模型请求、MCP、远端表、framework、权限或签名安装链变化。Windows 已执行 SQL/Node 与 React 夹具回归，尚未编译 Swift、运行原生测试或真机验收；不单独打包、不提交、不推送、不部署。详见 [Phase B 实现与验证](PARLOR_MEMORY_PHASE_B.md)。
+
+## Parlor Persona Memory Phase A 源码候选
+
+AIStore v6 在原 ai.sqlite3 增加 ai_conversation_owners、ai_persona_memories；旧库迁移前使用包含 WAL 的 sqlite3_backup 和 quick_check，可靠历史才回填单聊人格，群聊与不明确历史分别保留 group／unresolved。八个可选 ai.memory*／assignConversationPersona／exportBackup／restoreBackup 方法沿用本地主 frame、origin、账户与 generation 安全门。设置使用现有 Vintage；Phase A 只管理本地记忆；后续 Phase B 已接入本地推理上下文，仍不接 Echo 或 MCP。
+
+导出经既有 UIActivityViewController 分享当前账户的版本化 JSON，排除 Keychain；恢复验证账户、校验和与引用后以事务替换当前账户，并停用 Provider／清理相关 API Key，其他账户保留。删除清空完整记忆版本链并清理相关内部安全／分享副本；用户另存的文件不自动删除。冻结请求生成前核对当前 Provider 启用状态及端点。没有新增 framework 配置、Info.plist、entitlement、权限或签名安装链变化。Node／浏览器验证不替代 Swift、原生分享／文件选择及 iPhone 验收；未编译、打包、提交、推送或部署。详见 [Phase A 实现与验证](PARLOR_MEMORY_PHASE_A.md)。
+
+## Parlor 会话模型切换源码候选
+
+同一 ai.sqlite3 v5 追加账户／会话／人格隔离的 ai_conversation_models，保留既有表、消息与冻结轮次。可选 Bridge v1 方法 ai.setConversationModel 沿用原主 frame／origin／account generation 门；验证 Provider、Model 与凭据后取消并等待目标任务，Discussion 则暂停整轮，新配置只用于后续回答，retry 保留原快照。选择不修改人格默认；旧 Host 禁用快捷入口。推理仍在本机，无新增 framework、权限、Info.plist、entitlement 或签名链变化。Windows 未编译 Swift／运行 Native 测试，不打包、不发布；需新 IPA 验收。详见 [实现与验证](PARLOR_CONVERSATION_MODELS.md)。
+
 ## Parlor Group Chat 源码候选
 
 `ai.sqlite3` 幂等升级 v4，追加账户隔离 `ai_groups`／`ai_rounds`／`ai_discussions`，不重建旧表；用户消息、参与者占位回答和冻结上下文同一事务保存。`ai.saveGroup`／`ai.groupSend`／`ai.groupCancel`／`ai.groupRegenerate` 是可选 Bridge v1 能力，继续复用主 frame、origin、account generation 校验。Discussion 复用同轮并行任务，轮间等待后冻结新上下文，预算默认 3／上限 5 轮；可选 `ai.discussionControl`／`ai.discussionIntervene`／`ai.discussionSummarize` 支持暂停、插话、结束与总结，恢复为 interrupted 且不自动启动推理。群聊参与者使用独立任务与请求 ID，单个错误不取消其他任务；后台或切换账户取消全部，保留已持久化输出。多人格复用既有 Persona 表，API/订阅复用同一 transport 边界；SIWC 同账户共享旋转令牌刷新，不共用推理请求。没有新增 framework、Info.plist、entitlement、权限、签名或安装链变化。不通过 EO 服务端推理。本轮不提交／推送／部署／打包；Windows 测试不等于 Swift 编译或真机验收。详见 [实现与验收记录](PARLOR_GROUP_CHAT.md)。
@@ -24,7 +46,7 @@ SIWC 核心协议／浏览器／Runtime 进入普通产品编译，独立实验�
 
 用户已授权在 `codex/parlor-native-test` 提交、推送并以 `local_trackers=true` 打包。该分支禁用 Vercel 部署并禁止 push 自动构建普通线上 Host；使用手动 workflow_dispatch，只构建独立本地包，不切换生产 Web 构建分支。Hermes 连接 API、通知回调、插件、本地后备入口及业务白名单已移除，保留消息渲染、分段气泡、头像背景和设备偏好。既有 SQL 迁移／服务端历史数据不删除、不执行迁移。以下早期 Hermes 接入段落仅为历史。
 
-Bundle ID、scheme、ad-hoc 签名、HealthKit entitlement、patched xtool 重签与覆盖安装流程保持原链路。CI 继续按既有决定省略 Simulator／Swift Testing 执行，iphoneos Release 构建与 entitlement 断言通过后才能声称 IPA 已生成；真机测试由用户执行。测试项见 [Parlor Native 验收清单](PARLOR_NATIVE_TEST.md)。
+Bundle ID、scheme、ad-hoc 签名、HealthKit entitlement、patched xtool 重签与覆盖安装流程沿用原链路。手动打包可选 `run_native_tests=true`，通过完整 Simulator 测试后才进入设备构建。iphoneos Release 构建与 entitlement 断言通过后生成 IPA。真机测试项见 [Parlor Native 验收清单](PARLOR_NATIVE_TEST.md)。
 
 ## Native Eva Phase 1A（源码候选，尚未原生验收）
 
@@ -187,11 +209,12 @@ Windows 不能直接完成正式的 Xcode/iPhoneOS 编译。当前已经验证�
 `.github/workflows/ios-native-host.yml` 当前会：
 
 1. 安装 XcodeGen，从 `ios/EvaOrbitHost/project.yml` 生成工程。
-2. 用 `iphoneos`、Release 和 ad-hoc code signing 构建设备 `.app`。
-3. 由 `scripts/ios/package-ad-hoc-ipa.sh` 验证签名，并断言以下 entitlement 都是 `true`：
+2. 手动运行选择 `run_native_tests=true` 时，用当前 Xcode 的 Simulator SDK 匹配已安装的 iOS runtime，在新建的 iPhone 16 Pro Simulator 上运行完整 `EvaOrbitHostTests`。测试使用本地 Tracker bundle 和独立容器。编译、启动或测试失败会阻止设备构建。上传可用的 `.xcresult`、环境、启动与编译测试日志。
+3. 用 `iphoneos`、Release 和 ad-hoc code signing 构建设备 `.app`。
+4. 由 `scripts/ios/package-ad-hoc-ipa.sh` 验证签名，并断言以下 entitlement 都是 `true`：
    - `com.apple.developer.healthkit`
    - `com.apple.developer.healthkit.background-delivery`
-4. 使用 `actions/upload-artifact@v7` 直接发布单个 IPA。运行摘要记录 IPA 的 SHA-256、Git SHA 和 Xcode 版本。
+5. 使用 `actions/upload-artifact@v7` 直接发布单个 IPA。运行摘要记录 IPA 的 SHA-256、Git SHA 和 Xcode 版本。
 
 设备 build 不能改成完全 unsigned 的 `CODE_SIGNING_ALLOWED=NO`。patched xtool 需要从 ad-hoc 签名中读取并重建 entitlement。
 
@@ -199,9 +222,9 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 
 页面、共享组件、样式、前端依赖和业务代码可以正常提交并 push，不自动触发 iOS 打包。`push.paths` 仅保留 Native Host（排除生成的 `Resources/TrackerWeb/**`）、原生资源准备/IPA 打包脚本和 workflow 本身；需要把累计的本地 React 更新安装到手机时，手动运行 `iOS Native Host`，本地版选择 `local_trackers=true`。此调整只改变触发时机，完整测试、构建、签名和安装链保持不变。
 
-2026-10-23 按用户明确要求，打包 workflow 移除 Simulator 编译、Native XCTest 执行及 xcresult 上传。保留前端构建/Node 回归、iphoneos Release 编译、ad-hoc 签名和 entitlement 校验、产物校验资料及隔离数据库测试。原生行为交由安装后的手机验收；CI 成功仅表示构建与保留的检查通过，不表示原生测试通过。
+正常 push 和默认手动运行跳过 Simulator 检查。选择 `run_native_tests=true` 后，测试结果至少要有一个通过用例，且没有失败或跳过，才能继续打包。CI 的测试配置使用 Debug 本地 Host，设备 Release 配置由原有打包选项决定。
 
-保留仓库中的原生测试源码及有界等待修复，供日后手动在 macOS 运行，当前不作为打包门槛。历史 #60 停在页面启动测试；#61 在测试 App 启动时缺少 libswiftWebKit.dylib，尚未执行用例即超时。移除模拟器门槛不等于修复或验证该运行库问题，不能将其记录为已通过。
+历史 #60 停在页面启动测试，#61 在测试 App 启动时因缺少 `libswiftWebKit.dylib` 超时。workflow 会记录 Xcode 版本、SDK、runtime 和启动日志，实际加载情况待首次启用测试的 Runner 验证。
 
 ### 3.3 Artifact 与重建判断
 
