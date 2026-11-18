@@ -405,7 +405,8 @@ struct AIGroupRuntimeTests {
         let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
         let secrets = MemoryAISecrets(); var contexts: [[[String: String]]] = []; var starts = 0
         let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
-            let json = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            let data = try #require(request.httpBody)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             contexts.append(Array(try #require(json["messages"] as? [[String: String]]).dropFirst())); starts += 1
             try await receive(.init(delta: "independent partial"))
             try await Task.sleep(nanoseconds: 100_000_000)
@@ -489,7 +490,8 @@ struct AIGroupRuntimeTests {
         let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
         let secrets = MemoryAISecrets(); var contexts: [[[String: String]]] = []
         let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
-            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            let data = try #require(request.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             contexts.append(Array(try #require(body["messages"] as? [[String: String]]).dropFirst()))
             let who = request.url?.host == "second.example.invalid" ? "Ada" : "Sebastian"
             try await receive(.init(delta: who + " viewpoint"))
@@ -533,7 +535,8 @@ struct AIGroupRuntimeTests {
         let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
         let secrets = MemoryAISecrets(); var hold = true; var contexts: [[[String: String]]] = []
         let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
-            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            let data = try #require(request.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             contexts.append(Array(try #require(body["messages"] as? [[String: String]]).dropFirst()))
             try await receive(.init(delta: "partial viewpoint"))
             while hold { try await Task.sleep(nanoseconds: 10_000_000) }

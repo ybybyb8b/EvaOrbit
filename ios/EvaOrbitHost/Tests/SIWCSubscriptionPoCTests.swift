@@ -27,7 +27,8 @@ struct SIWCSubscriptionPoCTests {
         let request = try SIWCProtocol.request(model: "mock-only", token: "test-bearer-never-real")
         #expect(request.url?.absoluteString == "https://api.openai.com/v1/responses")
         #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
-        let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+        let data = try #require(request.httpBody)
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(body["store"] as? Bool == false); #expect(body["stream"] as? Bool == true)
         #expect(body["max_output_tokens"] == nil); #expect(body["temperature"] == nil)
         #expect(String(data: request.httpBody!, encoding: .utf8)?.contains("test-bearer") == false)
@@ -203,7 +204,8 @@ struct SIWCSubscriptionPoCTests {
         try keychain.write(SIWCConnection(host: "urn:uuid:mock", client: "oaiapp_test", subject: "mock-user",
             access: "mock-access", expires: Date().addingTimeInterval(3600), scopes: ["resource.invoke", "chatgpt.tokens.use.direct"]))
         transport.install { request in
-            let body = try #require(JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any])
+            let data = try #require(request.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             #expect(body["instructions"] as? String == "Persona prompt")
             let input = try #require(body["input"] as? [[String: String]])
             #expect(input.map { $0["role"] ?? "" } == ["user", "assistant", "user"])
@@ -360,7 +362,8 @@ private final class SIWCMockURLProtocol: URLProtocol {
             let resolved = try #require(handler)
             let reply = try resolved(request)
             let headers: [String: String] = reply.1.map { ["Content-Type": $0] } ?? [:]
-            let response = try #require(HTTPURLResponse(url: #require(request.url), statusCode: reply.0,
+            let url = try #require(request.url)
+            let response = try #require(HTTPURLResponse(url: url, statusCode: reply.0,
                 httpVersion: "HTTP/1.1", headerFields: headers))
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: Data(reply.2.utf8)); client?.urlProtocolDidFinishLoading(self)
