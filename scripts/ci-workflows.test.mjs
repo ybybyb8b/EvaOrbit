@@ -47,6 +47,8 @@ test("IPA packaging defaults to device-only and requires an opted-in Simulator r
   assert.match(native.run, /xcodebuild test[\s\S]*-scheme EvaOrbitHost[\s\S]*-resultBundlePath/);
   assert.doesNotMatch(native.run, /-only-testing|-skip-testing/);
   assert.match(native.run, /EVAORBIT_LOCAL_TRACKERS=YES/);
+  assert.match(native.run, /IPHONEOS_DEPLOYMENT_TARGET=18\.4/);
+  assert.doesNotMatch(device.run, /IPHONEOS_DEPLOYMENT_TARGET/);
   assert.match(diagnostics.if, /always\(\).*inputs\.run_native_tests.*native_tests\.outcome != 'skipped'/);
   assert.equal(diagnostics.with.path, "${{ runner.temp }}/EvaOrbitHost-Tests");
   assert.equal(device.if, "${{ success() && (!inputs.run_native_tests || steps.native_tests.outcome == 'success') }}");

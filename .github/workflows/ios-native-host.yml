@@ -105,6 +105,11 @@ jobs:
           trap 'xcrun simctl shutdown "$device" || true; xcrun simctl delete "$device" || true' EXIT
           printf 'SDK=%s Runtime=%s Device=%s\n' "$sdk" "$runtime" "$device" | tee -a "$diagnostics/environment.log"
           xcrun simctl bootstatus "$device" -b 2>&1 | tee "$diagnostics/simulator.log"
+          simulator_settings=()
+          # WebKit #293831: iOS 18.5 cannot launch Swift WebKit apps targeting iOS 18.3 or earlier.
+          if [[ "$sdk" == "18.5" || "$sdk" == 18.5.* ]]; then
+            simulator_settings+=("IPHONEOS_DEPLOYMENT_TARGET=18.4")
+          fi
           xcodebuild test \
             -project EvaOrbitHost.xcodeproj \
             -scheme EvaOrbitHost \
@@ -119,6 +124,7 @@ jobs:
             -default-test-execution-time-allowance 60 \
             -maximum-test-execution-time-allowance 120 \
             CODE_SIGNING_ALLOWED=NO EVAORBIT_LOCAL_TRACKERS=YES \
+            "${simulator_settings[@]}" \
             2>&1 | tee "$diagnostics/xcodebuild.log"
           xcrun xcresulttool get test-results summary --path "$diagnostics/EvaOrbitHostTests.xcresult" \
             > "$diagnostics/summary.json"

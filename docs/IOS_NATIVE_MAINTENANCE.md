@@ -224,7 +224,7 @@ GitHub Actions 只构建已经提交并 push 的内容；本地未提交文件�
 
 正常 push 和默认手动运行跳过 Simulator 检查。选择 `run_native_tests=true` 后，测试结果至少要有一个通过用例，且没有失败或跳过，才能继续打包。CI 的测试配置使用 Debug 本地 Host，设备 Release 配置由原有打包选项决定。
 
-历史 #60 停在页面启动测试，#61 在测试 App 启动时因缺少 `libswiftWebKit.dylib` 超时。workflow 会记录 Xcode 版本、SDK、runtime 和启动日志，实际加载情况待首次启用测试的 Runner 验证。
+历史 #60 停在页面启动测试，#61 和 A–D 候选运行 `44235060744` 在测试 App 启动时缺少 `libswiftWebKit.dylib`。iOS 18.5 Simulator 测试采用 [WebKit #293831](https://bugs.webkit.org/show_bug.cgi?id=293831) 的部署目标规避方案，将该次 Simulator 构建目标设置为 iOS 18.4。设备构建沿用项目部署目标。workflow 记录 Xcode 版本、SDK、runtime 和启动日志。
 
 ### 3.3 Artifact 与重建判断
 
