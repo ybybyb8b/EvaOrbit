@@ -1051,7 +1051,7 @@ function foodLogResource(operations: NonNullable<ResourceRegistryOperations["foo
     async delete(value) { const id = numericId(value); if (!await operations.delete(id)) throw new ConflictError("Food record not found."); return { deleted: true, id }; },
   };
 }
-const drinkLogMap = { consumed_volume_ml: "consumedVolumeMl", food_library_id: "foodLibraryId", drink_menu_id: "drinkMenuId", food_place_id: "foodPlaceId", occurred_at: "occurredAt", occurred_has_explicit_time: "occurredHasExplicitTime", name: "name", drink_type: "drinkType", sugar_level: "sugarLevel", temperature: "temperature", rating: "rating", estimated_kcal: "estimatedKcal", kcal_min: "kcalMin", kcal_max: "kcalMax", confidence: "confidence", notes: "notes" };
+const drinkLogMap = { consumed_volume_ml: "consumedVolumeMl", food_library_id: "foodLibraryId", drink_menu_id: "drinkMenuId", food_place_id: "foodPlaceId", occurred_at: "occurredAt", occurred_has_explicit_time: "occurredHasExplicitTime", name: "name", custom_name: "customName", drink_type: "drinkType", sugar_level: "sugarLevel", temperature: "temperature", rating: "rating", drink_kcal_mode: "drinkKcalMode", estimated_kcal: "estimatedKcal", kcal_min: "kcalMin", kcal_max: "kcalMax", confidence: "confidence", notes: "notes" };
 function drinkLogResource(operations: NonNullable<ResourceRegistryOperations["drinkLog"]>): RegisteredResource {
   const writable = Object.keys(drinkLogMap);
   return {
@@ -1063,14 +1063,16 @@ function drinkLogResource(operations: NonNullable<ResourceRegistryOperations["dr
         drink_menu_id: { type: "integer", nullable: true, description: "Drink-kind menu ID from selected place; supplies name and classified type on create/source change, never sugar or temperature." },
         drink_menu_name: { type: "string", read_only: true, description: "Resolved menu name." },
         name: { type: "string", max_length: 200, description: "Optional manual name; linked menu supplies its name." },
+        custom_name: { type: "string", nullable: true, max_length: 200, description: "Optional display name that preserves the linked menu and nutrition reference. Null clears the display name override." },
         drink_type: { type: "string", enum: ["coffee", "milk_tea", "tea", "soda", "juice", "alcohol", "other"], default: "other", description: "Fixed classification; source menu type takes precedence, then library type, on create/source changes. With unchanged source, the saved snapshot is retained unless explicitly updated. water is legacy: cannot create it or introduce it on another record." },
-        consumed_volume_ml: { type: "number", nullable: true, description: "Actual intake in ml, 0-10000, up to two decimals. If estimated_kcal is omitted, amount changes recalculate from the saved nutrition reference when convertible; null means unknown. Unrelated PATCH preserves calories." },
+        consumed_volume_ml: { type: "number", nullable: true, description: "Actual intake in ml, 0-10000, up to two decimals. Null means unknown. Auto estimates use the saved reference; manual calories are preserved when volume changes." },
+        drink_kcal_mode: { type: "string", nullable: true, enum: ["auto", "serving", "manual"], description: "Auto calculates from actual ml; serving requires explicit whole-serving consumption with unknown ml; manual preserves the supplied estimate. Legacy records may have no saved mode." },
         nutrition_reference: { type: "object", nullable: true, read_only: true, description: "Immutable nutrition snapshot captured from the linked Food Library; source changes refresh it. Never write this field." },
         sugar_level: { type: "string", enum: ["", "无糖", "微糖", "半糖", "少糖", "标准", "多糖"], description: "Sugar level." },
         temperature: { type: "string", nullable: true, enum: ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"], description: "Temperature or ice amount." },
         limits: { type: "array", read_only: true, description: "Drink Limit status results included in create/update responses." },
       },
-      required_fields: [], writable_fields: writable, searchable_fields: ["name", "notes"], supported_actions: [],
+      required_fields: [], writable_fields: writable, searchable_fields: ["name", "custom_name", "notes"], supported_actions: [],
       validation_rules: ["search filters: date (YYYY-MM-DD), drink_type, food_place_id, drink_menu_id", "create/update preserve Drink Limit evaluation using the saved record's date", "null clears associations; omitted PATCH preserves", "linked menu must be drink-kind and belong to the selected place", "Name selection resolves one catalog item and auto-links its owner and explicit menu nutrition reference; manual names never infer ambiguous matches", "source classification is inherited on create/source change; editing source metadata never rewrites old log types"],
     },
     async search({ query, filters = {}, limit, cursor }) {

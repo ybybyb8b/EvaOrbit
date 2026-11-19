@@ -28,8 +28,10 @@ async function validateFoodLinks(repository:Awaited<ReturnType<typeof getReposit
 }
 async function prepareFoodCalculation(repository: Awaited<ReturnType<typeof getRepository>>, input: Record<string, unknown>, existing?: FoodLog) {
   let inputs = input.foodLibraryItems as FoodConsumption[] | undefined;
-  if (input.consumedWeightG !== undefined && (input.consumedWeightG !== null || existing?.consumedWeightG != null) && (inputs ?? existing?.foodLibraryItems)?.length === 1 && (inputs ?? existing?.foodLibraryItems)?.[0].unit === "g") {
-    inputs = (inputs ?? existing!.foodLibraryItems!).map(item => ({ ...item, quantity: input.consumedWeightG as number | null, unit: "g" }));
+  const items = inputs ?? existing?.foodLibraryItems;
+  // Older callers can use measured weight as shorthand for a sole gram portion.
+  if (input.separateMealWeight !== true && input.consumedWeightG !== undefined && (input.consumedWeightG !== null || existing?.consumedWeightG != null) && items?.length === 1 && items[0].unit === "g") {
+    inputs = [{ ...items[0], quantity: input.consumedWeightG as number | null }];
   }
   const legacyChanged = inputs === undefined && input.foodLibraryId !== undefined && input.foodLibraryId !== existing?.foodLibraryId;
   if (legacyChanged) inputs = [];
@@ -60,7 +62,7 @@ async function applyCatalogFoodLinks(repository:Awaited<ReturnType<typeof getRep
   const placeId=Object.hasOwn(input,"foodPlaceId")?input.foodPlaceId as number|null:menus[0]?.foodPlaceId??library?.foodPlaceId??existing?.foodPlaceId??null;
   return {...input,foodPlaceId:placeId,...(consumptions?{foodLibraryItems:consumptions,foodLibraryId:libraryId,foodKcalMode:input.foodKcalMode??(!inferred && input.estimatedKcal!=null?"manual":"auto")}:{})};
 }
-export async function createFoodLog(input: NewFoodLog) { const repository=await getRepository();input={...input,...await applyCatalogFoodLinks(repository,input)} as NewFoodLog;const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);const calculation=await prepareFoodCalculation(repository,input);const saved=await repository.createFoodLog({...input,...calculation,foodDishIds:ids,foodDishId:ids[0]??null} as NewFoodLog);return (await withMealTimes(repository,[saved]))[0]; }
+export async function createFoodLog(input: NewFoodLog & { separateMealWeight?: boolean }) { const repository=await getRepository();input={...input,...await applyCatalogFoodLinks(repository,input)} as NewFoodLog;const ids=input.foodDishIds??(input.foodDishId?[input.foodDishId]:[]);await validateFoodLinks(repository,input.foodPlaceId??null,ids);await validateLibraryLink(repository,input.foodLibraryId);const calculation=await prepareFoodCalculation(repository,input);const saved=await repository.createFoodLog({...input,...calculation,foodDishIds:ids,foodDishId:ids[0]??null} as NewFoodLog);return (await withMealTimes(repository,[saved]))[0]; }
 export async function updateFoodLog(id: number, input: Record<string, unknown>) {
   const repository = await getRepository(); const existing = await repository.getFoodLog(id); if (!existing) return null;
   const [effective] = await withMealTimes(repository, [existing]);

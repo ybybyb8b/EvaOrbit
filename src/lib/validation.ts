@@ -2,7 +2,7 @@ import { DRINK_TYPES } from "./drink-types.ts";
 import { normalizeTrackerTimeRange } from "./tracker-time-range.ts";
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
-import { ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
+import { DRINK_KCAL_MODES, ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
 import { normalizeLuciusMood } from "./lucius-mood.ts";
 import { normalizeWeightKg } from "./weight.ts";
 import { journalEmotions } from "./journal-emotions.ts";
@@ -782,6 +782,7 @@ export function parseNewFoodLog(value: unknown) {
   if (rating !== null && scene !== "delivery" && scene !== "restaurant") throw new ValidationError("只有外卖或外食记录可以填写评价");
   return {
     consumedWeightG: consumedAmount(body.consumedWeightG, "食用量（克）", 1000000),
+    ...(body.separateMealWeight === undefined ? {} : { separateMealWeight: booleanValue(body.separateMealWeight, "独立记录整餐重量", false) }),
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()),
     occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "饮食时间精度", true),
     mealType: enumValue(body.mealType, "餐次", ["breakfast", "lunch", "dinner", "snack", "late_night"] as const, "snack"),
@@ -804,12 +805,12 @@ export function parseFoodLogPatch(value: unknown) {
   const body = objectValue(value);
   rejectRetiredLogFields(body, ["portion", "notes", "calendarTimeEnabled"]);
   const parsed = parseNewFoodLog({
-    consumedWeightG: body.consumedWeightG, occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
+    consumedWeightG: body.consumedWeightG, separateMealWeight: body.separateMealWeight, occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime, mealType: body.mealType ?? "snack",
     title: body.title ?? "placeholder", description: body.description ?? "", scene: body.scene ?? (body.rating === undefined ? "other" : "delivery"), rating: body.rating,
     estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low",
     imageUrl: body.imageUrl, attachmentId: body.attachmentId, foodLibraryId: body.foodLibraryId, foodLibraryItems: body.foodLibraryItems, foodKcalMode: body.foodKcalMode, foodPlaceId: body.foodPlaceId, foodDishId: body.foodDishId, foodDishIds: body.foodDishIds,
   });
-  const keys = ["consumedWeightG", "occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
+  const keys = ["consumedWeightG", "separateMealWeight", "occurredAt", "occurredHasExplicitTime", "mealType", "title", "description", "scene", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "imageUrl", "attachmentId", "foodLibraryId", "foodLibraryItems", "foodKcalMode", "foodPlaceId", "foodDishId", "foodDishIds"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;
@@ -1212,6 +1213,8 @@ export function parseNewDrinkLog(value: unknown) {
   if (kcalMin !== null && kcalMax !== null && kcalMin > kcalMax) throw new ValidationError("热量下限不能大于上限");
   return {
     occurredAt: timestamp(body.occurredAt ?? new Date().toISOString()), occurredHasExplicitTime: booleanValue(body.occurredHasExplicitTime, "发生时间精度", true), name: text(body.name ?? "", "饮品名称", 200, false) ?? "",
+    ...(body.customName === undefined ? {} : { customName: body.customName === null ? null : text(body.customName, "自定义饮品名称", 200, false) || null }),
+    ...(body.drinkKcalMode === undefined ? {} : { drinkKcalMode: enumValue(body.drinkKcalMode, "热量计算方式", DRINK_KCAL_MODES, "auto") }),
     drinkType: enumValue(body.drinkType, "饮品类型", DRINK_TYPES, "other"),
     consumedVolumeMl: consumedAmount(body.consumedVolumeMl, "饮用量（毫升）", 10000), sugarLevel: enumValue(body.sugarLevel, "糖度", ["", ...SUGAR_LEVELS] as const, ""),
     temperature: body.temperature === undefined || body.temperature === null || body.temperature === "" ? null : enumValue(body.temperature, "冷热 / 冰量", ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const, "room_temperature"),
@@ -1226,9 +1229,9 @@ export function parseNewDrinkLog(value: unknown) {
 export function parseDrinkLogPatch(value: unknown) {
   const body = objectValue(value);
   rejectRetiredLogFields(body, ["brand", "volumeMl", "caffeineMg"]);
-  const parsed = parseNewDrinkLog({ occurredAt: body.occurredAt ?? new Date().toISOString(), occurredHasExplicitTime: body.occurredHasExplicitTime ?? true, name: body.name ?? "placeholder", drinkType: body.drinkType === "water" ? "other" : body.drinkType ?? "other", consumedVolumeMl: body.consumedVolumeMl, sugarLevel: body.sugarLevel ?? "", temperature: body.temperature, rating: body.rating, estimatedKcal: body.estimatedKcal, kcalMin: body.kcalMin, kcalMax: body.kcalMax, confidence: body.confidence ?? "low", drinkMenuId: body.drinkMenuId, foodPlaceId: body.foodPlaceId, foodLibraryId: body.foodLibraryId, notes: body.notes ?? "" });
+  const parsed = parseNewDrinkLog({ ...body, name: body.name ?? "placeholder", drinkType: body.drinkType === "water" ? "other" : body.drinkType ?? "other", sugarLevel: body.sugarLevel ?? "", confidence: body.confidence ?? "low" });
   if (body.drinkType === "water") (parsed as { drinkType: string }).drinkType = "water";
-  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "drinkType", "consumedVolumeMl", "sugarLevel", "temperature", "rating", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "drinkMenuId", "notes"] as const;
+  const keys = ["occurredAt", "occurredHasExplicitTime", "name", "customName", "drinkType", "consumedVolumeMl", "sugarLevel", "temperature", "rating", "drinkKcalMode", "estimatedKcal", "kcalMin", "kcalMax", "confidence", "foodLibraryId", "foodPlaceId", "drinkMenuId", "notes"] as const;
   const result = Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, parsed[key]]));
   if (!Object.keys(result).length) throw new ValidationError("没有可更新的字段");
   return result;

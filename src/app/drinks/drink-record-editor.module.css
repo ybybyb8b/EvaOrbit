@@ -1,2 +1,36 @@
-.compactFields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px 12px; align-items: start; }
+.editor { display: grid; gap: 20px; }
+.identity, .details { display: grid; gap: 10px; min-width: 0; }
+.details { gap: 16px; }
+.selected { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; }
+.selected > div:first-child { flex: 1 1 130px; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.selected strong { color: var(--text-primary); font-size: 16px; }
+.selected small, .calorieSummary small { color: var(--text-secondary); font-size: 12px; }
+.label { color: var(--text-label); font-size: 12px; font-weight: 700; }
+.actions { display: flex; align-items: center; gap: 4px; }
+.actions button, .filter, .intakeAction button { min-height: 44px; padding-inline: 6px; font-size: 12px; }
+.filter { justify-self: start; text-align: start; overflow-wrap: anywhere; }
+
+.intake { display: grid; gap: 2px; padding: 13px 13px 5px; border-radius: 16px; background: rgb(var(--surface-tint-rgb) / .55); }
+.intakeMain { display: grid; grid-template-columns: minmax(84px, 108px) minmax(0, 1fr); gap: 12px; align-items: end; }
+.volume {
+  --sheet-control-surface: transparent;
+  --sheet-control-focus: transparent;
+  --sheet-control-depth: none;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: var(--form-control-radius);
+  background: rgb(var(--surface-raised-rgb) / .72);
+}
+:global(html[data-mode="dark"]) .volume { background: var(--surface-canvas); }
+.volume:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.volume > input[type="number"] { flex: 1 1 0; min-height: 44px; background: transparent; padding: 0 2px; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; appearance: none; }
+.volume > input[type="number"]:focus { box-shadow: none; }
+.volume > input[type="number"]::-webkit-inner-spin-button { appearance: none; }
+.volume > span { padding-inline-end: 8px; color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+.calorieSummary { display: grid; align-content: center; gap: 2px; min-height: 44px; text-align: end; overflow-wrap: anywhere; }
+.calorieSummary strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.intakeAction { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0 10px; }
+.intakeAction > span { margin-inline-end: auto; color: var(--text-secondary); font-size: 12px; }
+.manualEnergy { padding-block-end: 8px; }
 

@@ -27,7 +27,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "react-dom") return { createPortal: node => node };
       if (name === "reicon-react") return { Trash2: "minimal-trash" };
-      if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false }) };
+      if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false, language: environment.english ? "en" : "zh-CN" }) };
       if (name.endsWith("cats-data-context")) return {useCatsData:()=>({read:environment.fetch??globalThis.fetch,local:false})};
       if (name.endsWith("form-preview")) return {useFormPreview:()=>environment.previewOnly??false,FormPreviewNotice:"form-preview-notice"};
       if (name.endsWith("food-data-context")) return {useFoodData:()=>({read:environment.fetch??globalThis.fetch,local:false}),useFoodLink:fallback=>fallback};
@@ -270,17 +270,26 @@ test("food meals reuse shared capsules, have no recommendation badge, and detail
   assert.equal(rating.props.clearable,true);assert.equal(rating.props.value,"");
 });
 
-test("food hides calorie bounds but preserves them on edit, with context before calories and details after place", async () => {
+const foodRows = h => h.nodes().filter(node => node.type === "consumption-fields");
+const foodRow = (h, name) => foodRows(h).find(node => node.props.name === name).props;
+const foodButton = (h, label) => h.nodes().find(node => node.type === "button" && node.props.children === label);
+function renameFood(h, title) {
+  foodButton(h, "改名").props.onClick(); h.render();
+  h.nodes().find(node => node.type === "input" && node.props.maxLength === 200).props.onChange({ target: { value: title } }); h.render();
+}
+
+test("food keeps calorie input optional, preserves hidden bounds and places notes after location", async () => {
   let payload;
   const record = { id: 1, title: "午餐", description: "原有明细\n\n份量说明：原有份量\n\n原有备注", occurredAt: "2026-10-09T04:00:00.000Z", occurredHasExplicitTime: false, mealType: "lunch", scene: "restaurant", rating: "good", estimatedKcal: 180, kcalMin: 0, kcalMax: 240, confidence: "medium", portion: "原有份量", notes: "原有备注", foodPlaceId: 2, foodPlaceName: "餐厅", foodDishIds: [3] };
   const h = harness("src/app/food/food-record-editor.tsx", "FoodRecordEditor", { date: "2026-10-10", record, onClose() {}, onSaved() {} }, { fetch: async (_, options) => { payload = JSON.parse(options.body); return { ok: true }; } });
   h.render();
   const labels = h.nodes().filter(node => node.type === "span").map(node => node.props.children);
   assert.ok(labels.indexOf("餐次") < labels.indexOf("场景"));
-  assert.ok(labels.indexOf("场景") < labels.indexOf("热量估算 kcal"));
+  assert.equal(labels.includes("热量估算 kcal"), false);
   const nodes = h.nodes();
+  assert.ok(nodes.findIndex(node => node.type === "input" && node.props.type === "date") < nodes.findIndex(node => node.type === "food-name-input"));
   assert.ok(nodes.findIndex(node => node.type === "link-picker") < nodes.findIndex(node => node.type === "textarea"));
-  assert.equal(nodes.filter(node => node.type === "input" && node.props.type === "number").length, 2);
+  assert.equal(nodes.filter(node => node.type === "input" && node.props.type === "number").length, 1);
   assert.equal(nodes.some(node => node.type === "p" && node.props.children === "热量与营养 · 可选"), false);
   assert.equal(nodes.some(node => node.type === "p" && node.props.children === "按店铺查找（备选）"), false);
   await nodes.find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
@@ -289,7 +298,7 @@ test("food hides calorie bounds but preserves them on edit, with context before 
   assert.equal(payload.occurredHasExplicitTime, false); assert.deepEqual(payload.foodDishIds, [3]);
 });
 
-test("Food search clears after each selection, displays removable chips and saves complete names for multiple items", async () => {
+test("Food search clears after each selection, shows one row per selection and saves complete names", async () => {
   for (const menu of [false, true]) {
     let payload;
     const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
@@ -298,7 +307,7 @@ test("Food search clears after each selection, displays removable chips and save
     primary().props.onSelect({key:menu?"menu:2":"library:11",name:"黄油小面包",placeId:menu?2:null,placeName:menu?"面包店":"",menu:menu?{id:2}:null,library:{id:11,name:"黄油小面包",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null},servingKcal:180});h.render();
     assert.equal(primary().props.value,"");
     assert.equal(h.nodes().filter(node=>node.props?.["aria-label"]==="已选食物").length,1);
-    assert.ok(h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]===(menu?"移除菜品关联 黄油小面包":"移除食品 黄油小面包")));
+    assert.equal(foodRow(h, "黄油小面包").dish, menu);
     await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
     assert.equal(payload.title,"黄油小面包");assert.equal(payload.foodLibraryItems[0].foodLibraryId,11);
     assert.deepEqual(payload.foodDishIds,menu?[2]:[]);assert.equal(payload.foodPlaceId,null);
@@ -314,7 +323,7 @@ test("Food search clears after each selection, displays removable chips and save
     primary().props.onValueChange("没有选中的搜索词");h.render();
     await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
     assert.equal(payload.title,"黄油小面包 + 纯牛奶","search text must not overwrite the record name");
-    h.nodes().find(node=>node.type==="input"&&node.props.maxLength===200).props.onChange({target:{value:"早餐的小面包"}});h.render();
+    renameFood(h, "早餐的小面包");
     await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
     assert.equal(payload.title,"早餐的小面包","a later manual title edit remains authoritative");
   }
@@ -336,14 +345,14 @@ test("Food appends menu and Library selections, rejects duplicates, supports mul
   await save();assert.deepEqual(payload.foodDishIds,[1,2]);
   add({key:"menu:3",name:"外店菜品",placeId:3,placeName:"外店",menu:{id:3},servingKcal:null});
   await save();assert.equal(payload.foodPlaceId,null);assert.deepEqual(payload.foodDishIds,[1,2,3]);assert.equal(payload.foodLibraryItems.length,2);
-  h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除菜品关联 菜品 A").props.onClick();h.render();
+  foodRow(h, "菜品 A").onRemove();h.render();
   await save();assert.deepEqual(payload.foodDishIds,[2,3]);assert.deepEqual(payload.foodLibraryItems.map(item=>item.foodLibraryId),[12]);
-  h.nodes().find(node=>node.type==="input"&&node.props.maxLength===200).props.onChange({target:{value:"我手动维护的标题"}});h.render();
+  renameFood(h, "我手动维护的标题");
   add({key:"menu:4",name:"菜品 D",placeId:2,placeName:"店铺",menu:{id:4},servingKcal:null});
   await save();assert.equal(payload.title,"我手动维护的标题");assert.deepEqual(payload.foodDishIds,[2,3,4]);assert.equal(payload.foodLibraryItems.length,1);
 });
 
-test("Food chips rehydrate, remove the final item and preserve free-text recording", async () => {
+test("Food rows rehydrate, remove the final item and preserve free-text recording", async () => {
   let payload;
   const reference={referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingWeight:null,servingKcal:180};
   const record={id:1,title:"黄油小面包",description:"原备注",occurredAt:"2026-10-09T04:00:00Z",occurredHasExplicitTime:false,mealType:"lunch",scene:"other",rating:null,estimatedKcal:180,kcalMin:null,kcalMax:null,confidence:"medium",foodPlaceId:null,foodDishIds:[],foodKcalMode:"auto",foodLibraryItems:[{foodLibraryId:11,item:{id:11,name:"黄油小面包",brand:""},quantity:1,unit:"serving",nutritionReference:reference,calculatedKcal:180}]};
@@ -351,9 +360,9 @@ test("Food chips rehydrate, remove the final item and preserve free-text recordi
   const primary=()=>h.nodes().find(node=>node.type==="food-name-input");
   const save=async()=>{await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();};
   h.render();assert.equal(primary().props.value,"");assert.equal(h.nodes().filter(node=>node.type==="food-name-input").length,1);
-  assert.ok(h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除食品 黄油小面包"));
+  assert.equal(foodRow(h, "黄油小面包").value.quantity, 1);
   primary().props.onValueChange("自制蛋羹");h.render();
-  h.nodes().find(node=>node.type==="button"&&node.props["aria-label"]==="移除食品 黄油小面包").props.onClick();h.render();
+  foodRow(h, "黄油小面包").onRemove();h.render();
   assert.equal(h.nodes().some(node=>node.props?.["aria-label"]==="已选食物"),false);
   await save();assert.equal(payload.title,"自制蛋羹");assert.deepEqual(payload.foodLibraryItems,[]);assert.equal(payload.foodLibraryId,null);assert.equal(payload.foodKcalMode,"manual");assert.equal(payload.estimatedKcal,null);assert.equal(payload.description,"原备注");
   primary().props.onRecord("自制蛋羹");h.render();assert.equal(primary().props.value,"");
@@ -369,7 +378,7 @@ test("removing the last food clears its inferred place but preserves a manually 
     const library={id:11,name:"面包",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null};
     h.nodes().find(node=>node.type==="food-name-input").props.onSelect({key:"library:11",name:"面包",placeId:2,placeName:"面包店",library,servingKcal:180});h.render();
     assert.deepEqual(h.nodes().find(node=>node.type==="link-picker").props.selected,manual?[2]:[]);
-    h.nodes().find(node=>node.props?.["aria-label"]==="移除食品 面包").props.onClick();h.render();
+    foodRow(h, "面包").onRemove();h.render();
     assert.deepEqual(h.nodes().find(node=>node.type==="link-picker").props.selected,manual?[2]:[]);
     h.nodes().find(node=>node.type==="food-name-input").props.onValueChange("手填餐食");h.render();
     await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();
@@ -377,16 +386,17 @@ test("removing the last food clears its inferred place but preserves a manually 
   }
 });
 
-test("removing a menu chip preserves a shared nutrition reference until its last menu is removed", async () => {
+test("removing a menu row preserves a shared nutrition reference until its last menu is removed", async () => {
   let payload;
   const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
   const library={id:11,name:"面包营养",brand:"",referenceType:"per_serving",referenceKcal:180,referenceEnergyKj:null,servingKcal:180,servingWeight:null};
   h.render();
   for(const id of [1,2]){h.nodes().find(node=>node.type==="food-name-input").props.onSelect({key:`menu:${id}`,name:`面包 ${id}`,placeId:2,placeName:"面包店",menu:{id},library,servingKcal:180});h.render();}
-  assert.equal(h.nodes().filter(node=>node.props?.["aria-label"]?.startsWith("移除菜品关联 ")).length,2);
-  assert.equal(h.nodes().some(node=>node.props?.["aria-label"]==="移除食品 面包营养"),false);
+  assert.equal(foodRows(h).length,2);
+  assert.equal(foodRow(h, "面包 1").value.quantity, 1);
+  assert.equal(foodRow(h, "面包 2").shared, true);
   for(const id of [1,2]){
-    h.nodes().find(node=>node.props?.["aria-label"]===`移除菜品关联 面包 ${id}`).props.onClick();h.render();
+    foodRow(h, `面包 ${id}`).onRemove();h.render();
     if(id===1){await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();assert.deepEqual(payload.foodDishIds,[2]);assert.equal(payload.foodLibraryItems.length,1);assert.equal(payload.title,"面包 2");}
   }
   assert.equal(h.nodes().some(node=>node.type==="consumption-fields"),false);
@@ -399,8 +409,11 @@ test("Food preserves manual calories on weight edits and clears hidden bounds on
   const record={id:1,title:"午餐",description:"备注",occurredAt:"2026-10-09T04:00:00Z",occurredHasExplicitTime:false,mealType:"lunch",scene:"restaurant",rating:null,foodDishIds:[],consumedWeightG:250,foodLibraryItems:[{foodLibraryId:1,item:{id:1,name:"食品",brand:""},quantity:250,unit:"g",nutritionReference:reference,calculatedKcal:500}],foodKcalMode:"manual",estimatedKcal:900,kcalMin:800,kcalMax:1000,confidence:"high"};
   const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",record,onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
   const save=async()=>{await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});h.render();};
-  h.render();h.nodes().find(node=>node.type==="input"&&node.props.step==="0.01").props.onChange({target:{value:"200"}});h.render();
-  await save();assert.equal(payload.foodKcalMode,"manual");assert.equal(payload.estimatedKcal,900);assert.equal(payload.kcalMin,800);assert.equal(payload.kcalMax,1000);assert.equal(payload.foodLibraryItems[0].quantity,200);assert.equal(payload.confidence,"high");
+  h.render();
+  const row = foodRow(h, "食品");
+  row.onChange({ ...row.value, quantity: 200, calculatedKcal: 400 }); h.render();
+  await save();assert.equal(payload.foodKcalMode,"manual");assert.equal(payload.estimatedKcal,900);assert.equal(payload.kcalMin,800);assert.equal(payload.kcalMax,1000);assert.equal(payload.foodLibraryItems[0].quantity,200);assert.equal(payload.consumedWeightG,250);assert.equal(payload.confidence,"high");
+  foodButton(h,"修改热量").props.onClick();h.render();
   h.nodes().find(node=>node.type==="input"&&node.props.step==="any").props.onChange({target:{value:"750"}});h.render();
   await save();assert.equal(payload.estimatedKcal,750);assert.equal(payload.kcalMin,null);assert.equal(payload.kcalMax,null);assert.equal(payload.confidence,"high");
   h.nodes().find(node=>node.type==="button"&&node.props.children==="恢复自动计算").props.onClick();h.render();
@@ -412,21 +425,21 @@ test("single Food ml/serving quantities stay editable independently of measured 
     let payload;
     const record={id:1,title:"食品",description:"",occurredAt:"2026-10-09T04:00:00Z",occurredHasExplicitTime:false,mealType:"lunch",scene:"other",rating:null,estimatedKcal:100,kcalMin:null,kcalMax:null,confidence:"low",foodKcalMode:"auto",consumedWeightG:90,foodDishIds:[],foodLibraryItems:[{foodLibraryId:1,item:{id:1,name:"食品",brand:""},quantity:unit==="ml"?100:0.5,unit,nutritionReference:{referenceType:unit==="ml"?"per_100ml":"per_serving",referenceKcal:100,referenceEnergyKj:null,servingKcal:200,servingWeight:null},calculatedKcal:100}]};
     const h=harness("src/app/food/food-record-editor.tsx","FoodRecordEditor",{date:"2026-10-10",record,onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
-    h.render();const fields=h.nodes().find(node=>node.type==="consumption-fields");assert.equal(fields.props.hideQuantity,false);
+    h.render();const fields=h.nodes().find(node=>node.type==="consumption-fields");
     fields.props.onChange({...fields.props.value,quantity:unit==="ml"?150:0.75,calculatedKcal:150});h.render();
     await h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});
     assert.equal(payload.foodLibraryItems[0].unit,unit);assert.equal(payload.foodLibraryItems[0].quantity,unit==="ml"?150:0.75);assert.equal(payload.consumedWeightG,90);assert.equal(payload.estimatedKcal,150);
   }
 });
 
-test("single gram Food can switch to serving units while using the shared top-level gram input", () => {
+test("food amount stays in its own row and switches units only with a known conversion", () => {
   let changed;
   const value={foodLibraryId:1,item:{id:1,name:"食品",brand:""},quantity:100,unit:"g",nutritionReference:{referenceType:"per_100g",referenceKcal:100,referenceEnergyKj:null,servingWeight:200,servingKcal:200},calculatedKcal:100};
-  const h=harness("src/app/food/food-consumption-fields.tsx","FoodConsumptionFields",{value,index:0,hideQuantity:true,onChange:next=>{changed=next;},onLoaded(){},onRemove(){}});
-  h.render();const units=h.nodes().find(node=>node.type==="searchable-select");assert.ok(units);assert.equal(h.nodes().some(node=>node.type==="input"),false);
-  units.props.onValueChange("serving");assert.equal(changed.unit,"serving");assert.equal(changed.quantity,0.5);assert.equal(changed.calculatedKcal,100);
+  const h=harness("src/app/food/food-consumption-fields.tsx","FoodConsumptionFields",{value,name:"食品",onChange:next=>{changed=next;},onLoaded(){},onRemove(){}});
+  h.render();const units=h.nodes().find(node=>node.type==="select");assert.ok(units);assert.equal(h.nodes().find(node=>node.type==="input").props.value,100);
+  units.props.onChange({target:{value:"serving"}});assert.equal(changed.unit,"serving");assert.equal(changed.quantity,0.5);assert.equal(changed.calculatedKcal,100);
   h.setProps({value:{...value,unit:"g",quantity:100,nutritionReference:{...value.nutritionReference,referenceType:"per_100ml",servingWeight:null}}});h.render();
-  h.nodes().find(node=>node.type==="searchable-select").props.onValueChange("ml");assert.equal(changed.unit,"ml");assert.equal(changed.quantity,null,"mass must not be guessed as volume");
+  h.nodes().find(node=>node.type==="select").props.onChange({target:{value:"ml"}});assert.equal(changed.unit,"ml");assert.equal(changed.quantity,null,"mass must not be guessed as volume");
 });
 
 test("optional capsules start empty, omit the empty pill and toggle off; fixed sugar can show six choices", () => {
@@ -451,29 +464,47 @@ test("measured food and drink amounts calculate decimal calories and persist sep
     h.render();
     h.nodes().find(node => node.type === "food-name-input" && !node.props.placeId).props.onSelect({ key: "library:4", name: "测试物品", placeId: null, placeName: "", servingKcal: null, library: { ...reference, referenceType: kind === "food" ? "per_100g" : "per_100ml" } });
     h.render();
-    const amount = () => h.nodes().find(node => node.type === "input" && node.props.step === "0.01");
-    amount().props.onChange({ target: { value: "250.25" } }); h.render();
+    function setAmount(value) {
+      if (kind === "drink") h.nodes().find(node => node.type === "input" && node.props.step === "0.01").props.onChange({ target: { value: String(value) } });
+      else {
+        const row = foodRow(h, "测试物品");
+        row.onChange({ ...row.value, quantity: value, calculatedKcal: value * 0.4 });
+      }
+      h.render();
+    }
+    setAmount(250.25);
     await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
-    assert.equal(payload[kind === "food" ? "consumedWeightG" : "consumedVolumeMl"], 250.25);
-    assert.equal(payload.estimatedKcal, 100.1);
-    if (kind === "drink") assert.equal("volumeMl" in payload, false);
-    amount().props.onChange({ target: { value: "0" } }); h.render();
+    assert.equal(kind === "food" ? payload.foodLibraryItems[0].quantity : payload.consumedVolumeMl, 250.25);
+    if (kind === "drink") {
+      assert.equal("volumeMl" in payload, false);
+      assert.equal(payload.drinkKcalMode, "auto");
+      assert.ok(h.nodes().some(node => node.type === "strong" && node.props.children === "100.1 kcal"));
+    } else assert.equal(payload.estimatedKcal, 100.1);
+    setAmount(0);
     await h.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} });
-    assert.equal(payload.estimatedKcal, 0);
+    if (kind === "drink") assert.ok(h.nodes().some(node => node.type === "strong" && node.props.children === "0 kcal"));
+    else assert.equal(payload.estimatedKcal, 0);
   }
 });
 
-test("name selection preserves historical links until choosing another item and fills source, type and calories together", async () => {
+test("renaming and searching preserve the drink link until a replacement is explicitly chosen", async () => {
   let payload;
   const record={id:1,occurredAt:"2026-10-09T04:00:00.000Z",occurredHasExplicitTime:false,name:"拿铁",brand:"历史品牌",drinkType:"coffee",volumeMl:350,caffeineMg:0,sugarLevel:"",temperature:null,rating:null,estimatedKcal:null,kcalMin:0,kcalMax:120,confidence:"medium",notes:"",foodLibraryId:3,foodPlaceId:1,foodPlaceName:"咖啡店",drinkMenuId:2,drinkMenuName:"拿铁"};
   const h=harness("src/app/drinks/drink-ui.tsx","DrinkRecordEditor",{record,suggestions:{names:[],brands:[]},onClose(){},onSaved(){}},{fetch:async(_,options)=>{payload=JSON.parse(options.body);return{ok:true};}});
   const save=async()=>h.nodes().find(node=>node.type==="form").props.onSubmit({preventDefault(){}});
   const name=()=>h.nodes().find(node=>node.type==="food-name-input"&&!node.props.placeId);
   h.render();await save();h.render();assert.equal(payload.foodLibraryId,3);assert.equal(payload.drinkMenuId,2);assert.equal(payload.kcalMax,120);
-  name().props.onSelect({key:"menu:5",name:"乌龙茶",placeId:4,placeName:"茶店",menu:{id:5,drinkType:"tea"},library:{id:9,drinkType:"tea"},servingKcal:80});h.render();await save();h.render();
-  assert.equal(payload.foodPlaceId,4);assert.equal(payload.foodLibraryId,9);assert.equal(payload.drinkMenuId,5);assert.equal(payload.drinkType,"tea");assert.equal(payload.estimatedKcal,80);
+  foodButton(h,"改名").props.onClick();h.render();
+  h.nodes().find(node=>node.type==="input"&&node.props.maxLength===200).props.onChange({target:{value:"我的拿铁"}});h.render();
+  await save();assert.equal(payload.customName,"我的拿铁");assert.equal(payload.drinkMenuId,2);assert.equal(payload.foodLibraryId,3);
+  foodButton(h,"更换饮品").props.onClick();h.render();
+  name().props.onValueChange("乌龙");h.render();await save();assert.equal(payload.drinkMenuId,2);
+  name().props.onSelect({key:"menu:5",name:"乌龙茶",placeId:4,placeName:"茶店",menu:{id:5,drinkType:"tea"},library:{id:9,drinkType:"tea",referenceType:"per_serving",referenceKcal:80,referenceEnergyKj:null,servingWeight:null,servingKcal:80},servingKcal:80});h.render();await save();h.render();
+  assert.equal(payload.foodPlaceId,4);assert.equal(payload.foodLibraryId,9);assert.equal(payload.drinkMenuId,5);assert.equal(payload.drinkType,"tea");assert.equal(payload.estimatedKcal,null);assert.equal(payload.customName,null);
+  foodButton(h,"按一整份计入").props.onClick();h.render();await save();assert.equal(payload.drinkKcalMode,"serving");assert.equal(payload.consumedVolumeMl,null);
   assert.equal(payload.occurredHasExplicitTime,false);assert.equal("caffeineMg" in payload,false);assert.equal("brand" in payload,false);assert.equal("volumeMl" in payload,false);
-  name().props.onValueChange("手填饮品");h.render();await save();
+  foodButton(h,"更换饮品").props.onClick();h.render();
+  name().props.onRecord("手填饮品");h.render();await save();
   assert.equal(payload.name,"手填饮品");assert.equal(payload.foodPlaceId,null);assert.equal(payload.foodLibraryId,null);assert.equal(payload.drinkMenuId,null);assert.equal(payload.estimatedKcal,null);
 });
 

@@ -992,7 +992,11 @@ export const SUGAR_LEVELS = ["无糖", "微糖", "半糖", "少糖", "标准", "
 export type SugarLevel = "" | typeof SUGAR_LEVELS[number];
 export const DRINK_TEMPERATURES = ["normal_ice", "less_ice", "no_ice", "room_temperature", "hot"] as const;
 export type DrinkTemperature = typeof DRINK_TEMPERATURES[number];
+export const DRINK_KCAL_MODES = ["auto", "serving", "manual"] as const;
+export type DrinkKcalMode = typeof DRINK_KCAL_MODES[number];
 export interface DrinkLog {
+  drinkKcalMode?: DrinkKcalMode | null;
+  customName?: string | null;
   consumedVolumeMl?: number | null;
   nutritionReference?: FoodNutritionReference | null;
   drinkMenuId?: number | null;

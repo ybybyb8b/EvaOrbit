@@ -131,6 +131,11 @@ const UI_COPY: CopyPair[] = [
   ["吃了多少（克）", "Amount eaten (g)"], ["喝了多少（毫升）", "Amount drunk (ml)"],
   ["按已关联的每 100 毫升营养基准换算；没有可换算基准时手动估算热量。", "Calculated from the linked nutrition per 100 ml; estimate calories manually if no convertible reference is available."],
   ["热量估算 kcal", "Calories kcal"], ["最低 kcal", "Minimum kcal"], ["最高 kcal", "Maximum kcal"], ["部分食品缺少食用量或营养基准，可直接保存", "Some items lack an amount or nutrition reference; you can still save"], ["尚未估算热量", "Calories not estimated"], ["手动修改", "Edit manually"], ["恢复自动计算", "Restore automatic calculation"],
+  ["热量合计", "Total"], ["食品库热量", "Library calories"], ["已计算", "Calculated"], ["手动估算", "Estimate manually"], ["修改热量", "Edit calories"], ["改名", "Rename"], ["搜索并添加食物", "Search and add food"],
+  ["整餐实测重量", "Measured meal weight"], ["整餐实测重量（克）", "Measured meal weight (g)"], ["共用份量", "Shared amount"], ["缺少营养基准", "No nutrition reference"], ["未填份量", "No amount"], ["无法换算", "Cannot calculate"], ["计算热量", "Calculated calories"],
+  ["实际饮用量", "Amount consumed"], ["手动估算值", "Manual estimate"], ["按整份计入", "Counted as one serving"], ["整份参考", "Per serving"], ["按一整份计入", "Count one serving"],
+  ["更换饮品", "Change drink"], ["取消更换", "Cancel change"], ["搜索并更换饮品", "Search for a different drink"], ["按店铺查找", "Find by place"],
+  ["店铺筛选", "Filter by place"], ["店铺（可选）", "Place (optional)"], ["店铺菜单", "Place menu"], ["食品库", "Food Library"], ["口味、评价与备注", "Taste, rating and notes"],
   ["暂无营养基准，可留空或手动估算", "No nutrition reference; leave blank or estimate manually"], ["本次食用量", "Amount consumed"], ["填写实际食用量", "Enter the amount consumed"], ["填写食用量后计算", "Enter an amount to calculate"], ["当前基准与单位无法换算，可手动估算", "This reference cannot convert the chosen unit; estimate manually"], ["更换食品", "Change item"], ["移除食品", "Remove item"], ["毫升", "ml"], ["克", "g"], ["份", "serving"],
 
   ["喝了什么", "What did you drink?"], ["饮品", "Drink"], ["店铺", "Place"], ["店铺饮品", "Place drinks"], ["店铺食品", "Place food"], ["按店铺查找（备选）", "Browse by place"], ["通用食品", "Library item"],

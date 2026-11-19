@@ -1,9 +1,62 @@
-.consumption { gap: 12px; padding-block: 8px; }
-.consumption p { margin: 0; overflow-wrap: anywhere; }
-.heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-.heading strong { min-width: 0; overflow-wrap: anywhere; }
-.heading button { min-height: 44px; }
-.unit { display: flex; align-items: center; min-height: 44px; }
-.result { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; font-variant-numeric: tabular-nums; }
-.result output { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.result button { flex: none; min-height: 44px; }
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(78px, 88px) minmax(64px, 84px) 44px;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 58px;
+}
+.identity { min-width: 0; padding-block: 5px; overflow-wrap: anywhere; font-size: 14px; }
+.identity > small { display: block; color: var(--text-secondary); font-size: 11px; }
+.name, .remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0;
+}
+.name { display: inline-flex; align-items: center; gap: 5px; text-align: start; }
+.name :global(.icon) { flex: 0 0 12px; width: 12px; height: 12px; color: var(--text-secondary); }
+.name[aria-expanded="true"] :global(.icon) { transform: rotate(180deg); }
+.amount:global(.field) {
+  --sheet-control-surface: transparent;
+  --sheet-control-focus: transparent;
+  --sheet-control-depth: none;
+  grid-column: 2;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  border-radius: var(--form-control-radius);
+  background: rgb(var(--surface-raised-rgb) / .72);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+:global(html[data-mode="dark"]) .amount:global(.field) { background: var(--surface-canvas); }
+.amount:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.amount:global(.field) > input, .amount:global(.field) > select {
+  appearance: none;
+  min-height: 44px;
+  border: 0;
+  background-color: transparent;
+  padding: 0;
+}
+.amount:global(.field) > input { text-align: center; font-size: 16px; flex: 1 1 0; }
+.amount:global(.field) > input:focus { box-shadow: none; }
+.amount > input::-webkit-inner-spin-button { appearance: none; }
+.amount > small { font-size: 12px; padding-inline-end: 8px; white-space: nowrap; }
+.amount:global(.field) > select { width: 44px; flex: 0 0 44px; text-align: center; font-size: 12px; cursor: pointer; padding-inline-end: 13px; background-size: 9px; background-position: right 5px center; }
+.result { grid-column: 3; font-size: 12px; line-height: 1.4; text-align: end; color: var(--text-secondary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.result[data-calculated="true"] { color: var(--text-primary); }
+.remove { grid-column: 4; display: grid; place-items: center; color: var(--text-secondary); border-radius: 50%; }
+.remove :global(.icon) { width: 15px; height: 15px; }
+.remove:is(:hover, :active) { color: var(--danger); background: var(--surface-danger); }
+.details { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; padding-block-end: 6px; }
+.details p { flex: 1 1 180px; margin: 0; color: var(--text-secondary); font-size: 12px; }
+.details > :global(.field) { width: 100%; margin-top: 4px; }
+
+@media (max-width: 360px) {
+  .row { grid-template-columns: minmax(0, 1fr) 88px 44px; padding-block: 4px; }
+  .result { grid-column: 1; grid-row: 2; text-align: start; padding-bottom: 3px; }
+  .remove { grid-column: 3; grid-row: 1; }
+}

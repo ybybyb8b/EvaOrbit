@@ -43,6 +43,14 @@ test("food portions persist through CRUD, migrations, library updates, summaries
       assert.equal(servingLog.foodLibraryItems[0].unit,"serving");assert.equal(servingLog.foodLibraryItems[0].quantity,0.5);assert.equal(servingLog.estimatedKcal,100);
       const servingEdit=await food.updateFoodLog(servingLog.id,parseFoodLogPatch({consumedWeightG:90,foodLibraryItems:[{foodLibraryId:servingItem.id,quantity:0.75,unit:"serving"}],foodKcalMode:"auto"}));
       assert.equal(servingEdit.foodLibraryItems[0].unit,"serving");assert.equal(servingEdit.foodLibraryItems[0].quantity,0.75);assert.equal(servingEdit.estimatedKcal,150);
+      const grams=await food.createFoodLog(parseNewFoodLog({title:"独立重量",occurredAt:"2026-10-06T06:00:00Z",consumedWeightG:90,separateMealWeight:true,foodLibraryItems:[{...portions[0],quantity:20}],foodKcalMode:"auto"}));
+      assert.equal(grams.foodLibraryItems[0].quantity,20);assert.equal(grams.consumedWeightG,90);assert.equal(grams.estimatedKcal,106);
+      const gramsEdit=await food.updateFoodLog(grams.id,parseFoodLogPatch({consumedWeightG:120,separateMealWeight:true,foodLibraryItems:[{...portions[0],quantity:30}]}));
+      assert.equal(gramsEdit.foodLibraryItems[0].quantity,30);assert.equal(gramsEdit.consumedWeightG,120);assert.equal(gramsEdit.estimatedKcal,159);
+      const legacyWeight=await food.updateFoodLog(grams.id,parseFoodLogPatch({consumedWeightG:40}));
+      assert.equal(legacyWeight.foodLibraryItems[0].quantity,40);assert.equal(legacyWeight.estimatedKcal,212);
+      const unknownPortion=await food.updateFoodLog(grams.id,parseFoodLogPatch({consumedWeightG:40,separateMealWeight:true,foodLibraryItems:[{...portions[0],quantity:null}]}));
+      assert.equal(unknownPortion.foodLibraryItems[0].quantity,null);assert.equal(unknownPortion.consumedWeightG,40);assert.equal(unknownPortion.estimatedKcal,null);
       db.updateFoodLibraryItem(a.id,{...a,referenceKcal:800});
       const titleEdit=await food.updateFoodLog(saved.id,parseFoodLogPatch({title:"改名字"}));assert.equal(titleEdit.estimatedKcal,198.58);assert.deepEqual(titleEdit.foodLibraryItems,saved.foodLibraryItems);
       const portionEdit=await food.updateFoodLog(saved.id,parseFoodLogPatch({foodLibraryItems:[{...portions[0],quantity:40},portions[1]]}));assert.equal(portionEdit.estimatedKcal,312);assert.equal(portionEdit.foodLibraryItems[0].nutritionReference.referenceKcal,530);

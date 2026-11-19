@@ -1,4 +1,4 @@
-import type { FoodConsumption, FoodLibraryItem, FoodNutritionReference, FoodQuantityUnit } from "./types.ts";
+import type { DrinkKcalMode, FoodConsumption, FoodLibraryItem, FoodNutritionReference, FoodQuantityUnit } from "./types.ts";
 import { ValidationError } from "./validation.ts";
 
 export function foodNutritionReference(item: FoodLibraryItem): FoodNutritionReference {
@@ -30,6 +30,11 @@ export function calculateFoodKcal(reference: FoodNutritionReference, quantity: n
   const result = kcal * factor;
   const rounded = Math.round(result * 100) / 100;
   return Number.isFinite(rounded) ? rounded : null;
+}
+
+export function calculateDrinkKcal(reference: FoodNutritionReference | null, amount: number | null, mode: Exclude<DrinkKcalMode, "manual">): number | null {
+  if (!reference) return null;
+  return mode === "serving" && amount === null ? calculateFoodKcal(reference, 1, "serving") : calculateFoodKcal(reference, amount, "ml");
 }
 
 export function foodCalculatedTotal(items: FoodConsumption[]): number | null {
