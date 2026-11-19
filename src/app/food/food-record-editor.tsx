@@ -174,8 +174,8 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
     try { const response = await businessFetch(`/api/food/logs/${record.id}`, { method: "DELETE" }); if (!response.ok) throw new Error("无法删除这条饮食记录，请重试"); await onDeleted(); showActionToast("饮食记录已删除", "deleted"); try { await reconcileNativeNotifications(); } catch { /* Web Push remains the fallback. */ } onClose(); } finally { setSaving(false); }
   }
   return <FormSheet title={record ? "改饮食记录" : "补一条饮食"} onClose={onClose} formId="food-record-form" submitLabel={record ? "改好了" : "记下"} submitDisabled={previewOnly} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}>
-    <form id="food-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
-      <DateTimeField inline label="日期" minuteStep={1} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={value => {
+    <form id="food-record-form" className={`editor-card compact-editor field-focus-surface ${styles.editor}`} onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
+      <DateTimeField label="日期" value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.length > 10 ? draft.occurredAt.slice(11, 16) : "" }} onChange={value => {
         setDraft({ ...draft, occurredAt: value.date + (value.time ? `T${value.time}` : ""), ...(!mealChosen.current && value.time ? { mealType: usualMeal(Number(value.time.slice(0, 2))) } : {}) });
       }} />
       {record?.calendarMeal && <p className="muted">时间来自日历：<span className="user-content">{record.calendarMeal.title}</span></p>}

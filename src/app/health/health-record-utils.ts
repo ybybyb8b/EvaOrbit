@@ -15,37 +15,42 @@ export const healthRecordTypes: Array<{ value: HealthRecordType; label: string }
 export const healthRecordTypeLabels = Object.fromEntries(healthRecordTypes.map((item) => [item.value, item.label])) as Record<HealthRecordType, string>;
 export const healthRecordStatusLabels: Record<HealthRecordStatus, string> = { active: "Active", resolved: "Resolved" };
 
-export const detailFields: Record<HealthRecordType, Array<{ key: string; label: string; placeholder: string; inputType?: "text" | "number" }>> = {
+export const healthRecordTypeLabelsZh: Record<HealthRecordType, string> = {
+  symptom: "症状", medication: "用药", visit: "就诊", test: "检查",
+  condition: "健康状况", treatment: "治疗", measurement: "测量", note: "笔记",
+};
+export const healthRecordStatusLabelsZh: Record<HealthRecordStatus, string> = { active: "进行中", resolved: "已结束" };
+
+export const detailFields: Record<HealthRecordType, Array<{ key: string; label: string; zh: string; placeholder?: string }>> = {
   symptom: [
-    { key: "severity", label: "Severity", placeholder: "Mild, moderate, severe" },
-    { key: "body_area", label: "Body area", placeholder: "Where did you notice it?" },
+    { key: "severity", label: "Severity", zh: "程度" },
   ],
   medication: [
-    { key: "dose", label: "Dose", placeholder: "e.g. 200 mg" },
-    { key: "frequency", label: "Frequency", placeholder: "e.g. Once daily" },
+    { key: "dose", label: "Dose", zh: "用量" },
+    { key: "frequency", label: "Frequency", zh: "用药频率" },
   ],
   visit: [
-    { key: "provider", label: "Provider", placeholder: "Clinic or clinician" },
-    { key: "reason", label: "Reason", placeholder: "Why was this visit?" },
+    { key: "provider", label: "Provider", zh: "医疗机构或医生" },
+    { key: "reason", label: "Reason", zh: "就诊原因" },
   ],
   test: [
-    { key: "result", label: "Result", placeholder: "Short result summary" },
-    { key: "provider", label: "Provider", placeholder: "Lab or clinic" },
+    { key: "result", label: "Result", zh: "检查结果" },
+    { key: "provider", label: "Provider", zh: "检查机构" },
   ],
   condition: [
-    { key: "severity", label: "Severity", placeholder: "Mild, moderate, severe" },
-    { key: "diagnosed_on", label: "Diagnosed on", placeholder: "Date or context" },
+    { key: "severity", label: "Severity", zh: "程度" },
+    { key: "diagnosed_on", label: "Diagnosed on", zh: "确诊日期" },
   ],
   treatment: [
-    { key: "treatment", label: "Treatment", placeholder: "What treatment was used?" },
-    { key: "provider", label: "Provider", placeholder: "Clinic or clinician" },
+    { key: "treatment", label: "Treatment details", zh: "治疗内容" },
+    { key: "provider", label: "Provider", zh: "医疗机构或医生" },
   ],
   measurement: [
-    { key: "value", label: "Value", placeholder: "e.g. 120/80 or 63.5" },
-    { key: "unit", label: "Unit", placeholder: "e.g. mmHg, kg" },
+    { key: "value", label: "Value", zh: "测量值", placeholder: "120/80" },
+    { key: "unit", label: "Unit", zh: "单位" },
   ],
   note: [
-    { key: "source", label: "Source", placeholder: "Optional context" },
+    { key: "source", label: "Source", zh: "来源" },
   ],
 };
 

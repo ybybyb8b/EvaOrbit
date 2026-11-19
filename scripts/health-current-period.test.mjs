@@ -8,10 +8,12 @@ import ts from 'typescript';
 import {periodDayForDate} from '../src/lib/timeline.ts';
 
 const today='2026-10-23';
-function fixture(remotePeriods = null) {
+function fixture(remotePeriods = null, doseTime = '') {
   const writes=[];
   const empty=()=>null;
-  const hooks={useState:value=>[value && typeof value==='object' && 'data' in value ? {data:remotePeriods,error:''} : typeof value==='function'?value():value,()=>{}],useEffect:()=>{}};
+  const hooks={useState:value=>[value && typeof value==='object' && 'data' in value ? {data:remotePeriods,error:''}
+    : doseTime && value && typeof value==='object' && 'time' in value && !value.time ? {...value,time:doseTime}
+    : typeof value==='function'?value():value,()=>{}],useEffect:()=>{}};
   let section;
   const shared={
     HealthLink:props=>React.createElement("a",props),useHealthData:()=>({local:false,read:async(url,init)=>{writes.push({url,body:JSON.parse(init.body)});return {ok:true,json:async()=>({id:99})};}}),
@@ -81,11 +83,18 @@ test('Health does not treat past closed periods or future starts as current',()=
 
 test('new flow and dose forms link the imported period covering their date, while edits preserve their link',async()=>{
   for(const kind of ['flow','dose'])for(const editing of [false,true]){
-    const {section,writes}=fixture(),row=period(today,today);
+    const {section,writes}=fixture(null,'09:00'),row=period(today,today);
     const record=editing?{id:5,periodId:91,isCycleStart:false,occurredAt:today,occurredHasExplicitTime:false,takenAt:today+'T09:00',medicationPresetId:2,flow:'light',notes:''}:undefined;
     const tree=kind==='flow'?section.PeriodFlowEditor({initialDate:today,periods:[row],record,onClose(){},onSaved(){}}):section.MedicationDoseEditor({initialDate:today,periods:[row],presets:[{id:2,name:'Fixture'}],record,onClose(){},onSaved(){}});
     await findForm(tree).props.onSubmit({preventDefault(){}});
     assert.equal(writes.length,1);assert.equal(writes[0].body.periodId,editing?91:7);
     if(kind==='flow'&&!editing)assert.equal(writes[0].body.occurredHasExplicitTime,false);
   }
+});
+
+test('a new dose does not save without a selected time',async()=>{
+  const {section,writes}=fixture();
+  const tree=section.MedicationDoseEditor({initialDate:today,periods:[],presets:[{id:2,name:'Fixture'}],onClose(){},onSaved(){}});
+  await findForm(tree).props.onSubmit({preventDefault(){}});
+  assert.equal(writes.length,0);
 });

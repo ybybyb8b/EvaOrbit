@@ -244,9 +244,9 @@ export function DrinkRecordEditor({ record, initialDate, onClose, onSaved, onDel
   }
 
   return <FormSheet title={record ? "改饮品记录" : "补一杯"} onClose={onClose} formId="drink-record-form" submitLabel={record ? "改好了" : "记下"} submitDisabled={previewOnly} busy={saving} busyLabel={record ? "正在修改…" : "正在保存…"}>
-    <form id="drink-record-form" className={`editor-card compact-editor ${styles.editor}`} onSubmit={submit}>
+    <form id="drink-record-form" className={`editor-card compact-editor field-focus-surface ${styles.editor}`} onSubmit={submit}>
       {previewOnly && <FormPreviewNotice/>}
-      <DateTimeField inline label="日期" minuteStep={1} value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.slice(11, 16) }}
+      <DateTimeField label="日期" value={{ date: draft.occurredAt.slice(0, 10), time: draft.occurredAt.slice(11, 16) }}
         onChange={value => setDraft(current => ({ ...current, occurredAt: value.date + (value.time ? `T${value.time}` : "") }))}/>
       <div className={styles.identity}>
         {linked && <div className={styles.selected}>

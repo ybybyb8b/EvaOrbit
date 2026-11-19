@@ -1,4 +1,5 @@
 "use client";
+import { Droplet, Pill, Plus } from "reicon-react";
 import { Disclosure } from "@/components/disclosure";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useHealthData,type HealthRead} from "@/components/health-data-context";
@@ -6,6 +7,7 @@ import { ErrorNotice } from "@/components/error-notice";
 import { apiErrorMessage } from "@/lib/response-error";
 import { useServerDataState, useDataRefresh } from "@/components/use-data-refresh";
 import { BottomLogScope } from "@/components/bottom-log";
+import { QuickLogPicker, type QuickLogOption } from "@/components/quick-log-picker";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { ToastNotice } from "@/components/action-toast";
@@ -23,6 +25,7 @@ import { periodDayForDate } from "@/lib/timeline";
 import type { MedicationDoseEvent, MedicationPreset, MenstrualFlowRecord, MenstrualPeriod, ScheduledNotification } from "@/lib/types";
 
 type Saved = () => void | Promise<void>;
+type PeriodLogKind = "start" | "flow" | "dose" | "preset";
 const flowLabels = { none: { en: "No flow", zh: "无" }, unspecified: { en: "Unspecified", zh: "未指定" }, light: { en: "Light", zh: "少量" }, medium: { en: "Medium", zh: "中等" }, heavy: { en: "Heavy", zh: "大量" } } as const;
 function flowLabel(flow: MenstrualFlowRecord["flow"], english: boolean) { return flowLabels[flow][english ? "en" : "zh"]; }
 
@@ -50,6 +53,21 @@ export function PeriodMedicationSection({ initialPeriods, initialFlows, initialP
   const currentFlows = current ? flows.filter((item) => item.periodId === current.id) : [];
   const currentDoses = current ? doses.filter((item) => item.periodId === current.id) : [];
   const currentDay = currentContext?.day ?? null;
+  const logOptions: QuickLogOption<PeriodLogKind>[] = [
+    current
+      ? { kind: "flow", icon: Droplet, en: "Log flow", zh: "记录经量" }
+      : { kind: "start", icon: Droplet, en: "Start period", zh: "开始经期" },
+    { kind: "dose", icon: Pill, en: "Log dose", zh: "记录服药", disabled: !presets.length },
+    ...(!presets.length ? [{ kind: "preset" as const, icon: Plus, en: "Add medication", zh: "添加药物配置" }] : []),
+  ];
+
+  function chooseLog(kind: PeriodLogKind) {
+    setLogPickerOpen(false);
+    if (kind === "flow") setEditingFlow(undefined);
+    if (kind === "dose") setEditingDose(undefined);
+    if (kind === "preset") setEditingPreset(undefined);
+    setOpen(kind);
+  }
 
   async function reload() {
     const from = healthPeriodHistoryFrom(currentLocalDate()), fromInstant = encodeURIComponent(dateRange(from).from);
@@ -73,12 +91,9 @@ export function PeriodMedicationSection({ initialPeriods, initialFlows, initialP
 
   return <section className="health-section period-medication-section" aria-labelledby="period-medication-title">
     <BottomLogScope label={english ? "Log period or medication" : "记录经期或用药"} onClick={() => setLogPickerOpen(true)} />
-    {logPickerOpen && <FormSheet title={english ? "Log period or medication" : "记录经期或用药"} onClose={() => setLogPickerOpen(false)}><div className="health-log-choices">
-      <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen(current ? "flow" : "start"); }}><Icon name="plus" /><span>{current ? (english ? "Log flow" : "记录经量") : (english ? "Start period" : "开始经期")}</span></button>
-      {!current && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingFlow(undefined); setOpen("flow"); }}><Icon name="plus" /><span>{english ? "Log earlier flow" : "补录历史经量"}</span></button>}
-      <button type="button" disabled={!presets.length} onClick={() => { setLogPickerOpen(false); setEditingDose(undefined); setOpen("dose"); }}><Icon name="plus" /><span>{english ? "Log dose" : "记录服药"}</span></button>
-      {!presets.length && <button type="button" onClick={() => { setLogPickerOpen(false); setEditingPreset(undefined); setOpen("preset"); }}><Icon name="plus" /><span>{english ? "Add medication first" : "先添加药物配置"}</span></button>}
-    </div></FormSheet>}
+    {logPickerOpen && <FormSheet className="period-log-picker-sheet" title={english ? "Log period or medication" : "记录经期或用药"} onClose={() => setLogPickerOpen(false)}>
+      <QuickLogPicker options={logOptions} onChoose={chooseLog}/>
+    </FormSheet>}
     {open === "start" && <StartPeriodEditor initialDate={currentLocalDate()} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Period started" : "经期已开始")} />}
     {open === "period" && editingPeriod && <PeriodEditor record={editingPeriod} ending={endingPeriod} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Period updated" : "经期已更新")} />}
     {open === "flow" && <PeriodFlowEditor initialDate={currentLocalDate()} periods={periods} record={editingFlow} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Menstrual flow saved" : "经量记录已保存")} />}
@@ -86,7 +101,7 @@ export function PeriodMedicationSection({ initialPeriods, initialFlows, initialP
     {open === "preset" && <MedicationPresetEditor record={editingPreset} onClose={() => setOpen(null)} onSaved={() => saved(english ? "Medication settings saved" : "药物配置已保存")} />}
     <div className="section-heading"><div><h2 id="period-medication-title">{english ? "Current period" : "当前经期"}</h2></div></div>
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}{error && <ErrorNotice role="alert">{error}</ErrorNotice>}
-    {!current ? <div className="period-empty"><div><strong>{english ? "No active period" : "当前没有进行中的经期"}</strong><p>{english ? "Start when bleeding begins. Earlier records remain in Home Timeline." : "经期开始时再记录，历史继续在首页 Timeline 查看。"}</p></div><div className="period-primary-actions page-log-controls"><button className="button primary" onClick={() => setOpen("start")}>{english ? "Start period" : "开始经期"}</button><button className="text-button" onClick={() => { setEditingFlow(undefined); setOpen("flow"); }}>{english ? "Log earlier flow" : "补录历史经量"}</button></div></div> : <>
+    {!current ? <div className="period-empty"><div><strong>{english ? "No active period" : "当前没有进行中的经期"}</strong><p>{english ? "Start when bleeding begins. Earlier records remain in Home Timeline." : "经期开始时再记录，历史继续在首页 Timeline 查看。"}</p></div><div className="period-primary-actions page-log-controls"><button className="button primary" onClick={() => setOpen("start")}>{english ? "Start period" : "开始经期"}</button></div></div> : <>
       <div className="period-overview"><div className="period-day"><span>{english ? "Current period" : "当前周期"}</span><strong>{english ? `Day ${currentDay}` : `第 ${currentDay} 天`}</strong><small>{english ? `Started ${current.startedOn}` : `${current.startedOn} 开始`}</small></div><dl><div><dt>{english ? "Recent flow" : "最近经量"}</dt><dd>{currentFlows[0] ? `${flowLabel(currentFlows[0].flow, english)} · ${formatWhen(currentFlows[0].occurredAt, currentFlows[0].occurredHasExplicitTime, english)}` : (english ? "Not logged" : "尚未记录")}</dd></div><div><dt>{english ? "Recent dose" : "最近服药"}</dt><dd>{currentDoses[0] ? `${currentDoses[0].medicationNameSnapshot}${currentDoses[0].doseText ? ` · ${currentDoses[0].doseText}` : ""}` : (english ? "Not logged" : "尚未记录")}</dd></div><div><dt>{english ? "Next reminder" : "下一次提醒"}</dt><dd>{reminders[0] ? formatWhen(reminders[0].scheduledAt, true, english) : presets.some((item) => item.reminderEnabled && item.periodLinkEnabled) ? (english ? "Waiting for a dose" : "等待服药记录") : (english ? "Off" : "关闭")}</dd></div></dl></div>
       <div className="period-primary-actions page-log-controls"><button className="button primary" onClick={() => { setEditingFlow(undefined); setOpen("flow"); }}><Icon name="plus" />{english ? "Log flow" : "记录经量"}</button><button className="button secondary" disabled={!presets.length} onClick={() => { setEditingDose(undefined); setOpen("dose"); }}><Icon name="plus" />{english ? "Log dose" : "记录服药"}</button></div><div className="period-management-actions"><button className="text-button" onClick={() => { setEditingPeriod(current); setEndingPeriod(false); setOpen("period"); }}>{english ? "Edit period" : "编辑经期"}</button>{!current.endedOn && <button className="text-button period-end-action" onClick={() => { setEditingPeriod(current); setEndingPeriod(true); setOpen("period"); }}>{english ? "End period" : "结束经期"}</button>}</div>
       <Disclosure className="training-history period-records" title={english ? "Edit recent records" : "编辑近期记录"} description={english ? "Current period" : "当前周期"} trailing={currentFlows.length + currentDoses.length}>{currentFlows.length ? <RecordList items={currentFlows.slice(0, 4).map((item) => ({ id: item.id, time: formatWhen(item.occurredAt, item.occurredHasExplicitTime, english), title: flowLabel(item.flow, english), detail: item.source === "apple_health" ? "Apple Health" : item.notes || (english ? "Menstrual flow" : "经量记录"), edit: item.source === "apple_health" ? undefined : () => { setEditingFlow(item); setOpen("flow"); }, remove: item.source === "apple_health" ? undefined : () => void remove("flow", item.id), english }))} /> : null}{currentDoses.length ? <RecordList items={currentDoses.slice(0, 4).map((item) => ({ id: item.id, time: formatWhen(item.takenAt, true, english), title: item.medicationNameSnapshot, detail: item.doseText || item.notes || (english ? "Dose recorded" : "已记录服用"), edit: () => { setEditingDose(item); setOpen("dose"); }, remove: () => void remove("dose", item.id), english }))} /> : null}</Disclosure>
@@ -141,16 +156,120 @@ function FlowField({ value, onChange, english }: { value: MenstrualFlowRecord["f
 function PeriodField({ periods, value, onChange, english }: { periods: MenstrualPeriod[]; value: string; onChange: (value: string) => void; english: boolean }) { return periods.length > 10 ? <div className="field"><span>{english ? "Related period (optional)" : "关联经期（可选）"}</span><SearchableSelect label={english ? "Related period" : "关联经期"} value={value} onValueChange={onChange} options={[{value:"",label:english ? "Not linked" : "未关联"},...periods.map(item=>({value:String(item.id),label:periodLabel(item,english)}))]} /></div> : <label className="field"><span>{english ? "Related period (optional)" : "关联经期（可选）"}</span><ChoiceSelect value={value} onChange={(event) => onChange(event.target.value)}><option value="">—</option>{periods.map((item) => <option key={item.id} value={item.id}>{periodLabel(item, english)}</option>)}</ChoiceSelect></label>; }
 
 export function MedicationDoseEditor({ initialDate, periods, presets, record, onClose, onSaved }: { initialDate: string; periods: MenstrualPeriod[]; presets: MedicationPreset[]; record?: MedicationDoseEvent; onClose: () => void; onSaved: Saved }) {
-  const preview=useFormPreview();
+  const preview = useFormPreview();
+  const { read } = useHealthData();
+  const { english } = useLocale();
+  const today = currentLocalDate();
+  const initial = record ? compactDateTimeValue(record.takenAt, true) : initialDate;
+  const [when, setWhen] = useState({ date: initial.slice(0, 10), time: initial.slice(11, 16) });
+  const [presetId, setPresetId] = useState(String(record?.medicationPresetId ?? (presets.length === 1 ? presets[0].id : "")));
+  const [doseText, setDoseText] = useState(record?.doseText ?? "");
+  const [periodId, setPeriodId] = useState(record?.periodId ? String(record.periodId) : "");
+  const initialPeriodId = periodDayForDate(periods, initial.slice(0, 10), today)?.period.id ?? null;
+  const [choosePeriod, setChoosePeriod] = useState(Boolean(record && record.periodId !== initialPeriodId));
+  const [notes, setNotes] = useState(record?.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const medicationLabel = english ? "Medication" : "药物";
+  const doseLabel = english ? "Amount taken (optional)" : "本次用量（可选）";
+  const medicationOptions = presets.map(item => ({ value: String(item.id), label: item.name }));
+  if (record && !medicationOptions.some(option => option.value === String(record.medicationPresetId))) {
+    medicationOptions.unshift({ value: String(record.medicationPresetId), label: record.medicationNameSnapshot });
+  }
+  const defaultDose = presets.find(item => String(item.id) === presetId)?.defaultDoseText?.trim();
 
-  const {read}=useHealthData();
+  function changeMedication(value: string) {
+    if (value === presetId) return;
+    setPresetId(value);
+    setDoseText("");
+  }
 
-  const { english } = useLocale(), active = periodDayForDate(periods, initialDate, currentLocalDate())?.period ?? null, now = new Date().toTimeString().slice(0, 5); const initial = record ? compactDateTimeValue(record.takenAt, true) : `${initialDate}T${now}`;
-  const [presetId, setPresetId] = useState(String(record?.medicationPresetId ?? presets[0]?.id ?? "")), [date, setDate] = useState(initial.slice(0, 10)), [time, setTime] = useState(initial.slice(11, 16)), [doseText, setDoseText] = useState(record?.doseText ?? ""), [periodId, setPeriodId] = useState(record?.periodId ? String(record.periodId) : ""), [choosePeriod, setChoosePeriod] = useState(Boolean(record && record.periodId !== active?.id)), [notes, setNotes] = useState(record?.notes ?? ""), [saving, setSaving] = useState(false), [error, setError] = useState("");
-  async function submit(event: React.FormEvent) { event.preventDefault(); if(preview)return; setSaving(true); setError(""); try { if (!date || !time) throw new Error(english ? "Taken date and time are required" : "实际服药日期和时间均为必填"); const taken = compactDateTimePayload(`${date}T${time}`); await jsonRequest(read,record ? `/api/health/medication-doses/${record.id}` : "/api/health/medication-doses", { method: record ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ medicationPresetId: Number(presetId), periodId: choosePeriod ? (periodId ? Number(periodId) : null) : record ? record.periodId : periodDayForDate(periods, date, currentLocalDate())?.period.id ?? null, takenAt: taken.value, doseText, notes }) }); await onSaved(); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); } finally { setSaving(false); } }
-  return <FormSheet title={record ? (english ? "Edit dose" : "编辑服药记录") : (english ? "Log dose" : "记录服药")} onClose={onClose} formId="medication-dose-form" submitLabel={english ? "Save" : "保存"} busy={saving} submitDisabled={preview}><form id="medication-dose-form" className="weight-settings-form" onSubmit={submit}>{preview&&<FormPreviewNotice/>}{presets.length > 10 ? <div className="field"><span>{english ? "Medication" : "药物"}</span><SearchableSelect label={english ? "Medication" : "药物"} required value={presetId} onValueChange={setPresetId} options={presets.map(item=>({value:String(item.id),label:item.name}))} /></div> : <label className="field"><span>{english ? "Medication" : "药物"}</span><ChoiceSelect required value={presetId} onChange={(event) => setPresetId(event.target.value)}>{presets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</ChoiceSelect></label>}<div className="date-time-field"><label className="field"><span>{english ? "Taken date" : "实际服药日期"}</span><input required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><label className="field date-time-clock"><span>{english ? "Taken time" : "实际服药时间"}</span><input required type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label></div><label className="field"><span>{english ? "Amount taken (optional)" : "本次实际用量（可选）"}</span><input maxLength={200} value={doseText} onChange={(event) => setDoseText(event.target.value)} placeholder={english ? "For example: 2 tablets" : "例如：2片"} /></label><label className="weight-reminder-toggle"><span><strong>{english ? "Backfill or choose another period" : "补录或选择其他经期"}</strong><small>{active ? (english ? "Normally linked to the active period automatically." : "日常记录会自动关联当前经期。") : (english ? "Leave off when this dose is unrelated to a period." : "与经期无关时无需选择。")}</small></span><input role="switch" className="toggle-switch" type="checkbox" checked={choosePeriod} onChange={(event) => setChoosePeriod(event.target.checked)} /></label>{choosePeriod && <PeriodField periods={periods} value={periodId} onChange={setPeriodId} english={english} />}<label className="field"><span>{english ? "Notes" : "备注"}</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>{error && <ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (preview) return;
+    setSaving(true);
+    setError("");
+    try {
+      if (!when.date || !when.time) throw new Error(english ? "Taken date and time are required" : "服药日期和时间均为必填");
+      if (!presetId) throw new Error(english ? "Choose a medication" : "请选择药物");
+      const taken = compactDateTimePayload(`${when.date}T${when.time}`);
+      const relatedPeriodId = choosePeriod
+        ? (periodId ? Number(periodId) : null)
+        : record ? record.periodId : periodDayForDate(periods, when.date, currentLocalDate())?.period.id ?? null;
+      await jsonRequest(read, record ? `/api/health/medication-doses/${record.id}` : "/api/health/medication-doses", {
+        method: record ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medicationPresetId: Number(presetId), periodId: relatedPeriodId, takenAt: taken.value, doseText, notes }),
+      });
+      await onSaved();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <FormSheet
+    title={record ? (english ? "Edit dose" : "编辑服药记录") : (english ? "Log dose" : "记录服药")}
+    onClose={onClose}
+    formId="medication-dose-form"
+    submitLabel={english ? "Save" : "保存"}
+    busy={saving}
+    submitDisabled={preview || medicationOptions.length === 0}
+  >
+    <form id="medication-dose-form" className="medication-dose-form field-focus-surface" onSubmit={submit}>
+      {preview && <FormPreviewNotice />}
+      <div className="date-time-field date-time-inline">
+        <label className="field">
+          <span>{english ? "Taken date" : "服药日期"}</span>
+          <input required type="date" value={when.date} onChange={event => setWhen({ ...when, date: event.target.value })} />
+        </label>
+        <div className="field medication-dose-time">
+          <label htmlFor="medication-dose-time">{english ? "Taken time" : "服药时间"}</label>
+          <input id="medication-dose-time" required type="time" value={when.time} onChange={event => setWhen({ ...when, time: event.target.value })} />
+          {!record && when.date === today && <button type="button" data-form-change className="text-button" onClick={() => setWhen({ ...when, time: new Date().toTimeString().slice(0, 5) })}>
+            {english ? "Now" : "现在"}
+          </button>}
+        </div>
+      </div>
+      <div className="field">
+        <span>{medicationLabel}</span>
+        {medicationOptions.length === 0
+          ? <div className="muted">{english ? "Add a medication in Period & Medication to log a dose." : "请先在「经期与用药」添加药物配置。"}</div>
+          : medicationOptions.length > 10
+            ? <SearchableSelect label={medicationLabel} required value={presetId} onValueChange={changeMedication} options={medicationOptions} />
+            : <ChoiceSelect aria-label={medicationLabel} required value={presetId} onChange={event => changeMedication(event.target.value)}>
+              {medicationOptions.length > 1 && <option value="">{english ? "Choose medication" : "选择药物"}</option>}
+              {medicationOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </ChoiceSelect>}
+      </div>
+      <div className="field">
+        <label htmlFor="medication-dose-amount">{doseLabel}</label>
+        <input id="medication-dose-amount" maxLength={200} value={doseText} onChange={event => setDoseText(event.target.value)} placeholder={english ? "e.g. 2 tablets" : "例如：2 片"} />
+        {defaultDose && defaultDose !== doseText && <button type="button" data-form-change className="text-button medication-dose-default" onClick={() => setDoseText(defaultDose)}>
+          {english ? "Use preset amount:" : "填入预设用量："} {defaultDose}
+        </button>}
+      </div>
+      <Disclosure title={english ? "Notes & period link" : "备注与经期关联"} defaultOpen={Boolean(record?.notes) || choosePeriod}>
+        <label className="field">
+          <span>{english ? "Notes" : "备注"}</span>
+          <textarea value={notes} onChange={event => setNotes(event.target.value)} />
+        </label>
+        <label className="weight-reminder-toggle">
+          <span>
+            <strong>{english ? "Choose period manually" : "手动选择经期"}</strong>
+            <small>{record
+              ? (english ? "Keep the existing link unless you change it." : "默认保留原有的经期关联。")
+              : (english ? "Automatically links to the period covering the date." : "默认关联服药日期所在的经期。")}</small>
+          </span>
+          <input role="switch" className="toggle-switch" type="checkbox" checked={choosePeriod} onChange={event => setChoosePeriod(event.target.checked)} />
+        </label>
+        {choosePeriod && <PeriodField periods={periods} value={periodId} onChange={setPeriodId} english={english} />}
+      </Disclosure>
+      {error && <ErrorNotice>{error}</ErrorNotice>}
+    </form>
+  </FormSheet>;
 }
-
 function MedicationPresetEditor({ record, onClose, onSaved }: { record?: MedicationPreset; onClose: () => void; onSaved: Saved }) {
   const preview=useFormPreview();
 

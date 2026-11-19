@@ -25,7 +25,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name === "react") return react;
       if (name.endsWith("business-request-context")) return {useBusinessRequest:()=>environment.fetch??globalThis.fetch};
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
-      if (name === "react-dom") return { createPortal: node => node };
+      if (name === "react-dom") return { createPortal: node => node, flushSync: update => update() };
       if (name === "reicon-react") return { Trash2: "minimal-trash" };
       if (name.endsWith("locale-controller")) return { useLocale: () => ({ english: environment.english ?? false, language: environment.english ? "en" : "zh-CN" }) };
       if (name.endsWith("cats-data-context")) return {useCatsData:()=>({read:environment.fetch??globalThis.fetch,local:false})};
@@ -171,18 +171,32 @@ test("care keeps a specific project name separate from its optional category", a
   assert.equal(payload.occurredHasExplicitTime, false);
 });
 
-test("inline date and time keep unknown time empty and allow clearing an explicit time", () => {
+test("date and time share a row and keep the date when time is added or cleared", () => {
   for (const english of [false, true]) {
     let value = { date: "2026-10-10", time: "" };
-    const h = harness("src/components/date-time-field.tsx", "DateTimeField", { inline: true, label: "日期", value, onChange: next => { value = next; h.setProps({ value }); } }, { english });
+    const h = harness("src/components/date-time-field.tsx", "DateTimeField", { label: "日期", optionalDate: true, value, onChange: next => { value = next; h.setProps({ value }); } }, { english });
     h.render();
+    const add = () => h.nodes().find(node => node.props.className === "date-time-add");
     const time = () => h.nodes().find(node => node.type === "input" && node.props.type === "time");
+    assert.equal(time(), undefined);
+    assert.equal(add().props.children, english ? "Add time" : "添加时间");
+    add().props.onClick();
+    h.render();
     assert.equal(time().props.value, "");
-    assert.equal(h.nodes().some(node => node.props.className === "date-time-add"), false);
-    time().props.onChange({ target: { value: "13:00" } }); h.render();
-    assert.equal(value.time, "13:00");
-    h.nodes().find(node => node.type === "button").props.onClick(); h.render();
-    assert.equal(value.time, ""); assert.equal(time().props.value, "");
+    assert.deepEqual(value, { date: "2026-10-10", time: "" });
+    time().props.onChange({ target: { value: "13:27" } });
+    h.render();
+    assert.equal(value.time, "13:27");
+    const clear = h.nodes().find(node => node.props.className === "date-time-clear");
+    assert.equal(clear.props.children, "×");
+    clear.props.onClick();
+    h.render();
+    assert.deepEqual(value, { date: "2026-10-10", time: "" });
+    assert.equal(time(), undefined);
+    assert.equal(add().props.disabled, false);
+    h.nodes().find(node => node.type === "input" && node.props.type === "date").props.onChange({ target: { value: "" } });
+    h.render();
+    assert.equal(add().props.disabled, true);
   }
 });
 

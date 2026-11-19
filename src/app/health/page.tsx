@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { listHealthRecords } from "../../lib/services/health";
 import { buildHealthDashboard } from "../../lib/health-dashboard";
@@ -28,7 +29,8 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   const trainingId = Number.isSafeInteger(requestedTraining) && requestedTraining > 0 ? requestedTraining : null;
   const requestedWeight = Number(params.weight);
   const weightId = Number.isSafeInteger(requestedWeight) && requestedWeight > 0 ? requestedWeight : null;
-  const views: HealthViewName[] = ["overview", "sleep", "weight", "training", "energy", "cycle", "records"];
+  if (!weightId && !trainingId && params.view === "records") redirect("/health/records");
+  const views: HealthViewName[] = ["overview", "sleep", "weight", "training", "energy", "cycle"];
   // Preserve direct Timeline editor links.
   const view: HealthViewName = weightId ? "weight" : trainingId ? "training" : views.includes(params.view as HealthViewName) ? params.view as HealthViewName : "overview";
   const overview = view === "overview";
@@ -37,7 +39,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
   // Unused props retain empty values; quick editors load their own inputs when opened.
   const [initialSleep, records, dailyEnergy, energyHistory, training, recentTraining, trainingSuggestions, focusedTraining, weights, weightSettings, focusedWeight, periods, menstrualFlows, medicationPresets, medicationDoses, scheduledNotifications, activePeriods, trainingPlan] = await Promise.all([
     overview || view === "sleep" ? getDailySleepSummary(today) : buildDailySleepSummary(today, [], null),
-    overview || view === "records" ? listHealthRecords({ limit: 100 }) : [],
+    overview ? listHealthRecords({ limit: 100 }) : [],
     overview || view === "energy" ? getDailyNutritionSummary(today) : calculateDailyNutrition(today, [], [], { restingEnergyKcal: null, activeEnergyKcal: null, notes: "" }),
     view === "energy" ? listDailyNutritionHistory(7) : [],
     overview || view === "training" ? listTrainingLogs({ date: today, limit: 100 }) : [],

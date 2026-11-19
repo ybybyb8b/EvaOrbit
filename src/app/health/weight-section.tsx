@@ -9,7 +9,7 @@ import { PageLogAction } from "@/components/bottom-log-core";
 import { ToastNotice } from "@/components/action-toast";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DateTimeField, compactDateTimePayload, compactDateTimeValue, currentLocalDate } from "@/components/date-time-field";
+import { DateTimeField, currentLocalDate, dateTimeDraft, dateTimePayload } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -20,7 +20,7 @@ import type { WeightRecord, WeightSettings } from "@/lib/types";
 import { formatWeightKg, normalizeWeightKg, type WeightRange, WEIGHT_STEP_KG, weightRecordsInRange, weightTrend } from "@/lib/weight";
 
 const ranges: Array<{ value: WeightRange; label: string }> = [{ value:"7d",label:"7D" },{ value:"30d",label:"30D" },{ value:"90d",label:"90D" },{ value:"1y",label:"1Y" },{ value:"all",label:"ALL" }];
-const MIN_WEIGHT=20,MAX_WEIGHT=300,TICK_STEP_KG=.1,TICK_PX=10,SNAP_PX=TICK_PX*WEIGHT_STEP_KG/TICK_STEP_KG;
+const MIN_WEIGHT=20,MAX_WEIGHT=300,MAX_RECORD_WEIGHT=500,TICK_STEP_KG=.1,TICK_PX=10,SNAP_PX=TICK_PX*WEIGHT_STEP_KG/TICK_STEP_KG;
 
 export function WeightSection({ initialRecords, initialSettings, initialFocused }: { initialRecords:WeightRecord[];initialSettings:WeightSettings;initialFocused?:WeightRecord }) {
   const {read}=useHealthData();
@@ -38,7 +38,7 @@ export function WeightSection({ initialRecords, initialSettings, initialFocused 
   function close(){setEditorOpen(false);setEditing(undefined);const url=new URL(window.location.href);if(url.searchParams.has("weight")){url.searchParams.delete("weight");url.searchParams.set("view","weight");window.history.replaceState(window.history.state,"",`${url.pathname}${url.search}${url.hash}`);}}
   async function reload(){const response=await read("/api/health/weight?limit=1000",{cache:"no-store"});if(response.ok)setRecords(await response.json());}
   return <section className="weight-section health-section" aria-labelledby="weight-title">
-    {editorOpen&&<WeightEditor record={editing} initialWeight={latest?.weightKg??65} onClose={close} onSaved={async(syncMessage)=>{await reload();close();setMessage(syncMessage);}}/>}
+    {editorOpen&&<WeightEditor record={editing} previousWeight={latest?.weightKg} onClose={close} onSaved={async(syncMessage)=>{await reload();close();setMessage(syncMessage);}}/>}
     {settingsOpen&&<WeightSettingsSheet settings={settings} onClose={()=>setSettingsOpen(false)} onSaved={(next)=>{setSettings(next);setSettingsOpen(false);setMessage(english?"Weight settings saved":"体重设置已保存");}}/>}
     <div className="section-heading"><div><h2 id="weight-title">{english?"Latest weight":"最新体重"}</h2></div><div className="weight-actions"><button className="icon-button weight-settings-button" aria-label={english?"Weight settings":"体重设置"} onClick={()=>setSettingsOpen(true)}><Icon name="settings" variant="stroke"/></button><PageLogAction label={english?"Log weight":"记录体重"} className="text-button training-add" onClick={()=>{setEditing(undefined);setEditorOpen(true);setError("");setMessage("");}}><Icon name="plus"/>{english?"Log weight":"记录体重"}</PageLogAction></div></div>
     {message&&<ToastNotice message={message} onShown={() => setMessage("")} />}{error&&<ErrorNotice>{error}</ErrorNotice>}
@@ -68,25 +68,101 @@ function WeightChart({points,english}:{points:Array<{date:string;weightKg:number
   </svg>;
 }
 
-export function WeightEditor({record,initialWeight,initialDate,onClose,onSaved}:{record?:WeightRecord;initialWeight:number;initialDate?:string;onClose:()=>void;onSaved:(message:string)=>void|Promise<void>}){
+export function WeightEditor({record,previousWeight,initialDate,onClose,onSaved}:{record?:WeightRecord;previousWeight?:number;initialDate?:string;onClose:()=>void;onSaved:(message:string)=>void|Promise<void>}){
   const preview=useFormPreview();
-
   const {read}=useHealthData();
+  const {english}=useLocale();
+  const [originalDateTime]=useState(() => record ? dateTimeDraft(record.occurredAt,record.occurredHasExplicitTime) : {date:initialDate??currentLocalDate(),time:""});
+  const originalMeasurement=record ? formatWeightKg(normalizeWeightKg(record.weightKg)) : "";
+  const [measurement,setMeasurement]=useState(originalMeasurement);
+  const [dateTime,setDateTime]=useState(originalDateTime);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const weight=measurement==="" ? null : Number(measurement);
+  const rulerValue=weight!==null && Number.isFinite(weight) && weight>=MIN_WEIGHT ? weight : record?.weightKg ?? previousWeight ?? 65;
+  const timeUnchanged=originalDateTime.date===dateTime.date && originalDateTime.time===dateTime.time;
 
-  const {english}=useLocale();const [weight,setWeight]=useState(normalizeWeightKg(record?.weightKg??initialWeight)),[occurredAt,setOccurredAt]=useState(record?compactDateTimeValue(record.occurredAt,record.occurredHasExplicitTime):initialDate??`${currentLocalDate()}T${new Date().toTimeString().slice(0,5)}`),[saving,setSaving]=useState(false),[error,setError]=useState("");
-  async function submit(event:React.FormEvent){event.preventDefault(); if(preview)return;setSaving(true);setError("");try{const occurred=compactDateTimePayload(occurredAt);const response=await read(record?`/api/health/weight/${record.id}`:"/api/health/weight",{method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,weightKg:weight})});const result=await response.json().catch(()=>null) as WeightRecord|{error?:string}|null;if(!response.ok)throw new Error(apiErrorMessage(result,english?"Could not save weight":"保存体重失败"));const saved=result as WeightRecord;let note=english?"Weight saved":"体重已保存";const info=await getNativeHostInfo();if(saved.healthKitSyncIdentifier&&hostSupports(info,"healthkit.saveBodyMass")){try{await nativeCall("healthkit.saveBodyMass",{weightKg:saved.weightKg,occurredAt:saved.occurredAt,syncIdentifier:saved.healthKitSyncIdentifier,syncVersion:saved.healthKitSyncVersion});note=english?"Weight saved and queued for Apple Health":"体重已保存并写入 Apple Health";}catch{note=english?"Weight saved; Apple Health write needs retry":"体重已保存，Apple Health 写入需重试";}}try{await reconcileNativeNotifications();}catch{/* Web Push still checks the saved record at delivery time. */}playNativeHaptic("success");await onSaved(note);}catch(reason){playNativeHaptic("error");setError(reason instanceof Error?reason.message:String(reason));}finally{setSaving(false);}}
-  return <FormSheet title={record?(english?"Edit weight":"编辑体重"):(english?"Log weight":"记录体重")} onClose={onClose} formId="weight-entry-form" submitLabel={record?(english?"Save changes":"保存修改"):(english?"Save weight":"保存体重")} busy={saving} submitDisabled={preview}><form id="weight-entry-form" className="weight-entry-form" onSubmit={submit}>{preview&&<FormPreviewNotice/>}<div className="weight-entry-value"><strong>{formatWeightKg(weight)}</strong><span>kg</span></div><WeightRuler value={weight} onChange={setWeight}/><DateTimeField label={english?"Date and time":"日期与时间"} value={{date:occurredAt.slice(0,10),time:occurredAt.length>10?occurredAt.slice(11,16):""}} onChange={value=>setOccurredAt(value.date+(value.time?`T${value.time}`:""))}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
+  async function submit(event:React.FormEvent){
+    event.preventDefault();
+    if(preview || saving || weight===null)return;
+    setSaving(true);setError("");
+    try{
+      const occurred=record && timeUnchanged ? {value:record.occurredAt,hasExplicitTime:record.occurredHasExplicitTime} : dateTimePayload(dateTime);
+      const response=await read(record?`/api/health/weight/${record.id}`:"/api/health/weight",{
+        method:record?"PATCH":"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({occurredAt:occurred.value,occurredHasExplicitTime:occurred.hasExplicitTime,weightKg:weight}),
+      });
+      const result=await response.json().catch(()=>null) as WeightRecord|{error?:string}|null;
+      if(!response.ok)throw new Error(apiErrorMessage(result,english?"Could not save weight":"保存体重失败"));
+      const saved=result as WeightRecord;let note=english?"Weight saved":"体重已保存";const info=await getNativeHostInfo();if(saved.healthKitSyncIdentifier&&hostSupports(info,"healthkit.saveBodyMass")){try{await nativeCall("healthkit.saveBodyMass",{weightKg:saved.weightKg,occurredAt:saved.occurredAt,syncIdentifier:saved.healthKitSyncIdentifier,syncVersion:saved.healthKitSyncVersion});note=english?"Weight saved and queued for Apple Health":"体重已保存并写入 Apple Health";}catch{note=english?"Weight saved; Apple Health write needs retry":"体重已保存，Apple Health 写入需重试";}}try{await reconcileNativeNotifications();}catch{/* Web Push still checks the saved record at delivery time. */}playNativeHaptic("success");await onSaved(note);
+    }catch(reason){playNativeHaptic("error");setError(reason instanceof Error?reason.message:String(reason));}
+    finally{setSaving(false);}
+  }
+
+  return <FormSheet className="weight-entry-sheet" title={record ? (english?"Edit weight":"编辑体重") : (english?"Log weight":"记录体重")}
+    onClose={onClose} formId="weight-entry-form" submitLabel={record?(english?"Save changes":"保存修改"):(english?"Save weight":"保存体重")}
+    busy={saving} dirty={measurement!==originalMeasurement || !timeUnchanged} submitDisabled={preview || weight===null}>
+    <form id="weight-entry-form" className="weight-entry-form field-focus-surface" onSubmit={submit}>
+      {preview&&<FormPreviewNotice/>}
+      <div className="weight-entry-time">
+        <DateTimeField label={english?"Date":"日期"} value={dateTime} onChange={setDateTime}/>
+        {dateTime.date===currentLocalDate() && !dateTime.time && <button type="button" className="text-button" onClick={()=>{
+          const now=dateTimeDraft(new Date().toISOString());
+          if(now.date===dateTime.date)setDateTime(now);
+        }}>{english?"Use current time":"填入当前时间"}</button>}
+      </div>
+      <div className="weight-entry-measurement">
+        <label className="weight-entry-value">
+          <span className="sr-only">{english?"Weight (kg)":"体重（kg）"}</span>
+          <input type="number" inputMode="decimal" required min={MIN_WEIGHT} max={MAX_RECORD_WEIGHT} step={WEIGHT_STEP_KG}
+            placeholder="—" value={measurement} onChange={event=>setMeasurement(event.target.value)}/>
+          <span aria-hidden="true">kg</span>
+        </label>
+      </div>
+      <div className="weight-entry-scale">
+        <WeightRuler value={rulerValue} onChange={value=>setMeasurement(formatWeightKg(value))}/>
+        {!record && previousWeight!==undefined && <p className="weight-entry-reference">{english?"Last recorded":"上次记录"} {formatWeightKg(previousWeight)} kg</p>}
+      </div>
+      {error&&<ErrorNotice>{error}</ErrorNotice>}
+    </form>
+  </FormSheet>;
 }
 
-function WeightRuler({value,onChange}:{value:number;onChange:(value:number)=>void}){
+function rulerWeight(value:number){return normalizeWeightKg(Math.min(MAX_WEIGHT,Math.max(MIN_WEIGHT,value)));}
 
-  const ref=useRef<HTMLDivElement>(null),timer=useRef<number|undefined>(undefined),last=useRef(value);
-  const initialValue=useRef(value);
-  useEffect(()=>{const element=ref.current;if(element)element.scrollLeft=(initialValue.current-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX;},[]);
-  function scroll(){const element=ref.current;if(!element)return;const next=normalizeWeightKg(Math.min(MAX_WEIGHT,Math.max(MIN_WEIGHT,MIN_WEIGHT+element.scrollLeft/TICK_PX*TICK_STEP_KG)));if(next!==last.current){last.current=next;onChange(next);}window.clearTimeout(timer.current);timer.current=window.setTimeout(()=>{const target=Math.round(element.scrollLeft/SNAP_PX)*SNAP_PX;element.scrollTo({left:target,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});},120);}
-  function keyDown(event:React.KeyboardEvent<HTMLDivElement>){const delta=event.key==="ArrowRight"||event.key==="ArrowUp"?WEIGHT_STEP_KG:event.key==="ArrowLeft"||event.key==="ArrowDown"?-WEIGHT_STEP_KG:0;const target=event.key==="Home"?MIN_WEIGHT:event.key==="End"?MAX_WEIGHT:delta?normalizeWeightKg(value+delta):null;if(target===null)return;event.preventDefault();ref.current?.scrollTo({left:(Math.min(MAX_WEIGHT,Math.max(MIN_WEIGHT,target))-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX,behavior:"auto"});}
+function WeightRuler({value,onChange}:{value:number;onChange:(value:number)=>void}){
+  const {english}=useLocale();
+  const ref=useRef<HTMLDivElement>(null),timer=useRef<number|undefined>(undefined),last=useRef<number|null>(null);
+  const position=rulerWeight(value);
+  useEffect(()=>{
+    const element=ref.current;
+    if(!element || last.current===position)return;
+    window.clearTimeout(timer.current);
+    // Scrolling to a reference or typed weight does not record a measurement.
+    last.current=position;
+    element.scrollLeft=Math.round((position-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX);
+  },[position]);
+  useEffect(()=>()=>window.clearTimeout(timer.current),[]);
+  function scroll(){
+    const element=ref.current;
+    if(!element)return;
+    const next=rulerWeight(MIN_WEIGHT+element.scrollLeft/TICK_PX*TICK_STEP_KG);
+    if(next!==last.current){last.current=next;onChange(next);}
+    window.clearTimeout(timer.current);
+    timer.current=window.setTimeout(()=>{
+      const target=Math.round(element.scrollLeft/SNAP_PX)*SNAP_PX;
+      element.scrollTo({left:target,behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+    },120);
+  }
+  function keyDown(event:React.KeyboardEvent<HTMLDivElement>){
+    const delta=event.key==="ArrowRight"||event.key==="ArrowUp"?WEIGHT_STEP_KG:event.key==="ArrowLeft"||event.key==="ArrowDown"?-WEIGHT_STEP_KG:0;
+    const target=event.key==="Home"?MIN_WEIGHT:event.key==="End"?MAX_WEIGHT:delta?rulerWeight(position+delta):null;
+    if(target===null)return;
+    event.preventDefault();
+    onChange(target);
+  }
   const labels=Array.from({length:(MAX_WEIGHT-MIN_WEIGHT)/1+1},(_,index)=>MIN_WEIGHT+index);
-  return <div className="weight-ruler-wrap"><span className="weight-ruler-pointer" aria-hidden="true"/><div ref={ref} className="weight-ruler" onScroll={scroll} onKeyDown={keyDown} role="slider" tabIndex={0} aria-valuemin={MIN_WEIGHT} aria-valuemax={MAX_WEIGHT} aria-valuenow={value} aria-valuetext={`${formatWeightKg(value)} kilograms`} aria-label="Weight in kilograms"><div className="weight-ruler-spacer"/><div className="weight-ruler-track">{labels.map(label=><span key={label} style={{left:`${(label-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX}px`}}>{label}</span>)}</div><div className="weight-ruler-spacer"/></div></div>;
+  return <div className="weight-ruler-wrap"><span className="weight-ruler-pointer" aria-hidden="true"/><div ref={ref} className="weight-ruler" onScroll={scroll} onKeyDown={keyDown} role="slider" tabIndex={0} aria-valuemin={MIN_WEIGHT} aria-valuemax={MAX_WEIGHT} aria-valuenow={position} aria-valuetext={`${formatWeightKg(position)} ${english?"kilograms":"千克"}`} aria-label={english?"Weight ruler":"体重刻度尺"}><div className="weight-ruler-spacer"/><div className="weight-ruler-track">{labels.map(label=><span key={label} style={{left:`${(label-MIN_WEIGHT)/TICK_STEP_KG*TICK_PX}px`}}>{label}</span>)}</div><div className="weight-ruler-spacer"/></div></div>;
 }
 
 function WeightSettingsSheet({settings,onClose,onSaved}:{settings:WeightSettings;onClose:()=>void;onSaved:(value:WeightSettings)=>void}){

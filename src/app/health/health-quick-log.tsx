@@ -76,7 +76,7 @@ function WeightQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorP
   const { english } = useLocale();
   const request = useRemoteJson<WeightRecord[]>("/api/health/weight?limit=1");
   if (!request.data) return <LoadSheet title={english ? "Log weight" : "记录体重"} error={request.error} onClose={onClose} onRetry={request.retry} />;
-  return <WeightEditor initialDate={initialDate} initialWeight={request.data[0]?.weightKg ?? 65} onClose={onClose} onSaved={async () => { await onSaved(); onClose(); }} />;
+  return <WeightEditor initialDate={initialDate} previousWeight={request.data[0]?.weightKg} onClose={onClose} onSaved={async () => { await onSaved(); onClose(); }} />;
 }
 
 function HealthRecordQuickLog({ initialDate, onClose, onSaved }: HealthQuickLogEditorProps) {

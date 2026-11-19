@@ -25,7 +25,11 @@ function pageFixture(oldActive = false) {
     return [];
   }});
   const exports = {};
-  new Function('require', 'exports', compiled)(name => name === 'react/jsx-runtime' ? { jsx: (_, props) => props } : services, exports);
+  new Function('require', 'exports', compiled)(name => {
+    if (name === 'react/jsx-runtime') return { jsx: (_, props) => props };
+    if (name === 'next/navigation') return { redirect: path => { throw new Error(path); } };
+    return services;
+  }, exports);
   return { run: params => exports.default({ searchParams: Promise.resolve(params) }), calls, releaseSleep };
 }
 
@@ -36,7 +40,6 @@ const expected = {
   training: ['listTrainingLogs', 'listTrainingLogs', 'getTrainingInputSuggestions', 'getTrainingPlan'],
   energy: ['getDailyNutritionSummary', 'listDailyNutritionHistory'],
   cycle: ['listMenstrualPeriods', 'listMenstrualFlowRecords', 'listMedicationPresets', 'listMedicationDoseEvents', 'listScheduledNotifications', 'listMenstrualPeriods'],
-  records: ['listHealthRecords'],
 };
 const queried = call => /^(getDailySleepSummary|listHealthRecords|getDailyNutritionSummary|listDailyNutritionHistory|listTrainingLogs|getTrainingInputSuggestions|getTrainingLog|getTrainingPlan|listWeightRecords|getWeightSettings|getWeightRecord|listMenstrualPeriods|listMenstrualFlowRecords|listMedicationPresets|listMedicationDoseEvents|listScheduledNotifications)$/.test(call.name);
 
@@ -63,6 +66,12 @@ test('Legacy editor IDs retain precedence without querying the other editor', as
     assert.equal((await fixture.run(params)).view, view);
     assert.deepEqual(fixture.calls.filter(call => /^(getWeightRecord|getTrainingLog)$/.test(call.name)).map(call => call.name), [focused]);
   }
+});
+
+test('Legacy Health Records links open the full list without querying the overview', async () => {
+  const fixture = pageFixture();
+  await assert.rejects(fixture.run({ view: 'records' }), { message: '/health/records' });
+  assert.deepEqual(fixture.calls.filter(queried), []);
 });
 
 test('Cycle retains an older active period and its associated flows and doses', async () => {

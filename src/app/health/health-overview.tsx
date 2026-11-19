@@ -78,6 +78,6 @@ export function HealthOverview({ initialSleep: sleep, initialEnergy: energy, ini
       ].map(item => <div key={item.label}><dt>{item.label}</dt><dd>{number(item.value)}{item.value !== null && <small>kcal</small>}</dd>{item.value === null && <span>{t("Not recorded", "未记录")}</span>}</div>)}</dl>
     </Link>
     {children}
-    <Link href="/health?view=records" className={`${styles.tile} ${styles.records}`}><ClipboardHeart weight="Filled" aria-hidden="true" /><div className={styles.tileCopy}><h2>{t("Health records", "健康记录")}</h2><p>{t("View and add health records", "查看与新增健康记录")}</p></div></Link>
+    <Link href="/health/records" className={`${styles.tile} ${styles.records}`}><ClipboardHeart weight="Filled" aria-hidden="true" /><div className={styles.tileCopy}><h2>{t("Health records", "健康记录")}</h2><p>{t("View and add health records", "查看与新增健康记录")}</p></div></Link>
   </div>;
 }

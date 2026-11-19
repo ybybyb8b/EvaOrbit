@@ -1,6 +1,7 @@
 "use client";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
+import { Icon } from "@/components/icons";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SearchableMultiSelect } from "@/components/searchable-multi-select";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -56,8 +57,8 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
     <label className="field"><span>{english?"Note":"备注"}</span><textarea rows={3} maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>
     {error && <ErrorNotice>{error}</ErrorNotice>}
   </>;
-  return <FormSheet title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
-{readOnly ? <fieldset disabled style={{border:0,padding:0,margin:0,minWidth:0}}><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
+  return <FormSheet className="tracker-entry-sheet" title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form field-focus-surface" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
+{readOnly ? <fieldset disabled className="tracker-entry-readonly"><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
   </form></FormSheet>;
 }
 
@@ -66,10 +67,24 @@ export function TrackerFieldInput({ field, value, onChange }: { field: TrackerFi
   const copy = (text: string) => translateUiCopy(text, language);
   const fieldName = copy(field.name);
   if (field.type === "time_range") return <TrackerTimeRangeInput field={field} value={value} onChange={onChange} />;
-  if (field.type === "boolean") return <label className="tracker-check field-check"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /><span className="user-content">{fieldName}</span></label>;
+  if (field.type === "boolean") return <label className="tracker-check">
+    <span className="user-content">{fieldName}</span>
+    <span className="tracker-check-control">
+      <input type="checkbox" checked={Boolean(value)} onChange={event => onChange(event.target.checked)} />
+      <Icon name="check" />
+    </span>
+  </label>;
   if (field.type === "single_select" && field.options.length <= 10) return <label className="field"><span className="user-content">{fieldName}</span><ChoiceSelect required={field.required} value={typeof value === "string" ? value : ""} onChange={event=>onChange(event.target.value)}><option value="">{english?"Not selected":"未选择"}</option>{field.options.map(option=><option className="user-content" key={option} value={option}>{copy(option)}</option>)}</ChoiceSelect></label>;
   if (field.type === "single_select") return <div className="field"><span className="user-content">{fieldName}</span><SearchableSelect required={field.required} label={fieldName} value={typeof value === "string" ? value : ""} options={[{value:"",label:english?"Not selected":"未选择"},...field.options.map(option=>({value:option,label:copy(option)}))]} onValueChange={onChange} /></div>;
-  if (field.type === "multi_select") return <fieldset className="tracker-multi-field"><legend className="user-content">{fieldName}</legend><SearchableMultiSelect label={fieldName} required={field.required} options={field.options.map(option=>({value:option,label:copy(option)}))} value={Array.isArray(value)?value as string[]:[]} onValueChange={onChange}/></fieldset>;
+  if (field.type === "multi_select") {
+    const selected = Array.isArray(value) ? value as string[] : [];
+    const showSelectedTags = field.options.length > 10 || selected.some(option => !field.options.includes(option));
+    return <fieldset className="tracker-multi-field">
+      <legend className="user-content">{fieldName}</legend>
+      <SearchableMultiSelect label={fieldName} required={field.required} showSelectedTags={showSelectedTags}
+        options={field.options.map(option => ({ value: option, label: copy(option) }))} value={selected} onValueChange={onChange}/>
+    </fieldset>;
+  }
   if (field.type === "rating") return <label className="field"><span className="user-content">{fieldName}</span><ChoiceSelect required={field.required} value={typeof value === "number" ? value : ""} onChange={(event) => onChange(event.target.value ? Number(event.target.value) : null)}><option value="">{english?"Not rated":"未评分"}</option>{[1, 2, 3, 4, 5].map((score) => <option key={score} value={score}>{"★".repeat(score)}</option>)}</ChoiceSelect></label>;
   return <label className="field"><span className="user-content">{fieldName}{field.unit && ` (${field.unit})`}</span><input required={field.required} type={field.type === "number" ? "number" : "text"} step={field.type === "number" ? 10 ** -field.precision : undefined} value={typeof value === "string" || typeof value === "number" ? String(value) : ""} onChange={(event) => onChange(field.type === "number" ? (event.target.value ? Number(event.target.value) : null) : event.target.value)} /></label>;
 }

@@ -8,13 +8,12 @@ import { ChoiceSelect } from "@/components/choice-select";
 import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import {CatsLink as Link, useCatsData} from "@/components/cats-data-context";
-import { ArrowDown5 } from "reicon-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Icon } from "@/components/icons";
 import { FormSheet } from "@/components/form-sheet";
 import { PageHeading as PageHeader } from "@/components/page-heading";
-import { PageLogAction } from "@/components/bottom-log-core";
+import { BottomLogScope } from "@/components/bottom-log-core";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
 import type {CatsDashboard as Dashboard} from "@/lib/cats-readonly";
@@ -28,7 +27,6 @@ import { ReminderEditor } from "./reminder-editor";
 import { RoutineEditor } from "./routine-editor";
 
 
-function relative(value: string) { const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000); if (days <= 0) return "today"; if (days === 1) return "1d ago"; return `${days}d ago`; }
 export type RoutineDueState = "overdue" | "today" | "tomorrow" | "upcoming";
 
 function localDayNumber(value: string) {
@@ -48,10 +46,27 @@ export function routineDueState(value: string): RoutineDueState {
   return "upcoming";
 }
 
-function routineDate(value: string) { return new Date(value.length===10?`${value}T12:00:00`:value).toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
-export function routineDueLabel(value: string) { const state = routineDueState(value); return state === "overdue" ? `Overdue · ${routineDate(value)}` : state === "today" ? "Due today" : state === "tomorrow" ? "Due tomorrow" : `Due ${routineDate(value)}`; }
-export function routineCadence(routine: CatRoutine) { return `Every ${routine.intervalValue} ${routine.intervalUnit}${routine.intervalValue === 1 ? "" : "s"}`; }
-export function routineLastDoneLabel(value: string | null | undefined) { return value ? `Last done ${routineDate(value)}` : "Not completed yet"; }
+function routineDate(value: string, english = true) {
+  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value);
+  return date.toLocaleDateString(english ? "en-US" : "zh-CN", { month: "short", day: "numeric" });
+}
+export function routineDueLabel(value: string, english = true) {
+  const state = routineDueState(value);
+  if (state === "today") return english ? "Due today" : "今天到期";
+  if (state === "tomorrow") return english ? "Due tomorrow" : "明天到期";
+  const date = routineDate(value, english);
+  if (state === "overdue") return english ? `Overdue · ${date}` : `已逾期 · ${date}`;
+  return english ? `Due ${date}` : `${date}到期`;
+}
+const routineUnits = { day: "天", week: "周", month: "个月" };
+export function routineCadence({ intervalValue, intervalUnit }: CatRoutine, english = true) {
+  return english ? `Every ${intervalValue} ${intervalUnit}${intervalValue === 1 ? "" : "s"}` : `每 ${intervalValue} ${routineUnits[intervalUnit]}`;
+}
+export function routineLastDoneLabel(value: string | null | undefined, english = true) {
+  if (!value) return english ? "Not completed yet" : "尚未完成过";
+  const date = routineDate(value, english);
+  return english ? `Last done ${date}` : `上次完成于${date}`;
+}
 
 export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: Dashboard; foodSummary: { items: number; packages: number; lowStock: number } }) {
   const businessFetch=useBusinessRequest(); const previewOnly=useFormPreview(); const {read}=useCatsData();
@@ -62,6 +77,7 @@ export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: 
   const [editingRecord, setEditingRecord] = useState<{ kind: CatTimelineEntry["kind"]; id: number; record: Record<string, unknown> }>();
   const [recordKind, setRecordKind] = useState<CatTimelineEntry["kind"]>("event");
   const [careExpanded, setCareExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [careBusy, setCareBusy] = useState(false);
   const [careError, setCareError] = useState("");
   const [editingRoutine, setEditingRoutine] = useState<CatRoutine>();
@@ -76,9 +92,40 @@ export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: 
     ...dashboard.oneTimeTasks.map(reminder => ({ key: `reminder-${reminder.id}`, due: reminder.nextDueAt!, petId: reminder.targetType === "cat" ? reminder.targetId : null, title: reminder.title, reminder, routine: null })),
     ...(dashboard.routines ?? dashboard.household.map(item => item.routine)).filter(item => item.enabled).map(routine => ({ key: `routine-${routine.id}`, due: routine.nextDueAt, petId: routine.petId, title: routine.title, reminder: null, routine })),
   ].sort((a,b) => a.due.localeCompare(b.due));
-  function careCard(item: (typeof careItems)[number], top = false) {
-    const content = <><div className="cat-care-copy"><strong>{pets.find(pet => pet.id === item.petId)?.name ?? "Household"} · {item.title}</strong><small>{routineDueLabel(item.due)}</small><small>{item.routine ? `${routineCadence(item.routine)} · ${routineLastDoneLabel(item.routine.lastCompletedOn??item.routine.lastCompletedAt)}` : "One-time"}</small></div><div className="cat-care-actions"><button disabled={careBusy} onClick={() => { if(item.routine){setEditingRoutine(item.routine);setRoutineScope(item.routine.scope);setPanel("routine");}else if(item.reminder){setEditingReminder(item.reminder);setPanel("reminder");} }}>Edit</button><button className="cat-care-done" disabled={careBusy || previewOnly} onClick={() => void careAction(() => item.routine ? completeRoutine(item.routine) : reminderAction(item.reminder!.id,"complete"))}>Done</button>{item.routine?.undoableEventId&&<button disabled={careBusy||previewOnly} onClick={()=>void careAction(()=>completeRoutine(item.routine!,true))}>Undo completion</button>}{item.reminder && <button disabled={careBusy || previewOnly} onClick={() => void careAction(() => reminderAction(item.reminder!.id,"cancel"))}>Cancel</button>}</div></>;
-    return <article key={item.key} className={`cat-care-card ${top ? "cat-care-top" : ""}`}>{top ? <><div className="cat-care-head"><button className="cat-care-toggle" type="button" aria-expanded={careExpanded} aria-controls="cats-care-more" onClick={() => setCareExpanded(value => !value)}><strong>Care to do</strong><span className="cat-care-count">{careItems.length}</span><ArrowDown5 className="cat-care-toggle-icon" size={13} weight="Outline" aria-hidden="true"/></button></div><div className="cat-care-card-body">{content}</div></> : <div className="cat-care-card-body">{content}</div>}</article>;
+  const careTitle = english ? "Care to do" : "护理待办";
+  const expandLabel = english ? "Expand" : "展开";
+  const collapseLabel = english ? "Collapse" : "收起";
+  function careCard(item: (typeof careItems)[number]) {
+    const subject = pets.find(pet => pet.id === item.petId)?.name ?? (english ? "Household" : "全家共用");
+    return <article key={item.key} className="cat-care-card">
+      <div className="cat-care-card-body">
+        <div className="cat-care-copy">
+          <strong>{item.title}</strong>
+          <small>{subject} · {routineDueLabel(item.due, english)}</small>
+          <small>{item.routine
+            ? `${routineCadence(item.routine, english)} · ${routineLastDoneLabel(item.routine.lastCompletedOn ?? item.routine.lastCompletedAt, english)}`
+            : english ? "One-time" : "单次待办"}</small>
+        </div>
+        <div className="cat-care-actions">
+          <button type="button" disabled={careBusy} onClick={() => {
+            if (item.routine) {
+              setEditingRoutine(item.routine);
+              setRoutineScope(item.routine.scope);
+              setPanel("routine");
+            } else if (item.reminder) {
+              setEditingReminder(item.reminder);
+              setPanel("reminder");
+            }
+          }}>Edit</button>
+          {item.routine?.undoableEventId && <button type="button" disabled={careBusy || previewOnly}
+            onClick={() => void careAction(() => completeRoutine(item.routine!, true))}>Undo completion</button>}
+          {item.reminder && <button type="button" disabled={careBusy || previewOnly}
+            onClick={() => void careAction(() => reminderAction(item.reminder!.id, "cancel"))}>Cancel</button>}
+          <button type="button" className="cat-care-done" disabled={careBusy || previewOnly}
+            onClick={() => void careAction(() => item.routine ? completeRoutine(item.routine) : reminderAction(item.reminder!.id, "complete"))}>Done</button>
+        </div>
+      </div>
+    </article>;
   }
   async function careAction(action: () => Promise<void>) { if(previewOnly)return; if (careBusy) return; setCareBusy(true); setCareError(""); try { await action(); } catch { setCareError("Could not update care. Please retry."); } finally { setCareBusy(false); } }
   async function load() { const response = await read("/api/cats"); if (response.ok) setDashboard(await response.json()); }
@@ -89,9 +136,26 @@ export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: 
   async function removeRecord(item: CatTimelineEntry) { if(previewOnly)return; if (!confirm(`Delete “${item.title}”?`)) return; const response = await businessFetch(`/api/cats/records/${item.kind}/${item.id}`, { method: "DELETE" }); if (response.ok) { await load(); showActionToast("Record deleted", "deleted"); } else playNativeHaptic("error"); }
   return <div className="page cats-page">
     <PageHeader eyebrow="" title="Cats"/>
+    <BottomLogScope label={english ? "Log cat care" : "记录猫咪护理"} onClick={() => setPanel("log")}/>
     <div className="cats-overview">
-      <section className="cats-pets-section cats-pets-primary">{dashboard.pets.length ? <><div className="cat-card-grid">{dashboard.pets.map(({ pet, latest }) => { const ageLabel = catAgeLabel(pet.birthday, english); return <Link href={`/cats/${pet.id}`} className="cat-card" key={pet.id}><CatAvatar pet={pet}/><div><h2>{pet.name}</h2>{ageLabel && <span className="cat-card-age">{ageLabel}</span>}<p>{latest ? <>Latest · {latest.title} · {relative(latest.occurredAt)}</> : "No recent records"}</p></div></Link>; })}</div></> : <button className="cats-inline-empty" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button>}</section>
-      <div className="cats-quick-actions" aria-label="Quick actions"><PageLogAction label="Log cat care" onClick={() => setPanel("log")}><Icon name="plus"/>Log</PageLogAction></div>
+      <section className="cats-pets-section cats-pets-primary">
+        {dashboard.pets.length ? <div className="cat-card-grid">{dashboard.pets.map(({ pet, nextRoutine }) => {
+          const ageLabel = catAgeLabel(pet.birthday, english);
+          return <Link href={`/cats/${pet.id}`} className="cat-card" key={pet.id}>
+            <CatAvatar pet={pet} size={68}/>
+            <div className="cat-card-identity">
+              <h2>{pet.name}</h2>
+              {ageLabel && <span className="cat-card-age">{ageLabel}</span>}
+            </div>
+            <div className="cat-card-routine">
+              {nextRoutine ? <>
+                <strong>{nextRoutine.title}</strong>
+                <small>{routineDueLabel(nextRoutine.nextDueAt, english)}</small>
+              </> : <small>{english ? "No routine scheduled" : "暂无例行待办"}</small>}
+            </div>
+          </Link>;
+        })}</div> : <button className="cats-inline-empty" onClick={() => setPanel("pet")}><Icon name="plus"/>Add cat</button>}
+      </section>
     </div>
 
     {message && <ToastNotice message={message} onShown={() => setMessage("")} />}
@@ -105,12 +169,45 @@ export function CatsView({ initialDashboard, foodSummary }: { initialDashboard: 
     )}
     <section className={`cats-care-section cat-care-disclosure due-stack ${careExpanded ? "expanded" : ""}`}>
       {careError && <ErrorNotice role="alert">{careError}</ErrorNotice>}
-      {careItems.length ? <div className={`cat-care-list ${careItems.length > 1 ? "due-stack-shell" : ""}`}>{careCard(careItems[0],true)}<div id="cats-care-more" className="cat-care-more" hidden={!careExpanded}>{careItems.slice(1).map(item => careCard(item))}</div></div> : <><div className="section-heading"><h2>Care to do</h2></div><p className="cat-section-copy">No care scheduled. Plan a one-time task or a repeating routine.</p></>}
+      {careItems.length ? <div className={careItems.length > 1 ? "due-stack-shell" : undefined}
+        data-layers={careItems.length === 2 ? 1 : undefined}>
+        <div className="cat-care-list">
+          <div className="cat-care-head">
+            {careItems.length > 1 ? <button className="cat-care-toggle" type="button" aria-expanded={careExpanded}
+              aria-controls="cats-care-more" onClick={() => setCareExpanded(value => !value)}>
+              <strong>{careTitle}</strong>
+              <span className="cats-disclosure-meta">
+                <span>{careItems.length}</span>
+                <span className="cats-disclosure-action">{careExpanded ? collapseLabel : expandLabel}</span>
+              </span>
+            </button> : <h2>{careTitle}</h2>}
+          </div>
+          {careCard(careItems[0])}
+          {careItems.length > 1 && <div id="cats-care-more" className="cat-care-more" hidden={!careExpanded}>
+            {careItems.slice(1).map(careCard)}
+          </div>}
+        </div>
+      </div> : <>
+        <div className="section-heading"><h2>{careTitle}</h2></div>
+        <p className="cat-section-copy">No care scheduled. Plan a one-time task or a repeating routine.</p>
+      </>}
     </section>
     <Link href="/cats/food" className="cats-food-library-entry"><span className="cats-food-library-copy"><small>CAT FOOD</small><strong>猫咪食品库</strong><p>{foodSummary.items ? `${foodSummary.items} 款猫咪食品，家里还有 ${foodSummary.packages} 包` : "从第一款买过的猫粮开始记录"}</p>{foodSummary.lowStock > 0 && <em>{foodSummary.lowStock} 款需要留意</em>}</span><span className="cats-food-library-visual"><span className="cats-food-library-icon"><Icon name="catFood"/></span></span></Link>
-    {records.length > 0 && <Disclosure className="cats-history-disclosure" title="Recent history" trailing={records.length}><div className="cat-history-list">{records.slice(0,12).map(item => <article key={`${item.kind}-${item.id}`}><button className="cat-history-row" aria-label={`Edit ${item.title}`} onClick={() => void editRecord(item)}><span><strong>{item.title}</strong><small>{pets.find(pet => pet.id === item.petId)?.name ?? "Household"}</small></span><time>{new Date(item.occurredAt).toLocaleDateString()}</time><Icon name="edit"/></button><button disabled={previewOnly} className="cat-history-delete" aria-label={`Delete ${item.title}`} onClick={() => void removeRecord(item)}><Icon name="trash"/></button></article>)}</div></Disclosure>}
-
-
+    {records.length > 0 && <Disclosure className="cats-history-disclosure"
+        title={english ? "Recent history" : "近期记录"} open={historyExpanded} onOpenChange={setHistoryExpanded}
+        trailing={<span className="cats-disclosure-meta">
+          <span>{records.length}</span>
+          <span className="cats-disclosure-action">{historyExpanded ? collapseLabel : expandLabel}</span>
+        </span>}>
+        <div className="cat-history-list">{records.slice(0, 12).map(item => <article key={`${item.kind}-${item.id}`}>
+          <button className="cat-history-row" aria-label={`Edit ${item.title}`} onClick={() => void editRecord(item)}>
+            <span><strong>{item.title}</strong><small>{pets.find(pet => pet.id === item.petId)?.name ?? "Household"}</small></span>
+            <time>{new Date(item.occurredAt).toLocaleDateString()}</time><Icon name="edit"/>
+          </button>
+          <button disabled={previewOnly} className="cat-history-delete" aria-label={`Delete ${item.title}`}
+            onClick={() => void removeRecord(item)}><Icon name="trash"/></button>
+        </article>)}</div>
+    </Disclosure>}
   </div>;
 }
 

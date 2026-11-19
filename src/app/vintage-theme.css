@@ -90,11 +90,26 @@ html[data-design-theme="vintage"][data-theme][data-mode] .home-quick-log-grid {
 html[data-design-theme="vintage"][data-theme][data-mode] .home-quick-log-grid > button {
   border-radius:15px;background:color-mix(in srgb,var(--surface-soft) 80%,var(--surface-card));box-shadow:none;
 }
+html[data-design-theme="vintage"][data-theme][data-mode] .period-log-picker-sheet .home-quick-log-grid {
+  grid-template-columns:minmax(0,1fr);gap:8px;
+}
+.period-log-picker-sheet .home-quick-log-grid > button {
+  gap:11px;padding-inline:14px;
+}
+.period-log-picker-sheet .home-quick-log-grid > button strong {
+  white-space:normal;overflow-wrap:anywhere;
+}
 html[data-design-theme="vintage"][data-theme][data-mode="dark"] .home-quick-log-grid > button {
   background:color-mix(in srgb,var(--surface-soft) 70%,var(--surface-canvas));
 }
 html[data-design-theme="vintage"][data-theme][data-mode] .home-quick-log-grid > button:focus-visible {
   outline:2px solid var(--focus-ring);outline-offset:1px;box-shadow:none;
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .period-log-picker-sheet .home-quick-log-grid > button:focus-visible {
+  outline:none;background:var(--surface-accent-soft);text-decoration:underline;text-underline-offset:.2em;
+}
+@media (forced-colors: active) {
+  html[data-design-theme="vintage"][data-theme][data-mode] .period-log-picker-sheet .home-quick-log-grid > button:focus-visible { outline:2px solid Highlight; }
 }
 html[data-design-theme="vintage"][data-theme][data-mode] .home-quick-log-grid > button:active:not(:disabled) {
   background:var(--surface-accent-soft);transform:scale(.985);box-shadow:none;
@@ -153,6 +168,59 @@ html[data-design-theme="vintage"][data-theme][data-mode] .training-form :is(.tra
 @media(hover:hover) {
   html[data-design-theme="vintage"][data-theme][data-mode] :is(.training-session-source,.training-session-complete) .button:hover:not(:disabled),
   html[data-design-theme="vintage"][data-theme][data-mode] .training-workout-options .training-log-main:hover { background:var(--surface-tint); }
+}
+
+html[data-design-theme="vintage"][data-theme][data-mode] .weight-entry-value:not(:focus-within) {
+  box-shadow:inset 0 2px 5px rgb(var(--shadow-rgb) / .16),inset 0 -1px 1px rgb(255 255 255 / .78);
+}
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] .weight-entry-value:not(:focus-within) {
+  box-shadow:inset 0 3px 6px rgb(0 0 0 / .46),inset 0 -1px 1px rgb(255 255 255 / .08);
+}
+html[data-design-theme="vintage"][data-theme][data-mode="light"] .medication-dose-form .field > :is(input:not([type="checkbox"]),textarea):not(:focus) {
+  box-shadow:inset 0 2px 4px rgb(var(--shadow-rgb) / .14),inset 0 -1px 1px rgb(255 255 255 / .78);
+}
+
+/* Tracker separates writing wells from the shallow keys used to choose values. */
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form {
+  --tracker-well-depth:var(--sheet-control-depth,inset 0 2px 5px rgb(var(--shadow-rgb) / .16),inset 0 -1px 1px rgb(255 255 255 / .78));
+  --tracker-key-surface:color-mix(in srgb,var(--surface-soft) 20%,var(--surface-card));
+  --tracker-key-depth:var(--quick-log-button-shadow);
+  --tracker-pressed-depth:inset 0 2px 4px rgb(0 0 0 / .2),inset 0 -1px 1px rgb(255 255 255 / .12);
+}
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] .tracker-entry-form {
+  --tracker-control-surface:color-mix(in srgb,var(--surface-canvas) 68%,var(--surface-card));
+  --tracker-key-surface:color-mix(in srgb,var(--surface-raised) 63%,var(--surface-card));
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form :is(
+  .field > input,.field > textarea,.searchable-multi-select > input[type="search"]
+) {
+  box-shadow:var(--tracker-well-depth);
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form :is(
+  .field > select,.searchable-select summary,.choice-capsules > button,.searchable-multi-options > label,.tracker-check
+) {
+  background-color:var(--tracker-key-surface);
+  box-shadow:var(--tracker-key-depth);
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form :is(
+  .searchable-select summary[aria-expanded="true"],.searchable-multi-options > label:has(input:checked),.tracker-check:has(input:checked)
+) {
+  background-color:var(--surface-accent-soft);
+  box-shadow:var(--tracker-pressed-depth);
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form .choice-capsules > button[aria-pressed="true"] {
+  background-color:var(--accent-primary);
+  box-shadow:var(--tracker-pressed-depth);
+}
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form :is(
+  .choice-capsules > button:not(:disabled),.searchable-select summary:not([aria-disabled="true"]),
+  .searchable-multi-options > label:has(input:not(:disabled)),.tracker-check:has(input:not(:disabled))
+):active { box-shadow:var(--tracker-pressed-depth); }
+html[data-design-theme="vintage"][data-theme][data-mode] .tracker-entry-form .searchable-multi-options { padding-bottom:3px; }
+html[data-design-theme="vintage"][data-theme][data-mode="dark"] .tracker-entry-form .tracker-time-range .field {
+  --tracker-control-surface:var(--surface-canvas);
+  --sheet-control-surface:var(--surface-canvas);
+  --sheet-control-focus:var(--surface-canvas);
 }
 
 /* Parlor uses the same shallow keys and recessed writing surfaces as Vintage sheets. */

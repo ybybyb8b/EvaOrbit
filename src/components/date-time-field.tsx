@@ -1,6 +1,8 @@
 "use client";
 
 import { useLocale } from "@/components/locale-controller";
+import { useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 export type DateTimeDraft = { date: string; time: string };
 
@@ -34,10 +36,69 @@ export function compactDateTimePayload(value: string) {
   return dateTimePayload({ date: value.slice(0, 10), time: value.length > 10 ? value.slice(11, 16) : "" });
 }
 
-export function DateTimeField({ label, value, onChange, optionalDate = false, minuteStep = 60, inline = false }: { label: string; value: DateTimeDraft; onChange: (value: DateTimeDraft) => void; optionalDate?: boolean; minuteStep?: number; inline?: boolean }) {
+export function DateTimeField({ label, timeLabel, value, onChange, optionalDate = false }: {
+  label: string;
+  timeLabel?: string;
+  value: DateTimeDraft;
+  onChange: (value: DateTimeDraft) => void;
+  optionalDate?: boolean;
+}) {
   const { english } = useLocale();
-  return <div className={`date-time-field${inline ? " date-time-inline" : ""}`}>
-    <label className="field"><span>{label}</span><input type="date" required={!optionalDate} value={value.date} onChange={(event) => onChange({ date: event.target.value, time: event.target.value ? value.time : "" })}/></label>
-    {value.date && (value.time || inline ? <label className="field date-time-clock"><span>{english ? "Time" : "时间"} <small>{english ? "Optional" : "可选"}</small></span><span className="date-time-clock-row"><input type="time" step={value.time&&Number(value.time.slice(3,5))%minuteStep!==0?60:minuteStep*60} value={value.time} onChange={(event) => onChange({ ...value, time: event.target.value })}/>{value.time && <button type="button" className="text-button" onClick={() => onChange({ ...value, time: "" })}>{english ? "Remove time" : "移除时间"}</button>}</span></label> : <button type="button" className="date-time-add" onClick={() => { const now = new Date(); const minute=Math.floor(now.getMinutes()/minuteStep)*minuteStep; onChange({ ...value, time: `${String(now.getHours()).padStart(2, "0")}:${String(minute).padStart(2, "0")}` }); }}>{english ? "+ Add time" : "+ 添加时间"}</button>)}
+  const [addingTime, setAddingTime] = useState(false);
+  const timeCaptionId = useId();
+  const timeInput = useRef<HTMLInputElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const showTimeInput = Boolean(value.date && (value.time || addingTime));
+  const optional = english ? "Optional" : "可选";
+  const resolvedTimeLabel = timeLabel ?? (english ? "Time" : "时间");
+
+  function addTime() {
+    // Mount the native input before requesting its picker during the same user gesture.
+    flushSync(() => setAddingTime(true));
+    const input = timeInput.current;
+    input?.focus({ preventScroll: true });
+    try { input?.showPicker?.(); } catch { /* The focused time input is still editable. */ }
+  }
+
+  function clearTime() {
+    flushSync(() => {
+      setAddingTime(false);
+      if (value.time) onChange({ ...value, time: "" });
+    });
+    addButton.current?.focus({ preventScroll: true });
+  }
+
+  return <div className="date-time-field date-time-inline date-time-optional">
+    <label className="field">
+      <span>{label} {optionalDate && <small>{optional}</small>}</span>
+      <input type="date" required={!optionalDate} value={value.date} onChange={event => {
+        const date = event.target.value;
+        if (!date) setAddingTime(false);
+        onChange({ date, time: date ? value.time : "" });
+      }}/>
+    </label>
+    <div className="field date-time-clock">
+      <span id={timeCaptionId}>{resolvedTimeLabel} <small>{optional}</small></span>
+      {showTimeInput ? <div className="date-time-clock-row">
+        <input type="time" ref={timeInput} aria-labelledby={timeCaptionId} value={value.time}
+          onChange={event => {
+            const time = event.target.value;
+            setAddingTime(!time);
+            onChange({ ...value, time });
+          }}
+          onBlur={event => {
+            if (!value.time && event.relatedTarget) setAddingTime(false);
+          }}
+          onKeyDown={event => {
+            if (event.key !== "Escape" || value.time) return;
+            event.preventDefault();
+            event.stopPropagation();
+            clearTime();
+          }} />
+        {value.time && <button type="button" className="date-time-clear" data-form-change onClick={clearTime}
+          aria-label={english ? `Remove ${resolvedTimeLabel.toLowerCase()}` : `移除${resolvedTimeLabel}`}>×</button>}
+      </div> : <button type="button" ref={addButton} className="date-time-add" disabled={!value.date}
+        aria-describedby={timeCaptionId} onClick={addTime}>{english ? "Add time" : "添加时间"}</button>}
+    </div>
   </div>;
 }

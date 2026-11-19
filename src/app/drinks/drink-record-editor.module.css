@@ -23,7 +23,7 @@
   background: rgb(var(--surface-raised-rgb) / .72);
 }
 :global(html[data-mode="dark"]) .volume { background: var(--surface-canvas); }
-.volume:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+:global(html[data-mode]) .volume:focus-within { background: var(--focused-field-surface); box-shadow: var(--focused-field-depth); }
 .volume > input[type="number"] { flex: 1 1 0; min-height: 44px; background: transparent; padding: 0 2px; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; appearance: none; }
 .volume > input[type="number"]:focus { box-shadow: none; }
 .volume > input[type="number"]::-webkit-inner-spin-button { appearance: none; }
