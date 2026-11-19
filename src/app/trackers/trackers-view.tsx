@@ -17,8 +17,7 @@ import { TrackerCardContent } from "@/components/tracker-card-content";
 import { invalidateCachedJson } from "@/lib/client-json-cache";
 import type { ApiError, TrackerSummary } from "@/lib/types";
 import { orderedTrackerGroups } from "@/lib/tracker-order";
-import { TrackerSortSheet, useTrackerOrder } from "./tracker-sort-sheet";
-import { Layers } from "reicon-react";
+import { TrackerSortButton, TrackerSortSheet, useTrackerOrder } from "./tracker-sort-sheet";
 
 export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[]; cacheScope: string | null }) {
   const { english } = useLocale();
@@ -54,8 +53,8 @@ export function TrackersView({ initial, cacheScope }: { initial: TrackerSummary[
   const visibleTrackers = trackers.filter(tracker => Boolean(tracker.archivedAt) === showArchived);
   const groups = orderedTrackerGroups(visibleTrackers, order);
   return <div className="page tracker-page">
-    <PageHeader eyebrow="生活" title="Trackers" action={<span className="tracker-header-actions">{visibleTrackers.length > 1 && <button type="button" className="text-button tracker-sort-button" disabled={!cacheScope} aria-haspopup="dialog" onClick={() => setShowSort(true)}><Layers size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button>}<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction></span>} />
-    {showSort && <TrackerSortSheet trackers={trackers} archived={showArchived} order={order} onSave={saveOrder} onClose={() => setShowSort(false)} />}
+    <PageHeader eyebrow="生活" title="Trackers" action={<span className="tracker-header-actions">{visibleTrackers.length > 1 && <TrackerSortButton disabled={!cacheScope} onClick={() => setShowSort(true)} />}<PageLogAction label="新增观测" onClick={() => setShowForm(true)}><Icon name="plus" />新增观测</PageLogAction></span>} />
+    {showSort && <TrackerSortSheet trackers={trackers} archived={showArchived} order={order} picture={tracker => <TrackerIcon tracker={tracker} size={30} />} onSave={saveOrder} onClose={() => setShowSort(false)} />}
     {trackers.some(tracker=>tracker.archivedAt)&&<div className="tracker-archive-filter"><button className="text-button" aria-pressed={showArchived} onClick={()=>setShowArchived(value=>!value)}>{showArchived?(english?"Back to active Trackers":"返回使用中的 Tracker"):(english?"Archived Trackers":"已归档 Tracker")} · {trackers.filter(tracker=>tracker.archivedAt).length}</button></div>}
     {showForm && <TrackerCreateSheet groupNames={trackers.map(tracker => tracker.groupName)} onClose={() => setShowForm(false)} onCreate={createTracker} />}
     {error && !showForm && <ErrorNotice>{error}</ErrorNotice>}

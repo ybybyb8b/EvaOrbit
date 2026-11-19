@@ -1,13 +1,11 @@
 "use client";
 
 import { ErrorNotice } from "@/components/error-notice";
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
-import { ArrowDown2, ArrowUp2, Sort } from "reicon-react";
+import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
+import { ArrowDown2, ArrowUp2, Layers, Sort } from "reicon-react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
-import { TrackerIcon } from "@/components/tracker-icon";
-import type { TrackerSummary } from "@/lib/types";
-import { moveTrackerOrder, orderedTrackerGroups, readTrackerOrder, type TrackerOrder } from "@/lib/tracker-order";
+import { moveTrackerOrder, orderedTrackerGroups, readTrackerOrder, type TrackerOrder, type TrackerOrderId } from "@/lib/tracker-order";
 
 const orderChanged = "eo:tracker-order-changed";
 const emptySnapshot = () => "";
@@ -15,18 +13,25 @@ function subscribe(listener: () => void) {
   window.addEventListener("storage", listener); window.addEventListener(orderChanged, listener);
   return () => { window.removeEventListener("storage", listener); window.removeEventListener(orderChanged, listener); };
 }
-export function useTrackerOrder(scope: string | null): [TrackerOrder, (order: TrackerOrder) => void] {
-  const key = `eo:tracker-order:${scope}`;
+export function useTrackerOrder(scope: string | null, localIds = false): [TrackerOrder, (order: TrackerOrder) => void] {
+  const key = localIds ? `eo:local-tracker-order:${scope}` : `eo:tracker-order:${scope}`;
   const value = useSyncExternalStore(subscribe, () => { try { return scope ? localStorage.getItem(key) ?? "" : ""; } catch { return ""; } }, emptySnapshot);
-  return [readTrackerOrder(value), order => {
+  return [readTrackerOrder(value, localIds), order => {
     if (!scope) throw new Error("Missing account");
     localStorage.setItem(key, JSON.stringify(order));
     window.dispatchEvent(new Event(orderChanged));
   }];
 }
 
+export function TrackerSortButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+  const { english } = useLocale();
+  return <button type="button" className="text-button tracker-sort-button" disabled={disabled} aria-haspopup="dialog" onClick={onClick}><Layers size={18} weight="Outline" aria-hidden="true" />{english ? "Sort" : "排序"}</button>;
+}
+
+type SortItem = { id: TrackerOrderId; groupName: string; name: string; archivedAt?: unknown };
+const entryKey = (id: TrackerOrderId) => `e:${id}`;
 type Drag = { key: string; group: string | null; row: HTMLElement; body: HTMLElement; startY: number; y: number; x: number; scroll: number; target: string | null; active: boolean };
-export function TrackerSortSheet({ trackers, archived, order, onSave, onClose }: { trackers: TrackerSummary[]; archived: boolean; order: TrackerOrder; onSave: (order: TrackerOrder) => void; onClose: () => void }) {
+export function TrackerSortSheet<T extends SortItem>({ trackers, archived, order, picture, onSave, onClose }: { trackers: T[]; archived: boolean; order: TrackerOrder; picture: (tracker: T) => ReactNode; onSave: (order: TrackerOrder) => void; onClose: () => void }) {
   const { english } = useLocale();
   const t = (en: string, zh: string) => english ? en : zh;
   const [draft, setDraft] = useState(() => {
@@ -40,9 +45,11 @@ export function TrackerSortSheet({ trackers, archived, order, onSave, onClose }:
   useEffect(() => () => { cancelAnimationFrame(frame.current); }, []);
 
   function move(from: string, to: string) {
-    setDraft(current => from.startsWith("g:")
-      ? { ...current, groups: moveTrackerOrder(current.groups, from.slice(2), to.slice(2)) }
-      : { ...current, entries: moveTrackerOrder(current.entries, Number(from.slice(2)), Number(to.slice(2))) });
+    setDraft(current => {
+      if (from.startsWith("g:")) return { ...current, groups: moveTrackerOrder(current.groups, from.slice(2), to.slice(2)) };
+      const start = current.entries.find(id => entryKey(id) === from), end = current.entries.find(id => entryKey(id) === to);
+      return start === undefined || end === undefined ? current : { ...current, entries: moveTrackerOrder(current.entries, start, end) };
+    });
     setAnnouncement(t("Order updated", "顺序已调整"));
   }
   function finish(cancel = false) {
@@ -113,8 +120,8 @@ export function TrackerSortSheet({ trackers, archived, order, onSave, onClose }:
       <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
       {groups.map(group => <section className="tracker-sort-group" key={group.name} data-sort-key={`g:${group.name}`}>
         <header><h3 className="user-content">{group.name}</h3><span>{group.items.length}</span>{controls(`g:${group.name}`, group.name, null, groups.map(item => `g:${item.name}`))}</header>
-        <div className="tracker-sort-items">{group.items.map(item => <div className="tracker-sort-item" key={item.id} data-sort-key={`e:${item.id}`} data-sort-group={group.name}>
-          <TrackerIcon tracker={item} size={30} /><span className="user-content">{item.name}</span>{controls(`e:${item.id}`, item.name, group.name, group.items.map(item => `e:${item.id}`))}
+        <div className="tracker-sort-items">{group.items.map(item => <div className="tracker-sort-item" key={item.id} data-sort-key={entryKey(item.id)} data-sort-group={group.name}>
+          {picture(item)}<span className="user-content">{item.name}</span>{controls(entryKey(item.id), item.name, group.name, group.items.map(item => entryKey(item.id)))}
         </div>)}</div>
       </section>)}
     </form>

@@ -1,12 +1,15 @@
-export type TrackerOrder = { groups: string[]; entries: number[] };
-type Item = { id: number; groupName: string };
+export type TrackerOrderId = number | string;
+export type TrackerOrder = { groups: string[]; entries: TrackerOrderId[] };
+type Item = { id: TrackerOrderId; groupName: string };
 
-export function readTrackerOrder(value: string): TrackerOrder {
+export function readTrackerOrder(value: string, localIds = false): TrackerOrder {
   try {
     const parsed = JSON.parse(value);
     return {
       groups: Array.isArray(parsed?.groups) ? [...new Set<string>(parsed.groups.filter((v: unknown) => typeof v === "string"))] : [],
-      entries: Array.isArray(parsed?.entries) ? [...new Set<number>(parsed.entries.filter((v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v > 0))] : [],
+      entries: Array.isArray(parsed?.entries) ? [...new Set<TrackerOrderId>(parsed.entries.filter((id: unknown) =>
+        localIds ? typeof id === "string" && id.length > 0 : typeof id === "number" && Number.isSafeInteger(id) && id > 0
+      ))] : [],
     };
   } catch { return { groups: [], entries: [] }; }
 }

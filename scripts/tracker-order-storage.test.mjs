@@ -14,6 +14,11 @@ test("Tracker sorting persists per account, tolerates corrupt data and surfaces 
   const saved = { groups: ["Daily"], entries: [2, 1] };
   exports.useTrackerOrder("alice")[1](saved);
   assert.deepEqual(exports.useTrackerOrder("alice")[0], saved);
+  const local = { groups: ["Daily"], entries: ["remote:tracker:2", "local-draft"] };
+  exports.useTrackerOrder("alice", true)[1](local);
+  assert.deepEqual(exports.useTrackerOrder("alice", true)[0], local);
+  assert.deepEqual(exports.useTrackerOrder("bob", true)[0], { groups: [], entries: [] });
+  assert.deepEqual(exports.useTrackerOrder("alice")[0], saved);
   assert.deepEqual(exports.useTrackerOrder("bob")[0], { groups: [], entries: [] });
   assert.deepEqual(exports.useTrackerOrder(null)[0], { groups: [], entries: [] });
   assert.throws(() => exports.useTrackerOrder(null)[1](saved), /Missing account/);
