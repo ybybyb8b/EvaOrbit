@@ -13,6 +13,8 @@ test("online business routes allow explicit operations and Tracker settings, nev
   for(const path of ["/api/trackers/1/entries","/api/trackers/quick-log"])assert(!allowsBusinessRequest(path,"POST"));
   assert(allowsBusinessRequest("/api/trackers/1/fields?fieldId=2","PATCH"));assert(allowsBusinessRequest("/api/trackers/1/goals","POST"));assert(!allowsBusinessRequest("/api/trackers/1/goals","PATCH"));
   assert(!allowsBusinessRequest("/api/tasks","DELETE"));
+  assert(allowsBusinessRequest("/api/calendar-events?from=2026-11-18&to=2026-11-19&limit=20","GET"));
+  for(const method of ["POST","PATCH","PUT","DELETE"])assert(!allowsBusinessRequest("/api/calendar-events",method),method);
   assert(allowsBusinessRequest("/api/subscriptions/1/purchases/2","PATCH"));
   assert(allowsBusinessRequest("/api/subscriptions/1/payments/2","PATCH"));
   for(const method of ["POST","DELETE","GET"])assert(!allowsBusinessRequest("/api/subscriptions/1/payments/2",method));
@@ -42,7 +44,8 @@ test("primary online access requires its own opt-in and native access never enab
  const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
  try{process.env.EVAORBIT_ALLOWED_EMAIL="owner@example.invalid";process.env.EVAORBIT_TEST_EMAILS="test@example.invalid";delete process.env.EVAORBIT_LOCAL_ONLINE_ENABLED;delete process.env.EVAORBIT_LOCAL_NATIVE_ENABLED;
  assert(!isLocalOnlineAccountAllowed("owner@example.invalid"));assert(isLocalOnlineAccountAllowed("test@example.invalid"));
- process.env.EVAORBIT_LOCAL_ONLINE_ENABLED="true";assert(isLocalOnlineAccountAllowed("OWNER@example.invalid"));assert(!isLocalOnlineAccountAllowed("stranger@example.invalid"));assert(!isNativeIntegrationAccountAllowed("owner@example.invalid"));
+ process.env.EVAORBIT_LOCAL_ONLINE_ENABLED="true";assert(isLocalOnlineAccountAllowed("OWNER@example.invalid"));assert(!isLocalOnlineAccountAllowed("stranger@example.invalid"));assert(isNativeIntegrationAccountAllowed("owner@example.invalid"));
+ process.env.EVAORBIT_LOCAL_NATIVE_ENABLED="false";assert(!isNativeIntegrationAccountAllowed("owner@example.invalid"));
  process.env.EVAORBIT_LOCAL_NATIVE_ENABLED="true";assert(isNativeIntegrationAccountAllowed("owner@example.invalid"));assert(!isNativeIntegrationAccountAllowed("test@example.invalid"));assert(!isNativeIntegrationAccountAllowed("stranger@example.invalid"));
  delete process.env.EVAORBIT_LOCAL_ONLINE_ENABLED;assert(!isNativeIntegrationAccountAllowed("owner@example.invalid"));
  }finally{for(const key of keys){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}}

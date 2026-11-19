@@ -236,6 +236,48 @@ actor AIStore {
         try execute("UPDATE ai_messages SET status=?,payload=? WHERE account_id=? AND id=?", [message.status, try encoded(message), account, message.id])
         guard sqlite3_changes(database) == 1 else { throw AIError.storage }
     }
+    func beginRetry(_ message: AIMessage, original: AIMessage, prompt: AIContextRecord, member: AIGroupMember, account: String, echo: AIEchoSnapshot?) throws -> (AIMessage, AIContextPlan) {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try detachMessageSources(original, account: account)
+            let text = prompt.message.content
+            let plan = try makeContextPlan(account: account, conversation: message.conversationId, group: false, members: [member], tail: text, currentMessageId: prompt.message.id, instruction: nil, query: text, echo: echo, through: prompt.ordinal - 1)
+            let reply = message.withContext(plan, persona: member.persona.id)
+            try update(reply, account: account)
+            try insertContextPlan(plan)
+            try execute("COMMIT")
+            return (reply, plan)
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
+    func deleteSingleMessage(_ id: String, conversation: String, account: String) throws {
+        guard try !isGroup(conversation, account: account) else { throw AIError.invalid }
+        guard let record = try contextRecord(id, conversation: conversation, account: account) else { return }
+        guard record.message.status != "streaming" else { throw AIError.busy }
+        try execute("BEGIN IMMEDIATE")
+        do {
+            if record.message.role == "user" {
+                // Keep legacy replies attached to the removed prompt, even after earlier rows become adjacent.
+                try execute("""
+                    UPDATE ai_messages SET payload=json_set(payload,'$.replyToMessageId',?,'$.seq',json_extract(payload,'$.seq')+1)
+                    WHERE account_id=? AND conversation_id=? AND ordinal>?
+                      AND ordinal<COALESCE((SELECT MIN(ordinal) FROM ai_messages
+                        WHERE account_id=? AND conversation_id=? AND ordinal>? AND json_extract(payload,'$.role')='user'),9223372036854775807)
+                      AND json_extract(payload,'$.role')='assistant' AND json_extract(payload,'$.replyToMessageId') IS NULL
+                    """, [id, account, conversation, String(record.ordinal), account, conversation, String(record.ordinal)])
+            }
+            try execute("DELETE FROM ai_messages WHERE account_id=? AND conversation_id=? AND id=?", [account, conversation, id])
+            try execute("UPDATE ai_context_snapshots SET payload=json_remove(payload,'$.currentMessageId','$.currentMessageHash') WHERE account_id=? AND conversation_id=? AND json_extract(payload,'$.currentMessageId')=?", [account, conversation, id])
+            try detachMessageSources(record.message, account: account)
+            if record.message.role == "user" {
+                let next: AIMessage? = try documents("SELECT payload FROM ai_messages WHERE account_id=? AND conversation_id=? AND json_extract(payload,'$.role')='user' ORDER BY ordinal LIMIT 1", [account, conversation], as: AIMessage.self).first
+                try execute("""
+                    UPDATE ai_conversations SET title=? WHERE account_id=? AND id=? AND title=? AND NOT EXISTS
+                      (SELECT 1 FROM ai_messages WHERE account_id=? AND conversation_id=? AND ordinal<? AND json_extract(payload,'$.role')='user')
+                    """, [next.map { String($0.content.prefix(60)) } ?? "Parlor", account, conversation, String(record.message.content.prefix(60)), account, conversation, String(record.ordinal)])
+            }
+            try execute("COMMIT")
+        } catch { try? execute("ROLLBACK"); throw error }
+    }
     func deleteConversation(_ id: String, account: String) throws {
         try purgeSafetyBackups(account: account, conversationID: id)
         try execute("BEGIN IMMEDIATE")

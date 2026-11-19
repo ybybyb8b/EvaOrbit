@@ -20,6 +20,10 @@ try{for(const [label,width,height] of [['mobile',402,874],['desktop',1280,900]])
  await page.getByText('我们先把眼前最重要的一件事挑出来。',{exact:false}).waitFor();await page.getByText('我会先检验这个想法的前提。',{exact:false}).waitFor();
  assert.equal(await page.locator('[data-role=assistant][data-status=streaming]').count(),2);
  assert.equal(await page.locator('[data-bubble-tail]').count(),0);
+ const leading=await page.locator('[data-chat-bubble] p').evaluateAll(nodes=>nodes.map(node=>{
+  const style=getComputedStyle(node);return parseFloat(style.lineHeight)/parseFloat(style.fontSize);
+ }));
+ assert(leading.length>=3&&leading.every(value=>Math.abs(value-1.425)<.015),'group and single use the same body line height');
  const alignment=await page.locator('[data-role=assistant]').evaluateAll(els=>els.map(el=>{
   const bubble=el.querySelector('[data-chat-bubble]'),content=bubble.getBoundingClientRect(),header=el.querySelector('[data-parlor-message-header] > header').getBoundingClientRect(),info=el.querySelector('[data-parlor-response-actions]').getBoundingClientRect();
   return {text:content.left+parseFloat(getComputedStyle(el.querySelector('[data-parlor-message-info]')).paddingInlineStart),header:header.left,info:info.left};

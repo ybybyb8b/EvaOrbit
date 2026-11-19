@@ -5,6 +5,9 @@
   const noDiscussion=new URL(location.href).searchParams.has("noDiscussion");
   const noModelSwitch=new URL(location.href).searchParams.has("noModelSwitch");
   const noCatalog=new URL(location.href).searchParams.has("noCatalog");
+  const orbitFixture=!legacy&&new URL(location.href).searchParams.has("orbitFixture");
+  const singleRetryFixture=new URL(location.href).searchParams.has("singleRetryFixture");
+  const singleReplyFailure=new URL(location.href).searchParams.get("singleReplyFailure")??"Synthetic Provider HTTP 503";
   const provider={id:"10000000-0000-4000-8000-000000000003",name:"Mock Provider",baseURL:"https://mock.example.invalid/v1",enabled:true,hasKey:true,models:[{id:"mock-text",name:"Mock text"}],currency:"USD",priceUpdatedAt:""};
   let state=JSON.parse(sessionStorage.getItem("eo-eva-synthetic-state")||"null")??{providers:[provider],conversations:[],messages:[]};
   state.persona??={id:"sebastian",name:"Sebastian",chineseName:"塞巴斯蒂安",nickname:"赛巴斯酱",systemPrompt:"你是 Sebastian，EvaOrbit 的 Parlor 中的默认 AI 人格。一位优雅、聪明、可靠的私人执事。沉稳从容，言谈有礼，偶尔带有一点狡黠的幽默感。默认中文，并随用户语言切换。独立判断，不盲目附和；没有工具时不得声称完成业务操作。",preferredAddress:"",humor:"subtle",formality:"natural",closeness:"warm"};
@@ -168,18 +171,47 @@
         for(const [id,job] of jobs){if(job.message.conversationId!==p.conversationId||(p.messageId&&p.messageId!==id))continue;clearInterval(job.timer);job.message.status='cancelled';job.message.seq++;jobs.delete(id);emit(job.message);}changed();if(d)queueMicrotask(()=>advanceDiscussion(d));result={requested:true};
       }
       else if(method==="ai.savePersona"){if(p.persona.id==='sebastian')state.persona=p.persona;state.personas=state.personas.filter(x=>x.id!==p.persona.id);state.personas.push(p.persona);save();result={saved:true};}
-      else if(method==="ai.send"){
+      else if(method==="ai.send"||(orbitFixture&&method==="ai.sendWithOrbit")){
+        sessionStorage.setItem("eo-synthetic-send-method",method);
         if(state.messages.some(m=>m.status==="streaming"))return {ok:false,error:{code:"busy",message:"Stop the active response first"}};
         const old=state.messages.find(m=>m.requestId===p.requestId);
         if(old)return {ok:true,result:{requestId:p.requestId,messageId:old.id}};
         const now=new Date().toISOString();
         state.conversations=state.conversations.filter(c=>c.id!==p.conversationId);state.conversations.unshift({id:p.conversationId,title:p.content.slice(0,60),updatedAt:now});
-        state.messages.push({id:crypto.randomUUID(),conversationId:p.conversationId,role:"user",content:p.content,status:"done",createdAt:now,seq:0,requestCount:0});
+        const user={id:crypto.randomUUID(),conversationId:p.conversationId,role:"user",content:p.content,status:"done",createdAt:now,seq:0,requestCount:0};
+        state.messages.push(user);
         const m={id:crypto.randomUUID(),conversationId:p.conversationId,role:"assistant",content:"",status:"streaming",createdAt:now,requestId:p.requestId,providerId:p.providerId,providerName:state.providers.find(x=>x.id===p.providerId)?.name,model:state.providers.find(x=>x.id===p.providerId)?.models.find(x=>x.id===p.modelId),usage:{source:"unknown"},seq:0,requestCount:1,personaId:p.personaId??state.persona.id,personaName:state.personas.find(x=>x.id===p.personaId)?.name??state.persona.name};
-        state.messages.push(m);save();
+        m.replyToMessageId=user.id;state.messages.push(m);save();
         const chunks=["先别急着和整张待办清单决斗。","我们把事情分成三类，它们就没那么擅长吓人了。\n\n","**今天非做不可的**，先留一件；","**可以推迟的**，给它一个明确日期；","**只是挂在心上的**，先写下来，不必立刻解决。\n\n","你把最让你惦记的那一件告诉我。","我们先从那里下手，如何？"];let index=-1;
-        timer=setInterval(()=>{if(m.status!=="streaming"){clearInterval(timer);return;}if(index<0){index=0;return;}if(index<chunks.length)m.content+=chunks[index++];else if(p.content.includes("stop")){return;}else{m.status="done";m.usage={inputTokens:42,outputTokens:76,source:"provider"};clearInterval(timer);}m.seq++;emit(m);},650);
+        timer=setInterval(()=>{if(m.status!=="streaming"){clearInterval(timer);return;}if(index<0){index=0;return;}if(singleRetryFixture){m.status="failed";m.error=singleReplyFailure;clearInterval(timer);}else if(index<chunks.length)m.content+=chunks[index++];else if(p.content.includes("stop")){return;}else{m.status="done";m.usage={inputTokens:42,outputTokens:76,source:"provider"};clearInterval(timer);}m.seq++;emit(m);},650);
         result={requestId:m.requestId,messageId:m.id};
+      }else if(method==="ai.retryMessage"){
+        const m=state.messages.find(x=>x.id===p.messageId&&x.conversationId===p.conversationId&&x.role==="assistant");
+        const user=m&&state.messages.find(x=>x.id===m.replyToMessageId);
+        if(!m||!user||state.groups.some(x=>x.id===p.conversationId))return {ok:false,error:{code:"invalid",message:"Original prompt unavailable"}};
+        if(m.requestId===p.requestId)return {ok:true,result:{requestId:p.requestId,messageId:m.id}};
+        if(!["failed","interrupted"].includes(m.status)||m.requestId!==p.previousRequestId||state.messages.some(x=>x.status==="streaming"))return {ok:false,error:{code:"busy",message:"Response is unavailable for retry"}};
+        const failAgain=singleRetryFixture&&!m.retried;
+        Object.assign(m,{retried:true,requestId:p.requestId,status:"streaming",content:"",error:undefined,seq:m.seq+1});
+        emit(m);
+        timer=setTimeout(()=>{
+          if(m.status!=="streaming")return;
+          m.content="**从这里开始**，先为今天最重要的事情留出一段不被打扰的时间。然后，把暂时做不了的事情安排到明确的日期。\n\n### 接下来\n\n- 从一件小事开始。\n- 做完再决定下一步。\n\n如果还有余力，就记下一件明天值得继续的事。";
+          m.seq++;emit(m);
+          timer=setTimeout(()=>{
+            if(m.status!=="streaming")return;
+            m.status=failAgain?"failed":"done";
+            m.error=failAgain?"Synthetic Provider HTTP 503":undefined;
+            if(!failAgain)m.usage={inputTokens:42,outputTokens:76,source:"provider"};
+            m.seq++;emit(m);
+          },950);
+        },600);
+        if(failAgain)throw new Error("Synthetic lost retry acknowledgement");
+        result={requestId:m.requestId,messageId:m.id};
+      }else if(method==="ai.deleteMessage"){
+        if(state.groups.some(x=>x.id===p.conversationId)||state.messages.some(x=>x.conversationId===p.conversationId&&x.status==="streaming"))return {ok:false,error:{code:"busy",message:"Stop the active response first"}};
+        state.messages=state.messages.filter(x=>!(x.id===p.messageId&&x.conversationId===p.conversationId));save();result={deleted:true};
+        if(singleRetryFixture)throw new Error("Synthetic lost delete acknowledgement");
       }else if(method==="ai.cancel"){const m=state.messages.find(m=>m.requestId===p.requestId);if(m?.status==="streaming"){m.status="cancelled";m.seq++;clearInterval(timer);emit(m);}result={requested:true};}
       else if(method==="ai.saveProvider"){const next={...p.provider,hasKey:p.clearKey?false:Boolean(p.apiKey||state.providers.find(x=>x.id===p.provider.id)?.hasKey)};state.providers=state.providers.filter(x=>x.id!==next.id);state.providers.push(next);save();result={saved:true};}
       else if(method==="ai.deleteProvider"){state.providers=state.providers.filter(x=>x.id!==p.providerId);save();}
@@ -189,8 +221,11 @@
     if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noProcessing"))result.methods.push(...processingFixture.processingMethods);
     if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noContext"))result.methods.push(...contextFixture.contextMethods);
     if(method==="host.getInfo"&&!legacy&&new URL(location.href).searchParams.has("echoFixture"))result.methods.push(...echoFixture.echoMethods);
+    if(method==="host.getInfo"&&orbitFixture)result.methods.push("ai.sendWithOrbit");
+    if(method==="host.getInfo"&&!legacy&&!new URL(location.href).searchParams.has("noSingleMessage"))result.methods.push("ai.retryMessage","ai.deleteMessage");
     if(method==="ai.getState"){delete result.echoConfig;delete result.echoShares;delete result.echoSnapshots;const page=contextFixture.contextPage(state,p.conversationId);result.messages=page.messages;result.messagePage=page;delete result.contexts;delete result.processingConfigs;delete result.processingJobs;delete result.processingProposals;result.conversation=state.conversations.find(c=>c.id===p.conversationId);result.unassignedConversations=state.conversations.filter(c=>c.ownership==="unresolved");delete result.memories;}
-    if(method==="ai.send"){const c=state.conversations.find(c=>c.id===p.conversationId);if(c){c.ownership="single";c.personaId=p.personaId;save();}}
+    if(method==="ai.send"||(orbitFixture&&method==="ai.sendWithOrbit")){const c=state.conversations.find(c=>c.id===p.conversationId);if(c){c.ownership="single";c.personaId=p.personaId;save();}}
+    if(method==="ai.getState"&&p.trackedMessageId&&!result.messages.some(m=>m.id===p.trackedMessageId))result.trackedMessage=state.messages.find(m=>m.id===p.trackedMessageId&&m.conversationId===p.conversationId);
     return {ok:true,result:JSON.parse(JSON.stringify(result))};
   }},configurable:false,writable:false});
 })();

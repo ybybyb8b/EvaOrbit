@@ -152,4 +152,42 @@ extension AIStore {
             try redactMemory(all.filter { $0.personaId == value.personaId && $0.id == value.id }, persona: value.personaId, account: account)
         }
     }
+
+    func detachMessageSources(_ message: AIMessage, account: String) throws {
+        let conversation = message.conversationId
+        func retainedSources(_ sources: [AIMemorySource]) throws -> [AIMemorySource] {
+            try sources.filter { source in
+                guard source.conversationId == conversation else { return true }
+                if let id = source.messageId { return id != message.id }
+                guard message.content.contains(source.excerpt) else { return true }
+                let query = try statement("SELECT 1 FROM ai_messages WHERE account_id=? AND conversation_id=? AND id<>? AND instr(json_extract(payload,'$.content'),?)>0 LIMIT 1", [account, conversation, message.id, source.excerpt])
+                defer { sqlite3_finalize(query) }
+                let step = sqlite3_step(query)
+                guard step == SQLITE_ROW || step == SQLITE_DONE else { throw AIError.storage }
+                return step == SQLITE_ROW
+            }
+        }
+        let memories = try documents("SELECT payload FROM ai_persona_memories WHERE account_id=? AND EXISTS(SELECT 1 FROM json_each(payload,'$.sources') WHERE json_extract(value,'$.conversationId')=?)", [account, conversation], as: AIPersonaMemory.self)
+        for var memory in memories {
+            let retained = try retainedSources(memory.sources)
+            guard retained != memory.sources else { continue }
+            memory.sources = retained
+            try execute("UPDATE ai_persona_memories SET payload=? WHERE account_id=? AND persona_id=? AND id=? AND version=?", [try encoded(memory), account, memory.personaId, memory.id, String(memory.version)])
+            try execute("""
+                UPDATE ai_context_snapshots SET payload=json_set(payload,'$.invalidated',json('true'),'$.inputHash','')
+                  WHERE account_id=? AND persona_id=? AND EXISTS(SELECT 1 FROM json_each(payload,'$.memories')
+                    WHERE json_extract(value,'$.id')=? AND json_extract(value,'$.version')=CAST(? AS INTEGER))
+                """, [account, memory.personaId, memory.id, String(memory.version)])
+        }
+        let proposals = try documents("SELECT payload FROM ai_memory_proposals WHERE account_id=? AND conversation_id=? AND EXISTS(SELECT 1 FROM json_each(payload,'$.memory.sources') WHERE json_extract(value,'$.messageId')=?)", [account, conversation, message.id], as: AIMemoryProposal.self)
+        for var proposal in proposals {
+            proposal.memory?.sources.removeAll { $0.messageId == message.id }
+            try writeProposal(proposal)
+        }
+        try execute("""
+            UPDATE ai_memory_jobs SET payload=json_remove(payload,'$.result')
+              WHERE account_id=? AND conversation_id=? AND status='stale'
+                AND EXISTS(SELECT 1 FROM json_each(payload,'$.messages') WHERE json_extract(value,'$.id')=?)
+            """, [account, conversation, message.id])
+    }
 }

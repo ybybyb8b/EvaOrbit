@@ -1,5 +1,9 @@
 [
   {
+    "pattern": "^/api/calendar-events$",
+    "methods": ["GET"]
+  },
+  {
     "pattern": "^/api/memory-graph/offline$",
     "methods": [
       "GET"

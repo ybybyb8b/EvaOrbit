@@ -74,7 +74,9 @@ extension AIStore {
       WHEN json_extract(m.payload,'$.roundId') IS NOT NULL THEN
         (SELECT MIN(u.ordinal) FROM ai_messages u WHERE u.account_id=m.account_id AND u.conversation_id=m.conversation_id AND json_extract(u.payload,'$.roundId')=json_extract(m.payload,'$.roundId'))
       WHEN json_extract(m.payload,'$.role')='user' THEN m.ordinal
-      ELSE COALESCE((SELECT u.ordinal FROM ai_messages u WHERE u.account_id=m.account_id AND u.id=json_extract(m.payload,'$.replyToMessageId')),
+      WHEN json_extract(m.payload,'$.replyToMessageId') IS NOT NULL THEN
+        COALESCE((SELECT u.ordinal FROM ai_messages u WHERE u.account_id=m.account_id AND u.conversation_id=m.conversation_id AND u.id=json_extract(m.payload,'$.replyToMessageId')),m.ordinal)
+      ELSE COALESCE(
         (SELECT MAX(u.ordinal) FROM ai_messages u WHERE u.account_id=m.account_id AND u.conversation_id=m.conversation_id AND u.ordinal<=m.ordinal AND json_extract(u.payload,'$.role')='user'),m.ordinal)
       END
     FROM ai_messages m
@@ -95,8 +97,8 @@ extension AIStore {
         }
         return (result, bounded)
     }
-    func messageCount(_ conversation: String, account: String, eligible: Bool = false) throws -> Int {
-        let query = try statement("SELECT COUNT(*) FROM ai_messages m WHERE m.account_id=? AND m.conversation_id=?" + (eligible ? " AND " + Self.eligibleContextSQL : ""), [account, conversation])
+    func messageCount(_ conversation: String, account: String, eligible: Bool = false, watermark: Int64? = nil) throws -> Int {
+        let query = try statement("SELECT COUNT(*) FROM ai_messages m WHERE m.account_id=? AND m.conversation_id=?" + (eligible ? " AND " + Self.eligibleContextSQL : "") + (watermark == nil ? "" : " AND m.ordinal<=?"), [account, conversation] + (watermark.map { [String($0)] } ?? []))
         defer { sqlite3_finalize(query) }; guard sqlite3_step(query) == SQLITE_ROW else { throw AIError.storage }
         return Int(sqlite3_column_int64(query, 0))
     }
@@ -135,9 +137,9 @@ extension AIStore {
         guard result == SQLITE_ROW || result == SQLITE_DONE else { throw AIError.storage }
         return result == SQLITE_ROW
     }
-    func contextHistory(_ conversation: String, account: String, tokenLimit: Int) throws -> AIContextHistory {
+    func contextHistory(_ conversation: String, account: String, tokenLimit: Int, through: Int64? = nil) throws -> AIContextHistory {
         var records: [AIContextRecord] = [], before: Int64?, cost = 0, bytes = 0, more = false
-        let watermark = try messageWatermark(conversation, account: account)
+        let watermark = try through ?? messageWatermark(conversation, account: account)
         repeat {
             let page = try messagePage(conversation, account: account, before: before, eligible: true, watermark: watermark)
             records = page.records + records; more = page.hasMore; before = page.before
@@ -158,10 +160,10 @@ extension AIStore {
             }
             let extraBytes = extra.reduce(0) { $0 + $1.message.content.utf8.count }
             records.removeAll { $0.unitOrdinal == sample.unitOrdinal }
-            if extraBytes < 4 * 1024 * 1024 { records += extra } else { more = true }
+            if extraBytes < 4 * 1024 * 1024 { records += extra.filter { $0.ordinal <= watermark } } else { more = true }
         }
         records = Dictionary(grouping: records, by: { $0.message.id }).compactMap { $0.value.first }.sorted { $0.ordinal < $1.ordinal }
-        return .init(records: records, total: try messageCount(conversation, account: account, eligible: true), watermark: watermark, truncated: more)
+        return .init(records: records, total: try messageCount(conversation, account: account, eligible: true, watermark: through), watermark: watermark, truncated: more)
     }
     func contextScope(_ conversation: String, persona: String, account: String) throws -> String {
         try requirePersona(persona, account: account)
@@ -241,7 +243,7 @@ extension AIStore {
     func contextSnapshot(_ id: String, conversation: String, account: String) throws -> AIContextSnapshot? {
         try documents("SELECT payload FROM ai_context_snapshots WHERE account_id=? AND conversation_id=? AND id=?", [account, conversation, id], as: AIContextSnapshot.self).first
     }
-    func makeContextPlan(account: String, conversation: String, group: Bool, members: [AIGroupMember], tail: String, currentMessageId: String?, instruction: String?, query: String, echo: AIEchoSnapshot? = nil) throws -> AIContextPlan {
+    func makeContextPlan(account: String, conversation: String, group: Bool, members: [AIGroupMember], tail: String, currentMessageId: String?, instruction: String?, query: String, echo: AIEchoSnapshot? = nil, through: Int64? = nil) throws -> AIContextPlan {
         var notices: [String] = []
         var authorizedEcho: AIEchoSnapshot?
         if (try? echoConfig(account).readEnabled) == true {
@@ -252,15 +254,19 @@ extension AIStore {
         }
         let limit = try members.map { try AIContext.budget($0.model, persona: $0.persona, tail: tail).inputLimit }.min() ?? 8192
         var history: AIContextHistory
-        do { history = try contextHistory(conversation, account: account, tokenLimit: limit) }
-        catch { history = .init(records: [], total: (try? messageCount(conversation, account: account)) ?? 0, watermark: 0, truncated: true); notices.append("history_read_failed") }
+        do { history = try contextHistory(conversation, account: account, tokenLimit: limit, through: through) }
+        catch { history = .init(records: [], total: (try? messageCount(conversation, account: account, watermark: through)) ?? 0, watermark: 0, truncated: true); notices.append("history_read_failed") }
         if instruction != nil, let currentMessageId, let record = try? contextRecord(currentMessageId, conversation: conversation, account: account) {
             history.excludedCurrentOrdinal = record.ordinal
             history.records.removeAll { $0.message.id == currentMessageId }; history.total = max(0, history.total - 1)
         }
         let scope = group ? "public" : members[0].persona.id
         let summary: AIConversationContext?
-        do { let value = try conversationContext(conversation, scope: scope, account: account); summary = value?.status == "active" ? value : nil; if value != nil && summary == nil { notices.append("summary_invalidated") } }
+        do {
+            let value = try conversationContext(conversation, scope: scope, account: account)
+            summary = value.flatMap { $0.status == "active" && $0.throughOrdinal <= (through ?? Int64.max) ? $0 : nil }
+            if value?.status == "invalidated" { notices.append("summary_invalidated") }
+        }
         catch { summary = nil; notices.append("summary_read_failed") }
         let participants = members.map { member -> AIContextParticipant in
             let memories: [AIPersonaMemory]

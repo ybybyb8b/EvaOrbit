@@ -426,7 +426,14 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 case let aiMethod where AIRuntime.methods.contains(aiMethod):
                     guard let runtime = aiRuntime, let account = parameters["accountId"] as? String else { throw AIError.invalid }
                     let generation = try await controller.aiAccountGeneration(account)
-                    let value = try await runtime.handle(aiMethod, account: account, parameters: parameters) { [weak webView, weak controller] event in
+                    let confirmation: AIRuntime.ConfirmOrbitAction?
+                    if aiMethod == AIRuntime.orbitSendMethod {
+                        let english = parameters["english"] as? Bool == true
+                        confirmation = { [weak webView] title, preview in
+                            await ParlorOrbitConfirmation().ask(from: webView?.window?.rootViewController, title: title, preview: preview, english: english)
+                        }
+                    } else { confirmation = nil }
+                    let value = try await runtime.handle(aiMethod, account: account, parameters: parameters, confirmOrbitAction: confirmation) { [weak webView, weak controller] event in
                         Task { @MainActor in
                             guard let controller, let webView, let url = webView.url,
                                   self.hostConfiguration.allowsTrackerUI(url),

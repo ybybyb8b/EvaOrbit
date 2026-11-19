@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Parlor 单聊消息操作
+
+Bridge v1 增加可选方法 `ai.retryMessage` 和 `ai.deleteMessage`，沿用本地主 frame、账户与 generation 校验，旧 IPA 按能力隐藏入口。重试复用原提问、原模型和原回复位置，从原提问之前的历史重建上下文，显式生成一次回答。曾使用 EvaOrbit 的消息重试只生成回答，已确认的业务操作不会重放。删除只移除目标消息，沿用 SQLite 的上下文、自动记忆来源和 Echo 草稿失效规则。已有独立人格记忆继续由 Memory 管理。无需数据库迁移、权限或签名配置变更。新方法需重建 IPA，Windows 浏览器结果不能替代 Xcode 与 iPhone 键盘实测。
+
 ## Parlor Echo Shared Memory Phase D 源码候选
 
 AIStore v9 增加账户级 Echo 权限/完整召回缓存、Discussion 冻结绑定与人格分享回执，读取与写入默认关闭。AIEchoClient 经原 TrackerLocalController.businessRequest 的 HTTPS、Session/Cookie、账户、generation、拒绝重定向和大小限制访问 /api/memory-graph；白名单只新增根路径 GET/POST，Echo 请求 5 秒/资源 8 秒，不进入通用在线缓存或离线写队列。完整 getMemoryContext 直接返回，旧简化召回保持不变；群聊一次召回形成公共包，Persona Memory 独立，失败本地降级。分享必须预览和明确确认，始终 manual Candidate，稳定 requestId 查询/幂等重试，重启不自动写入；本地遗忘清理副本但不删除 Echo。备份 v4/schema9 兼容 v1/v2/v3，仅导出 Echo 快照元数据，恢复关闭两项权限；无新远端表、MCP、推理接口、entitlement 或签名安装链变化。Windows SQL/Node、HTTP、React 页面已验证；Swift 编译和真机待统一验收。详见 [Phase D](PARLOR_MEMORY_PHASE_D.md)。

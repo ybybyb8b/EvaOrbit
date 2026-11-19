@@ -105,7 +105,10 @@ extension AIStore {
         for var context in value.contexts ?? [] {
             context.fromOrdinal = context.firstMessageId.flatMap { current[$0] } ?? 0
             context.throughOrdinal = context.throughMessageId.flatMap { current[$0] } ?? 0
-            if !context.content.isEmpty && context.throughOrdinal == 0 { context.status = "invalidated" }
+            if !context.content.isEmpty && context.throughOrdinal == 0 {
+                context.fromOrdinal = 0
+                context.status = "invalidated"
+            }
             try insertConversationContext(context)
         }
         for var snapshot in value.contextSnapshots ?? [] {

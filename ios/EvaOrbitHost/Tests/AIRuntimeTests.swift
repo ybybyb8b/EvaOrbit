@@ -162,6 +162,72 @@ struct AIStreamTests {
 @Suite("Native Eva storage and requests", .serialized)
 @MainActor
 struct AIRuntimeTests {
+    @Test(arguments: [false, true])
+    func orbitTaskRequiresNativeConfirmation(confirmed: Bool) async throws {
+        let store = try AIStore(path: ":memory:"), secrets = MemoryAISecrets()
+        try secrets.write("fixture-key", account: accountA, provider: providerID)
+        try await store.saveProvider(fixtureProvider(), account: accountA)
+        var writes = 0, approvals = 0
+        let runtime = AIRuntime(store: store, secrets: secrets, echoTransport: { account, path, method, body in
+            #expect(account == accountA && path == "/api/tasks" && method == "POST")
+            #expect(approvals == 1 && body?.contains("Bring a book") == true)
+            #expect(body?.contains("dueTime") == false)
+            writes += 1
+            return ["status": 201, "body": ["id": 123]]
+        }) { _, receive in
+            try await receive(.init(delta: #"{"action":"create_task","title":"Bring a book","dueDate":"2026-11-19"}"#, done: true))
+        }
+        let conversation = UUID().uuidString, request = UUID().uuidString
+        let parameters = ["conversationId": conversation, "requestId": request, "providerId": providerID, "modelId": "mock-text", "content": "Add a task to bring a book tomorrow"]
+        _ = try await runtime.handle(AIRuntime.orbitSendMethod, account: accountA, parameters: parameters, confirmOrbitAction: { _, preview in
+            #expect(writes == 0 && preview.contains("Bring a book"))
+            approvals += 1
+            return confirmed
+        }, emit: { _ in })
+        for _ in 0..<100 {
+            if try await store.messages(conversation, account: accountA).last?.status == "done" { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let saved = try #require(await store.messages(conversation, account: accountA).last)
+        #expect(saved.status == "done" && saved.requestCount == 1)
+        #expect(saved.content.contains(confirmed ? "任务已保存" : "已取消"))
+        _ = try await runtime.handle(AIRuntime.orbitSendMethod, account: accountA, parameters: parameters, emit: { _ in })
+        #expect(approvals == 1 && writes == (confirmed ? 1 : 0))
+    }
+
+    @Test func orbitLookupUsesSameAccountAndSendsOnlySelectedFields() async throws {
+        let store = try AIStore(path: ":memory:"), secrets = MemoryAISecrets()
+        try secrets.write("fixture-key", account: accountA, provider: providerID)
+        try await store.saveProvider(fixtureProvider(), account: accountA)
+        var modelCalls = 0, lookups = 0
+        let runtime = AIRuntime(store: store, secrets: secrets, echoTransport: { account, path, method, body in
+            #expect(account == accountA && path == "/api/tasks?status=open" && method == "GET" && body == nil)
+            lookups += 1
+            return ["status": 200, "body": [["title": "Bring a book", "notes": "NOT_SENT_TO_MODEL"]]]
+        }) { request, receive in
+            modelCalls += 1
+            let data = try #require(request.httpBody)
+            let input = String(decoding: data, as: UTF8.self)
+            if modelCalls == 1 {
+                #expect(!input.contains("Bring a book"))
+                try await receive(.init(delta: #"{"action":"tasks","query":"book"}"#, done: true))
+            } else {
+                #expect(input.contains("Bring a book") && !input.contains("NOT_SENT_TO_MODEL"))
+                try await receive(.init(delta: "You have a task to bring a book.", done: true))
+            }
+        }
+        let conversation = UUID().uuidString
+        _ = try await runtime.handle(AIRuntime.orbitSendMethod, account: accountA, parameters: [
+            "conversationId": conversation, "requestId": UUID().uuidString,
+            "providerId": providerID, "modelId": "mock-text", "content": "Show my tasks about books"
+        ], emit: { _ in })
+        for _ in 0..<100 {
+            if try await store.messages(conversation, account: accountA).last?.status == "done" { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let saved = try #require(await store.messages(conversation, account: accountA).last)
+        #expect(saved.status == "done" && saved.requestCount == 2 && modelCalls == 2 && lookups == 1)
+    }
     @Test func defaultPersonaPersistsIndependentlyAndDoesNotRewriteHistory() async throws {
         let (store, directory) = try temporaryStore(); defer { try? FileManager.default.removeItem(at: directory) }
         var persona = try await store.defaultPersona(accountA)
@@ -286,6 +352,74 @@ struct AIRuntimeTests {
         #expect(saved.count == 2)
         #expect(saved.last?.usage?.inputTokens == 100)
         #expect(abs((saved.last?.cost ?? 0) - 0.00028) < 0.00000001)
+    }
+
+    @Test func singleRetryReusesPromptAndDeletionUpdatesFutureContext() async throws {
+        let (store, directory) = try temporaryStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let secrets = MemoryAISecrets()
+        try secrets.write("mock-key", account: accountA, provider: providerID)
+        try await store.saveProvider(fixtureProvider(), account: accountA)
+        var bodies: [String] = []
+        var terminalEvents = 0
+        let runtime = AIRuntime(store: store, secrets: secrets) { request, receive in
+            bodies.append(String(decoding: request.httpBody ?? Data(), as: UTF8.self))
+            if bodies.count == 1 { throw AIError.http(503) }
+            try await receive(.init(delta: "fixture answer"))
+        }
+        let emit: ([String: Any]) -> Void = { if $0["eventType"] as? String == "terminal" { terminalEvents += 1 } }
+        func settle(_ count: Int) async throws {
+            for _ in 0..<100 {
+                if terminalEvents >= count { return }
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+            Issue.record("Response did not settle")
+        }
+        let conversation = UUID().uuidString
+        let first: [String: Any] = ["conversationId": conversation, "requestId": UUID().uuidString, "providerId": providerID, "modelId": "mock-text", "content": "original fixture prompt"]
+        _ = try await runtime.handle("ai.send", account: accountA, parameters: first, emit: emit)
+        try await settle(1)
+        let initial = try await store.messages(conversation, account: accountA)
+        let user = try #require(initial.first)
+        let failed = try #require(initial.last)
+        let request = try #require(failed.requestId)
+        #expect(failed.status == "failed")
+        var later = first
+        later["requestId"] = UUID().uuidString
+        later["content"] = "later fixture prompt"
+        _ = try await runtime.handle("ai.send", account: accountA, parameters: later, emit: emit)
+        try await settle(2)
+
+        let retry: [String: Any] = ["conversationId": conversation, "messageId": failed.id, "previousRequestId": request, "requestId": UUID().uuidString]
+        _ = try await runtime.handle("ai.retryMessage", account: accountA, parameters: retry, emit: emit)
+        try await settle(3)
+        _ = try await runtime.handle("ai.retryMessage", account: accountA, parameters: retry, emit: emit)
+        let retried = try await store.messages(conversation, account: accountA)
+        #expect(retried.map(\.role) == ["user", "assistant", "user", "assistant"])
+        #expect(retried.first?.id == user.id)
+        let replaced = try #require(retried.first(where: { $0.id == failed.id }))
+        #expect(replaced.status == "done")
+        #expect(replaced.seq > failed.seq)
+        #expect(bodies.count == 3)
+        let retryBody = try #require(bodies.last)
+        #expect(retryBody.components(separatedBy: user.content).count == 2)
+        #expect(!retryBody.contains("later fixture prompt"))
+
+        for id in [user.id, failed.id] {
+            let deletion = ["conversationId": conversation, "messageId": id]
+            _ = try await runtime.handle("ai.deleteMessage", account: accountA, parameters: deletion, emit: emit)
+            _ = try await runtime.handle("ai.deleteMessage", account: accountA, parameters: deletion, emit: emit)
+        }
+        let remaining = try await store.messages(conversation, account: accountA)
+        #expect(remaining.map(\.id) == Array(retried.suffix(2)).map(\.id))
+        let backup = try await store.exportBackup(account: accountA)
+        try await store.validateBackup(backup, account: accountA)
+        later["requestId"] = UUID().uuidString
+        later["content"] = "followup fixture prompt"
+        _ = try await runtime.handle("ai.send", account: accountA, parameters: later, emit: emit)
+        try await settle(4)
+        #expect(bodies.last?.contains(user.content) == false)
+        #expect(bodies.last?.contains("later fixture prompt") == true)
     }
 
     @Test func accountInterruptionPreservesOutputAndStopsOldEvents() async throws {

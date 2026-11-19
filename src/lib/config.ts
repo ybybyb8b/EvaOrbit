@@ -32,5 +32,6 @@ export function isLocalOnlineAccountAllowed(email:string){
   return isOnlineTestEmail(email) || Boolean(allowedEmail()) && email.trim().toLowerCase()===allowedEmail() && process.env.EVAORBIT_LOCAL_ONLINE_ENABLED==="true";
 }
 export function isNativeIntegrationAccountAllowed(email:string){
-  return !isOnlineTestEmail(email)&&isLocalOnlineAccountAllowed(email)&&process.env.EVAORBIT_LOCAL_NATIVE_ENABLED==="true";
+  const setting=process.env.EVAORBIT_LOCAL_NATIVE_ENABLED;
+  return !isOnlineTestEmail(email)&&isLocalOnlineAccountAllowed(email)&&(setting===undefined||setting==="true");
 }

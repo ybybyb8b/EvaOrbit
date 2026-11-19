@@ -22,6 +22,7 @@ extension AIStore {
                   ISO8601DateFormatter().date(from: job.createdAt) != nil, ISO8601DateFormatter().date(from: job.updatedAt) != nil else { throw AIError.invalid }
             try job.provider.validate()
             for ref in job.messages {
+                if job.status == "stale" && messages[ref.id] == nil { continue }
                 guard let source = messages[ref.id], source.conversationId == job.conversationId, value.messageOrdinals?[ref.id] == ref.ordinal else { throw AIError.invalidContext }
                 if job.status == "completed" { guard source.seq == ref.seq, AIContextRecord(ordinal: ref.ordinal, unitOrdinal: 0, message: source).ref.hash == ref.hash else { throw AIError.invalidContext } }
             }
@@ -50,7 +51,13 @@ extension AIStore {
     func restoreProcessingBackup(_ value: AIBackupPayload, account: String) throws {
         for var config in value.processingConfigs ?? [] { config.automatic = false; try execute("INSERT INTO ai_memory_processing_config VALUES(?,?,?)", [account, config.personaId, try encoded(config)]) }
         for var job in value.processingJobs ?? [] {
-            job.messages = try job.messages.map { ref in guard let row = try contextRecord(ref.id, conversation: job.conversationId, account: account) else { throw AIError.invalidContext }; var copy = ref; copy.ordinal = row.ordinal; return copy }
+            job.messages = try job.messages.map { ref in
+                if let row = try contextRecord(ref.id, conversation: job.conversationId, account: account) {
+                    var copy = ref; copy.ordinal = row.ordinal; return copy
+                }
+                guard job.status == "stale" else { throw AIError.invalidContext }
+                return ref
+            }
             if ["queued", "running"].contains(job.status) { job.status = "interrupted"; job.error = "Restored task. No automatic retry." }
             try writeJob(job)
         }

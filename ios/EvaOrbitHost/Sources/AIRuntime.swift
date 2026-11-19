@@ -5,6 +5,7 @@ import UIKit
 final class AIRuntime {
     typealias Stream = (URLRequest, @escaping (AIStreamPart) async throws -> Void) async throws -> Void
     typealias Catalog = (URLRequest, String) async throws -> AIModelCatalog
+    typealias ConfirmOrbitAction = @MainActor (String, String) async -> Bool
     static let subscriptionID = "00000000-0000-4000-8000-000000000220"
     private let subscriptionFactory: (String) -> SIWCRuntime
     private var subscriptionClients: [String: SIWCRuntime] = [:]
@@ -56,7 +57,8 @@ final class AIRuntime {
     nonisolated static let echoMethods: Set<String> = ["ai.echoGet", "ai.echoConfigure", "ai.echoClear", "ai.echoEntities", "ai.echoSharePrepare", "ai.echoShareSubmit", "ai.echoShareStatus"]
     nonisolated static let contextMethods: Set<String> = ["ai.messagePage", "ai.contextGet", "ai.contextSave"]
     nonisolated static let memoryMethods: Set<String> = ["ai.memoryList", "ai.memoryDetail", "ai.memorySave", "ai.memoryDelete", "ai.memorySources", "ai.assignConversationPersona", "ai.exportBackup", "ai.restoreBackup"]
-    nonisolated static let methods: Set<String> = Set(["ai.getState", "ai.saveProvider", "ai.deleteProvider", "ai.send", "ai.cancel", "ai.deleteConversation", "ai.savePersona", "ai.listModels", "ai.cancelModelList", "ai.subscriptionLogin", "ai.subscriptionLogout", "ai.subscriptionModels", "ai.saveGroup", "ai.groupSend", "ai.groupCancel", "ai.groupRegenerate", "ai.discussionControl", "ai.discussionIntervene", "ai.discussionSummarize", "ai.setConversationModel"]).union(memoryMethods).union(contextMethods).union(processingMethods).union(echoMethods)
+    nonisolated static let orbitSendMethod = "ai.sendWithOrbit"
+    nonisolated static let methods: Set<String> = Set(["ai.getState", "ai.saveProvider", "ai.deleteProvider", "ai.send", orbitSendMethod, "ai.retryMessage", "ai.deleteMessage", "ai.cancel", "ai.deleteConversation", "ai.savePersona", "ai.listModels", "ai.cancelModelList", "ai.subscriptionLogin", "ai.subscriptionLogout", "ai.subscriptionModels", "ai.saveGroup", "ai.groupSend", "ai.groupCancel", "ai.groupRegenerate", "ai.discussionControl", "ai.discussionIntervene", "ai.discussionSummarize", "ai.setConversationModel"]).union(memoryMethods).union(contextMethods).union(processingMethods).union(echoMethods)
 
     init(store: AIStore, secrets: AISecretStore = AICredentialStore(), catalog: Catalog? = nil, subscriptionFactory: ((String) -> SIWCRuntime)? = nil, echoTransport: AIEchoClient.Transport? = nil, stream: Stream? = nil) {
         self.store = store; self.secrets = secrets
@@ -84,10 +86,10 @@ final class AIRuntime {
         for id in Array(groupJobs.keys) { groupJobs[id]?.terminal = "interrupted"; groupJobs[id]?.task?.cancel() }
     }
 
-    func handle(_ method: String, account: String, parameters: [String: Any], emit: @escaping ([String: Any]) -> Void) async throws -> Any {
+    func handle(_ method: String, account: String, parameters: [String: Any], confirmOrbitAction: ConfirmOrbitAction? = nil, emit: @escaping ([String: Any]) -> Void) async throws -> Any {
         guard Self.methods.contains(method), UUID(uuidString: account) != nil else { throw AIError.invalid }
         let requestEpoch = epoch
-        if ["ai.send", "ai.groupSend", "ai.groupRegenerate", "ai.discussionIntervene", "ai.discussionControl", "ai.discussionSummarize", "ai.setConversationModel", "ai.restoreBackup", "ai.exportBackup", "ai.deleteConversation", "ai.memoryDelete", "ai.memorySave", "ai.saveProvider", "ai.deleteProvider", "ai.subscriptionLogin", "ai.subscriptionLogout"].contains(method) { await memoryProcessor.yield() }
+        if ["ai.send", Self.orbitSendMethod, "ai.retryMessage", "ai.deleteMessage", "ai.groupSend", "ai.groupRegenerate", "ai.discussionIntervene", "ai.discussionControl", "ai.discussionSummarize", "ai.setConversationModel", "ai.restoreBackup", "ai.exportBackup", "ai.deleteConversation", "ai.memoryDelete", "ai.memorySave", "ai.saveProvider", "ai.deleteProvider", "ai.subscriptionLogin", "ai.subscriptionLogout"].contains(method) { await memoryProcessor.yield() }
         guard requestEpoch == epoch && !Task.isCancelled else { throw CancellationError() }
         guard !modelSwitching || method == "ai.getState" else { throw AIError.busy }
         self.emit = emit
@@ -197,6 +199,11 @@ final class AIRuntime {
             let messages = page?.records.map(\.message) ?? []
             var result: [String: Any] = ["providers": providers, "conversations": try aiJSON(conversations), "messages": try aiJSON(messages)]
             if let page { result["messagePage"] = try messagePageJSON(page) }
+            if let conversation, let id = parameters["trackedMessageId"] as? String, UUID(uuidString: id) != nil,
+               !messages.contains(where: { $0.id == id }),
+               let record = try await store.contextRecord(id, conversation: conversation, account: account) {
+                result["trackedMessage"] = try aiJSON(record.message)
+            }
             result["subscriptionConnected"] = try subscription(account).keychain.read()?.enabled ?? false
             result["persona"] = try aiJSON(await store.defaultPersona(account))
             result["personas"] = try aiJSON(await store.personas(account))
@@ -265,6 +272,14 @@ final class AIRuntime {
                   current?.account != account || current?.message.conversationId != id else { throw AIError.busy }
             try await store.deleteConversation(id, account: account)
             return ["deleted": true]
+        case "ai.deleteMessage":
+            guard let conversation = parameters["conversationId"] as? String, UUID(uuidString: conversation) != nil,
+                  let id = parameters["messageId"] as? String, UUID(uuidString: id) != nil else { throw AIError.invalid }
+            guard !preparing, !configuring, current?.account != account || current?.message.conversationId != conversation else { throw AIError.busy }
+            configuring = true
+            defer { configuring = false }
+            try await store.deleteSingleMessage(id, conversation: conversation, account: account)
+            return ["deleted": true]
         case "ai.cancel":
             guard let id = parameters["requestId"] as? String, UUID(uuidString: id) != nil else { throw AIError.invalid }
             if (current?.account == account && current?.message.requestId == id) || (preparingRequest?.account == account && preparingRequest?.id == id) {
@@ -273,6 +288,10 @@ final class AIRuntime {
             return ["requested": true]
         case "ai.send":
             return try await send(account: account, parameters: parameters)
+        case "ai.retryMessage":
+            return try await send(account: account, parameters: parameters, retry: true)
+        case Self.orbitSendMethod:
+            return try await send(account: account, parameters: parameters, useOrbit: true, confirm: confirmOrbitAction)
         default: throw AIError.invalid
         }
     }
@@ -465,29 +484,152 @@ final class AIRuntime {
         return try aiJSON(result)
     }
 
-    private func send(account: String, parameters: [String: Any]) async throws -> Any {
+    private struct OrbitReply {
+        var context: [[String: String]]
+        var receipt: String?
+        var plannerUsage: AIUsage?
+    }
+
+    private static func combinedOrbitUsage(_ planner: AIUsage?, _ answer: AIUsage) -> AIUsage {
+        func total(_ first: Int?, _ second: Int?) -> Int? {
+            guard let first, let second else { return nil }
+            return first + second
+        }
+        return .init(inputTokens: total(planner?.inputTokens, answer.inputTokens),
+                     outputTokens: total(planner?.outputTokens, answer.outputTokens),
+                     cachedTokens: total(planner?.cachedTokens, answer.cachedTokens),
+                     source: planner?.inputTokens != nil && answer.inputTokens != nil ? "provider" : "unknown")
+    }
+
+    private func prepareOrbitReply(provider: AIProvider, model: AIModel, persona: ParlorPersona, context: [[String: String]],
+                                   content: String, account: String, english: Bool, confirm: ConfirmOrbitAction?) async throws -> OrbitReply {
+        func localized(_ en: String, _ zh: String) -> String { english ? en : zh }
+        var raw = "", completed = false, reply = OrbitReply(context: context)
+        let today = ParlorOrbitAction.dateFormat().string(from: Date())
+        try await perform(provider: provider, model: model, persona: persona, context: [["role": "user", "content": content]],
+                          account: account, instructions: ParlorOrbitAction.instructions(today: today)) { part in
+            guard raw.utf8.count + part.delta.utf8.count <= 8192 else { throw AIError.tooLarge }
+            raw += part.delta
+            completed = completed || part.done
+            if let usage = part.usage { reply.plannerUsage = usage }
+        }
+        try Task.checkCancellation()
+        guard completed else { throw AIError.truncated }
+        guard let action = try? JSONDecoder().decode(ParlorOrbitAction.self, from: Data(raw.utf8)), action.action != .none else { return reply }
+        switch action.action {
+        case .create_task, .capture_inbox:
+            guard let draft = try? action.draft(english: english) else {
+                reply.receipt = localized("Check the content, date or time before trying again.", "未保存。请检查内容、日期或时间后再试。")
+                return reply
+            }
+            guard await confirm?(draft.title, draft.preview) == true else {
+                try Task.checkCancellation()
+                reply.receipt = localized("Cancelled. Nothing was saved.", "已取消，未保存。")
+                return reply
+            }
+            try Task.checkCancellation()
+            let response: [String: Any]
+            do {
+                response = try await echoTransport(account, draft.path, "POST", draft.payload)
+            } catch {
+                try Task.checkCancellation()
+                reply.receipt = localized("Save result unknown. Check Tasks or Inbox before retrying.", "保存结果未确认。请先检查任务或收件箱，再决定是否重试。")
+                return reply
+            }
+            try Task.checkCancellation()
+            guard let status = response["status"] as? Int, (200..<300).contains(status) else {
+                reply.receipt = localized("EvaOrbit did not confirm the save. Check your account and the details.", "EvaOrbit 未确认保存。请检查账户和填写的内容。")
+                return reply
+            }
+            let statusText = action.action == .create_task ? localized("Task saved.", "任务已保存。") : localized("Quick note saved to Inbox.", "速记已保存到收件箱。")
+            reply.receipt = statusText + "\n\n" + draft.preview
+        case .tasks, .calendar, .memory:
+            let result: [[String: String]]
+            do {
+                result = try await orbitRead(action, account: account, persona: persona.id)
+            } catch {
+                try Task.checkCancellation()
+                reply.receipt = localized("EvaOrbit lookup failed. Check your connection, account or date range.", "这次未能读取 EvaOrbit 数据。请检查网络、账户或日期范围后重试。")
+                return reply
+            }
+            try Task.checkCancellation()
+            let message = AIContext.dataMessage("evaorbit_\(action.action.rawValue)_lookup", result)
+            let budget = try AIContext.budget(model, persona: persona, tail: content)
+            if AIContext.tokens(context + [message]) + budget.systemTokens <= budget.inputLimit {
+                reply.context.insert(message, at: max(0, reply.context.count - 1))
+            } else {
+                reply.receipt = localized("The results exceed this model's context budget. Narrow the search.", "查询结果超出当前模型的上下文预算，请缩小查询范围。")
+            }
+        case .none: break
+        }
+        return reply
+    }
+
+    private func orbitRead(_ action: ParlorOrbitAction, account: String, persona: String) async throws -> [[String: String]] {
+        let query = String((action.query?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").prefix(100))
+        if action.action == .memory {
+            guard !query.isEmpty else { throw AIError.invalid }
+            return try await store.memories(persona: persona, account: account)
+                .filter { $0.expiredAt == nil && ($0.content.localizedCaseInsensitiveContains(query) || AIContext.relevance($0, query: query) > 0) }
+                .prefix(8).map { ["content": String($0.content.prefix(360))] }
+        }
+        let path: String
+        if action.action == .calendar { path = try action.calendarPath() }
+        else { path = "/api/tasks?status=open" }
+        let response = try await echoTransport(account, path, "GET", nil)
+        guard response["status"] as? Int == 200, let rows = response["body"] as? [[String: Any]] else { throw AIError.invalid }
+        let fields = action.action == .calendar ? ["title", "startAt", "endAt", "isAllDay", "timezone", "status"] : ["title", "dueDate", "dueTime", "priority"]
+        return rows.filter { query.isEmpty || action.action == .calendar || ($0["title"] as? String)?.localizedCaseInsensitiveContains(query) == true }.prefix(20).map { row in
+            Dictionary(uniqueKeysWithValues: fields.compactMap { key in
+                if let value = row[key] as? String { return (key, String(value.prefix(240))) }
+                if let value = row[key] as? Bool { return (key, String(value)) }
+                return nil
+            })
+        }
+    }
+
+    private func send(account: String, parameters: [String: Any], useOrbit: Bool = false, confirm: ConfirmOrbitAction? = nil, retry: Bool = false) async throws -> Any {
         guard task == nil && !preparing && !configuring && catalogTask == nil && subscriptionTask == nil && !groupPreparing && groupJobs.isEmpty && discussionTask == nil && !discussionControlling else { throw AIError.busy }
         preparing = true
         defer { preparing = false; preparingRequest = nil }
         let generation = epoch
         guard let conversation = parameters["conversationId"] as? String, UUID(uuidString: conversation) != nil,
-              let requestID = parameters["requestId"] as? String, UUID(uuidString: requestID) != nil,
-              let providerID = parameters["providerId"] as? String,
-              let modelID = parameters["modelId"] as? String,
-              let content = parameters["content"] as? String, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              content.count <= 20000 else { throw AIError.invalid }
+              let requestID = parameters["requestId"] as? String, UUID(uuidString: requestID) != nil else { throw AIError.invalid }
         preparingRequest = (account, requestID)
         guard try await store.groups(account).allSatisfy({ $0.id != conversation }) else { throw AIError.invalid }
+        var original: AIMessage?
+        var prompt: AIContextRecord?
+        if retry {
+            guard let id = parameters["messageId"] as? String, UUID(uuidString: id) != nil,
+                  let record = try await store.contextRecord(id, conversation: conversation, account: account),
+                  record.message.role == "assistant" else { throw AIError.invalid }
+            let failed = record.message
+            if failed.requestId == requestID { return ["requestId": requestID, "messageId": id] }
+            guard ["failed", "interrupted"].contains(failed.status),
+                  failed.requestId == parameters["previousRequestId"] as? String,
+                  try await store.requestMessage(requestID, conversation: conversation, account: account) == nil else { throw AIError.invalid }
+            if let promptID = failed.replyToMessageId {
+                prompt = try await store.contextRecord(promptID, conversation: conversation, account: account)
+            } else {
+                prompt = try await store.messagePage(conversation, account: account, before: record.ordinal, limit: 1).records.last
+            }
+            guard prompt?.message.role == "user" else { throw AIError.invalidContext }
+            original = failed
+        }
+        guard let providerID = retry ? original?.providerId : parameters["providerId"] as? String,
+              let modelID = retry ? original?.model?.id : parameters["modelId"] as? String,
+              let content = retry ? prompt?.message.content : parameters["content"] as? String,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, content.count <= 20000 else { throw AIError.invalid }
+        let personaID = retry ? original?.personaId : parameters["personaId"] as? String
         let persona: ParlorPersona
-        if let id = parameters["personaId"] as? String {
+        if let id = personaID {
             _ = try await store.defaultPersona(account)
             guard let selected = try await store.personas(account).first(where: { $0.id == id }) else { throw AIError.invalid }
             persona = selected
         } else { persona = try await store.defaultPersona(account) }
-        if let requested = parameters["personaId"] as? String, requested != persona.id { throw AIError.invalid }
         try await store.requireConversationPersona(conversation, persona: persona.id, account: account)
         // Delivery retries are never model retries. The UI keeps a stable request ID until acknowledged.
-        if let previous = try await store.requestMessage(requestID, conversation: conversation, account: account),
+        if !retry, let previous = try await store.requestMessage(requestID, conversation: conversation, account: account),
            let record = try await store.contextRecord(previous.id, conversation: conversation, account: account) {
             let originalUser: AIMessage?
             if let id = previous.replyToMessageId { originalUser = try await store.contextRecord(id, conversation: conversation, account: account)?.message }
@@ -497,7 +639,7 @@ final class AIRuntime {
         }
         guard let provider = try await store.providers(account).first(where: { $0.id == providerID && $0.enabled }),
               let model = provider.models.first(where: { $0.id == modelID }) else { throw AIError.invalid }
-        if let choice = try await store.conversationModels(conversation, account: account).first(where: { $0.personaId == persona.id }) {
+        if !retry, let choice = try await store.conversationModels(conversation, account: account).first(where: { $0.personaId == persona.id }) {
             guard choice.providerId == providerID && choice.modelId == modelID else { throw AIError.invalid }
         }
         let isSubscription = providerID == Self.subscriptionID
@@ -506,24 +648,34 @@ final class AIRuntime {
         else { guard let stored = try secrets.read(account: account, provider: providerID) else { throw AIError.missingKey }; key = stored }
         guard isSubscription || !content.contains(key) else { throw AIError.invalid }
         let timestamp = aiTimestamp()
-        let user = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "user", content: content, status: "done", createdAt: timestamp)
+        let user = prompt?.message ?? AIMessage(id: UUID().uuidString, conversationId: conversation, role: "user", content: content, status: "done", createdAt: timestamp)
         let sharedEcho = await echoClient.recall(account: account, text: content)
         guard generation == epoch && !Task.isCancelled else { throw CancellationError() }
-        let plan = try await store.makeContextPlan(account: account, conversation: conversation, group: false, members: [AIGroupMember(persona: persona, provider: provider, model: model)], tail: content, currentMessageId: user.id, instruction: nil, query: content, echo: sharedEcho)
-        let context = plan.inputs[persona.id] ?? plan.publicMessages
-        var assistant = AIMessage(id: UUID().uuidString, conversationId: conversation, role: "assistant", content: "", status: "streaming", createdAt: timestamp,
+        let member = AIGroupMember(persona: persona, provider: provider, model: model)
+        var assistant = AIMessage(id: original?.id ?? UUID().uuidString, conversationId: conversation, role: "assistant", content: "", status: "streaming", createdAt: original?.createdAt ?? timestamp,
                                   requestId: requestID, providerId: providerID, providerName: provider.name, model: model,
                                   currency: provider.currency, priceUpdatedAt: model.priceUpdatedAt ?? provider.priceUpdatedAt, usage: AIUsage(), requestCount: 1,
                                   personaId: persona.id, personaName: persona.name)
         assistant.personaAvatar = persona.avatarDataURL
         assistant.replyToMessageId = user.id
-        assistant.contextSnapshotId = plan.generations[persona.id]?.id
-        assistant.contextBudget = plan.generations[persona.id]?.budget
-        assistant.contextCoverage = plan.generations[persona.id]?.coverage
-        // Reserve before awaiting storage: a second bridge send cannot enter while begin() is suspended.
-        current = (account, assistant)
-        do { try await store.begin(user: user, assistant: assistant, account: account, contextPlan: plan) }
+        if let original { assistant.seq = original.seq + 1; assistant.ordinal = original.ordinal }
+        let plan: AIContextPlan
+        do {
+            if let original, let prompt {
+                current = (account, assistant)
+                let saved = try await store.beginRetry(assistant, original: original, prompt: prompt, member: member, account: account, echo: sharedEcho)
+                assistant = saved.0; plan = saved.1
+            } else {
+                plan = try await store.makeContextPlan(account: account, conversation: conversation, group: false, members: [member], tail: content, currentMessageId: user.id, instruction: nil, query: content, echo: sharedEcho)
+                guard generation == epoch && !Task.isCancelled else { throw CancellationError() }
+                assistant = assistant.withContext(plan, persona: persona.id)
+                current = (account, assistant)
+                try await store.begin(user: user, assistant: assistant, account: account, contextPlan: plan)
+            }
+            current = (account, assistant)
+        }
         catch { current = nil; task = nil; throw error }
+        let context = plan.inputs[persona.id] ?? plan.publicMessages
         if generation != epoch {
             current?.message.requestCount = 0
             do { try await finish(status: terminalStatus ?? "interrupted", error: nil) }
@@ -532,13 +684,32 @@ final class AIRuntime {
             throw CancellationError()
         }
         terminalStatus = nil
+        if retry { publish(assistant, account: account) }
+        let english = parameters["english"] as? Bool == true
         task = Task { [weak self] in
             guard let self else { return }
             do {
                 try Task.checkCancellation()
-                try await self.perform(provider: provider, model: model, persona: persona, context: context, account: account) { [weak self] part in
-                    guard let self else { throw CancellationError() }
-                    try await self.receive(part, account: account, requestID: requestID)
+                let prepared: OrbitReply
+                if useOrbit {
+                    prepared = try await self.prepareOrbitReply(provider: provider, model: model, persona: persona,
+                                                                context: context, content: content, account: account, english: english, confirm: confirm)
+                } else {
+                    prepared = OrbitReply(context: context)
+                }
+                if let receipt = prepared.receipt {
+                    try await self.receive(.init(delta: receipt, usage: prepared.plannerUsage, done: true), account: account, requestID: requestID)
+                } else {
+                    if useOrbit {
+                        self.current?.message.requestCount += 1
+                        try await self.receive(.init(), account: account, requestID: requestID)
+                    }
+                    try await self.perform(provider: provider, model: model, persona: persona, context: prepared.context, account: account) { [weak self] part in
+                        guard let self else { throw CancellationError() }
+                        var reported = part
+                        if useOrbit, let usage = part.usage { reported.usage = Self.combinedOrbitUsage(prepared.plannerUsage, usage) }
+                        try await self.receive(reported, account: account, requestID: requestID)
+                    }
                 }
                 try Task.checkCancellation()
                 guard !(self.current?.message.content.isEmpty ?? true) else { throw AIError.stream }
@@ -588,16 +759,17 @@ final class AIRuntime {
                "seq": message.seq, "eventType": message.status == "streaming" ? "progress" : "terminal", "message": json])
     }
     private func perform(provider: AIProvider, model: AIModel, persona: ParlorPersona, context: [[String: String]], account: String,
-                         dispatch: (() async throws -> Void)? = nil, receive: @escaping (AIStreamPart) async throws -> Void) async throws {
+                         dispatch: (() async throws -> Void)? = nil, instructions: String? = nil, receive: @escaping (AIStreamPart) async throws -> Void) async throws {
         try Task.checkCancellation()
-        guard try JSONSerialization.data(withJSONObject: [["role": "system", "content": persona.runtimePrompt]] + context).count <= AIContext.hardBytes - 1024 else { throw AIError.contextCapacity }
+        let prompt = instructions ?? persona.runtimePrompt
+        guard try JSONSerialization.data(withJSONObject: [["role": "system", "content": prompt]] + context).count <= AIContext.hardBytes - 1024 else { throw AIError.contextCapacity }
         // Frozen replies keep their model, but cannot bypass a disabled/restored Provider
         // or send a newly configured credential to an old endpoint.
         guard let configured = try await store.providers(account).first(where: { $0.id == provider.id && $0.enabled }),
               configured.baseURL == provider.baseURL, configured.models.contains(where: { $0.id == model.id }) else { throw AIError.invalid }
         try Task.checkCancellation()
         if provider.id == Self.subscriptionID {
-            try await subscription(account).infer(model: model.id, input: context, instructions: persona.runtimePrompt, dispatch: dispatch) { event in
+            try await subscription(account).infer(model: model.id, input: context, instructions: prompt, dispatch: dispatch) { event in
                 try await receive(AIStreamPart(delta: event.delta, usage: event.tokenUsage, done: event.completed))
             }
             return
@@ -610,7 +782,7 @@ final class AIRuntime {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["model": model.id, "stream": true,
-            "stream_options": ["include_usage": true], "messages": [["role": "system", "content": persona.runtimePrompt]] + context])
+            "stream_options": ["include_usage": true], "messages": [["role": "system", "content": prompt]] + context])
         try await dispatch?()
         try Task.checkCancellation()
         try await stream(request, receive)

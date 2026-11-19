@@ -136,6 +136,14 @@ struct AIMessage: Codable {
     var contextCoverage: AIContextCoverage?
     var ordinal: Int64?
     var replyToMessageId: String?
+
+    func withContext(_ plan: AIContextPlan, persona: String) -> AIMessage {
+        var reply = self
+        reply.contextSnapshotId = plan.generations[persona]?.id
+        reply.contextBudget = plan.generations[persona]?.budget
+        reply.contextCoverage = plan.generations[persona]?.coverage
+        return reply
+    }
 }
 
 func aiTimestamp() -> String { ISO8601DateFormatter().string(from: Date()) }

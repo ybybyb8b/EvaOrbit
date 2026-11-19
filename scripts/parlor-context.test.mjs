@@ -31,6 +31,36 @@ test('replacement after a summary watermark invalidates the covered original ass
  const d=db();try{message(d,'u');const end=message(d,'old',{role:'assistant'});summary(d,{through:end});message(d,'new-turn');assert.equal(d.prepare('SELECT status FROM ai_conversation_contexts').get().status,'active');message(d,'replacement',{role:'assistant',supersedesId:'old'});assert.equal(d.prepare('SELECT status FROM ai_conversation_contexts').get().status,'invalidated');}finally{d.close();}
 });
 
+test('deleting just a legacy prompt leaves its reply independent and invalidates dependent context',()=>{
+ const d=db();
+ try{
+  message(d,'keep');
+  const prompt=message(d,'delete');
+  const reply=message(d,'reply',{role:'assistant'});
+  const later=message(d,'later');
+  message(d,'delete',{account:'b'});
+  summary(d,{through:reply});
+  snapshot(d,'source',{refs:[{id:'delete'}]});
+  const operation=store.slice(store.indexOf('func deleteSingleMessage'),store.indexOf('func deleteConversation'));
+  const link=operation.match(/try execute\("""\s*(UPDATE ai_messages[\s\S]*?)\s*"""/)?.[1];
+  const remove=operation.match(/try execute\("(DELETE FROM ai_messages[^"]+)"/)?.[1];
+  assert(link&&remove);
+  d.exec('BEGIN');
+  d.prepare(link).run('delete','a','c',String(prompt),'a','c',String(prompt));
+  d.prepare(remove).run('a','c','delete');
+  d.exec('COMMIT');
+  const rows=d.prepare(select+' WHERE m.account_id=? AND m.conversation_id=? ORDER BY m.ordinal').all('a','c');
+  const payloads=rows.map(row=>JSON.parse(row.payload));
+  assert.deepEqual(payloads.map(row=>row.id),['keep','reply','later']);
+  assert.equal(payloads[1].replyToMessageId,'delete');
+  assert.equal(Object.values(rows[1])[2],reply);
+  assert.equal(rows[2].ordinal,later);
+  assert.equal(d.prepare("SELECT COUNT(*) count FROM ai_messages WHERE account_id='b' AND id='delete'").get().count,1);
+  assert.equal(d.prepare('SELECT status FROM ai_conversation_contexts').get().status,'invalidated');
+  assert.equal(JSON.parse(d.prepare('SELECT payload FROM ai_context_snapshots').get().payload).invalidated,true);
+ }finally{d.close();}
+});
+
 test('withdrawing memory clears only matching account/persona/version snapshot refs and private hashes',()=>{
  const d=db();try{
   const m={accountId:'a',personaId:'s',id:'memory',version:1,status:'active'};d.prepare('INSERT INTO ai_persona_memories VALUES(?,?,?,?,?,?,?)').run('a','s','memory',1,'experience','active',JSON.stringify(m));

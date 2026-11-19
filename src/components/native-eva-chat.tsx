@@ -1,11 +1,11 @@
 "use client";
 import {useCallback,useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
-import {acceptEvaEvent,mergeEvaMessages,evaCall,evaIsBusy,evaModelBinding,nativeEvaEvent,sebastianIdentity,type EvaMessage,type EvaState,type MessagePage} from "@/lib/native-eva";
+import {acceptEvaEvent,mergeEvaMessages,evaCall,evaIsBusy,evaModelBinding,nativeEvaEvent,nativeOrbitSendMethod,sebastianIdentity,type EvaMessage,type EvaState,type MessagePage} from "@/lib/native-eva";
 import {useLocale} from "./locale-controller";
 import {Icon} from "./icons";
 import {Refresh} from "reicon-react";
 import {FormSheet} from "./form-sheet";
-import {ParlorMessageBody,ParlorAssistantLayout} from "./parlor-message";
+import {ParlorMessageBody,ParlorAssistantLayout,ParlorFailedReply} from "./parlor-message";
 import {ParlorErrorNotice} from "./parlor-error-notice";
 import {useParlorAppearance} from "./parlor-appearance-sheet";
 import {useNativeEva} from "./native-eva-context";
@@ -21,17 +21,21 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
   const {english}=useLocale(),t=(en:string,zh:string)=>english?en:zh;
   const [conversation,setConversation]=useState(()=>initialConversationId??localStorage.getItem(`eo:eva:last:${accountId}`)??crypto.randomUUID());
   const [state,setState]=useState<EvaState|null>(null),[draft,setDraft]=useState(""),[error,setError]=useState("");
+  const [useOrbit,setUseOrbit]=useState(false);
   const [submitting,setSubmitting]=useState(false),[stopping,setStopping]=useState(false),[history,setHistory]=useState(false),[personaOpen,setPersonaOpen]=useState(false),[usageId,setUsageId]=useState<string|null>(null);
   const [olderLoading,setOlderLoading]=useState(false);
   const [modelOpen,setModelOpen]=useState(false);
   const [away,setAway]=useState(false);
   const [firstVisit]=useState(()=>!localStorage.getItem(`eo:parlor:introduced:${accountId}`));
-  const {memoryProcessingSupported,groupSupported,discussionSupported,modelSwitchSupported}=useNativeEva();
+  const {memoryProcessingSupported,groupSupported,discussionSupported,modelSwitchSupported,orbitSupported,singleMessageSupported}=useNativeEva();
   const [discussionBusy,setDiscussionBusy]=useState(false),[summaryOpen,setSummaryOpen]=useState(false),[summaryPersona,setSummaryPersona]=useState("");
   const discussionLock=useRef(false),summaryIdentity=useRef<{conversation:string;persona:string;id:string}|null>(null);
   const [groupSheet,setGroupSheet]=useState(false),[newGroup,setNewGroup]=useState(false),[selectedPersona,setSelectedPersona]=useState(()=>localStorage.getItem(`eo:parlor:persona:${accountId}`)??"sebastian");
   const retryIds=useRef(new Map<string,string>()),controlLock=useRef(new Set<string>());
   const [controlling,setControlling]=useState<string[]>([]);
+  const [messageAction,setMessageAction]=useState<{id:string;kind:"retry"|"delete"}|null>(null);
+  const messageActionLock=useRef(false),deletedMessages=useRef(new Set<string>());
+  const singleRetry=useRef<{conversation:string;messageId:string;previousRequestId?:string;requestId:string}|null>(null);
   const group=state?.groups?.find(g=>g.id===conversation);
   const discussion=state?.discussions?.find(d=>d.conversationId===conversation);
   const discussionMode=group?.mode==="discussion";
@@ -42,13 +46,27 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
   const container=useRef<HTMLElement>(null),input=useRef<HTMLTextAreaElement>(null),scroll=useRef<HTMLDivElement>(null),followBottom=useRef(true);
   const identity=useRef<{id:string;conversation:string;content:string;choice:string}|null>(null),sendLock=useRef(false);
   const generation=useRef(0),currentConversation=useRef(conversation),refreshQueued=useRef(false);
-  const messages=state?.messages??emptyMessages,running=messages.find(m=>m.status==="streaming");
+  const messages=state?.messages??emptyMessages;
+  const messageIds=new Set(messages.map(message=>message.id));
+  const activeHere=state?.active?.conversationId===conversation&&state.active.status==="streaming"&&!messageIds.has(state.active.id)?state.active:undefined;
+  const running=messages.find(m=>m.status==="streaming")??activeHere;
   useChatViewport(container,input,scroll,followBottom);
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(deletedCandidate?:string)=>{
     const target=conversation,version=generation.current;
-    const value=await evaCall<EvaState>(accountId,"ai.getState",{conversationId:target});
+    const attempt=singleRetry.current?.conversation===target?singleRetry.current:null;
+    const trackedMessageId=deletedCandidate??attempt?.messageId;
+    const value=await evaCall<EvaState>(accountId,"ai.getState",{conversationId:target,...(trackedMessageId?{trackedMessageId}:{})});
     if(version!==generation.current||currentConversation.current!==target)return value;
-    setState(current=>{const first=value.messages[0]?.ordinal;const retained=current?.messages.some(m=>m.ordinal!==undefined&&first!==undefined&&m.ordinal<first);return {...value,messages:mergeEvaMessages(current?.messages??[],value.messages),messagePage:retained&&current?.messagePage?{...value.messagePage!,hasMore:current.messagePage.hasMore,beforeOrdinal:current.messagePage.beforeOrdinal}:value.messagePage};});
+    if(deletedCandidate&&!value.trackedMessage&&!value.messages.some(m=>m.id===deletedCandidate))deletedMessages.current.add(deletedCandidate);
+    setState(current=>{
+      const first=value.messages[0]?.ordinal;
+      const retained=current?.messages.some(m=>m.ordinal!==undefined&&first!==undefined&&m.ordinal<first);
+      const incoming=value.trackedMessage?[...value.messages,value.trackedMessage]:value.messages;
+      const merged=mergeEvaMessages(current?.messages??[],incoming).filter(m=>!deletedMessages.current.has(m.id));
+      return {...value,messages:merged,messagePage:retained&&current?.messagePage?{...value.messagePage!,hasMore:current.messagePage.hasMore,beforeOrdinal:current.messagePage.beforeOrdinal}:value.messagePage};
+    });
+    const reply=value.trackedMessage??value.messages.find(m=>m.id===attempt?.messageId);
+    if(attempt&&singleRetry.current===attempt&&reply?.requestId===attempt.requestId&&reply.status!=="streaming")singleRetry.current=null;
     return value;
   },[accountId,conversation]);
   useEffect(()=>{
@@ -63,7 +81,8 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
       if(detail?.accountId!==accountId)return;
       if(detail.eventType==="configuration"){schedule();return;}
       if(detail.conversationId!==conversation){if(detail.eventType==="terminal"||detail.seq===1)schedule();return;}
-      setState(current=>{if(!current)return current;const next=acceptEvaEvent(detail,accountId,conversation,current.messages);return next?{...current,messages:next}:current;});
+      const retryRequestId=singleRetry.current?.requestId;
+      setState(current=>{if(!current)return current;const next=acceptEvaEvent(detail,accountId,conversation,current.messages,retryRequestId);return next?{...current,messages:next}:current;});
       // Reconcile terminal / initial events and gaps from remounts against durable state.
       if(detail.seq===1||detail.eventType==="terminal")schedule();
     };
@@ -71,13 +90,12 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
     return()=>{alive=false;generation.current+=1;clearTimeout(timer);refreshQueued.current=false;window.removeEventListener(nativeEvaEvent,receive);window.removeEventListener("evaorbit:native-active",load);window.removeEventListener("focus",load);};
   },[accountId,conversation,refresh]);
   useLayoutEffect(()=>{if(followBottom.current&&scroll.current)scroll.current.scrollTop=scroll.current.scrollHeight;},[messages,conversation,appearance.segmentReplies]);
-  useLayoutEffect(()=>{const element=input.current;if(element){element.style.height="auto";element.style.height=`${Math.min(element.scrollHeight,160)}px`;}},[draft]);
   const boundModel=Boolean(state?.conversationModels?.some(c=>c.personaId===persona.id)||"providerId" in persona&&persona.providerId&&persona.modelId);
   const selected=state?evaModelBinding(state,persona):undefined;
   const activeElsewhere=state?.active??state?.activeMessages?.find(m=>m.conversationId!==conversation)??state?.discussions?.find(d=>d.conversationId!==conversation&&(d.status==="running"||d.status==="summarizing"));
   const inspected=messages.find(m=>m.id===usageId);
   function select(id?:string){
-    const next=id??crypto.randomUUID();setOlderLoading(false);setHistory(false);setDraft("");setError("");identity.current=null;followBottom.current=true;
+    const next=id??crypto.randomUUID();setOlderLoading(false);setHistory(false);setDraft("");setError("");setUseOrbit(false);identity.current=null;followBottom.current=true;
     if(next===currentConversation.current){void refresh().catch(reason=>setError(reason.message));return;}
     generation.current+=1;currentConversation.current=next;setConversation(next);setState(null);
   }
@@ -87,20 +105,22 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
     const before=state?.messagePage?.beforeOrdinal;if(!before||olderLoading)return;
     const version=generation.current,target=conversation,pane=scroll.current,height=pane?.scrollHeight??0,top=pane?.scrollTop??0;
     setOlderLoading(true);followBottom.current=false;
-    try{const page=await evaCall<MessagePage>(accountId,"ai.messagePage",{conversationId:target,beforeOrdinal:before,limit:100});if(version!==generation.current||target!==currentConversation.current)return;setState(current=>current?{...current,messages:mergeEvaMessages(page.messages,current.messages),messagePage:page}:current);requestAnimationFrame(()=>{if(pane&&target===currentConversation.current)pane.scrollTop=top+pane.scrollHeight-height;});}
+    try{const page=await evaCall<MessagePage>(accountId,"ai.messagePage",{conversationId:target,beforeOrdinal:before,limit:100});if(version!==generation.current||target!==currentConversation.current)return;setState(current=>current?{...current,messages:mergeEvaMessages(page.messages,current.messages).filter(m=>!deletedMessages.current.has(m.id)),messagePage:page}:current);requestAnimationFrame(()=>{if(pane&&target===currentConversation.current)pane.scrollTop=top+pane.scrollHeight-height;});}
     catch(reason){if(version===generation.current)setError(reason instanceof Error?reason.message:String(reason));}finally{if(version===generation.current)setOlderLoading(false);}
   }
   async function send(){
-    if(sendLock.current||discussionLock.current||(!discussionMode&&running)||!draft.trim()||(!group&&!selected))return;
+    if(sendLock.current||messageActionLock.current||discussionLock.current||(!discussionMode&&running)||!draft.trim()||(!group&&!selected))return;
     sendLock.current=true;setSubmitting(true);setError("");
     const content=draft.trim(),target=conversation;
+    const withOrbit=!group&&orbitSupported&&useOrbit;
+    const choice=group?.id??selected!.key+(withOrbit?":orbit":"");
     const previous=identity.current;
-    const submission=previous?.content===content&&previous.conversation===target&&previous.choice===(group?group.id:selected!.key)?previous:{id:crypto.randomUUID(),conversation:target,content,choice:group?group.id:selected!.key};
+    const submission=previous?.content===content&&previous.conversation===target&&previous.choice===choice?previous:{id:crypto.randomUUID(),conversation:target,content,choice};
     identity.current=submission;
     try{
       if(group)await evaCall(accountId,discussionMode&&discussion&&["running","paused","interrupted"].includes(discussion.status)?"ai.discussionIntervene":"ai.groupSend",{conversationId:target,requestId:submission.id,content});
-      else await evaCall(accountId,"ai.send",{conversationId:target,requestId:submission.id,providerId:selected!.provider.id,modelId:selected!.model.id,personaId:persona.id,content});
-      setDraft("");identity.current=null;followBottom.current=true;await refresh();
+      else await evaCall(accountId,withOrbit?nativeOrbitSendMethod:"ai.send",{conversationId:target,requestId:submission.id,providerId:selected!.provider.id,modelId:selected!.model.id,personaId:persona.id,content,...(withOrbit?{english}:{})});
+      setDraft("");setUseOrbit(false);identity.current=null;followBottom.current=true;await refresh();
     }catch(reason){
       setError(reason instanceof Error?reason.message:String(reason));
       // Only read after uncertain delivery. Never repeat a possibly billed model call automatically.
@@ -108,6 +128,41 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
     }finally{setSubmitting(false);sendLock.current=false;}
   }
   async function stop(){if(!running||stopping)return;setStopping(true);try{if(group)await evaCall(accountId,"ai.groupCancel",{conversationId:conversation});else await evaCall(accountId,"ai.cancel",{requestId:running.requestId});await refresh();}catch(reason){setError(reason instanceof Error?reason.message:String(reason));}finally{setStopping(false);}}
+  async function actOnMessage(message:EvaMessage,kind:"retry"|"delete"){
+    if(group||!singleMessageSupported||messageActionLock.current||sendLock.current||running)return;
+    if(kind==="delete"&&!window.confirm(t("Delete this message from this conversation?","从这段对话中删除这条消息？")))return;
+    messageActionLock.current=true;
+    setMessageAction({id:message.id,kind});
+    setError("");
+    let requestId:string|undefined;
+    try{
+      const target={conversationId:conversation,messageId:message.id};
+      if(kind==="retry"){
+        const previous=singleRetry.current;
+        const attempt=previous?.messageId===message.id&&previous.previousRequestId===message.requestId
+          ?previous:{conversation,messageId:message.id,previousRequestId:message.requestId,requestId:crypto.randomUUID()};
+        singleRetry.current=attempt;
+        requestId=attempt.requestId;
+        await evaCall(accountId,"ai.retryMessage",{...target,requestId,...(attempt.previousRequestId?{previousRequestId:attempt.previousRequestId}:{})});
+      }else{
+        await evaCall(accountId,"ai.deleteMessage",target);
+        deletedMessages.current.add(message.id);
+        if(currentConversation.current===conversation)setState(current=>current?{...current,messages:current.messages.filter(m=>m.id!==message.id)}:current);
+      }
+      await refresh();
+    }catch(reason){
+      let recovered=false;
+      try{
+        const saved=await refresh(kind==="delete"?message.id:undefined);
+        const persisted=saved.trackedMessage??saved.messages.find(item=>item.id===message.id);
+        recovered=kind==="delete"?!persisted:requestId!==undefined&&persisted?.requestId===requestId;
+      }catch{/* Keep the attempt identity for uncertain delivery. */}
+      if(!recovered&&currentConversation.current===conversation)setError(reason instanceof Error?reason.message:String(reason));
+    }finally{
+      messageActionLock.current=false;
+      setMessageAction(null);
+    }
+  }
   async function control(message:EvaMessage,regenerate=false){
     if(controlLock.current.has(message.id)||regenerate&&discussing)return;
     controlLock.current.add(message.id);setControlling([...controlLock.current]);setError("");
@@ -156,22 +211,29 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
           const tail=!samePersona(next),first=!samePersona(previous);
           const avatar=message.role==="assistant"?(message.personaAvatar??(message.personaId==="sebastian"||!message.personaId?appearance.images.assistant:undefined)):hasContent?appearance.images.user:undefined;
           const showAvatar=appearance.avatarPlacement==="all"||appearance.avatarPlacement==="first"&&first||appearance.avatarPlacement==="last"&&tail;
+          const canAct=!group&&singleMessageSupported&&message.status!=="streaming";
+          const promptMayBeEarlier=index===0&&state?.messagePage?.hasMore;
+          const hasPrompt=message.replyToMessageId?messageIds.has(message.replyToMessageId)||promptMayBeEarlier:previous?.role==="user"||promptMayBeEarlier;
+          const failedReply=!group&&message.role==="assistant"&&["failed","interrupted"].includes(message.status);
+          const pending=messageAction?.id===message.id?messageAction.kind:null;
+          const actionDisabled=Boolean(running||submitting||messageAction);
+          const deleteAction=canAct&&<button type="button" className={`text-button ${styles.messageAction}`} disabled={actionDisabled} aria-label={t("Delete message","删除消息")} title={t("Delete message","删除消息")} onClick={()=>void actOnMessage(message,"delete")}>{pending==="delete"?<span role="status">{t("Deleting…","正在删除…")}</span>:<Icon name="trash"/>}</button>;
           return <article className={styles.message} data-role={message.role} data-group-end={tail} data-avatar={message.role==="user"&&!group&&Boolean(avatar)} data-group-persona={group&&message.role==="assistant"?group.participants.findIndex(p=>p.id===message.personaId)%2:undefined} data-message-id={message.id} data-status={message.status} key={message.id}>
             {message.role==="user"?<>
-              {!group&&avatar&&tail&&(
-                // eslint-disable-next-line @next/next/no-img-element -- Device-local resized user avatar.
-                <img className={styles.messageAvatar} src={avatar} alt="" width={28} height={28}/>
-              )}
-              {hasContent&&<ParlorMessageBody message={message}/>}
-              <footer><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString(english?"en-US":"zh-CN",{hour:"2-digit",minute:"2-digit"})}</time></footer>
+              {hasContent&&<ParlorMessageBody message={message} avatar={!group?avatar:undefined} avatarPlacement={appearance.avatarPlacement} showAvatar={showAvatar}/>}
+              <footer className={styles.messageActions}><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString(english?"en-US":"zh-CN",{hour:"2-digit",minute:"2-digit"})}</time>{deleteAction}</footer>
               {message.error&&<ParlorErrorNotice inline error={message.error}/>}
-            </>:<ParlorAssistantLayout group={Boolean(group)} hasAvatar={!group&&Boolean(avatar)} header={group?<header className={parlor.speaker}><span className={parlor.avatar} style={avatar||message.personaAvatar?{backgroundImage:`url("${message.personaAvatar||avatar}")`}:undefined} aria-hidden="true">{!avatar&&!message.personaAvatar&&(message.personaName??"?").charAt(0)}</span><strong>{message.personaName}</strong><small>{message.purpose==="summary"?t("Summary","总结"):message.discussionRound?t(`Round ${message.discussionRound}`,`第 ${message.discussionRound} 轮`):message.model?.name}</small></header>:undefined} footer={<>
-              <div className={group?parlor.responseActions:undefined} data-parlor-response-actions={group||undefined}>
+            </>:<ParlorAssistantLayout group={Boolean(group)} hasAvatar={!group&&Boolean(avatar)} header={group?<header className={parlor.speaker}><span className={parlor.avatar} style={avatar||message.personaAvatar?{backgroundImage:`url("${message.personaAvatar||avatar}")`}:undefined} aria-hidden="true">{!avatar&&!message.personaAvatar&&(message.personaName??"?").charAt(0)}</span><strong>{message.personaName}</strong><small>{message.purpose==="summary"?t("Summary","总结"):message.discussionRound?t(`Round ${message.discussionRound}`,`第 ${message.discussionRound} 轮`):message.model?.name}</small></header>:undefined} footer={failedReply?
+              <ParlorFailedReply error={message.error} interrupted={message.status==="interrupted"} avatar={!hasContent&&showAvatar?avatar:undefined} disabled={actionDisabled} pending={pending}
+                onRetry={canAct&&hasPrompt?()=>void actOnMessage(message,"retry"):undefined} onDelete={canAct?()=>void actOnMessage(message,"delete"):undefined} onSettings={()=>onSettings("providers")}/>
+              :<>
+              <div className={group?parlor.responseActions:styles.messageActions} data-parlor-response-actions={group||undefined}>
               {group&&message.status==="streaming"?<span className={parlor.meta} role="status" data-parlor-waiting={!hasContent||undefined}><span>{message.model?.name??t("Unknown model","模型未知")}</span><span aria-hidden="true">·</span><span>{t("Generating","正在生成")}</span></span>:(hasContent||group)&&message.status!=="streaming"&&<button className={parlor.meta} onClick={()=>setUsageId(message.id)} aria-label={t("Response usage details","回答用量详情")}>
                 <span>{message.model?.name??t("Unknown model","模型未知")}</span><span aria-hidden="true">·</span>
                 <span>{message.usage?.inputTokens!==undefined&&message.usage.outputTokens!==undefined?`${(message.usage.inputTokens+message.usage.outputTokens).toLocaleString(english?"en-US":"zh-CN")} tokens`:t("Usage unknown","用量未知")}</span><span aria-hidden="true">·</span>
                 <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString(english?"en-US":"zh-CN",{hour:"2-digit",minute:"2-digit"})}</time>
               </button>}
+              {deleteAction}
               {group&&message.role==="assistant"&&<div className={parlor.generationControls}>{message.status==="streaming"?<button className={`${parlor.meta} ${parlor.generationAction} ${parlor.stopAction}`} disabled={controlling.includes(message.id)} onClick={()=>void control(message)} aria-label={t(`Stop ${message.personaName}`,`停止 ${message.personaName}`)} title={t("Stop","停止")}><svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg></button>:<button className={`${parlor.meta} ${parlor.generationAction}`} disabled={submitting||discussing||controlling.includes(message.id)||messages.some(m=>m.supersedesId===message.id||m.personaId===message.personaId&&m.status==="streaming")} onClick={()=>void control(message,true)} aria-label={t(`Regenerate ${message.personaName}`,`重新生成 ${message.personaName}`)} title={t("Regenerate","重新生成")}><Refresh className="icon" weight="Outline" aria-hidden="true"/></button>}</div>}
               </div>
               {((!group&&message.status==="streaming"&&!hasContent)||!["streaming","done"].includes(message.status))&&<div className={parlor.status} data-parlor-waiting={message.status==="streaming"||undefined} role="status">{message.status==="streaming"?t("Thinking…","思考中…"):message.status==="cancelled"?t(hasContent?"Stopped · partial text kept":"Stopped",hasContent?"已停止 · 已保留部分内容":"已停止"):message.status==="interrupted"?t(hasContent?"Interrupted · partial text kept":"Interrupted",hasContent?"已中断 · 已保留部分内容":"已中断"):t("Response failed","回答未完成")}</div>}
@@ -200,7 +262,11 @@ export function NativeEvaChat({accountId,back,initialConversationId,onSettings}:
         </div>}
         {discussion?.error&&<ParlorErrorNotice inline error={discussion.error}/>}
         {discussionMode&&!discussionSupported&&<p className={styles.notice}>{t("Update Host for Discussion","更新 Host 后使用 Discussion")}</p>}
-        <ChatComposer inputRef={input} draft={draft} english={english} placeholder={discussionMode&&discussing?t("Guide the discussion…","插话或引导讨论……"):t("Say something…","说点什么……")} disabled={state?.conversation?.ownership==="unresolved"||submitting||discussionBusy||!state||discussionMode&&!discussionSupported||discussion?.status==="summarizing"} stop={!discussionMode&&Boolean(running)} stopLabel={stopping?t("Stopping…","正在停止…"):group?t("Stop all","停止全部"):t("Stop response","停止生成")} buttonDisabled={!discussionMode&&running?stopping:state?.conversation?.ownership==="unresolved"||submitting||discussionBusy||discussionMode&&!discussionSupported||discussion?.status==="summarizing"||!draft.trim()||(!group&&!(selected?.provider.connectionType==="subscription"||selected?.provider.hasKey))||!state} onDraftChange={setDraft} onSend={()=>void send()} onStop={()=>void stop()}/>
+        {!group&&orbitSupported&&state&&<div className={parlor.conversationTools}>
+          <button type="button" className="text-button" aria-pressed={useOrbit} disabled={submitting||Boolean(running)} onClick={()=>setUseOrbit(value=>!value)}><Icon name={useOrbit?"check":"ai"}/>{t("Use EvaOrbit","使用 EvaOrbit")}</button>
+          {useOrbit&&<small>{t("Lookup results go to the selected model. Saving requires confirmation.","查询结果会发给当前模型，保存前需确认。")}</small>}
+        </div>}
+        <ChatComposer inputRef={input} draft={draft} english={english} placeholder={discussionMode&&discussing?t("Guide the discussion…","插话或引导讨论……"):t("Say something…","说点什么……")} disabled={state?.conversation?.ownership==="unresolved"||submitting||discussionBusy||!state||discussionMode&&!discussionSupported||discussion?.status==="summarizing"} stop={!discussionMode&&Boolean(running)} stopLabel={stopping?t("Stopping…","正在停止…"):group?t("Stop all","停止全部"):t("Stop response","停止生成")} buttonDisabled={!discussionMode&&running?stopping:state?.conversation?.ownership==="unresolved"||submitting||Boolean(messageAction)||discussionBusy||discussionMode&&!discussionSupported||discussion?.status==="summarizing"||!draft.trim()||(!group&&!(selected?.provider.connectionType==="subscription"||selected?.provider.hasKey))||!state} onDraftChange={setDraft} onSend={()=>void send()} onStop={()=>void stop()}/>
       </div>
       {history&&<FormSheet title={t("Conversations on this device","本机历史对话")} onClose={()=>setHistory(false)}><div className={styles.history}>{state?.conversations.map(c=><div key={c.id}><button onClick={()=>select(c.id)}>{c.title}</button><button className="text-button" disabled={state?.active?.conversationId===c.id||state?.activeMessages?.some(m=>m.conversationId===c.id)||state?.discussions?.some(d=>d.conversationId===c.id&&(d.status==="running"||d.status==="summarizing"))} onClick={async()=>{if(!window.confirm(t("Delete this local conversation and memories derived from it?","删除这段本机对话及其衍生记忆？")))return;try{await evaCall(accountId,"ai.deleteConversation",{conversationId:c.id});if(c.id===conversation)select();else await refresh();}catch(reason){setError(reason instanceof Error?reason.message:String(reason));}}}>{t("Delete","删除")}</button></div>)}{!state?.conversations.length&&<p>{t("No conversations yet.","还没有对话。")}</p>}<p><small>{t("Recent 200","最近 200 段")}</small></p></div></FormSheet>}
       {personaOpen&&<FormSheet title={t("Personas","人格")} onClose={()=>setPersonaOpen(false)}><div className={parlor.personaChoices} data-persona-choices>{(state?.personas??(state?.persona?[state.persona]:[])).map(p=><button key={p.id} className={parlor.personaOption} onClick={()=>{if(state?.conversation?.personaId&&state.conversation.personaId!==p.id)select();setSelectedPersona(p.id);localStorage.setItem(`eo:parlor:persona:${accountId}`,p.id);setPersonaOpen(false);}}><span className={parlor.avatar} aria-hidden="true" style={p.avatarDataURL?{backgroundImage:`url("${p.avatarDataURL}")`}:p.id==="sebastian"&&appearance.images.assistant?{backgroundImage:`url("${appearance.images.assistant}")`}:undefined}>{!p.avatarDataURL&&!(p.id==="sebastian"&&appearance.images.assistant)&&p.name.charAt(0)}</span><span><strong>{p.name}</strong><small>{state?evaModelBinding(state,p)?.model.name??t("Model unavailable","模型不可用"):""}</small></span>{persona.id===p.id&&<Icon name="check"/>}</button>)}<button className="text-button" onClick={()=>{setPersonaOpen(false);onSettings("personas");}}>{t("Manage persona","管理人格")}</button></div></FormSheet>}

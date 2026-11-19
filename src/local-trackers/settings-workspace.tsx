@@ -16,7 +16,6 @@ import { AppleHealthSection } from "@/app/health/apple-health-section";
 import { NativeNotificationControl } from "@/components/native-notification-control";
 import { BackupExportCard } from "@/app/settings/data-backup/backup-export-card";
 import { LocalBackAction } from "./navigation-header";
-import { DevelopmentDetails } from "@/components/development-details";
 import { ErrorNotice } from "@/components/error-notice";
 import { PageHeading } from "@/components/page-heading";
 import { PageLoading } from "@/components/page-loading";
@@ -49,7 +48,7 @@ export function SettingsWorkspace({ account, platform, onSignIn, onSignOut }: { 
   const back = <LocalBackAction onBack={section ? () => navigate("") : undefined} />;
   const web = (path: string) => <a className="button secondary" href={`https://eva-orbit.vercel.app${path}`} target="_blank" rel="noreferrer">{english ? "Manage on Web" : "在网页版管理"}</a>;
   const detail = (title: string, children: ReactNode) => <div className="page settings-detail-page local-settings">{back}<PageHeading eyebrow="" title={title} />{children}</div>;
-  const nativeNote = <DevelopmentDetails title={english ? "Development version" : "开发版说明"}><p>{english ? "Native integration is enabled only for the explicitly authorized primary account. Test accounts show device status without changing Apple data. Existing data and queues are retained." : "原生接入仅对服务端明确启用的主账号开放。测试账号可查看设备状态，不修改 Apple 数据。保留已有数据和队列。"}</p></DevelopmentDetails>;
+  const nativeNote = !nativeEnabled&&<p className="muted">{english ? "Connect with the primary account to edit these settings. Test accounts can view device status." : "请联网并使用主账号编辑这些设置。测试账号可查看设备状态。"}</p>;
 
   if (section === "/settings/data-sync") return <>{back}<LocalSyncManager key={account.accountId} account={account} platform={platform}/></>;
   if (section === "/settings/app-appearance") return detail(english ? "App & Appearance" : "应用与外观", <div className="provider-card"><AppearanceSettings localOnly /></div>);

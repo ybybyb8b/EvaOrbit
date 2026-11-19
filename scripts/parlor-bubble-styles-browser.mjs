@@ -22,8 +22,8 @@ try{for(const [label,width,height] of [['mobile',402,874],['desktop',1280,900]])
  await page.screenshot({path:`${output}/${label}-vintage.png`,animations:'disabled'});
  await settings();await page.getByRole('combobox',{name:'气泡样式',exact:true}).selectOption('frosted');await page.screenshot({path:`${output}/${label}-settings.png`,animations:'disabled'});await back();
  assert.equal(await chat.getAttribute('data-bubble-style'),'frosted');
- const avatarAlignment=await page.locator('[data-parlor-bubble-avatar]').evaluate(el=>{const avatar=el.getBoundingClientRect(),bubble=el.parentElement.querySelector('[data-chat-bubble]').getBoundingClientRect();return Math.abs(avatar.top+avatar.height/2-bubble.top-bubble.height/2);});
- assert(avatarAlignment<=1,'Frosted bubble and avatar centers must align');
+ const avatarAlignment=await page.locator('[data-parlor-bubble-avatar]').evaluate(el=>{const avatar=el.getBoundingClientRect(),bubble=el.parentElement.querySelector('[data-chat-bubble]').getBoundingClientRect();return Math.abs(avatar.top-bubble.top-8);});
+ assert(avatarAlignment<=1,'Frosted avatar must align to the first line of its bubble');
  const glass=await page.locator('[data-chat-bubble]').first().evaluate(el=>{const s=getComputedStyle(el);return {filter:s.backdropFilter,background:s.backgroundColor,radius:parseFloat(s.borderTopLeftRadius)};});
  assert(glass.filter.includes('14px'));assert(glass.background.includes('0.7'));assert(glass.radius>=42);
  await page.screenshot({path:`${output}/${label}-frosted-light.png`,animations:'disabled'});

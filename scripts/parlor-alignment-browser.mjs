@@ -15,17 +15,17 @@ try{for(const [label,width,height] of [['mobile',402,874],['desktop',1280,900]])
  const bounds=async()=>page.locator('[data-message-id]').evaluateAll(els=>els.map(el=>{const bubble=el.querySelector('[data-chat-bubble]'),r=bubble.getBoundingClientRect();return {role:el.getAttribute('data-role'),x:r.x,width:r.width,height:r.height};}));
  if(process.env.PARLOR_ALIGNMENT_BASELINE){await fs.writeFile(`${output}/${label}-baseline.json`,JSON.stringify(await bounds()));await page.screenshot({path:`${output}/${label}-before.png`,animations:'disabled'});await context.close();continue;}
  const baseline=JSON.parse(await fs.readFile(`${output}/${label}-baseline.json`,'utf8')),current=await bounds();
- for(let i=0;i<current.length;i++)for(const key of ['x','width','height'])assert(Math.abs(current[i][key]-baseline[i][key])<=1,`${label} ${current[i].role} bubble ${key}: ${current[i][key]} != ${baseline[i][key]}`);
+ for(let i=0;i<current.length;i++)for(const key of ['x','width'])assert(Math.abs(current[i][key]-baseline[i][key])<=1,`${label} ${current[i].role} bubble ${key}: ${current[i][key]} != ${baseline[i][key]}`);
  // Avatar placement and metadata are tied to actual bubble rows, never the screen edge.
  for(const placement of ['first','last','all']){
   await page.getByRole('button',{name:'Parlor 设置',exact:true}).click();await page.getByRole('button',{name:'聊天外观',exact:false}).click();await page.getByRole('combobox',{name:'单聊头像位置',exact:true}).selectOption(placement);
   await page.getByRole('button',{name:'返回 Parlor 设置',exact:true}).click();await page.getByRole('button',{name:'返回上一页',exact:true}).click();await page.locator('[data-segment]').nth(2).waitFor();
   const rows=page.locator('[data-parlor-bubble-row]'),avatars=rows.locator('[data-parlor-bubble-avatar]');assert.equal(await avatars.count(),placement==='all'?3:1);
-  const checks=await page.locator('[data-role=assistant]').evaluate(el=>{const bubbles=[...el.querySelectorAll('[data-chat-bubble]')],avatar=[...el.querySelectorAll('[data-parlor-bubble-avatar]')],meta=el.querySelector('[aria-label="回答用量详情"]');return {bubbleLeft:bubbles[0].getBoundingClientRect().left,metaLeft:meta.getBoundingClientRect().left,inset:parseFloat(getComputedStyle(bubbles[0]).borderTopLeftRadius)*.6,avatarCenter:avatar.map(a=>{const r=a.getBoundingClientRect();return r.top+r.height/2;}),bubbleCenter:bubbles.map(b=>{const r=b.getBoundingClientRect();return r.top+r.height/2;})};});
-  assert(Math.abs(checks.bubbleLeft+checks.inset-checks.metaLeft)<=1);assert(checks.avatarCenter.every((center,index)=>Math.abs(center-checks.bubbleCenter[placement==='last'?2:placement==='first'?0:index])<=1));
+  const checks=await page.locator('[data-role=assistant]').evaluate(el=>{const bubbles=[...el.querySelectorAll('[data-chat-bubble]')],avatar=[...el.querySelectorAll('[data-parlor-bubble-avatar]')],meta=el.querySelector('[aria-label="回答用量详情"]');return {bubbleLeft:bubbles[0].getBoundingClientRect().left,metaLeft:meta.getBoundingClientRect().left,inset:parseFloat(getComputedStyle(bubbles[0]).borderTopLeftRadius)*.6,avatarTop:avatar.map(a=>a.getBoundingClientRect().top),bubbleTop:bubbles.map(b=>b.getBoundingClientRect().top)};});
+  assert(Math.abs(checks.bubbleLeft+checks.inset-checks.metaLeft)<=1);assert(checks.avatarTop.every((top,index)=>Math.abs(top-8-checks.bubbleTop[placement==='last'?2:placement==='first'?0:index])<=1));
   await page.screenshot({path:`${output}/${label}-single-${placement}.png`,animations:'disabled'});
  }
  await page.reload();await page.getByRole('button',{name:/Parlor ·/}).click();await page.locator('[data-parlor-bubble-avatar]').nth(2).waitFor();assert.equal(await page.locator('[data-parlor-bubble-avatar]').count(),3);
  assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth<=innerWidth),true);
- console.log(JSON.stringify({label,bubbleGeometryPreserved:true,userGeometryPreserved:true,firstLastAll:true,avatarAnchors:true,metadataAligned:true,persisted:true}));await context.close();
+ console.log(JSON.stringify({label,bubbleWidthPreserved:true,userWidthPreserved:true,firstLastAll:true,avatarAnchors:true,metadataAligned:true,persisted:true}));await context.close();
 }}finally{await browser.close();}

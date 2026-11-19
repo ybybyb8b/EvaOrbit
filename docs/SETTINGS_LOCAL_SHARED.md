@@ -1,5 +1,11 @@
 # Settings 共享页面
 
+## 主账户原生设置
+
+健康、Apple 日历与提醒事项、通知使用现有 `native.invoke` 和 `native.api`。主账户明确开启 `EVAORBIT_LOCAL_ONLINE_ENABLED=true` 后可编辑这三个入口，`EVAORBIT_LOCAL_NATIVE_ENABLED=false` 可暂停原生权限。测试账号继续只看设备状态，系统权限由用户按原有 iOS 流程授予。此规则由部署后的 session 响应生效。
+
+Parlor 单聊的「使用 EvaOrbit」与系统设置分开授权。模型选择的操作限于任务、EvaOrbit 日程、当前人格本地记忆查询，以及经手机明确确认的任务和收件箱新增。模型收到回答所需的查询结果；它不获取账户 Cookie、系统权限或设置写入能力。
+
 开发版直接复用 Web 的共享设置目录，包含 Timeline 关联规则。页面内部只向全局 Header 注册返回动作，不增加第二个返回/设置按钮。保留英语/August 视觉基准、主题和字号体系。账户、Tracker 暂停开关保留；技术说明折叠。
 
 Timeline 管理沿用既有配置通道，增加精确 GET/PUT `/api/timeline-association`，账户、generation、无缓存／队列／重试边界不变。旧 IPA 拒绝该路径，管理需新包或 Web；Home 沿用服务端快照展示结果。见 [关联规则契约](TIMELINE_ASSOCIATION.md)。
