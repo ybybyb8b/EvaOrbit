@@ -1393,7 +1393,8 @@ export interface RelationEventParty {
   paidAmountMinor: number | null;
 }
 
-export interface RelationEventItem { id: number; label: string; amountMinor: number; sortOrder: number }
+export type RelationGiftDirection = "out" | "in";
+export interface RelationEventItem { id: number; label: string; amountMinor: number | null; sortOrder: number }
 export interface RelationEventFlow {
   id: number;
   fromPartyId: number;
@@ -1407,6 +1408,7 @@ export interface RelationEventFlow {
 export interface RelationEvent {
   id: number;
   eventType: RelationEventType;
+  giftDirection?: RelationGiftDirection | null;
   title: string;
   note: string | null;
   occurredAt: string;

@@ -1,11 +1,12 @@
 "use client";
-import {useEffect,useRef,useState,type ReactNode} from "react";
+import {useEffect,useState,type ReactNode} from "react";
 import {evaCall,evaIsBusy,type EvaState,type ParlorPersona} from "@/lib/native-eva";
 import {useLocale} from "./locale-controller";
 import {useNativeEva} from "./native-eva-context";
 import {NativeEvaSettings} from "./native-eva-settings";
 import {ParlorErrorNotice} from "./parlor-error-notice";
 import {Icon} from "./icons";
+import {ImageUploadField} from "./image-upload-field";
 import {ChevronRight,ArrowLeft2} from "reicon-react";
 import {showActionToast} from "./action-toast";
 import styles from "./parlor.module.css";
@@ -66,14 +67,34 @@ function PersonaEditor({accountId,initial,providers,busyRequest}:{accountId:stri
   const [persona,setPersona]=useState(initial),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const appearance=useParlorAppearance(accountId);
   const [avatarOpen,setAvatarOpen]=useState(false);
-  const avatarInput=useRef<HTMLInputElement>(null);
   const {groupSupported}=useNativeEva();
+  const ownAvatar=groupSupported&&persona.id!=="sebastian";
+  const [avatarError,setAvatarError]=useState("");
   const binding=persona.providerId&&persona.modelId?JSON.stringify([persona.providerId,persona.modelId]):"";
   const availableBindings=providers.filter(p=>p.enabled).flatMap(p=>p.models.map(m=>({key:JSON.stringify([p.id,m.id]),name:`${p.name} · ${m.name}`})));
+  async function chooseAvatar(file:File){
+    setBusy(true);
+    setAvatarError("");
+    try{
+      const {prepareParlorAppearanceImage}=await import("@/lib/parlor-appearance");
+      const blob=await prepareParlorAppearanceImage(file,"assistant");
+      const data=await new Promise<string>((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(String(reader.result));
+        reader.onerror=()=>reject(new Error(t("Image could not be read","无法读取图片")));
+        reader.readAsDataURL(blob);
+      });
+      if(data.length>256*1024)throw new Error(t("Choose a smaller image","请选择更小的图片"));
+      setPersona(current=>({...current,avatarDataURL:data}));
+    }catch(reason){setAvatarError(reason instanceof Error?reason.message:String(reason));}
+    finally{setBusy(false);}
+  }
   return <form className={styles.personaForm} data-no-translate onSubmit={async event=>{event.preventDefault();setBusy(true);setError("");try{await evaCall(accountId,"ai.savePersona",{persona});window.dispatchEvent(new CustomEvent("evaorbit:ai",{detail:{accountId,eventType:"configuration"}}));showActionToast(t("Persona saved on this device","人格已保存到本机"));}catch(reason){setError(reason instanceof Error?reason.message:String(reason));}finally{setBusy(false);}}}>
-    <div className={styles.personaProfile}><button type="button" className={styles.personaAvatar} aria-label={t("Change persona avatar","更换人格头像")} onClick={()=>{if(groupSupported&&persona.id!=="sebastian")avatarInput.current?.click();else setAvatarOpen(true);}}><span className={styles.avatar} style={(persona.avatarDataURL||(persona.id==="sebastian"?appearance.images.assistant:undefined))?{backgroundImage:`url("${persona.avatarDataURL||appearance.images.assistant}")`}:undefined} aria-hidden="true">{!(persona.avatarDataURL||(persona.id==="sebastian"&&appearance.images.assistant))&&persona.name.charAt(0)}</span><small>{t("Change avatar","更换头像")}</small></button><div><h2>{persona.name}</h2><p>{persona.chineseName} · {persona.nickname}</p></div></div>
+    <div className={styles.personaProfile}>{!ownAvatar&&<button type="button" className={styles.personaAvatar} aria-label={t("Change persona avatar","更换人格头像")} onClick={()=>setAvatarOpen(true)}><span className={styles.avatar} style={(persona.avatarDataURL||(persona.id==="sebastian"?appearance.images.assistant:undefined))?{backgroundImage:`url("${persona.avatarDataURL||appearance.images.assistant}")`}:undefined} aria-hidden="true">{!(persona.avatarDataURL||(persona.id==="sebastian"&&appearance.images.assistant))&&persona.name.charAt(0)}</span><small>{t("Change avatar","更换头像")}</small></button>}<div><h2>{persona.name}</h2><p>{persona.chineseName} · {persona.nickname}</p></div></div>
+    {ownAvatar&&<ImageUploadField title={t("Persona avatar","人格头像")} shape="round" icon="people" source={persona.avatarDataURL}
+      help={t("JPG, PNG or WebP","JPG、PNG 或 WebP")} disabled={busyRequest} busy={busy} error={avatarError} onSelect={file=>void chooseAvatar(file)}
+      onRemove={persona.avatarDataURL ? ()=>{setPersona(current=>({...current,avatarDataURL:undefined}));setAvatarError("");} : undefined}/>}
     {error&&<ParlorErrorNotice inline error={error}/>}
-    <input ref={avatarInput} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label={t("Persona avatar image","人格头像图片")} onChange={async event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value="";if(!file)return;setBusy(true);setError("");try{const {prepareParlorAppearanceImage}=await import("@/lib/parlor-appearance");const blob=await prepareParlorAppearanceImage(file,"assistant");const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error(t("Image could not be read","无法读取图片")));reader.readAsDataURL(blob);});if(data.length>256*1024)throw new Error(t("Choose a smaller image","请选择更小的图片"));setPersona(p=>({...p,avatarDataURL:data}));}catch(reason){setError(reason instanceof Error?reason.message:String(reason));}finally{setBusy(false);}}}/>
     {busyRequest&&<p>{t("Response in progress","正在生成回答")}</p>}
     <fieldset disabled={busy||busyRequest} className={styles.fields}>
       <label className="field"><span>{t("Name","名称")}</span><input value={persona.name} required maxLength={80} onChange={e=>setPersona({...persona,name:e.target.value})}/></label>

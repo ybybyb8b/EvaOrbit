@@ -7,6 +7,7 @@ import { ToastNotice } from "@/components/action-toast";
 import { FormEvent, useEffect, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ConversationAvatar } from "@/components/conversation-avatar";
+import { ImageUploadButton } from "@/components/image-upload-field";
 import Link from "next/link";
 import type { AiSettings, ApiError, AvatarType } from "@/lib/types";
 import { useLocale } from "@/components/locale-controller";
@@ -31,6 +32,7 @@ export function AiPreferences() {
   const [error, setError] = useState("");
   const [avatarVersion, setAvatarVersion] = useState(() => Date.now().toString());
   const [uploadingAvatar, setUploadingAvatar] = useState<"user" | "assistant" | null>(null);
+  const [avatarErrors, setAvatarErrors] = useState<Partial<Record<"user" | "assistant", string>>>({});
 
   useEffect(() => {
     fetch("/api/ai/settings").then(async (response) => {
@@ -51,8 +53,10 @@ export function AiPreferences() {
   }, [english]);
 
   async function uploadAvatar(subject: "user" | "assistant", file: File) {
-    if (file.size > 4 * 1024 * 1024) { setError(english ? "Avatar must be smaller than 4 MB" : "头像文件必须小于 4 MB"); return; }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setError(english ? "Use a JPG, PNG, or WebP image" : "头像只接受 JPG、PNG 或 WebP"); return; }
+    const fieldError = (message: string) => setAvatarErrors(current => ({ ...current, [subject]: message }));
+    fieldError("");
+    if (!file.size || file.size > 4 * 1024 * 1024) { fieldError(english ? "Avatar must be smaller than 4 MB" : "头像文件必须小于 4 MB"); return; }
+    if (file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) { fieldError(english ? "Use a JPG, PNG, or WebP image" : "头像只接受 JPG、PNG 或 WebP"); return; }
     setUploadingAvatar(subject); setError(""); setNotice("");
     try {
       const body = new FormData(); body.set("file", file);
@@ -62,7 +66,7 @@ export function AiPreferences() {
       if (subject === "user") setDraft((current) => ({ ...current, userAvatarType: "image", userAvatarValue: result.avatarValue ?? "" }));
       else setDraft((current) => ({ ...current, assistantAvatarType: "image", assistantAvatarValue: result.avatarValue ?? "" }));
       setAvatarVersion(Date.now().toString()); setNotice(english ? "Avatar updated." : "头像已经换上了。");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : english ? "Could not upload avatar" : "上传头像失败"); }
+    } catch (reason) { fieldError(reason instanceof Error && reason.message ? reason.message : english ? "Could not upload avatar" : "上传头像失败"); }
     finally { setUploadingAvatar(null); }
   }
 
@@ -97,8 +101,8 @@ export function AiPreferences() {
       <section className="conversation-appearance-settings">
         <div className="persona-heading"><span className="eyebrow">{english ? "CONVERSATION IDENTITY" : "对话身份"}</span><h2>{english ? "Names & avatars" : "名称与头像"}</h2></div>
         <div className="identity-editor-grid">
-          <IdentityEditor english={english} subject="user" label={english ? "My identity" : "我的身份"} name={draft.userDisplayName} avatarType={draft.userAvatarType} avatarValue={draft.userAvatarValue} uploading={uploadingAvatar === "user"} onName={(value) => setDraft({ ...draft, userDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, userAvatarType: "emoji", userAvatarValue: value })} onChoose={(type) => void chooseAvatar("user", type)} onUpload={(file) => void uploadAvatar("user", file)} />
-          <IdentityEditor english={english} subject="assistant" label={english ? "Eva's identity" : "Eva 的身份"} name={draft.assistantDisplayName} avatarType={draft.assistantAvatarType} avatarValue={draft.assistantAvatarValue} uploading={uploadingAvatar === "assistant"} onName={(value) => setDraft({ ...draft, assistantDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, assistantAvatarType: "emoji", assistantAvatarValue: value })} onChoose={(type) => void chooseAvatar("assistant", type)} onUpload={(file) => void uploadAvatar("assistant", file)} />
+          <IdentityEditor english={english} subject="user" label={english ? "My identity" : "我的身份"} name={draft.userDisplayName} avatarType={draft.userAvatarType} avatarValue={draft.userAvatarValue} uploading={uploadingAvatar === "user"} error={avatarErrors.user} onName={(value) => setDraft({ ...draft, userDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, userAvatarType: "emoji", userAvatarValue: value })} onChoose={(type) => void chooseAvatar("user", type)} onUpload={(file) => void uploadAvatar("user", file)} />
+          <IdentityEditor english={english} subject="assistant" label={english ? "Eva's identity" : "Eva 的身份"} name={draft.assistantDisplayName} avatarType={draft.assistantAvatarType} avatarValue={draft.assistantAvatarValue} uploading={uploadingAvatar === "assistant"} error={avatarErrors.assistant} onName={(value) => setDraft({ ...draft, assistantDisplayName: value })} onEmoji={(value) => setDraft({ ...draft, assistantAvatarType: "emoji", assistantAvatarValue: value })} onChoose={(type) => void chooseAvatar("assistant", type)} onUpload={(file) => void uploadAvatar("assistant", file)} />
         </div>
         <div className="appearance-toggles">
           <label><input role="switch" className="toggle-switch" type="checkbox" checked={draft.showUserName} onChange={(event) => setDraft({ ...draft, showUserName: event.target.checked })} /><span><strong>{english ? "Show my name" : "显示我的名称"}</strong><small>{english ? "Shown at the start of grouped messages" : "只在一组连续消息开头显示"}</small></span></label>
@@ -136,21 +140,22 @@ export function AiPreferences() {
   </div>;
 }
 
-function IdentityEditor({ english, subject, label, name, avatarType, avatarValue, uploading, onName, onEmoji, onChoose, onUpload }: {
-  english: boolean; subject: "user" | "assistant"; label: string; name: string; avatarType: AvatarType; avatarValue: string; uploading: boolean;
+function IdentityEditor({ english, subject, label, name, avatarType, avatarValue, uploading, error, onName, onEmoji, onChoose, onUpload }: {
+  english: boolean; subject: "user" | "assistant"; label: string; name: string; avatarType: AvatarType; avatarValue: string; uploading: boolean; error?: string;
   onName: (value: string) => void; onEmoji: (value: string) => void; onChoose: (type: "default" | "emoji") => void; onUpload: (file: File) => void;
 }) {
-  const inputId = `${subject}-avatar-upload`;
   return <section className="identity-editor">
     <div className="identity-editor-heading"><ConversationAvatar subject={subject} name={name} type={avatarType} value={avatarValue} /><div><span>{label}</span><strong className="user-content">{name || (english ? "Unnamed" : "未命名")}</strong></div></div>
     <label className="field"><span>{english ? subject === "user" ? "My name" : "Eva's name" : subject === "user" ? "我的称呼" : "Eva 的称呼"}</span><input required maxLength={40} value={name} onChange={(event) => onName(event.target.value)} /></label>
     <div className="avatar-choice" role="group" aria-label={english ? `${label} avatar type` : `${label}头像类型`}>
       <button type="button" className={avatarType === "default" ? "active" : ""} onClick={() => onChoose("default")}>{english ? "Default" : "恢复默认"}</button>
       <button type="button" className={avatarType === "emoji" ? "active" : ""} onClick={() => onChoose("emoji")}>Emoji</button>
-      <label className={avatarType === "image" ? "active" : ""} htmlFor={inputId}>{uploading ? english ? "Uploading…" : "上传中…" : english ? "Upload Image" : "上传图片"}</label>
-      <input id={inputId} className="avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
+      <ImageUploadButton label={english ? `Upload ${label} image` : `上传${label}图片`} pressed={avatarType === "image"} busy={uploading} onSelect={onUpload}>
+        {avatarType === "image" ? (english ? "Replace image" : "更换图片") : (english ? "Upload image" : "上传图片")}
+      </ImageUploadButton>
     </div>
     {avatarType === "emoji" && <label className="field emoji-field"><span>Emoji</span><input required maxLength={16} value={avatarValue} onChange={(event) => onEmoji(event.target.value)} placeholder="✨" /></label>}
     <small className="avatar-help">{english ? "JPG, PNG, or WebP. 4 MB maximum." : "JPG、PNG 或 WebP，最大 4 MB。"}</small>
+    {error && <ErrorNotice inline role="alert">{error}</ErrorNotice>}
   </section>;
 }

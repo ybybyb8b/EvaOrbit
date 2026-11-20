@@ -74,6 +74,7 @@ export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaLi
   const[favoriteOnly,setFavoriteOnly]=useRememberedState(`MediaView:${defaultSeries?.id??"all"}:favoriteOnly`, false),[rewatchedOnly,setRewatchedOnly]=useRememberedState(`MediaView:${defaultSeries?.id??"all"}:rewatchedOnly`, false);
   const[loading,setLoading]=useState(false),[showForm,setShowForm]=useState(false),[draft,setDraft]=useState<MediaDraft>(emptyDraft);
   const[coverFile,setCoverFile]=useState<File|null>(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[saving,setSaving]=useState(false);
+  const[coverRetryId,setCoverRetryId]=useState<number|null>(null);
   const[renaming,setRenaming]=useState(false),[seriesName,setSeriesName]=useState(defaultSeries?.name??"");
   const[hasMore,setHasMore]=useState(initial.length>=200);
   const filtered=Boolean(query.trim()||mediaType||status||rating||favoriteOnly||rewatchedOnly);
@@ -88,7 +89,60 @@ export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaLi
   const collection=useMemo(()=>!defaultSeries&&!filtered?groupMediaCollection(items,series):(defaultSeries?[...items].sort((a,b)=>(a.seasonNumber??9999)-(b.seasonNumber??9999)||a.id-b.id):items).map(item=>({kind:"item" as const,item})),[items,series,defaultSeries,filtered]);
 
   async function resolveSeries(){if(draft.seriesChoice!=="__new__")return draft.seriesChoice?Number(draft.seriesChoice):null;const response=await read("/api/media/series",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:draft.newSeries})});if(!response.ok)throw new Error(await responseError(response,"Could not create series."));const created=await response.json() as MediaSeries;setSeries(current=>[...current.filter(item=>item.id!==created.id),created].sort((a,b)=>a.name.localeCompare(b.name)));return created.id;}
-  async function submit(event:FormEvent){event.preventDefault();if(preview||saving)return;setSaving(true);setError("");setNotice("");try{const seriesId=await resolveSeries();const response=await read("/api/media",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({originalTitle:draft.originalTitle||null,translatedTitle:draft.translatedTitle||null,mediaType:draft.mediaType,status:draft.status,watchedDate:draft.status==="completed"?draft.watchedDate:null,rating:draft.rating||null,isFavorite:draft.isFavorite,note:draft.note||null,seriesId,seasonNumber:draft.seasonNumber||null,seasonTitle:draft.seasonTitle||null})});if(!response.ok){setError(await responseError(response,"Could not save media."));return;}const created=await response.json() as MediaDetail;let coverFailed=false;if(coverFile){const body=new FormData();body.set("file",coverFile);const upload=await read(`/api/media/${created.id}/cover`,{method:"POST",body});coverFailed=!upload.ok;}setShowForm(false);setDraft(emptyDraft());setCoverFile(null);setNotice(coverFailed?"Media added, but its cover could not be uploaded.":"Media added.");await load();const seriesResponse=await read("/api/media/series",{cache:"no-store"});if(seriesResponse.ok)setSeries(await seriesResponse.json() as MediaSeries[]);}catch(reason){setError(reason instanceof Error?reason.message:"Could not save media.");}finally{setSaving(false);}}
+  function closeCreate() {
+    setShowForm(false);
+    setCoverRetryId(null);
+    setCoverFile(null);
+    setError("");
+  }
+
+  async function submit(event:FormEvent) {
+    event.preventDefault();
+    if(preview||saving)return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      let mediaId=coverRetryId;
+      if(mediaId===null) {
+        if(!draft.originalTitle.trim()&&!draft.translatedTitle.trim()&&
+          !(draft.seriesChoice&&["tv","anime"].includes(draft.mediaType))) {
+          setError(language==="en"?"Enter an original or translated title.":"请填写原名或译名。");
+          return;
+        }
+        const seriesId=await resolveSeries();
+        const response=await read("/api/media",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            originalTitle:draft.originalTitle||null,translatedTitle:draft.translatedTitle||null,
+            mediaType:draft.mediaType,status:draft.status,watchedDate:draft.status==="completed"?draft.watchedDate:null,
+            rating:draft.rating||null,isFavorite:draft.isFavorite,note:draft.note||null,
+            seriesId,seasonNumber:draft.seasonNumber||null,seasonTitle:draft.seasonTitle||null,
+          }),
+        });
+        if(!response.ok){setError(await responseError(response,"Could not save media."));return;}
+        mediaId=((await response.json()) as MediaDetail).id;
+      }
+      if(coverFile) {
+        const body=new FormData();
+        body.set("file",coverFile);
+        const upload=await read(`/api/media/${mediaId}/cover`,{method:"POST",body}).catch(()=>null);
+        if(!upload?.ok) {
+          setCoverRetryId(mediaId);
+          await load();
+          return;
+        }
+      }
+      closeCreate();
+      setNotice(coverRetryId===null?"Media added.":language==="en"?"Cover uploaded.":"封面已上传。");
+      await load();
+    } catch(reason) {
+      setError(reason instanceof Error?reason.message:"Could not save media.");
+    } finally {
+      setSaving(false);
+    }
+  }
   function clearFilters(){setQuery("");setMediaType("");setStatus("");setRating("");setFavoriteOnly(false);setRewatchedOnly(false);}
 
   const filterControls=(<div className="media-secondary-filters" role="group" aria-label="Additional filters">
@@ -99,8 +153,18 @@ export function MediaView({initial,initialSeries,defaultSeries}:{initial:MediaLi
         </div>);
 
   return <div className="page media-page media-exhibit-page">
-    <PageHeader eyebrow="" title={defaultSeries?(series.find(item=>item.id===defaultSeries.id)?.name??defaultSeries.name):"Media"} translatePage={!defaultSeries} action={<PageLogAction label={addLabel} className="button primary" onClick={()=>{setDraft({...emptyDraft(),...(defaultSeries?{seriesChoice:String(defaultSeries.id),mediaType:seriesType,status:"planned" as const}:{})});setCoverFile(null);setError("");setShowForm(true);}}><Icon name="plus"/>{addLabel}</PageLogAction>}/>
-    {showForm&&<FormSheet title={addLabel} onClose={()=>setShowForm(false)} formId="media-record-form" submitLabel={addLabel} busy={saving} submitDisabled={preview}><form id="media-record-form" className="editor-card media-editor" onSubmit={submit}><MediaFields draft={draft} setDraft={setDraft} coverFile={coverFile} setCoverFile={setCoverFile} series={series}/>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>}
+    <PageHeader eyebrow="" title={defaultSeries?(series.find(item=>item.id===defaultSeries.id)?.name??defaultSeries.name):"Media"} translatePage={!defaultSeries} action={<PageLogAction label={addLabel} className="button primary" onClick={()=>{setDraft({...emptyDraft(),...(defaultSeries?{seriesChoice:String(defaultSeries.id),mediaType:seriesType}:{})});setCoverFile(null);setError("");setShowForm(true);}}><Icon name="plus"/>{addLabel}</PageLogAction>}/>
+    {showForm&&<FormSheet title={coverRetryId===null?addLabel:language==="en"?"Upload cover":"上传封面"} onClose={closeCreate}
+      formId="media-record-form" submitLabel={coverRetryId===null?addLabel:language==="en"?"Retry upload":"重试上传"}
+      cancelLabel={coverRetryId===null?"Cancel":language==="en"?"Close":"关闭"} dirty={coverRetryId===null?undefined:false}
+      busy={saving} submitDisabled={preview}>
+      <form id="media-record-form" className="editor-card media-editor" onSubmit={submit}>
+        {coverRetryId===null
+          ? <MediaFields draft={draft} setDraft={setDraft} coverFile={coverFile} setCoverFile={setCoverFile} series={series}/>
+          : <ErrorNotice inline role="alert">{language==="en"?"The work was saved. Its cover could not be uploaded.":"作品已保存，封面上传失败。"}</ErrorNotice>}
+        {error&&<ErrorNotice>{error}</ErrorNotice>}
+      </form>
+    </FormSheet>}
     {renaming&&<FormSheet title="Rename series" onClose={()=>setRenaming(false)} formId="media-series-form" submitLabel="Save changes" submitDisabled={preview} busy={saving}><form id="media-series-form" onSubmit={async event=>{event.preventDefault();if(preview||saving||!defaultSeries)return;setSaving(true);setError("");try{const response=await read(`/api/media/series/${defaultSeries.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:seriesName})});if(!response.ok)throw new Error(await responseError(response,"Could not rename series."));const updated=await response.json() as MediaSeries;setSeries(current=>current.map(item=>item.id===updated.id?updated:item));setRenaming(false);setNotice("Series renamed.");await load();}catch(e){setError(e instanceof Error?e.message:"Could not rename series.");}finally{setSaving(false);}}}>{preview&&<FormPreviewNotice/>}<label className="field"><span>Series name</span><input required maxLength={200} value={seriesName} onChange={event=>setSeriesName(event.target.value)}/></label>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>}
     {!showForm&&error&&<ErrorNotice>{error}</ErrorNotice>}{notice&&<ToastNotice message={notice} onShown={() => setNotice("")} />}
     {defaultSeries&&<button className="button secondary media-rename-action" onClick={()=>{setSeriesName(series.find(item=>item.id===defaultSeries.id)?.name??defaultSeries.name);setError("");setRenaming(true);}}><Icon name="edit"/>Rename series</button>}

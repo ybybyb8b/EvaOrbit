@@ -6,16 +6,18 @@ import { ToastNotice, showActionToast } from "@/components/action-toast";
 
 import {MediaLink as Link,useMediaData} from "@/components/media-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
-import {MediaFields,type MediaDraft,statusLabel,typeLabel} from "@/components/media-fields";
+import {MediaFields,MediaQuickDates,type MediaDraft,statusLabel,typeLabel} from "@/components/media-fields";
 import { FormEvent, useState } from "react";
 import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
+import { useLocale } from "@/components/locale-controller";
 import { MediaCover } from "@/components/media-cover";
 import { MediaPageHeader as PageHeader } from "@/components/media-data-context";
 import { getMediaDisplayTitle, mediaNameKey } from "@/lib/media-display";
 import type { MediaDetail, MediaSeries, MediaViewing } from "@/lib/types";
 import { playNativeHaptic } from "@/lib/native-haptics";
+import styles from "./media-viewing-editor.module.css";
 
 
 function draftFromDetail(detail: MediaDetail): MediaDraft {
@@ -29,15 +31,15 @@ function viewingLabel(viewing: MediaViewing) {
 
 export function MediaDetailContent({ initial, initialSeries,navigate }: { initial: MediaDetail; initialSeries:MediaSeries[];navigate:(path:string)=>void }) {
   const {read}=useMediaData(),preview=useFormPreview();
+  const {english}=useLocale();
+  const t = (en: string, zh: string) => english ? en : zh;
   const [detail, setDetail] = useServerDataState(initial);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<MediaDraft>(() => draftFromDetail(initial));
   const [series,setSeries]=useServerDataState(initialSeries);
   const [coverFile,setCoverFile]=useState<File|null>(null);
-  const [rewatchOpen, setRewatchOpen] = useState(false);
-  const [rewatchDate, setRewatchDate] = useState(currentLocalDate);
-  const [editingViewingId, setEditingViewingId] = useState<number | null>(null);
-  const [viewingDate, setViewingDate] = useState("");
+  const [viewingEditor, setViewingEditor] = useState<{ date: string; viewing?: MediaViewing }>();
+  const [viewingError, setViewingError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -68,45 +70,48 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
     finally { setBusy(false); }
   }
 
-  async function addRewatch(event: FormEvent) {
-    event.preventDefault(); if(preview||busy)return; setBusy(true); setError(""); setNotice("");
+  function openViewingEditor(viewing?: MediaViewing) {
+    setViewingEditor({ date: viewing?.watchedDate ?? currentLocalDate(), viewing });
+    setViewingError("");
+    setError("");
+    setNotice("");
+  }
+
+  async function saveViewing(event: FormEvent) {
+    event.preventDefault();
+    if (!viewingEditor || preview || busy) return;
+    const { date, viewing } = viewingEditor;
+    const failure = viewing ? t("Could not update the viewing date.", "无法修改观看日期。")
+      : t("Could not save the viewing.", "无法保存观看记录。");
+    setViewingError("");
+    setBusy(true);
     try {
-      const response = await read(`/api/media/${detail.id}/viewings`, {
-        method: "POST",
+      const path = `/api/media/${detail.id}/viewings`;
+      const response = await read(viewing ? `${path}/${viewing.id}` : path, {
+        method: viewing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ watchedDate: rewatchDate }),
+        body: JSON.stringify({ watchedDate: date }),
       });
-      if (!response.ok) { setError(await responseError(response, "Could not add rewatch.")); return; }
-      const viewing = await response.json() as MediaViewing;
-      setDetail((current) => ({ ...current, status:"completed", viewings: [...current.viewings, viewing].sort((a, b) => a.viewingNumber - b.viewingNumber || a.id - b.id) }));
-      playNativeHaptic("success");
-      setRewatchOpen(false); setRewatchDate(currentLocalDate()); setNotice("Rewatch added.");
-    } catch { setError("Could not add rewatch."); }
-    finally { setBusy(false); }
-  }
-
-  function startViewingEdit(viewing: MediaViewing) {
-    setEditingViewingId(viewing.id); setViewingDate(viewing.watchedDate); setError(""); setNotice("");
-  }
-
-  function cancelViewingEdit() {
-    setEditingViewingId(null); setViewingDate("");
-  }
-
-  async function saveViewing(event: FormEvent, viewing: MediaViewing) {
-    event.preventDefault(); if(preview||busy)return; setBusy(true); setError(""); setNotice("");
-    try {
-      const response = await read(`/api/media/${detail.id}/viewings/${viewing.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ watchedDate: viewingDate }),
-      });
-      if (!response.ok) { setError(await responseError(response, "Could not update viewing date.")); return; }
+      if (!response.ok) {
+        setViewingError(await responseError(response, failure));
+        return;
+      }
       const next = await response.json() as MediaViewing;
-      setDetail((current) => ({ ...current, viewings: current.viewings.map((item) => item.id === next.id ? next : item) }));
-      cancelViewingEdit(); setNotice("Viewing date updated.");
-    } catch { setError("Could not update viewing date."); }
-    finally { setBusy(false); }
+      setDetail(current => ({
+        ...current,
+        status: viewing ? current.status : "completed",
+        viewings: viewing ? current.viewings.map(item => item.id === next.id ? next : item)
+          : [...current.viewings.filter(item => item.id !== next.id), next].sort((a, b) => a.viewingNumber - b.viewingNumber || a.id - b.id),
+      }));
+      if (!viewing) playNativeHaptic("success");
+      setViewingEditor(undefined);
+      setNotice(viewing ? t("Viewing date updated.", "已修改观看日期。") : next.viewingNumber === 1
+        ? t("Completion recorded.", "已记录看完。") : t("Rewatch recorded.", "已记录重看。"));
+    } catch {
+      setViewingError(failure);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function removeViewing(viewing: MediaViewing) {
@@ -141,6 +146,11 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
   const visibleOriginal = detail.originalTitle && mediaNameKey(detail.originalTitle) !== primaryKey ? detail.originalTitle : null;
   const visibleTranslated = detail.translatedTitle && mediaNameKey(detail.translatedTitle) !== primaryKey && mediaNameKey(detail.translatedTitle) !== mediaNameKey(visibleOriginal) ? detail.translatedTitle : null;
   const seriesRepeatsName = detail.seriesName && [displayTitle.primary, detail.originalTitle, detail.translatedTitle].some((name) => mediaNameKey(name) === mediaNameKey(detail.seriesName));
+  const addViewingLabel = detail.viewings.length ? t("Log rewatch", "记录重看") : t("Log completion", "记录看完");
+  function setViewingDate(date: string) {
+    setViewingEditor(current => current ? { ...current, date } : current);
+    setViewingError("");
+  }
 
   return <div className="page media-page media-detail-page">
     <PageHeader eyebrow="" title={displayTitle.primary} />
@@ -149,16 +159,35 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
     {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
 
     {editing && <FormSheet title="Edit media" onClose={closeEditor} formId="media-edit-form" submitLabel="Save changes" busy={busy} submitDisabled={preview}><form id="media-edit-form" className="editor-card media-editor" onSubmit={submitEdit}>
-      <MediaFields draft={draft} setDraft={setDraft} coverFile={coverFile} setCoverFile={setCoverFile} series={series} needsCompletion={!detail.viewings.length} hasCover={Boolean(detail.coverUrl)}/>
+      <MediaFields draft={draft} setDraft={setDraft} coverFile={coverFile} setCoverFile={setCoverFile} series={series} needsCompletion={!detail.viewings.length} coverPreview={detail.coverUrl ? <MediaCover item={detail} compact/> : undefined}/>
       <div className="form-actions"><button className="button primary" type="submit" disabled={preview||busy}>Save changes</button></div>
     </form></FormSheet>}
+
+    {viewingEditor && <FormSheet title={viewingEditor.viewing ? t("Edit viewing date", "修改观看日期") : addViewingLabel}
+      onClose={() => setViewingEditor(undefined)} formId="media-viewing-form" submitLabel={t("Save", "保存")} busy={busy} submitDisabled={preview}>
+      <form id="media-viewing-form" className={`${styles.form} field-focus-surface${viewingEditor.viewing ? "" : " media-rewatch-form"}`} onSubmit={saveViewing}>
+        {preview && <FormPreviewNotice/>}
+        <div className={styles.work}>
+          <span className={styles.cover} aria-hidden="true"><MediaCover item={detail} compact/></span>
+          <strong className="user-content">{displayTitle.primary}</strong>
+        </div>
+        <div className={styles.dateRow}>
+          <label className="field">
+            <span>{t("Viewing date", "观看日期")}</span>
+            <input required type="date" value={viewingEditor.date} onChange={event => setViewingDate(event.target.value)}/>
+          </label>
+          <MediaQuickDates value={viewingEditor.date} onChange={setViewingDate}/>
+        </div>
+        {viewingError && <ErrorNotice inline role="alert">{viewingError}</ErrorNotice>}
+      </form>
+    </FormSheet>}
 
     {!editing && <section className="media-detail-hero">
       <div className="media-detail-summary"><MediaCover item={detail} compact/><div className="media-detail-summary-copy">
         <p>{typeLabel(detail.mediaType)}{displayTitle.seasonLabel?` · ${displayTitle.seasonLabel}`:""}</p>
         <strong>{statusLabel(detail.status)}</strong>
         <p>{detail.rating??"Not rated"}{detail.isFavorite?" · Favorite":""}</p>
-        <div className="media-detail-actions"><button className="button primary" onClick={() => { setError(""); setNotice(""); setRewatchDate(currentLocalDate()); setRewatchOpen(true); }}><Icon name="plus" />{detail.viewings.length?"Add rewatch":"Add completion"}</button><button className="button secondary" onClick={startEdit}><Icon name="edit" />Edit</button></div>
+        <div className="media-detail-actions"><button className="button primary" onClick={() => openViewingEditor()}><Icon name="plus" />{addViewingLabel}</button><button className="button secondary" onClick={startEdit}><Icon name="edit" />Edit</button></div>
       </div></div>
       <dl>{visibleOriginal&&<div><dt>Original title</dt><dd>{visibleOriginal}</dd></div>}{visibleTranslated&&<div><dt>Translated title</dt><dd>{visibleTranslated}</dd></div>}{detail.seriesId&&<div><dt>Series / Franchise</dt><dd><Link href={`/media/series/${detail.seriesId}`}>{seriesRepeatsName?"Open series":detail.seriesName}</Link></dd></div>}</dl>
     </section>}
@@ -168,10 +197,10 @@ export function MediaDetailContent({ initial, initialSeries,navigate }: { initia
       {!detail.viewings.length&&<p className="media-viewings-empty">No viewings recorded yet.</p>}
       <ol className="media-viewings">
         {detail.viewings.map((viewing) => <li key={viewing.id}>
-          {editingViewingId === viewing.id ? <FormSheet title="Edit viewing date" onClose={cancelViewingEdit} formId={`media-viewing-${viewing.id}`} submitLabel="Save" busy={busy} submitDisabled={preview}><form id={`media-viewing-${viewing.id}`} className="media-viewing-edit" onSubmit={(event) => void saveViewing(event, viewing)}>{preview&&<FormPreviewNotice/>}<label className="field"><span>Date</span><input required type="date" value={viewingDate} onChange={(event) => setViewingDate(event.target.value)} /></label><div className="media-viewing-actions"><button className="button primary compact" type="submit" disabled={preview||busy}>Save</button><button className="text-button" type="button" onClick={cancelViewingEdit}>Cancel</button></div></form></FormSheet> : <><div className="media-viewing-copy"><time dateTime={viewing.watchedDate}>{viewing.watchedDate}</time><span>{viewingLabel(viewing)}</span></div><div className="media-viewing-actions"><button className="text-button" type="button" onClick={() => startViewingEdit(viewing)}>Edit date</button>{viewing.viewingNumber > 1 && <button className="text-button danger" type="button" onClick={() => void removeViewing(viewing)} disabled={preview||busy}>Delete</button>}</div></>}
+          <div className="media-viewing-copy"><time dateTime={viewing.watchedDate}>{viewing.watchedDate}</time><span>{viewingLabel(viewing)}</span></div>
+          <div className="media-viewing-actions"><button className="text-button" type="button" onClick={() => openViewingEditor(viewing)}>{t("Edit date", "改日期")}</button>{viewing.viewingNumber > 1 && <button className="text-button danger" type="button" onClick={() => void removeViewing(viewing)} disabled={preview||busy}>Delete</button>}</div>
         </li>)}
       </ol>
-      {rewatchOpen && <FormSheet title={detail.viewings.length?"Add rewatch":"Add completion"} onClose={() => setRewatchOpen(false)} formId="media-rewatch-form" submitLabel={detail.viewings.length?"Add rewatch":"Add completion"} busy={busy} submitDisabled={preview} busyLabel="Adding…"><form id="media-rewatch-form" className="media-rewatch-form" onSubmit={addRewatch}>{preview&&<FormPreviewNotice/>}<label className="field"><span>{detail.viewings.length?"Rewatch date":"Completed date"}</span><input required type="date" value={rewatchDate} onChange={(event) => setRewatchDate(event.target.value)} /></label><div className="media-form-actions"><button className="button primary compact" type="submit" disabled={preview||busy}>Save date</button><button className="text-button" type="button" onClick={() => setRewatchOpen(false)}>Cancel</button></div></form></FormSheet>}
     </section>}
 
     {!editing && <section className="media-note-section"><h2>Note</h2><p>{detail.note || "No note added."}</p></section>}

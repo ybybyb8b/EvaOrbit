@@ -17,6 +17,10 @@ import type { FormEvent } from "react";
 import { useRef, useState } from "react";
 import { useSectionSwipe } from "@/components/use-section-swipe";
 import { Icon } from "@/components/icons";
+import { ImageUploadField } from "@/components/image-upload-field";
+import { useLocale } from "@/components/locale-controller";
+import { MAX_AVATAR_BYTES } from "@/lib/avatar";
+import { responseError } from "@/lib/response-error";
 import { FormSheet } from "@/components/form-sheet";
 import type { CatMeasurement, CatMedication, CatRecordKind, CatRoutine, CatTimelineEntry, Pet, Reminder } from "@/lib/types";
 import { latestCatRecords, isCatHealthRecord } from "@/lib/cat-presentation";
@@ -115,7 +119,39 @@ function RecordDetails({ record }: { record?: Record<string, unknown> }) {
 
 function age(birthday: string | null) { if (!birthday) return "Not set"; const born = new Date(`${birthday}T00:00:00`); const now = new Date(); let years = now.getFullYear() - born.getFullYear(); if (now < new Date(now.getFullYear(), born.getMonth(), born.getDate())) years--; return `${years} year${years === 1 ? "" : "s"}`; }
 function ProfileSection({ detail, onChanged }: { detail: Detail; onChanged: (pet: Pet) => void }) {
-  const businessFetch=useBusinessRequest(); const previewOnly=useFormPreview(); const [editing, setEditing] = useState(false); const [uploading, setUploading] = useState(false); async function upload(file?: File) { if(previewOnly)return; if (!file) return; setUploading(true); const form = new FormData(); form.set("file", file); const response = await businessFetch(`/api/cats/pets/${detail.pet.id}/avatar`, { method: "POST", body: form }); setUploading(false); if (response.ok) { invalidateCachedJson("/api/cats/pets"); onChanged(await response.json()); } } async function reset() { if(previewOnly)return; const response = await businessFetch(`/api/cats/pets/${detail.pet.id}/avatar`, { method: "DELETE" }); if (response.ok) { invalidateCachedJson("/api/cats/pets"); onChanged(await response.json()); showActionToast("Photo removed", "deleted"); } } if (editing) return <ProfileEditor detail={detail} onChanged={pet => { onChanged(pet); setEditing(false); }} onCancel={() => setEditing(false)}/>; const pet = detail.pet; return <section className="pet-profile-view"><div className="pet-profile-identity"><div className="pet-photo-control"><CatAvatar pet={pet} size={88}/><label aria-label="Change photo">{uploading ? "…" : <Icon name="edit"/>}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={previewOnly || uploading} onChange={event => { void upload(event.target.files?.[0]); event.target.value = ""; }}/></label></div><div><h2>{pet.name}</h2><p>{pet.sex ? pet.sex[0].toUpperCase() + pet.sex.slice(1) : "Sex not set"}</p>{pet.avatarUrl && <button disabled={previewOnly} className="text-button" onClick={() => void reset()}>Remove photo</button>}</div></div><dl><div><dt>Birthday</dt><dd>{pet.birthday ? new Date(`${pet.birthday}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set"}</dd></div><div><dt>Adoption date</dt><dd>{pet.adoptionDate ? new Date(`${pet.adoptionDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set"}</dd></div><div><dt>Age</dt><dd>{age(pet.birthday)}</dd></div></dl><div className="profile-notes"><span className="eyebrow">NOTES</span><p>{pet.notes || "No notes yet."}</p></div><button className="button primary" onClick={() => setEditing(true)}>Edit profile</button>{pet.isActive && <div className="danger-zone"><span className="eyebrow">DANGER ZONE</span><p>Archive this cat while keeping all historical records.</p><ArchiveButton detail={detail} onChanged={onChanged}/></div>}</section>; }
+  const businessFetch=useBusinessRequest();
+  const previewOnly=useFormPreview();
+  const {english}=useLocale();
+  const [editing,setEditing]=useState(false);
+  const [working,setWorking]=useState(false);
+  const [photoError,setPhotoError]=useState("");
+  const pet=detail.pet;
+
+  async function changePhoto(file?: File){
+    if(previewOnly||working)return;
+    const failure=file?(english?"Could not upload the photo.":"照片上传失败。"):(english?"Could not remove the photo.":"无法移除照片。");
+    setWorking(true);
+    setPhotoError("");
+    try{
+      const body=new FormData();
+      if(file)body.set("file",file);
+      const response=await businessFetch("/api/cats/pets/"+pet.id+"/avatar",file?{method:"POST",body}:{method:"DELETE"});
+      if(!response.ok)throw new Error(await responseError(response,failure));
+      invalidateCachedJson("/api/cats/pets");
+      onChanged(await response.json());
+      showActionToast(file?(english?"Photo updated":"照片已更新"):(english?"Photo removed":"照片已移除"),file?"success":"deleted");
+    }catch(reason){setPhotoError(reason instanceof Error?reason.message:failure);}
+    finally{setWorking(false);}
+  }
+
+  if(editing)return <ProfileEditor detail={detail} onChanged={updated=>{onChanged(updated);setEditing(false);}} onCancel={()=>setEditing(false)}/>;
+  return <section className="pet-profile-view">
+    <div className="pet-profile-identity"><div><h2>{pet.name}</h2><p>{pet.sex ? pet.sex[0].toUpperCase()+pet.sex.slice(1) : "Sex not set"}</p></div></div>
+    <ImageUploadField title={english?"Cat photo":"猫咪照片"} shape="round" icon="cats" thumbnail={<CatAvatar pet={pet} size={54}/>}
+      hasImage={Boolean(pet.avatarUrl)} maxBytes={MAX_AVATAR_BYTES} disabled={previewOnly} busy={working} error={photoError}
+      onSelect={file=>void changePhoto(file)} onRemove={pet.avatarUrl?()=>void changePhoto():undefined}/>
+    <dl><div><dt>Birthday</dt><dd>{pet.birthday ? new Date(`${pet.birthday}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set"}</dd></div><div><dt>Adoption date</dt><dd>{pet.adoptionDate ? new Date(`${pet.adoptionDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Not set"}</dd></div><div><dt>Age</dt><dd>{age(pet.birthday)}</dd></div></dl><div className="profile-notes"><span className="eyebrow">NOTES</span><p>{pet.notes || "No notes yet."}</p></div><button className="button primary" onClick={() => setEditing(true)}>Edit profile</button>{pet.isActive && <div className="danger-zone"><span className="eyebrow">DANGER ZONE</span><p>Archive this cat while keeping all historical records.</p><ArchiveButton detail={detail} onChanged={onChanged}/></div>}</section>;
+}
 
 function ArchiveButton({ detail, onChanged }: { detail: Detail; onChanged: (pet: Pet) => void }) {
   const businessFetch=useBusinessRequest(); const previewOnly=useFormPreview(); async function archive() { if(previewOnly)return; if (!confirm(`Archive ${detail.pet.name}? Historical records will remain.`)) return; const response = await businessFetch(`/api/cats/pets/${detail.pet.id}`, { method: "DELETE" }); if (response.ok) { invalidateCachedJson("/api/cats/pets"); onChanged({ ...detail.pet, isActive: false }); showActionToast("Cat archived", "deleted"); } } return <button disabled={previewOnly} type="button" className="text-button danger" onClick={() => void archive()}>Archive cat</button>; }

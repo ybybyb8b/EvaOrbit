@@ -3,13 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 import { newTrackerLocalId } from "../src/lib/tracker-local-store.ts";
+import { MAX_AVATAR_BYTES } from "../src/lib/avatar.ts";
 import { parseNewTrackerField } from "../src/lib/validation.ts";
 
 test("the shared Web/local create form retains all seven property types and failed drafts", async () => {
   const slots=[], saves=[]; let cursor=0, tree, fail=true, closed=0;
   const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],next=>{slots[i]=typeof next==="function"?next(slots[i]):next;}];},useMemo:fn=>fn(),useEffect(){}};
   const jsx=(type,props)=>({type,props});
-  const imported={react,"react/jsx-runtime":{jsx,jsxs:jsx},"@/components/form-sheet":{FormSheet:"sheet"},"@/components/choice-select":{ChoiceSelect:"select"},"@/components/suggested-input":{SuggestedInput:"suggestion"},"@/components/error-notice":{ErrorNotice:"error"},"@/components/icons":{Icon:"icon"},"@/lib/tracker-local-store":{newTrackerLocalId},"./tracker-capture-toggle":{TrackerCaptureToggle:"toggle"}};
+  const imported={react,"react/jsx-runtime":{jsx,jsxs:jsx},"@/components/form-sheet":{FormSheet:"sheet"},"@/components/choice-select":{ChoiceSelect:"select"},"@/components/suggested-input":{SuggestedInput:"suggestion"},"@/components/error-notice":{ErrorNotice:"error"},"@/components/icons":{Icon:"icon"},"@/components/image-upload-field":{ImageUploadField:"image-picker"},"@/components/locale-controller":{useLocale:()=>({english:true})},"@/lib/avatar":{MAX_AVATAR_BYTES},"@/lib/tracker-local-store":{newTrackerLocalId},"./tracker-capture-toggle":{TrackerCaptureToggle:"toggle"}};
   const loaded={};
   const code=ts.transpileModule(readFileSync("src/app/trackers/tracker-create-sheet.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   new Function("require","exports",code)(name=>{if(!(name in imported))throw Error(name);return imported[name];},loaded);
@@ -17,6 +18,7 @@ test("the shared Web/local create form retains all seven property types and fail
   const nodes=(node=tree)=>!node||typeof node!=="object"?[]:Array.isArray(node)?node.flatMap(child=>nodes(child??null)):[node,...nodes(node.props?.children??null)];
   const find=predicate=>nodes().find(predicate);
   render();
+  assert.equal(find(node=>node.type==="image-picker").props.disabled,true);
   find(node=>node.type==="input"&&node.props.maxLength===80).props.onChange({target:{value:"完整观测"}});render();
   for(let index=0;index<7;index++){
     const strip=find(node=>node.props.className==="tracker-field-type-strip");

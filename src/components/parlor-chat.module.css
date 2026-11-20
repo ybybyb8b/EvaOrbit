@@ -10,18 +10,9 @@
 .message[data-role=user][data-avatar=true] { position:relative;margin-inline-start:0; margin-inline-end:36px; max-width:calc(85% - 36px); }
 .appearanceList { display:grid; gap:18px; }
 .appearanceList > small { color:var(--text-secondary); }
-.appearanceRow { display:flex; align-items:center; gap:14px; min-width:0; }
-.appearancePreview { width:54px; height:54px; flex:none; border-radius:50%; background:var(--surface-soft) center / cover; }
-.appearancePreview[data-kind=wallpaper] { border-radius:12px; }
-.appearanceControls { min-width:0; display:grid; gap:3px; }
-.appearanceControls > div { display:flex; flex-wrap:wrap; align-items:center; gap:2px 12px; }
 .appearanceToggle { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer; }
 .appearanceToggle small { display:block; margin-top:4px; color:var(--text-secondary); }
 .appearanceToggle input { flex:none; }
-.appearancePicker { position:relative; display:inline-flex; align-items:center; min-height:44px; color:var(--text-action); font-size:13px; cursor:pointer; }
-.appearancePicker:focus-within { outline:2px solid var(--focus-ring); outline-offset:2px; border-radius:4px; }
-.appearancePicker input { position:absolute; inset:0; width:100%; opacity:0; cursor:pointer; }
-.appearancePicker:has(input:disabled) { opacity:.55; }
 :global(html[data-design-theme][data-mode]) :global(.app-shell) :global(.main-content):has(> .chat[data-parlor-chat]) { min-height:0;padding-block:0; }
 :global(html[data-design-theme][data-mode]) :global(.app-shell) :global(.main-content):has(> .wallpaper[data-parlor-wallpaper]) { position:relative; isolation:isolate; overflow:clip; }
 @media (any-pointer:coarse) {

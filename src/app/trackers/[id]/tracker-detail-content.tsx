@@ -47,6 +47,7 @@ export function TrackerDetailContent({initial,trackerId,initialEntry,openDetaile
   const {english}=useLocale();
   const swipeRootRef=useRef<HTMLDivElement>(null),swipeTabsRef=useRef<HTMLElement>(null);
   const [detail,setDetail]=useServerDataState<TrackerDetailData|null>(initial),[loading,setLoading]=useState(false),[working,setWorking]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState(""),[query,setQuery]=useRememberedState("TrackerDetailView:query", ""),[tab,setTab]=useRememberedState<Tab>("TrackerDetailView:tab", "timeline");
+  const [iconBusy,setIconBusy]=useState(false);
   const [showEntry,setShowEntry]=useState(openDetailedRecord || Boolean(initialEntry)),[showField,setShowField]=useState(false),[rulePanel,setRulePanel]=useState<"goal"|"reminder"|null>(null);
   const [showRename,setShowRename]=useState(false),[trackerName,setTrackerName]=useState("");
   const [trackerGroup,setTrackerGroup]=useState(""),[trackerQuick,setTrackerQuick]=useState(true),[editingFieldId,setEditingFieldId]=useState<number|null>(null);
@@ -83,12 +84,17 @@ export function TrackerDetailContent({initial,trackerId,initialEntry,openDetaile
   async function renameTracker(event:FormEvent){event.preventDefault();if(await request(`/api/trackers/${trackerId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:trackerName,groupName:trackerGroup,quickCaptureEnabled:trackerQuick})})){setShowRename(false);setMessage(english?"Tracker updated.":"基本信息已保存。");}}
   function editTrackerReminder(reminder:TrackerReminder){setReminderDraft({reminderMode:reminder.reminderMode,periodDays:String(reminder.periodDays),configuredTime:reminder.configuredTime,anchorDate:reminder.anchorDate});setEditingReminderId(reminder.id);setRulePanel("reminder");}
   function closeReminderSheet(){setRulePanel(null);setEditingReminderId(null);setReminderDraft({...emptyReminder,anchorDate:new Date().toLocaleDateString("en-CA")});}
-  async function uploadIcon(file:File|undefined){
-    if(!file||working)return;
-    if(file.size>4*1024*1024){setError(english?"The image must be smaller than 4 MB.":"图片不能超过 4 MB。");return;}
-    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){setError(english?"Use a JPG, PNG or WebP image.":"请选择 JPG、PNG 或 WebP 图片。");return;}
-    const body=new FormData();body.set("file",file);
-    await request(`/api/trackers/${trackerId}/icon`,{method:"POST",body},english?"Image updated.":"图片已更新。");
+  async function changeIcon(file?:File){
+    if(working||iconBusy)return;
+    setIconBusy(true);
+    try{
+      const path=`/api/trackers/${trackerId}/icon`;
+      if(file){
+        const body=new FormData();
+        body.set("file",file);
+        await request(path,{method:"POST",body},english?"Image updated.":"图片已更新。");
+      }else await request(path,{method:"DELETE"},english?"Default icon restored.":"已恢复默认图标。");
+    }finally{setIconBusy(false);}
   }
   async function removeTracker(){
     if(working)return false;
@@ -145,9 +151,9 @@ export function TrackerDetailContent({initial,trackerId,initialEntry,openDetaile
       </section>
     </>}
 
-    {activeTab==="settings"&&<TrackerSettingsView detail={detail} total={stats.total} picture={<TrackerIcon tracker={tracker} size={64}/>} busy={working} actions={{editBasics: ()=>{setError("");setTrackerName(tracker.name);setTrackerGroup(tracker.groupName);setTrackerQuick(tracker.quickCaptureEnabled);setShowRename(true);},
-chooseImage: event=>{void uploadIcon(event.target.files?.[0]);event.target.value="";},
-resetImage: ()=>void request(`/api/trackers/${trackerId}/icon`,{method:"DELETE"},english?"Default icon restored.":"已恢复默认图标。"),
+    {activeTab==="settings"&&<TrackerSettingsView detail={detail} total={stats.total} picture={<TrackerIcon tracker={tracker} size={54}/>} busy={working} iconBusy={iconBusy} actions={{editBasics: ()=>{setError("");setTrackerName(tracker.name);setTrackerGroup(tracker.groupName);setTrackerQuick(tracker.quickCaptureEnabled);setShowRename(true);},
+chooseImage: file=>void changeIcon(file),
+resetImage: ()=>void changeIcon(),
 addField: ()=>openField(),
 editField: field => ()=>openField(field),
 archiveField: field => ()=>void setFieldArchived(field,true),

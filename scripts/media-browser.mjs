@@ -27,21 +27,78 @@ async function openLocal(){
 async function media(page){await navigateLocal(page,'Home');await navigateLocal(page,'Media');await page.locator('.media-page').waitFor();}
 async function detail(page){await media(page);await page.locator('a.media-series-card[href="/media/series/1"]').click();await page.locator('.media-results a[href="/media/1"]').click();await page.locator('.media-detail-page').waitFor();}
 try{
- const port=await freeLocalPort();ports.push(port);web=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-H','127.0.0.1','-p',String(port)],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});webExited=new Promise(resolve=>web.once('exit',resolve));let log='';web.stdout.on('data',d=>log+=d);web.stderr.on('data',d=>log+=d);console.log(JSON.stringify({pid:web.pid,port,isolated:true}));for(let i=0;i<100&&!log.includes('Ready in');i++){if(web.exitCode!==null)throw Error(log);await new Promise(r=>setTimeout(r,200));}
+ const port=await freeLocalPort();ports.push(port);
+ web=spawn(process.execPath,['node_modules/next/dist/bin/next','dev','-H','127.0.0.1','-p',String(port)],{
+   env:{...env,EVAORBIT_SQLITE_LOOPBACK_LAUNCHER:'1'},
+   windowsHide:true,stdio:['ignore','pipe','pipe'],
+ });
+ webExited=new Promise(resolve=>web.once('exit',resolve));
+ let log='';web.stdout.on('data',d=>log+=d);web.stderr.on('data',d=>log+=d);console.log(JSON.stringify({pid:web.pid,port,isolated:true}));for(let i=0;i<100&&!log.includes('Ready in');i++){if(web.exitCode!==null)throw Error(log);await new Promise(r=>setTimeout(r,200));}
  browser=await chromium.launch({channel:'chrome',headless:true});context=await browser.newContext({viewport:{width:1280,height:900}});let page=await context.newPage();page.on('pageerror',e=>errors.push(String(e)));await page.route('**/api/preferences/appearance',r=>r.fulfill({json:prefs}));
  await page.goto(`http://127.0.0.1:${port}/media`);await page.getByRole('button',{name:'Documentaries',exact:true}).waitFor();await page.getByRole('button',{name:'Other',exact:true}).waitFor();
+ await page.setViewportSize({width:402,height:874});
+ await page.locator('.home-quick-log-trigger').click();
+ await sheet(page).waitFor();
+ const original=sheet(page).getByLabel('Original title',{exact:true}),translated=sheet(page).getByLabel('Translated title',{exact:true});
+ const completion=sheet(page).getByLabel('Completed date',{exact:true}),ratingInput=sheet(page).getByLabel(/^Rating/);
+ assert.equal((await original.boundingBox()).y,(await translated.boundingBox()).y);
+ assert.equal((await completion.boundingBox()).y,(await ratingInput.boundingBox()).y);
+ assert.equal(await sheet(page).getByLabel('Status',{exact:true}).inputValue(),'completed');
+ const defaultDate=await completion.inputValue();
+ await sheet(page).getByRole('button',{name:'Yesterday',exact:true}).click();
+ assert.notEqual(await completion.inputValue(),defaultDate);
+ await sheet(page).getByRole('button',{name:'Today',exact:true}).click();
+ assert.equal(await completion.inputValue(),defaultDate);
+ assert.equal(await sheet(page).getByText('Series / Franchise',{exact:true}).count(),0);
+ await sheet(page).getByRole('button',{name:'TV Shows',exact:true}).click();
+ const seasonNumber=sheet(page).getByLabel('Season number',{exact:true}),seasonTitle=sheet(page).getByLabel('Season title',{exact:true});
+ assert.equal((await seasonNumber.boundingBox()).y,(await seasonTitle.boundingBox()).y);
+ await sheet(page).getByRole('button',{name:'Movies',exact:true}).click();
+ await original.fill('Spirited Away');
+ await translated.fill('千与千寻');
+ await translated.blur();
+ await page.locator('.form-sheet-body').evaluate(body=>{body.scrollTop=0;});
+ await page.addStyleTag({content:'nextjs-portal { display: none; }'});
+ await page.screenshot({path:'tmp/media-create-form-402.png'});
+ await sheet(page).getByRole('button',{name:'Link a series',exact:true}).click();
+ assert.equal(await sheet(page).getByText('Series / Franchise',{exact:true}).count(),1);
+ let createAttempts=0,coverAttempts=0;
+ await page.route('**/api/media',route=>{if(route.request().method()==='POST')createAttempts++;return route.continue();});
+ await page.route('**/api/media/*/cover',route=>{
+   if(route.request().method()!=='POST')return route.continue();
+   coverAttempts++;
+   return coverAttempts===1?route.abort():route.fulfill({status:200,json:{}});
+ });
+ await sheet(page).locator('input[type="file"]').setInputFiles({name:'cover.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jhAAAAABJRU5ErkJggg==','base64')});
+ await sheet(page).locator('.form-sheet-footer button.primary').click();
+ await sheet(page).getByText('The work was saved. Its cover could not be uploaded.',{exact:true}).waitFor();
+ await save(page);
+ assert.equal(createAttempts,1);
+ assert.equal(coverAttempts,2);
+ await page.setViewportSize({width:1280,height:900});
  await page.locator('a.media-series-card').click();await page.getByRole('button',{name:'Rename series',exact:true}).click();await sheet(page).waitFor();await page.getByLabel('Series name',{exact:true}).fill('Reacher Revised');await save(page);await page.getByRole('heading',{name:'Reacher Revised',exact:true}).waitFor();
- await page.getByRole('button',{name:'Add season',exact:true}).click();await sheet(page).waitFor();await page.getByLabel('Season number',{exact:false}).fill('3');await save(page);await page.locator('.media-poster-grid a').filter({hasText:'S3'}).click();await page.locator('.media-detail-page').waitFor();
- await page.getByRole('button',{name:'Edit',exact:true}).click();await sheet(page).waitFor();await sheet(page).getByRole('button',{name:'Completed',exact:true}).click();await page.getByLabel('Completed date',{exact:true}).fill('2026-10-20');await save(page);await page.locator('.media-viewings li').waitFor();assert.equal(await page.locator('.media-viewings li').count(),1);
+ await page.locator('.page-log-action').filter({hasText:'Add season'}).click();await sheet(page).waitFor();
+ assert.equal(await sheet(page).getByLabel('Status',{exact:true}).inputValue(),'completed');
+ await page.getByLabel('Season number',{exact:false}).fill('3');await save(page);await page.locator('.media-poster-grid a').filter({hasText:'S3'}).click();await page.locator('.media-detail-page').waitFor();
+ await page.locator('.media-viewings li').waitFor();
+ assert.equal(await page.locator('.media-viewings li').count(),1);
  const id=Number(new URL(page.url()).pathname.split('/').at(-1));const patch=await page.request.patch(`http://127.0.0.1:${port}/api/media/${id}`,{data:{rating:'dope'}});assert.equal(patch.status(),200);assert.equal((await patch.json()).seasonNumber,3);
+ await page.goto(`http://127.0.0.1:${port}/media/2`);
+ await page.getByRole('button',{name:'Edit',exact:true}).click();await sheet(page).waitFor();
+ await sheet(page).getByLabel('Status',{exact:true}).selectOption('completed');
+ await page.getByLabel('Completed date',{exact:true}).fill('2026-10-20');
+ await save(page);await page.locator('.media-viewings li').waitFor();assert.equal(await page.locator('.media-viewings li').count(),1);
  for(const width of [320,402,1280]){await page.setViewportSize({width,height:874});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>window.scrollTo(0,0));await page.waitForFunction(()=>scrollY===0);await page.screenshot({path:`tmp/media-web-detail-${width}.png`,fullPage:true});}
+ assert.deepEqual(errors,[]);
+ console.log('PASS Media Web form alignment, date shortcuts, cover retry, number-only season, first completion and partial PATCH');
+ if(!process.argv.includes('--web-only')){
  await context.close();context=null;await browser.close();browser=null;
  server=await createServer({configFile:path.resolve('vite.trackers.config.ts'),server:{host:'127.0.0.1',port:await freeLocalPort(),strictPort:true}});await server.listen();ports.push(server.httpServer.address().port);console.log(JSON.stringify({pid:process.pid,localPort:ports[1]}));
  page=await openLocal();await page.evaluate(async({account,old})=>{const db=await new Promise(resolve=>{const r=indexedDB.open('eo-tracker-local-v1',1);r.onsuccess=()=>resolve(r.result);});await new Promise((resolve,reject)=>{const tx=db.transaction(['session','states'],'readwrite');tx.objectStore('session').put({accountId:account,email:'media@example.invalid'},'current');tx.objectStore('states').put(old,account);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});db.close();},{account,old});await page.reload();await media(page);
  await page.getByRole('button',{name:'Documentaries',exact:true}).waitFor();await page.getByRole('button',{name:'Other',exact:true}).waitFor();await page.locator('a.media-series-card').click();await page.getByRole('button',{name:'Rename series',exact:true}).click();await sheet(page).waitFor();await force(page);await close(page);
  await page.locator('.home-quick-log-trigger').click();await sheet(page).waitFor();assert(await page.locator('input[type="file"]').isDisabled());await force(page);await close(page);
- await page.locator('.media-poster-grid a[href="/media/2"]').click();await page.getByRole('button',{name:'Edit',exact:true}).click();await sheet(page).waitFor();await sheet(page).getByRole('button',{name:'Completed',exact:true}).click();await page.getByLabel('Completed date',{exact:true}).fill('2026-10-20');await force(page);await close(page);assert(await page.getByRole('button',{name:'Delete',exact:true}).isDisabled());
- await detail(page);await page.getByRole('button',{name:'Add rewatch',exact:true}).click();await sheet(page).waitFor();await force(page);await close(page);await page.getByRole('button',{name:'Edit date',exact:true}).first().click();await sheet(page).waitFor();await force(page);await close(page);
+ await page.locator('.media-poster-grid a[href="/media/2"]').click();await page.getByRole('button',{name:'Edit',exact:true}).click();await sheet(page).waitFor();await sheet(page).getByLabel('Status',{exact:true}).selectOption('completed');await page.getByLabel('Completed date',{exact:true}).fill('2026-10-20');await force(page);await close(page);assert(await page.getByRole('button',{name:'Delete',exact:true}).isDisabled());
+ await detail(page);await page.getByRole('button',{name:'Log rewatch',exact:true}).click();await sheet(page).waitFor();await force(page);await close(page);await page.getByRole('button',{name:'Edit date',exact:true}).first().click();await sheet(page).waitFor();await force(page);await close(page);
  assert.equal(await page.locator('.media-viewings li').count(),2);assert.match(await page.locator('.media-detail-hero img').getAttribute('src'),/^data:image\/png;base64,/);
  for(const width of [320,402,1280]){await page.setViewportSize({width,height:874});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`tmp/media-local-detail-${width}.png`,fullPage:true});}
  assert.deepEqual(await cached(page,'media-readonly:'+account),snapshot);assert.deepEqual(await cached(page,account),old);await context.close();context=null;offline=true;page=await openLocal();await detail(page);assert.equal(await page.locator('.media-viewings li').count(),2);
@@ -51,5 +108,16 @@ try{
  context=await chromium.launchPersistentContext(path.join(directory,'packaged'),{channel:'chrome',headless:true,viewport:{width:402,height:874}});await context.addInitScript(({account,snapshot})=>{localStorage.setItem('evaorbit.uiLanguage','en');window.mockWrites=[];window.EvaOrbitNative={version:1,call:async(method)=>{let result;if(method==='host.getInfo')result={methods:['media.readOnlySnapshot']};else if(method==='trackers.getSession')result={accountId:account,email:'media@example.invalid'};else if(method==='media.readOnlySnapshot')result=snapshot;else if(method==='appearance.setPreference')result=null;else{window.mockWrites.push(method);throw Error(method);}return {ok:true,result};}};},{account,snapshot});
  page=context.pages()[0];const api=[];page.on('pageerror',e=>errors.push(String(e)));page.on('request',req=>{if(/\/(eo-api|api)\//.test(req.url()))api.push(req.url());});await page.goto(`http://127.0.0.1:${ports[2]}`);await detail(page);await page.getByRole('button',{name:'Edit',exact:true}).click();await sheet(page).waitFor();await force(page);assert.deepEqual(await page.evaluate(()=>window.mockWrites),[]);assert.deepEqual(api,[]);assert.deepEqual(errors,[]);
  console.log('PASS Media Web parent rename, number-only season, first completion/date, partial PATCH; shared local forms, covers, offline restart, corrupt/account recovery, old queue preserved, forced writes blocked, 320/402/1280, packaged CSP/native bridge');
-}catch(error){if(context){const p=context.pages()[0];console.log((await p.locator('body').innerText()).slice(-2500));await p.screenshot({path:'tmp/media-browser-failure.png',fullPage:true});}throw error;}
-finally{await context?.close();await browser?.close();await server?.close();if(packaged)await new Promise(resolve=>packaged.httpServer.close(resolve));if(web){web.kill();await webExited;}console.log(JSON.stringify({closedPorts:ports}));}
+ }
+}catch(error){console.error(error);if(context){const p=context.pages()[0];console.log((await p.locator('body').innerText()).slice(-2500));await p.screenshot({path:'tmp/media-browser-failure.png',fullPage:true,timeout:5000}).catch(()=>{});}throw error;}
+finally{
+ await context?.close();await browser?.close();await server?.close();
+ if(packaged)await new Promise(resolve=>packaged.httpServer.close(resolve));
+ if(web){
+   if(process.platform==='win32'&&web.exitCode===null)spawnSync('taskkill',['/PID',String(web.pid),'/T','/F'],{windowsHide:true,timeout:5000});
+   web.kill();
+   web.stdout.destroy();web.stderr.destroy();
+   await webExited;
+ }
+ console.log(JSON.stringify({closedPorts:ports}));
+}

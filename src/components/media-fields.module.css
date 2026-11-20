@@ -1,0 +1,88 @@
+.fields,
+.series {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.series { gap: 10px; }
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  align-items: start;
+}
+
+.titleHint {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.completion input[type="date"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.presets button {
+  min-width: 44px;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--form-control-radius);
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font: 500 12px/1.2 var(--font-body);
+  cursor: pointer;
+}
+
+.completion .presets button {
+  min-height: 36px;
+  padding-inline: 8px;
+}
+
+.presets button[aria-pressed="true"] {
+  background: var(--surface-accent-soft);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.linkSeries {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  align-self: end;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.linkSeries svg { width: 15px; height: 15px; }
+
+.presets button:focus-visible,
+.linkSeries:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+
+.presets button:focus-visible { box-shadow: var(--focused-field-depth); }
+
+@media (forced-colors: active) {
+  .presets button:focus-visible,
+  .linkSeries:focus-visible { outline: 2px solid Highlight; }
+}

@@ -1,0 +1,54 @@
+.form {
+  display: grid;
+  gap: 19px;
+  min-width: 0;
+}
+
+.work {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--text-primary);
+}
+
+.work > strong {
+  min-width: 0;
+  font: 600 15px/1.4 var(--font-body);
+  overflow-wrap: anywhere;
+}
+
+.cover {
+  display: block;
+  width: 34px;
+  flex: 0 0 auto;
+}
+
+.cover :global(.media-cover) {
+  padding: 0;
+  border-radius: 7px;
+}
+
+.cover :global(.media-cover-initial) { font-size: 20px; }
+
+.dateRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: end;
+}
+
+.form .dateRow input {
+  width: 100%;
+  min-height: 48px;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: var(--form-control-radius);
+  background: var(--surface-soft);
+  box-shadow: var(--sheet-control-depth, none);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+:global(html[data-design-theme="vintage"][data-mode="light"]) .form {
+  --sheet-control-depth: inset 0 2px 4px rgb(var(--shadow-rgb) / .12);
+}

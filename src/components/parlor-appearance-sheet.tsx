@@ -1,4 +1,5 @@
 "use client";
+import { ImageUploadField } from "./image-upload-field";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { parlorAppearanceImages, parlorImageLimit, parlorImageTypes, prepareParlorAppearanceImage, readParlorAppearance, saveParlorAppearanceImage, type ParlorAppearanceImage,normalizeParlorAvatarPlacement,type ParlorAvatarPlacement,normalizeParlorBubbleStyle,type ParlorBubbleStyle } from "@/lib/parlor-appearance";
@@ -84,6 +85,7 @@ export function ParlorAppearanceSheet({ appearance, english, onClose }: {
 
 export function ParlorAppearanceControls({appearance,english}:{appearance:ReturnType<typeof useParlorAppearance>;english:boolean}) {
   const [busy, setBusy] = useState(false);
+  const [activeImage, setActiveImage] = useState<ParlorAppearanceImage>();
   const [error, setError] = useState("");
   const segmentId = useId();
   const t = (en: string, zh: string) => english ? en : zh;
@@ -95,6 +97,7 @@ export function ParlorAppearanceControls({appearance,english}:{appearance:Return
 
   async function change(kind: ParlorAppearanceImage, file: File | null) {
     setError("");
+    setActiveImage(kind);
     if (file && ((!file.type.startsWith("image/")&&!/\.(png|jpe?g|webp|heic|heif|avif)$/i.test(file.name)) || file.size > parlorImageLimit)) {
       setError(t("Choose an image under 20 MB.", "请选择 20 MB 以内的图片。"));
       return;
@@ -115,7 +118,7 @@ export function ParlorAppearanceControls({appearance,english}:{appearance:Return
   }
 
   return <div className={styles.appearanceList}>
-      <label className="field"><span>{t("Bubble style","气泡样式")}</span><select value={appearance.bubbleStyle} disabled={!appearance.ready||busy} onChange={event=>{setError("");try{appearance.saveBubbleStyle(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="vintage">Vintage</option><option value="frosted">{t("Frosted glass","磨砂玻璃")}</option></select></label>
+      <label className="field"><span>{t("Bubble style","气泡样式")}</span><select value={appearance.bubbleStyle} disabled={!appearance.ready||busy} onChange={event=>{setActiveImage(undefined);setError("");try{appearance.saveBubbleStyle(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="vintage">Vintage</option><option value="frosted">{t("Frosted glass","磨砂玻璃")}</option></select></label>
       <label className={styles.appearanceToggle}>
         <span>
           <strong id={segmentId}>{t("Split replies into bubbles", "自动分段气泡")}</strong>
@@ -123,32 +126,20 @@ export function ParlorAppearanceControls({appearance,english}:{appearance:Return
         <input type="checkbox" role="switch" className="toggle-switch" aria-labelledby={segmentId}
           checked={appearance.segmentReplies} disabled={!appearance.ready || busy}
           onChange={event => {
-            setError("");
+            setActiveImage(undefined);setError("");
             try { appearance.saveSegmentReplies(event.currentTarget.checked); }
             catch { setError(t("Could not save this setting on this device.", "无法在当前设备保存此设置。")); }
           }} />
       </label>
-      <label className="field"><span>{t("Single-chat avatar position","单聊头像位置")}</span><select value={appearance.avatarPlacement} disabled={!appearance.ready||busy} onChange={event=>{setError("");try{appearance.saveAvatarPlacement(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="first">{t("First bubble","首个气泡")}</option><option value="last">{t("Last bubble","末个气泡")}</option><option value="all">{t("Every bubble","每个气泡")}</option></select></label>
+      <label className="field"><span>{t("Single-chat avatar position","单聊头像位置")}</span><select value={appearance.avatarPlacement} disabled={!appearance.ready||busy} onChange={event=>{setActiveImage(undefined);setError("");try{appearance.saveAvatarPlacement(event.target.value);}catch{setError(t("Could not save this setting","无法保存此设置"));}}}><option value="first">{t("First bubble","首个气泡")}</option><option value="last">{t("Last bubble","末个气泡")}</option><option value="all">{t("Every bubble","每个气泡")}</option></select></label>
       {parlorAppearanceImages.map(kind => {
         const url = appearance.images[kind];
-        return <div className={styles.appearanceRow} key={kind}>
-          <span className={styles.appearancePreview} data-kind={kind} style={url ? { backgroundImage: `url("${url}")` } : undefined} aria-hidden="true" />
-          <div className={styles.appearanceControls}>
-            <strong>{labels[kind]}</strong>
-            <div>
-              <label className={styles.appearancePicker}>
-                {url ? t("Replace", "更换") : t("Choose image", "选择图片")}
-                <input type="file" accept={parlorImageTypes} disabled={busy || !appearance.ready} aria-label={labels[kind]} onChange={event => {
-                  const file = event.currentTarget.files?.[0];
-                  event.currentTarget.value = "";
-                  if (file) void change(kind, file);
-                }} />
-              </label>
-              {url && <button type="button" className="text-button" disabled={busy} aria-label={t(`Reset ${labels[kind]}`, `恢复${labels[kind]}`)} onClick={() => void change(kind, null)}>{t("Reset", "恢复默认")}</button>}
-            </div>
-          </div>
-        </div>;
+        return <ImageUploadField key={kind} title={labels[kind]} source={url} shape={kind === "wallpaper" ? "landscape" : "round"}
+          icon={kind === "wallpaper" ? "media" : "people"} help={t("Images up to 20 MB","图片最大 20 MB")}
+          accept={parlorImageTypes} disabled={busy || !appearance.ready} busy={busy && activeImage === kind}
+          onSelect={file => void change(kind, file)} onRemove={url ? () => void change(kind,null) : undefined}
+          removeLabel={t("Reset","恢复默认")} error={activeImage === kind ? error : undefined}/>;
       })}
-      {error && <ErrorNotice inline>{error}</ErrorNotice>}
+      {error && !activeImage && <ErrorNotice inline>{error}</ErrorNotice>}
     </div>;
 }

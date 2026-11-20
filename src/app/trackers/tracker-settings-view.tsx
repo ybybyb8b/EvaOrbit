@@ -1,16 +1,18 @@
 "use client";
 import { Disclosure } from "@/components/disclosure";
-import type { ReactNode, MouseEventHandler, ChangeEventHandler } from "react";
+import type { ReactNode, MouseEventHandler } from "react";
 import { ArchiveBox, MoreH, Trash2 } from "reicon-react";
 import { Icon } from "@/components/icons";
+import { ImageUploadField } from "@/components/image-upload-field";
+import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { useLocale } from "@/components/locale-controller";
 import type { Tracker, TrackerField, TrackerFieldType, TrackerGoal, TrackerPeriodType, TrackerReminder } from "@/lib/types";
 const fieldTypes: Array<[TrackerFieldType,string]> = [["time_range","Time range"],["number","Number"],["single_select","Single select"],["multi_select","Multi select"],["text","Text"],["boolean","Switch"],["rating","Rating"]];
 export function periodLabel(value:TrackerPeriodType,english=true){return english?{daily:"Daily",weekly:"Weekly",monthly:"Monthly",yearly:"Yearly",custom:"Custom"}[value]:{daily:"每天",weekly:"每周",monthly:"每月",yearly:"每年",custom:"自定义周期"}[value];}
 export function fieldTypeLabel(type:TrackerFieldType,english:boolean){return english?fieldTypes.find(([value])=>value===type)?.[1]??type:{time_range:"时间段",number:"数字",single_select:"单选",multi_select:"多选",text:"文本",boolean:"是 / 否",rating:"评价"}[type];}
 type Actions = { editBasics?: MouseEventHandler<HTMLElement>;
-chooseImage?: ChangeEventHandler<HTMLInputElement>;
-resetImage?: MouseEventHandler<HTMLElement>;
+chooseImage?: (file: File) => void;
+resetImage?: () => void;
 addField?: MouseEventHandler<HTMLElement>;
 editField?: (field: TrackerField) => MouseEventHandler<HTMLElement>;
 archiveField?: (field: TrackerField) => MouseEventHandler<HTMLElement>;
@@ -25,7 +27,7 @@ editReminder?: (reminder: TrackerReminder) => MouseEventHandler<HTMLElement>;
 deleteReminder?: (reminder: TrackerReminder) => MouseEventHandler<HTMLElement>;
 toggleArchived?: MouseEventHandler<HTMLElement>;
 deleteTracker?: MouseEventHandler<HTMLElement>; };
-export function TrackerSettingsView({ detail, picture, busy=false, readOnly=false, actions={}, basicsEditor, fieldEditor, goalEditor, reminderEditor }: {detail:{tracker:Tracker;fields:TrackerField[];goals:TrackerGoal[];reminders:TrackerReminder[]};total?:number;picture:ReactNode;busy?:boolean;readOnly?:boolean;actions?:Actions;basicsEditor?:ReactNode;fieldEditor?:ReactNode;goalEditor?:ReactNode;reminderEditor?:ReactNode}) {
+export function TrackerSettingsView({ detail, picture, busy=false, iconBusy=false, readOnly=false, actions={}, basicsEditor, fieldEditor, goalEditor, reminderEditor }: {detail:{tracker:Tracker;fields:TrackerField[];goals:TrackerGoal[];reminders:TrackerReminder[]};total?:number;picture:ReactNode;busy?:boolean;iconBusy?:boolean;readOnly?:boolean;actions?:Actions;basicsEditor?:ReactNode;fieldEditor?:ReactNode;goalEditor?:ReactNode;reminderEditor?:ReactNode}) {
  const {english}=useLocale(),tracker=detail.tracker,working=busy||readOnly;
  const activeFields=detail.fields.filter(field=>!field.archivedAt);
  return (<div className="tracker-settings" onClickCapture={event=>{const target=event.target as HTMLElement;if(target.closest("button")){const menu=target.closest("details.tracker-setting-actions");if(menu instanceof HTMLDetailsElement)menu.open=false;}}} onKeyDown={event=>{if(event.key==="Escape"){const menu=(event.target as HTMLElement).closest("details.tracker-setting-actions");if(menu instanceof HTMLDetailsElement){event.preventDefault();event.stopPropagation();menu.open=false;menu.querySelector("summary")?.focus();}}}}>
@@ -33,7 +35,11 @@ export function TrackerSettingsView({ detail, picture, busy=false, readOnly=fals
       <section className="tracker-settings-section">
         <div className="section-heading"><h2>{english?"Basic information":"基本信息"}</h2><button className="text-button" disabled={(working) || !actions.editBasics} onClick={readOnly ? undefined : actions.editBasics}>{english?"Edit":"编辑"}</button></div>
         <dl className="tracker-settings-summary"><div><dt>{english?"Name":"名称"}</dt><dd className="user-content">{tracker.name}</dd></div><div><dt>{english?"Group":"分组"}</dt><dd className="user-content">{tracker.groupName}</dd></div><div><dt>{english?"Default recording action":"默认记录方式"}</dt><dd>{tracker.quickCaptureEnabled?(english?"Quick record":"立即记录"):(english?"Open detailed form":"打开详细表单")}</dd></div></dl>
-        <div className="tracker-icon-settings">{picture}<div><strong>{english?"Tracker icon":"Tracker 图标"}</strong><small>{english?"JPG, PNG or WebP · up to 4 MB · cropped to a square":"JPG、PNG 或 WebP · 最大 4 MB · 裁剪为正方形"}</small><div><label className="button secondary">{english?"Choose image":"更换图片"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={(working) || !actions.chooseImage} onChange={readOnly ? undefined : actions.chooseImage}/></label>{tracker.iconType==="image"&&<button className="text-button" disabled={(working) || !actions.resetImage} onClick={readOnly ? undefined : actions.resetImage}>{english?"Restore default":"恢复默认图标"}</button>}</div></div></div>
+        <ImageUploadField title={english?"Tracker icon":"Tracker 图标"} thumbnail={picture} hasImage={tracker.iconType==="image"}
+          help={english?"JPG, PNG or WebP · up to 4 MB · cropped to a square":"JPG、PNG 或 WebP · 最大 4 MB · 裁剪为正方形"}
+          maxBytes={MAX_AVATAR_BYTES} onSelect={actions.chooseImage} disabled={working} busy={iconBusy}
+          onRemove={tracker.iconType==="image" ? actions.resetImage : undefined}
+          removeLabel={english?"Restore default":"恢复默认图标"}/>
         {basicsEditor}
       </section>
       <Disclosure className="tracker-settings-section tracker-settings-disclosure" title={english ? "Record properties" : "记录属性"} trailing={activeFields.length}>

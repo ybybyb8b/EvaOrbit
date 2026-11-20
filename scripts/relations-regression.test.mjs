@@ -44,6 +44,39 @@ test('SQLite person PATCH preserves omitted fields/photo/archive and supports ex
  const unknown=await updateRelationPerson(99999,parseRelationPersonPatch({name:'Missing'}));assert.equal(unknown,null);
 `));
 
+test('itemized gifts round-trip optional prices and direction without changing legacy gifts',()=>run(String.raw`
+ const {alice,bob}=await seedRelations();
+ const {parseRelationEvent}=await import('./src/lib/relations-validation.ts');
+ const {createRelationEvent,updateRelationEvent,getRelationPersonDetail}=await import('./src/lib/services/relations.ts');
+ const parties=[{key:'self',partyType:'self',personId:null},{key:'other',partyType:'person',personId:alice.id}];
+ const base={eventType:'gift',title:'Housewarming',occurredAt:'2026-11-20T04:00:00.000Z',occurredHasExplicitTime:false,parties,items:[],flows:[]};
+ const payment={fromKey:'other',toKey:'self',flowType:'gift',amountMinor:12000};
+ const old=await createRelationEvent(parseRelationEvent({...base,flows:[payment]}));
+ assert.equal(old.giftDirection,undefined);
+ const items=[{label:'Book',amountMinor:12000},{label:'Tea',amountMinor:null}];
+ const saved=await createRelationEvent(parseRelationEvent({...base,giftDirection:'in',items,flows:[payment]}));
+ assert.equal(saved.giftDirection,'in');
+ assert.deepEqual(saved.items.map(item=>item.amountMinor),[12000,null]);
+ await assert.rejects(updateRelationEvent(saved.id,parseRelationEvent({...base,flows:[payment]})),/礼物明细/);
+ const edited=await updateRelationEvent(saved.id,parseRelationEvent({...base,giftDirection:'in',items:[{label:'Tea',amountMinor:null}]}));
+ assert.equal(edited.giftDirection,'in');
+ assert.equal(edited.items[0].amountMinor,null);
+ assert.deepEqual(edited.flows,[]);
+ const detail=await getRelationPersonDetail(alice.id);
+ assert.equal(detail.events.find(event=>event.id===old.id).flows[0].amountMinor,12000);
+ assert.equal(detail.events.find(event=>event.id===saved.id).items[0].label,'Tea');
+ assert.throws(()=>parseRelationEvent({...base,giftDirection:'out',items,flows:[payment]}),/不一致/);
+ const guests=[...parties,{...parties[1],key:'second',personId:bob.id}];
+ const sent={...base,title:'Travel souvenirs',giftDirection:'out',parties:guests,items:[{label:'Magnet',amountMinor:3500}],
+   flows:guests.slice(1).map(party=>({fromKey:'self',toKey:party.key,flowType:'gift',amountMinor:3500}))};
+ const group=await createRelationEvent(parseRelationEvent(sent));
+ assert.deepEqual(group.flows.map(flow=>flow.amountMinor),[3500,3500]);
+ assert.equal(group.items.length,1);
+ const {derivePersonBalance}=await import('./src/lib/relations.ts');
+ for(const person of [alice,bob])assert.equal(derivePersonBalance([group],person.id).socialMinor,3500);
+ assert.throws(()=>parseRelationEvent({...sent,flows:[sent.flows[0],sent.flows[0]]}),/不一致/);
+`));
+
 function run(program){
  const dir=mkdtempSync(path.join(tmpdir(),'eo-relations-regression-'));
  try{

@@ -1,0 +1,64 @@
+.field { min-width: 0; display: grid; gap: 6px; }
+:global(.form-sheet-panel):has(.field):focus { outline: none; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  min-width: 0;
+  border-radius: var(--form-control-radius);
+  background: color-mix(in srgb, var(--surface-soft) 46%, var(--surface-card));
+}
+
+.thumbnail {
+  flex: 0 0 auto;
+  width: 54px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text-action);
+}
+.thumbnail[data-shape="round"] { border-radius: 50%; }
+.thumbnail[data-shape="portrait"] { width: 50px; aspect-ratio: 2 / 3; }
+.thumbnail[data-shape="landscape"] { width: 70px; aspect-ratio: 4 / 3; }
+.thumbnail > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.thumbnail > :global(.icon) { width: 22px; height: 22px; }
+.thumbnail > :global(.media-cover) { border-radius: inherit; }
+
+.details { min-width: 0; flex: 1; display: grid; gap: 3px; }
+.details > strong { font: 650 13px/1.4 var(--font-body); overflow-wrap: anywhere; }
+.details > small { color: var(--text-secondary); font: 400 12px/1.4 var(--font-body); overflow-wrap: anywhere; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0 5px; }
+.choose,
+.remove {
+  min-height: 44px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-action);
+  font: 550 12px/1.35 var(--font-body);
+  text-align: start;
+  cursor: pointer;
+}
+.choose { background: var(--surface-raised); color: var(--text-primary); font-weight: 650; }
+.choose[aria-pressed="true"] { background: var(--surface-accent-soft); }
+.remove { color: var(--text-secondary); }
+.choose:disabled,
+.remove:disabled { opacity: .55; cursor: default; }
+.choose:focus-visible,
+.remove:focus-visible {
+  outline: none;
+  background: var(--surface-accent-soft);
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+@media (hover: hover) {
+  .choose:hover:not(:disabled), .remove:hover:not(:disabled) { text-decoration: underline; text-underline-offset: .2em; }
+}
+@media (forced-colors: active) {
+  .choose:focus-visible, .remove:focus-visible { outline: 2px solid Highlight; }
+}

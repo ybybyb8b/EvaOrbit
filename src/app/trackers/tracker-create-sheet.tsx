@@ -1,10 +1,13 @@
 "use client";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { ChoiceSelect } from "@/components/choice-select";
 import { SuggestedInput } from "@/components/suggested-input";
 import { ErrorNotice } from "@/components/error-notice";
 import { Icon } from "@/components/icons";
+import { ImageUploadField } from "@/components/image-upload-field";
+import { useLocale } from "@/components/locale-controller";
+import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { newTrackerLocalId } from "@/lib/tracker-local-store";
 import type { TrackerFieldType } from "@/lib/types";
 import { TrackerCaptureToggle } from "./tracker-capture-toggle";
@@ -26,20 +29,12 @@ function newFieldDraft(type: TrackerFieldType = "number"): FieldDraft {
 
 export type TrackerCreateInput = { draft: typeof emptyDraft; iconFile: File | null; fields: FieldDraft[] };
 export function TrackerCreateSheet({ groupNames, onCreate, onClose, allowImages = true,allowedFieldTypes }: { groupNames: string[]; onCreate: (input: TrackerCreateInput) => Promise<void>; onClose: () => void; allowImages?: boolean;allowedFieldTypes?:readonly TrackerFieldType[] }) {
+  const {english} = useLocale();
   const [draft, setDraft] = useState(emptyDraft);
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [fieldDrafts, setFieldDrafts] = useState<FieldDraft[]>([]);
   const [fieldEditor, setFieldEditor] = useState<FieldDraft | null>(null);
   const [working, setWorking] = useState(false), [error, setError] = useState("");
-  const iconPreview = useMemo(() => iconFile ? URL.createObjectURL(iconFile) : "", [iconFile]);
-  useEffect(() => () => { if (iconPreview) URL.revokeObjectURL(iconPreview); }, [iconPreview]);
-  function chooseIcon(file: File | undefined) {
-    setError("");
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) { setError("The image must be smaller than 4 MB."); return; }
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { setError("Use a JPG, PNG or WebP image."); return; }
-    setIconFile(file);
-  }
 
   function startField(type: TrackerFieldType) {
     setError("");
@@ -67,11 +62,11 @@ export function TrackerCreateSheet({ groupNames, onCreate, onClose, allowImages 
   return <FormSheet title="Create Tracker" onClose={onClose} formId="tracker-create-form" submitLabel="Create Tracker" busy={working} busyLabel="Creating…" submitDisabled={fieldEditor !== null}><form id="tracker-create-form" className="editor-card tracker-create-form" onSubmit={submit}>
       <p className="tracker-create-intro">What do you want to notice?</p>
       <div className="tracker-create-basics">
-        <label className="tracker-image-picker" aria-disabled={!allowImages}>
-          <span className="tracker-image-preview" style={iconPreview ? { backgroundImage: `url(${iconPreview})` } : undefined}>{!iconPreview && <Icon name="tracker" />}</span>
-          <span><strong>{allowImages ? iconFile ? "Change image" : "Choose image" : "Default icon"}</strong><small>{allowImages ? "JPG, PNG or WebP · up to 4 MB" : "Images can be changed on the Web"}</small></span>
-          <input type="file" disabled={!allowImages} accept="image/jpeg,image/png,image/webp" onChange={(event) => { chooseIcon(event.target.files?.[0]); event.target.value = ""; }} />
-        </label>
+        <ImageUploadField title={allowImages ? (english ? "Tracker icon" : "Tracker 图标") : (english ? "Default icon" : "默认图标")}
+          icon="tracker" file={iconFile} maxBytes={MAX_AVATAR_BYTES} disabled={!allowImages || working}
+          help={!allowImages ? (english ? "Images can be changed on the Web" : "可在网页版更换图片") : undefined}
+          onSelect={setIconFile} onRemove={iconFile ? () => setIconFile(null) : undefined}
+          removeLabel={english ? "Use default" : "恢复默认"}/>
         <div className="tracker-basic-fields">
           <label className="field wide"><span>Name</span><input required maxLength={80} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Poo, Home visit, Headache…" /></label>
           <div className="field"><span>Group</span><SuggestedInput recommendationStyle="search" suggestionLabel="分组" suggestions={groupNames} maxLength={60} value={draft.groupName} onValueChange={nextValue => setDraft({ ...draft, groupName: nextValue })} /></div>

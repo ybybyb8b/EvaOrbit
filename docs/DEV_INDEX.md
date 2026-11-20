@@ -214,6 +214,7 @@ Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好�
 
 - **职责与入口**：[relations/](../src/app/relations/)、[relations 服务](../src/lib/services/relations.ts)；`/people` 重定向至 `/relations`。
 - **数据与接口**：`relation_people`、`relation_events`、`relation_event_parties`、`relation_event_items`、`relation_event_flows`、`person_memory_notes`；`/api/relations/*`；MCP `relation_person`、`relation_event`、`person_note`。
+- **礼物明细**：送出时可选一位或多位收礼人，收到时选一位赠送人。多人赠礼共用每人的礼物明细，合计由每人金额乘人数，每位对方只计自己的已知金额。没有方向字段的旧礼物沿用原逐笔流向，可继续编辑。Web、本地读取和 MCP 共用同一往来模型。
 - **依赖与决定**：人物笔记与 Graph Entity 是独立模型，不能仅凭名称合并。交往事件参与 Timeline；代垫结清以 flow ID 执行业务操作，不使用 event ID。事件 update 现有契约要求完整输入，不能当普通 PATCH。
 - **详文**：[MCP 操作与限制](../src/lib/mcp/README.md)。
 
