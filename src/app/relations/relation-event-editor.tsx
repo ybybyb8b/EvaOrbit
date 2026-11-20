@@ -97,7 +97,7 @@ export function RelationEventEditor({ people, editing, initialPersonId, onSaved,
   const multiGift = itemizedGift && direction === "out" && giftMulti;
   const selected = itemizedGift ? multiGift ? giftRecipients : giftPerson === undefined ? [] : [giftPerson] : selectedPeople;
   const personOptions = people.filter(person => !person.archivedAt || selected.includes(person.id)).map(person => ({
-    value: String(person.id), label: relationPersonDisplayName(person), detail: person.nickname ? person.name : undefined,
+    value: String(person.id), label: relationPersonDisplayName(person), keywords: person.nickname ? person.name : undefined,
   }));
   const partyRows: RelationPartyInput[] = [null, ...selected].map(id => ({
     key: personKey(id), partyType: id === null ? "self" : "person", personId: id, shareAmountMinor: null, paidAmountMinor: null,
@@ -278,7 +278,7 @@ export function RelationEventEditor({ people, editing, initialPersonId, onSaved,
           }}>{multiGift ? t("Choose one person", "改为单人") : t("Send to multiple people", "送给多人")}</button>}
         </div>
         {multiGift ? <SearchableMultiSelect label={giftPersonLabel} value={giftRecipients.map(String)} options={personOptions}
-          onValueChange={values => setGiftRecipients(values.map(Number))} required alwaysSearch hideSelectedOptions/>
+          onValueChange={values => setGiftRecipients(values.map(Number))} required alwaysSearch/>
           : <SearchableSelect label={giftPersonLabel} value={giftPerson === undefined ? "" : String(giftPerson)} options={personOptions}
             onValueChange={value => setGiftPerson(value ? Number(value) : undefined)} required/>}
       </div>
@@ -290,7 +290,7 @@ export function RelationEventEditor({ people, editing, initialPersonId, onSaved,
       <span>{personLabel}</span>
       {linkedEdit ? <div className={styles.summary}>{partyRows.slice(1).map(party => name(party.key)).join(t(", ", "、"))}</div>
         : <SearchableMultiSelect label={personLabel} value={selected.map(String)} options={personOptions}
-          onValueChange={values => changePeople(values.map(Number))} required alwaysSearch hideSelectedOptions/>}
+          onValueChange={values => changePeople(values.map(Number))} required alwaysSearch/>}
     </div>}
     {type === "expense" && <>
       {decimalInput(t("Total · ¥", "总额 · ¥"), total, setTotal)}

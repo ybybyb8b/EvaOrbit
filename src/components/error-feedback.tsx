@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { CircleInfo } from "reicon-react";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
 import { presentError } from "@/lib/error-presentation";
@@ -37,14 +38,15 @@ export function ErrorFeedbackProvider({ children }: { children: ReactNode }) {
   return <ErrorFeedbackContext.Provider value={registry}>{children}{visible && createPortal(<ErrorBanner key={visible.id} details={visible.details} onDismiss={dismiss} closeLabel={english ? "Dismiss error" : "收起错误提示"}>{visible.content}</ErrorBanner>, document.body)}</ErrorFeedbackContext.Provider>;
 }
 
-function ErrorDetails({ details, phrasing }: { details: string; phrasing?: boolean }) {
+function ErrorDetails({ details, phrasing, iconOnly }: { details: string; phrasing?: boolean; iconOnly?: boolean }) {
   const { english } = useLocale();
   const [open, setOpen] = useState(false);
   const id = useId();
   const Detail = phrasing ? "code" : "pre";
+  const label = open ? (english ? "Hide details" : "收起报错详情") : (english ? "View error details" : "查看报错详情");
   return <>
-    <button type="button" className="text-button error-details-toggle" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-      {open ? (english ? "Hide details" : "收起报错详情") : (english ? "View error details" : "查看报错详情")}
+    <button type="button" className="text-button error-details-toggle" aria-label={iconOnly ? label : undefined} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
+      {iconOnly ? <CircleInfo className="icon" weight="Outline" aria-hidden="true" /> : label}
     </button>
     {open && <Detail id={id} className="error-details" data-error-details data-no-translate tabIndex={0}>{details}</Detail>}
   </>;
@@ -71,7 +73,7 @@ function ErrorBanner({ children, details, onDismiss, closeLabel }: { children: R
     <span className="error-banner-symbol" aria-hidden="true">!</span>
     <div className="error-banner-content form-error">
       <div role="alert" aria-atomic="true">{children}</div>
-      {details && <ErrorDetails key={details} details={details} />}
+      {details && <ErrorDetails key={details} details={details} iconOnly />}
     </div>
     <button type="button" className="error-banner-close" aria-label={closeLabel} onClick={() => { onDismiss(); previousFocus.current?.focus({ preventScroll: true }); }}><Icon name="close" /></button>
   </section>;

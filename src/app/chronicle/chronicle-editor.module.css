@@ -1,0 +1,77 @@
+.editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.editor > :global(.field) > input {
+  min-width: 0;
+  box-shadow: var(--sheet-control-depth, inset 0 2px 4px rgb(var(--shadow-rgb) / .12));
+}
+.date { width: min(100%, 12rem); }
+.date input { width: 100%; }
+
+.body { display: grid; gap: 7px; min-width: 0; }
+.bodyHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+.bodyHeader label { font-size: .8125rem; color: var(--text-label); }
+.modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+.modes button {
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: .8125rem;
+  cursor: pointer;
+}
+.modes button[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: 0 2px 5px rgb(var(--shadow-rgb) / .10);
+}
+.modes button:disabled { color: var(--text-tertiary); opacity: .65; cursor: default; }
+
+.paper {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: clamp(14rem, 36svh, 24rem);
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border: 0;
+  border-radius: var(--form-control-radius);
+  background: var(--sheet-control-surface, var(--surface-card));
+  color: var(--text-primary);
+  font: 1rem/1.7 var(--font-ui);
+  overflow-wrap: anywhere;
+  resize: none;
+}
+textarea.paper { box-shadow: var(--sheet-control-depth, inset 0 2px 5px rgb(var(--shadow-rgb) / .12)); }
+textarea.paper[hidden] { display: none; }
+textarea.paper::placeholder { color: var(--text-tertiary); opacity: 1; }
+textarea.paper:focus {
+  outline: 0;
+  background: var(--focused-field-surface);
+  box-shadow: var(--focused-field-depth);
+}
+.preview { background: var(--surface-card); box-shadow: 0 3px 12px -6px rgb(var(--shadow-rgb) / .18); }
+.preview :global(.markdown-content) { font: inherit; }
+.preview :global(.markdown-content) > :first-child { margin-top: 0; }
+.preview :global(.markdown-content) > :last-child { margin-bottom: 0; }
+.preview:focus-visible, .modes button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (forced-colors: active) {
+  textarea.paper:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+.source { justify-self: start; width: fit-content; max-width: 100%; }
+.source :global(.choice-capsules) { overflow: visible; padding: 0; }
+.source :global(.choice-select .choice-capsules) > button { min-height: 44px; padding-inline: 14px; }

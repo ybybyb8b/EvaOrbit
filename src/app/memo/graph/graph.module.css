@@ -22,7 +22,6 @@
   --echo-accent:var(--accent-primary);
   --echo-surface:var(--surface-card);
   --echo-tint:var(--surface-tint);
-  --echo-edge:var(--border-default);
   --echo-shadow:0 7px 20px rgb(var(--shadow-rgb) / .14);
   --graph-glint:var(--surface-raised);
   --graph-ground:var(--surface-card);
@@ -40,7 +39,7 @@
 .manage { width:50px; height:50px; }
 .manage svg { width:24px; height:24px; }
 .search { min-height:48px; }
-.results, .activity, .map {
+.results, .map {
   border-radius:18px; background:var(--echo-surface); box-shadow:var(--echo-shadow);
 }
 .results { margin-top:6px; padding:8px 12px; }
@@ -67,7 +66,6 @@
 .filters label:has(select[data-active="true"]) svg { color:var(--echo-surface); }
 .map {
   overflow:hidden;
-  border:1px solid var(--graph-rim);
   background:
     radial-gradient(ellipse at 30% 5%,color-mix(in srgb,var(--graph-glint),transparent 30%),transparent 72%),
     linear-gradient(155deg,color-mix(in srgb,var(--echo-surface),transparent 10%),var(--graph-ground));
@@ -133,13 +131,8 @@
 .recent header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
 .page .recent h2 { margin:0; font:600 clamp(27px,6vw,38px)/1.08 var(--echo-display); letter-spacing:-.02em; }
 .recent header button { flex:none; min-height:40px; padding:0 6px; font-size:13px; }
-.activity {
-  overflow:hidden;
-  background:linear-gradient(170deg,var(--echo-surface),color-mix(in srgb,var(--echo-surface),var(--echo-tint) 22%));
-  box-shadow:inset 0 1px var(--graph-rim),0 8px 19px -13px var(--graph-contact);
-}
-.activity button { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; min-height:58px; padding:7px 12px; border-radius:0; }
-.activity button + button { box-shadow:inset 0 1px color-mix(in srgb,var(--echo-tint),transparent 40%); }
+.activity { display:grid; gap:6px; }
+.activity button { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; min-height:58px; padding:7px 12px; border-radius:12px; background:var(--echo-surface); }
 .activity strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .activity time { color:var(--echo-muted); font-size:11px; white-space:nowrap; }
 .empty { padding:12px; color:var(--echo-muted); }

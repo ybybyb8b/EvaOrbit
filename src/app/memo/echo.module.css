@@ -3,23 +3,28 @@
   --echo-muted: var(--text-secondary);
   --echo-accent: var(--accent-primary);
   --echo-tint: var(--surface-tint);
-  --echo-edge: var(--border-default);
   --echo-surface: var(--surface-card);
   --echo-display: var(--font-cormorant, "Cormorant Garamond"), var(--font-selected-zh), Georgia, serif;
-  --echo-shadow: 0 7px 22px rgb(var(--shadow-rgb) / .04);
+  --echo-shadow: 0 5px 16px -5px rgb(var(--shadow-rgb) / .13);
+  --echo-search-shadow: inset 0 2px 5px rgb(var(--shadow-rgb) / .10);
   width: min(760px, calc(100% - 44px));
   padding-top: 32px;
   color: var(--echo-ink);
   font-family: system-ui, var(--font-selected-zh), sans-serif;
 }
 
+:global(html[data-mode="dark"]) .echo {
+  --echo-shadow: 0 5px 16px -5px rgb(var(--shadow-rgb) / .36);
+  --echo-search-shadow: inset 0 2px 5px rgb(var(--shadow-rgb) / .26);
+}
+
 :global(.main-content):has(.echo, .detail) { background: var(--surface-canvas); }
 .detail { color: var(--text-primary); }
 .detail :global(.long-term-prose), .detail :global(.long-term-meta) > div { background: var(--surface-card); }
+.detail :global(.long-term-prose) { border: 0; }
 
 .echo ::selection { background: var(--echo-tint); color: var(--echo-ink); }
-.echo :is(a, button, select):focus-visible,
-.search:focus-within { outline: 2px solid var(--echo-accent); outline-offset: 3px; }
+.echo :is(a, button, select):focus-visible { outline: 2px solid var(--echo-accent); outline-offset: 3px; }
 
 .masthead {
   display: flex;
@@ -64,13 +69,15 @@
   align-items: center;
   gap: 11px;
   padding: 0 16px;
-  border: 1px solid var(--echo-edge);
+  border: 0;
   border-radius: 100px;
-  background: var(--echo-surface);
+  background: var(--surface-soft);
   color: var(--echo-accent);
-  box-shadow: var(--echo-shadow);
+  box-shadow: var(--echo-search-shadow);
   cursor: text;
 }
+
+.search:focus-within { background: var(--surface-accent-soft); }
 
 .search input {
   width: 100%;
@@ -94,11 +101,9 @@
 
 .destinations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
 .destination, .list .row {
-  background: var(--echo-surface);
-  border: 1px solid var(--echo-edge);
+  border: 0;
   border-radius: 17px;
   color: var(--echo-ink);
-  box-shadow: var(--echo-shadow);
 }
 
 .destination {
@@ -110,6 +115,8 @@
   gap: 6px 11px;
   min-height: 112px;
   padding: 14px 12px 13px;
+  background: var(--surface-raised);
+  box-shadow: var(--echo-shadow);
 }
 
 .destination:only-child { grid-column: 1 / -1; }
@@ -149,7 +156,7 @@
 .sectionHeading > span { flex: none; color: var(--echo-accent); font-size: 12px; }
 
 .list { display: grid; gap: 9px; }
-.list .row { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 12px 14px; }
+.list .row { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 12px 14px; background: var(--echo-surface); }
 .list .memoryRow { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; }
 .memoryIcon { color: var(--echo-accent); padding-top: 4px; }
 .memoryIcon > :global(.icon) { width: 17px; height: 17px; }
@@ -172,8 +179,13 @@
 .empty p { margin: 0; }
 
 @media (hover: hover) {
-  .destination:hover, .list .row:hover { background: color-mix(in srgb, var(--echo-surface), var(--echo-tint) 45%); }
+  .destination:hover { background: color-mix(in srgb, var(--surface-raised), var(--echo-tint) 30%); }
+  .list .row:hover { background: color-mix(in srgb, var(--echo-surface), var(--echo-tint) 35%); }
   .recallButton:hover { text-decoration: underline; text-underline-offset: 4px; }
+}
+
+@media (forced-colors: active) {
+  .search:focus-within { outline: 2px solid Highlight; outline-offset: 3px; }
 }
 
 @media (max-width: 700px) {

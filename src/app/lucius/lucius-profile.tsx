@@ -7,6 +7,7 @@ import { plainExcerpt } from "@/lib/long-term-memory";
 import type { LuciusPostComment, LuciusState, LuciusPost, LuciusDiaryEntry } from "@/lib/types";
 import { LuciusPostComments } from "./lucius-post-comments";
 import { PageBackButton } from "@/components/page-back-button";
+import journal from "@/components/journal-reading.module.css";
 
 
 export type LuciusTab = "posts" | "diary";
@@ -83,16 +84,14 @@ export function LuciusProfile({tab,state,posts,diaryEntries,comments,now}:{now:n
         </div>}
       </section>}
 
-      {tab === "diary" && <section className="lucius-profile-archive" aria-labelledby="lucius-diary-heading">
+      {tab === "diary" && <section className={`lucius-profile-archive ${journal.profileArchive}`} aria-labelledby="lucius-diary-heading">
         <div className="lucius-profile-section-heading">
           <div><span>Private record</span><h2 id="lucius-diary-heading">Diary</h2></div>
           <Link href="/lucius/diary">Open archive</Link>
         </div>
-        {diaryEntries.length ? <div className="lucius-profile-list">{diaryEntries.map((entry) => <Link href={`/lucius/diary/${entry.id}`} className="lucius-diary-entry" key={entry.id}>
+        {diaryEntries.length ? <div className={journal.profileList}>{diaryEntries.map((entry) => <Link href={`/lucius/diary/${entry.id}`} className={journal.profileEntry} key={entry.id}>
           <time dateTime={entry.date}>{longDate(entry.date)}</time>
-          <strong>Diary entry</strong>
-          <p>{plainExcerpt(entry.content, 180)}</p>
-          <span>Read entry <i aria-hidden="true">→</i></span>
+          <p className={`${journal.excerpt} ${journal.diaryExcerpt}`}>{plainExcerpt(entry.content, 180)}</p>
         </Link>)}</div> : <div className="lucius-profile-empty"><span aria-hidden="true">✦</span><p>No diary entries yet.</p><small>An unwritten page is still a page.</small></div>}
       </section>}
 

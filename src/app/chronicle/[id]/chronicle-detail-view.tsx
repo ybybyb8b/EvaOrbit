@@ -4,6 +4,7 @@ import { ErrorNotice } from "@/components/error-notice";
 import { responseError } from "@/lib/response-error";
 import { useServerDataState } from "@/components/use-data-refresh";
 import {ChronicleEditor,type ChronicleDraft} from "../chronicle-editor";
+import journal from "@/components/journal-reading.module.css";
 import {useFormPreview} from "@/components/form-preview";
 import {useChronicleData} from "@/components/chronicle-data-context";
 import {useLocale} from "@/components/locale-controller";
@@ -47,14 +48,15 @@ export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEnt
   }
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); if(readonly)return; setBusy(true); setError(""); setNotice("");
+    event.preventDefault(); if (readonly || busy) return; setBusy(true); setError(""); setNotice("");
+    const fallback = english ? "Could not update Chronicle entry." : "无法保存纪事。";
     try {
       const response = await businessFetch(`/api/chronicle/${entry.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
-      if (!response.ok) { setError(await responseError(response, "Could not update Chronicle entry.")); return; }
+      if (!response.ok) { setError(await responseError(response, fallback)); return; }
       const updated = await response.json() as ChronicleEntry;
-      setEntry(updated); setDraft(draftFromEntry(updated)); setEditing(false); setNotice("Chronicle entry updated.");
+      setEntry(updated); setDraft(draftFromEntry(updated)); setEditing(false); setNotice(english ? "Chronicle entry updated." : "纪事已更新");
     } catch {
-      setError("Could not update Chronicle entry.");
+      setError(fallback);
     } finally {
       setBusy(false);
     }
@@ -76,17 +78,23 @@ export function ChronicleDetailContent({initial,onDeleted}:{initial:ChronicleEnt
     }
   }
 
-  return <div className="page chronicle-page chronicle-detail-page">
-    <PageHeader eyebrow={`${chronicleDateLabel(entry.date,english)} · ${entry.source==="manual"&&!english?"手动":sourceLabel(entry.source)}`} title={entry.title} action={<button className="button secondary" onClick={startEdit} disabled={editing||busy}><Icon name="edit"/>{english?"Edit":"编辑"}</button>} />
+  return <div className={`page chronicle-page chronicle-detail-page ${journal.reader}`}>
+    <PageHeader eyebrow={chronicleDateLabel(entry.date,english)} title={entry.title} action={<button className="button secondary" onClick={startEdit} disabled={editing||busy}><Icon name="edit"/>{english?"Edit":"编辑"}</button>} />
     {notice && <ToastNotice message={notice} onShown={() => setNotice("")} />}
-    {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
+    {!editing && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
 
-    {editing ? <FormSheet title="Edit Chronicle" onClose={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }} formId="chronicle-edit-form" submitLabel="Save changes" busy={busy} submitDisabled={readonly}><form id="chronicle-edit-form" className="editor-card chronicle-editor" onSubmit={submit}>
-      <ChronicleEditor draft={draft} onChange={setDraft}/>
+    {editing ? <FormSheet title={english ? "Edit Chronicle" : "编辑纪事"} onClose={() => { setEditing(false); setDraft(draftFromEntry(entry)); setError(""); }} formId="chronicle-edit-form" submitLabel={english ? "Save changes" : "保存修改"} busy={busy} submitDisabled={readonly}><form id="chronicle-edit-form" className="editor-card field-focus-surface" onSubmit={submit}>
+      <ChronicleEditor draft={draft} onChange={setDraft} error={error} />
     </form></FormSheet> : <>
-      <article className="chronicle-article"><MarkdownMessage content={entry.contentMd} offlineMedia={local} /></article>
-      <div className="chronicle-entry-meta"><span>{english?"Created":"创建于"} {new Date(entry.createdAt).toLocaleString()}</span><span>{english?"Updated":"更新于"} {new Date(entry.updatedAt).toLocaleString()}</span></div>
-      <div className="chronicle-detail-actions"><button className="text-button danger" onClick={() => void remove()} disabled={busy||readonly}><Icon name="trash" />{english?"Delete":"删除"}</button></div>
+      <article className={`chronicle-article ${journal.reading}`}><MarkdownMessage content={entry.contentMd} offlineMedia={local} /></article>
+      <footer>
+        <dl className={journal.metadata}>
+          <div><dt>{english ? "Source" : "来源"}</dt><dd>{entry.source === "manual" && !english ? "手动" : sourceLabel(entry.source)}</dd></div>
+          <div><dt>{english ? "Created" : "创建于"}</dt><dd><time dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleString(english ? "en-US" : "zh-CN")}</time></dd></div>
+          <div><dt>{english ? "Updated" : "更新于"}</dt><dd><time dateTime={entry.updatedAt}>{new Date(entry.updatedAt).toLocaleString(english ? "en-US" : "zh-CN")}</time></dd></div>
+        </dl>
+        <div className="chronicle-detail-actions"><button className="text-button danger" onClick={() => void remove()} disabled={busy||readonly}><Icon name="trash" />{english?"Delete":"删除"}</button></div>
+      </footer>
     </>}
   </div>;
 }

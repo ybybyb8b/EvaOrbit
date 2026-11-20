@@ -14,7 +14,7 @@ import { SuggestedInput } from "@/components/suggested-input";
 import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { DateTimeField } from "@/components/date-time-field";
+import { currentLocalDate, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -25,18 +25,13 @@ import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { groupTasks, taskCalendarDates, taskDateOffset, type TaskGroup } from "@/lib/task-groups";
 import { dateInEvaOrbit } from "@/lib/time";
 import type { ApiError, Task, TaskPriority } from "@/lib/types";
+import styles from "./task-editor.module.css";
 
 type Status = "all" | "open" | "done";
 const sections = ["list", "month"] as const;
 type ReminderMode="none"|"at_due"|"custom";
 type TaskDraft = { title:string;notes:string;dueDate:string;dueTime:string;completedOn?:string;reminderMode:ReminderMode;reminderDate:string;reminderTime:string;repeatWhileOverdue:boolean;priority:TaskPriority;tags:string };
 const emptyDraft:TaskDraft={title:"",notes:"",dueDate:"",dueTime:"",reminderMode:"none",reminderDate:"",reminderTime:"",repeatWhileOverdue:false,priority:"medium",tags:""};
-
-function localDate(offset = 0) {
-  const value = new Date();
-  value.setDate(value.getDate() + offset);
-  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
-}
 
 function dueLabel(task: Task, english: boolean) {
   if (!task.dueDate) return "";
@@ -58,7 +53,6 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   const [showForm, setShowForm] = useState(params.get("new") === "1");
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
-  const [showMore, setShowMore] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedTag, setSelectedTag] = useRememberedState<string | null>("TasksView:selectedTag", null);
@@ -81,7 +75,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     const reminder=task.reminders?.[0];
     setEditing(task.id);
     setDraft({title:task.title,notes:task.notes,dueDate:task.dueDate??"",dueTime:task.dueTime??"",completedOn:task.completed?(task.completedOn??(task.completedAt?dateInEvaOrbit(new Date(task.completedAt)):"")):undefined,reminderMode:reminder?(reminder.triggerType==="absolute"?"custom":"at_due"):"none",reminderDate:reminder?.absoluteDate??"",reminderTime:reminder?.absoluteTime??"",repeatWhileOverdue:reminder?.repeatWhileOverdue??false,priority:task.priority,tags:task.tags.join(", ")});
-    setShowMore(true); setError(""); setShowForm(true);
+    setError(""); setShowForm(true);
   }, []);
 
 
@@ -105,17 +99,16 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     return () => { cancelled = true; };
   }, [english, taskId, startEdit,read]);
 
-  function startNew(dueDate = "") { setEditing(null); setDraft({ ...emptyDraft, dueDate, tags: activeTag ?? "" }); setShowMore(false); setError(""); setShowForm(true); }
+  function startNew(dueDate = "") { setEditing(null); setDraft({ ...emptyDraft, dueDate, tags: activeTag ?? "" }); setError(""); setShowForm(true); }
 
-  function quickDate(kind: "today" | "tomorrow" | "week" | "none") {
-    if (kind === "none") { setDraft({ ...draft, dueDate: "", dueTime: "", reminderMode:draft.reminderMode==="at_due"?"none":draft.reminderMode,repeatWhileOverdue:false }); return; }
-    if (kind === "week") {
-      const value = new Date();
-      const offset = 7 - (value.getDay() || 7);
-      setDraft({ ...draft, dueDate: localDate(offset) });
-      return;
-    }
-    setDraft({ ...draft, dueDate: localDate(kind === "tomorrow" ? 1 : 0) });
+  function setDue({ date, time }: DateTimeDraft) {
+    setDraft(current => {
+      const reminderMode = current.reminderMode === "at_due" && (!date || !time) ? "none" : current.reminderMode;
+      return {
+        ...current, dueDate: date, dueTime: date ? time : "", reminderMode,
+        repeatWhileOverdue: Boolean(date && reminderMode !== "none" && current.repeatWhileOverdue),
+      };
+    });
   }
 
   async function refreshNativeNotifications() {
@@ -136,6 +129,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
       const result = await response.json().catch(() => null) as ApiError | null;
       if (!response.ok) throw new Error(english ? "Could not save task." : result?.error ?? "无法保存任务。");
       setShowForm(false); setEditing(null); setDraft(emptyDraft);
+      if (!editing) showActionToast(english ? "Task added" : "任务已添加");
       await load(); await refreshNativeNotifications();
       playNativeHaptic("success");
     } catch (reason) {
@@ -176,12 +170,13 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   }
 
   const labels = { all: english ? "All" : "全部", open: english ? "Open" : "未完成", done: english ? "Done" : "已完成" };
-  const today = localDate();
+  const today = currentLocalDate();
   const now = clock ?? new Date();
   const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const tags = [...new Set(tasks.flatMap(task => task.tags))].sort((a, b) => a.localeCompare(b));
   const activeTag = selectedTag && tags.includes(selectedTag) ? selectedTag : null;
   const activeDate = dateScope === "today" ? today : dateScope === "all" || dateScope === "undated" ? null : dateScope;
+  const selectedDueDate = dateScope === "today" ? "" : activeDate ?? "";
   useSectionSwipe({active:view,sections,rootRef:swipeRoot,feedbackRef:swipeNav,onChange:mode=>{setView(mode);setPeriod(activeDate??today);},enabled:!showForm,ignoreSelector:".task-calendar-controls, .task-filter-bar, .task-status-tabs, .task-week-strip",interactiveSurfaceSelector:".task-month-day"});
   const taggedTasks = tasks.filter(task => !activeTag || task.tags.includes(activeTag));
   const scopeTasks = taggedTasks.filter(task => dateScope === "all" || (dateScope === "undated" ? !task.dueDate : task.dueDate === activeDate || (activeDate === today && !task.completed && task.dueDate && task.dueDate < today)));
@@ -222,21 +217,49 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   }
 
   return <div ref={swipeRoot} className="page tasks-page">
-    <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
-    {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} submitDisabled={preview} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className="editor-card" onSubmit={submit}>{preview&&<FormPreviewNotice/>}
-      <label className="field wide quick-title"><span>{english ? "Task" : "任务内容"}</span><input required maxLength={160} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
-      {draft.completedOn!==undefined&&<label className="field wide"><span>{english?"Completion date":"完成日期"}</span><input type="date" required max={dateInEvaOrbit()} value={draft.completedOn} onChange={event=>setDraft({...draft,completedOn:event.target.value})}/></label>}
-      <div className="quick-date-field"><span>{english ? "Due" : "截止日期"}</span><div>{([['today',english ? 'Today' : '今天'],['tomorrow',english ? 'Tomorrow' : '明天'],['week',english ? 'This week' : '本周'],['none',english ? 'No due date' : '不设日期']] as const).map(([value,label])=><button type="button" key={value} onClick={()=>quickDate(value)}>{label}</button>)}</div>{draft.dueDate&&<small>{english ? `Due ${draft.dueDate}${draft.dueTime ? ` at ${draft.dueTime}` : ""}` : `截止 ${draft.dueDate}${draft.dueTime ? ` ${draft.dueTime}` : ""}`}</small>}</div>
-      <button type="button" className="more-toggle" onClick={()=>setShowMore(!showMore)}>{showMore ? (english ? "Fewer settings" : "收起设置") : (english ? "More settings" : "更多设置")} <span>›</span></button>
-      {showMore && <div className="form-grid advanced-fields">
-        <div className="field wide"><span>{english?"Due":"截止"}</span><DateTimeField label={english?"Date":"日期"} optionalDate value={{date:draft.dueDate,time:draft.dueTime}} onChange={(value)=>setDraft({...draft,dueDate:value.date,dueTime:value.time,reminderMode:draft.reminderMode==="at_due"&&(!value.date||!value.time)?"none":draft.reminderMode,repeatWhileOverdue:value.date?draft.repeatWhileOverdue:false})}/></div>
-        <div className="field wide"><span>{english?"Remind me":"提醒我"}</span><ChoiceSelect value={draft.reminderMode} onChange={(event)=>setDraft({...draft,reminderMode:event.target.value as ReminderMode})}><option value="none">{english?"None":"不提醒"}</option><option value="at_due" disabled={!draft.dueDate||!draft.dueTime}>{english?"At due time":"截止时提醒"}</option><option value="custom">{english?"Custom":"自定义"}</option></ChoiceSelect></div>
-        {draft.reminderMode==="custom"&&<><label className="field"><span>{english?"Reminder date":"提醒日期"}</span><input type="date" required value={draft.reminderDate} onChange={(event)=>setDraft({...draft,reminderDate:event.target.value})}/></label><label className="field"><span>{english?"Reminder time":"提醒时间"}</span><input type="time" required step={draft.reminderTime&&Number(draft.reminderTime.slice(3,5))%5!==0?60:300} value={draft.reminderTime} onChange={(event)=>setDraft({...draft,reminderTime:event.target.value})}/></label></>}
-        {draft.reminderMode!=="none"&&draft.dueDate&&<label className="field wide checkbox-line"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>{english?"Repeat daily while overdue":"逾期后每日重复提醒"}</span></label>}
-        <label className="field"><span>{english ? "Priority" : "优先级"}</span><ChoiceSelect value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value as TaskPriority })}><option value="low">{english ? "Low" : "低"}</option><option value="medium">{english ? "Medium" : "中"}</option><option value="high">{english ? "High" : "高"}</option></ChoiceSelect></label>
-        <div className="field wide"><span>{english ? "Tags" : "标签"} <small>{english ? "Enter to add" : "回车添加"}</small></span><SuggestedInput suggestionLabel="标签" suggestions={tasks.flatMap(task => task.tags)} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></div>
-        <label className="field wide"><span>{english ? "Notes" : "备注"}</span><textarea rows={3} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={english ? "Optional context" : "补充上下文（可选）"} /></label>
-      </div>}
+    <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(selectedDueDate)}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
+    {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} submitDisabled={preview} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className={`editor-card field-focus-surface ${styles.editor}`} onSubmit={submit}>{preview&&<FormPreviewNotice/>}
+      <label className="field"><span>{english ? "Task" : "任务内容"}</span><input required maxLength={160} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
+      {draft.completedOn !== undefined && <label className="field"><span>{english ? "Completion date" : "完成日期"}</span><input type="date" required max={dateInEvaOrbit()} value={draft.completedOn} onChange={event => setDraft({ ...draft, completedOn: event.target.value })} /></label>}
+
+      <div className={styles.schedule}>
+        <DateTimeField label={english ? "Due date" : "截止日期"} timeLabel={english ? "Due time" : "截止时间"} optionalDate value={{ date: draft.dueDate, time: draft.dueTime }} onChange={setDue} />
+        <div className={styles.shortcuts} role="group" aria-label={english ? "Due date shortcuts" : "截止日期快捷选项"}>
+          {[[today, english ? "Today" : "今天"], [taskDateOffset(today, 1), english ? "Tomorrow" : "明天"], ["", english ? "No due date" : "不设日期"]].map(([date, label]) =>
+            <button type="button" key={label} data-form-change aria-pressed={draft.dueDate === date} onClick={() => setDue({ date, time: draft.dueTime })}>{label}</button>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.schedule}>
+        <div className="field">
+          <span>{english ? "Reminder" : "提醒"}</span>
+          <ChoiceSelect aria-label={english ? "Reminder" : "提醒"} value={draft.reminderMode} onChange={event => {
+            const reminderMode = event.target.value as ReminderMode;
+            setDraft({ ...draft, reminderMode, repeatWhileOverdue: reminderMode !== "none" && draft.repeatWhileOverdue });
+          }}>
+            <option value="none">{english ? "None" : "不提醒"}</option>
+            <option value="at_due" disabled={!draft.dueDate || !draft.dueTime}>{english ? "At due time" : "截止时提醒"}</option>
+            <option value="custom">{english ? "Custom" : "自定义"}</option>
+          </ChoiceSelect>
+        </div>
+        {draft.reminderMode === "custom" && <div className={styles.reminderDateTime}>
+          <label className="field"><span>{english ? "Reminder date" : "提醒日期"}</span><input type="date" required value={draft.reminderDate} onChange={event => setDraft({ ...draft, reminderDate: event.target.value })} /></label>
+          <label className="field"><span>{english ? "Reminder time" : "提醒时间"}</span><input type="time" required step={draft.reminderTime && Number(draft.reminderTime.slice(3, 5)) % 5 !== 0 ? 60 : 300} value={draft.reminderTime} onChange={event => setDraft({ ...draft, reminderTime: event.target.value })} /></label>
+        </div>}
+        {draft.reminderMode !== "none" && draft.dueDate && <label className={`field ${styles.repeat}`}><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={event => setDraft({ ...draft, repeatWhileOverdue: event.target.checked })} /><span>{english ? "Repeat daily while overdue" : "逾期后每日重复提醒"}</span></label>}
+      </div>
+
+      <div className="field">
+        <span>{english ? "Priority" : "优先级"}</span>
+        <ChoiceSelect aria-label={english ? "Priority" : "优先级"} value={draft.priority} onChange={event => setDraft({ ...draft, priority: event.target.value as TaskPriority })}>
+          <option value="low">{english ? "Low" : "低"}</option>
+          <option value="medium">{english ? "Medium" : "中"}</option>
+          <option value="high">{english ? "High" : "高"}</option>
+        </ChoiceSelect>
+      </div>
+      <div className="field"><span>{english ? "Tags" : "标签"} <small>{english ? "Enter to add" : "回车添加"}</small></span><SuggestedInput aria-label={english ? "Tags" : "标签"} suggestionLabel={english ? "Tags" : "标签"} suggestions={tags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></div>
+      <label className="field"><span>{english ? "Notes" : "备注"}</span><textarea rows={2} maxLength={2000} value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder={english ? "Optional context" : "补充上下文（可选）"} /></label>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {editingTask && <button type="button" className="task-delete-button" disabled={preview||saving} onClick={() => void remove(editingTask)}><Icon name="trash" />{english ? "Delete task" : "删除这条任务"}</button>}
     </form></FormSheet>}
@@ -260,9 +283,9 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
         <div className="task-agenda-heading"><div><h2>{activeDate === today ? (english ? "Today’s tasks" : "今天的任务") : dayDate ? dayDate.toLocaleDateString(locale, { month: "long", day: "numeric", weekday: "short" }) : dateScope === "undated" ? (english ? "No date yet" : "还未安排日期") : (english ? "All your tasks" : "所有任务")}</h2><p>{!loading && (english ? `${statusCounts.open} to do · ${statusCounts.done} completed` : `${statusCounts.open} 项待办 · ${statusCounts.done} 项已完成`)}{activeDate === today && groups.overdue.length > 0 && (english ? " · includes overdue tasks" : " · 含逾期任务")}</p></div><div className="segmented task-status-tabs">{(["all", "open", "done"] as Status[]).map(item => <button type="button" key={item} className={status === item ? "active" : ""} aria-pressed={status === item} onClick={() => setStatus(item)}>{labels[item]}</button>)}</div></div>
         {error && !showForm && <ErrorNotice role="alert">{error}</ErrorNotice>}
         {loading ? <PageLoading title="任务" englishTitle="tasks" inline /> : visibleTasks.length ? <>
-          {(["overdue", "today", "upcoming", "unscheduled"] as const).map(group => groups[group].length > 0 && <section className={`task-group task-group-${group}`} key={group} aria-labelledby={`task-group-${group}`}><header className="task-group-heading"><h3 id={`task-group-${group}`}>{activeDate && group === "upcoming" ? (english ? "Due this day" : "当天到期") : groupLabels[group]}<span>{groups[group].length}</span></h3></header><div className="task-list">{groups[group].map(renderTask)}{group !== "overdue" && <button type="button" className="task-inline-add" onClick={() => startNew(group === "unscheduled" ? "" : activeDate ?? (group === "today" ? today : localDate(1)))}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div></section>)}
+          {(["overdue", "today", "upcoming", "unscheduled"] as const).map(group => groups[group].length > 0 && <section className={`task-group task-group-${group}`} key={group} aria-labelledby={`task-group-${group}`}><header className="task-group-heading"><h3 id={`task-group-${group}`}>{activeDate && group === "upcoming" ? (english ? "Due this day" : "当天到期") : groupLabels[group]}<span>{groups[group].length}</span></h3></header><div className="task-list">{groups[group].map(renderTask)}{group !== "overdue" && <button type="button" className="task-inline-add" onClick={() => startNew(group === "today" ? today : group === "upcoming" ? selectedDueDate : "")}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div></section>)}
           {groups.completed.length > 0 && (status === "done" ? <section className="task-group"><div className="task-list">{groups.completed.map(renderTask)}</div></section> : <Disclosure className="task-completed" title={groupLabels.completed} trailing={groups.completed.length}><div className="task-list">{groups.completed.map(renderTask)}</div></Disclosure>)}
-        </> : <div className="task-empty"><Icon name="check" /><h3>{activeTag ? (english ? "No tasks match this filter" : "这个筛选下还没有任务") : status === "done" ? (english ? "No completed tasks" : "还没有完成项") : (english ? "A little breathing room" : "留一点空白，也很好")}</h3><p>{activeDate ? (english ? "No tasks due here. Add one when you need it." : "这一天暂时没有任务到期，有想做的事就记下来。") : (english ? "Add your next task here." : "把接下来想做的事，记在这里。")}</p>{activeTag && <button type="button" className="task-inline-add" onClick={() => setSelectedTag(null)}>{english ? "Show all tags" : "查看全部标签"}</button>}{status !== "done" && <button type="button" className="task-inline-add" onClick={() => startNew(activeDate ?? "")}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div>}
+        </> : <div className="task-empty"><Icon name="check" /><h3>{activeTag ? (english ? "No tasks match this filter" : "这个筛选下还没有任务") : status === "done" ? (english ? "No completed tasks" : "还没有完成项") : (english ? "A little breathing room" : "留一点空白，也很好")}</h3><p>{activeDate ? (english ? "No tasks due here. Add one when you need it." : "这一天暂时没有任务到期，有想做的事就记下来。") : (english ? "Add your next task here." : "把接下来想做的事，记在这里。")}</p>{activeTag && <button type="button" className="task-inline-add" onClick={() => setSelectedTag(null)}>{english ? "Show all tags" : "查看全部标签"}</button>}{status !== "done" && <button type="button" className="task-inline-add" onClick={() => startNew(selectedDueDate)}><Icon name="plus" />{english ? "Add a task" : "添加任务"}</button>}</div>}
       </div>
       </div>
     </div>

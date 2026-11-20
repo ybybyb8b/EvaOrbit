@@ -852,7 +852,16 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string, agent?:
     async createMemo(input){const{data,error}=await client.from("memos").insert({user_id:userId,title:input.title,content:input.content,type:input.type,status:input.status,tags:input.tags,event_date:input.eventDate,confirmed_at:input.confirmedAt,merged_into_id:input.mergedIntoId,source_system:input.sourceSystem,source_id:input.sourceId,source_url:input.sourceUrl,imported_at:input.importedAt}).select().single();fail(error,"创建 Memo");return memoFromRow(data);},
     async updateMemo(id,input:MemoPatch){const patch=mappedPatch(input,{title:"title",content:"content",type:"type",status:"status",tags:"tags",eventDate:"event_date",confirmedAt:"confirmed_at",mergedIntoId:"merged_into_id",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"});if(!Object.keys(patch).length)return repository.getMemo(id);const{data,error}=await client.from("memos").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Memo");return data?memoFromRow(data):null;},
     async deleteMemo(id){const{data,error}=await client.from("memos").delete().eq("id",id).select("id").maybeSingle();fail(error,"删除 Memo");return Boolean(data);},
-    async listLuciusDiaryEntries(input={}){let request=client.from("lucius_diary_entries").select("*");if(input.query)request=request.ilike("content",`%${input.query.replace(/[\\%_]/g,"\\$&")}%`);if(input.tag)request=request.contains("tags",[input.tag]);const limit=Math.min(Math.max(input.limit??100,1),200);const{data,error}=await request.order("date",{ascending:false}).order("id",{ascending:false}).limit(limit);fail(error,"读取 Lucius Diary");return(data as Row[]).map(luciusDiaryFromRow);},
+    async listLuciusDiaryEntries(input = {}) {
+      let request = client.from("lucius_diary_entries").select("*");
+      if (input.query) request = request.ilike("content", `%${input.query.replace(/[\\%_]/g, "\\$&")}%`);
+      if (input.tag) request = request.contains("tags", [input.tag]);
+      if (input.date) request = request.eq("date", input.date);
+      const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+      const { data, error } = await request.order("date", { ascending: false }).order("id", { ascending: false }).limit(limit);
+      fail(error, "读取 Lucius Diary");
+      return (data as Row[]).map(luciusDiaryFromRow);
+    },
     async getLuciusDiaryEntry(id){const{data,error}=await client.from("lucius_diary_entries").select("*").eq("id",id).maybeSingle();fail(error,"读取 Lucius Diary");return data?luciusDiaryFromRow(data):null;},
     async createLuciusDiaryEntry(input){const{data,error}=await client.from("lucius_diary_entries").insert({user_id:userId,date:input.date,content:input.content,tags:input.tags,source_system:input.sourceSystem,source_id:input.sourceId,source_url:input.sourceUrl,imported_at:input.importedAt}).select().single();fail(error,"创建 Lucius Diary");return luciusDiaryFromRow(data);},
     async updateLuciusDiaryEntry(id,input:LuciusDiaryPatch){const patch=mappedPatch(input,{date:"date",content:"content",tags:"tags",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"});if(!Object.keys(patch).length)return repository.getLuciusDiaryEntry(id);const{data,error}=await client.from("lucius_diary_entries").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新 Lucius Diary");return data?luciusDiaryFromRow(data):null;},

@@ -21,6 +21,7 @@ import { useIconColors } from "../preview/use-icon-colors";
 import styles from "./library.module.css";
 
 const categoryNames:Record<string,string>={"效率":"Productivity","创作":"Creative","摄影":"Photography","影音":"Media","开发":"Development","工具":"Utilities","学习":"Learning","生活":"Lifestyle"};
+const editablePlatforms = libraryPlatforms.filter(platform => platform !== "Android");
 
 const emptyEntry = (): LibraryEntry => ({ id: 0, iconPath: "", name: "",alternateName:"",iosRegions:[],category: "", platforms: [], license: "perpetual", version: "", acquisition: "giveaway", acquiredOn: null, website: "", notes: "", createdAt: "", updatedAt: "" });
 
@@ -136,21 +137,54 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
       <button className="text-button danger" disabled={previewOnly||busy} onClick={() => void remove()}>{t("Remove software", "移除软件")}</button>{error && <ErrorNotice>{error}</ErrorNotice>}
     </article></FormSheet>}
 
-    {editing && <FormSheet title={editing.id ? t("Edit software", "编辑软件") : t("Add software", "添加软件")} onClose={() => { setEditing(null); setError(""); }} formId={formId} submitLabel={t("Save", "保存")} busy={busy} submitDisabled={previewOnly}><form id={formId} className="editor-card" onSubmit={save}>
-      {previewOnly&&<FormPreviewNotice/>}
-      <div className="form-grid"><SubscriptionIconField label={t("Software icon","软件图标")} name={editing.name} source={iconSource(editing)} file={iconFile} remove={removeIcon} disabled={previewOnly||busy} onChange={(file,remove)=>{setIconFile(file);setRemoveIcon(remove);}}/><label className="field wide"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
-        <label className="field wide"><span>{t("Other language name · optional","另一语言名称 · 选填")}</span><input maxLength={80} value={editing.alternateName??""} onChange={event=>setEditing(current=>current?{...current,alternateName:event.target.value}:current)}/></label>
-        <fieldset className={styles.platforms}><legend>{t("Platforms · choose one or more", "平台 · 可多选")}</legend><div>{libraryPlatforms.map(value => <button type="button" key={value} data-form-change aria-pressed={editing.platforms.includes(value)} onClick={() => {const platforms=editing.platforms.includes(value)?editing.platforms.filter(item=>item!==value):[...editing.platforms,value];setEditing({...editing,platforms,iosRegions:platforms.includes("iOS")?editing.iosRegions??[]:[]});}}>{value}</button>)}</div></fieldset>
-        {editing.platforms.includes("iOS")&&<fieldset className={styles.platforms}><legend>{t("iOS App Store regions · optional","iOS 选区 · 选填")}</legend><div>{libraryIOSRegions.map(region=><button type="button" key={region} data-form-change aria-pressed={editing.iosRegions?.includes(region)??false} onClick={()=>setEditing(current=>current?{...current,iosRegions:current.iosRegions?.includes(region)?current.iosRegions.filter(value=>value!==region):[...(current.iosRegions??[]),region]}:current)}>{iosRegionLabel(region)}</button>)}</div></fieldset>}
-        <label className="field"><span>{t("Acquisition", "获取方式")}</span><ChoiceSelect value={editing.acquisition==="gift"?"giveaway":editing.acquisition} onChange={event => setEditing({ ...editing, acquisition: event.target.value as LibraryAcquisition })}>{(["paid", "giveaway"] as const).map(value => <option key={value} value={value}>{acquisitionLabel(value)}</option>)}</ChoiceSelect></label>
-        <label className="field"><span>{t("Licence", "授权方式")}</span><ChoiceSelect value={editing.license} onChange={event => setEditing({ ...editing, license: event.target.value as LibraryEntry["license"] })}><option value="perpetual">{t("Perpetual", "永久授权")}</option><option value="version">{t("Specific version", "指定版本买断")}</option></ChoiceSelect></label>
-        {editing.license === "version" && <label className="field wide"><span>{t("Licensed version", "授权版本")}</span><input required maxLength={40} placeholder={t("For example, V2", "例如 V2")} value={editing.version} onChange={event => setEditing({ ...editing, version: event.target.value })} /></label>}
-        <label className="field"><span>{t("Purchase price · optional","实付金额 · 选填")}</span><input inputMode="decimal" value={purchaseAmount} placeholder={t("Unknown","未知")} onChange={event=>setPurchaseAmount(event.target.value)}/></label>
-        <label className="field"><span>{t("Purchase currency","购买币种")}</span><input maxLength={3} pattern="[A-Za-z]{3}" required={Boolean(purchaseAmount.trim())} value={editing.purchaseCurrency??"CNY"} onChange={event=>setEditing({...editing,purchaseCurrency:event.target.value.toUpperCase()})}/></label>
-        <div className="field"><span>{t("Category · optional", "分类 · 选填")}</span><SuggestedInput aria-label={t("Category · optional","分类 · 选填")} maxLength={24} value={categoryLabel(editing.category)} suggestions={categorySuggestions} suggestionLabel={t("Recommended categories","推荐分类")} recommendationStyle="list" onValueChange={value=>setEditing(current=>current?{...current,category:categories.find(category=>categoryLabel(category)===value)??Object.keys(categoryNames).find(category=>categoryLabel(category)===value)??value}:current)} /></div>
+    {editing && <FormSheet title={editing.id ? t("Edit software", "编辑软件") : t("Add software", "添加软件")} onClose={() => { setEditing(null); setError(""); }} formId={formId} submitLabel={t("Save", "保存")} busy={busy} submitDisabled={previewOnly}><form id={formId} className={`editor-card field-focus-surface ${styles.editor}`} onSubmit={save}>
+      {previewOnly && <FormPreviewNotice />}
+      <SubscriptionIconField label={t("Software icon", "软件图标")} name={editing.name} source={iconSource(editing)} file={iconFile} remove={removeIcon} disabled={previewOnly || busy} onChange={(file, remove) => { setIconFile(file); setRemoveIcon(remove); }} />
+      <div className={styles.editorRow}>
+        <label className="field"><span>{t("Software name", "软件名称")}</span><input required maxLength={80} value={editing.name} onChange={event => setEditing({ ...editing, name: event.target.value })} /></label>
+        <label className="field"><span>{t("Alternate name · optional", "另一语言名称 · 选填")}</span><input maxLength={80} value={editing.alternateName ?? ""} onChange={event => setEditing({ ...editing, alternateName: event.target.value })} /></label>
+      </div>
+      <fieldset className={styles.platforms}>
+        <legend>{t("Platforms · choose one or more", "平台 · 可多选")}</legend>
+        <div>{editablePlatforms.map(value => <button type="button" key={value} data-form-change aria-pressed={editing.platforms.includes(value)} onClick={() => {
+          const platforms = editing.platforms.includes(value) ? editing.platforms.filter(item => item !== value) : [...editing.platforms, value];
+          setEditing({ ...editing, platforms, iosRegions: platforms.includes("iOS") ? editing.iosRegions : [] });
+        }}>{value}</button>)}</div>
+      </fieldset>
+      {editing.platforms.includes("iOS") && <fieldset className={styles.platforms}>
+        <legend>{t("iOS App Store regions · optional", "iOS 选区 · 选填")}</legend>
+        <div>{libraryIOSRegions.map(region => <button type="button" key={region} data-form-change aria-pressed={editing.iosRegions?.includes(region) ?? false} onClick={() => {
+          const regions = editing.iosRegions ?? [];
+          setEditing({ ...editing, iosRegions: regions.includes(region) ? regions.filter(value => value !== region) : [...regions, region] });
+        }}>{iosRegionLabel(region)}</button>)}</div>
+      </fieldset>}
+      <div className={`${styles.editorRow} ${styles.choicesRow}`}>
+        <div className="field">
+          <span>{t("Acquisition", "获取方式")}</span>
+          <ChoiceSelect aria-label={t("Acquisition", "获取方式")} value={editing.acquisition === "gift" ? "giveaway" : editing.acquisition} onChange={event => setEditing({ ...editing, acquisition: event.target.value as LibraryAcquisition })}>
+            <option value="paid">{t("Paid", "买断")}</option>
+            <option value="giveaway">{acquisitionLabel("giveaway")}</option>
+          </ChoiceSelect>
+        </div>
+        <div className="field">
+          <span>{t("Licence", "授权范围")}</span>
+          <ChoiceSelect aria-label={t("Licence", "授权范围")} value={editing.license} onChange={event => setEditing({ ...editing, license: event.target.value as LibraryEntry["license"] })}>
+            <option value="perpetual">{t("Perpetual", "永久授权")}</option>
+            <option value="version">{t("Version", "指定版本")}</option>
+          </ChoiceSelect>
+        </div>
+      </div>
+      {editing.license === "version" && <label className="field wide"><span>{t("Licensed version", "授权版本")}</span><input required maxLength={40} placeholder={t("For example, V2", "例如 V2")} value={editing.version} onChange={event => setEditing({ ...editing, version: event.target.value })} /></label>}
+      <div className={`${styles.editorRow} ${styles.priceRow}`}>
+        <label className="field"><span>{t("Price · optional","实付金额 · 选填")}</span><input inputMode="decimal" value={purchaseAmount} placeholder={t("Unknown","未知")} onChange={event=>setPurchaseAmount(event.target.value)}/></label>
+        <label className="field"><span>{t("Currency","币种")}</span><input maxLength={3} pattern="[A-Za-z]{3}" autoCapitalize="characters" spellCheck={false} required={Boolean(purchaseAmount.trim())} value={editing.purchaseCurrency??"CNY"} onChange={event=>setEditing({...editing,purchaseCurrency:event.target.value.toUpperCase()})}/></label>
+      </div>
+      <div className={styles.editorRow}>
         <label className="field"><span>{t("Acquired on · optional", "获取日期 · 选填")}</span><input type="date" value={editing.acquiredOn ?? ""} onChange={event => setEditing({ ...editing, acquiredOn: event.target.value || null })} /></label>
-        <label className="field wide"><span>{t("Notes · optional", "备注 · 选填")}</span><textarea rows={3} maxLength={2000} placeholder={t("Where you got it, which account, what to remember…", "领取来源、账号提示，或以后想记得的事…")} value={editing.notes} onChange={event => setEditing({ ...editing, notes: event.target.value })} /></label>
-      </div>{error && <ErrorNotice>{error}</ErrorNotice>}
+        <div className="field"><span>{t("Category · optional", "分类 · 选填")}</span><SuggestedInput aria-label={t("Category · optional","分类 · 选填")} maxLength={24} value={categoryLabel(editing.category)} suggestions={categorySuggestions} suggestionLabel={t("Recommended categories","推荐分类")} recommendationStyle="list" onValueChange={value=>setEditing(current=>current?{...current,category:categories.find(category=>categoryLabel(category)===value)??Object.keys(categoryNames).find(category=>categoryLabel(category)===value)??value}:current)} /></div>
+      </div>
+      <label className="field wide"><span>{t("Notes · optional", "备注 · 选填")}</span><textarea rows={3} maxLength={2000} placeholder={t("Where you got it, which account, what to remember…", "领取来源、账号提示，或以后想记得的事…")} value={editing.notes} onChange={event => setEditing({ ...editing, notes: event.target.value })} /></label>
+      {error && <ErrorNotice>{error}</ErrorNotice>}
     </form></FormSheet>}
   </div>;
 }

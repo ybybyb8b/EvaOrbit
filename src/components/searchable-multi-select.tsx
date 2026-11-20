@@ -2,14 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useLocale } from "./locale-controller";
-import type { SearchOption } from "./searchable-select";
+import { matchesSearchOption, type SearchOption } from "./searchable-select";
 
 export function SearchableMultiSelect({ label, options, value, onValueChange, required = false, showSelectedTags = true, alwaysSearch = false, hideSelectedOptions = false }: { label: string; options: readonly SearchOption[]; value: string[]; onValueChange: (values: string[]) => void; required?: boolean; showSelectedTags?: boolean; alwaysSearch?: boolean; hideSelectedOptions?: boolean }) {
   const { english } = useLocale();
   const [query, setQuery] = useState("");
   const search = useRef<HTMLInputElement>(null);
   const candidates = hideSelectedOptions && showSelectedTags ? options.filter(option => !value.includes(option.value)) : options;
-  const matches = candidates.filter(option => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matches = candidates.filter(option => matchesSearchOption(option, normalizedQuery));
   function toggleOption(id: string, checked: boolean) {
     onValueChange(checked ? [...value, id] : value.filter(item => item !== id));
     if (checked && hideSelectedOptions && showSelectedTags) {

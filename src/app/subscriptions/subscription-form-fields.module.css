@@ -1,0 +1,75 @@
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+}
+
+.price {
+  grid-template-columns: minmax(0, 1fr) 4.5rem;
+}
+
+.cycle {
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+}
+
+.reminder {
+  grid-template-columns: 7rem minmax(0, 1fr);
+  margin-top: 8px;
+}
+
+.fields :global(.field) > :is(input:not([type="file"]), textarea) {
+  box-shadow: var(--sheet-control-depth, inset 0 2px 4px rgb(var(--shadow-rgb) / .12));
+}
+
+.fields :global(.field) > input:not([type="file"]) {
+  height: 44px;
+  min-height: 44px;
+}
+
+.fields :global(.choice-capsules) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: visible;
+  padding: 0;
+}
+
+.mode :global(.choice-capsules) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fields :global(.choice-select .choice-capsules) > button {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: 3px;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.preferences {
+  margin-top: 2px;
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}

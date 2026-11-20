@@ -2747,7 +2747,14 @@ export function updateMemo(id:number,input:MemoPatch){const changed=patchRow("me
 export function deleteMemo(id:number){return database.prepare("DELETE FROM memos WHERE id=? AND user_id='local'").run(id).changes>0;}
 
 function luciusDiaryFromRow(row:Record<string,unknown>):LuciusDiaryEntry{return{id:Number(row.id),date:String(row.date),content:String(row.content),tags:stringArrayFromRow(row.tags),...migrationTraceFromRow(row),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};}
-export function listLuciusDiaryEntries(input:LuciusDiaryListInput={}){const conditions=["user_id='local'"],values:Array<string|number>=[];if(input.query){conditions.push("content LIKE ? ESCAPE '\\'");values.push(`%${escapedLike(input.query.trim())}%`);}if(input.tag){conditions.push("EXISTS (SELECT 1 FROM json_each(lucius_diary_entries.tags) WHERE json_each.value=?)");values.push(input.tag);}const limit=Math.min(Math.max(input.limit??100,1),200);return(database.prepare(`SELECT * FROM lucius_diary_entries WHERE ${conditions.join(" AND ")} ORDER BY date DESC,id DESC LIMIT ?`).all(...values,limit) as Record<string,unknown>[]).map(luciusDiaryFromRow);}
+export function listLuciusDiaryEntries(input: LuciusDiaryListInput = {}) {
+  const conditions = ["user_id='local'"], values: Array<string | number> = [];
+  if (input.query) { conditions.push("content LIKE ? ESCAPE '\\'"); values.push(`%${escapedLike(input.query.trim())}%`); }
+  if (input.tag) { conditions.push("EXISTS (SELECT 1 FROM json_each(lucius_diary_entries.tags) WHERE json_each.value=?)"); values.push(input.tag); }
+  if (input.date) { conditions.push("date=?"); values.push(input.date); }
+  const limit = Math.min(Math.max(input.limit ?? 100, 1), 200);
+  return (database.prepare(`SELECT * FROM lucius_diary_entries WHERE ${conditions.join(" AND ")} ORDER BY date DESC,id DESC LIMIT ?`).all(...values, limit) as Record<string, unknown>[]).map(luciusDiaryFromRow);
+}
 export function getLuciusDiaryEntry(id:number){const row=database.prepare("SELECT * FROM lucius_diary_entries WHERE id=? AND user_id='local'").get(id) as Record<string,unknown>|undefined;return row?luciusDiaryFromRow(row):null;}
 export function createLuciusDiaryEntry(input:NewLuciusDiaryEntry){const result=database.prepare("INSERT INTO lucius_diary_entries(user_id,date,content,tags,source_system,source_id,source_url,imported_at) VALUES('local',?,?,?,?,?,?,?)").run(input.date,input.content,JSON.stringify(input.tags),input.sourceSystem,input.sourceId,input.sourceUrl,input.importedAt);return getLuciusDiaryEntry(Number(result.lastInsertRowid))!;}
 export function updateLuciusDiaryEntry(id:number,input:LuciusDiaryPatch){patchRow("lucius_diary_entries",id,input,{date:"date",content:"content",tags:"tags",sourceSystem:"source_system",sourceId:"source_id",sourceUrl:"source_url",importedAt:"imported_at"},["tags"]);return getLuciusDiaryEntry(id);}

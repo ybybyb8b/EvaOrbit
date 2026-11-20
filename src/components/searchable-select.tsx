@@ -9,7 +9,11 @@ import { translateUiCopy } from "@/lib/ui-copy";
 import { Icon } from "./icons";
 import { usesCapsules } from "@/lib/choice-presentation";
 
-export type SearchOption = { value: string; label: string; detail?: string; disabled?: boolean };
+export type SearchOption = { value: string; label: string; detail?: string; keywords?: string; disabled?: boolean };
+
+export function matchesSearchOption(option: SearchOption, query: string) {
+  return `${option.label} ${option.detail ?? ""} ${option.keywords ?? ""}`.toLocaleLowerCase().includes(query);
+}
 
 export function SearchableSelect({ value, options, onValueChange, label, required = false, disabled = false, onSearch, loading = false, error, onRetry, searchable = true, clearable = false, presentation = "auto" }: {
   value: string; options: readonly SearchOption[]; onValueChange: (value: string) => void; label: string; required?: boolean; disabled?: boolean;
@@ -24,7 +28,8 @@ export function SearchableSelect({ value, options, onValueChange, label, require
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = options.find(option => option.value === value);
-  const matches = options.filter(option => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matches = options.filter(option => matchesSearchOption(option, normalizedQuery));
   const canClear = clearable || options.some(option => option.value === "");
   const capsuleOptions = options.filter(option => option.value !== "");
   if (presentation !== "dropdown" && (presentation === "capsules" || usesCapsules(capsuleOptions.length, searchable)) && !onSearch && !loading && !error) return <span className="choice-select">

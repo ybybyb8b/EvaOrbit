@@ -79,10 +79,22 @@
 .detail section p { font-size: 14px; line-height: 1.9; color: var(--text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
 .website { width: 100%; flex-wrap: wrap; justify-content: center; }
 .website > small { width: 100%; font-size: 12px; color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
-.platforms { grid-column: 1 / -1; padding: 0; margin: 0; border: 0; min-width: 0; }
-.platforms legend { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
-.platforms > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.platforms button { min-height: 44px; padding: 10px 14px; border: 0; border-radius: var(--radius-control); color: var(--text-secondary); background: var(--surface-soft); font: inherit; cursor: pointer; }
+.editor { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+.editor:global(.editor-card) > :global(.field.wide) { margin-bottom: 0; }
+.editor :global(.field) > :is(input:not([type="file"]), select, textarea),
+.editor :global(.suggested-input-row) {
+  box-shadow: var(--sheet-control-depth, inset 0 2px 4px rgb(var(--shadow-rgb) / .12));
+}
+.editorRow { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: end; gap: 10px; }
+.choicesRow :global(.choice-capsules) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); overflow: visible; padding: 0; }
+.choicesRow :global(.choice-select .choice-capsules) > button { min-height: 44px; padding-inline: 3px; font-size: 13px; white-space: normal; }
+.priceRow { grid-template-columns: minmax(0,1fr) 4.5rem; }
+.priceRow input { width: 100%; min-width: 0; }
+.editorRow input[type="date"] { width: 100%; min-width: 0; }
+.platforms { padding: 0; margin: 0; border: 0; min-width: 0; }
+.platforms legend { padding: 0; margin-bottom: 7px; font-size: 12px; color: var(--text-label); }
+.platforms > div { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.platforms button { min-height: 44px; padding: 8px 3px; border: 0; border-radius: var(--form-control-radius); color: var(--text-secondary); background: var(--sheet-control-surface,var(--surface-soft)); box-shadow: var(--sheet-control-depth); font: inherit; font-size: 14px; cursor: pointer; }
 .platforms button[aria-pressed="true"] { color: var(--accent-on); background: var(--accent-primary); }
 .platforms button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; }
 @media (max-width: 760px) {

@@ -42,10 +42,85 @@
   box-shadow: var(--sheet-control-depth, none);
 }
 
-.form :global(.searchable-multi-options) { max-height: 100px; }
-.form :global(.searchable-multi-options > label:has(input:focus-visible)) { text-decoration: underline; text-underline-offset: .2em; }
-.form :global(.searchable-multi-options input) { accent-color: var(--accent-primary); }
-.form :global(.searchable-multi-options > label:has(input:checked)) { background: var(--surface-accent-soft); }
+.form :global(.searchable-multi-options) {
+  --person-row-size: 2.75rem;
+  --person-row-gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: var(--person-row-size);
+  gap: var(--person-row-gap);
+  max-height: calc(3 * var(--person-row-size) + 2 * var(--person-row-gap));
+}
+
+.form :global(.searchable-multi-options > label) {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: var(--form-control-radius);
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+
+.form :global(.searchable-multi-options input[type="checkbox"]) {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-height: 20px;
+  flex-basis: 20px;
+  border: 1px solid color-mix(in srgb, var(--text-secondary) 70%, var(--surface-soft));
+  border-radius: 6px;
+  background: var(--surface-card);
+  box-shadow: var(--sheet-control-depth, none);
+  cursor: inherit;
+}
+
+.form :global(.searchable-multi-options input[type="checkbox"]:checked) {
+  border-color: transparent;
+  background: var(--accent-primary);
+  box-shadow: none;
+}
+
+.form :global(.searchable-multi-options > label:has(input:checked)::after) {
+  content: "";
+  position: absolute;
+  inset-inline-start: 20px;
+  top: 50%;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-on);
+  border-width: 0 2px 2px 0;
+  transform: translateY(-60%) rotate(45deg);
+  pointer-events: none;
+}
+
+.form :global(.searchable-multi-options > label > span) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form :global(.searchable-multi-options > label:has(input:focus-visible, input:checked)),
+.form :global(.searchable-multi-options > label:active) {
+  background: var(--surface-accent-soft);
+}
+
+.form :global(.searchable-multi-options > label:has(input:focus-visible) > span) {
+  text-decoration: underline;
+  text-underline-offset: .2em;
+}
+
+.form :global(.searchable-multi-options > small) { grid-column: 1 / -1; }
+
+@media (forced-colors: active) {
+  .form :global(.searchable-multi-options input[type="checkbox"]) { appearance: auto; }
+  .form :global(.searchable-multi-options > label:has(input:checked)::after) { display: none; }
+  .form :global(.searchable-multi-options > label:has(input:focus-visible)) { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+
 .form :global(.input-selected-tags > button) {
   background: var(--surface-accent-soft);
   color: var(--text-primary);

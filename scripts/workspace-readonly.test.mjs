@@ -29,6 +29,13 @@ test('Tasks/Projects/Lucius download original data without writes, preserve date
   assert.deepEqual(validateWorkspaceSnapshot(old,'a','lucius').data.cases,[]);
   assert.throws(()=>readWorkspaceSnapshot(old,'/api/lucius/cases'),/path refused/);
   assert.equal((await readWorkspaceSnapshot(snapshots.lucius,'/api/lucius/posts/'+fixture.post.id+'/comments').json()).length,2);
+  const diaryDate=fixture.diary.date;
+  assert.deepEqual((await r.listLuciusDiaryEntries({date:diaryDate,query:'canary',tag:'Canary'})).map(entry=>entry.id),[fixture.diary.id]);
+  assert.deepEqual(await r.listLuciusDiaryEntries({date:'1900-01-01'}),[]);
+  assert.deepEqual((await readWorkspaceSnapshot(snapshots.lucius,'/api/lucius/diary?date='+diaryDate+'&q=canary&tag=Canary').json()).map(entry=>entry.id),[fixture.diary.id]);
+  assert.deepEqual(await readWorkspaceSnapshot(snapshots.lucius,'/api/lucius/diary?date=1900-01-01').json(),[]);
+  assert.throws(()=>readWorkspaceSnapshot(snapshots.lucius,'/api/lucius/diary?date=2026-02-30'),/query refused/);
+  assert.throws(()=>readWorkspaceSnapshot(snapshots.tasks,'/api/tasks?date='+diaryDate),/query refused/);
   for(const [kind,mutate] of [['tasks',s=>s.data.tasks[0].dueDate='2026-02-30'],['tasks',s=>s.data.tasks[0].reminders=[{id:4,taskId:999}]],['projects',s=>s.data.items[0].projectId=999],['projects',s=>s.data.projects[0].doingCount++],['lucius',s=>s.data.comments[0].postId=999],['lucius',s=>s.data.diary[0].date='2026-02-30']]){const bad=structuredClone(snapshots[kind]);mutate(bad);assert.throws(()=>validateWorkspaceSnapshot(bad,'a',kind));}
   for(const command of [r=>r.updateTask(fixture.task.id,{completed:true}),r=>r.updateProjectItem(fixture.item.id,{status:'done'}),r=>r.updateLuciusState({status:'NO'}),r=>r.createLuciusPostComment({postId:fixture.post.id,author:'user',content:'NO'})])await assert.rejects(withWorkspaceReadOnlyRepository(async()=>command(await getRepository())),/refused/);
   const large=structuredClone(snapshots.tasks);large.extra='x'.repeat(8*1024*1024);assert.throws(()=>validateWorkspaceSnapshot(large,'a','tasks'),/8 MiB/);

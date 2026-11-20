@@ -1,0 +1,51 @@
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  --task-date-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+}
+
+.editor :global(.field) > :is(input:not([type="checkbox"]), textarea),
+.editor :global(.suggested-input-row) {
+  box-shadow: var(--sheet-control-depth, inset 0 2px 4px rgb(var(--shadow-rgb) / .12));
+}
+
+.schedule { display: grid; gap: 8px; min-width: 0; }
+
+.schedule :global(.date-time-field.date-time-inline), .reminderDateTime {
+  display: grid;
+  grid-template-columns: var(--task-date-columns);
+  align-items: end;
+  gap: 10px;
+}
+
+.reminderDateTime input, .editor input[type="date"] { width: 100%; min-width: 0; }
+
+.shortcuts { display: flex; flex-wrap: wrap; gap: 6px; }
+.shortcuts button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.shortcuts button[aria-pressed="true"] { color: var(--accent-on); background: var(--accent-primary); }
+.shortcuts button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.editor :global(.choice-capsules) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0;
+  overflow: visible;
+}
+.editor :global(.choice-select .choice-capsules) > button {
+  min-height: 44px;
+  padding-inline: 4px;
+  font-size: 13px;
+  white-space: normal;
+}
+.repeat { min-height: 44px; flex-direction: row; }

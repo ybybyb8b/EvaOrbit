@@ -40,7 +40,8 @@ export function readWorkspaceSnapshot(snapshot:WorkspaceReadonlySnapshot,path:st
  if(init?.method&&init.method!=="GET")throw new Error("Workspace read-only adapter refused a write");
  if(!/^\/api\/[a-z-]+(?:\/[1-9][0-9]*|\/lucius)?/.test(path)||path.includes("#"))throw new Error("Workspace read-only path refused");
  const u=new URL(path,"https://offline.invalid");let data:unknown;const q=u.searchParams,query=q.get("q")?.trim().toLowerCase();
- const allowed=new Set(["status","q","tag","projectId","project","type","module","limit"]);if([...q.keys()].some(k=>!allowed.has(k)))throw new Error("Workspace query refused");
+ const allowed=new Set(["status","q","tag","projectId","project","type","module","limit"]);if(snapshot.kind==="lucius"&&u.pathname==="/api/lucius/diary")allowed.add("date");
+ const date=q.get("date");if([...q.keys()].some(k=>!allowed.has(k))||(date&&!day(date)))throw new Error("Workspace query refused");
  if(snapshot.kind==="tasks"&&u.pathname==="/api/tasks")data=snapshot.data.tasks.filter(t=>!q.get("status")||q.get("status")==="all"||t.completed===(q.get("status")==="done"));
  else if(snapshot.kind==="projects"){
   const m=/^\/api\/(projects|project-items)(?:\/([1-9][0-9]*))?$/.exec(u.pathname);if(!m)throw new Error("Workspace read-only path refused");
@@ -51,7 +52,7 @@ export function readWorkspaceSnapshot(snapshot:WorkspaceReadonlySnapshot,path:st
   const d=snapshot.data;
   if(m[1]==="state"&&!m[2])data=d.state;
   else if(m[1]==="posts")data=m[3]?d.comments.filter(c=>c.postId===Number(m[2])):m[2]?d.posts.find(p=>p.id===Number(m[2])):d.posts;
-  else if(m[1]==="diary")data=m[2]?d.diary.find(e=>e.id===Number(m[2])):d.diary.filter(e=>(!query||e.content.toLowerCase().includes(query))&&(!q.get("tag")||e.tags.includes(q.get("tag")!)));
+  else if(m[1]==="diary")data=m[2]?d.diary.find(e=>e.id===Number(m[2])):d.diary.filter(e=>(!date||e.date===date)&&(!query||e.content.toLowerCase().includes(query))&&(!q.get("tag")||e.tags.includes(q.get("tag")!)));
  }
  else throw new Error("Workspace read-only path refused");
  return new Response(JSON.stringify(data??{error:"Not in downloaded workspace snapshot"}),{status:data===undefined?404:200,headers:{"Content-Type":"application/json"}});
