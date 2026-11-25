@@ -1,5 +1,15 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## 官方稳定版认证独立候选（2026-11-25，未迁移默认工具）
+
+旧会话在原工具联网查询 Team 时返回 1100，服务端过期已确认；Android 客户端候选的 AuthInit 503 已在 Windows 无账号空请求上复现，不应继续要求用户重装 Ubuntu 或反复登录。分支 `codex/xtool-stable-auth` 转向官方稳定版 1.24.0 的 Mac Omnisette 认证，固定 upstream `70e1568fdfcb20b560774057cd783f02361293b9`。本分支 workflow 仅手动触发并只允许该 ref，Vercel 部署关闭；主分支、原 AppImage 和默认安装脚本 SHA 不变。
+
+稳定版已有每次 GrandSlam 请求使用新 HTTP client、Mac provider 和匹配的 client info/User-Agent；单独移植 HealthKit background-delivery 的识别和 Personal Team capability、安全诊断、AppTokens HTTP 503 最多三次尝试、token 原子写入与权限保护。移除上游 TLS 验证绕过选项及通用 HTTP 错误的响应体打印。认证固定保存到 `~/.config/evaorbit-xtool-1.24-candidate`，不导入、清理或重置原 `~/.config/xtool`。登录和安装必须使用同一候选，不能复制 token 回旧 Android provider。
+
+认证新增第三方依赖 `https://mac-ani.jkcoxson.com`（上游默认）：仅设备标识、provisioning 数据和 Anisette 计算通过该服务，Apple ID、密码、2FA、账号 token 仍直接发送 Apple。准备期间只 GET 公开 client_info，返回 HTTP 200，未用用户数据调用 provisioning/get_headers，也未执行真实登录。执行登录／安装这一认证迁移前需明确授权；现有 AGENTS 的“迁移须有明确授权”和真机验收要求仍适用。
+
+CI 除编译外，运行 HealthKit 两项 entitlement 的解码/重编码与免费 Team 映射测试，向原认证目录放置无敏感内容的哨兵文件，再运行候选 auth status，验证返回 Logged out 且原文件未读取或删除。CI 不执行真实 Apple 登录，不代表真机安装成功。产物附源码提交、完整补丁、SHA256SUMS、审计摘要和校验后运行的 candidate.sh。详细数据流与使用边界见 [候选说明](../tools/xtool/stable-patches/CANDIDATE.md)。
+
 ## Parlor 单聊消息操作
 
 Bridge v1 增加可选方法 `ai.retryMessage` 和 `ai.deleteMessage`，沿用本地主 frame、账户与 generation 校验，旧 IPA 按能力隐藏入口。重试复用原提问、原模型和原回复位置，从原提问之前的历史重建上下文，显式生成一次回答。曾使用 EvaOrbit 的消息重试只生成回答，已确认的业务操作不会重放。删除只移除目标消息，沿用 SQLite 的上下文、自动记忆来源和 Echo 草稿失效规则。已有独立人格记忆继续由 Memory 管理。无需数据库迁移、权限或签名配置变更。新方法需重建 IPA，Windows 浏览器结果不能替代 Xcode 与 iPhone 键盘实测。

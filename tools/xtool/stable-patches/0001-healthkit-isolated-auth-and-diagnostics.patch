@@ -1,0 +1,604 @@
+diff --git a/Linux/build.sh b/Linux/build.sh
+index 299c535..c3ac6e2 100755
+--- a/Linux/build.sh
++++ b/Linux/build.sh
+@@ -17,7 +17,7 @@ swift build --package-path .. -c release --product xtool
+ bin="$(swift build --package-path .. -c release --show-bin-path)"
+ strip "${bin}/xtool"
+
+-curr_git_info="$(curl -fsSL https://api.github.com/repos/linuxdeploy/linuxdeploy/git/refs/tags/continuous)"
++curr_git_info="$(git ls-remote --exit-code https://github.com/linuxdeploy/linuxdeploy.git refs/tags/continuous)"
+ curr_arch="$(uname -m)"
+
+ if [[ -f staging/linuxdeploy/git.json ]]; then
+diff --git a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift b/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
+index 1d12254..0754436 100644
+--- a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
++++ b/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
+@@ -107,6 +107,12 @@ extension HealthKitEntitlement: EntitlementWithCapability {
+     }
+ }
+
++extension HealthKitBackgroundDeliveryEntitlement: EntitlementWithCapability {
++    var capability: DeveloperServicesCapability {
++        DeveloperServicesCapability(.healthkit, isFree: true)
++    }
++}
++
+ extension HomeKitEntitlement: EntitlementWithCapability {
+     var capability: DeveloperServicesCapability {
+         DeveloperServicesCapability(.homekit, isFree: true)
+diff --git a/Sources/XKit/DeveloperServices/DeveloperServicesClient.swift b/Sources/XKit/DeveloperServices/DeveloperServicesClient.swift
+index ebc6edd..b8bca64 100644
+--- a/Sources/XKit/DeveloperServices/DeveloperServicesClient.swift
++++ b/Sources/XKit/DeveloperServices/DeveloperServicesClient.swift
+@@ -96,9 +96,20 @@ public struct DeveloperServicesClient: Sendable {
+
+         let body = try request.apiVersion.body(withParameters: request.parameters)
+
+-        let (_, data) = try await httpClient.makeRequest(httpRequest, body: body)
+-
+-        let decoded: R.Response = try request.apiVersion.decode(response: data)
++        let (response, data) = try await httpClient.makeRequest(
++            httpRequest, body: body, requireHTTPSuccess: false
++        )
++        let metadata = try GrandSlamHTTPDiagnostics.inspect(
++            response: response, body: data, url: url,
++            request: "DeveloperServices.\(request.action)"
++        )
++
++        let decoded: R.Response
++        do {
++            decoded = try request.apiVersion.decode(response: data)
++        } catch {
++            throw metadata.error(.responseDecode)
++        }
+
+         return try await request.parse(decoded)
+     }
+diff --git a/Sources/XKit/DeveloperServices/DeveloperServicesLoginManager.swift b/Sources/XKit/DeveloperServices/DeveloperServicesLoginManager.swift
+index 6d2dcad..2f1b8a5 100644
+--- a/Sources/XKit/DeveloperServices/DeveloperServicesLoginManager.swift
++++ b/Sources/XKit/DeveloperServices/DeveloperServicesLoginManager.swift
+@@ -34,6 +34,7 @@ public struct DeveloperServicesLoginManager: Sendable {
+     private func logIn(
+         withLoginData loginData: GrandSlamLoginData
+     ) async throws -> DeveloperServicesLoginToken {
++        GrandSlamHTTPDiagnostics.logStage("app-token-fetch-start")
+         let tokens = try await GrandSlamFetchAppTokensOperation(
+             client: client,
+             apps: [.xcode],
+@@ -41,6 +42,7 @@ public struct DeveloperServicesLoginManager: Sendable {
+         ).perform()
+         guard let token = tokens[.xcode]
+             else { throw Error.missingLoginToken }
++        GrandSlamHTTPDiagnostics.logStage("app-token-fetch-success")
+         return .init(adsid: loginData.adsid, token: token.value, expiry: token.expiry)
+     }
+
+@@ -49,6 +51,7 @@ public struct DeveloperServicesLoginManager: Sendable {
+         password: String,
+         twoFactorDelegate: TwoFactorAuthDelegate
+     ) async throws -> DeveloperServicesLoginToken {
++        GrandSlamHTTPDiagnostics.logStage("grand-slam-authenticate-start")
+         let loginData = try await GrandSlamAuthenticateOperation(
+             client: client,
+             // GSA requires Apple IDs in lowercase for SRP
+@@ -56,6 +59,7 @@ public struct DeveloperServicesLoginManager: Sendable {
+             password: password,
+             twoFactorDelegate: twoFactorDelegate
+         ).authenticate()
++        GrandSlamHTTPDiagnostics.logStage("grand-slam-authenticate-success")
+         _ = twoFactorDelegate
+         return try await self.logIn(withLoginData: loginData)
+     }
+diff --git a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+index 16ee784..da898df 100644
+--- a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
++++ b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+@@ -178,9 +178,18 @@ public struct ADIDataProvider: AnisetteDataProvider {
+             request.headerFields[.init(key)!] = value
+         }
+
+-        let (_, response) = try await self.httpClient.makeRequest(request, body: body)
+-
+-        return try GrandSlamOperationDecoder<Response>.decode(data: response)
++        GrandSlamHTTPDiagnostics.logRequest(url: endpointURL, request: "ADIProvisioning")
++        let (httpResponse, response) = try await self.httpClient.makeRequest(
++            request, body: body, requireHTTPSuccess: false
++        )
++        let metadata = try GrandSlamHTTPDiagnostics.inspect(
++            response: httpResponse, body: response, url: endpointURL, request: "ADIProvisioning"
++        )
++        do {
++            return try GrandSlamOperationDecoder<Response>.decode(data: response)
++        } catch is DecodingError {
++            throw metadata.error(.responseDecode)
++        }
+     }
+
+     private func endProvisioning(
+diff --git a/Sources/XKit/GrandSlam/GrandSlamClient.swift b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+index d713505..42c797e 100644
+--- a/Sources/XKit/GrandSlam/GrandSlamClient.swift
++++ b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+@@ -40,10 +40,19 @@ struct GrandSlamClient: Sendable {
+
+         // GrandSlam doesn't seem to like reused (keep-alive) connections so create a
+         // new one for each request. cf https://github.com/rileytestut/AltSign/pull/52
++        GrandSlamHTTPDiagnostics.logRequest(url: url, request: String(describing: R.self))
+         let resp = try await httpClient.withEphemeralClient {
+-            try await $0.makeRequest(httpRequest, body: body)
++            try await $0.makeRequest(httpRequest, body: body, requireHTTPSuccess: false)
++        }
++        let metadata = try GrandSlamHTTPDiagnostics.inspect(
++            response: resp.response, body: resp.body, url: url,
++            request: String(describing: R.self)
++        )
++        do {
++            return try R.Decoder.decode(data: resp.body)
++        } catch is DecodingError {
++            throw metadata.error(.responseDecode)
+         }
+-        return try R.Decoder.decode(data: resp.body)
+     }
+
+ }
+diff --git a/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift b/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift
+new file mode 100644
+index 0000000..5ff2575
+--- /dev/null
++++ b/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift
+@@ -0,0 +1,130 @@
++//
++//  GrandSlamHTTPDiagnostics.swift
++//  XKit
++//
++//  Safe transport diagnostics for Apple's private authentication endpoints.
++//
++
++import Foundation
++import HTTPTypes
++
++struct GrandSlamHTTPResponseError: Error, LocalizedError {
++    enum Failure: String {
++        case httpStatus = "unexpected-http-status"
++        case responseDecode = "unexpected-response-body"
++    }
++
++    let failure: Failure
++    let request: String
++    let endpoint: String
++    let statusCode: Int
++    let contentType: String
++    let responseKind: String
++    let byteCount: Int
++
++    var errorDescription: String? {
++        "Apple authentication failed (reason=\(failure.rawValue), request=\(request), "
++            + "endpoint=\(endpoint), status=\(statusCode), content-type=\(contentType), "
++            + "response=\(responseKind), bytes=\(byteCount)). "
++            + "The response body was intentionally not logged."
++    }
++}
++
++enum GrandSlamHTTPDiagnostics {
++    struct Metadata {
++        let request: String
++        let endpoint: String
++        let statusCode: Int
++        let contentType: String
++        let responseKind: String
++        let byteCount: Int
++
++        func error(_ failure: GrandSlamHTTPResponseError.Failure) -> GrandSlamHTTPResponseError {
++            GrandSlamHTTPResponseError(
++                failure: failure,
++                request: request,
++                endpoint: endpoint,
++                statusCode: statusCode,
++                contentType: contentType,
++                responseKind: responseKind,
++                byteCount: byteCount
++            )
++        }
++    }
++
++    private static var isEnabled: Bool {
++        ProcessInfo.processInfo.environment["XTL_AUTH_DIAGNOSTICS"] == "1"
++    }
++
++    static func logStage(_ stage: String) {
++        guard isEnabled else { return }
++        print("[xtool-auth] stage=\(stage)")
++    }
++
++    static func logRequest(url: URL, request: String) {
++        guard isEnabled else { return }
++        print("[xtool-auth-http] event=request-start request=\(request) endpoint=\(sanitizedEndpoint(url))")
++    }
++
++    static func inspect(
++        response: HTTPResponse,
++        body: Data,
++        url: URL,
++        request: String
++    ) throws -> Metadata {
++        let contentType = response.headerFields[.contentType] ?? "<missing>"
++        let metadata = Metadata(
++            request: request,
++            endpoint: sanitizedEndpoint(url),
++            statusCode: response.status.code,
++            contentType: contentType,
++            responseKind: classify(body: body, contentType: contentType),
++            byteCount: body.count
++        )
++
++        if isEnabled {
++            print(
++                "[xtool-auth-http] request=\(metadata.request) endpoint=\(metadata.endpoint) "
++                    + "status=\(metadata.statusCode) content-type=\(metadata.contentType) "
++                    + "response=\(metadata.responseKind) bytes=\(metadata.byteCount)"
++            )
++        }
++
++        guard (200..<300).contains(metadata.statusCode) else {
++            throw metadata.error(.httpStatus)
++        }
++        return metadata
++    }
++
++    private static func sanitizedEndpoint(_ url: URL) -> String {
++        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
++              let scheme = components.scheme,
++              let host = components.host
++        else { return "<invalid-url>" }
++        return "\(scheme)://\(host)\(components.percentEncodedPath)"
++    }
++
++    private static func classify(body: Data, contentType: String) -> String {
++        if body.isEmpty { return "empty" }
++
++        let mediaType = contentType.lowercased()
++        if mediaType.contains("html") { return "html" }
++        if mediaType.contains("plist") { return "plist" }
++        if mediaType.contains("json") { return "json" }
++
++        if body.starts(with: Data("bplist".utf8)) { return "plist" }
++        let prefix = String(decoding: body.prefix(256), as: UTF8.self)
++            .trimmingCharacters(in: .whitespacesAndNewlines)
++            .lowercased()
++        if prefix.hasPrefix("<!doctype html") || prefix.hasPrefix("<html") {
++            return "html"
++        }
++        if prefix.hasPrefix("<?xml") || prefix.hasPrefix("<plist") {
++            return "plist"
++        }
++        if prefix.hasPrefix("{") || prefix.hasPrefix("[") {
++            return "json"
++        }
++        return "other"
++    }
++}
+diff --git a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+index 756afa1..678e662 100644
+--- a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
++++ b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+@@ -42,9 +42,16 @@ actor GrandSlamLookupManager {
+             request.headerFields[.init(key)!] = value
+         }
+
+-        let (_, body) = try await httpClient.makeRequest(request)
+-
+-        return try self.decoder.decode(Response.self, from: body).urls
++        GrandSlamHTTPDiagnostics.logRequest(url: Self.lookupURL, request: "GrandSlamLookup")
++        let (response, body) = try await httpClient.makeRequest(request, requireHTTPSuccess: false)
++        let metadata = try GrandSlamHTTPDiagnostics.inspect(
++            response: response, body: body, url: Self.lookupURL, request: "GrandSlamLookup"
++        )
++        do {
++            return try self.decoder.decode(Response.self, from: body).urls
++        } catch {
++            throw metadata.error(.responseDecode)
++        }
+     }
+
+     private func fetchEndpoints() async throws -> GrandSlamEndpoints {
+diff --git a/Sources/XKit/GrandSlam/Operations/GrandSlamFetchAppTokensOperation.swift b/Sources/XKit/GrandSlam/Operations/GrandSlamFetchAppTokensOperation.swift
+index 9a26383..278e289 100644
+--- a/Sources/XKit/GrandSlam/Operations/GrandSlamFetchAppTokensOperation.swift
++++ b/Sources/XKit/GrandSlam/Operations/GrandSlamFetchAppTokensOperation.swift
+@@ -19,6 +19,8 @@ extension AppTokenKey {
+
+ struct GrandSlamFetchAppTokensOperation {
+
++    private static let maximumAttempts = 3
++
+     enum Error: Swift.Error {
+         case invalidResponse
+     }
+@@ -62,6 +64,24 @@ struct GrandSlamFetchAppTokensOperation {
+         return Dictionary(uniqueKeysWithValues: pairs)
+     }
+
++    private func fetch(
++        _ request: GrandSlamAppTokensRequest,
++        attempt: Int = 1
++    ) async throws -> GrandSlamAppTokensRequest.Decoder.Value {
++        do {
++            return try await client.send(request)
++        } catch let error as GrandSlamHTTPResponseError
++            where error.statusCode == 503 && attempt < Self.maximumAttempts {
++            let delaySeconds = attempt * 2
++            GrandSlamHTTPDiagnostics.logStage(
++                "app-token-fetch-retry attempt=\(attempt + 1) delay-seconds=\(delaySeconds)"
++            )
++            try await Task.sleep(seconds: Double(delaySeconds))
++            // GrandSlamClient fetches fresh anisette data for every send.
++            return try await fetch(request, attempt: attempt + 1)
++        }
++    }
++
+     func perform() async throws -> [AppTokenKey: Token] {
+         let checksum = AppTokens.checksum(withSK: loginData.sk, adsid: loginData.adsid, apps: apps.map { $0.rawValue })
+         let appTokensRequest = GrandSlamAppTokensRequest(
+@@ -71,7 +91,7 @@ struct GrandSlamFetchAppTokensOperation {
+             idmsToken: loginData.idmsToken,
+             checksum: checksum
+         )
+-        let response = try await client.send(appTokensRequest)
++        let response = try await fetch(appTokensRequest)
+         return try await self.handle(response: response)
+     }
+
+diff --git a/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift b/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift
+index db93baa..57df149 100644
+--- a/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift
++++ b/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift
+@@ -42,9 +42,6 @@ private struct Client: HTTPClientProtocol {
+         }
+         var tlsConfiguration: TLSConfiguration = .makeClientConfiguration()
+         tlsConfiguration.additionalTrustRoots = [.certificates(appleRoots)]
+-        if ProcessInfo.processInfo.environment["XTL_DISABLE_TLS_VALIDATION"] == "1" {
+-            tlsConfiguration.certificateVerification = .none
+-        }
+         return tlsConfiguration
+     }()
+
+diff --git a/Sources/XKit/HTTPClientProtocol/HTTPClientProtocol.swift b/Sources/XKit/HTTPClientProtocol/HTTPClientProtocol.swift
+index 503a003..def649c 100644
+--- a/Sources/XKit/HTTPClientProtocol/HTTPClientProtocol.swift
++++ b/Sources/XKit/HTTPClientProtocol/HTTPClientProtocol.swift
+@@ -102,9 +102,6 @@ public struct HTTPResponseError: Error, LocalizedError, Sendable, CustomStringCo
+         if !status.reasonPhrase.isEmpty {
+             description += " \(status.reasonPhrase)"
+         }
+-        if let body, !body.isEmpty {
+-            description += ". Details:\n\(body)"
+-        }
+         return description
+     }
+
+diff --git a/Sources/XKit/Model/Entitlements/EntitlementTypes.swift b/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
+index 7bc1ea5..4c90dbe 100644
+--- a/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
++++ b/Sources/XKit/Model/Entitlements/EntitlementTypes.swift
+@@ -29,6 +29,7 @@ extension EntitlementContainer {
+         WiFiAwareEntitlement.self,
+         HomeKitEntitlement.self,
+         HealthKitEntitlement.self,
++        HealthKitBackgroundDeliveryEntitlement.self,
+         AppleSignInEntitlement.self,
+     ]
+ }
+@@ -200,3 +201,9 @@ public struct HealthKitEntitlement: Entitlement, RawRepresentable {
+     public var rawValue: Bool
+     public init(rawValue: Bool) { self.rawValue = rawValue }
+ }
++
++public struct HealthKitBackgroundDeliveryEntitlement: Entitlement, RawRepresentable {
++    public static let identifier = "com.apple.developer.healthkit.background-delivery"
++    public var rawValue: Bool
++    public init(rawValue: Bool) { self.rawValue = rawValue }
++}
+diff --git a/Sources/XKit/Utilities/DirectoryProvider.swift b/Sources/XKit/Utilities/DirectoryProvider.swift
+index 5d4d3a7..f90010e 100644
+--- a/Sources/XKit/Utilities/DirectoryProvider.swift
++++ b/Sources/XKit/Utilities/DirectoryProvider.swift
+@@ -6,7 +6,7 @@ private struct PersistentDirectoryProvider: DependencyKey, Sendable {
+
+     static let liveValue = PersistentDirectoryProvider(
+         directory: URL(fileURLWithPath: NSHomeDirectory())
+-            .appendingPathComponent(".config/xtool")
++            .appendingPathComponent(".config/evaorbit-xtool-1.24-candidate")
+     )
+ }
+
+diff --git a/Sources/XKit/Utilities/KeyValueStorage.swift b/Sources/XKit/Utilities/KeyValueStorage.swift
+index ff2801e..6c68002 100644
+--- a/Sources/XKit/Utilities/KeyValueStorage.swift
++++ b/Sources/XKit/Utilities/KeyValueStorage.swift
+@@ -94,18 +94,40 @@ public struct DirectoryStorage: KeyValueStorage {
+     }
+
+     public func data(forKey key: String) throws -> Data? {
+-        try? Data(contentsOf: url(for: key))
++        do {
++            return try Data(contentsOf: url(for: key))
++        } catch {
++            let error = error as NSError
++            if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
++                return nil
++            }
++            throw error
++        }
+     }
+
+     public func setData(_ data: Data?, forKey key: String) throws {
+         let url = url(for: key)
+-        if !FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path) {
+-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
++        let parent = url.deletingLastPathComponent()
++        if !FileManager.default.fileExists(atPath: parent.path) {
++            try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
++#if os(Linux) || os(macOS)
++            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: parent.path)
++#endif
+         }
+         if let data = data {
+-            try data.write(to: url)
++            try data.write(to: url, options: .atomic)
++#if os(Linux) || os(macOS)
++            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
++#endif
+         } else {
+-            try FileManager.default.removeItem(at: url)
++            do {
++                try FileManager.default.removeItem(at: url)
++            } catch {
++                let error = error as NSError
++                guard error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError else {
++                    throw error
++                }
++            }
+         }
+     }
+ }
+diff --git a/Sources/XToolSupport/AuthCommand.swift b/Sources/XToolSupport/AuthCommand.swift
+index 4a88b91..d637735 100644
+--- a/Sources/XToolSupport/AuthCommand.swift
++++ b/Sources/XToolSupport/AuthCommand.swift
+@@ -24,12 +24,27 @@ struct AuthOperation {
+     var mode: AuthMode?
+     var quiet = false
+
++    private func logAuthStage(_ stage: String) {
++        guard ProcessInfo.processInfo.environment["XTL_AUTH_DIAGNOSTICS"] == "1" else { return }
++        print("[xtool-auth] stage=\(stage)")
++    }
++
+     func run() async throws {
+-        if let token = try? AuthToken.saved(), !logoutFromExisting {
+-            if !quiet {
+-                print("Logged in.\n\(token)")
++        logAuthStage("evaorbit-stable-1.24-mac-auth-candidate")
++        if !logoutFromExisting {
++            do {
++                if let token = try AuthToken.savedIfPresent() {
++                    if !quiet {
++                        print("Logged in.\n\(token)")
++                    }
++                    return
++                }
++            } catch {
++                throw Console.Error(
++                    "Stored authentication data exists but cannot be read. "
++                        + "Run `xtool auth logout` before logging in again."
++                )
+             }
+-            return
+         }
+
+         let mode: AuthMode
+@@ -50,7 +65,9 @@ struct AuthOperation {
+         case .key:
+             try await logInWithKey()
+         }
++        logAuthStage("token-persist-start")
+         try token.save()
++        logAuthStage("token-persist-success")
+
+         print("Logged in.\n\(token)")
+     }
+@@ -107,7 +124,9 @@ struct AuthOperation {
+         )
+
+         let client = DeveloperServicesClient(loginToken: token)
++        logAuthStage("developer-teams-fetch-start")
+         let teams = try await client.send(DeveloperServicesListTeamsRequest())
++        logAuthStage("developer-teams-fetch-success")
+         let team = try await Console.choose(
+             from: teams,
+             onNoElement: {
+@@ -173,11 +192,16 @@ struct AuthLogoutCommand: AsyncParsableCommand {
+     ) var reset2FA = false
+
+     func run() async throws {
+-        if (try? AuthToken.saved()) != nil {
++        do {
++            if try AuthToken.savedIfPresent() != nil {
++                try AuthToken.clear()
++                print("Logged out")
++            } else {
++                print("Already logged out")
++            }
++        } catch {
+             try AuthToken.clear()
+-            print("Logged out")
+-        } else {
+-            print("Already logged out")
++            print("Removed unreadable authentication data")
+         }
+
+         if reset2FA {
+@@ -195,10 +219,17 @@ struct AuthStatusCommand: AsyncParsableCommand {
+     )
+
+     func run() async throws {
+-        if let token = try? AuthToken.saved() {
++        do {
++            guard let token = try AuthToken.savedIfPresent() else {
++                print("Logged out")
++                return
++            }
+             print("Logged in.\n\(token)")
+-        } else {
+-            print("Logged out")
++        } catch {
++            throw Console.Error(
++                "Stored authentication data exists but cannot be read. "
++                    + "Run `xtool auth logout` before logging in again."
++            )
+         }
+     }
+ }
+diff --git a/Sources/XToolSupport/AuthToken.swift b/Sources/XToolSupport/AuthToken.swift
+index 0319a7b..9aa0814 100644
+--- a/Sources/XToolSupport/AuthToken.swift
++++ b/Sources/XToolSupport/AuthToken.swift
+@@ -80,6 +80,9 @@ extension AuthToken {
+     func save() throws {
+         let data = try Self.encoder.encode(self)
+         try Self.storage.setData(data, forKey: "XTLAuthToken")
++        guard try Self.savedIfPresent() != nil else {
++            throw Console.Error("Authentication data could not be verified after saving.")
++        }
+     }
+
+     func authData() -> DeveloperAPIAuthData {
+diff --git a/Tests/XToolTests/EvaOrbitHealthKitTests.swift b/Tests/XToolTests/EvaOrbitHealthKitTests.swift
+new file mode 100644
+index 0000000..f71780c
+--- /dev/null
++++ b/Tests/XToolTests/EvaOrbitHealthKitTests.swift
+@@ -0,0 +1,20 @@
++import Foundation
++import Testing
++@testable import XKit
++
++@Test func evaOrbitHealthKitEntitlementsSurviveSerializationAndSupportPersonalTeam() throws {
++    let dictionary: [String: Any] = [
++        "com.apple.developer.healthkit": true,
++        "com.apple.developer.healthkit.background-delivery": true,
++    ]
++    let data = try PropertyListSerialization.data(fromPropertyList: dictionary, format: .xml, options: 0)
++    let entitlements = try PropertyListDecoder().decode(Entitlements.self, from: data)
++    let health = try #require(entitlements.entitlements().compactMap { $0 as? HealthKitEntitlement }.first)
++    let background = try #require(entitlements.entitlements().compactMap { $0 as? HealthKitBackgroundDeliveryEntitlement }.first)
++    #expect(health.rawValue && background.rawValue)
++    #expect(health.capability.isFree && background.capability.isFree)
++    let encoded = try PropertyListEncoder().encode(entitlements)
++    let decoded = try #require(PropertyListSerialization.propertyList(from: encoded, format: nil) as? [String: Any])
++    #expect(decoded["com.apple.developer.healthkit"] as? Bool == true)
++    #expect(decoded["com.apple.developer.healthkit.background-delivery"] as? Bool == true)
++}

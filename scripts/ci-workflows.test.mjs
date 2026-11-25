@@ -29,7 +29,11 @@ test("Intel runner selection preserves native signing and packaging", () => {
   assert.match(workflow, /CODE_SIGNING_ALLOWED=YES/);
   assert.match(workflow, /AD_HOC_CODE_SIGNING_ALLOWED=YES/);
   assert.match(workflow, /bash scripts\/ios\/package-ad-hoc-ipa\.sh/);
-  assert.match(readWorkflow("xtool-patched"), /XTOOL_COMMIT: 2d58d987edff728fccebc6df643b1672e3583f00/);
+  const candidate = load(readWorkflow("xtool-patched"));
+  assert.equal(candidate.env.XTOOL_COMMIT, "70e1568fdfcb20b560774057cd783f02361293b9");
+  assert.equal(candidate.on.push, undefined);
+  assert.equal(candidate.jobs.build.if, "github.ref == 'refs/heads/codex/xtool-stable-auth'");
+  assert.match(readFileSync(new URL("./ios/xtool-env.sh", import.meta.url), "utf8"), /9f23739f9ca45a7506d3290878853e067706b26f510deefafc9728add3c5a628/);
 });
 
 test("IPA packaging defaults to device-only and requires an opted-in Simulator run to pass", () => {

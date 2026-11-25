@@ -1,68 +1,72 @@
-name: Build patched xtool
+name: Build isolated stable xtool candidate
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "tools/xtool/patches/**"
-      - ".github/workflows/xtool-patched.yml"
 
 permissions:
   contents: read
 
 env:
-  XTOOL_COMMIT: 2d58d987edff728fccebc6df643b1672e3583f00
+  XTOOL_COMMIT: 70e1568fdfcb20b560774057cd783f02361293b9
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/codex/xtool-stable-auth'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     steps:
       - uses: actions/checkout@v5
-
-      - name: Fetch pinned xtool source
+      - name: Fetch pinned official stable source
         run: |
           git clone https://github.com/xtool-org/xtool.git "$RUNNER_TEMP/xtool"
           git -C "$RUNNER_TEMP/xtool" checkout "$XTOOL_COMMIT"
           test "$(git -C "$RUNNER_TEMP/xtool" rev-parse HEAD)" = "$XTOOL_COMMIT"
-
-      - name: Apply and verify EvaOrbit patches
+      - name: Apply and verify isolated candidate patch
         run: |
-          patches=(
-            "$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch"
-            "$GITHUB_WORKSPACE/tools/xtool/patches/0002-password-auth-compatibility.patch"
-          )
-          for patch in "${patches[@]}"; do
-            git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
-            git -C "$RUNNER_TEMP/xtool" apply "$patch"
-          done
-          grep -R -q 'public static let identifier = "com.apple.developer.healthkit.background-delivery"' "$RUNNER_TEMP/xtool/Sources/XKit"
-          grep -R -q 'DeveloperServicesCapability(.healthkit, isFree: true)' "$RUNNER_TEMP/xtool/Sources/XKit"
-          grep -R -q 'XTL_AUTH_DIAGNOSTICS' "$RUNNER_TEMP/xtool/Sources"
-          grep -R -q 'closesConnectionAfterResponse = true' "$RUNNER_TEMP/xtool/Sources/XKit"
-          grep -R -q 'evaorbit-compat-v4-fresh-app-token-tls' "$RUNNER_TEMP/xtool/Sources/XToolSupport"
-          grep -R -q 'The response body was intentionally not logged' "$RUNNER_TEMP/xtool/Sources/XKit"
-          grep -R -q 'options: .atomic' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/KeyValueStorage.swift"
-
+          patch="$GITHUB_WORKSPACE/tools/xtool/stable-patches/0001-healthkit-isolated-auth-and-diagnostics.patch"
+          git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
+          git -C "$RUNNER_TEMP/xtool" apply "$patch"
+          grep -q 'HealthKitBackgroundDeliveryEntitlement.self' "$RUNNER_TEMP/xtool/Sources/XKit/Model/Entitlements/EntitlementTypes.swift"
+          grep -q 'DeveloperServicesCapability(.healthkit, isFree: true)' "$RUNNER_TEMP/xtool/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift"
+          grep -q 'mac-ani.jkcoxson.com' "$RUNNER_TEMP/xtool/Sources/XKit/GrandSlam/Anisette/OmnisetteADIProvider.swift"
+          grep -q '.config/evaorbit-xtool-1.24-candidate' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/DirectoryProvider.swift"
+          grep -q 'withEphemeralClient' "$RUNNER_TEMP/xtool/Sources/XKit/GrandSlam/GrandSlamClient.swift"
+          grep -q 'options: .atomic' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/KeyValueStorage.swift"
+          ! grep -q 'certificateVerification = .none' "$RUNNER_TEMP/xtool/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift"
       - name: Build patched AppImage
-        run: docker build --target build-xtool -t evaorbit-xtool-patched "$RUNNER_TEMP/xtool"
-
-      - name: Extract AppImage
+        run: docker build --target build-xtool -t evaorbit-xtool-stable "$RUNNER_TEMP/xtool"
+      - name: Verify HealthKit entitlement round trip and Personal Team capability
+        run: |
+          docker run --rm --entrypoint bash evaorbit-xtool-stable -lc \
+            'cd /xtool && swift test -c release --filter evaOrbitHealthKitEntitlementsSurviveSerializationAndSupportPersonalTeam'
+      - name: Verify candidate does not read or clear original authentication
+        run: |
+          docker run --rm --entrypoint bash evaorbit-xtool-stable -lc '
+            set -euo pipefail
+            mkdir -p "$HOME/.config/xtool/data"
+            printf "original-profile-canary" > "$HOME/.config/xtool/data/XTLAuthToken"
+            expected="$(sha256sum "$HOME/.config/xtool/data/XTLAuthToken")"
+            APPIMAGE_EXTRACT_AND_RUN=1 /xtool/Linux/packages/xtool-x86_64.AppImage auth status > /tmp/status.txt
+            grep -q "Logged out" /tmp/status.txt
+            test "$(sha256sum "$HOME/.config/xtool/data/XTLAuthToken")" = "$expected"
+            echo "PASS: candidate ignores and preserves original profile"
+          '
+      - name: Extract candidate and audit information
         run: |
           mkdir -p "$RUNNER_TEMP/xtool-artifact"
-          container_id="$(docker create evaorbit-xtool-patched)"
+          container_id="$(docker create evaorbit-xtool-stable)"
           trap 'docker rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
           docker cp "$container_id:/xtool/Linux/packages/." "$RUNNER_TEMP/xtool-artifact/"
+          cp tools/xtool/stable-patches/*.patch "$RUNNER_TEMP/xtool-artifact/"
+          cp scripts/ios/run-xtool-stable-candidate.sh "$RUNNER_TEMP/xtool-artifact/candidate.sh"
+          cp tools/xtool/stable-patches/CANDIDATE.md "$RUNNER_TEMP/xtool-artifact/"
           cd "$RUNNER_TEMP/xtool-artifact"
-          sha256sum ./*.AppImage > SHA256SUMS
           printf '%s\n' "$XTOOL_COMMIT" > XTOOL_COMMIT.txt
-          cp "$GITHUB_WORKSPACE"/tools/xtool/patches/*.patch .
-          sha256sum ./*.patch > PATCH_SHA256SUMS
-
+          sha256sum ./*.AppImage > SHA256SUMS
+          sha256sum ./*.patch candidate.sh CANDIDATE.md XTOOL_COMMIT.txt > AUDIT_SHA256SUMS
       - uses: actions/upload-artifact@v6
         with:
-          name: xtool-patched-${{ env.XTOOL_COMMIT }}
+          name: xtool-1.24.0-evaorbit-isolated-candidate
           path: ${{ runner.temp }}/xtool-artifact
           if-no-files-found: error
           retention-days: 30
