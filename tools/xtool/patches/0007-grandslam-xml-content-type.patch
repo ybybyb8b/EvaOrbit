@@ -1,0 +1,26 @@
+diff --git a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+index 07472e2..912da5a 100644
+--- a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
++++ b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+@@ -170,7 +170,7 @@ public struct ADIDataProvider: AnisetteDataProvider {
+         var request = HTTPRequest(url: endpointURL)
+         request.method = .post
+         request.headerFields = [
+-            .contentType: "text/x-xml-plist",
++            .contentType: "text/xml",
+             .acceptLanguage: "en_US",
+             .init(AnisetteData.localUserIDKey)!: self.localUserID,
+         ]
+diff --git a/Sources/XKit/GrandSlam/GrandSlamClient.swift b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+index 31a1bdb..d9f954e 100644
+--- a/Sources/XKit/GrandSlam/GrandSlamClient.swift
++++ b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+@@ -29,7 +29,7 @@ struct GrandSlamClient: Sendable {
+
+         let method = request.method(deviceInfo: deviceInfo, anisetteData: anisetteData)
+         var httpRequest = HTTPRequest(method: method.httpMethod, url: url)
+-        httpRequest.headerFields[.contentType] = "text/x-xml-plist"
++        httpRequest.headerFields[.contentType] = "text/xml"
+         httpRequest.headerFields[.init(DeviceInfo.clientInfoKey)!] = deviceInfo.clientInfo.clientString
+         let body: Data? = switch method {
+         case .get:

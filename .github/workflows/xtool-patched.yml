@@ -47,6 +47,7 @@ jobs:
             patches+=("$GITHUB_WORKSPACE/tools/xtool/patches/0004-pin-compatible-xadi-build.patch")
             patches+=("$GITHUB_WORKSPACE/tools/xtool/patches/0005-auth-request-start-diagnostics.patch")
             patches+=("$GITHUB_WORKSPACE/tools/xtool/patches/0006-linuxdeploy-git-tag-query.patch")
+            patches+=("$GITHUB_WORKSPACE/tools/xtool/patches/0007-grandslam-xml-content-type.patch")
           fi
           for patch in "${patches[@]}"; do
             git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
@@ -89,6 +90,7 @@ jobs:
             cp "$GITHUB_WORKSPACE/tools/xtool/patches/0004-pin-compatible-xadi-build.patch" .
             cp "$GITHUB_WORKSPACE/tools/xtool/patches/0005-auth-request-start-diagnostics.patch" .
             cp "$GITHUB_WORKSPACE/tools/xtool/patches/0006-linuxdeploy-git-tag-query.patch" .
+            cp "$GITHUB_WORKSPACE/tools/xtool/patches/0007-grandslam-xml-content-type.patch" .
             printf '%s\n' '61c02708c9cb046100f500878863fd2122b0d7e3' > XADI_COMMIT.txt
             printf '%s\n' 'Linux authentication candidate. Keep the audited xtool installed; do not replace it or reset provisioning. Live Apple login and device validation are still required.' > AUTH_CANDIDATE.txt
           fi
