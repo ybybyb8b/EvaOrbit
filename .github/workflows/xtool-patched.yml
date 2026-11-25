@@ -2,7 +2,13 @@ name: Build patched xtool
 
 on:
   workflow_dispatch:
+    inputs:
+      auth_client_info_candidate:
+        description: Build the Linux XADI client-info repair candidate (not the audited default)
+        type: boolean
+        default: false
   push:
+    branches-ignore: ["codex/xtool-linux-auth-fix"]
     paths:
       - "tools/xtool/patches/**"
       - ".github/workflows/xtool-patched.yml"
@@ -28,11 +34,17 @@ jobs:
           test "$(git -C "$RUNNER_TEMP/xtool" rev-parse HEAD)" = "$XTOOL_COMMIT"
 
       - name: Apply and verify EvaOrbit patches
+        env:
+          AUTH_CLIENT_INFO_CANDIDATE: ${{ inputs.auth_client_info_candidate }}
         run: |
           patches=(
             "$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch"
             "$GITHUB_WORKSPACE/tools/xtool/patches/0002-password-auth-compatibility.patch"
           )
+          if [[ "$AUTH_CLIENT_INFO_CANDIDATE" == "true" ]]; then
+            test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+            patches+=("$GITHUB_WORKSPACE/tools/xtool/patches/0003-linux-anisette-client-info.patch")
+          fi
           for patch in "${patches[@]}"; do
             git -C "$RUNNER_TEMP/xtool" apply --check "$patch"
             git -C "$RUNNER_TEMP/xtool" apply "$patch"
@@ -45,10 +57,20 @@ jobs:
           grep -R -q 'The response body was intentionally not logged' "$RUNNER_TEMP/xtool/Sources/XKit"
           grep -R -q 'options: .atomic' "$RUNNER_TEMP/xtool/Sources/XKit/Utilities/KeyValueStorage.swift"
 
+      - name: Prepare candidate client-info smoke test
+        if: ${{ inputs.auth_client_info_candidate }}
+        run: node scripts/verify-xtool-client-info.mjs "$RUNNER_TEMP/xtool" "$RUNNER_TEMP/xtool-client-info-smoke.swift"
+
       - name: Build patched AppImage
         run: docker build --target build-xtool -t evaorbit-xtool-patched "$RUNNER_TEMP/xtool"
 
+      - name: Compile and run candidate client-info smoke test
+        if: ${{ inputs.auth_client_info_candidate }}
+        run: docker run --rm --volume "$RUNNER_TEMP/xtool-client-info-smoke.swift:/check.swift:ro" swift:6.3-jammy swift /check.swift
+
       - name: Extract AppImage
+        env:
+          AUTH_CLIENT_INFO_CANDIDATE: ${{ inputs.auth_client_info_candidate }}
         run: |
           mkdir -p "$RUNNER_TEMP/xtool-artifact"
           container_id="$(docker create evaorbit-xtool-patched)"
@@ -57,12 +79,17 @@ jobs:
           cd "$RUNNER_TEMP/xtool-artifact"
           sha256sum ./*.AppImage > SHA256SUMS
           printf '%s\n' "$XTOOL_COMMIT" > XTOOL_COMMIT.txt
-          cp "$GITHUB_WORKSPACE"/tools/xtool/patches/*.patch .
+          cp "$GITHUB_WORKSPACE/tools/xtool/patches/0001-healthkit-background-delivery.patch" .
+          cp "$GITHUB_WORKSPACE/tools/xtool/patches/0002-password-auth-compatibility.patch" .
+          if [[ "$AUTH_CLIENT_INFO_CANDIDATE" == "true" ]]; then
+            cp "$GITHUB_WORKSPACE/tools/xtool/patches/0003-linux-anisette-client-info.patch" .
+            printf '%s\n' 'Linux authentication candidate. Keep the audited xtool installed; do not replace it or reset provisioning. Live Apple login and device validation are still required.' > AUTH_CANDIDATE.txt
+          fi
           sha256sum ./*.patch > PATCH_SHA256SUMS
 
       - uses: actions/upload-artifact@v6
         with:
-          name: xtool-patched-${{ env.XTOOL_COMMIT }}
+          name: xtool-patched-${{ env.XTOOL_COMMIT }}${{ inputs.auth_client_info_candidate && '-linux-auth-candidate' || '' }}
           path: ${{ runner.temp }}/xtool-artifact
           if-no-files-found: error
           retention-days: 30

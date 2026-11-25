@@ -7,6 +7,16 @@ const { load } = createRequire(import.meta.url)("js-yaml");
 const readWorkflow = (name) =>
   readFileSync(new URL(`../.github/workflows/${name}.yml`, import.meta.url), "utf8");
 
+test("xtool auth candidate is opt-in and keeps the audited installer baseline", () => {
+  const workflow = load(readWorkflow("xtool-patched"));
+  assert.equal(workflow.on.workflow_dispatch.inputs.auth_client_info_candidate.default, false);
+  const steps = workflow.jobs.build.steps;
+  const patch = steps.find(step => step.name === "Apply and verify EvaOrbit patches");
+  assert.match(patch.run, /if \[\[ "\$AUTH_CLIENT_INFO_CANDIDATE" == "true" \]\]; then\s+test "\$GITHUB_EVENT_NAME" = "workflow_dispatch"\s+patches\+=/);
+  assert(steps.some(step => step.name === "Compile and run candidate client-info smoke test" && step.if === "${{ inputs.auth_client_info_candidate }}"));
+  assert.match(readFileSync(new URL("./ios/xtool-env.sh", import.meta.url), "utf8"), /9f23739f9ca45a7506d3290878853e067706b26f510deefafc9728add3c5a628/);
+});
+
 test("Tracker PoC development branch cannot trigger a Vercel Git deployment", () => {
   const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
   assert.equal(config.git.deploymentEnabled["codex/tracker-local-first-poc"], false);

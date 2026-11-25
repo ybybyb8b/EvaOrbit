@@ -1,5 +1,23 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+## Linux xtool 认证候选（2026-11-25）
+
+针对网页登录正常、GSA 初始化返回 `-22410` 的情况，分支 `codex/xtool-linux-auth-fix` 保留固定 upstream 和原两份补丁，仅追加 Linux 客户端声明修复。背景及边界见 [维护契约](IOS_NATIVE_MAINTENANCE.md#linux-xtool-认证候选2026-11-25)。候选尚需真实 Apple 登录与设备验收，不能作为已验证默认工具。
+
+手动构建 `Build patched xtool`，ref 选择该分支，`auth_client_info_candidate=true`。等待编译和 ClientInfo Swift 检查成功后，下载后缀为 `-linux-auth-candidate` 的产物到独立目录，保留其中的 SHA256SUMS 和补丁摘要；不要覆盖 `~/.local/bin/xtool`。
+
+在候选解压目录先运行 `sha256sum -c SHA256SUMS`，成功后给其中的 AppImage 增加执行权限。然后在 WSL 中运行：
+
+```bash
+cd /mnt/e/EvaOrbit
+source scripts/ios/xtool-env.sh
+XTL_AUTH_DIAGNOSTICS=1 APPIMAGE_EXTRACT_AND_RUN=1 "/候选目录/实际文件名.AppImage" auth login
+```
+
+诊断应包含 `evaorbit-compat-v5-linux-xadi-client-info`。账号、密码、验证码仅在本机提示中输入，不放进参数或分享日志。候选保留原认证存储格式和路径，不重置 pseudo-device，也不删除或导出旧认证文件。若再次失败，保留安全阶段诊断，停止连续尝试，不自动改换认证服务或重置 2FA。
+
+登录成功后，用原 `bash scripts/ios/xtool-install.sh "已有IPA完整路径"` 重试；无需重新打包 App。此候选不改 Bundle ID、IPA、entitlement 或安装链。真实登录和安装通过后再记录新审计信息，另行决定是否升级默认工具与 SHA。
+
 SIWC 手机实验包已获用户本批构建授权：在 `codex/parlor-native-test` 手动运行原 iOS workflow，设 `local_trackers=true`、`subscription_poc=true`。保持 Release / iphoneos / ad-hoc 签名和既有 xtool 安装链，只在该包显式编译实验模块并保存默认关闭的 Info.plist 开关；手机启动直接打开测试面板。普通包不受影响；此说明不代表 CI 已成功或真机授权通过。旧段落的 Debug-only 说明是最初源码状态，现以此处为准。
 
 Parlor SIWC 实验仅 Debug 本地 Host 加 `--parlor-subscription-poc` 后出现，普通 Release IPA 不包含模块或入口。未改变既有签名安装链，本轮未打包或运行 CI；Xcode、iOS 回环回调和用户 Plus 授权／推理均未验证。不要用已有 Release IPA 作为本实验已上机的证据。下一步及条件见 [独立 PoC 报告](PARLOR_SUBSCRIPTION_POC.md)。

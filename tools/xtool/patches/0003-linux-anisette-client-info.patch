@@ -1,0 +1,53 @@
+diff --git a/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift b/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
+index 88d5a1a..40aa55d 100644
+--- a/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
++++ b/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
+@@ -27,12 +27,19 @@ public struct DeviceInfo: Codable, Sendable {
+
+         public let modelID: String // e.g. MacBookPro11,5
+
++        // Match the local Android CoreADI provider on Linux (upstream xtool #337).
++        static let androidClientString = "<Pixel 7> <Android;14;UQ1A.240205.002> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
++
+         // TODO: Do we need to replace com.apple.akd with com.apple.dt.Xcode? See AltStore
+         var clientString: String {
++            #if os(Linux)
++            Self.androidClientString
++            #else
+             """
+             <\(modelID)> <Mac OS X;\(Self.macOSVersion);\(Self.macOSBuild)> \
+             <com.apple.AuthKit/\(Self.authKitVersion) (com.apple.akd/\(Self.akdVersion))>
+             """
++            #endif
+         }
+
+         var userAgent: String {
+diff --git a/Sources/XKit/GrandSlam/Anisette/XADIProvider.swift b/Sources/XKit/GrandSlam/Anisette/XADIProvider.swift
+index 3183101..db003f6 100644
+--- a/Sources/XKit/GrandSlam/Anisette/XADIProvider.swift
++++ b/Sources/XKit/GrandSlam/Anisette/XADIProvider.swift
+@@ -85,9 +85,7 @@ public actor XADIProvider: RawADIProvider {
+     }
+
+     public func clientInfo() async throws -> String {
+-        """
+-        <MacBookPro13,2> <macOS;13.1;22C65> <com.apple.AuthKit/1 (com.apple.dt.Xcode/3594.4.19)>
+-        """
++        DeviceInfo.ClientInfo.androidClientString
+     }
+
+     public func startProvisioning(spim: Data, userID: UUID) async throws -> (any RawADIProvisioningSession, Data) {
+diff --git a/Sources/XToolSupport/AuthCommand.swift b/Sources/XToolSupport/AuthCommand.swift
+index b82edc0..28c8fe5 100644
+--- a/Sources/XToolSupport/AuthCommand.swift
++++ b/Sources/XToolSupport/AuthCommand.swift
+@@ -31,6 +31,9 @@ struct AuthOperation {
+
+     func run() async throws {
+         logAuthStage("evaorbit-compat-v4-fresh-app-token-tls")
++        #if os(Linux)
++        logAuthStage("evaorbit-compat-v5-linux-xadi-client-info")
++        #endif
+         if !logoutFromExisting {
+             do {
+                 if let token = try AuthToken.savedIfPresent() {

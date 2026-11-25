@@ -1,5 +1,13 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## Linux xtool 认证候选（2026-11-25）
+
+Apple 网页登录正常，但旧 AppImage 在 `GrandSlamAuthInitRequest` 收到 HTTP 200 plist 后返回 `-22410`，未进入 2FA／App Token。固定源码的 Linux XADI 来自 Android CoreADI，GSA 却声明 Mac；上游 [#337](https://github.com/xtool-org/xtool/pull/337) 已验证过这种不一致的兼容问题。这支持修复方向，尚不能证明本账户错误的唯一原因。
+
+独立分支 `codex/xtool-linux-auth-fix` 的 `0003-linux-anisette-client-info.patch` 只在 Linux 统一登录和 XADI provisioning 的 Android 客户端声明。原 upstream commit、HealthKit／免费 Team 补丁、fresh-TLS、有限重试、原子 token 保存和安装 transport 保留；非 Linux 声明不变，不增加认证端点、远端服务或凭据输出，不自动清理 provisioning。
+
+`Build patched xtool` 仅手动选择 `auth_client_info_candidate=true` 时应用第三补丁，默认仍只用前两份。候选产物有独立后缀；CI 从实际补丁源码生成无凭据／无网络 Swift 检查，覆盖 Linux 与非 Linux 分支。原安装工具和环境脚本的已验证 SHA 不变；候选须独立校验后手动登录，再沿用原 IPA 和安装脚本验收。构建通过不能视为 Apple 登录或真机通过，禁止提前替换默认工具、使用 `--skip-sha256` 或重置 2FA。见 [runbook 的候选步骤](IOS_NATIVE_HOST.md#linux-xtool-认证候选2026-11-25)。
+
 ## Parlor 单聊消息操作
 
 Bridge v1 增加可选方法 `ai.retryMessage` 和 `ai.deleteMessage`，沿用本地主 frame、账户与 generation 校验，旧 IPA 按能力隐藏入口。重试复用原提问、原模型和原回复位置，从原提问之前的历史重建上下文，显式生成一次回答。曾使用 EvaOrbit 的消息重试只生成回答，已确认的业务操作不会重放。删除只移除目标消息，沿用 SQLite 的上下文、自动记忆来源和 Echo 草稿失效规则。已有独立人格记忆继续由 Memory 管理。无需数据库迁移、权限或签名配置变更。新方法需重建 IPA，Windows 浏览器结果不能替代 Xcode 与 iPhone 键盘实测。
