@@ -14,18 +14,22 @@ assert.match(clientInfo, /#if os\(Linux\)/);
 assert.match(read("Sources/XKit/GrandSlam/Anisette/XADIProvider.swift"), /func clientInfo\(\) async throws -> String \{\s*DeviceInfo\.ClientInfo\.androidClientString\s*\}/);
 assert.match(read("Sources/XKit/GrandSlam/GrandSlamClient.swift"), /deviceInfo\.clientInfo\.clientString/);
 assert.match(read("Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift"), /deviceInfo\.clientInfo\.userAgent/);
+assert.match(read("Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift"), /deviceInfo\.clientInfo\.urlBagClientString/);
+assert.match(read("Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift"), /#if !os\(Linux\)\s+clientData\.merge\(deviceInfo\.dictionary\)/);
 
 // Compile the actual patched implementation, plus its non-Linux branch, without
 // importing the signing stack, reading credentials or contacting Apple.
 fs.writeFileSync(outputFile, `import Foundation
 enum LinuxIdentity { ${clientInfo} }
-enum OtherIdentity { ${clientInfo.replace("#if os(Linux)", "#if false")} }
+enum OtherIdentity { ${clientInfo.replaceAll("#if os(Linux)", "#if false")} }
 let linux = LinuxIdentity.ClientInfo(modelID: "fixture")
 let other = OtherIdentity.ClientInfo(modelID: "fixture")
 precondition(linux.clientString == "<Pixel 7> <Android;14;UQ1A.240205.002> <com.apple.AuthKit/1 (com.apple.akd/1.0)>")
 precondition(linux.clientString == LinuxIdentity.ClientInfo.androidClientString)
 precondition(other.clientString == "<fixture> <Mac OS X;14.3.1;23D60> <com.apple.AuthKit/1 (com.apple.akd/1.0)>")
-precondition(linux.userAgent == other.userAgent)
-print("PASS: Linux login/provisioning use the same Android identity; non-Linux identity and User-Agent are preserved")
+precondition(linux.urlBagClientString == other.clientString)
+precondition(linux.userAgent == "akd/1.0 CFNetwork/808.1.4")
+precondition(other.userAgent == "akd/1.0 CFNetwork/978.0.7 Darwin/18.7.0")
+print("PASS: Linux auth/provisioning use Android, URL bag uses Mac, and non-Linux identity/UA are preserved")
 `);
 console.log("Prepared credential-free Swift client-info smoke test");

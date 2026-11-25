@@ -1,0 +1,58 @@
+diff --git a/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift b/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
+index 40aa55d..cb18c67 100644
+--- a/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
++++ b/Sources/XKit/GrandSlam/Anisette/DeviceInfo.swift
+@@ -35,15 +35,24 @@ public struct DeviceInfo: Codable, Sendable {
+             #if os(Linux)
+             Self.androidClientString
+             #else
++            urlBagClientString
++            #endif
++        }
++
++        // Keep the full Mac URL bag; actual Linux authentication still identifies Android.
++        var urlBagClientString: String {
+             """
+             <\(modelID)> <Mac OS X;\(Self.macOSVersion);\(Self.macOSBuild)> \
+             <com.apple.AuthKit/\(Self.authKitVersion) (com.apple.akd/\(Self.akdVersion))>
+             """
+-            #endif
+         }
+
+         var userAgent: String {
++            #if os(Linux)
++            "akd/1.0 CFNetwork/808.1.4"
++            #else
+             "akd/\(Self.akdVersion) CFNetwork/\(Self.cfNetworkVersion) Darwin/\(Self.darwinVersion)"
++            #endif
+         }
+
+         public init(modelID: String) {
+diff --git a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+index e6a7ca0..d1c41b4 100644
+--- a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
++++ b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+@@ -39,7 +39,8 @@ actor GrandSlamLookupManager {
+         } */
+         var request = HTTPRequest(url: Self.lookupURL)
+         request.headerFields = [
+-            .init(DeviceInfo.clientInfoKey)!: deviceInfo.clientInfo.clientString,
++            .userAgent: deviceInfo.clientInfo.userAgent,
++            .init(DeviceInfo.clientInfoKey)!: deviceInfo.clientInfo.urlBagClientString,
+             .init(DeviceInfo.deviceIDKey)!: deviceInfo.deviceID,
+             .init(AnisetteData.iLocaleKey)!: Locale.current.identifier,
+             .init(AnisetteData.timeZoneKey)!: TimeZone.current.identifier,
+diff --git a/Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift b/Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift
+index 2e90417..48b9e83 100644
+--- a/Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift
++++ b/Sources/XKit/GrandSlam/Requests/GrandSlamOperationRequest.swift
+@@ -89,7 +89,9 @@ extension GrandSlamOperationRequest {
+             "svct": "iCloud",
+             "loc": Locale.current.identifier
+         ]
++        #if !os(Linux)
+         clientData.merge(deviceInfo.dictionary) { _, b in b }
++        #endif
+         clientData.merge(anisetteData.dictionary) { _, b in b }
+
+         var request: [String: Any] = [
