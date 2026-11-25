@@ -35,10 +35,10 @@ jobs:
           ! grep -q 'certificateVerification = .none' "$RUNNER_TEMP/xtool/Sources/XKit/HTTPClientProtocol/AsyncHTTPClient+HTTP.swift"
       - name: Build patched AppImage
         run: docker build --target build-xtool -t evaorbit-xtool-stable "$RUNNER_TEMP/xtool"
-      - name: Verify HealthKit entitlement round trip and Personal Team capability
+      - name: Verify HealthKit and empty-profile storage behavior
         run: |
           docker run --rm --entrypoint bash evaorbit-xtool-stable -lc \
-            'cd /xtool && swift test -c release --filter evaOrbitHealthKitEntitlementsSurviveSerializationAndSupportPersonalTeam'
+            'cd /xtool && swift test -c release --filter "evaOrbit(HealthKit|MissingCredential)"'
       - name: Verify candidate does not read or clear original authentication
         run: |
           docker run --rm --entrypoint bash evaorbit-xtool-stable -lc '

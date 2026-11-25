@@ -2,6 +2,8 @@
 
 ## 官方稳定版认证独立候选（2026-11-25，未迁移默认工具）
 
+首次稳定版 CI 已编译出 AppImage，HealthKit 两项权限往返及免费 Team 测试通过；隔离目录检查执行 auth status 时误报“Stored authentication data exists but cannot be read”，因此未发布产物。存储读取仅识别 NSFileNoSuchFileError，未覆盖 Foundation 文件读取的 NSFileReadNoSuchFileError。候选补齐这两种缺失文件错误的 nil 语义，并新增空目录/删除后读取/保存读取及其他读取错误继续抛出的测试；保留原目录哨兵检查，不以忽略错误放行产物。实际隔离与首次运行通过仍以新 CI 结果为准。
+
 旧会话在原工具联网查询 Team 时返回 1100，服务端过期已确认；Android 客户端候选的 AuthInit 503 已在 Windows 无账号空请求上复现，不应继续要求用户重装 Ubuntu 或反复登录。分支 `codex/xtool-stable-auth` 转向官方稳定版 1.24.0 的 Mac Omnisette 认证，固定 upstream `70e1568fdfcb20b560774057cd783f02361293b9`。本分支 workflow 仅手动触发并只允许该 ref，Vercel 部署关闭；主分支、原 AppImage 和默认安装脚本 SHA 不变。
 
 稳定版已有每次 GrandSlam 请求使用新 HTTP client、Mac provider 和匹配的 client info/User-Agent；单独移植 HealthKit background-delivery 的识别和 Personal Team capability、安全诊断、AppTokens HTTP 503 最多三次尝试、token 原子写入与权限保护。移除上游 TLS 验证绕过选项及通用 HTTP 错误的响应体打印。认证固定保存到 `~/.config/evaorbit-xtool-1.24-candidate`，不导入、清理或重置原 `~/.config/xtool`。登录和安装必须使用同一候选，不能复制 token 回旧 Android provider。

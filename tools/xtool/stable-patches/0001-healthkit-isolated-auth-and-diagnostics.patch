@@ -11,6 +11,18 @@ index 299c535..c3ac6e2 100755
  curr_arch="$(uname -m)"
 
  if [[ -f staging/linuxdeploy/git.json ]]; then
+diff --git a/Package.swift b/Package.swift
+index 2727e4e..664e44d 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -164,6 +164,7 @@ let package = Package(
+                 "PackLib",
+                 .product(name: "Crypto", package: "swift-crypto"),
+                 .product(name: "X509", package: "swift-certificates"),
++                .product(name: "Dependencies", package: "swift-dependencies"),
+             ],
+             swiftSettings: swiftSettings,
+         ),
 diff --git a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift b/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
 index 1d12254..0754436 100644
 --- a/Sources/XKit/DeveloperServices/App IDs/Entitlements/DeveloperServicesCapability.swift
@@ -415,10 +427,10 @@ index 5d4d3a7..f90010e 100644
  }
 
 diff --git a/Sources/XKit/Utilities/KeyValueStorage.swift b/Sources/XKit/Utilities/KeyValueStorage.swift
-index ff2801e..6c68002 100644
+index ff2801e..f6b6153 100644
 --- a/Sources/XKit/Utilities/KeyValueStorage.swift
 +++ b/Sources/XKit/Utilities/KeyValueStorage.swift
-@@ -94,18 +94,40 @@ public struct DirectoryStorage: KeyValueStorage {
+@@ -94,18 +94,41 @@ public struct DirectoryStorage: KeyValueStorage {
      }
 
      public func data(forKey key: String) throws -> Data? {
@@ -427,7 +439,8 @@ index ff2801e..6c68002 100644
 +            return try Data(contentsOf: url(for: key))
 +        } catch {
 +            let error = error as NSError
-+            if error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
++            if error.domain == NSCocoaErrorDomain
++                && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError) {
 +                return nil
 +            }
 +            throw error
@@ -601,4 +614,40 @@ index 0000000..f71780c
 +    let decoded = try #require(PropertyListSerialization.propertyList(from: encoded, format: nil) as? [String: Any])
 +    #expect(decoded["com.apple.developer.healthkit"] as? Bool == true)
 +    #expect(decoded["com.apple.developer.healthkit.background-delivery"] as? Bool == true)
++}
+diff --git a/Tests/XToolTests/EvaOrbitStorageTests.swift b/Tests/XToolTests/EvaOrbitStorageTests.swift
+new file mode 100644
+index 0000000..909504c
+--- /dev/null
++++ b/Tests/XToolTests/EvaOrbitStorageTests.swift
+@@ -0,0 +1,30 @@
++import Foundation
++import Testing
++import Dependencies
++@testable import XKit
++
++@Test func evaOrbitMissingCredentialFileIsNotCorruption() throws {
++    let profile = FileManager.default.temporaryDirectory
++        .appendingPathComponent("evaorbit-storage-test-\(UUID().uuidString)")
++    defer { try? FileManager.default.removeItem(at: profile) }
++    try withDependencies {
++        $0.persistentDirectory = profile
++    } operation: {
++        let storage = DirectoryStorage()
++        #expect(try storage.data(forKey: "XTLAuthToken") == nil)
++        let fixture = Data("non-sensitive-fixture".utf8)
++        try storage.setData(fixture, forKey: "XTLAuthToken")
++        #expect(try storage.data(forKey: "XTLAuthToken") == fixture)
++        try storage.setData(nil, forKey: "XTLAuthToken")
++        #expect(try storage.data(forKey: "XTLAuthToken") == nil)
++
++        // Other read failures must still propagate instead of silently logging out.
++        try FileManager.default.createDirectory(
++            at: profile.appendingPathComponent("data/not-a-file"),
++            withIntermediateDirectories: true
++        )
++        #expect(throws: (any Error).self) {
++            _ = try storage.data(forKey: "not-a-file")
++        }
++    }
 +}
