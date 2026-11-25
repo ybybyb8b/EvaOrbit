@@ -1,0 +1,52 @@
+diff --git a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+index 4cee00a..07472e2 100644
+--- a/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
++++ b/Sources/XKit/GrandSlam/Anisette/ADIDataProvider.swift
+@@ -181,6 +181,7 @@ public struct ADIDataProvider: AnisetteDataProvider {
+ //        request.headers[DeviceInfo.clientInfoKey] = self.deviceInfo.clientInfo.clientString
+ //        self.deviceInfo.dictionary.forEach { request.headers[$0] = $1 }
+
++        GrandSlamHTTPDiagnostics.logRequest(url: endpointURL, request: "ADIProvisioning")
+         let (_, response) = try await self.httpClient.makeRequest(request, body: body)
+
+ //        print(String(data: response, encoding: .utf8) ?? "<no utf8 data>")
+diff --git a/Sources/XKit/GrandSlam/GrandSlamClient.swift b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+index 4a6ecf2..31a1bdb 100644
+--- a/Sources/XKit/GrandSlam/GrandSlamClient.swift
++++ b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+@@ -41,6 +41,7 @@ struct GrandSlamClient: Sendable {
+         }
+         request.configure(request: &httpRequest, deviceInfo: deviceInfo, anisetteData: anisetteData)
+
++        GrandSlamHTTPDiagnostics.logRequest(url: url, request: String(describing: R.self))
+         let resp = try await httpClient.makeRequest(httpRequest, body: body)
+         let metadata = try GrandSlamHTTPDiagnostics.inspect(
+             response: resp.response,
+diff --git a/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift b/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift
+index c314cdc..5ff2575 100644
+--- a/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift
++++ b/Sources/XKit/GrandSlam/GrandSlamHTTPDiagnostics.swift
+@@ -61,6 +61,11 @@ enum GrandSlamHTTPDiagnostics {
+         print("[xtool-auth] stage=\(stage)")
+     }
+
++    static func logRequest(url: URL, request: String) {
++        guard isEnabled else { return }
++        print("[xtool-auth-http] event=request-start request=\(request) endpoint=\(sanitizedEndpoint(url))")
++    }
++
+     static func inspect(
+         response: HTTPResponse,
+         body: Data,
+diff --git a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+index 77ccc4d..e6a7ca0 100644
+--- a/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
++++ b/Sources/XKit/GrandSlam/Lookup/GrandSlamLookupManager.swift
+@@ -47,6 +47,7 @@ actor GrandSlamLookupManager {
+         ]
+         request.headerFields[.init("X-MMe-Country")!] = Locale.current.region?.identifier
+
++        GrandSlamHTTPDiagnostics.logRequest(url: Self.lookupURL, request: "GrandSlamLookup")
+         let (response, body) = try await httpClient.makeRequest(request)
+         let metadata = try GrandSlamHTTPDiagnostics.inspect(
+             response: response,
