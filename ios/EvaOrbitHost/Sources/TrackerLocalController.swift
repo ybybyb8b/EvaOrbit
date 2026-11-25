@@ -71,7 +71,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
         if path == "sync" && !replica { throw TrackerLocalError.readOnly }
         let trackerPath = path == "trackers" || path.range(of: "^trackers/[1-9][0-9]*(/icon)?$", options: .regularExpression) != nil
         let homePath = path.range(of: "^home-readonly/(day/[0-9]{4}-[0-9]{2}-[0-9]{2}|month/[0-9]{4}-[0-9]{2}|due/current)$", options: .regularExpression) != nil
-        let workspacePath = path.range(of: "^workspace-readonly/(tasks|projects|lucius)$", options: .regularExpression) != nil
+        let workspacePath = path.range(of: "^workspace-readonly/(tasks|projects)$", options: .regularExpression) != nil
         let foodPath = path.range(of: "^food-readonly/(catalog/current|place/[1-9][0-9]*|item/[1-9][0-9]*)$", options: .regularExpression) != nil
         guard replica && path == "sync" && method == "POST" || path == "session" && ["GET", "POST", "DELETE"].contains(method) || (path == "inbox" || path == "memos" || path == "chronicle" || workspacePath || trackerPath || homePath || foodPath || path == "food-readonly" || path == "cats-readonly" || path == "subscriptions-readonly" || path == "health-readonly" || path == "relations-readonly" || path == "media-readonly") && method == "GET" else { throw TrackerLocalError.invalid }
         var endpoint = baseURL.appendingPathComponent((trackerPath || path == "chronicle" || path == "memos" || path == "inbox") ? "api/\(path)" : "api/native/\(path)")
@@ -465,7 +465,7 @@ final class TrackerLocalController: NSObject, URLSessionTaskDelegate {
     }
 
     func workspaceReadOnlySnapshot(accountId: String, kind: String, refresh: Bool) async throws -> Any {
-        guard ["tasks", "projects", "lucius"].contains(kind) else { throw TrackerLocalError.invalid }
+        guard ["tasks", "projects"].contains(kind) else { throw TrackerLocalError.invalid }
         _ = try await acceptanceStatus(accountId: accountId)
         if !refresh { return try await database.workspaceReadOnlyCache(accountId: accountId, kind: kind) }
         let expectedGeneration = generation

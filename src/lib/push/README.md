@@ -6,8 +6,4 @@ Production activation requires `EVAORBIT_VAPID_PUBLIC_KEY`, `EVAORBIT_VAPID_PRIV
 
 The delivery client's table GET requests retry only HTTP 401 with `PGRST303` / `JWT issued at future`, after 500ms and 1500ms (three attempts total). This mitigates transient upstream JWT time validation failures; it does not change credentials or permissions. Each retry logs the table and attempt without query parameters or credentials. Exhausted retries preserve the original error for the route's diagnostic log. Writes, RPCs, push sends and the whole delivery job are never retried by this wrapper.
 
-Lucius state changes and Post creation/edits send an immediate owner-scoped Web Push through the same opt-in subscriptions. The notification is “Lucius有新动态 / 要来看看吗？” and opens `/lucius`. Identical updates and deletes do not notify. Delivery failures do not undo saved changes. This path uses the request repository for both web and MCP identity and requires the three VAPID variables; it does not require a scheduler.
-
-New Lucius-authored Post comments also notify the owner with “Lucius回复了你的评论” and open `/lucius`. User comments, edits, deletes, and failed saves do not send reply notifications. Reply tags are scoped to their parent Post and separate from activity notices.
-
-Content changes to the active `recent_life_context` Memo tagged `lucius` send “生活近况已更新 / Lucius 更新了 recent_life_context” and open that Memo's detail page. Both web and MCP updates use the same service. Identical content, metadata-only edits, other Memos, and archived Memos do not notify. The payload does not include private Memo content; delivery uses the existing Web Push subscriptions and VAPID configuration, and failures do not undo the save.
+Lucius activity, comment reply and recent-life Memo notification triggers are retired. General reminder delivery, Bark settings and opt-in Web Push subscriptions remain available.

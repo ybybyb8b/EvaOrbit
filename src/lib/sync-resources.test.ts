@@ -8,10 +8,10 @@ test("sync overview inspects caches without requesting a network refresh",async(
  const account={accountId:"account-a",email:"a@example.invalid"},calls:unknown[][]=[],stamp="2026-10-22T00:00:00Z";
  const platform=new Proxy({},{get:(_target,key)=>(...args:unknown[])=>{calls.push([key,...args]);return Promise.resolve({capturedAt:stamp,complete:false});}}) as TrackerPlatform;
  for(const selectedModule of syncModules.filter(row=>row.id!=="trackers"))assert.equal((await readModuleSyncStatus(platform,account,selectedModule.id)).capturedAt,stamp);
- assert.equal(calls.length,13);
+ assert.equal(calls.length,12);
  assert(calls.every(call=>call[1]===account));
  assert(calls.every(call=>call[0]==="homeResource"?call[2]==="day"&&call[3]==="latest":call.at(-1)===false));
- assert.equal(calls.filter(call=>call[0]==="workspaceSnapshot").length,3);
+ assert.equal(calls.filter(call=>call[0]==="workspaceSnapshot").length,2);
 });
 
 test("explicit update refreshes full Home bundle and preserves partial-history facts",async()=>{

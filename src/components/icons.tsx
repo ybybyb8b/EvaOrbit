@@ -1,13 +1,12 @@
 import { ReiconGlyph } from "./reicon-icons";
 import { Trash2, Bone, ChevronDown, Cookie, Edit2, FoodTray, History, Pet, PillJar } from "reicon-react";
 
-export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "insights" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "lucius" | "more" | "notifications" | "calendar" | "health";
+export type IconName = "home" | "tasks" | "projects" | "memory" | "ai" | "settings" | "plus" | "search" | "trash" | "edit" | "check" | "spark" | "insights" | "history" | "chevronDown" | "close" | "arrow" | "inbox" | "food" | "foodDrink" | "foodPlaces" | "foodLibrary" | "catFood" | "catFoodDry" | "catFoodWet" | "catFoodTreat" | "catFoodSupplement" | "drink" | "tracker" | "cats" | "people" | "media" | "chronicle" | "more" | "notifications" | "calendar" | "health";
 type IconProps = { name: IconName; variant?: "feature" | "nav" | "stroke" };
 
 const navIconSources: Partial<Record<IconName, string>> = {
   insights: "/icons/features/insights.png",
   home: "/icons/nav/home.png",
-  lucius: "/icons/nav/lucius.png",
   settings: "/icons/nav/settings.png",
 };
 
@@ -30,7 +29,6 @@ const featureIconSources: Partial<Record<IconName, string>> = {
   people: "/icons/features/people.png",
   media: "/icons/features/media.png",
   chronicle: "/icons/features/chronicle.png",
-  lucius: "/icons/features/lucius.png",
   more: "/icons/features/more.png",
   notifications: "/icons/features/notifications.png",
   calendar: "/icons/features/calendar.png",

@@ -9,6 +9,6 @@ export function takeNativeNavigationPath(host: Pick<Window, "__evaorbitPendingPa
   let decoded: string;
   try { decoded = decodeURIComponent(rawPath); } catch { return null; }
   if (/[\\\u0000-\u001f]/.test(decoded) || decoded.startsWith("//") || decoded.split("/").some(part => part === "." || part === "..")) return null;
-  const routes = ["/tasks", "/settings/notifications", "/food", "/health", "/lucius", "/memo"];
+  const routes = ["/tasks", "/settings/notifications", "/food", "/health", "/memo"];
   return decoded === "/" || decoded === "/ai" || routes.some(route => decoded === route || decoded.startsWith(route + "/")) ? path : null;
 }

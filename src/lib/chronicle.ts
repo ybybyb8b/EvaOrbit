@@ -1,6 +1,18 @@
 import type { EvaOrbitRepository } from "./repositories/types.ts";
 import type { ChronicleEntryPatch, ChronicleListInput, NewChronicleEntry } from "./repositories/types.ts";
 
+export function chronicleSearchDates(query?: string) {
+  const value = query?.trim();
+  if (!value || !/^(?!0000)\d{4}-\d{2}(?:-\d{2})?$/.test(value)) return;
+
+  const monthOnly = value.length === 7;
+  const from = monthOnly ? `${value}-01` : value;
+  const date = new Date(`${from}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== from) return;
+  if (monthOnly) date.setUTCMonth(date.getUTCMonth() + 1, 0);
+  return { from, to: date.toISOString().slice(0, 10) };
+}
+
 export function chronicleExcerpt(contentMd: string, maxLength = 180) {
   const text = contentMd
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")

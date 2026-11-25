@@ -53,3 +53,6 @@ Thumbs.db
 # Private software-library uploads
 data/software-icons/
 .vercel
+
+# Private retirement archives
+/backups/

@@ -1,4 +1,5 @@
 import type {ChronicleEntry} from "./types";
+import {chronicleSearchDates} from "./chronicle.ts";
 
 export type ChronicleReadonlySnapshot={format:"eo-chronicle-readonly-v1";accountId:string;capturedAt:string;items:ChronicleEntry[];complete:boolean};
 const validDay=(day:unknown)=>typeof day==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(day)&&Number.isFinite(Date.parse(day))&&new Date(day).toISOString().slice(0,10)===day;
@@ -21,7 +22,11 @@ export function readChronicleSnapshot(value:ChronicleReadonlySnapshot,path:strin
   if(init?.method&&init.method!=="GET")throw new Error("Chronicle read-only adapter refused a write");
   const match=/^\/api\/chronicle(?:\/([1-9][0-9]*))?(?:\?q=([^&]*)&limit=100)?$/.exec(path);
   if(!match||match[1]&&match[2]!==undefined)throw new Error("Chronicle read-only path refused");
-  const query=decodeURIComponent(match[2]??"").toLocaleLowerCase();
-  const data=match[1]?value.items.find(item=>item.id===Number(match[1])):value.items.filter(item=>!query||item.title.toLocaleLowerCase().includes(query)||item.contentMd.toLocaleLowerCase().includes(query));
+  const query=decodeURIComponent(match[2]??"").trim().toLocaleLowerCase();
+  const dates=chronicleSearchDates(query);
+  const data=match[1]?value.items.find(item=>item.id===Number(match[1])):value.items.filter(item=>{
+    if(dates)return item.date>=dates.from&&item.date<=dates.to;
+    return !query||item.title.toLocaleLowerCase().includes(query)||item.contentMd.toLocaleLowerCase().includes(query);
+  });
   return new Response(JSON.stringify(data??{error:"Not in downloaded Chronicle snapshot"}),{status:data===undefined?404:200,headers:{"Content-Type":"application/json"}});
 }

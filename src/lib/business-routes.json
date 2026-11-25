@@ -1,7 +1,9 @@
 [
   {
     "pattern": "^/api/calendar-events$",
-    "methods": ["GET"]
+    "methods": [
+      "GET"
+    ]
   },
   {
     "pattern": "^/api/memory-graph/offline$",
@@ -433,57 +435,6 @@
     "methods": [
       "GET",
       "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/diary/[1-9][0-9]*$",
-    "methods": [
-      "GET",
-      "PATCH",
-      "DELETE"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/diary$",
-    "methods": [
-      "GET",
-      "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/posts/[1-9][0-9]*/comments/[1-9][0-9]*$",
-    "methods": [
-      "PATCH",
-      "DELETE"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/posts/[1-9][0-9]*/comments$",
-    "methods": [
-      "GET",
-      "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/posts/[1-9][0-9]*$",
-    "methods": [
-      "GET",
-      "PATCH",
-      "DELETE"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/posts$",
-    "methods": [
-      "GET",
-      "POST"
-    ]
-  },
-  {
-    "pattern": "^/api/lucius/state$",
-    "methods": [
-      "GET",
-      "PATCH"
     ]
   },
   {

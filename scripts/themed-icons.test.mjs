@@ -10,7 +10,7 @@ test("all feature and navigation icons have transparent, harmonized assets in ev
   assert.equal(new Set(cached).size, cached.length);
   const families = {
     features: (await readdir("public/icons/features")).filter(name => name.endsWith(".png") && !name.endsWith("-dark.png")).map(name => name.slice(0, -4)),
-    nav: ["home", "lucius", "settings"],
+    nav: ["home", "settings"],
   };
   let count = 0;
   for (const theme of ["editorial", "rosewood", "powderblue", "mistviolet"]) {
@@ -37,5 +37,5 @@ test("all feature and navigation icons have transparent, harmonized assets in ev
       }
     }
   }
-  assert.equal(count, 208);
+  assert.equal(count, 192);
 });

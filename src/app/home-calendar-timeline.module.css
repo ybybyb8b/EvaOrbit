@@ -60,3 +60,130 @@
   .pill { transition:none; }
   .capsules :global(.home-calendar-grid) > button .pill { transform:none; }
 }
+
+.untimed { margin-block-start: 4px; padding: 5px 8px; border-radius: 10px; background: color-mix(in srgb, var(--surface-soft) 45%, transparent); }
+.untimedList, .groupList { margin: 0; padding: 0; list-style: none; }
+.untimedList:not([hidden]) { display: grid; gap: 2px; }
+.untimedList > li { display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: center; min-width: 0; }
+.untimedKind { padding-inline: 4px; color: var(--text-secondary); font-size: 11px; }
+.untimedToggle { min-height: 44px; margin-inline-start: 58px; }
+
+.timePlot {
+  --timeline-sage: #668675;
+  --timeline-blue: #728a9a;
+  --timeline-rose: #a07886;
+  --timeline-oat: #9a8868;
+  --timeline-lilac: #8b819f;
+  --gutter: 24px;
+  --rule: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  position: relative;
+  margin-block-start: 28px;
+}
+.timeRuler {
+  position: absolute;
+  inset-inline-start: 50%;
+  width: 1px;
+  background: var(--rule);
+  transform: translateX(-50%);
+  border-radius: 999px;
+}
+.timeGap { position: absolute; left: 50%; z-index: 3; transform: translate(-50%, -50%); padding: 5px 8px; background: var(--surface-card); color: var(--text-secondary); white-space: nowrap; font-size: 10px; }
+.timeSegment {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.timeInterval {
+  position: absolute;
+  inset: 0;
+  background: var(--mark, var(--accent-primary));
+}
+.timeSegment { isolation: isolate; overflow: hidden; }
+.timePlot[data-overlap-style="blend"] .timeInterval[data-overlap] { mix-blend-mode: multiply; }
+:global(html[data-mode="dark"]) .timePlot[data-overlap-style="blend"] .timeInterval[data-overlap] { mix-blend-mode: screen; }
+:is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-lilac); }
+:is([data-source="calendar"],[data-source="chronicle"]):is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-blue); }
+:is([data-source="tracker"],[data-source="training"]):is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-sage); }
+:is([data-source="food"],[data-source="subscription"]):is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-oat); }
+:is([data-source="drink"],[data-source="media"]):is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-lilac); }
+:is([data-source="health"],[data-source="cat"],[data-source="person"]):is(.timeInterval,.timeDot,.timeCard) { --mark: var(--timeline-rose); }
+:global(html[data-mode="dark"]) .timePlot {
+  --timeline-sage: #a1bcac;
+  --timeline-blue: #a8becd;
+  --timeline-rose: #c8a8b3;
+  --timeline-oat: #c3b28f;
+  --timeline-lilac: #b9afcd;
+}
+.timeDot {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mark, var(--accent-primary));
+  box-shadow: 0 0 0 1px var(--surface-card);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.timeLabel { position: absolute; inset-inline: 0; }
+.timeCard {
+  position: absolute;
+  width: calc(50% - var(--gutter));
+  transform: translateY(-50%);
+}
+.timeCard[data-side="left"] { right: calc(50% + var(--gutter)); display: flex; justify-content: flex-end; }
+.timeCard[data-side="right"] { left: calc(50% + var(--gutter)); }
+.timeCard::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: var(--gutter);
+  height: 1px;
+  background: var(--rule);
+  pointer-events: none;
+}
+.timeCard[data-side="left"]::before { left: 100%; }
+.timeCard[data-side="right"]::before { right: 100%; }
+.timeCard[data-duration]::before { background: color-mix(in srgb, var(--mark, var(--accent-primary)) 40%, transparent); }
+.timelineEntry {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+}
+.timeCard > .timelineEntry {
+  width: max-content;
+  max-width: 100%;
+  background: color-mix(in srgb, var(--mark, var(--accent-primary)) 7%, var(--surface-card));
+  background-image: linear-gradient(135deg, rgb(255 255 255 / .24), transparent 65%);
+  box-shadow: inset 0 1px rgb(255 255 255 / .35), 0 2px 6px rgb(var(--shadow-rgb) / .035);
+}
+.timeCard[data-duration] > .timelineEntry { background-color: color-mix(in srgb, var(--mark, var(--accent-primary)) 14%, var(--surface-card)); }
+:global(html[data-mode="dark"]) .timeCard > .timelineEntry {
+  background-image: linear-gradient(135deg, rgb(255 255 255 / .035), transparent 65%);
+  box-shadow: inset 0 1px rgb(255 255 255 / .06), 0 2px 6px rgb(var(--shadow-rgb) / .035);
+}
+.timelineEntry:focus-visible, .untimedToggle:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+:is(.timelineEntry,.timeCard > .timelineEntry):active { background: var(--surface-accent-soft); }
+@media (hover: hover) and (pointer: fine) {
+  :is(.timelineEntry,.timeCard > .timelineEntry):hover { background: var(--surface-accent-soft); color: var(--text-primary); }
+}
+.timeGroup { gap: 4px; }
+.timeGroup > svg { flex: none; color: var(--text-secondary); }
+.entryCopy { display: grid; flex: 1; min-width: 0; gap: 2px; }
+.entryCopy > :is(strong,small) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.entryCopy > strong { font-size: 13px; line-height: 1.3; font-weight: 600; }
+.entryCopy > small { color: var(--text-secondary); font-size: 10px; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.groupList .entryCopy > :is(strong,small) { overflow: visible; white-space: normal; overflow-wrap: anywhere; }

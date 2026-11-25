@@ -59,10 +59,10 @@ test("Home passes due reminders into the shared task list", () => {
   assert.match(timeline, /<HomeTasksSummary[^>]*reminders=\{dueItems\?\?\[\]\}/);
 });
 
-test("Global mobile chrome excludes Login and Lucius from the scroll-aware header", () => {
+test("Global mobile chrome excludes Login from the scroll-aware header", () => {
   const shell = readFileSync(new URL("../components/app-shell.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
-  assert.match(shell, /pathname !== "\/login" && !pathname\.startsWith\("\/lucius"\)/);
+  assert.match(shell, /const hasGlobalHeader = !inParlor && pathname !== "\/login";/);
   assert.match(shell, /window\.scrollY \/ 80/);
   assert.match(shell, /<header ref=\{globalHeaderRef\} className="mobile-global-header"/);
   assert.match(css, /\.mobile-global-header \{[^}]*env\(safe-area-inset-top\)[^}]*z-index:55/);

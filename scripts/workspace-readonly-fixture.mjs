@@ -9,11 +9,5 @@ export async function seedWorkspaces(){
  const project=await r.createProject({name:'Offline Project',description:'Shared original UI',status:'active'});
  const item=await r.createProjectItem(parseNewProjectItem({projectId:project.id,title:'Doing item canary',description:'Literal <script> text',type:'feature',status:'doing',module:'Home',priority:'P1',nextStep:'Check offline',resolution:null}));
  await r.createProjectItem(parseNewProjectItem({projectId:project.id,title:'Verified item canary',description:'Verified remains separate from Done',type:'bug',status:'verified',module:'Core',priority:'P2',nextStep:null,resolution:'Confirmed canary'}));
- await r.updateLuciusState({status:'Reading quietly',mood:'composed'});
- const post=await r.createLuciusPost({content:'Lucius post canary <script>literal</script>',publishedAt:'2026-10-20T00:00:00Z'});
- await r.createLuciusPostComment({postId:post.id,author:'user',content:'User comment canary'});
- await r.createLuciusPostComment({postId:post.id,author:'lucius',content:'Lucius reply canary'});
- const trace={sourceSystem:null,sourceId:null,sourceUrl:null,importedAt:null};
- const diary=await r.createLuciusDiaryEntry({...trace,date:'2026-10-19',content:'Diary canary content <script>literal</script>',tags:['Canary']});
- return {task,project,item,post,diary};
+ return {task,project,item};
 }

@@ -57,7 +57,13 @@ function localDatabase() {
   return database ??= new Promise((resolve, reject) => {
     const request = indexedDB.open("eo-tracker-local-v1", 1);
     request.onupgradeneeded = () => { request.result.createObjectStore("states"); request.result.createObjectStore("session"); };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result, tx = db.transaction("states", "readwrite");
+      const cursor = tx.objectStore("states").openCursor();
+      cursor.onsuccess = () => { const row = cursor.result; if (!row) return; if (String(row.key).startsWith("lucius-readonly:") || /^business:[^:]+:\/api\/lucius(?:\/|\?|$)/.test(String(row.key))) row.delete(); row.continue(); };
+      tx.oncomplete = () => resolve(db);
+      tx.onabort = tx.onerror = () => reject(new Error("无法清理已退役模块缓存"));
+    };
     request.onerror = () => reject(new Error("无法打开本地数据库，记录尚未保存"));
     request.onblocked = () => reject(new Error("请关闭其他 Tracker 窗口后重试"));
   });

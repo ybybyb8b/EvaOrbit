@@ -20,7 +20,7 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(BACKUP_TABLES.includes("software_library"));
   assert.ok(BACKUP_TABLES.includes("food_logs"));
   assert.ok(BACKUP_TABLES.includes("relation_event_flows"));
-  assert.ok(BACKUP_TABLES.includes("lucius_post_comments"));
+  assert.ok(!BACKUP_TABLES.some(table => table.startsWith("lucius_")));
   assert.ok(BACKUP_TABLES.includes("memory_entities"));
   assert.ok(BACKUP_TABLES.includes("memory_facts"));
   assert.ok(BACKUP_TABLES.includes("memory_sources"));

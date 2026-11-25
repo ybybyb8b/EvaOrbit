@@ -180,8 +180,6 @@
 .metadata dd { margin: 0; }
 .reader > footer > div:last-child { margin-top: 0; }
 .reader > footer button { min-height: 44px; }
-
-.profileArchive > :global(.lucius-profile-section-heading) { border-bottom: 0; }
 .profileList { display: grid; gap: 8px; }
 .profileEntry { background: var(--lucius-ivory); color: var(--lucius-ink-strong); }
 .profileEntry time { color: var(--lucius-muted); font-size: .8125rem; }

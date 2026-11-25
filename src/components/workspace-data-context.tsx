@@ -9,5 +9,5 @@ const Context=createContext<{read:WorkspaceRead;Link:ComponentType<LinkProps>}|n
 export function WorkspaceDataProvider({read,Link,children}:{read:WorkspaceRead;Link:ComponentType<LinkProps>;children:ReactNode}){return <Context.Provider value={{read,Link}}>{children}</Context.Provider>;}
 export function useWorkspaceData(){const value=useContext(Context);return {read:value?.read??fetch,local:Boolean(value)};}
 export function WorkspaceLink(props:LinkProps){const value=useContext(Context);return value?<value.Link {...props}/>:<NextLink {...props}/>;}
-// Web keeps Lucius's existing navigation; the local shell owns its single back control.
+// The local shell owns its single back control.
 export function WorkspacePageHeader(props:ComponentProps<typeof PageHeading>){const {local}=useWorkspaceData();return local?<PageHeading {...props}/>:<PageHeader {...props}/>;}

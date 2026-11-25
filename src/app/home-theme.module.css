@@ -24,7 +24,6 @@
 .home :global(.home-journal-preview-entry .home-journal-state) { margin-top: 12px; }
 .home :global(.home-time-summary) { margin-block: 22px 8px; background: transparent; box-shadow: none; }
 .home :global(.home-calendar-card > .home-day-timeline) { margin-top: 30px; padding: 22px 20px; border-radius: 16px; background: var(--surface-card); }
-.home :global(.home-activity-item) { padding-block: 14px; }
 
 @media (max-width: 720px) {
   .home :global(.home-day-grid) { gap: 14px; }

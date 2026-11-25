@@ -605,9 +605,9 @@ final class TrackerLocalTests: XCTestCase {
         let task: [String: Any] = ["id": 1, "title": "Date only", "notes": "", "completed": false, "tags": [], "priority": "medium", "dueDate": "2026-10-20", "dueTime": NSNull(), "completedAt": NSNull(), "reminders": [], "createdAt": stamp, "updatedAt": stamp]
         let project: [String: Any] = ["id": 1, "name": "Ideas", "description": NSNull(), "status": "active", "doingCount": 0, "toSolveCount": 0, "ideaCount": 1, "createdAt": stamp, "updatedAt": stamp]
         let idea: [String: Any] = ["id": 1, "projectId": 1, "title": "Possibility", "type": "feature", "status": "idea", "description": NSNull(), "module": NSNull(), "priority": NSNull(), "nextStep": NSNull(), "resolution": NSNull(), "startedAt": NSNull(), "completedAt": NSNull(), "verifiedAt": NSNull(), "createdAt": stamp, "updatedAt": stamp]
-        let data: [String: [String: Any]] = ["tasks": ["tasks": [task], "complete": true], "projects": ["projects": [project], "items": [idea], "complete": true], "lucius": ["state": ["status": "Quiet", "mood": "composed", "updatedAt": stamp], "posts": [], "comments": [], "diary": [], "cases": [], "complete": true]]
+        let data: [String: [String: Any]] = ["tasks": ["tasks": [task], "complete": true], "projects": ["projects": [project], "items": [idea], "complete": true]]
         let reopened = try TrackerLocalDatabase(path: path)
-        for kind in ["tasks", "projects", "lucius"] {
+        for kind in ["tasks", "projects"] {
             let snapshot: [String: Any] = ["format": "eo-workspace-readonly-v1", "accountId": account, "kind": kind, "capturedAt": stamp, "data": data[kind]!]
             try await database.saveWorkspaceReadOnlyCache(accountId: account, kind: kind, snapshot: snapshot)
             var bad = snapshot; bad["accountId"] = "wrong"
@@ -631,7 +631,7 @@ final class TrackerLocalTests: XCTestCase {
         let queue = try await reopened.read(accountId: account) as? NSDictionary
         XCTAssertEqual(queue, original as NSDictionary)
         let controller = TrackerLocalController(baseURL: URL(string: "https://example.invalid")!, database: reopened)
-        for kind in ["tasks", "projects", "lucius"] {
+        for kind in ["tasks", "projects"] {
             for method in ["POST", "PATCH", "PUT", "DELETE"] {
                 do { _ = try await controller.request(path: "workspace-readonly/\(kind)", method: method); XCTFail("Business writes") } catch TrackerLocalError.invalid {}
             }
@@ -640,7 +640,7 @@ final class TrackerLocalTests: XCTestCase {
             do { _ = try await controller.request(path: path, method: "GET"); XCTFail("Unlisted path") } catch TrackerLocalError.invalid {}
         }
         try await reopened.setAccount(id: "10000000-0000-4000-8000-000000000002", email: "other@example.invalid")
-        for kind in ["tasks", "projects", "lucius"] {
+        for kind in ["tasks", "projects"] {
             do { _ = try await reopened.workspaceReadOnlyCache(accountId: account, kind: kind); XCTFail("Account isolation") } catch {}
         }
         XCTAssertTrue(NativeBridge.trackerMethods.contains("workspaces.readOnlySnapshot"))

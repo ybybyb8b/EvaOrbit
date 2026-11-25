@@ -6,14 +6,14 @@ import test from "node:test";
 import { parseCatRoutine } from "./cats-validation.ts";
 import { parseDrinkLimit, parseNewTracker } from "./validation.ts";
 import { createResourceRegistry, type ResourceRegistryOperations } from "./mcp/resource-registry.ts";
-import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, Memo, MemoryEntity, MemoryFact, MemorySource, Project, ProjectItem, Task } from "./types.ts";
+import type { ChronicleEntry, FoodDish, FoodPlace, InboxItem, Memo, MemoryEntity, MemoryFact, MemorySource, Project, ProjectItem, Task } from "./types.ts";
 
 test("production schemas describe every action and distinguish create from PATCH", async () => {
   const operations = fakeOperations().operations;
   const bindings = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   for (const [, key] of bindings.matchAll(/^\s*(\w+):\s*\{/gm)) Object.assign(operations, { [key]: {} });
   const registry = createResourceRegistry(operations);
-  assert.equal(registry.resources().length, 38);
+  assert.equal(registry.resources().length, 34);
   assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 39);
   assert.ok(registry.resources().some(item=>item.resource==="software_library"));
   for (const item of registry.resources()) {
@@ -36,13 +36,11 @@ test("production schemas describe every action and distinguish create from PATCH
       await assert.rejects(() => registry.action(item.resource, { action: name, ...(action.id_required ? {id:1} : {}), data: { unexpected: true } }), /does not accept: unexpected/);
     }
   }
-  assert.deepEqual(registry.schema("lucius_post_comment").update_fields, ["content"]);
   assert.deepEqual(registry.schema("person_note").update_fields, ["content"]);
   assert.ok(!registry.schema("media").update_fields.includes("title"));
   assert.ok(registry.schema("media").update_fields.includes("watched_date"));
   assert.ok(!registry.schema("memory_fact").update_fields.includes("predicate"));
   assert.ok(!registry.schema("memory_source").update_fields.includes("fact_id"));
-  assert.deepEqual(registry.schema("lucius_state").create_fields, []);
   assert.match(registry.schema("memo").description, /ordinary conversation/);
   assert.match(registry.schema("memory_fact").usage_guidance.join(" "), /status=active.*valid_on/);
   assert.match(registry.schema("memory_entity").usage_guidance.join(" "), /Same names are not unique/);
@@ -211,15 +209,13 @@ function fakeOperations() {
   const tasks: Task[] = [];
   const chronicles: ChronicleEntry[] = [];
   const memos: Memo[] = [];
-  const diary: LuciusDiaryEntry[] = [];
-  const luciusState: LuciusState = { status: "quiet", mood: "composed", updatedAt: null };
   const projects: Project[] = [];
   const projectItems: ProjectItem[] = [];
   const memoryEntities: MemoryEntity[] = [];
   const memoryFacts: MemoryFact[] = [];
   const candidates: MemoryFactCandidate[] = [];
   const memorySources: MemorySource[] = [];
-  let nextInbox = 0, nextTask = 0, nextChronicle = 0, nextMemo = 0, nextDiary = 0, nextProject = 0, nextProjectItem = 0;
+  let nextInbox = 0, nextTask = 0, nextChronicle = 0, nextMemo = 0, nextProject = 0, nextProjectItem = 0;
   let nextMemoryId = 0;
   const memoryId = () => `00000000-0000-4000-8000-${String(++nextMemoryId).padStart(12,"0")}`;
   const remove = <T extends { id: number }>(items: T[], id: number) => { const index = items.findIndex((item) => item.id === id); if (index < 0) return false; items.splice(index, 1); return true; };
@@ -283,17 +279,6 @@ function fakeOperations() {
       async update(id, patch) { const item = memos.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
       async delete(id) { return remove(memos, id); },
     },
-    luciusDiary: {
-      async search({ query, tag, limit = 20 }) { const needle = query?.toLocaleLowerCase(); return diary.filter((item) => (!needle || item.content.toLocaleLowerCase().includes(needle)) && (!tag || item.tags.includes(tag))).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, limit); },
-      async get(id) { return diary.find((item) => item.id === id) ?? null; },
-      async create(input) { const item: LuciusDiaryEntry = { ...input, id: ++nextDiary, createdAt, updatedAt: createdAt }; diary.push(item); return item; },
-      async update(id, patch) { const item = diary.find((entry) => entry.id === id); if (!item) return null; Object.assign(item, patch, { updatedAt: "2026-08-30T00:00:00Z" }); return item; },
-      async delete(id) { return remove(diary, id); },
-    },
-    luciusState: {
-      async get() { return luciusState; },
-      async update(input) { Object.assign(luciusState, input, { updatedAt: "2026-09-01T14:41:00Z" }); return luciusState; },
-    },
     project: {
       async search({ query, status, limit = 20 }) { return projects.filter((item) => (!query || item.name.includes(query)) && (!status || item.status === status)).slice(0, limit); },
       async get(id) { return projects.find((item) => item.id === id) ?? null; },
@@ -310,18 +295,17 @@ function fakeOperations() {
     relationEvent:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;},async settle(){throw new Error("unused");}},
     personNote:{async search(){return[];},async get(){return null;},async create(){throw new Error("unused");},async update(){return null;},async delete(){return false;}},
   };
-  return { operations, inbox, tasks, chronicles, memos, diary, memoryEntities, memoryFacts, memorySources };
+  return { operations, inbox, tasks, chronicles, memos, memoryEntities, memoryFacts, memorySources };
 }
 
 test("registry exposes long-term memory and project resources without changing generic tools", () => {
   const registry = createResourceRegistry(fakeOperations().operations);
-  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_candidate", "memory_entity", "memory_fact", "memory_source", "inbox", "task", "echo", "chronicle", "lucius_diary", "lucius_state", "project", "project_item", "relation_person", "relation_event", "person_note"]);
+  assert.deepEqual(registry.resources().map((entry) => entry.resource), ["memory_candidate", "memory_entity", "memory_fact", "memory_source", "inbox", "task", "echo", "chronicle", "project", "project_item", "relation_person", "relation_event", "person_note"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "inbox")?.capabilities, ["search", "get", "create", "update", "delete", "action"]);
   assert.deepEqual(registry.resources().find((entry) => entry.resource === "chronicle")?.capabilities, ["search", "get", "create", "update", "delete"]);
-  assert.deepEqual(registry.resources().find((entry) => entry.resource === "lucius_state")?.capabilities, ["get", "update"]);
   assert.deepEqual(registry.schema("chronicle").required_fields, ["date", "title", "content_md"]);
   assert.deepEqual(registry.schema("chronicle").writable_fields, ["date", "title", "content_md", "source"]);
-  assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md"]);
+  assert.deepEqual(registry.schema("chronicle").searchable_fields, ["title", "content_md", "date"]);
   assert.deepEqual(registry.schema("inbox").supported_actions, ["mark_processed", "archive", "restore"]);
   assert.deepEqual(registry.schema("inbox").writable_fields, ["content"]);
   assert.equal(registry.schema("memory_fact").fields.object_value.type,"json");
@@ -380,39 +364,6 @@ test("Memory Graph resources preserve lifecycle, provenance, and immutable asser
   await assert.rejects(()=>registry.search("memory_source",{filters:{source_record_id:7},limit:20}),/opaque string/);
 });
 
-test("optional Web API resources are exposed when production operations are registered", async () => {
-  const base=fakeOperations().operations;
-  const posts:LuciusPost[]=[];
-  const comments:LuciusPostComment[]=[];
-  const registry=createResourceRegistry({...base,luciusPost:{
-    async search({limit=20}){return posts.slice(0,limit);},
-    async get(id){return posts.find(item=>item.id===id)??null;},
-    async create(input){const item={...input,id:posts.length+1,createdAt,updatedAt:createdAt};posts.unshift(item);return item;},
-    async update(id,input){const item=posts.find(post=>post.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"2026-09-02T01:00:00Z"});return item;},
-    async delete(id){const index=posts.findIndex(post=>post.id===id);if(index<0)return false;posts.splice(index,1);return true;},
-  },luciusPostComment:{
-    async search({postId,author,limit=20}){return comments.filter(item=>(!postId||item.postId===postId)&&(!author||item.author===author)).slice(0,limit);},
-    async get(id){return comments.find(item=>item.id===id)??null;},
-    async create(input){const item:LuciusPostComment={...input,id:comments.length+1,createdAt,updatedAt:createdAt};comments.push(item);return item;},
-    async update(id,input){const item=comments.find(comment=>comment.id===id);if(!item)return null;Object.assign(item,input,{updatedAt:"2026-09-02T01:00:00Z"});return item;},
-    async delete(id){const index=comments.findIndex(comment=>comment.id===id);if(index<0)return false;comments.splice(index,1);return true;},
-  }});
-  assert.ok(registry.resources().some(item=>item.resource==="lucius_post"));
-  assert.ok(registry.resources().some(item=>item.resource==="lucius_post_comment"));
-  assert.ok(!registry.resources().some(item=>item.resource==="memory"));
-  const created=await registry.create("lucius_post",{content:"The room is quiet.",published_at:"2026-09-02T00:00:00Z"});
-  assert.equal(created.content,"The room is quiet.");
-  assert.equal((await registry.get("lucius_post",created.id as number)).published_at,"2026-09-02T00:00:00.000Z");
-  assert.equal((await registry.update("lucius_post",created.id as number,{content:"Still quiet."})).content,"Still quiet.");
-  const comment=await registry.create("lucius_post_comment",{post_id:created.id,author:"lucius",content:"I heard you."});
-  assert.equal(comment.author,"lucius");
-  assert.deepEqual((await registry.search("lucius_post_comment",{filters:{post_id:created.id,author:"lucius"},limit:20})).items.map(item=>item.id),[comment.id]);
-  assert.equal((await registry.update("lucius_post_comment",comment.id as number,{content:"Still listening."})).content,"Still listening.");
-  await assert.rejects(()=>registry.update("lucius_post_comment",comment.id as number,{author:"user"}),/does not accept: author/);
-  assert.deepEqual(await registry.delete("lucius_post_comment",comment.id as number),{deleted:true,id:comment.id});
-  assert.deepEqual(await registry.delete("lucius_post",created.id as number),{deleted:true,id:created.id});
-});
-
 test("food place and dish resources expose safe generic CRUD",async()=>{
   const base=fakeOperations().operations,places:FoodPlace[]=[],dishes:FoodDish[]=[];
   const registry=createResourceRegistry({...base,foodPlace:{
@@ -438,17 +389,6 @@ test("food place and dish resources expose safe generic CRUD",async()=>{
   assert.equal((await registry.update("food_place",place.id as number,{status:"paused"})).status,"paused");
   assert.deepEqual(await registry.delete("food_dish",dish.id as number),{deleted:true,id:dish.id});
   await assert.rejects(()=>registry.create("food_place",{name:"Bad",postcode:"not supported"}),/does not accept: postcode/);
-});
-
-test("Lucius state is a single explicit MCP-updatable display resource", async () => {
-  const registry = createResourceRegistry(fakeOperations().operations);
-  assert.equal((await registry.get("lucius_state", "current")).status, "quiet");
-  const updated = await registry.update("lucius_state", "current", { status: "resting", mood: "composed" });
-  assert.equal("current_note" in updated, false);
-  await assert.rejects(() => registry.update("lucius_state", "current", { current_note: "retired" }), /does not accept/);
-  assert.equal(updated.updated_at, "2026-09-01T14:41:00Z");
-  await assert.rejects(() => registry.get("lucius_state", "other"), /id must be current/);
-  await assert.rejects(() => registry.update("lucius_state", "current", { affection: 91 }), /does not accept/);
 });
 
 test("generic Inbox searches current and historical items while lifecycle changes stay actions", async () => {
@@ -539,21 +479,10 @@ test("existing Generic Chronicle CRUD remains unchanged", async () => {
   assert.deepEqual(await registry.delete("chronicle", created.id as number), { deleted: true, id: created.id });
 });
 
-test("generic Lucius Diary supports search, get, PATCH and delete", async () => {
-  const registry = createResourceRegistry(fakeOperations().operations);
-  const created = await registry.create("lucius_diary", { date: "2026-08-29", content: "今天修正了误解", tags: ["修正"] });
-  assert.deepEqual((await registry.search("lucius_diary", { query: "误解", filters: { tag: "修正" }, limit: 20 })).items.map((item) => item.id), [created.id]);
-  const updated = await registry.update("lucius_diary", created.id as number, { content: "今天修正了一个误解" });
-  assert.deepEqual(updated.tags, ["修正"]);
-  assert.equal((await registry.get("lucius_diary", created.id as number)).content, "今天修正了一个误解");
-  assert.deepEqual(await registry.delete("lucius_diary", created.id as number), { deleted: true, id: created.id });
-});
-
 test("registry rejects table names, invalid filters and retired resources", async () => {
   const registry = createResourceRegistry(fakeOperations().operations);
   await assert.rejects(() => registry.create("memo", { title: "Bad", content: "Body", table: "memos" }), /does not accept: table/);
   await assert.rejects(() => registry.search("memo", { filters: { status: "all" }, limit: 20 }), /status filter is invalid/);
-  await assert.rejects(() => registry.update("lucius_diary", 1, {}), /没有可更新/);
   await assert.rejects(() => registry.action("lucius_case", { id: 1, action: "record_recurrence", data: { occurrence_count: 9 } }), /Unknown resource/i);
   await assert.rejects(() => registry.action("chronicle", { action: "resolve", data: {} }), /does not support action/);
 });
@@ -562,8 +491,6 @@ test("production registry delegates every write and action to existing business 
   const source = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   assert.match(source, /delete: deleteChronicleEntry/);
   assert.match(source, /memo: \{ search: \(input\)=>pageMemory\("memo",input\), get: getMemo, create: createMemo, update: updateMemo, delete: deleteMemo \}/);
-  assert.match(source, /luciusPost: \{ search: listLuciusPosts, get: getLuciusPost, create: createLuciusPost, update: updateLuciusPost, delete: deleteLuciusPost \}/);
-  assert.match(source, /luciusPostComment: \{ search: listLuciusPostComments, get: getLuciusPostComment, create: createLuciusPostComment, update: updateLuciusPostComment, delete: deleteLuciusPostComment \}/);
   assert.match(source, /healthRecord: \{ search: listHealthRecords/);
   assert.match(source, /trainingLog: \{ search: listTrainingLogs/);
   assert.match(source, /mediaSeries: \{ search: listMediaSeries/);

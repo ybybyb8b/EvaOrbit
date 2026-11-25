@@ -3,7 +3,6 @@ import { normalizeTrackerTimeRange } from "./tracker-time-range.ts";
 import type { ChronicleSource, HealthRecordDetailValue, HealthRecordDetails, HealthRecordStatus, HealthRecordType, MediaRating, MediaStatus, MediaType, MemoStatus, MemoType, ProjectItemStatus, ProjectItemType, ProjectStatus, SubscriptionIntervalUnit, TaskPriority, TrackerFieldType, TrackerGoalOperator, TrackerPeriodType, TrackerReminderMode, TrainingBodyPart, TrainingType } from "./types";
 import { addCalendarInterval, dateInEvaOrbit, zonedDateTimeToUtc } from "./time.ts";
 import { DRINK_KCAL_MODES, ONGOING_HEALTH_RECORD_TYPES, SUGAR_LEVELS, TRAINING_BODY_PARTS } from "./types.ts";
-import { normalizeLuciusMood } from "./lucius-mood.ts";
 import { normalizeWeightKg } from "./weight.ts";
 import { journalEmotions } from "./journal-emotions.ts";
 import type { DailyJournalEmotion } from "./types";
@@ -355,76 +354,6 @@ export function parseMemoPatch(value: unknown) {
   };
   if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Memo 字段");
   return result;
-}
-
-export function parseNewLuciusDiaryEntry(value: unknown) {
-  const body = objectValue(value);
-  return {
-    date: dateOnly(body.date),
-    content: text(body.content, "Diary 内容", 100_000)!,
-    tags: longTermTags(body.tags, "Diary 标签"),
-    ...migrationTrace(body),
-  };
-}
-
-export function parseLuciusDiaryPatch(value: unknown) {
-  const body = objectValue(value);
-  const result = {
-    date: body.date === undefined ? undefined : dateOnly(body.date),
-    content: body.content === undefined ? undefined : text(body.content, "Diary 内容", 100_000),
-    tags: longTermTags(body.tags, "Diary 标签", true),
-    ...migrationTrace(body, true),
-  };
-  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Diary 字段");
-  return result;
-}
-
-export function parseLuciusStatePatch(value: unknown) {
-  const body = objectValue(value);
-  if (Object.keys(body).some((key) => !["status", "mood"].includes(key))) throw new ValidationError("Lucius state 仅支持 status 和 mood");
-  const moodText = body.mood === undefined ? undefined : text(body.mood, "Lucius mood", 80);
-  const mood = moodText === undefined ? undefined : normalizeLuciusMood(moodText);
-  if (mood === null) throw new ValidationError("Lucius mood 必须是单个 emoji");
-  const result = {
-    status: body.status === undefined ? undefined : text(body.status, "Lucius 状态", 80),
-    mood,
-  };
-  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Lucius state 字段");
-  return result;
-}
-
-export function parseNewLuciusPost(value: unknown) {
-  const body = objectValue(value);
-  return {
-    content: text(body.content, "Lucius Post 正文", 1_000)!,
-    publishedAt: timestamp(body.publishedAt ?? new Date().toISOString(), "发布时间"),
-  };
-}
-
-export function parseLuciusPostPatch(value: unknown) {
-  const body = objectValue(value);
-  const result = {
-    content: body.content === undefined ? undefined : text(body.content, "Lucius Post 正文", 1_000),
-    publishedAt: body.publishedAt === undefined ? undefined : timestamp(body.publishedAt, "发布时间"),
-  };
-  if (Object.values(result).every((item) => item === undefined)) throw new ValidationError("没有可更新的 Lucius Post 字段");
-  return result;
-}
-
-const luciusPostCommentAuthors = ["user", "lucius"] as const;
-
-export function parseNewLuciusPostComment(value: unknown, postId?: number, author?: "user" | "lucius") {
-  const body = objectValue(value);
-  return {
-    postId: postId ?? positiveInteger(body.postId, "Lucius Post ID"),
-    author: author ?? enumValue(body.author, "评论作者", luciusPostCommentAuthors, "user"),
-    content: text(body.content, "评论内容", 2_000)!,
-  };
-}
-
-export function parseLuciusPostCommentPatch(value: unknown) {
-  const body = objectValue(value);
-  return { content: text(body.content, "评论内容", 2_000)! };
 }
 
 function priority(value: unknown): TaskPriority | undefined {

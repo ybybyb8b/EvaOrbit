@@ -1,8 +1,8 @@
-const CACHE = "eva-orbit-static-v12";
+const CACHE = "eva-orbit-static-v13";
 const ICON_NAMES = [
-  "food-drink", "food-library", "food-places", "tasks", "insights", "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "lucius", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
+  "food-drink", "food-library", "food-places", "tasks", "insights", "calendar", "cats", "chronicle", "drinks", "eva", "food", "health", "home", "inbox", "media", "memo", "more", "notifications", "people", "projects", "settings", "trackers",
 ];
-const NAV_ICON_NAMES = ["home", "lucius", "settings"];
+const NAV_ICON_NAMES = ["home", "settings"];
 const iconAssets = (base = "/icons") => ICON_NAMES.flatMap((name) => [
   `${base}/features/${name}.png`,
   `${base}/features/${name}-dark.png`,

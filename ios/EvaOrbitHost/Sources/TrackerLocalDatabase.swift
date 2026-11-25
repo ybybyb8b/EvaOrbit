@@ -60,6 +60,8 @@ actor TrackerLocalDatabase {
         CREATE TABLE IF NOT EXISTS cats_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS food_readonly_cache(account_id TEXT PRIMARY KEY,snapshot_json BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS food_resource_cache(account_id TEXT NOT NULL,resource_key TEXT NOT NULL,snapshot_json BLOB NOT NULL,saved_at INTEGER NOT NULL,PRIMARY KEY(account_id,resource_key));
+        DELETE FROM workspace_readonly_cache WHERE kind='lucius';
+        DELETE FROM online_business_cache WHERE path='/api/lucius' OR path LIKE '/api/lucius/%' OR path LIKE '/api/lucius?%';
         PRAGMA user_version=1;
         COMMIT;
         """
@@ -334,7 +336,7 @@ actor TrackerLocalDatabase {
 
     func workspaceReadOnlyCache(accountId: String, kind: String) throws -> Any {
         try requireAccount(accountId)
-        guard ["tasks", "projects", "lucius"].contains(kind) else { throw TrackerLocalError.invalid }
+        guard ["tasks", "projects"].contains(kind) else { throw TrackerLocalError.invalid }
         let query = try statement("SELECT snapshot_json FROM workspace_readonly_cache WHERE account_id=? AND kind=?", [accountId, kind]); defer { sqlite3_finalize(query) }
         let step = sqlite3_step(query)
         if step == SQLITE_DONE { return NSNull() }
@@ -343,7 +345,7 @@ actor TrackerLocalDatabase {
     }
     func saveWorkspaceReadOnlyCache(accountId: String, kind: String, snapshot: [String: Any]) throws {
         try requireAccount(accountId)
-        guard ["tasks", "projects", "lucius"].contains(kind), snapshot["format"] as? String == "eo-workspace-readonly-v1", snapshot["accountId"] as? String == accountId, snapshot["kind"] as? String == kind, let data = snapshot["data"] as? [String: Any], data["complete"] is Bool else { throw TrackerLocalError.invalid }
+        guard ["tasks", "projects"].contains(kind), snapshot["format"] as? String == "eo-workspace-readonly-v1", snapshot["accountId"] as? String == accountId, snapshot["kind"] as? String == kind, let data = snapshot["data"] as? [String: Any], data["complete"] is Bool else { throw TrackerLocalError.invalid }
         let iso = ISO8601DateFormatter(), fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         func timestamp(_ value: Any?) -> Bool { guard let raw = value as? String else { return false }; return iso.date(from: raw) != nil || fractional.date(from: raw) != nil }
         let date = DateFormatter(); date.dateFormat = "yyyy-MM-dd"; date.locale = Locale(identifier: "en_US_POSIX"); date.timeZone = TimeZone(secondsFromGMT: 0); date.isLenient = false
@@ -382,17 +384,7 @@ actor TrackerLocalDatabase {
                     guard own.filter({ $0["status"] as? String == "doing" }).count == doing, own.filter({ $0["status"] as? String == "to_solve" }).count == open, own.filter({ $0["status"] as? String == "idea" }).count == ideas else { throw TrackerLocalError.invalid }
                 }
             }
-        } else {
-            guard let state = data["state"] as? [String: Any], state["status"] is String, state["mood"] is String, state["updatedAt"] is NSNull || timestamp(state["updatedAt"]) else { throw TrackerLocalError.invalid }
-            let posts = try rows("posts", 50), postIds = Set(posts.compactMap { $0["id"] as? Int })
-            for post in posts { guard post["content"] is String, timestamp(post["publishedAt"]) else { throw TrackerLocalError.invalid } }
-            for comment in try rows("comments", 500) { guard let post = comment["postId"] as? Int, postIds.contains(post), comment["content"] is String, let author = comment["author"] as? String, ["user", "lucius"].contains(author) else { throw TrackerLocalError.invalid } }
-            for entry in try rows("diary", 100) { guard entry["content"] is String, entry["tags"] is [String], day(entry["date"]) else { throw TrackerLocalError.invalid } }
-            for entry in try rows("cases", 100) {
-                guard let type = entry["errorType"] as? String, ["naming", "memory_omission", "factual", "tool_misuse", "expression", "other"].contains(type), let severity = entry["severity"] as? String, ["minor", "moderate", "serious", "habitual"].contains(severity), let status = entry["status"] as? String, ["serving", "probation", "temporary_release", "permanent_record"].contains(status), entry["triggerScenes"] is [String], day(entry["firstOccurredDate"]), day(entry["latestOccurredDate"]), let first = entry["firstOccurredDate"] as? String, let latest = entry["latestOccurredDate"] as? String, first <= latest, let count = entry["occurrenceCount"] as? Int, count >= 1, let correct = entry["consecutiveCorrectCount"] as? Int, correct >= 0, let threshold = entry["resetThreshold"] as? Int, threshold >= 1, entry["isRecurrence"] is Bool else { throw TrackerLocalError.invalid }
-                for key in ["title", "errorQuote", "cause", "correctBehavior", "mandatoryRule", "punishment"] { guard entry[key] is String else { throw TrackerLocalError.invalid } }
-                guard entry["nextCheck"] is NSNull || day(entry["nextCheck"]), entry["recurrenceIntervalDays"] is NSNull || (entry["recurrenceIntervalDays"] as? Int ?? -1) > 0 else { throw TrackerLocalError.invalid }
-            }
+
         }
         let bytes = try JSONSerialization.data(withJSONObject: snapshot)
         guard bytes.count <= 8 * 1024 * 1024 else { throw TrackerLocalError.storage }

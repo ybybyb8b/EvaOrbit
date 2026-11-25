@@ -2,12 +2,11 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export const NOTION_RESOURCES = ["memo", "chronicle", "lucius_diary"];
+export const NOTION_RESOURCES = ["memo", "chronicle"];
 
 const RESOURCE_ALIASES = new Map([
   ["memo", "memo"], ["memos", "memo"],
   ["chronicle", "chronicle"], ["chronicles", "chronicle"],
-  ["lucius_diary", "lucius_diary"], ["lucius_diaries", "lucius_diary"],
 ]);
 
 const MEMO_TYPES = { basic: "basic", supplement: "supplement", event: "event", note: "note", "基本信息": "basic", "补充信息": "supplement", "事件内容": "event", "便签内容": "note" };
@@ -121,19 +120,6 @@ function mapChronicle(data) {
   };
 }
 
-function mapDiary(data, record, importedAt) {
-  const fields = ["date", "content", "tags"];
-  return {
-    data: {
-      date: dateValue(data.date, "lucius_diary.date"),
-      content: stringValue(data.content, "lucius_diary.content", 100000, { preserve: true }),
-      tags: tagsValue(data.tags, "lucius_diary.tags"),
-      ...commonTrace(record, importedAt),
-    },
-    ignoredFields: knownData(data, fields),
-  };
-}
-
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
@@ -169,7 +155,7 @@ export function normalizeNotionInput(input) {
   }
   const entries = [];
   for (const [key, value] of Object.entries(document)) {
-    if (key === "version") continue;
+    if (key === "version" || key === "lucius_diary" && Array.isArray(value) && value.length === 0) continue;
     const resource = normalizeResource(key);
     if (!Array.isArray(value)) throw new Error(`${key} 必须是 array`);
     for (const record of value) entries.push({ resource, record: objectValue(record, `${key} record`) });
@@ -189,8 +175,7 @@ function normalizeRecord(resource, rawRecord, importedAt) {
   };
   const data = record.data === undefined ? flattenedData(record) : objectValue(record.data, `${resource}.data`);
   const mapped = resource === "memo" ? mapMemo(data, normalized, importedAt)
-    : resource === "chronicle" ? mapChronicle(data)
-      : mapDiary(data, normalized, importedAt);
+    : mapChronicle(data);
   const payloadHash = hashValue({ resource, notion_page_id: notionPageId, notion_url: normalized.notionUrl, notion_created_at: normalized.notionCreatedAt, notion_updated_at: normalized.notionUpdatedAt, data: Object.fromEntries(Object.entries(mapped.data).filter(([key]) => key !== "imported_at")) });
   return { ...normalized, ...mapped, payloadHash, contentFingerprint: contentFingerprint(resource, mapped.data), importedAt };
 }

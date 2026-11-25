@@ -42,7 +42,7 @@ try{
  browser=await chromium.launch({channel:'chrome',headless:true});context=await browser.newContext({viewport:{width:402,height:874}});context.setDefaultTimeout(15000);await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>localStorage.getItem('synthetic-offline')!=='1'}));await context.route('**/eo-api/**',routeRequest);
  let page=await context.newPage();page.on('pageerror',error=>errors.push(String(error)));await page.goto(`http://127.0.0.1:${port}`);await seed(page);await page.reload();
  // One request per module exercises the same policy/identity/transport boundary.
- const paths=['food/logs','drinks/logs','cats/pets','health/weight','subscriptions','chronicle','memos','relations/people','media','tasks','projects','project-items','lucius/diary','daily-journal'];
+ const paths=['food/logs','drinks/logs','cats/pets','health/weight','subscriptions','chronicle','memos','relations/people','media','tasks','projects','project-items','daily-journal'];
  await page.evaluate(async({account,paths})=>{const {trackerPlatform}=await import('/platform.ts');const platform=trackerPlatform();for(const path of paths){const r=await platform.businessRequest({accountId:account,email:'synthetic@example.invalid'},'/api/'+path,{method:'POST',body:JSON.stringify({synthetic:true})});if(!r.ok)throw Error(path);}window.onlinePlatform=platform;}, {account,paths});
  assert.equal(calls.filter(call=>call.method==='POST').length,paths.length);
  await openInbox(page);slowSnapshot=true;

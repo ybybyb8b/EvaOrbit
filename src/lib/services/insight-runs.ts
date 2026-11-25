@@ -9,7 +9,7 @@ import { ValidationError } from "../validation";
 import { dateInEvaOrbit, shiftDate } from "../time";
 import { getInsightContext } from "./insight-context";
 import { getInsightDayReview, prepareRuleInsightSnapshot } from "./insight-reports";
-import { notifyLuciusActivity } from "./push";
+import { notifyActivity } from "./push";
 
 function claimResult(value:InsightRunClaim) {
   const ready=value.run.status==="running"&&value.attempt?.status==="running"&&value.run.currentAttemptId===value.attempt.id&&value.run.generation===value.attempt.generation&&Date.parse(value.attempt.leaseUntil)>Date.now();
@@ -81,7 +81,7 @@ export async function completeInsightRun(id:unknown,attemptId:unknown,output:unk
   const result=await repository.finishInsightRun(key,snapshot,outputHash);
   const important=importantInsightNotification(snapshot);
   if(result.newlyCompleted&&important){
-    await notifyLuciusActivity(repository,{kind:"daily_review",title:`EvaOrbit · ${period.date} 有值得关注的发现`,body:important.title.slice(0,200),url:`/insights?report=${result.report.id}`,tag:`insight-run:${result.run.id}`});
+    await notifyActivity(repository,{kind:"daily_review",title:`EvaOrbit · ${period.date} 有值得关注的发现`,body:important.title.slice(0,200),url:`/insights?report=${result.report.id}`,tag:`insight-run:${result.run.id}`});
   }
   return{run:result.run,report:result.report,version:result.version.version,replayed:!result.newlyCompleted};
 }

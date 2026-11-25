@@ -954,39 +954,6 @@ export interface Memo extends MigrationTrace {
   updatedAt: string;
 }
 
-export interface LuciusDiaryEntry extends MigrationTrace {
-  id: number;
-  date: string;
-  content: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface LuciusState {
-  status: string;
-  mood: string;
-  updatedAt: string | null;
-}
-
-export interface LuciusPost {
-  id: number;
-  content: string;
-  publishedAt: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type LuciusPostCommentAuthor = "user" | "lucius";
-export interface LuciusPostComment {
-  id: number;
-  postId: number;
-  author: LuciusPostCommentAuthor;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export type DrinkType = "coffee" | "milk_tea" | "tea" | "soda" | "juice" | "water" | "alcohol" | "other";
 export const SUGAR_LEVELS = ["无糖", "微糖", "半糖", "少糖", "标准", "多糖"] as const;
 export type SugarLevel = "" | typeof SUGAR_LEVELS[number];

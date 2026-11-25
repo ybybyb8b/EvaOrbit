@@ -16,6 +16,11 @@ test("Chronicle snapshot preserves date/source/Markdown and refuses invalid/acco
  assert.throws(()=>buildChronicleSnapshot("a",Array.from({length:101},(_,i)=>({...entry,id:i+1}))));
  assert.deepEqual(await readChronicleSnapshot(value,"/api/chronicle?q=unchanged&limit=100").json(),[entry]);
  assert.deepEqual(await readChronicleSnapshot(value,"/api/chronicle?q=absent&limit=100").json(),[]);
+ const dated=buildChronicleSnapshot("a",[entry,{...entry,id:2,date:"2026-10-31"},{...entry,id:3,date:"2026-11-01",title:"2026-10-20"}]);
+ for(const [query,ids] of [["2026-10-20",[1]],["2026-10",[1,2]],["2026-10-21",[]]]) {
+  const response=readChronicleSnapshot(dated,`/api/chronicle?q=${query}&limit=100`);
+  assert.deepEqual((await response.json()).map(item=>item.id),ids);
+ }
  assert.equal(readChronicleSnapshot(value,"/api/chronicle/2").status,404);
  for(const method of ["POST","PATCH","PUT","DELETE"])assert.throws(()=>readChronicleSnapshot(value,"/api/chronicle",{method}));
  for(const url of ["https://evil.invalid/api/chronicle","/api/chronicle/../session","/api/chronicle?limit=500","/api/chronicle/1?q=x&limit=100"])assert.throws(()=>readChronicleSnapshot(value,url));
@@ -27,9 +32,13 @@ test("Actual Chronicle service list/detail reads cannot write any business table
    import assert from 'node:assert/strict';import {DatabaseSync} from 'node:sqlite';
    import {getRepository} from './src/lib/repositories/index.ts';import {listChronicle,getChronicleEntry} from './src/lib/services/chronicle.ts';
    const r=await getRepository();const entry=await r.createChronicleEntry({date:'2026-10-20',title:'Archive',contentMd:'# Untouched',source:'manual'});
+   const other=await r.createChronicleEntry({date:'2026-10-31',title:'Month end',contentMd:'# End',source:'manual'});
+   const later=await r.createChronicleEntry({date:'2026-11-01',title:'2026-10-20',contentMd:'# Later',source:'manual'});
    const db=new DatabaseSync(process.env.EVAORBIT_SQLITE_PATH);
    for(const {name} of db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all())for(const op of ['INSERT','UPDATE','DELETE'])db.exec('CREATE TRIGGER "chronicle_no_'+op+'_'+name+'" BEFORE '+op+' ON "'+name+'" BEGIN SELECT RAISE(ABORT,\'Readonly wrote business data\'); END;');
-   assert.deepEqual(await listChronicle({limit:100}),[entry]);assert.deepEqual(await getChronicleEntry(entry.id),entry);
+   assert.deepEqual(await listChronicle({limit:100}),[later,other,entry]);assert.deepEqual(await getChronicleEntry(entry.id),entry);
+   assert.deepEqual(await listChronicle({query:'2026-10-20',limit:1}),[entry]);
+   assert.deepEqual(await listChronicle({query:'2026-10'}),[other,entry]);
    assert.deepEqual(await listChronicle({query:'Untouched',limit:100}),[entry]);db.close();
   `],{encoding:"utf8",env:{...process.env,EVAORBIT_DATA_BACKEND:"sqlite",EVAORBIT_SQLITE_PATH:path.join(directory,"fixture.db"),VERCEL:""}});
   assert.equal(result.status,0,result.stderr||result.stdout);

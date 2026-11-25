@@ -21,6 +21,7 @@ import { EVAORBIT_TIME_ZONE, dateInEvaOrbit, dateRange, shiftDate } from "@/lib/
 import { periodDayForDate } from "@/lib/timeline";
 import { buildCalendarTimelineEvents, calendarTimelineRangeLabel, timelineDurationLabel } from "@/lib/calendar-timeline";
 import { TimelineAssociationSheet } from "./timeline-association-sheet";
+import { HomeDayTimeline, type TimelineEntryView } from "./home-day-timeline";
 import { journalEmotions, journalMoodLabel } from "@/lib/journal-emotions";
 import { journalDraftChanged, journalPreviewEntries } from "@/lib/journal-draft";
 import type { DailyJournalEmotion } from "@/lib/types";
@@ -86,7 +87,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
   const english = language === "en";
   const [today, setToday] = useState(readOnly ? dateInEvaOrbit() : initialDay.date);
   const [month, setMonth] = useState(initialSummary.month), [summaries, setSummaries] = useState<Record<string, TimelineMonthSummary>>({ [initialSummary.month]: initialSummary });
-  const [selected, setSelected] = useState(initialDay.date), [calendarExpanded, setCalendarExpanded] = useState(false), [timelineExpanded, setTimelineExpanded] = useState(false);
+  const [selected, setSelected] = useState(initialDay.date), [calendarExpanded, setCalendarExpanded] = useState(false);
   const [days, setDays] = useState<Record<string, HomeDayOverview>>({ [initialDay.date]: initialDay });
   const [dueOverride,setDueOverride]=useState<{source:typeof initialDueItems;items:DueReminder[]}>();
   const dueItems=dueOverride?.source===initialDueItems ? dueOverride?.items : initialDueItems;
@@ -202,7 +203,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
 
   async function loadDay(date: string, force = date === today && date !== initialDay.date) {
     setRefreshFailed(false);
-    setSelected(date); setTimelineExpanded(false); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
+    setSelected(date); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
     dayRequest.current?.abort(); const controller = new AbortController(); dayRequest.current = controller; setLoadingDate(date);
     try { const show = (result: HomeDayOverview) => setDays(current => ({ ...current, [date]: result })); const result = await readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, show, force); if (!controller.signal.aborted) show(result); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this day" : "无法读取这一天"); }
@@ -273,6 +274,34 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
     return <button type="button" key={date} className={selected === date ? "selected" : ""} data-today={date === today} data-before-today={date < today} data-has-record={count > 0} data-highlighted={daySummary?.highlighted === true} data-outside-month={date.slice(0, 7) !== month} data-period={Boolean(context)} aria-current={date === today ? "date" : undefined} aria-pressed={selected === date} aria-label={`${date}${periodLabel}${count ? english ? `, ${count} entries` : `，${count} 条记录` : english ? ", no entries" : "，没有记录"}`} onClick={() => selectCalendarDate(date)}><span className={`${capsuleStyles.pill} home-date-pill`}><span className={`${capsuleStyles.weekday} home-date-weekday`}>{weekday}</span><strong>{Number(date.slice(-2))}</strong>{indicator}</span></button>;
   }
 
+  function renderTimelineEntry(item: TimelineEvent, view: TimelineEntryView, onOpen?: () => void) {
+    const source = sourceMeta[item.sourceType];
+    const calendar = item.sourceType === "calendar";
+    const meal = item.metadata.calendarMeal as FoodLog["calendarMeal"];
+    const start = meal?.startAt ?? item.occurredAt;
+    const end = meal?.endAt ?? item.endAt;
+    const hasDuration = Boolean(end && Date.parse(end) > Date.parse(start));
+    const time = view === "untimed" ? null : calendar ? calendarTimelineRangeLabel(item, english, selected) :
+      hasDuration ? `${timeLabel(start)}–${timeLabel(end!)}` : timeLabel(start);
+    const association = item.association;
+    const detail = association ? `${association.tracker.name} · ${english ? "2 associated records" : "2 条关联记录"}` : detailFor(item, english);
+    const sourceLabel = english ? source.en : source.zh;
+    const tentative = calendar && item.metadata.status === "tentative" ? english ? "Tentative" : "待定" : null;
+    const subtitle = view === "axis" ? [time?.split(" · ")[0], tentative,
+      detail || (hasDuration ? null : sourceLabel)].filter(Boolean).join(" · ") : [time, sourceLabel,
+      tentative, meal && view === "details" ? timelineDurationLabel(item) : null,
+      meal ? english ? "Time from Calendar" : "时间来自日历" : null, detail].filter(Boolean).join(" · ");
+    const content = <span className={capsuleStyles.entryCopy}><strong className="user-content">{titleFor(item, english)}</strong><small className="user-content">{subtitle}</small></span>;
+    const className = `${capsuleStyles.timelineEntry} home-timeline-entry`;
+    if (calendar || meal || association) return <button type="button" id={calendar ? `calendar-event-${item.sourceId}` : undefined} className={className} aria-haspopup="dialog" onClick={() => {
+      onOpen?.();
+      if (association) setAssociationDetail(association);
+      else if (meal) setMealDetail(item);
+      else setCalendarDetail(item);
+    }}>{content}</button>;
+    return <Link href={item.href} className={className}>{content}</Link>;
+  }
+
   return <section className={`today-focus home-calendar-card ${capsuleStyles.capsules}`} aria-label={english ? "Calendar and daily overview" : "日历与每日概览"}>
     <section className="home-calendar" aria-label={english ? "Calendar" : "日历"}>
       <header className="home-calendar-header"><h2>{monthLabel}</h2><div className="home-calendar-actions">{selected !== today && <button type="button" className="home-calendar-today" onClick={returnToToday} disabled={loadingMonth}>{english ? "Today" : "今天"}</button>}<button type="button" className="home-calendar-previous" aria-label={calendarExpanded ? english ? "Previous month" : "上个月" : english ? "Previous week" : "上一周"} disabled={loadingMonth} onClick={() => moveCalendar(-1)}><ArrowLeft2 className="home-calendar-action-icon" size={15} weight="Outline" aria-hidden="true" /></button><button type="button" className="home-calendar-next" aria-label={calendarExpanded ? english ? "Next month" : "下个月" : english ? "Next week" : "下一周"} disabled={loadingMonth} onClick={() => moveCalendar(1)}><ArrowRight2 className="home-calendar-action-icon" size={15} weight="Outline" aria-hidden="true" /></button><button type="button" className="home-calendar-toggle" aria-label={calendarExpanded ? english ? "Show week" : "收起为周" : english ? "Show month" : "展开月份"} aria-expanded={calendarExpanded} onClick={() => { playNativeHaptic("selection"); setCalendarExpanded((current) => !current); }}><ArrowDown5 className="home-calendar-action-icon" size={14} weight="Outline" aria-hidden="true" /></button></div></header>
@@ -295,13 +324,11 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
   const label = homeActivityLabel(activity, english);
   return <span key={activity.category} className="home-time-summary-part" title={label}><span className={activity.icon ? "home-time-summary-icon" : undefined}>{activity.icon ? <ReiconSymbol name={activity.icon} size={20} /> : label}</span><strong>{durationLabel(activity.durationMinutes, english)}</strong></span>;
 })}</span></span></button>}
-      <section className="home-day-timeline" aria-busy={loadingDate === selected}><header className="home-day-heading"><h2>Timeline</h2>{events.length > 4 && <button type="button" className="section-link" onClick={() => setTimelineExpanded((current) => !current)}>{timelineExpanded ? english ? "Show less" : "收起" : english ? `Show all ${events.length}` : `查看全部 ${events.length} 条`}</button>}</header>{periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}{events.length ? <div className="home-activity-list home-selected-day-events" key={selected}>{events.slice(0, timelineExpanded ? undefined : 4).map((item) => {
-        const source = sourceMeta[item.sourceType], calendar = item.sourceType === "calendar", detail = calendar ? [calendarTimelineRangeLabel(item, english, selected), item.association ? `${item.association.tracker.name} · ${english ? "2 associated records" : "2 条关联记录"}` : ""].filter(Boolean).join(" · ") : detailFor(item, english);
-        const meal = item.metadata.calendarMeal as FoodLog["calendarMeal"];
-        const dateOnlyCompletion = item.sourceType==="cat" && ["cat_routine","reminder"].includes(String(item.metadata.sourceType));
-        const content = <><time style={item.sourceType === "food" ? { whiteSpace: "normal" } : undefined}>{meal ? <>{timeLabel(meal.startAt)}<br />–{timeLabel(meal.endAt)}</> : item.hasExplicitTime ? timeLabel(item.occurredAt) : dateOnlyCompletion ? english ? "Date only" : "仅日期" : item.sourceType === "food" ? english ? "Time unspecified" : "未指定时间" : english ? "All day" : "全天"}</time><span className="home-activity-marker" aria-hidden="true" /><span className="home-activity-copy"><span className="home-activity-source">{english ? source.en : source.zh}{calendar && item.metadata.status === "tentative" ? english ? " · Tentative" : " · 待定" : ""}</span><strong className="user-content">{titleFor(item, english)}</strong>{detail && <small className="user-content">{detail}</small>}{meal && <small>{timeLabel(meal.startAt)}–{timeLabel(meal.endAt)}{timelineDurationLabel(item) && ` · ${timelineDurationLabel(item)}`} · {english ? "Time from Calendar" : "时间来自日历"}</small>}</span></>;
-        return item.association ? <button type="button" key={item.id} id={`calendar-event-${item.sourceId}`} className="home-activity-item" data-source="calendar" onClick={() => setAssociationDetail(item.association)} aria-haspopup="dialog">{content}</button> : meal ? <button type="button" key={item.id} className="home-activity-item" data-source="food" onClick={() => setMealDetail(item)} aria-haspopup="dialog">{content}</button> : calendar ? <button type="button" id={`calendar-event-${item.sourceId}`} key={item.id} className="home-activity-item" data-source="calendar" onClick={() => setCalendarDetail(item)} aria-haspopup="dialog">{content}</button> : <Link href={item.href} key={item.id} className="home-activity-item" data-source={item.sourceType}>{content}</Link>;
-      })}</div> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有 Timeline 记录"}</p>}</section>
+      <section className="home-day-timeline" aria-busy={loadingDate === selected}>
+        <header className="home-day-heading"><h2>{english ? "Timeline" : "时间轴"}</h2></header>
+        {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
+        {events.length ? <HomeDayTimeline key={selected} date={selected} events={events} english={english} timeLabel={timeLabel} titleFor={item => titleFor(item, english)} renderEntry={renderTimelineEntry} /> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有时间轴记录"}</p>}
+      </section>
     </>}
     <BottomLogScope selectedDate={selected} />
     {associationDetail && <TimelineAssociationSheet association={associationDetail} english={english} LinkComponent={Link} onClose={() => setAssociationDetail(null)} onCalendar={() => { const calendar = associationDetail.calendar; const range = dateRange(dateInEvaOrbit(new Date(calendar.startAt))); setCalendarDetail(buildCalendarTimelineEvents([calendar], range)[0]); setAssociationDetail(null); }} />}

@@ -22,7 +22,7 @@ test("connection policies default to denied and cannot activate missing, paused,
 
 test("the legacy ChatGPT migration contains the current explicit compatibility grants", () => {
   const migration = readFileSync(new URL("../../supabase/migrations/202611180001_agent_access.sql", import.meta.url), "utf8");
-  const policy = parseAgentPolicy(JSON.parse(migration.split("$policy$")[1]), catalog);
+  const policy = agentPolicyForConnection(JSON.parse(migration.split("$policy$")[1]), catalog, "chatgpt");
   assert.deepEqual(new Set(policy.permissions), new Set(legacyChatGptPolicy(catalog).permissions));
   for (const resource of ["echo", "memo", "memory_context"]) {
     assert.equal(allowsAgentCall(policy, catalog, { resource, operation: "search" }), true);

@@ -97,7 +97,7 @@ test("old Host cannot fall back to Media writes or uncached cover reads",async()
 
 test("workspace capabilities and AI routes fail closed on an old Host",async()=>{
  const {platform,account,calls}=fixture(true);
- for(const kind of ['tasks','projects','lucius'])await assert.rejects(platform.workspaceSnapshot(account,kind),/updated development Host/);
+ for(const kind of ['tasks','projects'])await assert.rejects(platform.workspaceSnapshot(account,kind),/updated development Host/);
  await assert.rejects(platform.workspaceSnapshot(account,'ai'),/Unknown read-only workspace/);
  for(const path of ['/api/ai/chat','/api/ai/sessions','/api/ai/settings','https://evil.invalid/api/ai/providers','/api/ai/providers?extra=true','/api/ai/providers/1/../test'])await assert.rejects(platform.aiConfiguration(account,path,{method:'POST'}),/Unsupported/);
  assert(calls.every(c=>c.method==='host.getInfo'));

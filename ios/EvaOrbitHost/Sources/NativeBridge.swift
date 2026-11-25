@@ -507,7 +507,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     guard let account = parameters["accountId"] as? String, let path = parameters["path"] as? String, let verb = parameters["method"] as? String else { throw TrackerLocalError.invalid }
                     result = try await controller.aiConfiguration(accountId: account, path: path, method: verb, body: parameters["body"], settings: method == "settings.configuration")
                 case "workspaces.readOnlySnapshot":
-                    guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, ["tasks", "projects", "lucius"].contains(kind), let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
+                    guard let account = parameters["accountId"] as? String, let kind = parameters["kind"] as? String, ["tasks", "projects"].contains(kind), let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }
                     result = try await controller.workspaceReadOnlySnapshot(accountId: account, kind: kind, refresh: refresh)
                 case "media.readOnlySnapshot":
                     guard let account = parameters["accountId"] as? String, let refresh = parameters["refresh"] as? Bool else { throw TrackerLocalError.invalid }

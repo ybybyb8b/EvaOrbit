@@ -21,7 +21,6 @@
 | [Food](#food) | `/food-drink`、`/food`、`/drinks/history`、`/food/places`、`/food/library` |
 | [Health](#health) | `/health`：睡眠、体重、能量、周期与健康记录 |
 | [Training](#training) | `/health?view=training`：训练记录与循环计划 |
-| [Lucius](#lucius) | `/lucius`：状态、动态、评论与日记 |
 | [Memory](#memory) | `/memo`、`/memo/graph`、`/memory`：叙事、图谱与旧记忆 |
 | [Parlor](#parlor) | `/ai`：私人会客厅、Persona、Provider 与 Model |
 | [Insights](#insights) | MCP `insight_context`：只读分析上下文，无独立页面 |
@@ -43,10 +42,11 @@
 
 ## Core
 
-- **分区滑动**：[use-section-swipe.ts](../src/components/use-section-swipe.ts) 统一触摸方向锁定、系统边缘保留、横向滚动控件避让和滑动后的误点抑制；页面声明分区顺序、切换回调与专属排除选择器。Subscriptions、Tracker、Notifications、猫咪详情、Lucius 主页、Tasks 列表／月历和 Project 视图按需接入；编辑表单或模态弹层打开时暂停，不注册全局页面手势，也不把筛选条件当作视图。
+- **分区滑动**：[use-section-swipe.ts](../src/components/use-section-swipe.ts) 统一触摸方向锁定、系统边缘保留、横向滚动控件避让和滑动后的误点抑制；页面声明分区顺序、切换回调与专属排除选择器。Subscriptions、Tracker、Notifications、猫咪详情、Tasks 列表／月历和 Project 视图按需接入；编辑表单或模态弹层打开时暂停，不注册全局页面手势，也不把筛选条件当作视图。
 
 - **下拉刷新**：[pull-to-refresh-core.tsx](../src/components/pull-to-refresh-core.tsx) 共享手势、阻尼、阈值和提示；Web 包装失效缓存并刷新路由，本地 [适配器](../src/local-trackers/pull-to-refresh.tsx) 调用 [refresh.ts](../src/local-trackers/refresh.ts) 中当前挂载模块注册的既有加载器，不重载文档、不模拟网络恢复或前台事件。本地 Host 关闭原生刷新控件和滚动回弹，避免露出网页外背景；普通在线 Host 保持原行为。
 - **入口**：[App shell](../src/components/app-shell.tsx)、[Form Sheet](../src/components/form-sheet.tsx)、[Disclosure](../src/components/disclosure.tsx)、[全局样式](../src/app/globals.css)、[Settings](../src/app/settings/)、[Services](../src/lib/services/)、[Repository](../src/lib/repositories/index.ts)、[SQLite schema](../src/lib/db.ts)、[Postgres migrations](../supabase/migrations/)。Disclosure 统一内容折叠的整行标题、摘要与计数、独立前置控件、受控／非受控展开、隐藏表单校验后的展开聚焦、保留输入及减少动态效果。Health／Training、Cats、Tracker 设置、Projects、Tasks、Relations、Eva、Home 短记和开发说明共用；筛选下拉与操作菜单保留各自语义，卡片堆叠继续由原组件管理。
+- **模块退役**：Lucius 页面、API、MCP、通知触发及本地入口已移除；专属 Supabase 数据先导出并隔离恢复验证，再经带备份校验门的迁移删除。代码与私有数据不进入 Git，恢复步骤及旧 Host 边界见 [Lucius 退役](LUCIUS_RETIREMENT.md)。
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，保留 HTTP 状态及业务 code；[request-diagnostics.ts](../src/lib/request-diagnostics.ts) 与 Native `NativeDiagnostics.swift` 在共用边界记录模块操作、失败步骤和安全诊断码，不依赖 Next、不自动重试请求，也不输出正文或查询参数，见 [错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
@@ -106,20 +106,11 @@
 - **历史选项管理**：训练表单和计划编辑器在老师、课程、动作的下拉列表中直接提供候选删除，同名选项需要时可重新输入并创建；按账户持久化于 `training_suggestion_exclusions`，仅过滤老师、课程、动作候选及历史组合，不修改日志或计划内容。`/api/health/training/suggestions` 的 PATCH 独立保存，GET 与 Health 快照统一过滤；备份包含删除状态。
 - **依据**：无单独专题文档；查 [计划迁移及事务](../supabase/migrations/202610150001_training_plans.sql)、[计划单测](../src/lib/training-plan.test.ts)、[SQLite 集成测试](../scripts/training-plan-sqlite.test.mjs)。
 
-## Lucius
-
-- **本地只读阶段**：[LuciusProfile](../src/app/lucius/lucius-profile.tsx) 与日记组件在 Web、Host 共享；缓存状态、动态/评论和日记，图片从 bundle 加载，全部业务写入及通知停用。Eva 聊天仍不接入；见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
-
-- **职责与入口**：[lucius/](../src/app/lucius/)、[lucius 服务](../src/lib/services/lucius.ts)。
-- **数据与接口**：`lucius_state`、`lucius_posts`、`lucius_post_comments`、`lucius_diary_entries`；`/api/lucius/*`；MCP `lucius_state`、`lucius_post`、`lucius_post_comment`、`lucius_diary`。
-- **依赖与决定**：状态/动态和 Lucius 新评论经 Notifications 通知，投递失败不回滚已保存内容。状态仅保留 status/mood，已退役的 `current_note` 兼容列只能为空，不恢复为内容入口。生活近况 Memo 属于 Memory，不复制进状态表。罪案库已退役；旧快照仅保留空数组兼容旧 Host，刷新会替换已缓存案底。
-- **详文**：[通知触发边界](../src/lib/push/README.md)、[Bark 通道](BARK_NOTIFICATIONS.md)、[MCP 契约](../src/lib/mcp/README.md)。
-
 ## Memory
 
 - **职责与入口**：[Echo](../src/app/memo/)（`/memo`）汇集近期更新的 Memo 和 Fact；[Memos](../src/app/memo/memos/) 负责浏览和筛选，[Graph](../src/app/memo/graph/) 以 Cytoscape 渲染有向实体关系，复用分页读取、事实证据和候选审核。JSON 值仅显示在事实详情中。旧 Memory 位于 [`/memory`](../src/app/memory/)。
 - **数据与接口**：叙事 `memos` → `/api/memos`、MCP `memo`；旧记忆 `memories` → `/api/memories`；Graph `memory_entities`、`memory_facts`、`memory_sources`、`memory_fact_candidates` → `/api/memory-graph` 及 candidates；MCP `memory_entity`、`memory_fact`、`memory_source`。
-- **依赖与决定**：Graph 为 owner-scoped Entity → Fact → Source；正式 Fact 通过 Candidate 审核与原子事务写入。MCP 使用 memory_candidate submit（强制 request_id），普通审核仅走 Web，拒绝直接创建 Fact；user_confirmed 是带原话、审计和幂等 ID 的调用方确认声明。Entity 合并保留重定向，Fact 作废与现实有效期分离。AI 工具阶段不接收 Graph 召回，最终回复使用独立 JSON 数据消息且不开放工具。SQLite Web 只通过 loopback 启动器访问。特定近况 Memo 更新会触发 Lucius 通知。
+- **依赖与决定**：Graph 为 owner-scoped Entity → Fact → Source；正式 Fact 通过 Candidate 审核与原子事务写入。MCP 使用 memory_candidate submit（强制 request_id），普通审核仅走 Web，拒绝直接创建 Fact；user_confirmed 是带原话、审计和幂等 ID 的调用方确认声明。Entity 合并保留重定向，Fact 作废与现实有效期分离。AI 工具阶段不接收 Graph 召回，最终回复使用独立 JSON 数据消息且不开放工具。SQLite Web 只通过 loopback 启动器访问。
 - **统一召回**：[Memory Context](../src/lib/services/memory-context.ts) 复用分页读取并返回匹配、时间、证据和覆盖信息。[Echo Recall](../src/app/memo/recall/)、内部聊天、Graph 召回和 MCP [memory_context](../MCP.md#memory-context-c3) 共用该服务。
 - **详文**：[Memory Graph](MEMORY_GRAPH.md)、[写入治理](MEMORY_WRITE_GOVERNANCE.md)、[MCP 兼容与生命周期](../src/lib/mcp/README.md)、[Memo 通知条件](../src/lib/push/README.md)。
 
@@ -242,7 +233,7 @@ Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好�
 
 ## Projects
 
-- **本地只读阶段**：原项目列表、详情、事项详情和表单由 [ReadOnlyWorkspace](../src/local-trackers/read-only-workspace.tsx) 注入读取与导航，保留 Done/Verified 和生命周期差异；不创建或修改事项。与 Tasks/Lucius 共用 `/api/native/workspace-readonly/:kind` 与独立缓存，见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
+- **本地只读阶段**：原项目列表、详情、事项详情和表单由 [ReadOnlyWorkspace](../src/local-trackers/read-only-workspace.tsx) 注入读取与导航，保留 Done/Verified 和生命周期差异；不创建或修改事项。与 Tasks 共用 `/api/native/workspace-readonly/:kind` 与独立缓存，见 [阶段说明](WORKSPACES_LOCAL_READONLY_POC.md)。
 
 - **职责与入口**：[projects/](../src/app/projects/)、[project 服务](../src/lib/services/project.ts)；`projects`、`project_items`；`/api/projects`、`/api/project-items`，MCP `project`、`project_item`。
 - **依赖与决定**：这里管理当前开发事项、模块、状态、结果和下一步；索引不替代进度系统。`done` 与 `verified` 分开，生命周期时间由服务端维护；写回须保留不相关内容并复用既有事项。
@@ -251,7 +242,7 @@ Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好�
 ## Chronicle
 
 - **职责与入口**：[chronicle/](../src/app/chronicle/)、[chronicle 服务](../src/lib/services/chronicle.ts)；`chronicle_entries`；`/api/chronicle`，MCP `chronicle`。
-- **依赖与决定**：纪事保存 date、标题、Markdown 正文和来源；与 Home 今日一记、Lucius 日记、Memo 各有数据表及服务，修改时不要按“都是日记”互相替换。
+- **依赖与决定**：纪事保存 date、标题、Markdown 正文和来源；与 Home 今日一记、Memo 各有数据表及服务，修改时不要按“都是日记”互相替换。
 - **契约**：[MCP](../MCP.md)；字段与校验以 [chronicle.ts](../src/lib/chronicle.ts) 为准。
 
 - **共享/本地只读**：[ChronicleWorkspace](../src/local-trackers/chronicle-workspace.tsx) 通过 [ChronicleDataProvider](../src/components/chronicle-data-context.tsx) 复用原版列表、详情与 [ChronicleEditor](../src/app/chronicle/chronicle-editor.tsx)。既有纯 GET 下载最近 100 篇至账户隔离缓存；表单只预览、不写入 outbox。排版、阅读宽度及预览改进同时作用于 Web 和 Host。范围、媒体限制与回退见 [Chronicle 只读阶段](CHRONICLE_LOCAL_READONLY_POC.md)。

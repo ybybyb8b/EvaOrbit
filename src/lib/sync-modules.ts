@@ -13,7 +13,6 @@ export const syncModules = [
   {id:"inbox",en:"Inbox",zh:"收件箱",offlineWrites:false},
   {id:"tasks",en:"Tasks",zh:"任务",offlineWrites:false},
   {id:"projects",en:"Projects",zh:"项目",offlineWrites:false},
-  {id:"lucius",en:"Lucius",zh:"Lucius",offlineWrites:false},
 ] as const;
 export type SyncModuleId=typeof syncModules[number]["id"];
 export type ModuleSyncStatus={capturedAt?:string;busy?:boolean;error?:string;complete?:boolean;pending?:number;issues?:number;hasLocalData?:boolean;paused?:boolean};

@@ -24,13 +24,14 @@ test("Web sidebar preserves every space; local sidebar filters availability and 
   const {AppSidebar}=navigation();
   const props={pathname:"/food/places/1",LinkComponent:"a",brandImage:null};
   const web=renderToStaticMarkup(createElement(AppSidebar,props));
-  for(const path of ["/memo","/lucius","/tasks","/health","/projects","/subscriptions","/cats","/settings"])assert(web.includes(`href="${path}"`),path);
+  for(const path of ["/memo","/tasks","/health","/projects","/subscriptions","/cats","/settings"])assert(web.includes(`href="${path}"`),path);
   assert(!web.includes('href="/insights"'));
+  assert(!web.includes('href="/lucius"'));
   assert.match(web,/href="\/memo"[^>]*aria-label="Echo"/);
   assert.match(web,/href="\/food-drink"[^>]*aria-current="page"/);
   const local=renderToStaticMarkup(createElement(AppSidebar,{...props,allowedPaths:new Set(["/","/trackers","/food-drink","/cats"])}));
   for(const path of ["/","/trackers","/food-drink","/cats","/settings"])assert(local.includes(`href="${path}"`),path);
-  for(const path of ["/memo","/lucius","/tasks","/health","/projects","/subscriptions"])assert(!local.includes(`href="${path}"`),path);
+  for(const path of ["/memo","/tasks","/health","/projects","/subscriptions"])assert(!local.includes(`href="${path}"`),path);
   const chinese=renderToStaticMarkup(createElement(navigation(false).AppSidebar,{...props,pathname:"/cats"}));
   assert.match(chinese,/aria-label="咪子"/);assert.match(chinese,/aria-label="主导航"/);
   assert.match(chinese,/href="\/memo"[^>]*aria-label="Echo"/);

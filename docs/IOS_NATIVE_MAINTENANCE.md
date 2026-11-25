@@ -537,7 +537,7 @@ Media 本地只读扩展增加 `media.readOnlySnapshot` 与账户隔离 `media_r
 
 ## Workspace 只读与在线 AI 配置边界
 
-- `workspaces.readOnlySnapshot` 仅允许 tasks/projects/lucius，独立 SQLite 缓存按账户和 kind 分区，刷新校验失败保留旧快照；不写业务队列。
+- `workspaces.readOnlySnapshot` 仅允许 tasks/projects，独立 SQLite 缓存按账户和 kind 分区，刷新校验失败保留旧快照；不写业务队列。
 - `settings.aiConfiguration` 仅允许既有 Provider/模型设置路径与对应方法；普通 `request` 白名单继续拒绝 AI/业务写入。配置请求先验证会话账户及 `aiConfigurationProtocol:1`，附 `X-EvaOrbit-Account` 由服务端认证 proxy 校验。Native 冻结 Cookie 到单次无磁盘缓存连接，不保存密钥或重试请求。
 - 必须同时发布会话协议声明和账户校验后才启用在线设置；未发布时应拒绝。覆盖安装保留数据库/队列，不新增 entitlement、系统权限或签名流程。回退只更换旧 IPA/API，禁止卸载或清理本地数据库。
 

@@ -12,13 +12,13 @@ npm run import:notion -- --notion-export "memohub.zip" --notion-export "diary-pa
 
 Repeat `--notion-export` when Notion delivered related databases and page bodies in separate ZIP files; nested Notion ZIP wrappers are expanded with path and size safety checks. The adapter always writes a reviewable `<export-name>.normalized.json`, `notion-export-report.json`, and `notion-export-sample.json` before invoking the importer. Use `--normalized-output <file>` and `--report-dir <directory>` to choose their locations. `--notion-timezone +08:00` controls the explicit timezone assumption for timestamp-like CSV fields.
 
-The supported MemoHub export profile is discovered by its inspected CSV headers, and `_all.csv` is preferred over a filtered view export. It migrates Memo, Chronicle, and Lucius Diary only.
+The supported MemoHub export profile is discovered by its inspected CSV headers, and `_all.csv` is preferred over a filtered view export. The active importer migrates Memo and Chronicle only. Lucius Diary is retired; the export adapter may still extract it for archival reading, but a nonempty diary input is rejected before any import.
 
 If the export has no per-page Notion ID, the adapter uses `notion-export:<database-id>:sha256(<ordered raw CSV row>)`. This never uses title or date, is deterministic for the frozen export and exact reruns, and is explicitly reported as a fallback identity. It cannot recognize an edited row from a later export as the same Notion page. Missing page bodies are errors rather than fabricated content.
 
 ## Input
 
-Use the shape in `scripts/fixtures/notion-memohub.sample.json`. The top-level arrays are `memo`, `chronicle`, and `lucius_diary`. A `records` array with an explicit `resource` on every item is also accepted. Resource fields may be flat or nested under `data`.
+Use the shape in `scripts/fixtures/notion-memohub.sample.json`. The active top-level arrays are `memo` and `chronicle`. Remove the retired `lucius_diary` array from the historical sample before importing. A `records` array with an explicit `resource` on every item is also accepted. Resource fields may be flat or nested under `data`.
 
 Every item requires `notion_page_id` and may include `notion_url`, `notion_created_at`, and `notion_updated_at`. Identity is always `source_system=notion` plus `source_id=notion_page_id`; titles and dates are never identity keys.
 

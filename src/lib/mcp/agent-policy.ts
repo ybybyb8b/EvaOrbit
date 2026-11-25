@@ -15,8 +15,7 @@ export const resourceNames: Record<string, string> = {
   chronicle: "纪事", daily_energy: "能量", drink_limit: "饮用限额", drink_log: "饮用记录",
   food_log: "饮食记录", food_library: "食品库", food_dish: "菜单", food_place: "地点",
   nutrition_daily: "营养汇总", training_log: "训练记录", cat_pet: "猫咪档案",
-  cat_record: "猫咪记录", cat_routine: "猫咪护理计划", lucius_state: "Lucius 状态",
-  lucius_diary: "Lucius 日记", lucius_post: "Lucius 动态", lucius_post_comment: "Lucius 评论",
+  cat_record: "猫咪记录", cat_routine: "猫咪护理计划",
   media: "影视", media_series: "影视系列", person_note: "人物笔记", relation_person: "人物",
   relation_event: "交往事件", reminder: "提醒（含各模块提醒）", software_library: "软件库", subscription: "订阅",
 };
@@ -30,7 +29,7 @@ const actionNames: Record<string, string> = {
   "media:add_viewing": "添加观看记录", "media:update_viewing": "修改观看记录",
 };
 const sensitive = new Set(["echo","memory_context","memory_entity","memory_fact","memory_source","memory_candidate",
-  "health_record","nutrition_daily","daily_energy","insight_context","relation_person","relation_event","person_note","lucius_diary","chronicle","reminder","subscription","tracker"]);
+  "health_record","nutrition_daily","daily_energy","insight_context","relation_person","relation_event","person_note","chronicle","reminder","subscription","tracker"]);
 const ownerOnlyUpdates = new Set(["memory_entity","memory_fact","memory_source","memory_candidate","subscription"]);
 const ownerOnlyCreates = new Set(["memory_entity","memory_fact","memory_source","memory_candidate","subscription"]);
 
@@ -128,7 +127,10 @@ export function legacyChatGptPolicy(permissions: AgentPermission[]): AgentPolicy
 }
 
 export function agentPolicyForConnection(value: unknown, permissions: AgentPermission[], clientId: string) {
-  const policy = parseAgentPolicy(value, permissions);
+  // Old stored grants may outlive a compatible deployment until retirement runs.
+  const stored = policySchema.parse(value);
+  stored.permissions = stored.permissions.filter(key => !/^lucius_(state|diary|post|post_comment|case):/.test(key));
+  const policy = parseAgentPolicy(stored, permissions);
   return clientId === HERMES_CLIENT ? { ...policy, inboxOwn: true } : policy;
 }
 

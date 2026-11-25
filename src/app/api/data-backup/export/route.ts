@@ -10,7 +10,6 @@ const orderColumn: Partial<Record<BackupTable, string>> = {
   ui_preferences: "user_id",
   training_plans: "user_id",
   daily_nutrition_summaries: "date",
-  lucius_state: "user_id",
   meal_reminder_rules: "meal_type",
 };
 

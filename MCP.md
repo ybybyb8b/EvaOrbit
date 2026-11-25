@@ -38,7 +38,6 @@ This is the business registry reference. The connection's actual resources and o
 
 - Memory and capture: `memory_context`, `memory_entity`, `memory_fact`, `memory_source`, `memory_candidate`, `inbox`, `echo`, `chronicle`.
 - Work and calendar: `task`, `calendar_event`, `project`, `project_item`.
-- Lucius: `lucius_diary`, `lucius_state`, `lucius_post`, `lucius_post_comment`.
 - People: `relation_person`, `relation_event`, `person_note`.
 - Health and activity: `health_record`, `training_log`, `tracker`.
 - Media: `media`, `media_series`.

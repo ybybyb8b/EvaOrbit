@@ -38,8 +38,8 @@ function AppShellContent({ children, cloudMode, cacheScope }: { children: React.
   const pathname = usePathname();
   const router = useRouter();
   const inParlor = pathname === "/ai" || pathname.startsWith("/ai/");
-  const hasPageBack = !inParlor && pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/") && !pathname.startsWith("/lucius");
-  const hasGlobalHeader = !inParlor && pathname !== "/login" && !pathname.startsWith("/lucius");
+  const hasPageBack = !inParlor && pathname !== "/" && pathname !== "/login" && pathname !== "/native" && !pathname.startsWith("/oauth/");
+  const hasGlobalHeader = !inParlor && pathname !== "/login";
   const previousUrlRef = useRef<string | null>(null);
   const globalHeaderRef = useRef<HTMLElement>(null);
   const [spacesDrawerMounted,setSpacesDrawerMounted]=useState(false);

@@ -32,6 +32,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
   const readonly=useFormPreview(),{read,local,complete}=useChronicleData();
   const [items, setItems] = useState(initial);
   const [query, setQuery] = useRememberedState("ChronicleView:query", "");
+  const [revision, setRevision] = useState(0);
   const [draft, setDraft] = useState<ChronicleDraft>(emptyDraft);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,12 +54,13 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
         if (!signal?.aborted) setLoading(false);
       }
   }, [query,read]);
-  useDataRefresh("/chronicle", () => load());
+  const refresh = () => setRevision(current => current + 1);
+  useDataRefresh("/chronicle", refresh);
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => { void load(controller.signal); }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [load]);
+  }, [load, revision]);
 
   function openCreate() {
     setDraft(emptyDraft()); setError(""); setSaveError(""); setNotice(""); setShowForm(true);
@@ -74,8 +76,7 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
         body: JSON.stringify(draft),
       });
       if (!response.ok) { setSaveError(await responseError(response, fallback)); return; }
-      const created = await response.json() as ChronicleEntry;
-      setItems((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      refresh();
       setShowForm(false); setDraft(emptyDraft()); setNotice(english ? "Chronicle entry saved." : "纪事已保存");
     } catch {
       setSaveError(fallback);
@@ -94,9 +95,10 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
 
     {!showForm && error && <ErrorNotice role="alert">{error}</ErrorNotice>}
     <div className={journal.toolbar} aria-busy={loading}>
-      <label className={`search-box ${journal.search}`}><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={english?"Search titles and entries…":"搜索标题和正文…"} aria-label={english?"Search Chronicle titles and content":"搜索 Chronicle 标题和正文"} />{query && <button type="button" onClick={() => setQuery("")} aria-label={english?"Clear search":"清除搜索"}><Icon name="close"/></button>}</label>
+      <label className={`search-box ${journal.search}`}><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={english?"Search text or date…":"搜索标题、正文或日期…"} aria-label={english?"Search Chronicle titles, content, or date":"搜索 Chronicle 标题、正文或日期"} aria-describedby="chronicle-search-format" />{query && <button type="button" onClick={() => setQuery("")} aria-label={english?"Clear search":"清除搜索"}><Icon name="close"/></button>}</label>
       <span className={journal.count} role="status">{loading?(english?"Searching…":"正在搜索…"):`${items.length}${items.length===100?"+":""} ${english?(items.length===1?"entry":"entries"):"篇"}`}</span>
     </div>
+    <p className="chronicle-scope" id="chronicle-search-format">{english?"Search by day (YYYY-MM-DD) or month (YYYY-MM).":"日期支持 YYYY-MM-DD 或 YYYY-MM。"}</p>
 
     {local&&<p className="chronicle-scope">{english?`Searching downloaded entries${complete?"":" · latest 100 only"}`:`搜索已下载的纪事${complete?"":" · 仅最近 100 篇"}`}</p>}
     {!local&&items.length===100&&<p className="chronicle-scope">{english?"Showing the latest 100 matches. Refine your search to find earlier entries.":"显示最近 100 条结果，可搜索更早的纪事。"}</p>}
@@ -106,6 +108,6 @@ export function ChronicleView({ initial }: { initial: ChronicleEntry[] }) {
         <span className={journal.excerpt}>{chronicleExcerpt(entry.contentMd)}</span>
         {entry.source === "chatgpt" && <span className={journal.tags}><span className={journal.tag}>ChatGPT</span></span>}
       </Link>
-    } /> : loading ? <p role="status">{english?"Loading entries…":"正在加载纪事…"}</p> : error ? <button className="button secondary" onClick={()=>void load()}>{english?"Try again":"重试"}</button> : <div className="empty-state chronicle-empty"><span className="empty-icon"><Icon name="chronicle" /></span><h2>{query ? "No matching entries" : "Chronicle is empty"}</h2><p>{query ? "Try a different title or phrase." : "Add a dated Markdown entry to begin."}</p>{!query && <button className="button secondary" onClick={openCreate}><Icon name="plus" />New entry</button>}</div>}
+    } /> : loading ? <p role="status">{english?"Loading entries…":"正在加载纪事…"}</p> : error ? <button className="button secondary" onClick={refresh}>{english?"Try again":"重试"}</button> : <div className="empty-state chronicle-empty"><span className="empty-icon"><Icon name="chronicle" /></span><h2>{query.trim() ? (english?"No matching entries":"没有匹配的纪事") : (english?"Chronicle is empty":"暂无纪事")}</h2><p>{query.trim() ? (english?"Try another date or search term.":"试试其他日期或关键词。") : (english?"Add a dated Markdown entry to begin.":"新增一篇带日期的 Markdown 纪事。")}</p>{!query.trim() && <button className="button secondary" onClick={openCreate}><Icon name="plus" />{english?"New entry":"新增纪事"}</button>}</div>}
   </div>;
 }

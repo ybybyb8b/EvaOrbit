@@ -1,4 +1,4 @@
-import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, LuciusDiaryEntry, LuciusPost, LuciusPostComment, LuciusState, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
+import type { AiModelConfig, AiProvider, AiSettings, CatEvent, CatMeasurement, CatMedication, CatRoutine, CatSymptom, CatVetVisit, ChatMessage, ChatPreferences, ChatRole, ChatSession, ChronicleEntry, ChronicleSource, DashboardSummary, DailyNutritionSummary, DrinkLimit, DrinkLog, FoodDish, FoodLibraryItem, FoodLog, FoodPlace, HealthRecord, HealthRecordStatus, HealthRecordType, InboxItem, InboxStatus, MealReminderRule, MedicationDoseEvent, MedicationPreset, MediaItem, MediaRating, MediaSeries, MediaStatus, MediaType, MediaViewing, Memo, MemoStatus, MemoType, Memory, MemoryEntity, MemoryEntityMergeResult, MemoryEntityStatus, MemoryFact, MemoryFactCandidate, MemoryFactCandidateProposer, MemoryFactCandidateStatus, MemoryFactStatus, MemorySource, MenstrualFlowRecord, MenstrualPeriod, NotificationDelivery, PersonMemoryNote, Pet, Project, ProjectItem, ProjectItemStatus, ProjectItemType, ProjectStatus, PushSubscriptionRecord, RelationEvent, RelationPerson, Reminder, ReminderOccurrence, Subscription, SubscriptionPayment, SubscriptionPriceChange, Task, TaskReminder, Tracker, TrackerEntry, TrackerField, TrackerGoal, TrackerReminder, TrainingLog, UiPreferences, WeightRecord, WeightSettings } from "../types";
 import type { CatFoodItem, CatFoodPurchase } from "../types";
 import type { RelationEventInput } from "../relations";
 import type { HomeModuleId } from "../home-modules";
@@ -122,16 +122,6 @@ export type SubscriptionPatch = Partial<Pick<Subscription, "mode" | "expiresOn" 
 export type SubscriptionListInput = { query?: string; status?: Subscription["status"]; limit?: number };
 export type NewSubscriptionPayment = Pick<SubscriptionPayment, "scheduledFor" | "paidOn" | "amountMinor" | "currency" | "note"> & { updateCurrentPrice: boolean };
 export type NewSubscriptionPurchase = Required<Pick<SubscriptionPayment, "purchaseKey" | "validUntil" | "purchasedValue" | "purchasedUnit" | "bonusValue" | "bonusUnit">> & Pick<SubscriptionPayment, "paidOn" | "amountMinor" | "currency" | "note">;
-export type NewLuciusDiaryEntry = Omit<LuciusDiaryEntry, "id" | "createdAt" | "updatedAt">;
-export type LuciusDiaryPatch = Partial<NewLuciusDiaryEntry>;
-export type LuciusDiaryListInput = { query?: string; tag?: string; date?: string; limit?: number };
-export type LuciusStatePatch = Partial<Pick<LuciusState, "status" | "mood">>;
-export type NewLuciusPost = Pick<LuciusPost, "content" | "publishedAt">;
-export type LuciusPostPatch = Partial<NewLuciusPost>;
-export type LuciusPostListInput = { limit?: number };
-export type NewLuciusPostComment = Pick<LuciusPostComment, "postId" | "author" | "content">;
-export type LuciusPostCommentPatch = Pick<LuciusPostComment, "content">;
-export type LuciusPostCommentListInput = { postId?: number; postIds?: number[]; author?: LuciusPostComment["author"]; limit?: number };
 export type NutritionSettings = Pick<DailyNutritionSummary, "date" | "restingEnergyKcal" | "activeEnergyKcal" | "notes">;
 export type NewDrinkLog = Omit<DrinkLog, "id" | "createdAt" | "updatedAt">;
 export type NewDrinkLimit = Omit<DrinkLimit, "id" | "createdAt" | "updatedAt">;
@@ -412,25 +402,6 @@ export interface EvaOrbitRepository {
   createMemo(input: NewMemo): Promise<Memo>;
   updateMemo(id: number, input: MemoPatch): Promise<Memo | null>;
   deleteMemo(id: number): Promise<boolean>;
-
-  listLuciusDiaryEntries(input?: LuciusDiaryListInput): Promise<LuciusDiaryEntry[]>;
-  getLuciusDiaryEntry(id: number): Promise<LuciusDiaryEntry | null>;
-  createLuciusDiaryEntry(input: NewLuciusDiaryEntry): Promise<LuciusDiaryEntry>;
-  updateLuciusDiaryEntry(id: number, input: LuciusDiaryPatch): Promise<LuciusDiaryEntry | null>;
-  deleteLuciusDiaryEntry(id: number): Promise<boolean>;
-
-  getLuciusState(): Promise<LuciusState>;
-  updateLuciusState(input: LuciusStatePatch): Promise<LuciusState>;
-  listLuciusPosts(input?: LuciusPostListInput): Promise<LuciusPost[]>;
-  getLuciusPost(id: number): Promise<LuciusPost | null>;
-  createLuciusPost(input: NewLuciusPost): Promise<LuciusPost>;
-  updateLuciusPost(id: number, input: LuciusPostPatch): Promise<LuciusPost | null>;
-  deleteLuciusPost(id: number): Promise<boolean>;
-  listLuciusPostComments(input?: LuciusPostCommentListInput): Promise<LuciusPostComment[]>;
-  getLuciusPostComment(id: number): Promise<LuciusPostComment | null>;
-  createLuciusPostComment(input: NewLuciusPostComment): Promise<LuciusPostComment>;
-  updateLuciusPostComment(id: number, input: LuciusPostCommentPatch): Promise<LuciusPostComment | null>;
-  deleteLuciusPostComment(id: number): Promise<boolean>;
 
   listDrinkLogs(input?: { date?: string; from?: string; to?: string; drinkType?: string; foodPlaceId?: number; drinkMenuId?: number; limit?: number }): Promise<DrinkLog[]>;
   getDrinkLog(id: number): Promise<DrinkLog | null>;

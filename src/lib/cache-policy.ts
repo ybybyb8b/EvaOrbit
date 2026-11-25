@@ -28,7 +28,7 @@ export function affectsData(path: string, domains: string[]) {
 export function cacheReadPolicy(path: string): { ttl: number } | null {
   const pathname = path.split("?")[0];
   // Never cache auth, native/device state, exports, credentials, or streaming replies.
-  if (!/^\/api\/(food(?:\/|$)|food-drink\/home|drinks(?:\/|$)|trackers(?:\/|$)|tasks(?:\/|$)|inbox(?:\/|$)|cats(?:\/|$)|health(?:\/|$)|nutrition(?:\/|$)|projects(?:\/|$)|project-items(?:\/|$)|relations(?:\/|$)|media(?:\/|$)|subscriptions(?:\/|$)|memos(?:\/|$)|memories(?:\/|$)|memory-graph(?:\/|$)|chronicle(?:\/|$)|lucius(?:\/|$)|daily-journal(?:\/|$)|notifications$|reminders(?:\/|$)|ai\/sessions(?:\/|$))/.test(pathname)) return null;
+  if (!/^\/api\/(food(?:\/|$)|food-drink\/home|drinks(?:\/|$)|trackers(?:\/|$)|tasks(?:\/|$)|inbox(?:\/|$)|cats(?:\/|$)|health(?:\/|$)|nutrition(?:\/|$)|projects(?:\/|$)|project-items(?:\/|$)|relations(?:\/|$)|media(?:\/|$)|subscriptions(?:\/|$)|memos(?:\/|$)|memories(?:\/|$)|memory-graph(?:\/|$)|chronicle(?:\/|$)|daily-journal(?:\/|$)|notifications$|reminders(?:\/|$)|ai\/sessions(?:\/|$))/.test(pathname)) return null;
   if (/\/(avatar|photo|cover|icon)$/.test(pathname) || pathname === "/api/notifications") return null;
   return { ttl: /\/(tasks|notifications|reminders)(\/|$)/.test(pathname) ? 15_000 : 60_000 };
 }

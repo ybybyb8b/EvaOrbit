@@ -32,7 +32,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const tools=(await rpc("tools/list")).tools;
       assert.deepEqual(tools.map(tool=>tool.name).sort(),["eo_resources","eo_schema","eo_search","eo_get","eo_create","eo_update","eo_delete","eo_action"].sort());
       const resources=(await call("eo_resources")).resources;
-      assert.equal(resources.length,39);
+      assert.equal(resources.length,35);
       assert.deepEqual(resources.find(resource=>resource.resource==="memory_context").capabilities,["search"]);
       assert(resources.some(resource=>resource.resource==="software_library"));
       assert.deepEqual(resources.find(resource=>resource.resource==="echo").aliases,["memo"]);
@@ -43,7 +43,7 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       await call("eo_update",{resource:"memo",id:echo.id,data:{title:"Alias updated"}});
       assert.equal((await call("eo_get",{resource:"echo",id:echo.id})).item.title,"Alias updated");
       await call("eo_delete",{resource:"echo",id:echo.id});
-      assert(!resources.some(resource=>["insight_run","insight_report","lucius_case"].includes(resource.resource)));
+      assert(!resources.some(resource=>["insight_run","insight_report","lucius_case","lucius_state","lucius_diary","lucius_post","lucius_post_comment"].includes(resource.resource)));
       assert.deepEqual(resources.find(resource=>resource.resource==="insight_context").capabilities,["get"]);
       const {item:context}=await call("eo_get",{resource:"insight_context",id:"day/2026-01-01"});
       assert.equal(context.period.date,"2026-01-01");
