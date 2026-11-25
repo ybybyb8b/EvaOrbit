@@ -14,6 +14,9 @@ test("xtool auth candidate is opt-in and keeps the audited installer baseline", 
   const patch = steps.find(step => step.name === "Apply and verify EvaOrbit patches");
   assert.match(patch.run, /if \[\[ "\$AUTH_CLIENT_INFO_CANDIDATE" == "true" \]\]; then\s+test "\$GITHUB_EVENT_NAME" = "workflow_dispatch"\s+patches\+=/);
   assert(steps.some(step => step.name === "Compile and run candidate client-info smoke test" && step.if === "${{ inputs.auth_client_info_candidate }}"));
+  assert.match(patch.run, /patches\+=\("\$GITHUB_WORKSPACE\/tools\/xtool\/patches\/0004-pin-compatible-xadi-build.patch"\)/);
+  const buildPatch = readFileSync(new URL("../tools/xtool/patches/0004-pin-compatible-xadi-build.patch", import.meta.url), "utf8");
+  assert.match(buildPatch, /\+ADD https:\/\/github.com\/xtool-org\/xadi.git#61c02708c9cb046100f500878863fd2122b0d7e3 \/xadi/);
   assert.match(readFileSync(new URL("./ios/xtool-env.sh", import.meta.url), "utf8"), /9f23739f9ca45a7506d3290878853e067706b26f510deefafc9728add3c5a628/);
 });
 

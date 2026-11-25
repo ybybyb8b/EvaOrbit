@@ -1,0 +1,10 @@
+diff --git a/Dockerfile b/Dockerfile
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -73,5 +73,5 @@
+ RUN curl -fsS https://dlang.org/install.sh | bash -s ldc
+
+-ADD https://github.com/xtool-org/xadi.git#main /xadi
++ADD https://github.com/xtool-org/xadi.git#61c02708c9cb046100f500878863fd2122b0d7e3 /xadi
+
+ RUN cd xadi \

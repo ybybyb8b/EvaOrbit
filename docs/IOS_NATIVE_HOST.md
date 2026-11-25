@@ -2,7 +2,7 @@
 
 ## Linux xtool 认证候选（2026-11-25）
 
-针对网页登录正常、GSA 初始化返回 `-22410` 的情况，分支 `codex/xtool-linux-auth-fix` 保留固定 upstream 和原两份补丁，仅追加 Linux 客户端声明修复。背景及边界见 [维护契约](IOS_NATIVE_MAINTENANCE.md#linux-xtool-认证候选2026-11-25)。候选尚需真实 Apple 登录与设备验收，不能作为已验证默认工具。
+针对网页登录正常、GSA 初始化返回 `-22410` 的情况，分支 `codex/xtool-linux-auth-fix` 保留固定 upstream 和原两份补丁，追加 Linux 客户端声明修复及兼容 XADI 构建版本固定。背景及边界见 [维护契约](IOS_NATIVE_MAINTENANCE.md#linux-xtool-认证候选2026-11-25)。候选尚需真实 Apple 登录与设备验收，不能作为已验证默认工具。
 
 手动构建 `Build patched xtool`，ref 选择该分支，`auth_client_info_candidate=true`。等待编译和 ClientInfo Swift 检查成功后，下载后缀为 `-linux-auth-candidate` 的产物到独立目录，保留其中的 SHA256SUMS 和补丁摘要；不要覆盖 `~/.local/bin/xtool`。
 

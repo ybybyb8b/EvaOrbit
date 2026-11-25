@@ -6,7 +6,7 @@ Apple 网页登录正常，但旧 AppImage 在 `GrandSlamAuthInitRequest` 收到
 
 独立分支 `codex/xtool-linux-auth-fix` 的 `0003-linux-anisette-client-info.patch` 只在 Linux 统一登录和 XADI provisioning 的 Android 客户端声明。原 upstream commit、HealthKit／免费 Team 补丁、fresh-TLS、有限重试、原子 token 保存和安装 transport 保留；非 Linux 声明不变，不增加认证端点、远端服务或凭据输出，不自动清理 provisioning。
 
-`Build patched xtool` 仅手动选择 `auth_client_info_candidate=true` 时应用第三补丁，默认仍只用前两份。候选产物有独立后缀；CI 从实际补丁源码生成无凭据／无网络 Swift 检查，覆盖 Linux 与非 Linux 分支。原安装工具和环境脚本的已验证 SHA 不变；候选须独立校验后手动登录，再沿用原 IPA 和安装脚本验收。构建通过不能视为 Apple 登录或真机通过，禁止提前替换默认工具、使用 `--skip-sha256` 或重置 2FA。见 [runbook 的候选步骤](IOS_NATIVE_HOST.md#linux-xtool-认证候选2026-11-25)。
+`Build patched xtool` 仅手动选择 `auth_client_info_candidate=true` 时应用第三、第四补丁，默认仍只用前两份。第四补丁将 Dockerfile 的浮动 XADI main 固定至 `61c02708c9cb046100f500878863fd2122b0d7e3`：该版本仍生成原构建器所需的动态库 `bin/libxadi.so`，当前 main 已改为静态库，导致候选首次构建在复制动态库时失败。产物附 XADI_COMMIT.txt 与实际补丁摘要。候选产物有独立后缀；CI 从实际补丁源码生成无凭据／无网络 Swift 检查，覆盖 Linux 与非 Linux 分支。原安装工具和环境脚本的已验证 SHA 不变；候选须独立校验后手动登录，再沿用原 IPA 和安装脚本验收。构建通过不能视为 Apple 登录或真机通过，禁止提前替换默认工具、使用 `--skip-sha256` 或重置 2FA。见 [runbook 的候选步骤](IOS_NATIVE_HOST.md#linux-xtool-认证候选2026-11-25)。
 
 ## Parlor 单聊消息操作
 
