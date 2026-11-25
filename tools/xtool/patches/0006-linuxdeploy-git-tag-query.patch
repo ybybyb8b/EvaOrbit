@@ -1,0 +1,13 @@
+diff --git a/Linux/build.sh b/Linux/build.sh
+index 87dff15..5489ba2 100755
+--- a/Linux/build.sh
++++ b/Linux/build.sh
+@@ -17,7 +17,7 @@ swift build --package-path .. -c release --product xtool --static-swift-stdlib
+ bin="$(swift build --package-path .. -c release --show-bin-path)"
+ strip "${bin}/xtool"
+
+-curr_git_info="$(curl -fsSL https://api.github.com/repos/linuxdeploy/linuxdeploy/git/refs/tags/continuous)"
++curr_git_info="$(git ls-remote --exit-code https://github.com/linuxdeploy/linuxdeploy.git refs/tags/continuous)"
+ curr_arch="$(uname -m)"
+
+ if [[ -f staging/linuxdeploy/git.json ]]; then
