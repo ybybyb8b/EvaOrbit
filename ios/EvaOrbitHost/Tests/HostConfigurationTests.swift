@@ -21,6 +21,7 @@ final class HostConfigurationTests: XCTestCase {
         let configuration = try XCTUnwrap(HostConfiguration(validating: URL(string: "https://eva-orbit.vercel.app")!))
         XCTAssertEqual(configuration.navigationURL(for: URL(string: "evaorbit://open/tasks?taskId=123")!)?.absoluteString, "https://eva-orbit.vercel.app/tasks?taskId=123")
         XCTAssertEqual(configuration.navigationURL(for: URL(string: "evaorbit://open/settings/notifications?reminderId=42")!)?.path, "/settings/notifications")
+        XCTAssertEqual(configuration.navigationURL(for: URL(string: "evaorbit://open/days")!)?.path, "/days")
         for raw in ["https://example.com/tasks", "evaorbit://other/tasks", "evaorbit://user@open/tasks", "evaorbit://open:443/tasks", "evaorbit://open//example.com/tasks", "evaorbit://open/api/tasks", "evaorbit://open/tasks/../api/tasks", "evaorbit://open/tasks/%2e%2e/api/tasks", "evaorbit://open/eventkit/private"] {
             XCTAssertNil(configuration.navigationURL(for: URL(string: raw)!), raw)
         }
@@ -31,6 +32,7 @@ final class HostConfigurationTests: XCTestCase {
         let link = URL(string: "evaorbit-trackers-poc://open/tasks?taskId=123#details")!
         XCTAssertEqual(local.navigationURL(for: link)?.absoluteString, "https://eva-orbit.vercel.app/tasks?taskId=123#details")
         XCTAssertEqual(local.navigationURL(for: URL(string: "evaorbit-trackers-poc://open/ai?conversation=thread")!)?.absoluteString, "https://eva-orbit.vercel.app/ai?conversation=thread")
+        XCTAssertEqual(local.navigationURL(for: URL(string: "evaorbit-trackers-poc://open/days")!)?.path, "/days")
         let online = try XCTUnwrap(HostConfiguration(validating: local.baseURL))
         XCTAssertNil(online.navigationURL(for: link))
         for raw in ["evaorbit-trackers-poc://user@open/tasks", "evaorbit-trackers-poc://open:443/tasks", "evaorbit-trackers-poc://open/tasks/%2e%2e/api/tasks", "evaorbit-trackers-poc://open/eventkit/token"] {

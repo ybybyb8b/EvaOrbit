@@ -9,6 +9,7 @@ export type NavigationLinkProps=ComponentProps<"a">&{href:string};
 type NavigationProps={pathname:string;LinkComponent:ComponentType<NavigationLinkProps>;allowedPaths?:ReadonlySet<string>;aiLabel?:string};
 const navigationGroups = [
   { label: "LIFE", items: [
+    { href: "/days", label: "Days", zh: "如期", icon: "calendar" as const },
     { href: "/trackers", label: "Trackers", zh: "观测", icon: "tracker" as const },
     { href: "/food-drink", label: "Food & Drink", zh: "Food & Drink", icon: "foodDrink" as const },
     { href: "/subscriptions", label: "Subscriptions", zh: "订阅", icon: "calendar" as const },

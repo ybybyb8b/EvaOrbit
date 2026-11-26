@@ -141,7 +141,7 @@
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.vintage-task-check) { width:44px;height:44px;margin:-12px;flex:none;display:grid;place-items:center;cursor:pointer; }
 
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(:is(p,small,time,button,input,textarea,select,.home-date-weekday,.home-pane-list,.home-journal-preview-list,.home-time-summary,.home-masthead>span)) { font-family:var(--font-vintage-body); }
-:global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(:is(h1,h2,h3,.home-date-pill strong)) { font-family:var(--font-editorial-label); }
+:global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.home-date-pill strong) { font-family:var(--font-editorial-label); }
 :global(html[data-design-theme="vintage"][data-theme][data-mode]) .vintage :global(.home-sleep-pane :is(strong,small,p)) { font-family:var(--font-vintage-body); }
 :global(html[data-design-theme="vintage"]):has(.vintage) :global(.form-sheet-panel) { --font-ui:var(--font-canger-huaxin),sans-serif;font-family:var(--font-ui); }
 

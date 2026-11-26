@@ -19,7 +19,7 @@ function record(id, sourceType, title, occurredAt, endAt = null, hasExplicitTime
 }
 
 function calendar(id, title, startAt, endAt, isAllDay = false) {
-  return { id, title, startAt, endAt, isAllDay, status: "confirmed", timezone: "Asia/Shanghai", notes: "", location: "", createdAt: capturedAt, updatedAt: capturedAt };
+  return { id, title, startAt, endAt, isAllDay, status: "confirmed", timezone: "Asia/Shanghai", notes: "", location: "", createdAt: capturedAt, updatedAt: capturedAt, ...(id === 2 ? { calendarSource: { name: "Focus", color: "#54b3a1" } } : {}) };
 }
 
 const days = {
@@ -41,6 +41,7 @@ const days = {
     ...buildCalendarTimelineEvents([
       calendar(9, "跨夜阅读", at("23:25", earlier), at("00:35", previous)),
       calendar(10, "整理相册", at("01:00", previous), at("01:05", previous)),
+      calendar(20, "睡眠", at("01:59", previous), at("09:20", previous)),
     ], dateRange(previous)),
     record(11, "tracker", "喝水", at("01:05", previous)),
     record(16, "health", "记下今天的心情", at("01:05", previous)),
@@ -116,6 +117,8 @@ try {
   const boxes = async locator => Promise.all((await locator.all()).map(item => item.boundingBox()));
   const points = await boxes(dots);
   const writing = await boxes(timeline.locator(`[data-interval="calendar:2:${date}"]`));
+  assert.equal(await timeline.locator(`[data-interval="calendar:2:${date}"]`).first().getAttribute("data-calendar-color"), "#54b3a1");
+  assert.notEqual(await timeline.getByRole("button", { name: /写作 · 上午专注/ }).evaluate(element => getComputedStyle(element).backgroundImage), "none", "source color keeps the shared glass highlight");
   const playlist = await timeline.locator('[data-interval="tracker:5"]').boundingBox();
   const lunch = await timeline.locator('[data-interval="food:8"]').boundingBox();
   const hour = (points[1].y - points[0].y) * 60 / 115;
@@ -150,6 +153,10 @@ try {
   const overnight = await bands.first().boundingBox();
   assert(Math.abs(midnight.y + hour / 4 - overnight.y) < 1);
   assert(Math.abs(overnight.height - hour * 35 / 60) < .1);
+  await timeline.getByText("7 小时 21 分 · 已压缩", { exact: true }).waitFor();
+  const sleepBand = await timeline.locator(`[data-interval="calendar:20:${previous}"]`).boundingBox();
+  assert(Math.abs(sleepBand.height - 80) < .1, "long sleep compresses while preserving its true duration label");
+  await timeline.screenshot({ path: output.replace(/\.png$/, "-overnight.png"), animations: "disabled", style: ".mobile-global-header, .mobile-nav, [data-parlor-activity], .home-quick-log-trigger { visibility: hidden !important; }" });
   await timeline.getByRole("button", { name: /01:00 \/ 01:05/ }).click();
   const nearby = page.getByRole("dialog", { name: "01:00 / 01:05 · 3 条记录" });
   await nearby.getByRole("button", { name: /整理相册/ }).click();

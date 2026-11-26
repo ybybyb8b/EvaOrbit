@@ -1,5 +1,6 @@
 import EventKit
 import Foundation
+import UIKit
 
 final class EventKitSyncEngine {
     private let store = EKEventStore()
@@ -258,7 +259,22 @@ final class EventKitSyncEngine {
         if #available(iOS 17.0, *) { switch status { case .notDetermined:return "not_determined";case .restricted:return "restricted";case .denied:return "denied";case .authorized:return "authorized";case .fullAccess:return "full_access";case .writeOnly:return "write_only";@unknown default:return "unknown" } }
         switch status { case .notDetermined:return "not_determined";case .restricted:return "restricted";case .denied:return "denied";case .authorized:return "authorized";default:return "unknown" }
     }
-    private func sources(_ kind: EKEntityType) -> [[String:Any]] { store.calendars(for:kind).map { ["identifier":$0.calendarIdentifier,"title":$0.title,"sourceIdentifier":$0.source.sourceIdentifier,"sourceTitle":$0.source.title,"allowsContentModifications":$0.allowsContentModifications] } }
+    static func colorHex(_ color: UIColor) -> String? {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return nil }
+        let channels = [red, green, blue].map { min(255, max(0, Int(($0 * 255).rounded()))) }
+        return String(format: "#%02x%02x%02x", channels[0], channels[1], channels[2])
+    }
+
+    private func sources(_ kind: EKEntityType) -> [[String: Any]] {
+        store.calendars(for: kind).map { calendar in
+            var result: [String: Any] = ["identifier": calendar.calendarIdentifier, "title": calendar.title,
+                "sourceIdentifier": calendar.source.sourceIdentifier, "sourceTitle": calendar.source.title,
+                "allowsContentModifications": calendar.allowsContentModifications]
+            if let color = calendar.cgColor, let hex = Self.colorHex(UIColor(cgColor: color)) { result["color"] = hex }
+            return result
+        }
+    }
     private func eventDictionary(_ event:EKEvent)->[String:Any]{let zone=event.timeZone?.identifier ?? TimeZone.current.identifier;return compact(["calendarItemIdentifier":event.calendarItemIdentifier,"externalIdentifier":event.calendarItemExternalIdentifier,"calendarIdentifier":event.calendar.calendarIdentifier,"sourceIdentifier":event.calendar.source.sourceIdentifier,"title":event.title ?? "","notes":event.notes,"startAt":event.isAllDay ? day(event.startDate,zone:zone) : iso(event.startDate),"endAt":event.isAllDay ? day(event.endDate,zone:zone) : iso(event.endDate),"isAllDay":event.isAllDay,"timezone":zone,"location":event.location,"status":eventStatus(event.status),"lastModifiedAt":event.lastModifiedDate.map(iso),"isRecurring":!(event.recurrenceRules?.isEmpty ?? true),"hasAttendees":!(event.attendees?.isEmpty ?? true)])}
     private func eventStatus(_ status:EKEventStatus)->String{switch status{case .tentative:return "tentative";case .canceled:return "cancelled";default:return "confirmed"}}
     private func reminderDictionary(_ reminder: EKReminder) -> [String: Any] {

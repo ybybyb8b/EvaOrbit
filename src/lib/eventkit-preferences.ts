@@ -1,7 +1,8 @@
 import { ValidationError } from "./validation.ts";
+import { calendarColor } from "./calendar-colors.ts";
 import type { EventKitModes, EventKitReminderRoutes, EventKitSource, EventKitStatus, EventKitSyncMode } from "./eventkit-sync.ts";
 
-export type SavedEventKitSource = EventKitSource & { kind: "calendar" | "reminder"; mode: EventKitSyncMode };
+export type SavedEventKitSource = EventKitSource & { kind: "calendar" | "reminder"; mode: EventKitSyncMode; colorOverride?: string };
 export type EventKitPreferences = { version: 1; sources: SavedEventKitSource[]; routes: EventKitReminderRoutes };
 const domains = ["tasks", "cats", "cat_household", "trackers", "health", "subscriptions"];
 export function parseEventKitPreferences(value: unknown): EventKitPreferences {
@@ -16,7 +17,9 @@ export function parseEventKitPreferences(value: unknown): EventKitPreferences {
     for (const key of ["identifier", "title", "sourceIdentifier", "sourceTitle"]) if (typeof item[key] !== "string" || String(item[key]).length > 500) throw new ValidationError("同步来源格式不正确");
     if (!item.identifier || seen.has(`${item.kind}:${item.identifier}`)) throw new ValidationError("同步来源重复或缺少标识");
     seen.add(`${item.kind}:${item.identifier}`);
-    return { kind: item.kind as SavedEventKitSource["kind"], mode: item.kind === "calendar" && item.mode === "two_way" ? "import" : item.mode as EventKitSyncMode, identifier: String(item.identifier), title: String(item.title), sourceIdentifier: String(item.sourceIdentifier), sourceTitle: String(item.sourceTitle), allowsContentModifications: item.allowsContentModifications };
+    for (const key of ["color", "colorOverride"]) if (item[key] !== undefined && !calendarColor(item[key])) throw new ValidationError("日历颜色格式不正确");
+    return { kind: item.kind as SavedEventKitSource["kind"], mode: item.kind === "calendar" && item.mode === "two_way" ? "import" : item.mode as EventKitSyncMode, identifier: String(item.identifier), title: String(item.title), sourceIdentifier: String(item.sourceIdentifier), sourceTitle: String(item.sourceTitle), allowsContentModifications: item.allowsContentModifications,
+      ...(item.color ? { color: calendarColor(item.color) } : {}), ...(item.colorOverride ? { colorOverride: calendarColor(item.colorOverride) } : {}) };
   });
   const routes: EventKitReminderRoutes = {};
   for (const [domain, id] of Object.entries(row.routes)) {
@@ -37,7 +40,7 @@ export function matchEventKitSource(saved: SavedEventKitSource, status: EventKit
   return named.length === 1 ? named[0] : null;
 }
 
-export function resolveEventKitPreferences(saved: EventKitPreferences, status: EventKitStatus) {
+export function resolveEventKitPreferences(saved: EventKitPreferences, status: EventKitStatus): { modes: EventKitModes; routes: EventKitReminderRoutes; unresolved: number; colors?: Record<string, string> } {
   const modes: EventKitModes = {}, routes: EventKitReminderRoutes = {}, ids = new Map<string, string>();
   let unresolved = 0;
   const matches = saved.sources.map(source => matchEventKitSource(source, status));
@@ -53,7 +56,12 @@ export function resolveEventKitPreferences(saved: EventKitPreferences, status: E
     const mapped = ids.get(id);
     if (mapped && status.reminderLists.some(item => item.identifier === mapped && item.allowsContentModifications) && modes[mapped] === "two_way") routes[domain as keyof EventKitReminderRoutes] = mapped;
   }
-  return { modes, routes, unresolved };
+  const colors: Record<string, string> = {};
+  for (const [index, source] of saved.sources.entries()) {
+    const match = matches[index];
+    if (source.kind === "calendar" && source.colorOverride && match && matches.filter(candidate => candidate?.identifier === match.identifier).length === 1) colors[match.identifier] = source.colorOverride;
+  }
+  return { modes, routes, unresolved, ...(Object.keys(colors).length ? { colors } : {}) };
 }
 
 export function captureEventKitPreferences(status: EventKitStatus, modes: EventKitModes, routes: EventKitReminderRoutes, previous?: EventKitPreferences, changedSources: string[] = []): EventKitPreferences {
@@ -66,7 +74,11 @@ export function captureEventKitPreferences(status: EventKitStatus, modes: EventK
   }) ?? [];
   const protectedIds = new Set(retained.map(source => matchEventKitSource(source, status)?.identifier).filter(Boolean));
   const sources: SavedEventKitSource[] = [...retained,
-    ...status.calendars.filter(source => !protectedIds.has(source.identifier)).map(source => ({ ...source, kind: "calendar" as const, mode: modes[source.identifier] ?? "off" })),
+    ...status.calendars.filter(source => !protectedIds.has(source.identifier)).map(source => {
+      const saved = previous?.sources.filter((candidate, index) => candidate.kind === "calendar" && previousMatches[index]?.identifier === source.identifier);
+      const old = saved?.length === 1 ? saved[0] : undefined;
+      return { ...old, ...source, ...(source.color ? { color: source.color } : old?.color ? { color: old.color } : {}), kind: "calendar" as const, mode: modes[source.identifier] ?? "off" };
+    }),
     ...status.reminderLists.filter(source => !protectedIds.has(source.identifier)).map(source => ({ ...source, kind: "reminder" as const, mode: modes[source.identifier] ?? "off" })),
   ];
   const retainedIds = new Set(retained.filter(source => source.kind === "reminder").map(source => source.identifier));

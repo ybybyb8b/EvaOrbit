@@ -3,6 +3,8 @@ import type { UiLanguage } from "@/lib/locale";
 type CopyPair = readonly [zh: string, en: string];
 
 const UI_COPY: CopyPair[] = [
+  ["跟随 Apple 日历颜色", "Follow Apple color"], ["雾蓝", "Mist blue"], ["鼠尾草绿", "Sage"], ["灰粉", "Dusty rose"], ["燕麦", "Oat"], ["灰紫", "Lilac"], ["自选颜色", "Custom color"],
+  ["如期", "Days"],
   ["筛选", "Filters"], ["收藏库", "Collection"], ["作品", "Works"], ["观看记录", "Viewings"], ["尚无观看记录。", "No viewings recorded yet."],
   ["系列／母作品", "Series & Franchises"], ["搜索片名、系列或季名…", "Search names, series or season…"],
   ["本机预览", "Local preview"],

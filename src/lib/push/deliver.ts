@@ -208,7 +208,7 @@ async function deliverReminderPushes(client: DeliveryClient, now: Date, validPer
       kind: "reminder_due",
       title: copy.title,
       body: copy.body,
-      url: reminder.target_type === "task" && reminder.target_id ? `/tasks?taskId=${Number(reminder.target_id)}` : `/settings/notifications?reminderId=${Number(reminder.id)}`,
+      url: reminder.target_type === "important_date" ? "/days" : reminder.target_type === "task" && reminder.target_id ? `/tasks?taskId=${Number(reminder.target_id)}` : `/settings/notifications?reminderId=${Number(reminder.id)}`,
       tag: `reminder-${reminder.id}-${deliveryScheduledAt.slice(0,10)}`,
     });
     sent += delivery.sent;
@@ -351,6 +351,8 @@ export async function deliverDueReminderPushes(now = new Date()) {
   const { url } = supabaseConfig();
   const client = createDeliveryClient(url, secret);
   if (subject && publicKey && privateKey) webpush.setVapidDetails(subject, publicKey, privateKey);
+  const refreshDates = await client.rpc("refresh_important_date_reminders");
+  if (refreshDates.error) throw new Error("Could not refresh important date reminders", { cause: refreshDates.error });
   const validPeriodMedicationKeys = await reconcilePeriodMedicationPushProjections(client, now);
   const [reminders, meals, weights] = await Promise.all([deliverReminderPushes(client, now, validPeriodMedicationKeys), deliverMissingMealPushes(client, now), deliverMissingWeightPushes(client,now)]);
   return { due: reminders.due, sent: reminders.sent, mealDue: meals.due, mealSent: meals.sent, weightDue:weights.due, weightSent:weights.sent };

@@ -65,6 +65,7 @@ export type HomeCompletedItem = {
 };
 
 export interface HomeDayOverview {
+  importantDates?: import("./important-dates").ImportantDate[];
   date: string;
   events: TimelineEvent[];
   // Snapshots created before overdue tasks were included omit dueDate.

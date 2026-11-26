@@ -27,6 +27,7 @@ function dueDateTime(value: string, locale: string, timezone?: string | null) {
 
 export function reminderNotificationCopy(item: ReminderNotificationCopyInput, locale = "zh-CN", channel: "native_local" | "web_push" = "native_local") {
   const english = locale.toLocaleLowerCase().startsWith("en");
+  if (item.sourceType === "important_date") return { title: english ? "Days" : "如期", body: item.title };
   const source = reminderSourceDefinition(item.sourceType);
   const webPush = channel === "web_push";
   const title = webPush ? (source.domainRule === "tracker_missing" || source.domainRule === "missing_record" ? "Not Logged" : "Reminder") : item.title;

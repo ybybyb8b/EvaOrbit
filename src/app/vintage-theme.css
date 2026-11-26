@@ -34,6 +34,7 @@ html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
 
 html[data-design-theme="vintage"][data-theme][data-mode] {
   --font-ui:var(--font-canger-huaxin),sans-serif;--font-body:var(--font-ui);
+  --font-heading:var(--font-selected-en),var(--font-heading-zh),"PingFang SC","Microsoft YaHei",sans-serif;
   --text-action:var(--text-secondary);--text-label:var(--text-secondary);--text-icon:var(--text-secondary);
   --surface-list:var(--surface-soft);--surface-segmented:var(--surface-soft);
   --surface-note:var(--surface-warm);--surface-note-alt:var(--surface-lavender);--surface-note-green:var(--surface-tint);
@@ -56,7 +57,26 @@ html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
 }
 html[data-design-theme="vintage"] body { background:var(--surface-canvas); }
 html[data-design-theme="vintage"] :is(input,textarea,[contenteditable="true"],.user-content,button,select) { font-family:var(--font-ui); }
-html[data-design-theme="vintage"] :is(h1,h2,h3,h4) { font-family:var(--font-editorial);font-weight:500; }
+/* Heading roles stay shared across Web and bundled React; metrics retain --font-editorial. */
+html[data-design-theme="vintage"][data-theme][data-mode] :is(h1,h2,h3,h4) {
+  font-family:var(--font-heading);font-weight:500;font-synthesis:none;
+}
+/* A user-authored page title still has a heading role; ordinary record text stays unchanged. */
+html[data-design-theme="vintage"][data-theme][data-mode] :is(h1.user-content,h1 .user-content) {
+  font-family:var(--font-heading) !important;
+}
+html[data-design-theme="vintage"][data-theme][data-mode]:lang(zh) :is(h1,h2,h3,h4) {
+  font-weight:400;letter-spacing:0;line-height:1.35;
+}
+html[data-design-theme="vintage"][data-theme][data-mode]:lang(zh) :is(.page-header,.home-masthead) h1 {
+  font-size:clamp(28px,2.5vw,36px);line-height:1.25;
+}
+html[data-design-theme="vintage"][data-theme][data-mode]:lang(zh) :is(.section-heading,.form-sheet-header,.home-day-heading,.home-calendar-header) h2 {
+  font-size:20px;
+}
+html[data-design-theme="vintage"][data-theme][data-mode]:lang(zh) :is(.home-selected-date-heading h2,.home-day-pane h3) {
+  font-size:18px;
+}
 /* Flat editorial content; translucent material is reserved for floating chrome. */
 html[data-design-theme="vintage"][data-theme][data-mode] :is(.editor-card,.provider-card,.ai-providers-panel,.tracker-card,.tracker-insight-card,.module-intro-card,.module-preview-card,.health-detail-card,.daily-energy-card,.health-record-card,.capture-card,.inbox-row,.settings-directory-item,.notification-rules > article,.notification-history > article,.pet-profile-view,.apple-health-section,.subscription-card,.subscription-summary) {
   background:var(--surface-card);box-shadow:none;

@@ -1,5 +1,6 @@
 "use client";
 import { Disclosure } from "./disclosure";
+import { HomeImportantDates } from "./home-important-dates";
 import {HomeTasksSummary} from "@/components/home-tasks-summary";
 import type {DueReminder} from "@/lib/types";
 import {useBusinessRequest} from "@/components/business-request-context";
@@ -325,6 +326,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
   return <span key={activity.category} className="home-time-summary-part" title={label}><span className={activity.icon ? "home-time-summary-icon" : undefined}>{activity.icon ? <ReiconSymbol name={activity.icon} size={20} /> : label}</span><strong>{durationLabel(activity.durationMinutes, english)}</strong></span>;
 })}</span></span></button>}
       <section className="home-day-timeline" aria-busy={loadingDate === selected}>
+        <HomeImportantDates items={day.importantDates??[]} date={selected} Link={Link}/>
         <header className="home-day-heading"><h2>{english ? "Timeline" : "时间轴"}</h2></header>
         {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
         {events.length ? <HomeDayTimeline key={selected} date={selected} events={events} english={english} timeLabel={timeLabel} titleFor={item => titleFor(item, english)} renderEntry={renderTimelineEntry} /> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有时间轴记录"}</p>}

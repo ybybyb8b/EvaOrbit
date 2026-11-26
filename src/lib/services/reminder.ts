@@ -15,6 +15,7 @@ import { completeTaskFromReminder, disableTaskReminder } from "./task";
 import { getRecurrenceCompletionDate } from "./life-day";
 
 export async function subjectLabel(reminder: Reminder) {
+  if (reminder.targetType === "important_date") return "Days";
   if (reminder.targetType === "cat_household") return "Household";
   if (reminder.targetType === "cat" && reminder.targetId) return (await (await getRepository()).getPet(reminder.targetId))?.name ?? "Cat";
   if (reminder.targetType === "cat_food" && reminder.targetId) return (await (await getRepository()).getCatFoodItem(reminder.targetId))?.name ?? "Cat food";
@@ -32,6 +33,7 @@ async function validateTarget(input: NewReminder) {
 }
 
 function assertReminderActionAccess(reminder: Reminder, creatingCareRecord = false) {
+  if (reminder.sourceType === "important_date") throw new ConflictError("请在重要日子中调整提醒；纪念日不需要完成、跳过或延后。");
   if (!isMcpRequest()) return;
   if (reminder.sourceType !== null || reminder.targetType === "subscription"
     || (creatingCareRecord && ["cat","cat_household"].includes(reminder.targetType))) {
@@ -57,6 +59,14 @@ export async function updateReminder(id: number, input: Record<string, unknown>)
 export async function cancelReminder(id: number) {
   const repository = await getRepository(), reminder = await repository.getReminder(id);
   if (!reminder) return false;
+  if (reminder.sourceType === "important_date" && reminder.sourceId) {
+    const item = (await repository.listImportantDates()).find(item => item.id === reminder.sourceId);
+    if (!item) return false;
+    const { id: itemId, createdAt: _created, updatedAt: _updated, ...input } = item;
+    void _created; void _updated;
+    await repository.saveImportantDate(itemId, { ...input, categoryColor: undefined, reminderTime: null });
+    return true;
+  }
   const source = reminderSourceDefinition(reminder.sourceType);
   if (source.projectionOwner === "cat_routine" && reminder.sourceId) { await skipCatRoutineOccurrence(reminder.sourceId); return true; }
   if (source.projectionOwner === "tracker" && reminder.sourceId) await repository.updateTrackerReminder(reminder.sourceId, { enabled: false });
@@ -109,7 +119,7 @@ export async function getDueReminders(limit = 50, now = new Date(), options: { r
     await reconcilePeriodMedicationReminders(now);
   }
   const repository = await getRepository();
-  const candidates = selectDueReminders(await repository.listReminders({ activeOnly: true }), now, limit * 2);
+  const candidates = selectDueReminders((await repository.listReminders({ activeOnly: true })).filter(item => item.sourceType !== "important_date"), now, limit * 2);
   const reminders = (await Promise.all(candidates.map(async (reminder) => {
     if (reminderSourceDefinition(reminder.sourceType).projectionOwner !== "tracker" || !reminder.sourceId) return reminder;
     const rule = await repository.getTrackerReminder(reminder.sourceId);

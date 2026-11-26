@@ -1,4 +1,5 @@
 import "server-only";
+import { importantDateStats, sortImportantDates } from "../important-dates";
 
 import { homeMeals, summarizeCalendarActivity, type HomeDayOverview } from "../home-day";
 import { getRepository } from "../repositories";
@@ -18,13 +19,14 @@ export async function getHomeDayOverview(date?: string, options: { readOnly?: bo
   const includeOverdue = date === today;
   const repository = await getRepository();
   const range = dateRange(date);
-  const [timeline, tasks, journal, sleepSamples, occurrences, pets] = await Promise.all([
+  const [timeline, tasks, journal, sleepSamples, occurrences, pets, importantDates] = await Promise.all([
     getDailyTimelineOverview(date, options),
     repository.listTasks("all", date, range, includeOverdue),
     repository.listDailyJournalEntries({ date, limit: 100 }),
     getHealthKitSleepSamples(date),
     repository.listReminderOccurrences(range,date),
     repository.listPets(),
+    repository.listImportantDates(),
   ]);
   const reminderIds = [...new Set(occurrences.map(item => item.reminderId))];
   const reminderRecords = await Promise.all(reminderIds.map(async id => {
@@ -42,6 +44,7 @@ export async function getHomeDayOverview(date?: string, options: { readOnly?: bo
   const { calendarEvents, calendarInterpretation } = timeline;
   const calendar = summarizeCalendarActivity(calendarEvents, date, calendarInterpretation);
   return {
+    importantDates: sortImportantDates(importantDates.filter(item => !item.archived && (item.pinned || (() => { const days=importantDateStats(item,date).remaining;return days!==null&&days>=0&&days<=30; })())), date).slice(0,4),
     date,
     events: timeline.events,
     tasks: tasks.filter((task) => task.completed && task.completedOn ? task.completedOn === date : !task.completed || task.dueDate === date)

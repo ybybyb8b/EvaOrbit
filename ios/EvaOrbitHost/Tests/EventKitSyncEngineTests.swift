@@ -1,8 +1,13 @@
 import EventKit
 import XCTest
+import UIKit
 @testable import EvaOrbitHost
 
 final class EventKitSyncEngineTests:XCTestCase {
+    func testCalendarColorsSerializeRGBAndGrayscale() {
+        XCTAssertEqual(EventKitSyncEngine.colorHex(UIColor(red: 1, green: 0.5, blue: 0, alpha: 1)), "#ff8000")
+        XCTAssertEqual(EventKitSyncEngine.colorHex(UIColor(white: 0.5, alpha: 1)), "#808080")
+    }
     func testRecoveryMarkerNeverOverwritesUserURL() {
         let token = "00000000-0000-4000-8000-000000000001"
         let userURL = URL(string: "https://example.com/personal")!

@@ -60,6 +60,7 @@ export async function withHomeReadOnlyRepository<T>(action: () => Promise<T>): P
   const repository = await getRepository();
   const allowed = new Set(["listFoodLogs", "listDrinkLogs", "listTrackerEntries", "listTrackers", "listHealthRecords", "listRelationEvents", "listRelationPeople", "listTrainingLogs", "listWeightRecords", "listMenstrualFlowRecords", "listMedicationDoseEvents", "listCalendarEvents", "listSubscriptions", "listSubscriptionPayments", "getCalendarInterpretation", "getNutritionSettings", "listCatEvents", "getCatRoutine", "listCatSymptoms", "listCatVetVisits", "listCatMedications", "listCatMeasurements", "listMenstrualPeriods", "listTasks", "listDailyJournalEntries", "listSleepSamples", "listReminders", "listReminderOccurrences", "getReminder", "listPets", "getPet", "getCatFoodItem", "getTracker", "getSubscription", "getTrackerReminder"]);
   allowed.add("getTimelineAssociation");
+  allowed.add("listImportantDates");
   const guarded = new Proxy(repository, { get(target, key) {
     // Await probes `then` when an async service returns this plain repository.
     if (key === "then") return undefined;

@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { importantDateFromRow, importantDateToRow, importantDateReminderAt, type ImportantDateInput } from "./important-dates";
 import { chronicleSearchDates } from "./chronicle";
 import { finishMemoryPage, memoryPageTables, prepareMemoryPage, type MemoryPageInput, type MemoryPageItem, type MemoryResource, type MemorySourceMatch } from "./memory-pagination";
 import { assertMemorySourceEvidence, hasMemorySourceEvidence, parseMemoryCandidateSubmission, parseMemorySourceDraft, parseMemorySourcePatch } from "./memory-graph-validation";
@@ -3383,3 +3384,81 @@ export function promoteMemoryFactCandidate(id: string, reviewNote: string | null
   });
 }
 export function rejectMemoryFactCandidate(id:string,reviewNote:string|null,reviewClient="local"){const result=database.prepare("UPDATE memory_fact_candidates SET status='rejected',review_note=?,review_client=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local' AND status='pending'").run(reviewNote,reviewClient,id);return result.changes?getMemoryFactCandidate(id):null;}
+
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=103").get()) {
+  database.exec("PRAGMA foreign_keys=OFF");
+  try {
+    database.exec("BEGIN");
+    // Rebuild from the current schema, preserving every existing column, index and trigger.
+    for (const table of ["reminders", "notification_deliveries"]) {
+      const schema = String(database.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?").get(table)!.sql);
+      if (!/CHECK\s*\(target_type IN/i.test(schema)) continue;
+      const attached = database.prepare("SELECT sql FROM sqlite_master WHERE tbl_name=? AND type IN ('index','trigger') AND sql IS NOT NULL").all(table);
+      const sequence = database.prepare("SELECT seq FROM sqlite_sequence WHERE name=?").get(table);
+      const create = schema.replace(/CREATE TABLE\s+"?\w+"?/i, `CREATE TABLE ${table}_days`).replace(/CHECK\s*\(target_type IN\s*\(([^)]+)\)\)/i, "CHECK(target_type IN ($1,'important_date'))");
+      database.exec(create);
+      database.exec(`INSERT INTO ${table}_days SELECT * FROM ${table}; DROP TABLE ${table}; ALTER TABLE ${table}_days RENAME TO ${table};`);
+      for (const item of attached) database.exec(String(item.sql));
+      if (sequence) database.prepare("UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name=?").run(sequence.seq, table);
+    }
+    database.exec(`CREATE TABLE important_dates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL DEFAULT 'local',title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 120),
+      date TEXT NOT NULL,recurrence TEXT NOT NULL CHECK(recurrence IN ('none','yearly')),category TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',
+      pinned INTEGER NOT NULL DEFAULT 0,archived INTEGER NOT NULL DEFAULT 0,reminder_time TEXT,reminder_days_before INTEGER NOT NULL DEFAULT 0 CHECK(reminder_days_before BETWEEN 0 AND 366),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE UNIQUE INDEX idx_reminders_important_date ON reminders(source_id) WHERE source_type='important_date';
+      INSERT INTO migrations(version) VALUES(103);`);
+    if (database.prepare("PRAGMA foreign_key_check").all().length) throw new Error("Important dates migration failed foreign-key validation");
+    database.exec("COMMIT");
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+  finally { database.exec("PRAGMA foreign_keys=ON"); }
+}
+
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=104").get()) {
+  database.exec(`BEGIN;
+    CREATE TABLE important_date_categories(user_id TEXT NOT NULL DEFAULT 'local',name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 40),color TEXT CHECK(color IS NULL OR (length(color)=7 AND color GLOB '#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]')),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,name));
+    INSERT INTO migrations(version) VALUES(104); COMMIT;`);
+}
+export function listImportantDateCategories() { return database.prepare("SELECT name,color FROM important_date_categories WHERE user_id='local' ORDER BY name").all().map(row => ({name:String(row.name),color:row.color ? String(row.color) : null})); }
+export function listImportantDates() { return database.prepare("SELECT d.*,c.color AS category_color FROM important_dates d LEFT JOIN important_date_categories c ON c.user_id=d.user_id AND c.name=d.category WHERE d.user_id='local' ORDER BY d.id").all().map(importantDateFromRow); }
+function syncImportantDateReminder(id: number) {
+  const item = listImportantDates().find(item => item.id === id);
+  const existing = database.prepare("SELECT id FROM reminders WHERE source_type='important_date' AND source_id=?").get(id);
+  const due = item ? importantDateReminderAt(item) : null;
+  if (!due) {
+    if (existing) updateReminder(Number(existing.id), { isActive: false, status: "cancelled", nextDueAt: null, snoozedUntil: null });
+    return;
+  }
+  const before = existing ? getReminder(Number(existing.id)) : null;
+  if (before?.nextDueAt === due && before.isActive) { updateReminder(before.id, { title: item!.title }); return; }
+  if (Date.parse(due) < Date.now()) {
+    if (before) updateReminder(before.id, { isActive: false, status: "cancelled", nextDueAt: null, snoozedUntil: null });
+    return;
+  }
+  const input = { title: item!.title, targetType: "important_date" as const, targetId: id, sourceType: "important_date", sourceId: id, scheduleType: "one_time" as const, startsAt: due, nextDueAt: due, dueHasExplicitTime: true, intervalValue: null, intervalUnit: null, timesOfDay: [], endsAt: null, timezone: "Asia/Shanghai", note: "", leadTimeMinutes: 0, repeatWhileOverdue: false, status: "scheduled" as const, isActive: true };
+  if (before) updateReminder(before.id, { ...input, sentAt: null, lastNotifiedAt: null, snoozedUntil: null, cancelledAt: null });
+  else createReminder(input);
+}
+export function saveImportantDate(id: number | null, input: ImportantDateInput) {
+  database.exec("BEGIN");
+  try {
+    const row = importantDateToRow(input), keys = Object.keys(row), values = Object.values(row).map(value => typeof value === "boolean" ? Number(value) : value);
+    if (id === null) {
+      id = Number(database.prepare(`INSERT INTO important_dates(${keys.join(",")}) VALUES(${keys.map(() => "?").join(",")})`).run(...values).lastInsertRowid);
+    } else if (!database.prepare(`UPDATE important_dates SET ${keys.map(key => `${key}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...values, id).changes) {
+      database.exec("ROLLBACK"); return null;
+    }
+    if (input.category && input.categoryColor !== undefined) database.prepare("INSERT INTO important_date_categories(name,color) VALUES(?,?) ON CONFLICT(user_id,name) DO UPDATE SET color=excluded.color,updated_at=CURRENT_TIMESTAMP").run(input.category,input.categoryColor);
+    syncImportantDateReminder(id);
+    const item = listImportantDates().find(item => item.id === id)!;
+    database.exec("COMMIT"); return item;
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}
+export function deleteImportantDate(id: number) {
+  database.exec("BEGIN");
+  try {
+    const removed = database.prepare("DELETE FROM important_dates WHERE id=? AND user_id='local'").run(id).changes > 0;
+    if (removed) syncImportantDateReminder(id);
+    database.exec("COMMIT"); return removed;
+  } catch (error) { database.exec("ROLLBACK"); throw error; }
+}

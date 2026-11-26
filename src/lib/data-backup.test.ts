@@ -37,6 +37,16 @@ test("backup allowlist excludes credentials and HealthKit energy infrastructure"
   assert.ok(EXCLUDED_BACKUP_TABLES.includes("healthkit_daily_energy"));
 });
 
+test("Days category colors survive backup and older backups default to an empty category palette",()=>{
+  const resources=emptyBackupResources();
+  resources.important_date_categories=[{user_id:"owner",name:"Life",color:"#75846F"}];
+  assert.deepEqual(sanitizeExportRow("important_date_categories",resources.important_date_categories[0]),{name:"Life",color:"#75846F"});
+  const older={...resources};delete (older as Partial<typeof resources>).important_date_categories;
+  const document={backup_version:20,exported_at:"2026-11-26T00:00:00Z",schema:{supabase_migration:"old"},source:{backend:"sqlite"},resources:older};
+  assert.deepEqual(parseBackupDocument(document).resources.important_date_categories,[]);
+  assert.throws(()=>parseBackupDocument({...document,backup_version:BACKUP_VERSION}),/important_date_categories/);
+});
+
 test("paper backups retain audit and usage but never resume an interrupted worker on restore", () => {
   const resources = { ...emptyBackupResources() };
   delete (resources as Partial<typeof resources>).eva_jobs;

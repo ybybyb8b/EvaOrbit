@@ -1,6 +1,6 @@
 export type ReminderDeliveryChannel = "native_local" | "web_push";
 export type ReminderDomainRule = "scheduled" | "tracker_missing" | "period_medication" | "missing_record";
-export type ReminderProjectionOwner = "reminder" | "cat_routine" | "cat_food" | "tracker" | "subscription" | "task" | "medication_preset" | "meal_rule" | "weight_settings" | "unknown";
+export type ReminderProjectionOwner = "reminder" | "cat_routine" | "cat_food" | "tracker" | "subscription" | "task" | "medication_preset" | "meal_rule" | "weight_settings" | "important_date" | "unknown";
 
 export type ReminderSourceDefinition = {
   sourceType: string | null;
@@ -15,6 +15,7 @@ const localAndPush = ["native_local", "web_push"] as const;
 const pushOnly = ["web_push"] as const;
 
 export const REMINDER_SOURCE_REGISTRY = {
+  important_date: { sourceType: "important_date", businessFact: "important_date", projectionOwner: "important_date", domainRule: "scheduled", label: "Days", channels: pushOnly },
   manual: { sourceType: null, businessFact: "reminder", projectionOwner: "reminder", domainRule: "scheduled", label: "Reminder", channels: localAndPush },
   cat_routine: { sourceType: "cat_routine", businessFact: "cat_routine", projectionOwner: "cat_routine", domainRule: "scheduled", label: "Routine", channels: localAndPush },
   vet_visit: { sourceType: "vet_visit", businessFact: "vet_visit", projectionOwner: "reminder", domainRule: "scheduled", label: "Cats", channels: localAndPush },

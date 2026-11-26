@@ -1,5 +1,13 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## 日历来源颜色
+
+既有 bridge v1 的 eventkit.getStatus 在来源中增加可选 HEX color，读取 EKCalendar.cgColor，转换 RGB／灰阶并限制 sRGB 通道范围。没有新方法、权限、framework 或 entitlement。Web 按旧 Host 缺少 color 降级，自选颜色保存到既有账户偏好，服务端从账户绑定投影至 Home；修改已有日历、同步方向及签名安装链的行为保持既有契约。无需 SQL 迁移，先发布兼容 Web/API，再按原链路重建并覆盖安装 IPA。已加入颜色序列化 XCTest，Windows 无法运行 Swift/Xcode/iPhone 验收。
+
+## Days 重要日子
+
+本地 React 通过现有 `business.request` 与共享 `business-routes.json` 访问重要日子 GET／POST、单条 GET／PUT／DELETE；沿用账户隔离的访问缓存，离线只读，不建立写入队列。HostConfiguration 与 React 原生导航白名单新增 `/days`，Bark 点击进入模块；不增加 Bridge 方法、权限、framework 或 entitlement，签名安装链保持原样。日期提醒先使用服务端 Bark／Web Push，不进入 EventKit 或 Native 本地通知。先应用重要日子迁移、发布 Web/API，再重建并覆盖安装本地 IPA；旧 IPA 没有新模块与深链路径。Windows 浏览器／Node 检查不替代 macOS XCTest 和 iPhone 深链、键盘验收。
+
 ## Parlor 单聊消息操作
 
 Bridge v1 增加可选方法 `ai.retryMessage` 和 `ai.deleteMessage`，沿用本地主 frame、账户与 generation 校验，旧 IPA 按能力隐藏入口。重试复用原提问、原模型和原回复位置，从原提问之前的历史重建上下文，显式生成一次回答。曾使用 EvaOrbit 的消息重试只生成回答，已确认的业务操作不会重放。删除只移除目标消息，沿用 SQLite 的上下文、自动记忆来源和 Echo 草稿失效规则。已有独立人格记忆继续由 Memory 管理。无需数据库迁移、权限或签名配置变更。新方法需重建 IPA，Windows 浏览器结果不能替代 Xcode 与 iPhone 键盘实测。

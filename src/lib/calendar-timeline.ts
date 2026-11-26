@@ -40,7 +40,7 @@ export function buildCalendarTimelineEvents(records: CalendarEvent[], range: { f
         title: record.title, detail: record.location, occurredAt: record.isAllDay ? `${record.startAt}T12:00:00.000Z` : new Date(record.startAt).toISOString(),
         hasExplicitTime: !record.isAllDay, endAt: record.endAt, href: `/#calendar-event-${record.id}`,
         relatedPeople: [], relatedPets: [],
-        metadata: { timelineDate: date, startAt: record.startAt, endAt: record.endAt, isAllDay: record.isAllDay, notes: record.notes, location: record.location, timezone: record.timezone, status: record.status },
+        metadata: { timelineDate: date, startAt: record.startAt, endAt: record.endAt, isAllDay: record.isAllDay, notes: record.notes, location: record.location, timezone: record.timezone, status: record.status, ...(record.calendarSource ? { calendarSource: record.calendarSource } : {}) },
       });
     }
   }

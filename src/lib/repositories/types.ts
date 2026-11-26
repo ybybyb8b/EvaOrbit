@@ -156,6 +156,10 @@ export type NewRelationPerson = Omit<RelationPerson, "id" | "photoPath" | "archi
 export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: string | null; archivedAt?: string | null };
 
 export interface EvaOrbitRepository {
+  listImportantDateCategories(): Promise<import("../important-dates").ImportantDateCategory[]>;
+  listImportantDates(): Promise<import("../important-dates").ImportantDate[]>;
+  saveImportantDate(id: number | null, input: import("../important-dates").ImportantDateInput): Promise<import("../important-dates").ImportantDate | null>;
+  deleteImportantDate(id: number): Promise<boolean>;
   eva: import("../eva").EvaStore;
   deleteInsightReport(id: string, expectedVersion: number, expectedGeneration: number): Promise<void>;
   getInsightVersionForRequest(requestKey: string): Promise<import("../insight-reports").InsightVersion | null>;

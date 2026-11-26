@@ -16,5 +16,5 @@ test("Reminder source registry keeps deterministic and conditional channels sepa
   assert.equal(reminderSourceDefinition("task_reminder").projectionOwner, "task");
   assert.equal(reminderSourceDefinition("cat_food_restock").projectionOwner, "cat_food");
   assert.equal(reminderSourceDefinition("unregistered").channels.length, 0);
-  assert.equal(Object.keys(REMINDER_SOURCE_REGISTRY).length, 13);
+  assert.equal(Object.keys(REMINDER_SOURCE_REGISTRY).length, 14);
 });

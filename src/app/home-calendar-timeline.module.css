@@ -117,6 +117,10 @@
   --timeline-oat: #c3b28f;
   --timeline-lilac: #b9afcd;
 }
+.timePlot [data-calendar-color] { --mark: var(--calendar-ink-light); }
+:global(html[data-mode="dark"]) .timePlot [data-calendar-color] { --mark: var(--calendar-ink-dark); }
+.untimedList > li[data-calendar-color] .untimedKind { color: var(--text-secondary); }
+.untimedList > li[data-calendar-color] .timelineEntry { background: color-mix(in srgb, var(--calendar-color) 9%, transparent); }
 .timeDot {
   position: absolute;
   left: 50%;

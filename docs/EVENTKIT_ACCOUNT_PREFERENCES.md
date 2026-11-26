@@ -1,5 +1,11 @@
 # EventKit 同步偏好与重装恢复
 
+## 日历来源颜色
+
+`eventkit.getStatus` 的来源增加可选六位 HEX `color`，由 Native 读取 EKCalendar.cgColor。账户偏好 sources 保存原色及可选 colorOverride；读取来源时刷新 Apple 原色，改同步方式和重装恢复保留自选色。设置提供跟随 Apple 和五种 Vintage 低饱和色。旧 Host 缺少 color 时保留已知原色，未知来源沿用默认色。
+
+Home 通过账户隔离的 EventKit 历史绑定关联已有事件，以最新 binding 匹配来源，优先自选色，再取 Apple 原色。Calendar DTO 的可选 calendarSource 进入 Timeline metadata 和 Home 快照，日历关联记录及日历餐次沿用该颜色。条目高光与浅底由共享样式生成，极浅／极深原色的轴线按 Vintage 背景调整亮度。无需修改日历事件或重新导入，也无需新增 SQL schema。来源偏好保存和 Native 原色变化会通知 Home 刷新。需要发布 Web/API 并重建 React／Swift IPA，Windows 检查不代表原生或真机验收。
+
 EventKit 自动同步和手动 Sync all 共用分项编排：Calendar／Reminders 的权限、错误与结果分别处理，账户失效或切换才共同中止；本地 Health 待写回和通知校准也独立收集错误。近期发现每轮执行，历史按季度与有限关联批次继续；完成断点只记录已解决项，未解决项以 30 秒至 10 分钟退避重新核对，手动可重试。执行断点版本升级仅重建元数据，不清业务数据或队列。Reminder Import all 改走原子导入，Tasks／Reminders 使用专用 ID 分页读取。新 API／数据库函数须先发布，本地包与恢复索引优化须重建 IPA；Windows 检查不等于原生实测。 日期下界与身份防重规则继续遵循 [Apple 同步范围](APPLE_SYNC_SCOPE.md)。
 
 设置页分别提供 `Sync Calendar`、`Sync Reminders`，保留 `Sync all`。单项执行只处理对应类型，不修改已保存的来源或路由；一键同步依次执行两项，错误和最近成功时间各自显示，一项失败仍检查另一项。共享同步锁按范围区分同次请求，不同范围等待当前操作结束，避免并发写入或把另一类型的结果当成本次结果。来源及 Reminder domain 路由默认折叠，摘要展示当前选择。权限请求继续分别进行，不由同步按钮代为申请。

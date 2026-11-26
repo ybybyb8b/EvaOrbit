@@ -263,6 +263,7 @@ export interface TaskReminder {
 
 export type CalendarEventStatus = "confirmed" | "tentative" | "cancelled";
 export interface CalendarEvent {
+  calendarSource?: { name: string; color?: string };
   id: number;
   title: string;
   notes: string;
@@ -1210,7 +1211,7 @@ export interface CatTimelineEntry {
   metadata: Record<string, unknown>;
 }
 
-export type ReminderTargetType = "cat" | "cat_household" | "cat_food" | "tracker" | "health" | "subscription" | "task";
+export type ReminderTargetType = "cat" | "cat_household" | "cat_food" | "tracker" | "health" | "subscription" | "task" | "important_date";
 export type ReminderScheduleType = "one_time" | "interval" | "course";
 export type ReminderIntervalUnit = "hour" | "day" | "week" | "month";
 export type CatRoutineScope = "cat" | "household";

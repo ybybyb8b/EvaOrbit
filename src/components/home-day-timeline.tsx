@@ -1,11 +1,18 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode, type CSSProperties } from "react";
 import { ArrowRight2 } from "reicon-react";
 import { FormSheet } from "./form-sheet";
 import { dateRange } from "@/lib/time";
+import { homeDurationLabel } from "@/lib/home-day";
 import type { FoodLog, TimelineEvent } from "@/lib/types";
 import styles from "@/app/home-calendar-timeline.module.css";
+import { calendarColorInk, timelineCalendarColor } from "@/lib/calendar-colors";
+
+function calendarColorProps(item: TimelineEvent) {
+  const color = timelineCalendarColor(item);
+  return { "data-calendar-color": color || undefined, style: color ? { "--calendar-color": color, "--calendar-ink-light": calendarColorInk(color, false), "--calendar-ink-dark": calendarColorInk(color, true) } as CSSProperties : undefined };
+}
 
 const minute = 60_000;
 const hour = 60 * minute;
@@ -53,15 +60,15 @@ function dayMarks(events: TimelineEvent[], date: string) {
   const start = first - 15 * minute;
   const last = Math.max(first, ...marks.map(mark => mark.end));
   const end = Math.min(to, last + 20 * minute);
-  const gaps: Array<{ start: number; end: number }> = [];
-  let occupiedUntil = first;
-  for (const mark of marks) {
-    if (mark.start - occupiedUntil > hour) gaps.push({ start: occupiedUntil, end: mark.start });
-    occupiedUntil = Math.max(occupiedUntil, mark.end);
+  const gaps: Array<{ start: number; end: number; occupied: boolean }> = [];
+  const eventTimes = [...new Set(marks.flatMap(mark => [mark.start, mark.end]))].sort((a, b) => a - b);
+  for (let index = 1; index < eventTimes.length; index++) {
+    const start = eventTimes[index - 1], end = eventTimes[index];
+    if (end - start > hour) gaps.push({ start, end, occupied: marks.some(mark => mark.start <= start && mark.end >= end) });
   }
   const position = (time: number) => (time - start) / hour * pixelsPerHour - gaps.reduce((removed, gap) => {
     const fraction = Math.max(0, Math.min(1, (time - gap.start) / (gap.end - gap.start)));
-    return removed + fraction * ((gap.end - gap.start) / hour * pixelsPerHour - 62);
+    return removed + fraction * ((gap.end - gap.start) / hour * pixelsPerHour - (gap.occupied ? 80 : 62));
   }, 0);
   const labels: Mark[][] = [];
   for (const mark of marks) {
@@ -102,7 +109,7 @@ export function HomeDayTimeline({ date, events, english, timeLabel, titleFor, re
   const groupCount = (count: number) => english ? `${count} events` : `${count} 条记录`;
   const height = position(end);
   const lastLabel = labels.at(-1)?.[0];
-  const untimedRow = (item: TimelineEvent) => <li key={item.id}>
+  const untimedRow = (item: TimelineEvent) => <li key={item.id} {...calendarColorProps(item)}>
     <span className={styles.untimedKind}>{allDay.includes(item) ? english ? "All day" : "全天" : english ? "Date only" : "仅日期"}</span>
     {renderEntry(item, "untimed")}
   </li>;
@@ -120,10 +127,10 @@ export function HomeDayTimeline({ date, events, english, timeLabel, titleFor, re
     {lastLabel && <div className={styles.timePlot} style={{ minHeight: Math.max(height + 10, position(lastLabel.start) + 42) }}>
       <div className={styles.timeRuler} style={{ height }} aria-hidden="true" />
       {gaps.map(gap => <span key={gap.start} className={styles.timeGap} style={{ top: (position(gap.start) + position(gap.end)) / 2 }}>
-        {english ? `${Math.round((gap.end - gap.start) / minute)}m gap` : `间隔 ${Math.round((gap.end - gap.start) / minute)} 分钟`}
+        {gap.occupied ? `${homeDurationLabel(Math.round((gap.end - gap.start) / minute), english)} · ${english ? "compressed" : "已压缩"}` : english ? `${Math.round((gap.end - gap.start) / minute)}m gap` : `间隔 ${Math.round((gap.end - gap.start) / minute)} 分钟`}
       </span>)}
       {segments.map(segment => <div key={segment.start} className={styles.timeSegment} style={{ top: position(segment.start), height: position(segment.end) - position(segment.start), borderRadius: `${segment.intervals.every(mark => mark.start === segment.start) ? 2 : 0}px ${segment.intervals.every(mark => mark.start === segment.start) ? 2 : 0}px ${segment.intervals.every(mark => mark.end === segment.end) ? 2 : 0}px ${segment.intervals.every(mark => mark.end === segment.end) ? 2 : 0}px` }} aria-hidden="true">
-        {segment.intervals.map(({ item }, index) => <span key={item.id} data-interval={item.id} data-source={item.sourceType} data-overlap={index > 0 || undefined} className={styles.timeInterval} />)}
+        {segment.intervals.map(({ item }, index) => <span key={item.id} data-interval={item.id} data-source={item.sourceType} data-overlap={index > 0 || undefined} className={styles.timeInterval} {...calendarColorProps(item)} />)}
       </div>)}
       {labels.map((items, index) => {
         const first = items[0];
@@ -134,14 +141,14 @@ export function HomeDayTimeline({ date, events, english, timeLabel, titleFor, re
         const firstLane = first.lane >= 0 ? first.lane : showBoth && second.lane >= 0 ? second.lane + 1 : index;
         const firstSide = firstLane % 2 ? "right" : "left";
         const secondSide = firstSide === "left" ? "right" : "left";
-        const points = new Map<number, string>();
+        const points = new Map<number, TimelineEvent | null>();
         for (const { start, lane, item } of items) {
-          if (lane === -1) points.set(start, points.has(start) ? "mixed" : item.sourceType);
+          if (lane === -1) points.set(start, points.has(start) ? null : item);
         }
         return <div key={first.item.id} className={styles.timeLabel} style={{ top: position(first.start) }}>
-          {[...points].map(([time, source]) => <span key={time} className={styles.timeDot} style={{ top: position(time) - position(first.start) }} data-source={source} aria-hidden="true" />)}
-          <div className={styles.timeCard} data-side={firstSide} data-source={first.item.sourceType} data-duration={first.lane >= 0 || undefined}>{renderEntry(first.item, "axis")}</div>
-          {second && <div className={styles.timeCard} style={{ top: showBoth ? position(second.start) - position(first.start) : 0 }} data-side={secondSide} data-source={second.item.sourceType} data-duration={showBoth && second.lane >= 0 || undefined}>
+          {[...points].map(([time, item]) => <span key={time} className={styles.timeDot} {...(item ? calendarColorProps(item) : {})} style={{ ...(item ? calendarColorProps(item).style : {}), top: position(time) - position(first.start) }} data-source={item?.sourceType ?? "mixed"} aria-hidden="true" />)}
+          <div className={styles.timeCard} {...calendarColorProps(first.item)} data-side={firstSide} data-source={first.item.sourceType} data-duration={first.lane >= 0 || undefined}>{renderEntry(first.item, "axis")}</div>
+          {second && <div className={styles.timeCard} {...calendarColorProps(second.item)} style={{ ...calendarColorProps(second.item).style, top: showBoth ? position(second.start) - position(first.start) : 0 }} data-side={secondSide} data-source={second.item.sourceType} data-duration={showBoth && second.lane >= 0 || undefined}>
             {showBoth ? renderEntry(second.item, "axis") : <button type="button" className={`${styles.timelineEntry} ${styles.timeGroup}`} aria-haspopup="dialog" onClick={() => setGroup(items)}>
               <span className={styles.entryCopy}><strong className="user-content">{titleFor(second.item)}{items.length > 2 && ` +${items.length - 2}`}</strong><small>{groupTime(items)} · {groupCount(items.length)}</small></span>
               <ArrowRight2 size={13} aria-hidden="true" />

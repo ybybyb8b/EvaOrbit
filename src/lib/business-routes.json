@@ -771,5 +771,24 @@
       "GET",
       "POST"
     ]
+  },
+  {
+    "pattern": "^/api/important-dates/categories$",
+    "methods": ["GET"]
+  },
+  {
+    "pattern": "^/api/important-dates$",
+    "methods": [
+      "GET",
+      "POST"
+    ]
+  },
+  {
+    "pattern": "^/api/important-dates/[1-9][0-9]*$",
+    "methods": [
+      "GET",
+      "PUT",
+      "DELETE"
+    ]
   }
 ]

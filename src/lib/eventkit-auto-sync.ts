@@ -5,6 +5,7 @@ import {responseError} from "./response-error.ts";
 import { eventKitSupported, getNativeHostInfo, nativeCall } from "./native-bridge.ts";
 import { eventKitCalendarReadModes, synchronizeEventKitScopes, type EventKitModes, type EventKitReminderRoutes, type EventKitSource, type EventKitStatus } from "./eventkit-sync.ts";
 import { captureEventKitPreferences, parseEventKitPreferences, resolveEventKitPreferences, type EventKitPreferences } from "./eventkit-preferences.ts";
+import { notifyDataChanged } from "./data-changed.ts";
 
 export const eventKitSourcesKey = "evaorbit.eventkit.sources.v1";
 export const eventKitRoutesKey = "evaorbit.eventkit.routes.v1";
@@ -48,7 +49,18 @@ async function readAccountPreferences(status: EventKitStatus) {
     localStorage.setItem(eventKitSourcesKey, "{}"); localStorage.setItem(eventKitRoutesKey, "{}");
   }
   localStorage.setItem(accountKey, account.userId);
-  if (account.preferences) return cacheResolved(parseEventKitPreferences(account.preferences), status);
+  if (account.preferences) {
+    const preferences = parseEventKitPreferences(account.preferences);
+    const resolved = resolveEventKitPreferences(preferences, status);
+    const hasColors = status.calendars.some(source => source.color) || preferences.sources.some(source => source.kind === "calendar" && source.colorOverride);
+    const refreshed = hasColors ? captureEventKitPreferences(status, resolved.modes, resolved.routes, preferences) : preferences;
+    if (JSON.stringify(refreshed) !== JSON.stringify(preferences)) {
+      const saved = await preferenceRequest({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: refreshed, revision: account.revision }) });
+      void notifyDataChanged(["calendar"], "eventkit").catch(() => {});
+      return cacheResolved(parseEventKitPreferences(saved.preferences), status);
+    }
+    return cacheResolved(preferences, status);
+  }
   const modes = eventKitCalendarReadModes(status.calendars, storedEventKitModes()), routes = storedEventKitRoutes(modes, status.reminderLists);
   // First upgrade uploads the existing local choices once; a fresh install never overwrites an account backup with empty choices.
   if (Object.keys(modes).length || Object.keys(routes).length) {
@@ -69,16 +81,24 @@ export async function loadEventKitAccountPreferences(status: EventKitStatus) {
   }
   return preferenceLoad;
 }
-export function saveEventKitAccountPreferences(status: EventKitStatus, modes: EventKitModes, routes: EventKitReminderRoutes, changedSources: string[] = []) {
+export function saveEventKitAccountPreferences(status: EventKitStatus, modes: EventKitModes, routes: EventKitReminderRoutes, changedSources: string[] = [], colors: Record<string, string | null> = {}) {
   const save = preferenceWrites.catch(() => {}).then(async () => {
     // Finish any startup restore before a user edit is saved, preserving inaccessible source choices.
     if (preferenceLoad) await preferenceLoad;
     const account = await preferenceRequest();
     if (account.available) {
       const preferences = captureEventKitPreferences(status, modes, routes, account.preferences ? parseEventKitPreferences(account.preferences) : undefined, changedSources);
+      preferences.sources = preferences.sources.map(source => {
+        if (source.kind !== "calendar" || !(source.identifier in colors)) return source;
+        const next = { ...source };
+        delete next.colorOverride;
+        return colors[source.identifier] ? { ...next, colorOverride: colors[source.identifier]! } : next;
+      });
       const saved = await preferenceRequest({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences, revision: account.revision }) });
+      void notifyDataChanged(["calendar"], "eventkit").catch(() => {});
       return cacheResolved(parseEventKitPreferences(saved.preferences), status);
     }
+    if (Object.keys(colors).length) throw new Error("日历来源颜色需要连接 EO 账户后保存");
     localStorage.setItem(eventKitSourcesKey, JSON.stringify(modes)); localStorage.setItem(eventKitRoutesKey, JSON.stringify(routes));
     return { modes, routes, unresolved: 0 };
   });

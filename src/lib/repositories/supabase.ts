@@ -1,4 +1,7 @@
 import "server-only";
+import { colorCalendarRecords, type CalendarColorBinding } from "../calendar-colors";
+import { parseEventKitPreferences } from "../eventkit-preferences";
+import { importantDateFromRow, importantDateToRow } from "../important-dates";
 import { chronicleSearchDates } from "../chronicle";
 import { finishMemoryPage, prepareMemoryPage, type MemoryPageInput, type MemoryPageItem, type MemoryResource, type MemorySourceMatch } from "../memory-pagination";
 import { createSupabaseEvaStore } from "./eva-supabase";
@@ -283,6 +286,32 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string, agent?:
     return logs.map(log=>({...log,foodPlaces:(log.foodPlaceIds??[]).flatMap(id=>places.has(id)?[places.get(id)!]:[]),foodDishes:(log.foodDishIds??[]).flatMap(id=>{const row=dishes.get(id);return row?[{id,name:String(row.name),...(row.food_place_id!=null?{foodPlaceId:Number(row.food_place_id)}:{}),...(row.food_library_id!=null?{foodLibraryId:Number(row.food_library_id)}:{})}]:[];})}));
   }
   const repository: EvaOrbitRepository = {
+    async listImportantDateCategories() {
+      const items: {name:string;color:string|null}[] = [];
+      for (let offset=0;;offset+=500) {
+        const {data,error}=await client.from("important_date_categories").select("name,color").eq("user_id",userId).order("name").range(offset,offset+499);
+        fail(error,"读取日子分类");
+        items.push(...(data as Row[]).map(row=>({name:String(row.name),color:row.color ? String(row.color) : null})));
+        if(data!.length<500) return items;
+      }
+    },
+    async listImportantDates() {
+      const colors=new Map((await repository.listImportantDateCategories()).map(item=>[item.name,item.color]));
+      const items = [];
+      for (let offset = 0; ; offset += 500) {
+        const {data,error} = await client.from("important_dates").select("*").eq("user_id",userId).order("id").range(offset,offset+499);
+        fail(error,"读取重要日子");
+        items.push(...(data as Row[]).map(row=>importantDateFromRow({...row,category_color:colors.get(String(row.category))??null})));
+        if (data!.length < 500) return items;
+      }
+    },
+    async saveImportantDate(id,input) {
+      const values={...importantDateToRow(input),...(input.categoryColor!==undefined ? {category_color:input.categoryColor} : {})};
+      const {data,error}=await client.rpc("save_important_date",{p_id:id,p_input:values});
+      if(error?.code==="P0002") return null;
+      fail(error,"保存重要日子");return data?importantDateFromRow(data as Row):null;
+    },
+    async deleteImportantDate(id) {const {data,error}=await client.from("important_dates").delete().eq("id",id).eq("user_id",userId).select("id").maybeSingle();fail(error,"删除重要日子");return Boolean(data);},
     eva: createSupabaseEvaStore(client),
     async deleteInsightReport(id,version,generation){const{error}=await client.rpc('delete_insight_report',{p_report_id:id,p_expected_version:version,p_expected_generation:generation});if(error?.message.includes('INSIGHT_'))throw new ConflictError('日报已更新或不存在，请刷新后再删除。');fail(error,'删除日报');},
     async getInsightVersionForRequest(key){const{data,error}=await client.from('insight_report_versions').select('*').eq('user_id',userId).eq('request_key',key).maybeSingle();fail(error,'读取复盘请求结果');return data?insightVersionFromRow(data):null;},
@@ -464,7 +493,33 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string, agent?:
     async createTaskReminder(input) { const {data,error}=await client.from("task_reminders").insert({user_id:userId,task_id:input.taskId,reminder_id:input.reminderId,trigger_type:input.triggerType,absolute_date:input.absoluteDate,absolute_time:input.absoluteTime,relative_to:input.relativeTo,offset_minutes:input.offsetMinutes,timezone:input.timezone,repeat_while_overdue:input.repeatWhileOverdue,delivery_channel:input.deliveryChannel??"pwa"}).select().single(); fail(error,"创建任务提醒"); return taskReminderFromRow(data); },
     async updateTaskReminder(id,input) { return catUpdate("task_reminders",id,input,{reminderId:"reminder_id",triggerType:"trigger_type",absoluteDate:"absolute_date",absoluteTime:"absolute_time",relativeTo:"relative_to",offsetMinutes:"offset_minutes",timezone:"timezone",repeatWhileOverdue:"repeat_while_overdue",deliveryChannel:"delivery_channel"},taskReminderFromRow); },
     async deleteTaskReminder(id) { const {data,error}=await client.from("task_reminders").delete().eq("id",id).select("id").maybeSingle(); fail(error,"删除任务提醒"); return Boolean(data); },
-    async listCalendarEvents(input={}) { let query=client.from("calendar_events").select("*"); if(input.query)query=query.or(`title.ilike.%${foodLibrarySearchValue(input.query)}%,notes.ilike.%${foodLibrarySearchValue(input.query)}%,location.ilike.%${foodLibrarySearchValue(input.query)}%`);if(input.from)query=query.gte("end_at",input.from);if(input.to)query=query.lte("start_at",input.to);if(input.status)query=query.eq("status",input.status);if(input.afterId!==undefined)query=query.gt("id",input.afterId);else query=query.order("start_at");const{data,error}=await query.order("id").limit(Math.min(Math.max(input.limit??200,1),500));fail(error,"读取日历事件");return(data as Row[]).map(calendarEventFromRow);},
+    async listCalendarEvents(input={}) {
+      let query=client.from("calendar_events").select("*");
+      if(input.query)query=query.or(`title.ilike.%${foodLibrarySearchValue(input.query)}%,notes.ilike.%${foodLibrarySearchValue(input.query)}%,location.ilike.%${foodLibrarySearchValue(input.query)}%`);
+      if(input.from)query=query.gte("end_at",input.from);
+      if(input.to)query=query.lte("start_at",input.to);
+      if(input.status)query=query.eq("status",input.status);
+      if(input.afterId!==undefined)query=query.gt("id",input.afterId);else query=query.order("start_at");
+      const {data,error}=await query.order("id").limit(Math.min(Math.max(input.limit??200,1),500));
+      fail(error,"读取日历事件");
+      const records = (data as Row[]).map(calendarEventFromRow);
+      if (!records.length) return records;
+      const preferences = await client.from("eventkit_preferences").select("preferences").eq("user_id",userId).maybeSingle();
+      fail(preferences.error,"读取日历来源配色");
+      if (!preferences.data) return records;
+      const sources = parseEventKitPreferences(preferences.data.preferences).sources.filter(source => source.kind === "calendar");
+      if (!sources.length) return records;
+      const bindings: CalendarColorBinding[] = [];
+      let cursor = 0;
+      for (;;) {
+        const page = await client.from("eventkit_links").select("id,eo_id,calendar_identifier,source_identifier,last_synced_at").eq("user_id",userId).eq("entity_type","calendar_event").in("eo_id",records.map(record => record.id)).gt("id",cursor).order("id").limit(500);
+        fail(page.error,"读取日历来源关联");
+        if (!page.data?.length) break;
+        bindings.push(...page.data);
+        cursor = Number(page.data[page.data.length - 1].id);
+      }
+      return colorCalendarRecords(records,bindings,sources);
+    },
     async getCalendarEvent(id) { const{data,error}=await client.from("calendar_events").select("*").eq("id",id).maybeSingle();fail(error,"读取日历事件");return data?calendarEventFromRow(data):null;},
     async createCalendarEvent(input:NewCalendarEvent) { const{data,error}=await client.from("calendar_events").insert({user_id:userId,title:input.title,notes:input.notes,start_at:input.startAt,end_at:input.endAt,is_all_day:input.isAllDay,timezone:input.timezone,location:input.location,status:input.status}).select().single();fail(error,"创建日历事件");return calendarEventFromRow(data);},
     async updateCalendarEvent(id,input) { const patch=mappedPatch(input,{title:"title",notes:"notes",startAt:"start_at",endAt:"end_at",isAllDay:"is_all_day",timezone:"timezone",location:"location",status:"status"});if(!Object.keys(patch).length)return repository.getCalendarEvent(id);const{data,error}=await client.from("calendar_events").update(patch).eq("id",id).select().maybeSingle();fail(error,"更新日历事件");return data?calendarEventFromRow(data):null;},

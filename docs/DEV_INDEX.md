@@ -18,6 +18,7 @@
 | --- | --- |
 | [Core](#core) | 数据访问、认证、全局 UI、时间、缓存与备份 |
 | [Home](#home) | `/`：日历、每日聚合、提醒与今日一记 |
+| [Days](#days) | `/days`：如期，重要日子的正数／倒数、年度纪念与提醒 |
 | [Food](#food) | `/food-drink`、`/food`、`/drinks/history`、`/food/places`、`/food/library` |
 | [Health](#health) | `/health`：睡眠、体重、能量、周期与健康记录 |
 | [Training](#training) | `/health?view=training`：训练记录与循环计划 |
@@ -52,6 +53,7 @@
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，保留 HTTP 状态及业务 code；[request-diagnostics.ts](../src/lib/request-diagnostics.ts) 与 Native `NativeDiagnostics.swift` 在共用边界记录模块操作、失败步骤和安全诊断码，不依赖 Next、不自动重试请求，也不输出正文或查询参数，见 [错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
 - **共享外观**：Web 与本地版统一使用 Vintage。首次绘制和运行时都应用 [Vintage 语义色、字体与表面](../src/app/vintage-theme.css)，首页任务汇总同时呈现到期提醒。独立 [Due 卡组件](../src/components/due-reminders-view.tsx) 和 [Classic 插画图标](../src/components/icons.tsx) 保留备用。两端共用 [AppearanceSettings](../src/components/appearance-settings.tsx)，支持语言、字体与浅色／深色／跟随系统。本地只写设备存储，Web 沿用外观偏好 API。历史数据库迁移保留，当前偏好 API 只处理语言、字体与显示模式。本地初始语言与英文字体为英语／August，旧字体键 `ibm` 对应 August。
 - **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一设置目录；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
+- **标题字体**：Web 与本地 React 共用 [fonts.css](../src/app/fonts.css) 的固定仓耳雅月体与 [Vintage 标题规则](../src/app/vintage-theme.css)，不加入字体备选或偏好 schema。`--font-heading` 保留所选英文字体，雅月体仅承担中文字符；中文界面页面标题为 28–36px、正常字距和原生字重。正文／控件仍用华新体，数值展示保留原有字体角色。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
 - **共享记录入口**：[bottom-log-core.tsx](../src/components/bottom-log-core.tsx) 统一页面动作注册、最新回调及过期清理；Web 包装注入 Next 路径，本地 Provider 提供模块路径，两端共用底栏、Log 触发器、选择器及 [菜单定义](../src/components/quick-log-options.ts)。本地 [Universal Log](../src/local-trackers/quick-log.tsx) 与 Tracker 页面经 [tracker-session.ts](../src/local-trackers/tracker-session.ts) 共用会话 Store、字段校验和独立同步队列；首页向表单传递所选日期，一键快速记录沿用当前时间语义。其他模块复用原表单，明确授权的测试账户通过统一在线请求层保存，离线只读适配仍作为读取后备。`FormPreview` 只提供验收状态，具体模块仍须显式拦截提交、删除及未经适配的读取；不能仅凭禁用保存按钮认定安全。
 - **共享导航**：[app-navigation.tsx](../src/components/app-navigation.tsx) 统一 Web 与本地 React 的侧栏菜单、图标、选中状态及手机抽屉（焦点约束、Escape、遮罩关闭和关闭后焦点恢复）。Web 保留全部入口、认证退出和系统协调器，本地仅注入已迁移模块链接；Home/Settings 继续复用底栏，本地不再维护顶部模块按钮。
@@ -72,6 +74,13 @@
 - **数据与接口**：`/api/home-day`、`/api/timeline`；读取 Calendar、Tasks、Food/Drink、Trackers、Health、Cats、Relations、Subscriptions 等原始记录。今日一记使用 `daily_journal_entries` 与 `/api/daily-journal`，服务为 [daily-journal.ts](../src/lib/services/daily-journal.ts)。
 - **依赖与决定**：日/月摘要和时间线由原模块聚合，Home 不另存一套业务记录；编辑仍走所属模块。睡眠摘要复用 Health，日历餐次解析复用 Calendar；Home 快照与全局缓存共享账户隔离存储。
 - **详文**：[客户端缓存](CLIENT_PAGE_CACHE.md)、[睡眠与 Calendar 窗口](HEALTHKIT_SLEEP.md)。
+
+## Days
+
+- **职责与入口**：[Days](../src/app/days/)、[日期计算](../src/lib/important-dates.ts)、[服务](../src/lib/services/important-dates.ts)；`important_dates`，`/api/important-dates` 及 `/:id`。保存用完整 PUT，日期与提醒时间独立，年度事件保留原始日期，2 月 29 日在平年按 2 月 28 日计算。剩余／累计天数按 EvaOrbit 自然日计算，不使用生活日偏移。
+- **共享与本地**：[DaysWorkspace](../src/local-trackers/days-workspace.tsx) 复用 Web 页面与 FormSheet；账户绑定 `business.request` 在线保存，访问过的列表复用既有账户缓存离线读取，不增加 outbox。Home 只读聚合置顶及未来 30 天的重要日子，不生成 Task 或真实发生记录；旧 Home 快照缺少该字段时兼容为空。
+- **提醒与数据**：`important_date` 来源只接 Bark／Web Push，不进入 Due 待办、EventKit 或 Native 本地通知。Postgres trigger 与 SQLite 事务维护唯一提醒投影，改期／归档／删除取消旧排程；既有 Cron 调用受 service_role 限制的年度校准函数，无需打开 App。已过的首次提醒时间跳过；不因改标题／置顶重复发送。分类颜色由 `important_date_categories` 按账户和分类共享，保存日子与选色在同一事务完成；顶部卡片优先手动置顶，否则取最近日子，下方完整列表按日期排列。纳入备份 v21，旧备份兼容为空，未注册新的 MCP 资源。
+- **发布边界**：先应用 `202611260001_important_dates.sql` 与 `202611260002_important_date_categories.sql`，再发布 Web/API，最后按原链路更新本地 IPA。Host 与本地路由只新增 `/days` 深链白名单，不改变 bridge 方法、权限、framework、entitlement 或签名链。农历、人物／猫咪生日关联与小组件后置。
 
 ## Food
 
@@ -176,6 +185,8 @@ Parlor 保留原聊天外观和自动分段气泡。为避免丢失设备偏好�
 - **本地客户端**：[共享 React 入口](../src/local-trackers/)、[本地工作区](../src/local-trackers/tracker-workspace.tsx)、[持久队列与状态机](../src/lib/tracker-local-store.ts)、[协议 2](../src/lib/tracker-local-contract.ts)。Web/本地共用 [登录外观](../src/components/login-surface.tsx)、`PageHeading`、Tracker 创建/记录表单、卡片内容、时间线/筛选、洞察及 [完整设置展示](../src/app/trackers/tracker-settings-view.tsx)；页面数据适配与认证传输分别保留在 Web 与本地入口。设置编辑器由 Web 注入原表单；本地真实账户现已接入独立 Tracker 编辑副本：新建 Tracker、数值/文本属性、记录增删改与基础信息修改；已有云端记录须先完成协议2版本握手再编辑。目标/提醒与认证图片仍来自独立只读快照。本轮编辑使用 `tracker_replica_state` / `replica-v1:`，旧记录和冻结 outbox 始终隔离；可在设置暂停编辑且保留本机草稿。同一IPA在服务端就绪后自动恢复同步，详见 [Tracker 编辑阶段](TRACKER_EDITABLE_REPLICA.md)。浏览器以 IndexedDB、Host 以 SQLite 原子保存记录和 outbox，创建 Tracker 与多个字段一次提交。云端事务 RPC 与数据库行版本覆盖 Web/MCP/Native 并发写入，完整快照处理删除。Web 与本地共用分组和组内 Tracker 排序，顺序按账户保存在当前设备；属性管理、目标/提醒的本地写入迁移仍待后续阶段。范围与验收见 [Tracker Local-first PoC](TRACKER_LOCAL_FIRST_POC.md)。
 
 ## Calendar
+
+- **来源配色**：Apple Integration 的日历来源支持跟随 Apple 原色或覆盖为 Vintage 色；Native status 可选 color → eventkit_preferences sources → 账户 EventKit binding → Calendar DTO calendarSource → Timeline metadata。复用现有偏好与来源恢复，细线和玻璃浅底在共享 Home 渲染。见 [来源偏好](EVENTKIT_ACCOUNT_PREFERENCES.md)。
 
 - **职责与入口**：[calendar-event 服务](../src/lib/services/calendar-event.ts)、[timeline 服务](../src/lib/services/timeline.ts)、[日历解释设置](../src/app/settings/calendar-interpretation/)、[eventkit-sync.ts](../src/lib/eventkit-sync.ts)。主要 UI 在 Home。
 - **数据与接口**：`calendar_events`、`eventkit_links`、`eventkit_logical_links`、`eventkit_preferences`；解释规则通过 Repository 偏好接口保存；`/api/calendar-events`、`/api/calendar-interpretation`、`/api/eventkit/*`、`/api/timeline`，MCP `calendar_event`。

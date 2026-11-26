@@ -3,7 +3,7 @@ import test from "node:test";
 import { takeNativeNavigationPath } from "../local-trackers/native-navigation.ts";
 
 test("native notification paths keep their destination and are consumed once", () => {
-  for (const path of ["/", "/tasks?taskId=123#details", "/settings/notifications?reminderId=42", "/food?date=2026-11-05", "/health", "/memo/123"]) {
+  for (const path of ["/", "/days", "/tasks?taskId=123#details", "/settings/notifications?reminderId=42", "/food?date=2026-11-05", "/health", "/memo/123"]) {
     const host = { __evaorbitPendingPath: path };
     assert.equal(takeNativeNavigationPath(host), path);
     assert.equal(takeNativeNavigationPath(host), null);

@@ -8,6 +8,10 @@ import type { EvaOrbitRepository } from "./types";
  * repository and never writes durable data to Vercel's filesystem.
  */
 export const sqliteRepository: EvaOrbitRepository = {
+  async listImportantDateCategories() { return sqlite.listImportantDateCategories(); },
+  async listImportantDates() { return sqlite.listImportantDates(); },
+  async saveImportantDate(id, input) { return sqlite.saveImportantDate(id, input); },
+  async deleteImportantDate(id) { return sqlite.deleteImportantDate(id); },
   eva: sqlite.evaStore,
   async deleteInsightReport(id,version,generation){sqlite.deleteInsightReport(id,version,generation);},
   async getInsightVersionForRequest(key){return sqlite.getInsightVersionForRequest(key);},
