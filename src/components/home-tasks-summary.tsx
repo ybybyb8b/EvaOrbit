@@ -187,7 +187,7 @@ export function HomeTasksSummary({tasks,completedItems=[],reminders,remindersAva
     </form>;
   }
   return <article className="home-day-pane home-tasks-pane">
-    <header><Checklist size={19} weight="Outline" aria-hidden="true"/><h3><Link href="/tasks">{english?"Tasks":"任务"}</Link></h3><small className="vintage-task-count">{dueCount>0?english?`${dueCount} due`:`${dueCount} 到期`:english?`${entries.length} items`:`${entries.length} 项`}</small><small aria-label={english?"Completed / total":"已完成 / 总数"}>{doneCount}/{entries.length}</small></header>
+    <header><Checklist size={19} weight="Outline" aria-hidden="true"/><h3><Link href="/tasks">{english?"Tasks":"任务"}</Link></h3><span className="home-task-date">{date===today?(english?"Today":"今天"):new Intl.DateTimeFormat(english?"en":"zh-CN",{month:"short",day:"numeric",...(date.slice(0,4)!==today.slice(0,4)?{year:"numeric" as const}:{}),timeZone:EVAORBIT_TIME_ZONE}).format(new Date(`${date}T12:00:00+08:00`))}</span><small className="vintage-task-count">{dueCount>0?english?`${dueCount} due`:`${dueCount} 到期`:english?`${entries.length} items`:`${entries.length} 项`}</small><small aria-label={english?"Completed / total":"已完成 / 总数"}>{doneCount}/{entries.length}</small></header>
     {date!==today&&remaining.length>0&&<p className="vintage-live-label">{english?"Includes reminders pending now":"含当前待处理提醒"}</p>}
     {!remindersAvailable&&<p className="vintage-live-label">{english?"Reminder snapshot unavailable. Connect to refresh.":"提醒快照不可用，请联网刷新。"}</p>}
     <ErrorNotice>{error||taskError}</ErrorNotice>

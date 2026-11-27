@@ -8,13 +8,12 @@ import { useSectionSwipe } from "@/components/use-section-swipe";
 import { useRememberedState } from "@/components/use-remembered-state";
 import { useDataRefresh } from "@/components/use-data-refresh";
 import { PageLogAction } from "@/components/bottom-log-core";
-import { ChoiceSelect } from "@/components/choice-select";
+import {TaskEditor,emptyTaskDraft,type TaskDraft} from "./task-editor";
 import { parseInputTags } from "@/lib/form-input";
-import { SuggestedInput } from "@/components/suggested-input";
 import { showActionToast } from "@/components/action-toast";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { currentLocalDate, DateTimeField, type DateTimeDraft } from "@/components/date-time-field";
+import { currentLocalDate } from "@/components/date-time-field";
 import { FormSheet } from "@/components/form-sheet";
 import { Icon } from "@/components/icons";
 import { useLocale } from "@/components/locale-controller";
@@ -24,14 +23,11 @@ import { playNativeHaptic } from "@/lib/native-haptics";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
 import { groupTasks, taskCalendarDates, taskDateOffset, type TaskGroup } from "@/lib/task-groups";
 import { dateInEvaOrbit } from "@/lib/time";
-import type { ApiError, Task, TaskPriority } from "@/lib/types";
+import type { ApiError, Task } from "@/lib/types";
 import styles from "./task-editor.module.css";
 
 type Status = "all" | "open" | "done";
 const sections = ["list", "month"] as const;
-type ReminderMode="none"|"at_due"|"custom";
-type TaskDraft = { title:string;notes:string;dueDate:string;dueTime:string;completedOn?:string;reminderMode:ReminderMode;reminderDate:string;reminderTime:string;repeatWhileOverdue:boolean;priority:TaskPriority;tags:string };
-const emptyDraft:TaskDraft={title:"",notes:"",dueDate:"",dueTime:"",reminderMode:"none",reminderDate:"",reminderTime:"",repeatWhileOverdue:false,priority:"medium",tags:""};
 
 function dueLabel(task: Task, english: boolean) {
   if (!task.dueDate) return "";
@@ -52,7 +48,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(params.get("new") === "1");
   const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
+  const [draft, setDraft] = useState<TaskDraft>(emptyTaskDraft);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedTag, setSelectedTag] = useRememberedState<string | null>("TasksView:selectedTag", null);
@@ -99,17 +95,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
     return () => { cancelled = true; };
   }, [english, taskId, startEdit,read]);
 
-  function startNew(dueDate = "") { setEditing(null); setDraft({ ...emptyDraft, dueDate, tags: activeTag ?? "" }); setError(""); setShowForm(true); }
-
-  function setDue({ date, time }: DateTimeDraft) {
-    setDraft(current => {
-      const reminderMode = current.reminderMode === "at_due" && (!date || !time) ? "none" : current.reminderMode;
-      return {
-        ...current, dueDate: date, dueTime: date ? time : "", reminderMode,
-        repeatWhileOverdue: Boolean(date && reminderMode !== "none" && current.repeatWhileOverdue),
-      };
-    });
-  }
+  function startNew(dueDate = "") { setEditing(null); setDraft({ ...emptyTaskDraft, dueDate, tags: activeTag ?? "" }); setError(""); setShowForm(true); }
 
   async function refreshNativeNotifications() {
     if(preview)return;
@@ -128,7 +114,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
       });
       const result = await response.json().catch(() => null) as ApiError | null;
       if (!response.ok) throw new Error(english ? "Could not save task." : result?.error ?? "无法保存任务。");
-      setShowForm(false); setEditing(null); setDraft(emptyDraft);
+      setShowForm(false); setEditing(null); setDraft(emptyTaskDraft);
       if (!editing) showActionToast(english ? "Task added" : "任务已添加");
       await load(); await refreshNativeNotifications();
       playNativeHaptic("success");
@@ -219,47 +205,7 @@ export function TasksContent({params}:{params:Pick<URLSearchParams,"get">}) {
   return <div ref={swipeRoot} className="page tasks-page">
     <PageHeader eyebrow={english ? "TASKS" : "任务"} title={english ? "Tasks" : "任务"} description={english ? "A little space for what comes next." : "把想做的事，慢慢变成做好的事。"} action={<PageLogAction label="新增待办" className="button primary" onClick={() => startNew(selectedDueDate)}><Icon name="plus" />{english ? "New task" : "新增任务"}</PageLogAction>} />
     {showForm && <FormSheet title={editing ? (english ? "Edit task" : "编辑任务") : (english ? "New task" : "新增任务")} onClose={() => setShowForm(false)} formId="task-record-form" submitLabel={editing ? (english ? "Save" : "保存") : (english ? "Add task" : "添加任务")} busy={saving} submitDisabled={preview} busyLabel={english ? "Saving…" : "保存中…"} cancelLabel={english ? "Cancel" : "取消"}><form id="task-record-form" className={`editor-card field-focus-surface ${styles.editor}`} onSubmit={submit}>{preview&&<FormPreviewNotice/>}
-      <label className="field"><span>{english ? "Task" : "任务内容"}</span><input required maxLength={160} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} placeholder={english ? "What needs to be done?" : "需要做什么？"} /></label>
-      {draft.completedOn !== undefined && <label className="field"><span>{english ? "Completion date" : "完成日期"}</span><input type="date" required max={dateInEvaOrbit()} value={draft.completedOn} onChange={event => setDraft({ ...draft, completedOn: event.target.value })} /></label>}
-
-      <div className={styles.schedule}>
-        <DateTimeField label={english ? "Due date" : "截止日期"} timeLabel={english ? "Due time" : "截止时间"} optionalDate value={{ date: draft.dueDate, time: draft.dueTime }} onChange={setDue} />
-        <div className={styles.shortcuts} role="group" aria-label={english ? "Due date shortcuts" : "截止日期快捷选项"}>
-          {[[today, english ? "Today" : "今天"], [taskDateOffset(today, 1), english ? "Tomorrow" : "明天"], ["", english ? "No due date" : "不设日期"]].map(([date, label]) =>
-            <button type="button" key={label} data-form-change aria-pressed={draft.dueDate === date} onClick={() => setDue({ date, time: draft.dueTime })}>{label}</button>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.schedule}>
-        <div className="field">
-          <span>{english ? "Reminder" : "提醒"}</span>
-          <ChoiceSelect aria-label={english ? "Reminder" : "提醒"} value={draft.reminderMode} onChange={event => {
-            const reminderMode = event.target.value as ReminderMode;
-            setDraft({ ...draft, reminderMode, repeatWhileOverdue: reminderMode !== "none" && draft.repeatWhileOverdue });
-          }}>
-            <option value="none">{english ? "None" : "不提醒"}</option>
-            <option value="at_due" disabled={!draft.dueDate || !draft.dueTime}>{english ? "At due time" : "截止时提醒"}</option>
-            <option value="custom">{english ? "Custom" : "自定义"}</option>
-          </ChoiceSelect>
-        </div>
-        {draft.reminderMode === "custom" && <div className={styles.reminderDateTime}>
-          <label className="field"><span>{english ? "Reminder date" : "提醒日期"}</span><input type="date" required value={draft.reminderDate} onChange={event => setDraft({ ...draft, reminderDate: event.target.value })} /></label>
-          <label className="field"><span>{english ? "Reminder time" : "提醒时间"}</span><input type="time" required step={draft.reminderTime && Number(draft.reminderTime.slice(3, 5)) % 5 !== 0 ? 60 : 300} value={draft.reminderTime} onChange={event => setDraft({ ...draft, reminderTime: event.target.value })} /></label>
-        </div>}
-        {draft.reminderMode !== "none" && draft.dueDate && <label className={`field ${styles.repeat}`}><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={event => setDraft({ ...draft, repeatWhileOverdue: event.target.checked })} /><span>{english ? "Repeat daily while overdue" : "逾期后每日重复提醒"}</span></label>}
-      </div>
-
-      <div className="field">
-        <span>{english ? "Priority" : "优先级"}</span>
-        <ChoiceSelect aria-label={english ? "Priority" : "优先级"} value={draft.priority} onChange={event => setDraft({ ...draft, priority: event.target.value as TaskPriority })}>
-          <option value="low">{english ? "Low" : "低"}</option>
-          <option value="medium">{english ? "Medium" : "中"}</option>
-          <option value="high">{english ? "High" : "高"}</option>
-        </ChoiceSelect>
-      </div>
-      <div className="field"><span>{english ? "Tags" : "标签"} <small>{english ? "Enter to add" : "回车添加"}</small></span><SuggestedInput aria-label={english ? "Tags" : "标签"} suggestionLabel={english ? "Tags" : "标签"} suggestions={tags} tags value={draft.tags} onValueChange={nextValue => setDraft({ ...draft, tags: nextValue })} placeholder={english ? "Personal, This week" : "生活, 本周"} /></div>
-      <label className="field"><span>{english ? "Notes" : "备注"}</span><textarea rows={2} maxLength={2000} value={draft.notes} onChange={event => setDraft({ ...draft, notes: event.target.value })} placeholder={english ? "Optional context" : "补充上下文（可选）"} /></label>
+      <TaskEditor draft={draft} setDraft={setDraft} tags={tags}/>
       {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
       {editingTask && <button type="button" className="task-delete-button" disabled={preview||saving} onClick={() => void remove(editingTask)}><Icon name="trash" />{english ? "Delete task" : "删除这条任务"}</button>}
     </form></FormSheet>}

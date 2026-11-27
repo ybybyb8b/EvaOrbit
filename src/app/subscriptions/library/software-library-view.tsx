@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 
 import { useBusinessRequest } from "@/components/business-request-context";
 import { useFormPreview, FormPreviewNotice } from "@/components/form-preview";
@@ -183,7 +184,7 @@ export function SoftwareLibraryView({ initial }: { initial: LibraryEntry[] }) {
         <label className="field"><span>{t("Acquired on · optional", "获取日期 · 选填")}</span><input type="date" value={editing.acquiredOn ?? ""} onChange={event => setEditing({ ...editing, acquiredOn: event.target.value || null })} /></label>
         <div className="field"><span>{t("Category · optional", "分类 · 选填")}</span><SuggestedInput aria-label={t("Category · optional","分类 · 选填")} maxLength={24} value={categoryLabel(editing.category)} suggestions={categorySuggestions} suggestionLabel={t("Recommended categories","推荐分类")} recommendationStyle="list" onValueChange={value=>setEditing(current=>current?{...current,category:categories.find(category=>categoryLabel(category)===value)??Object.keys(categoryNames).find(category=>categoryLabel(category)===value)??value}:current)} /></div>
       </div>
-      <label className="field wide"><span>{t("Notes · optional", "备注 · 选填")}</span><textarea rows={3} maxLength={2000} placeholder={t("Where you got it, which account, what to remember…", "领取来源、账号提示，或以后想记得的事…")} value={editing.notes} onChange={event => setEditing({ ...editing, notes: event.target.value })} /></label>
+      <label className="field wide"><span>{t("Notes · optional", "备注 · 选填")}</span><NoteTextarea maxLength={2000} placeholder={t("Where you got it, which account, what to remember…", "领取来源、账号提示，或以后想记得的事…")} value={editing.notes} onChange={event => setEditing({ ...editing, notes: event.target.value })} /></label>
       {error && <ErrorNotice>{error}</ErrorNotice>}
     </form></FormSheet>}
   </div>;

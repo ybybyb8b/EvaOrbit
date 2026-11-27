@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import { Disclosure } from "@/components/disclosure";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
@@ -77,7 +78,7 @@ export function RoutineEditor({ pets, initialPetId, initialScope, editing, onCan
       <label className="field"><span>Remind</span><ChoiceSelect value={draft.reminderLeadMinutes} onChange={e => setDraft({ ...draft, reminderLeadMinutes: Number(e.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></ChoiceSelect></label>
       <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={e=>setDraft({...draft,repeatWhileOverdue:e.target.checked})}/><span>Remind me daily while overdue</span></label>
       </div></Disclosure>
-      <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={3} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label>
+      <label className="field wide"><span>Notes <small>Optional</small></span><NoteTextarea value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })}/></label>
       {editing && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.enabled} onChange={e => setDraft({ ...draft, enabled: e.target.checked })}/><span>Routine enabled</span></label>}
     </div>
     {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={previewOnly || saving}>{saving ? "Saving…" : "Save routine"}</button>

@@ -34,7 +34,7 @@ export function TrackerWidget({ widget }: WidgetCardProps) {
       {tracker ? <>{widget.showDetails && (summary || latest?.note) && <p className={`${styles.primaryInfo} user-content`}>{summary || latest?.note}</p>}<p className={summary || latest?.note ? styles.detail : styles.primaryInfo}>{lastAt ? <>{english ? "Last recorded" : "最近记录"} · {widgetDate(lastAt,english)}</> : english ? "No records yet" : "暂无记录"}</p></> : !list.loading && !list.error && <p>{english ? "Tracker unavailable. Edit this widget to choose another." : "观测不可用，请编辑组件重新选择。"}</p>}
     </div>
     <button type="button" className={`button secondary ${styles.action}`} disabled={!tracker || tracker.disabled || !detail.data || !!detail.error} aria-label={`${english ? "Record" : "记录"} ${tracker?.name ?? "Tracker"}`} aria-haspopup="dialog" onClick={() => setRecording(true)}>{english ? "Record" : "记录"}</button>
-    {recording && detail.data && <TrackerEntryEditor centered trackerId={Number(id) || 0} fields={detail.data.fields} onClose={() => setRecording(false)} saveRecord={input => environment.trackers.save(id,input)} onSaved={environment.refresh}/>}
+    {recording && detail.data && <TrackerEntryEditor centered compact trackerId={Number(id) || 0} fields={detail.data.fields} onClose={() => setRecording(false)} saveRecord={input => environment.trackers.save(id,input)} onSaved={environment.refresh}/>}
   </>;
 }
 export function TrackerWidgetConfig({ id, initial, onSave }: WidgetConfigProps) {

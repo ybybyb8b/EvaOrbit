@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -118,7 +119,7 @@ export function SubscriptionFormFields({ draft, setDraft, icon, editing = false 
     </div>
     <label className="field">
       <span>{english ? "Notes" : "备注"} <small>{english ? "Optional" : "可选"}</small></span>
-      <textarea rows={3} maxLength={editing ? undefined : 5000} value={draft.notes} onChange={event => update("notes", event.target.value)} />
+      <NoteTextarea maxLength={editing ? undefined : 5000} value={draft.notes} onChange={event => update("notes", event.target.value)} />
     </label>
   </div>;
 }

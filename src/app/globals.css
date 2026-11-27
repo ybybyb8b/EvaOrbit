@@ -811,7 +811,14 @@ html[data-mode="dark"] .tracker-entry-form {
 }
 .tracker-entry-form :is(.field > input, .field > select, .searchable-select summary, .searchable-multi-select > input[type="search"]) { min-height: 48px; }
 .tracker-entry-form input[type="datetime-local"] { font-variant-numeric: tabular-nums; }
-.tracker-entry-form .field > textarea { min-height: 106px; }
+.field textarea[data-note-input] {
+  height: calc(1lh + 20px);
+  min-height: calc(1lh + 20px);
+  max-height: calc(6lh + 20px);
+  padding-block: 9px;
+  resize: none;
+  overflow-y: auto;
+}
 .tracker-entry-form .choice-capsules > button,
 .tracker-entry-form .searchable-multi-options > label {
   min-height: 44px;

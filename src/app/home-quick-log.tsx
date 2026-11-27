@@ -5,13 +5,14 @@ import { ErrorNotice } from "@/components/error-notice";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {QUICK_LOG_OPTIONS,type QuickEntryKind} from "@/components/quick-log-options";
+import {AdditionalQuickLog,isAdditionalQuickLog} from "@/components/additional-quick-log";
 import { FormSheet } from "@/components/form-sheet";
 import { showActionToast } from "@/components/action-toast";
 import { TrackerQuickLogButton } from "@/components/tracker-quick-log-button";
 import { useLocale } from "@/components/locale-controller";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { invalidateCachedJson, loadCachedJson, prefetchCachedJson } from "@/lib/client-json-cache";
-import type { ApiError, CatRecordKind, Pet, Tracker, TrackerField } from "@/lib/types";
+import type { ApiError, CatRecordKind, Pet, Tracker, TrackerField, RelationPerson } from "@/lib/types";
 import { CatRecordEditor } from "./cats/cat-record-editor";
 import { DrinkRecordEditor } from "./drinks/drink-ui";
 import { FoodRecordEditor } from "./food/food-record-editor";
@@ -40,6 +41,7 @@ export function HomeQuickLog() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [catKind, setCatKind] = useState<CatRecordKind|null>(null);
+  const [people,setPeople]=useState<RelationPerson[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [trackers, setTrackers] = useState<QuickTracker[]>([]);
   const [selectedTracker, setSelectedTracker] = useState<QuickTracker>();
@@ -63,13 +65,14 @@ export function HomeQuickLog() {
   }
   async function choose(kind: QuickEntryKind) {
     playNativeHaptic("selection"); setError("");
-    if (kind === "food" || kind === "inbox" || getHealthQuickLog(kind)) { setActive(kind); return; }
+    if (kind === "food" || kind === "inbox" || (isAdditionalQuickLog(kind) && kind !== "relation") || getHealthQuickLog(kind)) { setActive(kind); return; }
     if (kind === "drink") {
       setActive(kind);
       return;
     }
     setLoading(true);
     try {
+      if (kind === "relation") setPeople(await loadCachedJson<RelationPerson[]>("/api/relations/people"));
       if (kind === "cats") setPets(await loadCachedJson<Pet[]>(quickLogUrls.cats));
       if (kind === "tracker") setTrackers(await loadCachedJson<QuickTracker[]>(quickLogUrls.trackers));
       setActive(kind);
@@ -93,11 +96,12 @@ export function HomeQuickLog() {
   return <>
     <QuickLogTrigger label={action?.label} disabled={action?.disabled||loading} onClick={()=>{ playNativeHaptic("light"); if (action?.onClick) { action.onClick(); return; } setSelectedDate(action?.selectedDate ?? dateInEvaOrbit()); setActive("picker"); if (action?.picker) void choose(action.picker); }}/>
     {active === "picker" && <FormSheet title={action?.label ?? (english ? "Quick Log" : "快速记录")} onClose={close} busy={loading}><QuickLogPicker options={visibleOptions} disabled={loading} onChoose={kind=>void choose(kind)}/>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
+    {isAdditionalQuickLog(active) && <AdditionalQuickLog key={`${active}-${selectedDate}`} kind={active} initialDate={selectedDate} people={people} onClose={close} onSaved={saved}/>}
     {active === "food" && <FoodRecordEditor key={`food-${selectedDate}`} date={selectedDate} onClose={close} onSaved={saved} />}
     {active === "drink" && <DrinkRecordEditor key={`drink-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {HealthQuickLogEditor && <HealthQuickLogEditor key={`${healthQuickLog.kind}-${selectedDate}`} initialDate={selectedDate} onClose={close} onSaved={saved} />}
     {active === "cats" && <FormSheet title={english ? "New cat record" : "新增猫咪记录"} onClose={close} submitLabel={catKind ? (english ? "Save record" : "保存记录") : undefined} busy={loading}><CatRecordEditor key={`cats-${selectedDate}`} pets={pets} initialDate={selectedDate} onKindChange={setCatKind} onSavingChange={setLoading} onCancel={close} onSaved={async () => { await saved(); close(); }} /></FormSheet>}
-    {active === "inbox" && <FormSheet title="Inbox" onClose={close} formId="home-inbox-capture" submitLabel={english ? "Save" : "记下"} busy={loading}><InboxCaptureForm formId="home-inbox-capture" sheet onSaved={async () => { await saved(); close(); }} /></FormSheet>}
+    {active === "inbox" && <FormSheet title="Inbox" onClose={close} formId="home-inbox-capture" submitLabel={english ? "Save" : "记下"} busy={loading}><InboxCaptureForm onSavingChange={setLoading} formId="home-inbox-capture" sheet onSaved={async () => { await saved(); close(); }} /></FormSheet>}
     {active === "tracker" && !selectedTracker && <FormSheet title={english ? "Choose Tracker" : "选择观测"} onClose={close} busy={loading}><div className="home-quick-log-grid home-quick-tracker-list">{trackers.map((tracker) => <TrackerQuickLogButton key={tracker.id} name={tracker.name} groupName={tracker.groupName} quickCapture={tracker.quickCaptureEnabled} disabled={loading} onClick={() => void chooseTracker(tracker)} icon={<TrackerIcon tracker={tracker} size={20} />} />)}{!trackers.length && <p className="home-today-empty">{english ? "No Trackers yet" : "还没有观测项目"}</p>}</div>{error && <ErrorNotice role="alert">{error}</ErrorNotice>}</FormSheet>}
     {active === "tracker" && selectedTracker && <TrackerEntryEditor key={`tracker-${selectedTracker.id}-${selectedDate}`} trackerId={selectedTracker.id} fields={selectedTracker.fields} initialDate={selectedDate} onClose={close} onSaved={saved} />}
   </>;

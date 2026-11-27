@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import { ErrorNotice } from "@/components/error-notice";
 import { Icon } from "@/components/icons";
@@ -7,7 +8,7 @@ import { SearchableMultiSelect } from "@/components/searchable-multi-select";
 import { SearchableSelect } from "@/components/searchable-select";
 import { normalizeTrackerTimeRange, trackerDurationMinutes } from "@/lib/tracker-time-range";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 import { FormSheet } from "@/components/form-sheet";
 import { useLocale } from "@/components/locale-controller";
 import { reconcileNativeNotifications } from "@/lib/native-bridge";
@@ -15,11 +16,12 @@ import { playNativeHaptic } from "@/lib/native-haptics";
 import { responseError } from "@/lib/response-error";
 import { translateUiCopy } from "@/lib/ui-copy";
 import type { TrackerEntry, TrackerField } from "@/lib/types";
+import styles from "./tracker-entry-editor.module.css";
 
 function localDateTime(initialDate?: string) { const date = new Date(); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return `${initialDate ?? date.toISOString().slice(0, 10)}T${date.toISOString().slice(11, 16)}`; }
 function entryLocalTime(entry: Pick<TrackerEntry, "occurredAt">) { const date = new Date(entry.occurredAt); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0,16); }
 
-export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false, centered = false }: { centered?: boolean; readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
+export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false, centered = false, compact = false }: { compact?: boolean; centered?: boolean; readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
   const previewOnly=useFormPreview();
   const { english } = useLocale();
   const [occurredAt, setOccurredAt] = useState(() => entry ? entryLocalTime(entry) : localDateTime(initialDate));
@@ -53,13 +55,24 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
   function setFieldValue(field: TrackerField, value: unknown) { setValues((current) => ({ ...current, [field.key]: value })); }
   const content = <>
     <label className="field"><span>{english?"When":"时间"}</span><input required type="datetime-local" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
-    {activeFields.length > 0 && <div className="tracker-values-grid">{activeFields.map((field) => <TrackerFieldInput field={field} value={values[field.key]} onChange={(value) => setFieldValue(field, value)} key={field.key} />)}</div>}
-    <label className="field"><span>{english?"Note":"备注"}</span><textarea rows={3} maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>
+    {activeFields.length > 0 && <div className="tracker-values-grid">{activeFields.map((field) => compact && isBristolField(field) ? <BristolCapsules field={field} value={values[field.key]} onChange={value=>setFieldValue(field,value)} key={field.key}/> : <TrackerFieldInput field={field} value={values[field.key]} onChange={(value) => setFieldValue(field, value)} key={field.key} />)}</div>}
+    {!compact && <label className="field"><span>{english?"Note":"备注"}</span><NoteTextarea maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>}
     {error && <ErrorNotice>{error}</ErrorNotice>}
   </>;
-  return <FormSheet className={`tracker-entry-sheet${centered ? " centered-modal" : ""}`} title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form field-focus-surface" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
+  return <FormSheet className={`tracker-entry-sheet${centered ? " centered-modal" : ""}${compact ? ` ${styles.compact}` : ""}`} title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form field-focus-surface" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
 {readOnly ? <fieldset disabled className="tracker-entry-readonly"><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
   </form></FormSheet>;
+}
+
+const bristolNumber=(option:string)=>option.match(/^(?:type\s*)?([1-7])(?:\s*型)?$/i)?.[1];
+function isBristolField(field:TrackerField){
+  return field.type==="single_select" && /bristol|布里斯托/i.test(`${field.key} ${field.name}`) && field.options.length===7 && new Set(field.options.map(bristolNumber).filter(Boolean)).size===7;
+}
+function BristolCapsules({field,value,onChange}:{field:TrackerField;value:unknown;onChange:(value:string)=>void}){
+  const name=useId(),{language}=useLocale();
+  return <fieldset className={styles.bristol}><legend>{translateUiCopy(field.name,language)}</legend><div className={styles.capsules}>
+    {field.options.map(option=><label key={option}><input type="radio" name={name} required={field.required} value={option} checked={value===option} onChange={()=>onChange(option)}/><span>{bristolNumber(option)}</span></label>)}
+  </div></fieldset>;
 }
 
 export function TrackerFieldInput({ field, value, onChange }: { field: TrackerField; value: unknown; onChange: (value: unknown) => void }) {

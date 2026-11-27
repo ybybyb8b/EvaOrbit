@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 
@@ -49,7 +50,7 @@ export function ReminderEditor({ pets, initialPetId, editing, onSaved, onCancel,
       <DateTimeField label="Due date" value={draft.due} onChange={(due) => setDraft({ ...draft, due })}/>
       {draft.due.time ? <label className="field"><span>Remind</span><ChoiceSelect value={draft.leadTimeMinutes} onChange={(event) => setDraft({ ...draft, leadTimeMinutes: Number(event.target.value) })}><option value={0}>At due time</option><option value={60}>1 hour before</option><option value={1440}>1 day before</option><option value={4320}>3 days before</option><option value={10080}>1 week before</option></ChoiceSelect></label> : <p className="date-only-note">Date-only tasks stay in Upcoming but do not send a push notification until a time is added.</p>}
       {draft.due.time && <label className="check-row wide"><input role="switch" className="toggle-switch" type="checkbox" checked={draft.repeatWhileOverdue} onChange={(event)=>setDraft({...draft,repeatWhileOverdue:event.target.checked})}/><span>Remind me daily while overdue</span></label>}
-      <label className="field wide"><span>Note <small>Optional</small></span><textarea rows={3} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
+      <label className="field wide"><span>Note <small>Optional</small></span><NoteTextarea value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })}/></label>
     </div>
     {error && <ErrorNotice>{error}</ErrorNotice>}<button className="button primary" disabled={previewOnly || saving}>{saving ? "Saving…" : editing ? "Save changes" : "Save one-time task"}</button>
   </form>;

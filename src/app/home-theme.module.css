@@ -23,10 +23,12 @@
 .home :global(.home-journal-add) { background: rgb(var(--surface-raised-rgb) / .45); }
 .home :global(.home-journal-preview-entry .home-journal-state) { margin-top: 12px; }
 .home :global(.home-time-summary) { margin-block: 22px 8px; background: transparent; box-shadow: none; }
-.home :global(.home-calendar-card > .home-day-timeline) { margin-top: 30px; padding: 22px 20px; border-radius: 16px; background: var(--surface-card); }
+.home :global(.home-calendar-card > .home-day-timeline) { margin-top: 16px; padding: 22px 20px; border-radius: 16px; background: var(--surface-card); }
 
 @media (max-width: 720px) {
   .home :global(.home-day-grid) { gap: 14px; }
   :global(html[data-theme]) .home :global(.home-day-grid > .home-day-pane) { padding: 18px; }
   .home :global(.home-calendar-card > .home-day-timeline) { padding: 18px; }
 }
+
+.home :global(.home-task-date) { font-size:11px; font-weight:400; color:var(--text-secondary); white-space:nowrap; }

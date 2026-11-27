@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Disclosure } from "@/components/disclosure";
@@ -180,7 +181,7 @@ function DateEditor({ item, categoryDefinitions, onCategorySaved, today, onClose
         {draft.displayMode!=="countdown"&&<label className="field"><span>{english?"Starting day":"起始日计数"}</span><ChoiceSelect value={draft.countMode??"elapsed"} onChange={event=>change("countMode",event.target.value as "elapsed"|"ordinal")}><option value="elapsed">{english?"Elapsed · start at 0":"已过天数 · 当天算 0 天"}</option><option value="ordinal">{english?"Day N · start at 1":"第几天 · 当天算第 1 天"}</option></ChoiceSelect><small>{english?"Future dates always count down. Day N counts from the original date, including anniversaries.":"未来日期仍显示倒数；「第几天」从原始日期累计，重复事件也不重置。"}</small></label>}
         <CategoryField value={draft.category} categories={categoryDefinitions} onChange={name=>change("category",name)} onSaved={onCategorySaved} onEditing={setCategoryEditing} onBusy={setCategoryBusy}/>
         <Disclosure title={english?"Card background":"卡片背景"} defaultOpen={Boolean(item?.background&&item.background.kind!=="none")}><BackgroundField draft={draft} item={item} today={today} onChange={background=>change("background",background)} onBusy={setPhotoBusy}/></Disclosure>
-        <Disclosure title={english ? "Note (optional)" : "备注（选填）"} defaultOpen={Boolean(draft.note)}><label className="field"><span>{english ? "Note" : "备注"}</span><textarea rows={3} maxLength={2000} value={draft.note} onChange={event => change("note", event.target.value)} /></label></Disclosure>
+        <Disclosure title={english ? "Note (optional)" : "备注（选填）"} defaultOpen={Boolean(draft.note)}><label className="field"><span>{english ? "Note" : "备注"}</span><NoteTextarea maxLength={2000} value={draft.note} onChange={event => change("note", event.target.value)} /></label></Disclosure>
         <label className={styles.toggle}><span>{english ? "Feature this date" : "置于顶部卡片"}</span><input type="checkbox" checked={draft.pinned} onChange={event => change("pinned", event.target.checked)} /></label>
         <p className={styles.hint}>{english?"Up to three dates appear above. Pinned dates come first; the nearest days fill the remaining places.":"顶部最多展示三个日子，手动置顶优先，其余位置按日期临近补齐。"}</p>
         <label className={styles.toggle}><span>{english ? "Remind me" : "提醒我"}</span><input type="checkbox" checked={reminderEnabled} onChange={event => setReminderEnabled(event.target.checked)} /></label>

@@ -37,6 +37,7 @@ function harness(file, exportName, initialProps, environment = {}) {
       if (name.endsWith("suggested-input")) return { SuggestedInput: "suggested-input" };
       if (name.endsWith("use-form-history")) return { useFormHistory: () => [], historyValues: () => [] };
       if (name.endsWith("choice-select")) return { ChoiceSelect: "choice-select" };
+      if (name.endsWith("note-textarea")) return { NoteTextarea: "textarea" };
       if (name.endsWith("cat-log-picker")) return { CatLogPicker: "cat-log-picker", catRecordTitles: { event: "Record care", medication: "Medication" } };
       if (name.endsWith(".module.css")) return { default: {} };
       if (name === "next/link") return { default: "link" };

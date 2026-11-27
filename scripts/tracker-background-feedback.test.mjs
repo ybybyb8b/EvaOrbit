@@ -23,6 +23,7 @@ test("background Tracker initialization reports to sync status; explicit capture
   if(name.endsWith("time"))return{dateInEvaOrbit:()=>"2026-10-27"};
   if(name.endsWith("platform"))return{isPreviewAccount:()=>false};
   if(name.endsWith("health-quick-log"))return{getHealthQuickLog:()=>undefined};
+  if(name.endsWith("additional-quick-log"))return{isAdditionalQuickLog:()=>false};
   if(name.endsWith("quick-log-options"))return{QUICK_LOG_OPTIONS:[]};
   return new Proxy({},{get:(_,key)=>String(key)});
  },api);

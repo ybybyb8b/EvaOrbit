@@ -1,0 +1,18 @@
+.compact:global(.centered-modal) > :global(.form-sheet-panel) { width:min(420px,100%); }
+.compact :global(.form-sheet-header) { padding:16px 20px 10px; }
+.compact :global(.form-sheet-body) { padding:8px 20px; }
+.compact :global(.form-sheet-footer) { padding:12px 20px 16px; }
+.compact :global(.tracker-entry-form),
+.compact :global(.tracker-entry-readonly) { gap:12px; }
+.compact :global(.tracker-values-grid) { gap:12px 10px; }
+.compact :global(.tracker-values-grid > .field:has(.choice-select)) { grid-column:1 / -1; }
+.compact :global(.field) { gap:6px; }
+.bristol { grid-column:1 / -1; min-width:0; border:0; padding:0; margin:0; }
+.bristol legend { padding:0; margin-bottom:6px; font-size:13px; font-weight:650; color:var(--text-label); }
+.capsules { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.capsules label { position:relative; min-width:0; cursor:pointer; }
+.capsules input { position:absolute; opacity:0; width:1px; height:1px; min-height:0; padding:0; margin:0; }
+.capsules span { display:grid; place-items:center; min-height:36px; border-radius:999px; background:var(--tracker-key-surface,var(--tracker-control-surface)); box-shadow:var(--tracker-key-depth); color:var(--text-primary); font-size:14px; font-variant-numeric:tabular-nums; }
+.capsules input:checked + span { background:var(--accent-primary); color:var(--accent-on); box-shadow:var(--tracker-pressed-depth); font-weight:650; }
+.capsules input:focus-visible + span { outline:2px solid var(--text-action); outline-offset:2px; }
+.capsules input:disabled + span { opacity:.5; cursor:default; }

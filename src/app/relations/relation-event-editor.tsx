@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { ChoiceSelect } from "@/components/choice-select";
@@ -56,8 +57,8 @@ function matchExpenseFlows(parties: RelationPartyInput[]) {
   return flows;
 }
 
-export function RelationEventEditor({ people, editing, initialPersonId, onSaved, onBusy }: {
-  people: RelationPerson[]; editing?: RelationEvent; initialPersonId?: number; onSaved: () => void; onBusy: (value: boolean) => void;
+export function RelationEventEditor({ people, editing, initialPersonId, initialDate, onSaved, onBusy }: {
+  people: RelationPerson[]; editing?: RelationEvent; initialPersonId?: number; initialDate?: string; onSaved: () => void; onBusy: (value: boolean) => void;
 }) {
   const { read } = useRelationsData();
   const previewOnly = useFormPreview();
@@ -71,7 +72,7 @@ export function RelationEventEditor({ people, editing, initialPersonId, onSaved,
   const [giftRows, setGiftRows] = useState<GiftRow[]>(() => editing?.giftDirection
     ? editing.items.map((item, index) => ({ key: index, label: item.label, amount: money(item.amountMinor) }))
     : [{ key: 0, label: "", amount: "" }]);
-  const [date, setDate] = useState(() => editing ? dateTimeDraft(editing.occurredAt, editing.occurredHasExplicitTime) : { date: currentLocalDate(), time: "" });
+  const [date, setDate] = useState(() => editing ? dateTimeDraft(editing.occurredAt, editing.occurredHasExplicitTime) : { date: initialDate ?? currentLocalDate(), time: "" });
   const [title, setTitle] = useState(editing?.title ?? "");
   const [note, setNote] = useState(editing?.note ?? "");
   const [inPerson, setInPerson] = useState(editing?.isInPerson ?? null);
@@ -374,7 +375,7 @@ export function RelationEventEditor({ people, editing, initialPersonId, onSaved,
         <ExpenseItemsInput value={itemText} onValueChange={setItemText}/>
       </Disclosure>}
       <Disclosure title={note ? t("Notes", "备注") : t("Add notes", "添加备注")} defaultOpen={Boolean(note)}>
-        <label className="field"><textarea rows={3} aria-label={t("Notes", "备注")} value={note} onChange={event => setNote(event.target.value)}/></label>
+        <label className="field"><NoteTextarea aria-label={t("Notes", "备注")} value={note} onChange={event => setNote(event.target.value)}/></label>
       </Disclosure>
     </div>
     {error && <ErrorNotice role="alert">{error}</ErrorNotice>}

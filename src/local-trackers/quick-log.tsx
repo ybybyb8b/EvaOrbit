@@ -9,6 +9,9 @@ import {QuickLogPicker,QuickLogTrigger} from "@/components/quick-log-picker";
 import {QUICK_LOG_OPTIONS,type QuickEntryKind} from "@/components/quick-log-options";
 import {HealthDataProvider,type HealthRead} from "@/components/health-data-context";
 import {CatsDataProvider,type CatsRead} from "@/components/cats-data-context";
+import {AdditionalQuickLog,isAdditionalQuickLog} from "@/components/additional-quick-log";
+import {RelationsDataProvider,type RelationsRead} from "@/components/relations-data-context";
+import {readRelationsSnapshot,type RelationsReadonlySnapshot} from "@/lib/relations-readonly";
 import {FormSheet} from "@/components/form-sheet";
 import {FormPreview} from "@/components/form-preview";
 import {ErrorNotice} from "@/components/error-notice";
@@ -16,6 +19,7 @@ import {showActionToast} from "@/components/action-toast";
 import {useLocale} from "@/components/locale-controller";
 import {TrackerQuickLogButton} from "@/components/tracker-quick-log-button";
 import {TrackerEntryEditor} from "@/app/trackers/tracker-entry-editor";
+import type {CatRecordKind} from "@/lib/types";
 import {dateInEvaOrbit} from "@/lib/time";
 import {canEditTrackerRecord} from "@/lib/tracker-replica";
 import {readHealthSnapshot,type HealthReadonlySnapshot} from "@/lib/health-readonly";
@@ -37,9 +41,11 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   const [active,setActive]=useState<"picker"|QuickEntryKind|null>(null),[error,setError]=useState("");
   const [selectedId,setSelectedId]=useState<string|null>(null),[loading,setLoading]=useState(false);
   const [date,setDate]=useState(dateInEvaOrbit),[health,setHealth]=useState<HealthReadonlySnapshot|null>(null),[cats,setCats]=useState<CatsReadonlySnapshot|null>(null);
+  const [relations,setRelations]=useState<RelationsReadonlySnapshot|null>(null);
+  const [catKind,setCatKind]=useState<CatRecordKind|null>(null);
   const generation=useRef(0),saving=useRef(false);
   const readOnly=platform.readOnly(account);
-  const close=()=>{generation.current++;setActive(null);setSelectedId(null);setLoading(false);setError("");};
+  const close=()=>{generation.current++;setActive(null);setCatKind(null);setSelectedId(null);setLoading(false);setError("");};
   useEffect(()=>()=>{generation.current++;},[]);
   useEffect(()=>{
     let alive=true;
@@ -56,8 +62,10 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   },[account,platform,store,readOnly]);
   function syncSaved(){
     showActionToast(english?"Saved on this device.":"已保存到本机");close();
+    void action?.onSaved?.();
     if(!readOnly&&!isPreviewAccount(account))void synchronizeTrackerSession(account,platform).catch(()=>{});
   }
+  async function onlineSaved(){close();await action?.onSaved?.();}
   async function choose(kind:QuickEntryKind){
     const request=++generation.current;setError("");setLoading(true);
     try{
@@ -66,6 +74,11 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
         const value=await platform.healthSnapshot(account);
         if(!value)throw new Error(english?"Open Health online to download its data first.":"请先联网打开 Health 下载数据。");
         if(request!==generation.current)return;setHealth(value);
+      }
+      if(kind==="relation"){
+        const value=await platform.relationsSnapshot(account);
+        if(!value)throw new Error(english?"Open Relations online to download its data first.":"请先联网打开 Relations 下载数据。");
+        if(request!==generation.current)return;setRelations(value);
       }
       if(kind==="cats"){
         const value=await platform.catsSnapshot(account);
@@ -82,6 +95,7 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
   // Opening a downloaded form must never wait for the online business/session roundtrip.
   const readHealth=useCallback<HealthRead>(async(path,init)=>{if((init?.method??"GET").toUpperCase()!=="GET")return businessRequest(path,init);if(!health)throw new Error("Health is not downloaded");return readHealthSnapshot(health,path,init);},[health,businessRequest]);
   const readCats=useOnlineReader(useCallback<CatsRead>(async(path,init)=>{if(!cats)throw new Error("Cats is not downloaded");return readCatsSnapshot(cats,path,init);},[cats]));
+  const readRelations=useOnlineReader(useCallback<RelationsRead>(async(path,init)=>{if(!relations)throw new Error("Relations is not downloaded");return readRelationsSnapshot(relations,path,init);},[relations]));
   const healthDefinition=getHealthQuickLog(active),HealthEditor=healthDefinition?.Editor;
   async function selectTracker(id:string){
     const row=trackers.find(item=>item.id===id);if(!row||saving.current)return;
@@ -103,10 +117,11 @@ export function LocalQuickLog({account,platform}:{account:LocalAccount;platform:
     }}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
     {active==="picker"&&<FormSheet title={action?.label??(english?"Quick Log":"快速记录")} onClose={close} busy={loading}><QuickLogPicker options={options} disabled={loading} onChoose={kind=>void choose(kind)}/>{loading&&<p role="status">{english?"Loading downloaded data…":"正在读取本机数据…"}</p>}</FormSheet>}
-    {active==="inbox"&&<OnlineForms><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" submitLabel={english?"Save":"记下"} submitDisabled={!onlineBusiness}><InboxCaptureForm sheet formId="local-inbox-capture" onSaved={close}/></FormSheet></OnlineForms>}
+    {isAdditionalQuickLog(active)&&<RelationsDataProvider read={readRelations} Link={PreviewLink}><OnlineForms><AdditionalQuickLog key={`${active}-${date}`} kind={active} initialDate={date} people={relations?.people} onClose={close} onSaved={onlineSaved}/></OnlineForms></RelationsDataProvider>}
+    {active==="inbox"&&<OnlineForms><FormSheet title="Inbox" onClose={close} formId="local-inbox-capture" busy={loading} submitLabel={english?"Save":"记下"} submitDisabled={!onlineBusiness}><InboxCaptureForm onSavingChange={setLoading} sheet formId="local-inbox-capture" onSaved={onlineSaved}/></FormSheet></OnlineForms>}
     {(active==="food"||active==="drink")&&<FoodPreviewEditor date={date} editor={{kind:active}} onClose={close}/>}
-    {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={async()=>close()}/></OnlineForms></HealthDataProvider>}
-    {active==="cats"&&cats&&<CatsDataProvider read={readCats} Link={PreviewLink}><OnlineForms><FormSheet title={english?"New cat record":"新增猫咪记录"} onClose={close} submitLabel={english?"Save record":"保存记录"} submitDisabled={!onlineBusiness}><CatRecordEditor pets={cats.dashboard.pets.map(item=>item.pet)} initialDate={date} onCancel={close} onSaved={close}/></FormSheet></OnlineForms></CatsDataProvider>}
+    {HealthEditor&&health&&<HealthDataProvider read={readHealth} Link={PreviewLink}><OnlineForms><HealthEditor initialDate={date} onClose={close} onSaved={onlineSaved}/></OnlineForms></HealthDataProvider>}
+    {active==="cats"&&cats&&<CatsDataProvider read={readCats} Link={PreviewLink}><OnlineForms><FormSheet title={english?"New cat record":"新增猫咪记录"} onClose={close} submitLabel={catKind?(english?"Save record":"保存记录"):undefined} busy={loading} submitDisabled={!onlineBusiness}><CatRecordEditor onKindChange={setCatKind} onSavingChange={setLoading} pets={cats.dashboard.pets.map(item=>item.pet)} initialDate={date} onCancel={close} onSaved={onlineSaved}/></FormSheet></OnlineForms></CatsDataProvider>}
     {active==="tracker"&&!selected&&<FormSheet title={english?"Choose Tracker":"选择观测"} onClose={close} busy={loading}><div className="home-quick-log-grid home-quick-tracker-list">{trackers.map(row=><TrackerQuickLogButton key={row.id} name={String(row.payload.name)} groupName={String(row.payload.groupName??"")} quickCapture={Boolean(row.payload.quickCaptureEnabled)&&!readOnly&&canEditTrackerRecord(row)} disabled={loading} onClick={()=>void selectTracker(row.id)} icon={<LocalTrackerPicture row={row} state={state} size={20}/>}/>)}</div>{!trackers.length&&<p>{english?"No downloaded Trackers.":"暂无已下载的观测。"}</p>}</FormSheet>}
     {active==="tracker"&&selected&&(readOnly||!canEditTrackerRecord(selected)?<FormPreview>{trackerEditor}</FormPreview>:trackerEditor)}
   </>;

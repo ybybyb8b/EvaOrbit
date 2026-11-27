@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
@@ -97,7 +98,7 @@ export function TrainingLogEditor({ record, initialDate, resumeDraft, resumeDirt
       {draft.sessionDetails.plan && <Disclosure className="training-session-reference" title={english ? "Plan reference" : "计划参考"} description={`Day ${draft.sessionDetails.plan.dayNumber}｜${draft.sessionDetails.plan.dayName}`}>{draft.sessionDetails.plan.content && <p>{draft.sessionDetails.plan.content}</p>}</Disclosure>}
       <Disclosure className="training-content-description" defaultOpen={Boolean(record?.trainingContent)} title={english ? "Written description (optional)" : "文字补充（可选）"}><label className="field wide"><span>{english ? "Training description" : "训练内容补充"}</span><textarea rows={2} maxLength={5000} placeholder={english ? "Only add anything the exercises above do not cover" : "上面的动作未涵盖的内容，再补充在这里"} value={draft.trainingContent} onChange={event => setDraft({ ...draft, trainingContent: event.target.value })} /></label></Disclosure>
 
-      <label className="field wide"><span>{english ? "Notes" : "备注"} <small>{english ? "Optional" : "可选"}</small></span><textarea rows={3} maxLength={5000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
+      <label className="field wide"><span>{english ? "Notes" : "备注"} <small>{english ? "Optional" : "可选"}</small></span><NoteTextarea maxLength={5000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
 
 
 

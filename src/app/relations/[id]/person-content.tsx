@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import { Disclosure } from "@/components/disclosure";
 import {useRelationsData} from "@/components/relations-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
@@ -36,7 +37,7 @@ function SettleEditor({flow,outstanding,onBusy,onSaved}:{flow:RelationEventFlow;
   const {read}=useRelationsData();const previewOnly=useFormPreview();
   const[amount,setAmount]=useState((outstanding/100).toFixed(2)),[date,setDate]=useState({date:currentLocalDate(),time:""}),[note,setNote]=useState(""),[error,setError]=useState("");
   async function submit(event:FormEvent){event.preventDefault();if(previewOnly)return;onBusy(true);setError("");try{const when=dateTimePayload(date),response=await read(`/api/relations/flows/${flow.id}/settle`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amountMinor:minorFromDecimal(amount),occurredAt:when.value,occurredHasExplicitTime:when.hasExplicitTime,note:note||null})});if(!response.ok)throw new Error((await response.json()).error);onSaved();}catch(reason){setError(reason instanceof Error?reason.message:"Could not record repayment");}finally{onBusy(false);}}
-  return <form onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}<div className="form-grid"><label className="field"><span>Amount · CNY</span><input required inputMode="decimal" value={amount} onChange={event=>setAmount(event.target.value)}/></label><div className="wide"><DateTimeField label="Date" value={date} onChange={setDate}/></div><label className="field wide"><span>Note</span><textarea rows={3} value={note} onChange={event=>setNote(event.target.value)}/></label></div>{error&&<ErrorNotice>{error}</ErrorNotice>}</form>;
+  return <form onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}<div className="form-grid"><label className="field"><span>Amount · CNY</span><input required inputMode="decimal" value={amount} onChange={event=>setAmount(event.target.value)}/></label><div className="wide"><DateTimeField label="Date" value={date} onChange={setDate}/></div><label className="field wide"><span>Note</span><NoteTextarea value={note} onChange={event=>setNote(event.target.value)}/></label></div>{error&&<ErrorNotice>{error}</ErrorNotice>}</form>;
 }
 
 export function RelationPersonContent({initial,people,navigate}:{initial:Detail;people:RelationPersonSummary[];navigate:(path:string)=>void}){

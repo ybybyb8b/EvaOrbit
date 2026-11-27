@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFoodData} from "@/components/food-data-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
@@ -213,7 +214,7 @@ export function FoodRecordEditor({ date, record, initialMealType, onClose, onSav
       {canRate(draft.scene) && <div className="field"><span>评价</span><SearchableSelect label="评价" searchable={false} clearable value={draft.rating} options={TASTE_RATINGS.map(value=>({value,label:tasteLabels[value]}))} onValueChange={value=>setDraft({...draft,rating:value as TasteRating|""})}/></div>}
       <div className={styles.browser}><FoodLinkPicker label="用餐地点（可选）" options={placeOptions} selected={draft.foodPlaceId?[Number(draft.foodPlaceId)]:[]} loading={placeLoading} error={placeError} onRetry={()=>setPlaceAttempt(value=>value+1)} onSearch={setPlaceQuery} onChange={ids=>{setBrowseQuery("");setDraft({...draft,foodPlaceId:ids[0]?.toString()??""});}}/>
       </div>
-      <label className="field"><span>明细 / 备注</span><textarea rows={3} maxLength={8000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
+      <label className="field"><span>明细 / 备注</span><NoteTextarea maxLength={8000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
       <Disclosure title={t("整餐实测重量")} trailing={consumedWeight ? `${consumedWeight} ${t("克")}` : undefined} defaultOpen={Boolean(consumedWeight)}>
         <label className="field"><span>{t("整餐实测重量（克）")}</span><input type="number" inputMode="decimal" min="0" max="1000000" step="0.01" value={consumedWeight} onChange={event => setConsumedWeight(event.target.value)} /></label>
       </Disclosure>

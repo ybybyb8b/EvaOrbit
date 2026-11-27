@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
 import {useHealthData} from "@/components/health-data-context";
 import { ErrorNotice } from "@/components/error-notice";
@@ -204,7 +205,7 @@ export function DailyEnergyCard({ initial, initialHistory }: { initial: DailyNut
         <label className="field wide"><span>{t("Date", "日期")}</span><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
         <label className="field"><span>{t("Resting kcal", "静息能量（kcal）")} <small>{t("(optional)", "（选填）")}</small></span><input type="number" min="0" max="20000" step="1" value={draft.restingEnergyKcal} onChange={(event) => setDraft({ ...draft, restingEnergyKcal: event.target.value })} placeholder={t("e.g. 1500", "例如 1500")} /></label>
         <label className="field"><span>{t("Active kcal", "活动能量（kcal）")} <small>{t("(optional)", "（选填）")}</small></span><input type="number" min="0" max="20000" step="1" value={draft.activeEnergyKcal} onChange={(event) => setDraft({ ...draft, activeEnergyKcal: event.target.value })} placeholder={t("e.g. 300", "例如 300")} /></label>
-        <label className="field wide"><span>{t("Note", "备注")} <small>{t("(optional)", "（选填）")}</small></span><textarea rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={t("What informed this estimate?", "记录估算依据")} /></label>
+        <label className="field wide"><span>{t("Note", "备注")} <small>{t("(optional)", "（选填）")}</small></span><NoteTextarea maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder={t("What informed this estimate?", "记录估算依据")} /></label>
       </div>
       <div className="daily-energy-editor-actions"><button type="button" className="button secondary" onClick={closeEditor}>{t("Cancel", "取消")}</button><button className="button primary" disabled={saving||preview}>{saving ? t("Saving…", "保存中…") : t("Save energy", "保存能量")}</button></div>
     </form>}

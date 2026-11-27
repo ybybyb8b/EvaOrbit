@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import { Disclosure } from "@/components/disclosure";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
@@ -52,5 +53,5 @@ export function CatRecordEditor({pets,initialPetId,initialKind,initialDate,onSav
  </fieldset>{error&&<ErrorNotice role="alert">{error}</ErrorNotice>}<button type="submit" className="button primary" disabled={previewOnly || saving}>{saving?"Saving…":savedRecord?"Retry saving":editing?"Save changes":"Save record"}</button></form>;
 }
 function TextField({label,value,onChange,required=false,suggestions=[],placeholder,optional=false}:{label:string;value:string;onChange:(v:string)=>void;required?:boolean;suggestions?:string[];placeholder?:string;optional?:boolean}){const id=useId();const {english}=useLocale();return <div className="field"><label htmlFor={id}>{label}{optional&&<small> · {english?"Optional":"选填"}</small>}</label><SuggestedInput id={id} aria-label={label} suggestionLabel={label} suggestions={suggestions} placeholder={placeholder} required={required} value={value} onValueChange={onChange}/></div>}
-function TextArea({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="field wide"><span>{label}</span><textarea rows={3} value={value} onChange={e=>onChange(e.target.value)}/></label>}
+function TextArea({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="field wide"><span>{label}</span>{/^notes?$/i.test(label)?<NoteTextarea value={value} onChange={e=>onChange(e.target.value)}/>:<textarea rows={3} value={value} onChange={e=>onChange(e.target.value)}/>}</label>}
 function DateField({label,value,onChange,optional=false}:{label:string;value:string;onChange:(v:string)=>void;optional?:boolean}){const date=value.slice(0,10),time=value.length>10?value.slice(11,16):"";return <DateTimeField optionalDate={optional} label={label} value={{date,time}} onChange={next=>onChange(next.date+(next.time?`T${next.time}`:""))}/>}

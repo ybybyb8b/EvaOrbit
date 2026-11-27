@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useId,useState,type FormEvent} from "react";
 import {useBusinessRequest} from "@/components/business-request-context";
 import {useFormPreview,FormPreviewNotice} from "@/components/form-preview";
@@ -36,6 +37,6 @@ export function PurchaseSheet({item,purchase,onClose,onSaved}:{item:Subscription
     <label className="field"><span>{t("Bonus duration · optional","赠送时长 · 选填")}</span><input type="number" min="1" max="36500" step="1" value={form.bonusValue} onChange={e=>update("bonusValue",e.target.value)}/></label><label className="field"><span>{t("Bonus unit","赠送时长单位")}</span>{units(form.bonusUnit,v=>update("bonusUnit",v))}</label>
     <label className="field wide"><span>{t("Final membership expiry","最终会员有效期")}</span><input required type="date" aria-label={t("Final membership expiry","最终会员有效期")} aria-describedby={id+"-expiry-hint"} min={form.paidOn} value={form.validUntil} onChange={e=>update("validUntil",e.target.value)}/><small id={id+"-expiry-hint"}>{purchase?t("The latest purchase updates membership expiry. A separately adjusted expiry is preserved.","最新购买的有效期修正会同步到会员；曾单独调整的当前有效期将保留。所填时长仅记录权益。") : t("Use the expiry shown by the provider. Older purchases never shorten your current membership.","以平台实际显示日期为准。补录历史购买不会缩短当前会员有效期。")}</small></label>
     {!purchase&&(form.purchasedValue||form.bonusValue)&&<button className="text-button wide" type="button" onClick={estimate}>{t("Fill estimated expiry","填入预计到期日")}</button>}
-    <label className="field wide"><span id={id+"-note-label"}>{t("Purchase note","购买备注")}</span><textarea aria-labelledby={id+"-note-label"} rows={3} maxLength={5000} value={form.note} onChange={e=>update("note",e.target.value)}/></label>
+    <label className="field wide"><span id={id+"-note-label"}>{t("Purchase note","购买备注")}</span><NoteTextarea aria-labelledby={id+"-note-label"} maxLength={5000} value={form.note} onChange={e=>update("note",e.target.value)}/></label>
   </div>{error&&<ErrorNotice>{error}</ErrorNotice>}</form></FormSheet>;
 }

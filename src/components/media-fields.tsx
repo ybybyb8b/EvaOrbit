@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 import {useFormPreview,FormPreviewNotice} from "./form-preview";
 import {ChoiceSelect} from "./choice-select";
 import {SearchableSelect} from "./searchable-select";
@@ -85,6 +86,6 @@ export function MediaFields({draft,setDraft,coverFile,setCoverFile,series,needsC
       </div>
       {!completed&&linkSeries}
       <label className="media-favorite-toggle wide"><input type="checkbox" checked={draft.isFavorite} onChange={event=>setDraft({...draft,isFavorite:event.target.checked})}/><span><strong>Favorite</strong><small>Keep it on the Favorites shelf.</small></span></label>
-      <label className="field wide"><span>Notes <small>Optional</small></span><textarea rows={4} maxLength={5000} value={draft.note} onChange={event=>setDraft({...draft,note:event.target.value})}/></label>
+      <label className="field wide"><span>Notes <small>Optional</small></span><NoteTextarea maxLength={5000} value={draft.note} onChange={event=>setDraft({...draft,note:event.target.value})}/></label>
     </div></>;
 }

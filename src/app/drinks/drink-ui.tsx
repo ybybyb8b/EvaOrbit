@@ -1,4 +1,5 @@
 "use client";
+import {NoteTextarea} from "@/components/note-textarea";
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -323,7 +324,7 @@ export function DrinkRecordEditor({ record, initialDate, onClose, onSaved, onDel
           <div className="field"><span>冷热 / 冰量</span><SearchableSelect label="冷热 / 冰量" searchable={false} clearable value={draft.temperature} onValueChange={value => setDraft(current => ({ ...current, temperature: value as DrinkTemperature | "" }))} options={[{ value: "", label: "未填写" }, ...DRINK_TEMPERATURES.map(value => ({ value, label: temperatureLabels[value] }))]}/></div>
           <div className="field"><span>糖度</span><SearchableSelect label="糖度" searchable={false} clearable presentation="capsules" value={draft.sugarLevel} onValueChange={value => setDraft(current => ({ ...current, sugarLevel: value as SugarLevel }))} options={[{ value: "", label: "未填写" }, ...SUGAR_LEVELS.map(value => ({ value, label: value }))]}/></div>
           <div className="field"><span>评价</span><SearchableSelect label="评价" searchable={false} clearable value={draft.rating} onValueChange={value => setDraft(current => ({ ...current, rating: value as TasteRating | "" }))} options={[{ value: "", label: "未评价" }, ...TASTE_RATINGS.map(value => ({ value, label: tasteLabels[value] }))]}/></div>
-          <label className="field"><span>备注（可选）</span><textarea rows={2} maxLength={4000} value={draft.notes} onChange={event => { const notes = event.target.value; setDraft(current => ({ ...current, notes })); }}/></label>
+          <label className="field"><span>备注（可选）</span><NoteTextarea maxLength={4000} value={draft.notes} onChange={event => { const notes = event.target.value; setDraft(current => ({ ...current, notes })); }}/></label>
         </div>
       </Disclosure>
 
