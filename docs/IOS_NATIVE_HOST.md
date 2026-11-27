@@ -1,5 +1,9 @@
 # EvaOrbit iOS Native Host：Windows / WSL 安装与续签 Runbook
 
+## 当前打包方式（2026-11-27）
+
+`iOS Native Host` 工作流现仅生成本地 Native Host IPA，自动及手动入口均固定本地模式，不再传 `local_trackers`。仍使用 `com.evaorbit.nativehost.trackerspoc`、`evaorbit-trackers-poc` 和原 ad-hoc → patched xtool 免费 Team 重签 → Windows/WSL 覆盖安装链；保留既有数据库和队列。`run_native_tests` 可选、默认 false，SIWC 实验入口仍限测试分支的手动运行。隔离 Supabase 检查通过后才进入 macOS 打包。以下关于可选 Web Host 或 `local_trackers` 参数的内容仅为历史记录。
+
 SIWC 手机实验包已获用户本批构建授权：在 `codex/parlor-native-test` 手动运行原 iOS workflow，设 `local_trackers=true`、`subscription_poc=true`。保持 Release / iphoneos / ad-hoc 签名和既有 xtool 安装链，只在该包显式编译实验模块并保存默认关闭的 Info.plist 开关；手机启动直接打开测试面板。普通包不受影响；此说明不代表 CI 已成功或真机授权通过。旧段落的 Debug-only 说明是最初源码状态，现以此处为准。
 
 Parlor SIWC 实验仅 Debug 本地 Host 加 `--parlor-subscription-poc` 后出现，普通 Release IPA 不包含模块或入口。未改变既有签名安装链，本轮未打包或运行 CI；Xcode、iOS 回环回调和用户 Plus 授权／推理均未验证。不要用已有 Release IPA 作为本实验已上机的证据。下一步及条件见 [独立 PoC 报告](PARLOR_SUBSCRIPTION_POC.md)。

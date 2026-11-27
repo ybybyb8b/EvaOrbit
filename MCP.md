@@ -38,6 +38,7 @@ This is the business registry reference. The connection's actual resources and o
 
 - Memory and capture: `memory_context`, `memory_entity`, `memory_fact`, `memory_source`, `memory_candidate`, `inbox`, `echo`, `chronicle`.
 - Work and calendar: `task`, `calendar_event`, `project`, `project_item`.
+- Days / 如期: `important_date` (Gregorian/lunar dates, PATCH, pin/unpin/archive/restore; removal remains owner-only) and `important_date_category` (read-only category/color/count catalog). See [Days contracts](docs/DAYS.md#mcp). New capabilities require explicit connection authorization.
 - People: `relation_person`, `relation_event`, `person_note`.
 - Health and activity: `health_record`, `training_log`, `tracker`.
 - Media: `media`, `media_series`.
@@ -50,7 +51,7 @@ This is the business registry reference. The connection's actual resources and o
 
 These are business resources discovered through tools, not MCP protocol `resources/list` registrations. All dedicated Food/Drink tools have been removed; callers must use the generic resource operations below. `tracker_list` and `tracker_create_entry` have been removed: use `eo_search(tracker)` plus `eo_get(tracker,id)`, and `eo_action(tracker,create_entry)`. Search exposes `group_name`; detail fields include historical fields, so filter out non-null `archived_at` when presenting active fields. Entry input uses `data.values`; action output uses `result`.
 
-Tracker, Memo, Entity, Fact, Source and Candidate support cursors. Search defaults to 20 records, up to 100 per page. Continue with the same query, filters and order until next_cursor is null. The Memory resources also return has_more. Set filters.order to created for traversal by creation time and ID. Display pages can move after edits. Cursor reads reflect live data across requests.
+Tracker, Memo, Entity, Fact, Source, Candidate and both Days resources support cursors. Search defaults to 20 records, up to 100 per page. Continue with the same query, filters and order until next_cursor is null. The Memory resources also return has_more. Set filters.order to created for traversal by creation time and ID. Display pages can move after edits. Cursor reads reflect live data across requests.
 
 Food/Drink migration mapping (old tool names are no longer registered):
 

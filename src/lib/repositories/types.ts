@@ -157,6 +157,8 @@ export type RelationPersonPatch = Partial<NewRelationPerson> & { photoPath?: str
 
 export interface EvaOrbitRepository {
   listImportantDateCategories(): Promise<import("../important-dates").ImportantDateCategory[]>;
+  saveImportantDateCategory(name:string,color:string|null): Promise<import("../important-dates").ImportantDateCategory>;
+  getImportantDateBackground(id:number,version:string):Promise<string|null>;
   listImportantDates(): Promise<import("../important-dates").ImportantDate[]>;
   saveImportantDate(id: number | null, input: import("../important-dates").ImportantDateInput): Promise<import("../important-dates").ImportantDate | null>;
   deleteImportantDate(id: number): Promise<boolean>;

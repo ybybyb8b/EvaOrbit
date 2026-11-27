@@ -62,8 +62,8 @@ export async function cancelReminder(id: number) {
   if (reminder.sourceType === "important_date" && reminder.sourceId) {
     const item = (await repository.listImportantDates()).find(item => item.id === reminder.sourceId);
     if (!item) return false;
-    const { id: itemId, createdAt: _created, updatedAt: _updated, ...input } = item;
-    void _created; void _updated;
+    const { id: itemId, createdAt: _created, updatedAt: _updated, backgroundImageVersion: _backgroundVersion, ...input } = item;
+    void _created; void _updated; void _backgroundVersion;
     await repository.saveImportantDate(itemId, { ...input, categoryColor: undefined, reminderTime: null });
     return true;
   }

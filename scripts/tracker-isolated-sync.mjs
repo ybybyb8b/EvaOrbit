@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import postgres from 'postgres';
 import { createClient } from '@supabase/supabase-js';
 import { LocalTrackerStore } from '../src/lib/tracker-local-store.ts';
+import { applyEmptyLuciusFixture } from './empty-lucius-fixture.mjs';
 
 // This runner never accepts a hosted target or silently uses .env.local.
 assert.equal(process.env.TRACKER_ISOLATED_SUPABASE, '1', 'Explicit isolated-stack opt-in required');
@@ -65,7 +66,11 @@ if (process.argv.includes('--mcp')) {
   };
   const migrationFile='202610180001_tracker_local_sync.sql';
   const migrationPath=path.resolve('supabase/migrations');
-  async function migrate(file){await sql.unsafe(await fs.readFile(path.join(migrationPath,file),'utf8'));}
+  async function migrate(file){
+    const source=await fs.readFile(path.join(migrationPath,file),'utf8');
+    if(file==='202611250001_retire_lucius.sql')return applyEmptyLuciusFixture({run:(query,parameters=[])=>sql.unsafe(query,parameters),source,directory,databaseUrl});
+    await sql.unsafe(source);
+  }
   try {
     for(const file of (await fs.readdir(migrationPath)).filter(file=>file.endsWith('.sql')&&file<migrationFile).sort()) await migrate(file);
     const owner=await admin.auth.admin.createUser({email,password,email_confirm:true}); assert.ifError(owner.error);

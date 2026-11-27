@@ -58,7 +58,7 @@ export function useIconColors(sources: Record<number, string>) {
     };
     update();
     const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode", "data-theme", "style"] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode", "data-theme", "data-vintage-colorway", "style"] });
     return () => observer.disconnect();
   }, []);
   function palette(accent: string | null): CSSProperties {

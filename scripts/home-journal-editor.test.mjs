@@ -45,81 +45,13 @@ function fixture(readOnly = false) {
   return { render, nodes, find, byClass, byText, sheet, requests, entries, setFail: value => { fail = value; } };
 }
 
-test("read-only Home retains historical notes and refuses forced form submission", async () => {
-  const f = fixture(true);
-  assert(f.byClass("home-calendar-today"), "An older offline snapshot must not be labeled as today");
-  f.byClass("home-journal-preview-list").props.children[1].props.onClick(); f.render();
-  assert.equal(f.sheet().props.title, "查看短记");
-  assert.equal(f.sheet().props.submitLabel, undefined);
-  assert.equal(f.find(node => node.type === "textarea").props.disabled, true);
-  await f.byClass("home-journal-form").props.onSubmit({ preventDefault() {} });
-  assert.deepEqual(f.requests, []);
-});
-
-test("existing notes edit in isolation, preserve failed drafts and PATCH the selected ID", async () => {
-  const f = fixture();
-  f.byClass("home-journal-preview-list").props.children[1].props.onClick(); f.render();
-  assert.equal(f.sheet().props.title, "编辑短记");
-  assert.equal(f.sheet().props.dirty, false);
-  assert.equal(f.sheet().props.submitDisabled, true);
-  assert.equal(f.byClass("home-journal-entries"), undefined);
-  assert.equal(f.byText("改写新记录"), undefined);
-  const input = () => f.find(node => node.type === "textarea");
-  assert.equal(input().props.value, f.entries[1].content);
-  input().props.onChange({ target: { value: "修改后的内容" } }); f.render();
-  assert.equal(f.sheet().props.dirty, true);
-  f.setFail(true);
-  await f.byClass("home-journal-form").props.onSubmit({ preventDefault() {} }); f.render();
-  assert.equal(input().props.value, "修改后的内容");
-  assert.equal(f.sheet().props.dirty, true);
-  f.setFail(false);
-  await f.byClass("home-journal-form").props.onSubmit({ preventDefault() {} }); f.render();
-  assert.equal(f.sheet(), undefined);
-  assert.equal(f.requests.at(-1).url, "/api/daily-journal/2");
-  assert.equal(f.requests.at(-1).method, "PATCH");
-  assert.deepEqual(JSON.parse(f.requests.at(-1).body), { content: "修改后的内容", moodScore: null, emotion: "neutral", energyLevel: 2, hasFullDiary: true });
-});
-
-test("add opens a blank form and POSTs; history shows only a list before selecting an editor", async () => {
-  const f = fixture();
-  f.byClass("home-journal-add").props.onClick(); f.render();
-  assert.equal(f.sheet().props.title, "新增短记");
-  assert.equal(f.find(node => node.type === "textarea").props.value, "");
-  assert.equal(f.byClass("home-journal-entries"), undefined);
-  assert.equal(f.byText("删除这条短记"), undefined);
-  f.find(node => node.type === "textarea").props.onChange({ target: { value: "新短记" } }); f.render();
-  await f.byClass("home-journal-form").props.onSubmit({ preventDefault() {} }); f.render();
-  assert.equal(f.requests.at(-1).method, "POST");
-  assert.equal(JSON.parse(f.requests.at(-1).body).date, "2026-10-17");
-  f.byClass("home-journal-view-all").props.onClick(); f.render();
-  assert.equal(f.sheet().props.title, "当天日记");
-  assert.equal(f.sheet().props.submitLabel, undefined);
-  assert.equal(f.byClass("home-journal-form"), undefined);
-  assert.equal(f.byClass("home-journal-entries").props.children[0].length, 4);
-  f.byClass("home-journal-entries").props.children[0][3].props.onClick(); f.render();
-  assert.equal(f.sheet().props.title, "编辑短记");
-  assert.equal(f.find(node => node.type === "textarea").props.value, f.entries[3].content);
-  assert.equal(f.byClass("home-journal-entries"), undefined);
-});
-
-test("delete requires confirmation, preserves a failed edit and closes after success", async () => {
-  const f = fixture();
-  f.byClass("home-journal-preview-list").props.children[0].props.onClick(); f.render();
-  f.find(node => node.type === "textarea").props.onChange({ target: { value: "未保存的修改" } }); f.render();
-  f.byText("删除这条短记").props.onClick(); f.render();
-  assert.equal(f.requests.length, 0);
-  assert.equal(f.byClass("home-journal-form").props.inert, true);
-  f.byText("继续编辑").props.onClick(); f.render();
-  assert.equal(f.byClass("home-journal-form").props.inert, false);
-  f.byText("删除这条短记").props.onClick(); f.render();
-  f.setFail(true); f.byText("删除记录").props.onClick();
-  await new Promise(resolve => setImmediate(resolve)); f.render();
-  assert.equal(f.find(node => node.type === "textarea").props.value, "未保存的修改");
-  assert.equal(f.sheet().props.dirty, true);
-  f.setFail(false); f.byText("删除这条短记").props.onClick(); f.render();
-  f.byText("删除记录").props.onClick();
-  await new Promise(resolve => setImmediate(resolve)); f.render();
-  assert.equal(f.requests.at(-1).method, "DELETE");
-  assert.equal(f.requests.at(-1).url, "/api/daily-journal/1");
-  assert.equal(f.sheet(), undefined);
+test("Home hides retired summary panels while retaining the original day payload", () => {
+  for(const readOnly of [false,true]) {
+    const f=fixture(readOnly);
+    for(const name of ["home-sleep-pane","home-journal-pane","home-journal-add","home-time-summary","home-meal-list"]) assert.equal(f.byClass(name),undefined);
+    assert.equal(f.entries.length,4);
+    assert.deepEqual(f.requests,[]);
+    assert(f.byClass("home-day-timeline"));
+    if(readOnly) assert(f.byClass("home-calendar-today"));
+  }
 });

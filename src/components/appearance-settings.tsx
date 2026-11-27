@@ -4,23 +4,23 @@ import { ErrorNotice } from "@/components/error-notice";
 import { ToastNotice } from "@/components/action-toast";
 import { useLocale } from "@/components/locale-controller";
 import { type AppearancePreferences } from "@/lib/appearance-preferences";
-import { APPEARANCE_MODES } from "@/lib/theme";
+import { APPEARANCE_MODES, VINTAGE_COLORWAYS } from "@/lib/theme";
 import { UI_LANGUAGES } from "@/lib/locale";
 import { CHINESE_FONTS, ENGLISH_FONTS } from "@/lib/font-preferences";
 
 export function AppearanceSettings({ localOnly = false }: { localOnly?: boolean }) {
-  const { english, language, appearanceMode, chineseFont, englishFont, loadFailed, setPreferences } = useLocale();
+  const { english, language, appearanceMode, vintageColorway, chineseFont, englishFont, loadFailed, setPreferences } = useLocale();
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const visibleError = error || (loadFailed ? english ? "Could not load appearance settings. Your local settings are retained." : "读取主题设置失败，已保留本机设置。" : "");
   async function save(change: Partial<AppearancePreferences>) {
-    const next = { appearanceMode, uiLanguage: language, chineseFont, englishFont, ...change };
+    const next = { appearanceMode, vintageColorway, uiLanguage: language, chineseFont, englishFont, ...change };
     const nextEnglish = next.uiLanguage === "en";
     setSaving(true); setNotice(""); setError("");
     try {
       setPreferences(next);
-      if (localOnly) { setNotice(nextEnglish ? "Appearance saved on this device." : "外观已保存到本机。"); return; }
+      if (localOnly || Object.keys(change).every(key => key === "vintageColorway")) { setNotice(nextEnglish ? "Appearance saved on this device." : "外观已保存到本机。"); return; }
       const response = await fetch("/api/preferences/appearance", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
       if (!response.ok) throw new Error(nextEnglish ? "Could not save appearance settings" : "保存主题设置失败");
       setNotice(nextEnglish ? "Appearance updated." : "外观已经更新。");
@@ -29,6 +29,10 @@ export function AppearanceSettings({ localOnly = false }: { localOnly?: boolean 
   }
   return <section className="appearance-theme-settings">
     <div className="persona-heading"><span className="eyebrow">{english ? "LANGUAGE & APPEARANCE" : "语言与外观"}</span><h2>{english ? "Interface" : "界面设置"}</h2></div>
+    <div className="appearance-setting-group">
+      <strong>{english ? "Vintage · Colorway" : "Vintage · 配色"}</strong>
+      <div className="appearance-option-grid colorway-options">{VINTAGE_COLORWAYS.map(value => <button type="button" key={value} className={vintageColorway === value ? "active" : ""} aria-pressed={vintageColorway === value} disabled={saving} onClick={() => void save({ vintageColorway: value })}><span className="appearance-colorway-preview" data-colorway={value} aria-hidden="true"><i/><i/><i/><i/><i/></span><b>{value === "oat-plum" ? "Oat & Plum" : "Mauve & Ivory"}</b><small>{english ? "Saved on this device" : "保存到本机"}</small></button>)}</div>
+    </div>
     <div className="appearance-setting-group">
       <strong>{english ? "Language" : "界面语言"}</strong>
       <div className="appearance-option-grid language-options">{UI_LANGUAGES.map(uiLanguage => <button type="button" key={uiLanguage} aria-pressed={language === uiLanguage} className={language === uiLanguage ? "active" : ""} disabled={saving} onClick={() => void save({ uiLanguage })}><b>{uiLanguage === "en" ? "English" : "中文"}</b><small>{uiLanguage === "en" ? "English interface" : "中文界面"}</small></button>)}</div>

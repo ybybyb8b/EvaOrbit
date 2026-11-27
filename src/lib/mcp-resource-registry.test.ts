@@ -13,8 +13,8 @@ test("production schemas describe every action and distinguish create from PATCH
   const bindings = readFileSync(new URL("./mcp/resource-registry.server.ts", import.meta.url), "utf8");
   for (const [, key] of bindings.matchAll(/^\s*(\w+):\s*\{/gm)) Object.assign(operations, { [key]: {} });
   const registry = createResourceRegistry(operations);
-  assert.equal(registry.resources().length, 34);
-  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 39);
+  assert.equal(registry.resources().length, 36);
+  assert.equal(registry.resources().reduce((sum, item) => sum + item.actions.length, 0), 43);
   assert.ok(registry.resources().some(item=>item.resource==="software_library"));
   for (const item of registry.resources()) {
     const schema = registry.schema(item.resource);

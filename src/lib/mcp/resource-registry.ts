@@ -1,4 +1,5 @@
 import type { MemoryFactCandidate } from "../types.ts";
+import { importantDateResources,type ImportantDateResourceOperations } from "./important-date-resources.ts";
 import { z } from "zod";
 import type { MemoryContext, MemoryContextInput } from "../memory-context.ts";
 import { parseMemoryCandidateSubmission } from "../memory-graph-validation.ts";
@@ -39,6 +40,8 @@ export type ResourceField = {
   write_only?: boolean;
   nullable?: boolean;
   default?: unknown;
+  properties?: Record<string,ResourceField>;
+  required?: string[];
 };
 
 export type ResourceSchema = {
@@ -60,7 +63,7 @@ import type { MemoryPage, MemoryPageInput } from "../memory-pagination.ts";
 type ResourceSearchInput = { query?: string; filters?: ResourceRecord; limit: number; cursor?: string };
 type ResourceActionInput = { id?: ResourceId; action: string; data: ResourceRecord };
 
-type RegisteredResource = {
+export type RegisteredResource = {
   schema: ResourceSchema;
   search?: (input: ResourceSearchInput) => Promise<{ items: ResourceRecord[]; next_cursor: string | null; has_more?: boolean }>;
   get?: (id: ResourceId) => Promise<ResourceRecord>;
@@ -147,6 +150,7 @@ export type ResourceRegistryOperations = {
   inbox: InboxResourceOperations;
   task: TaskResourceOperations;
   calendarEvent?: CalendarEventResourceOperations;
+  importantDate?: ImportantDateResourceOperations;
   memo: MemoResourceOperations;
   chronicle: ChronicleResourceOperations;
   project: ProjectResourceOperations;
@@ -1240,6 +1244,7 @@ export function createResourceRegistry(operations: ResourceRegistryOperations) {
   ];
   if (operations.memoryContext) resources.push(memoryContextResource(operations.memoryContext));
   if(operations.calendarEvent)resources.push(calendarEventResource(operations.calendarEvent));
+  if(operations.importantDate)resources.push(...importantDateResources(operations.importantDate));
 
   if(operations.healthRecord)resources.push(healthRecordResource(operations.healthRecord));
   if(operations.trainingLog)resources.push(trainingLogResource(operations.trainingLog));

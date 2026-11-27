@@ -9,6 +9,8 @@ import type { EvaOrbitRepository } from "./types";
  */
 export const sqliteRepository: EvaOrbitRepository = {
   async listImportantDateCategories() { return sqlite.listImportantDateCategories(); },
+  async saveImportantDateCategory(name,color) { return sqlite.saveImportantDateCategory(name,color); },
+  async getImportantDateBackground(id,version) { return sqlite.getImportantDateBackground(id,version); },
   async listImportantDates() { return sqlite.listImportantDates(); },
   async saveImportantDate(id, input) { return sqlite.saveImportantDate(id, input); },
   async deleteImportantDate(id) { return sqlite.deleteImportantDate(id); },

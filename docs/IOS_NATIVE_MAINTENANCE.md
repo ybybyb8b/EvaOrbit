@@ -1,5 +1,11 @@
 # EvaOrbit iOS Native Host 维护契约
 
+## 当前打包入口：仅本地 Native Host
+
+2026-11-27 起，`iOS Native Host` 的 push 和手动运行均固定打包本地 Host，不再提供 `local_trackers` 开关，也不生成加载线上页面的 Web Host IPA。设备构建固定 `EVAORBIT_LOCAL_TRACKERS=YES`、Bundle ID `com.evaorbit.nativehost.trackerspoc` 和 scheme `evaorbit-trackers-poc`，继续覆盖安装并保留现有账户与本地数据库。`run_native_tests` 和受分支保护的 `subscription_poc` 仍保留。
+
+隔离 Supabase Tracker 检查先运行，通过后才进入 macOS IPA 构建。测试专用 Lucius 退役处理只允许显式 opt-in 的 loopback CI 临时库，确认五张旧模块表均为空、保存并回读空数据归档后使用其 SHA-256 满足迁移保护门，结束后清除标记；非空数据、非 CI 或托管目标直接拒绝。生产迁移和真实备份保护不变。签名、HealthKit entitlement、patched xtool、Bridge、权限和安装链均不变。下文旧的 Web Host／local_trackers 构建说明保留为历史。
+
 ## 日历来源颜色
 
 既有 bridge v1 的 eventkit.getStatus 在来源中增加可选 HEX color，读取 EKCalendar.cgColor，转换 RGB／灰阶并限制 sRGB 通道范围。没有新方法、权限、framework 或 entitlement。Web 按旧 Host 缺少 color 降级，自选颜色保存到既有账户偏好，服务端从账户绑定投影至 Home；修改已有日历、同步方向及签名安装链的行为保持既有契约。无需 SQL 迁移，先发布兼容 Web/API，再按原链路重建并覆盖安装 IPA。已加入颜色序列化 XCTest，Windows 无法运行 Swift/Xcode/iPhone 验收。

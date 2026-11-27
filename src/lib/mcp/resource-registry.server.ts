@@ -2,6 +2,7 @@ import { memoryWriteClient } from "../repositories";
 import { getMemoryFactCandidate, proposeMemoryFactCandidate } from "../services/memory-graph";
 import {listSoftwareLibrary,getSoftwareLibraryEntry,createSoftwareLibraryEntry,updateSoftwareLibraryEntry} from "../services/software-library";
 import "server-only";
+import { listImportantDates,getImportantDate,saveImportantDate,removeImportantDate,listImportantDateCategories } from "../services/important-dates";
 import { getInsightContext } from "../services/insight-context";
 import { createFoodLog, deleteFoodLog, getFoodLog, getFoodLibraryItem, listFoodLogs, searchFoodLibrary, upsertFoodLibraryItem, updateFoodLog, updateFoodLibraryItem, removeFoodLibraryItem } from "../services/food";
 import { createDrinkLog, deleteDrinkLog, getDrinkLog, listDrinkLogs, updateDrinkLog } from "../services/drink";
@@ -29,6 +30,7 @@ import { createTask, deleteTask, getTask, listTasks, updateTask } from "../servi
 import { createCalendarEvent,deleteCalendarEvent,getCalendarEvent,listCalendarEvents,updateCalendarEvent } from "../services/calendar-event";
 
 export const resourceRegistry = createResourceRegistry({
+  importantDate: { list:listImportantDates,get:getImportantDate,save:saveImportantDate,remove:removeImportantDate,categories:listImportantDateCategories },
   memoryContext: getMemoryContext,
   insightContext: { get: getInsightContext },
   foodLog: { search: listFoodLogs, get: getFoodLog, create: createFoodLog, update: updateFoodLog, delete: deleteFoodLog },

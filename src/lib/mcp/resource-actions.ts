@@ -12,6 +12,12 @@ export type ResourceActionSchema = {
 
 // Returned documentation only. The handler continues to enforce the original contracts below.
 const actionGuidance: Record<string, Record<string, string>> = {
+  important_date: {
+    pin:"Gives this date manual priority in the fixed three featured cards. Does not change other dates, recurrence or reminders.",
+    unpin:"Clears manual priority; automatic nearest-date fallback remains calculated and is never stored as a manual pin.",
+    archive:"Retains the date and shared category color, removes it from active/featured results and cancels its owned reminder projection.",
+    restore:"Returns an archived date to active and reconciles its original reminder rule. Past first alert times are skipped; no Task or Calendar event is created.",
+  },
   insight_run:{start:"Creates or resumes one bounded attempt with a 30-minute input lease; lunch and dinner are required before leasing; changed source data opens a new bounded generation. Does not write a report or any source record.",complete:"Checks the lease and frozen inputs, atomically appends an immutable report version and completes the run; identical replay returns the original result. Only supported important facts may trigger one best-effort existing-channel notification.",fail:"Closes only the specified active attempt with a safe error. Retryable failure waits ten minutes, up to three attempts; completed runs cannot be changed."},
   memory_candidate: {submit:"Atomically submit a proposal; manual stays pending, declared user_confirmed promotes with original evidence and audit. Retry with the same request_id."},
   memory_entity: {
@@ -60,6 +66,7 @@ function action(fields: Record<string, ResourceField> = {}, required_fields: str
 
 // These contracts are also the allowed-key boundary in ResourceRegistry.action.
 export const resourceActionSchemas: Record<string, Record<string, ResourceActionSchema>> = {
+  important_date: { pin:action(),unpin:action(),archive:action(),restore:action() },
   insight_run:{
     start:{...action({request_key:{type:"string",format:"uuid",description:"Fresh UUID for a new attempt; reuse on an uncertain response."},context_fingerprint:{type:"string",description:"SHA-256 from eo_get insight_context for the same day."}},["request_key","context_fingerprint"],"ready=true includes attempt_id, frozen base_snapshot and output_schema_json; false may mean a user-deleted report (analysis_status=deleted), missing meals, succeeded unchanged inputs, active lease or retry limit. Changed inputs can safely reanalyze a completed day.", ["ID is yesterday or day/YYYY-MM-DD", "Only analyze when ready=true", "Do not replace request_key merely because a response was lost"]),id_description:"Ended Daily ID: yesterday or day/YYYY-MM-DD."},
     complete:{...action({attempt_id:{type:"string",format:"uuid",description:"Attempt UUID from start."},output:{type:"object",description:"Exactly summary and findings, matching start.output_schema_json. Write a short natural Chinese recap; select at most three meaningful findings, or none. Findings use ai-* IDs, evidence_ids and optional revises. Never submit modified input, evidence, method or Agent."}},["attempt_id","output"],"Atomically saved report identity/version and succeeded run; identical retries return the original version.",["Use the lease's fixed input/evidence only", "Rule candidates are frozen reference material; do not copy them into output automatically", "A stale lease or concurrent report version rejects completion", "On uncertain response read the run before retrying or reporting failure"]),id_description:"Same Daily ID used to start."},

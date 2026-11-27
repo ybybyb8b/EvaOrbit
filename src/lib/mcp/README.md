@@ -12,7 +12,7 @@ create/update payloads strictly, documents its update mode, and delegates
 deletes and non-CRUD actions to existing business services. Register resources
 one at a time rather than mirroring every database table.
 
-The registry has 39 resources and 41 actions. Food Log, Drink Log, Food Library,
+The registry explicitly registers business resources and actions. Food Log, Drink Log, Food Library,
 daily nutrition and manual energy now route through generic tools to their
 existing parsers/services. Drink mutations include item.limits. Food portions
 preserve snapshots; Food Library create is name/brand upsert and removal keeps
@@ -107,3 +107,9 @@ The response contains candidate audit and promoted_fact_id. Candidate search sup
 promoted_fact_id to trace a formal Fact back to its writer and review client.
 Source PATCH includes source_record_id; note-only evidence and last-valid-source
 deletion for an active Fact are refused. See docs/MEMORY_WRITE_GOVERNANCE.md.
+
+## Days / 如期
+
+`important_date` supports paginated search/get/create/PATCH, owner-only removal and explicit pin/unpin/archive/restore actions. `important_date_category` is a read-only paginated category/color/count catalog; shared color changes go through a date. Gregorian and lunar input, short-month/leap rules and reminders reuse the same validators and business save transaction as the UI. Search defaults to active dates; from/to filter the next real Gregorian occurrence at as_of, not the stored original date. Derived counts disclose calculated_for. Cursor pages freeze that reference day; restart after data changes.
+
+Apply `202611270001_important_dates_lunar.sql` and then `202611270002_important_dates_mcp.sql` before publishing this MCP version. The latter replaces the unconditional external-OAuth denial with the existing verified bridge boundary, retaining owner isolation for both date and category tables. Existing connections gain no new grants; authorize Days capabilities under AI Access. Permanent removal follows the existing owner-only boundary. See [Days rules and examples](../../../docs/DAYS.md).

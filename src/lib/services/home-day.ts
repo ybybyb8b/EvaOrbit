@@ -44,7 +44,7 @@ export async function getHomeDayOverview(date?: string, options: { readOnly?: bo
   const { calendarEvents, calendarInterpretation } = timeline;
   const calendar = summarizeCalendarActivity(calendarEvents, date, calendarInterpretation);
   return {
-    importantDates: sortImportantDates(importantDates.filter(item => !item.archived && (item.pinned || (() => { const days=importantDateStats(item,date).remaining;return days!==null&&days>=0&&days<=30; })())), date).slice(0,4),
+    importantDates: sortImportantDates(importantDates.filter(item => !item.archived && (item.pinned || (() => { const days=importantDateStats(item,date).remaining;return days!==null&&days>=0; })())), date).slice(0,4),
     date,
     events: timeline.events,
     tasks: tasks.filter((task) => task.completed && task.completedOn ? task.completedOn === date : !task.completed || task.dueDate === date)

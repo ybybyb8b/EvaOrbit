@@ -7,6 +7,7 @@ export type AgentCall = { resource: string; operation: AgentOperation | "schema"
 export const CHATGPT_CLIENT = "614ae2e8-5759-40eb-ae0c-97188bc2010c";
 export const HERMES_CLIENT = "a2035497-982a-4811-8711-acc12c5a2064";
 export const resourceNames: Record<string, string> = {
+  important_date:"如期日子（含农历与提醒）",important_date_category:"如期分类与配色目录",
   task: "任务", calendar_event: "日程", project: "项目", project_item: "项目事项",
   inbox: "收件箱", echo: "Echo 记忆", memory_context: "综合记忆检索",
   memory_entity: "记忆实体（含相关事实）", memory_fact: "记忆事实（含来源）",
@@ -20,6 +21,7 @@ export const resourceNames: Record<string, string> = {
   relation_event: "交往事件", reminder: "提醒（含各模块提醒）", software_library: "软件库", subscription: "订阅",
 };
 const actionNames: Record<string, string> = {
+  "important_date:pin":"置顶日子","important_date:unpin":"取消日子置顶","important_date:archive":"归档日子并暂停提醒","important_date:restore":"恢复日子与提醒",
   "task:complete": "完成任务", "task:reopen": "重新打开任务",
   "inbox:mark_processed": "标记收件已处理", "inbox:archive": "归档收件", "inbox:restore": "恢复收件",
   "tracker:create_entry": "添加 Tracker 记录", "tracker:update_entry": "修改 Tracker 记录",
@@ -28,7 +30,7 @@ const actionNames: Record<string, string> = {
   "reminder:skip": "跳过独立提醒", "reminder:snooze": "延后独立提醒",
   "media:add_viewing": "添加观看记录", "media:update_viewing": "修改观看记录",
 };
-const sensitive = new Set(["echo","memory_context","memory_entity","memory_fact","memory_source","memory_candidate",
+const sensitive = new Set(["important_date","important_date_category","echo","memory_context","memory_entity","memory_fact","memory_source","memory_candidate",
   "health_record","nutrition_daily","daily_energy","insight_context","relation_person","relation_event","person_note","chronicle","reminder","subscription","tracker"]);
 const ownerOnlyUpdates = new Set(["memory_entity","memory_fact","memory_source","memory_candidate","subscription"]);
 const ownerOnlyCreates = new Set(["memory_entity","memory_fact","memory_source","memory_candidate","subscription"]);
@@ -122,7 +124,8 @@ export function canChangeProjectStatus(from: string, to?: string) {
 }
 
 export function legacyChatGptPolicy(permissions: AgentPermission[]): AgentPolicy {
-  return { ...emptyPolicy, permissions: permissions.map(({ key }) => key),
+  // The historical compatibility migration did not authorize newly introduced Days resources.
+  return { ...emptyPolicy, permissions: permissions.filter(item=>!["important_date","important_date_category"].includes(item.resource)).map(({ key }) => key),
     allProjects: true, allTrackers: true, inboxOwn: false };
 }
 

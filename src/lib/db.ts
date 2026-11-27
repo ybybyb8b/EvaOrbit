@@ -1,12 +1,15 @@
+import { ValidationError } from "./validation";
 import { isDeepStrictEqual } from "node:util";
-import { importantDateFromRow, importantDateToRow, importantDateReminderAt, type ImportantDateInput } from "./important-dates";
+import { createHash } from "node:crypto";
+import { importantDateColumns,importantDateFromRow, importantDateToRow, importantDateReminderAt, type ImportantDateInput } from "./important-dates";
+import { parseImportantDate } from "./important-dates-validation";
 import { chronicleSearchDates } from "./chronicle";
 import { finishMemoryPage, memoryPageTables, prepareMemoryPage, type MemoryPageInput, type MemoryPageItem, type MemoryResource, type MemorySourceMatch } from "./memory-pagination";
 import { assertMemorySourceEvidence, hasMemorySourceEvidence, parseMemoryCandidateSubmission, parseMemorySourceDraft, parseMemorySourcePatch } from "./memory-graph-validation";
 import {sameSubscriptionPurchase} from "./subscription-purchase";
 import type {NewSubscriptionPurchase} from "./repositories/types";
 import { mergePlaceAddress } from "./place-menu";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { createSqliteEvaStore } from "./repositories/eva-sqlite";
 import { randomUUID } from "node:crypto";
 import { addCalendarInterval, dateInEvaOrbit, shiftDate, zonedDateTimeToUtc } from "./time";
@@ -3419,8 +3422,43 @@ if (!database.prepare("SELECT 1 FROM migrations WHERE version=104").get()) {
     CREATE TABLE important_date_categories(user_id TEXT NOT NULL DEFAULT 'local',name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 40),color TEXT CHECK(color IS NULL OR (length(color)=7 AND color GLOB '#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]')),updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,name));
     INSERT INTO migrations(version) VALUES(104); COMMIT;`);
 }
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=105").get()) {
+  database.exec(`BEGIN; ALTER TABLE important_dates ADD COLUMN calendar_type TEXT NOT NULL DEFAULT 'solar' CHECK(calendar_type IN ('solar','lunar'));
+    ALTER TABLE important_dates ADD COLUMN lunar_date TEXT;
+    ALTER TABLE important_dates ADD COLUMN lunar_leap_policy TEXT NOT NULL DEFAULT 'regular' CHECK(lunar_leap_policy IN ('regular','skip'));
+    INSERT INTO migrations(version) VALUES(105); COMMIT;`);
+}
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=106").get()) {
+  database.exec(`BEGIN; ALTER TABLE important_dates ADD COLUMN background TEXT NOT NULL DEFAULT '{"kind":"none"}';
+    ALTER TABLE important_dates ADD COLUMN background_image TEXT;
+    ALTER TABLE important_dates ADD COLUMN background_image_version TEXT;
+    INSERT INTO migrations(version) VALUES(106); COMMIT;`);
+}
 export function listImportantDateCategories() { return database.prepare("SELECT name,color FROM important_date_categories WHERE user_id='local' ORDER BY name").all().map(row => ({name:String(row.name),color:row.color ? String(row.color) : null})); }
-export function listImportantDates() { return database.prepare("SELECT d.*,c.color AS category_color FROM important_dates d LEFT JOIN important_date_categories c ON c.user_id=d.user_id AND c.name=d.category WHERE d.user_id='local' ORDER BY d.id").all().map(importantDateFromRow); }
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=107").get()) {
+  database.exec("BEGIN; ALTER TABLE important_dates ADD COLUMN count_mode TEXT NOT NULL DEFAULT 'elapsed' CHECK(count_mode IN ('elapsed','ordinal')); INSERT INTO migrations(version) VALUES(107); COMMIT;");
+}
+
+if (!database.prepare("SELECT 1 FROM migrations WHERE version=108").get()) {
+  database.exec("PRAGMA foreign_keys=OFF");
+  try {
+    database.exec("BEGIN");
+    const schema=String(database.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='important_dates'").get()!.sql);
+    const attached=database.prepare("SELECT sql FROM sqlite_master WHERE tbl_name='important_dates' AND type IN ('index','trigger') AND sql IS NOT NULL").all();
+    const sequence=database.prepare("SELECT seq FROM sqlite_sequence WHERE name='important_dates'").get();
+    database.exec(schema.replace(/CREATE TABLE\s+"?important_dates"?/i,"CREATE TABLE important_dates_repeat").replace(/recurrence IN \('none','yearly'\)/i,"recurrence IN ('none','weekly','monthly','yearly')"));
+    database.exec("INSERT INTO important_dates_repeat SELECT * FROM important_dates; DROP TABLE important_dates; ALTER TABLE important_dates_repeat RENAME TO important_dates;");
+    for(const row of attached)database.exec(String(row.sql));
+    if(sequence)database.prepare("UPDATE sqlite_sequence SET seq=max(seq,?) WHERE name='important_dates'").run(sequence.seq);
+    database.exec("ALTER TABLE important_dates ADD COLUMN display_mode TEXT NOT NULL DEFAULT 'auto' CHECK(display_mode IN ('auto','elapsed','countdown')); INSERT INTO migrations(version) VALUES(108);");
+    if(database.prepare("PRAGMA foreign_key_check").all().length)throw new Error("Days repeat migration failed foreign-key validation");
+    database.exec("COMMIT");
+  }catch(error){database.exec("ROLLBACK");throw error;}finally{database.exec("PRAGMA foreign_keys=ON");}
+}
+
+export function saveImportantDateCategory(name:string,color:string|null){database.prepare("INSERT INTO important_date_categories(name,color) VALUES(?,?) ON CONFLICT(user_id,name) DO UPDATE SET color=excluded.color,updated_at=CURRENT_TIMESTAMP").run(name,color);return {name,color};}
+export function getImportantDateBackground(id:number,version:string){const row=database.prepare("SELECT background_image FROM important_dates WHERE user_id='local' AND id=? AND background_image_version=?").get(id,version);return row?.background_image?String(row.background_image):null;}
+export function listImportantDates() { return database.prepare(`SELECT ${importantDateColumns.map(column=>`d.${column}`).join(",")},c.color AS category_color FROM important_dates d LEFT JOIN important_date_categories c ON c.user_id=d.user_id AND c.name=d.category WHERE d.user_id='local' ORDER BY d.id`).all().map(importantDateFromRow); }
 function syncImportantDateReminder(id: number) {
   const item = listImportantDates().find(item => item.id === id);
   const existing = database.prepare("SELECT id FROM reminders WHERE source_type='important_date' AND source_id=?").get(id);
@@ -3442,7 +3480,18 @@ function syncImportantDateReminder(id: number) {
 export function saveImportantDate(id: number | null, input: ImportantDateInput) {
   database.exec("BEGIN");
   try {
-    const row = importantDateToRow(input), keys = Object.keys(row), values = Object.values(row).map(value => typeof value === "boolean" ? Number(value) : value);
+    if(id!==null&&input.calendar===undefined){
+      const existing=listImportantDates().find(item=>item.id===id);
+      if(existing?.calendar==="lunar")input={...input,calendar:existing.calendar,lunar:existing.lunar,lunarLeapPolicy:existing.lunarLeapPolicy};
+    }
+    input=parseImportantDate(input);
+    const row:Record<string,unknown> = importantDateToRow(input);
+    if(input.background!==undefined){
+      const image=input.background.kind==="photo"?(input.background.image??(id!==null?database.prepare("SELECT background_image FROM important_dates WHERE id=? AND user_id='local'").get(id)?.background_image:null)):null;
+      if(input.background.kind==="photo"&&!image)throw new ValidationError("请选择背景图片");
+      row.background_image=image;row.background_image_version=image?createHash("md5").update(String(image)).digest("hex"):null;
+    }
+    const keys = Object.keys(row), values = Object.values(row).map(value => typeof value === "boolean" ? Number(value) : value&&typeof value==="object"?JSON.stringify(value):value) as SQLInputValue[];
     if (id === null) {
       id = Number(database.prepare(`INSERT INTO important_dates(${keys.join(",")}) VALUES(${keys.map(() => "?").join(",")})`).run(...values).lastInsertRowid);
     } else if (!database.prepare(`UPDATE important_dates SET ${keys.map(key => `${key}=?`).join(",")},updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id='local'`).run(...values, id).changes) {

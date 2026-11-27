@@ -1,7 +1,7 @@
 import "server-only";
 import { colorCalendarRecords, type CalendarColorBinding } from "../calendar-colors";
 import { parseEventKitPreferences } from "../eventkit-preferences";
-import { importantDateFromRow, importantDateToRow } from "../important-dates";
+import { importantDateColumns,importantDateFromRow, importantDateToRow } from "../important-dates";
 import { chronicleSearchDates } from "../chronicle";
 import { finishMemoryPage, prepareMemoryPage, type MemoryPageInput, type MemoryPageItem, type MemoryResource, type MemorySourceMatch } from "../memory-pagination";
 import { createSupabaseEvaStore } from "./eva-supabase";
@@ -295,13 +295,15 @@ function buildSupabaseRepository(client: SupabaseClient, userId: string, agent?:
         if(data!.length<500) return items;
       }
     },
+    async saveImportantDateCategory(name,color) {const {data,error}=await client.rpc("save_important_date_category",{p_name:name,p_color:color});fail(error,"保存日子分类");return data as {name:string;color:string|null};},
+    async getImportantDateBackground(id,version) {const {data,error}=await client.from("important_dates").select("background_image").eq("user_id",userId).eq("id",id).eq("background_image_version",version).maybeSingle();fail(error,"读取日子背景");return data?.background_image?String(data.background_image):null;},
     async listImportantDates() {
       const colors=new Map((await repository.listImportantDateCategories()).map(item=>[item.name,item.color]));
       const items = [];
       for (let offset = 0; ; offset += 500) {
-        const {data,error} = await client.from("important_dates").select("*").eq("user_id",userId).order("id").range(offset,offset+499);
+        const {data,error} = await client.from("important_dates").select(importantDateColumns.join(",")).eq("user_id",userId).order("id").range(offset,offset+499);
         fail(error,"读取重要日子");
-        items.push(...(data as Row[]).map(row=>importantDateFromRow({...row,category_color:colors.get(String(row.category))??null})));
+        items.push(...(data as unknown as Row[]).map(row=>importantDateFromRow({...row,category_color:colors.get(String(row.category))??null})));
         if (data!.length < 500) return items;
       }
     },

@@ -32,7 +32,9 @@ test("MCP generic contracts preserve schedules, ownership, PATCH and archive sem
       const tools=(await rpc("tools/list")).tools;
       assert.deepEqual(tools.map(tool=>tool.name).sort(),["eo_resources","eo_schema","eo_search","eo_get","eo_create","eo_update","eo_delete","eo_action"].sort());
       const resources=(await call("eo_resources")).resources;
-      assert.equal(resources.length,35);
+      assert.equal(resources.length,37);
+      assert(resources.some(resource=>resource.resource==="important_date"));
+      assert.deepEqual(resources.find(resource=>resource.resource==="important_date_category").capabilities,["search","get"]);
       assert.deepEqual(resources.find(resource=>resource.resource==="memory_context").capabilities,["search"]);
       assert(resources.some(resource=>resource.resource==="software_library"));
       assert.deepEqual(resources.find(resource=>resource.resource==="echo").aliases,["memo"]);

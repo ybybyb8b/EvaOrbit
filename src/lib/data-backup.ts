@@ -1,7 +1,7 @@
 import { migrateFoodDrinkRecord } from "./food-drink-record-migration.ts";
 import { assertMemorySourceNoNul } from "./memory-graph-validation.ts";
-export const BACKUP_VERSION = 21 as const;
-export const BACKUP_SCHEMA_VERSION = "202611260002_important_date_categories";
+export const BACKUP_VERSION = 24 as const;
+export const BACKUP_SCHEMA_VERSION = "202611270004_important_date_repeats";
 
 /**
  * Dependency-safe import order. This is deliberately an allowlist: adding a new
@@ -99,7 +99,7 @@ export const EXCLUDED_BACKUP_TABLES = [
 ] as const;
 
 export interface EvaOrbitBackup {
-  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | typeof BACKUP_VERSION;
+  backup_version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | typeof BACKUP_VERSION;
   exported_at: string;
   schema: {
     supabase_migration: string;
@@ -117,6 +117,7 @@ export function emptyBackupResources(): BackupResources {
 export function sanitizeExportRow(table: BackupTable, source: BackupRow): BackupRow {
   const row = table === "food_logs" || table === "drink_logs" ? migrateFoodDrinkRecord(table, source) : { ...source };
   delete row.user_id;
+  if(table==="important_dates"){if(typeof row.lunar_date==="string")row.lunar_date=JSON.parse(row.lunar_date);if(typeof row.background==="string")row.background=JSON.parse(row.background);}
   // Provider/model records contain secrets and are intentionally excluded. Keep
   // conversation content useful locally without leaving dangling foreign keys.
   if (table === "chat_sessions" || table === "chat_messages") {
@@ -178,7 +179,7 @@ export function toSqliteValue(value: unknown): string | number | null {
 export function parseBackupDocument(value: unknown): EvaOrbitBackup {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("备份文件不是有效的 JSON 对象");
   const document = value as Record<string, unknown>;
-  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== 13 && document.backup_version !== 14 && document.backup_version !== 15 && document.backup_version !== 16 && document.backup_version !== 17 && document.backup_version !== 18 && document.backup_version !== 19 && document.backup_version !== 20 && document.backup_version !== BACKUP_VERSION) {
+  if (document.backup_version !== 1 && document.backup_version !== 2 && document.backup_version !== 3 && document.backup_version !== 4 && document.backup_version !== 5 && document.backup_version !== 6 && document.backup_version !== 7 && document.backup_version !== 8 && document.backup_version !== 9 && document.backup_version !== 10 && document.backup_version !== 11 && document.backup_version !== 12 && document.backup_version !== 13 && document.backup_version !== 14 && document.backup_version !== 15 && document.backup_version !== 16 && document.backup_version !== 17 && document.backup_version !== 18 && document.backup_version !== 19 && document.backup_version !== 20 && document.backup_version !== 21 && document.backup_version !== 22 && document.backup_version !== 23 && document.backup_version !== BACKUP_VERSION) {
     throw new Error(`不支持的 backup_version：${String(document.backup_version)}（当前支持 1 至 ${BACKUP_VERSION}）`);
   }
   if (typeof document.exported_at !== "string" || Number.isNaN(Date.parse(document.exported_at))) {

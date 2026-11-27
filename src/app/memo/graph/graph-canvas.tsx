@@ -37,20 +37,16 @@ const materials: Record<string, string> = {
   project: nodeMaterial("#e3d5b9", "#aa9a7d", "#83765e"),
   other: nodeMaterial("#e2ced9", "#ad92a2", "#876b7e"),
 };
-const hubMaterial = nodeMaterial("#d8adbf", "#9b6984", "#71435f");
-
 function graphStyle(element: HTMLElement): StylesheetJson {
-  const { mode, designTheme } = document.documentElement.dataset;
-  const dark = mode === "dark";
-  const vintageDark = dark && designTheme === "vintage";
   const theme = getComputedStyle(element);
-  const ink = vintageDark ? theme.getPropertyValue("--text-primary").trim() : dark ? "#f6eaf2" : "#382531";
-  const surface = vintageDark ? theme.getPropertyValue("--surface-raised").trim() : dark ? "#483b46" : "#fbf7f6";
-  const accent = vintageDark ? theme.getPropertyValue("--accent-primary").trim() : dark ? "#e6afcc" : "#814862";
-  const thread = vintageDark ? theme.getPropertyValue("--text-tertiary").trim() : dark ? "#bf9aae" : "#8e657c";
+  const ink = theme.getPropertyValue("--text-primary").trim();
+  const surface = theme.getPropertyValue("--surface-raised").trim();
+  const accent = theme.getPropertyValue("--accent-primary").trim();
+  const thread = theme.getPropertyValue("--text-tertiary").trim();
+  const hubMaterial = nodeMaterial(theme.getPropertyValue("--surface-accent-soft").trim(), accent, theme.getPropertyValue("--accent-strong").trim());
   return [
     { selector: "node", style: {
-      label: "data(name)", width: 25, height: 25, "background-color": "#a98a9d", "background-opacity": .07,
+      label: "data(name)", width: 25, height: 25, "background-color": accent, "background-opacity": .07,
       "background-image": "data(material)", "background-width": "144%", "background-height": "144%",
       "background-clip": "none", "bounds-expansion": 6, "font-family": "system-ui, sans-serif",
       "font-size": 14, "font-weight": 500, color: ink, "text-valign": "bottom", "text-margin-y": 6,
@@ -61,7 +57,7 @@ function graphStyle(element: HTMLElement): StylesheetJson {
     { selector: "node.hub", style: { width: 46, height: 46, "background-image": hubMaterial, "font-size": 15 } },
     { selector: "node.focused", style: {
       "outline-width": 1.5, "outline-offset": 3, "outline-color": accent, "outline-opacity": .82,
-      "border-width": 1.4, "border-color": dark ? "#f7dce8" : "#fff8f4",
+      "border-width": 1.4, "border-color": surface,
       "underlay-color": accent, "underlay-opacity": .13, "underlay-padding": 8, "underlay-shape": "ellipse",
     } },
     { selector: "edge", style: {
@@ -104,7 +100,7 @@ export function GraphCanvas({ graph, focused, selectedFact, ego, english, resetV
     const resize = new ResizeObserver(() => cy.resize());
     resize.observe(element);
     const theme = new MutationObserver(() => cy.style(graphStyle(element)));
-    theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode", "data-design-theme"] });
+    theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode", "data-design-theme", "data-vintage-colorway"] });
     return () => {
       resize.disconnect();
       theme.disconnect();

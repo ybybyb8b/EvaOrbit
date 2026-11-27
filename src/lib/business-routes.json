@@ -774,6 +774,10 @@
   },
   {
     "pattern": "^/api/important-dates/categories$",
+    "methods": ["GET","POST"]
+  },
+  {
+    "pattern": "^/api/important-dates/[1-9][0-9]*/background$",
     "methods": ["GET"]
   },
   {

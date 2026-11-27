@@ -47,6 +47,25 @@ test("Days category colors survive backup and older backups default to an empty 
   assert.throws(()=>parseBackupDocument({...document,backup_version:BACKUP_VERSION}),/important_date_categories/);
 });
 
+test("lunar dates use the same backup shape for SQLite and Postgres and old solar backups remain readable",()=>{
+  const lunar={year:2025,month:6,day:1,leap:true},base={id:1,calendar_type:"lunar",lunar_leap_policy:"skip",date:"2025-07-25"};
+  assert.deepEqual(sanitizeExportRow("important_dates",{...base,lunar_date:JSON.stringify(lunar)}),sanitizeExportRow("important_dates",{...base,lunar_date:lunar}));
+  assert.equal(toSqliteValue(normalizeBackupRowForSqlite("important_dates",{...base,lunar_date:lunar}).lunar_date),JSON.stringify(lunar));
+  const resources=emptyBackupResources();resources.important_dates=[{id:2,date:"2026-01-01"}];
+  const parsed=parseBackupDocument({backup_version:21,exported_at:"2026-11-27T00:00:00Z",schema:{supabase_migration:"old"},source:{backend:"sqlite"},resources});
+  assert.deepEqual(parsed.resources.important_dates,resources.important_dates);
+});
+
+test("photo settings, bytes and ordinal counting survive SQLite/Postgres backup conversion",()=>{
+  const background={kind:"photo",x:30,y:40,shade:.4,zoom:1.8},base={id:1,date:"2016-05-28",count_mode:"ordinal",display_mode:"elapsed",recurrence:"monthly",background_image:"data:image/png;base64,example",background_image_version:"version"};
+  const fromSqlite=sanitizeExportRow("important_dates",{...base,background:JSON.stringify(background)});
+  assert.deepEqual(fromSqlite,sanitizeExportRow("important_dates",{...base,background}));
+  assert.equal(toSqliteValue(normalizeBackupRowForSqlite("important_dates",fromSqlite).background),JSON.stringify(background));
+  const resources=emptyBackupResources();resources.important_dates=[fromSqlite];
+  const restored=parseBackupDocument({backup_version:BACKUP_VERSION,exported_at:"2026-11-27T00:00:00Z",schema:{supabase_migration:BACKUP_SCHEMA_VERSION},source:{backend:"sqlite"},resources});
+  assert.deepEqual(restored.resources.important_dates,[fromSqlite]);
+});
+
 test("paper backups retain audit and usage but never resume an interrupted worker on restore", () => {
   const resources = { ...emptyBackupResources() };
   delete (resources as Partial<typeof resources>).eva_jobs;

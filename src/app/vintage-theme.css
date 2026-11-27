@@ -40,7 +40,7 @@ html[data-design-theme="vintage"][data-theme][data-mode] {
   --surface-note:var(--surface-warm);--surface-note-alt:var(--surface-lavender);--surface-note-green:var(--surface-tint);
   --border-subtle:var(--border-default);--border-icon:var(--border-default);
   --surface-warm-rgb:233 227 233;--surface-chat-rgb:242 243 245;
-  --calendar-ribbon-rgb:95 62 84;--backdrop-rgb:30 27 32;
+  --calendar-ribbon-rgb:95 62 84;--backdrop-rgb:30 27 32;--art-overlay-rgb:49 40 53;
   --state-danger:#9a4756;--state-success:#52695d;--state-warning:#876b37;
   --surface-danger:#f3e5e9;--accent-gold:#846b4e;
   --surface-due:var(--vintage-due);--surface-brand:var(--surface-accent-soft);
@@ -55,6 +55,74 @@ html[data-design-theme="vintage"][data-theme][data-mode="dark"] {
   --surface-lavender:#383540;--border-strong:#817287;
   --action-primary:#69465e;--action-primary-hover:#80536f;--action-primary-ink:#fff6fc;
 }
+/* Colorways remap pigment; Vintage retains its shared material and geometry. */
+html[data-design-theme="vintage"][data-theme][data-mode][data-vintage-colorway="oat-plum"] {
+  --surface-canvas:#f1eee6;--surface-card:#faf8f3;--surface-raised:#fffdf8;
+  --surface-soft:#e6e1e9;--surface-tint:#bdcfe2;--surface-warm:#e6e1e9;
+  --surface-accent-soft:#e6e1e9;--surface-lavender:#e6e1e9;
+  --text-primary:#47394b;--text-secondary:#594c5e;--text-tertiary:#605265;
+  --text-editorial:#47394b;--text-overline:#594c5e;
+  --accent-primary:#47394b;--accent-strong:#382c3c;--accent-on:#faf8f3;
+  --accent-rgb:71 57 75;--surface-card-rgb:250 248 243;--surface-raised-rgb:255 253 248;
+  --surface-shell-rgb:241 238 230;--surface-header-rgb:241 238 230;
+  --surface-tint-rgb:189 207 226;--surface-warm-rgb:230 225 233;--surface-chat-rgb:241 238 230;
+  --calendar-ribbon-rgb:71 57 75;--art-overlay-rgb:71 57 75;
+  --border-default:#cfc7ce;--border-control:#7f6c85;--border-strong:#7f6c85;--focus-ring:#47394b;
+  --vintage-glass:rgb(189 207 226 / .49);--vintage-glass-edge:rgb(255 253 248 / .58);
+  --vintage-disc:#faf8f3;--vintage-disc-ink:#594c5e;--vintage-disc-selected:#47394b;
+  --vintage-due:#e6e1e9;--vintage-due-ink:#47394b;--vintage-nav:rgb(189 207 226 / .74);
+  --action-primary:#47394b;--action-primary-hover:#382c3c;--action-primary-ink:#faf8f3;--text-on-accent:#faf8f3;
+  --home-log-surface:#47394b;--home-log-hover:#382c3c;--home-log-ink:#faf8f3;
+  --log-accent-surface:#47394b;--log-accent-hover:#382c3c;--log-accent-ink:#faf8f3;
+  --state-danger:#873c4a;--state-success:#465b50;--state-warning:#685027;--state-info:#3a526c;--surface-info:#d9e3ed;--surface-success:#e2e9e1;--surface-warning:#efe4ca;
+  --colorway-widget-ivory:250 248 243;--colorway-widget-tint:189 207 226;
+  --colorway-widget-ink:#47394b;--colorway-widget-muted:#594c5e;
+  --colorway-widget-edge:255 253 248;--colorway-widget-rail-thumb:101 87 106;
+  --colorway-nav-material:linear-gradient(180deg,rgb(255 253 248 / .36),rgb(189 207 226 / .3));
+  --colorway-nav-text:#594c5e;--colorway-nav-accent:#47394b;--colorway-log-disc:#47394b;
+  --colorway-date-shell-material:linear-gradient(180deg,rgb(250 248 243 / .48),rgb(250 248 243 / .9));
+  --colorway-date-shell-selected:rgb(250 248 243 / .97);
+  --colorway-date-disc-ink:#594c5e;--colorway-date-selected-shadow:rgb(71 57 75 / .17);
+  --colorway-preview-light:#f1eee6;--colorway-preview-dark:#25232a;
+}
+html[data-design-theme="vintage"][data-theme][data-mode="dark"][data-vintage-colorway="oat-plum"] {
+  --surface-canvas:#25232a;--surface-card:#302c34;--surface-raised:#3d3742;
+  --surface-soft:#3b3541;--surface-tint:#354453;--surface-warm:#3b3541;
+  --surface-accent-soft:#443a49;--surface-lavender:#3b3541;
+  --text-primary:#eee8df;--text-secondary:#cbc1cf;--text-tertiary:#bab0bf;
+  --text-editorial:#eee8df;--text-overline:#cbc1cf;
+  --accent-primary:#d5c5dd;--accent-strong:#e8d9ef;--accent-on:#302635;
+  --accent-rgb:213 197 221;--surface-card-rgb:48 44 52;--surface-raised-rgb:61 55 66;
+  --surface-shell-rgb:37 35 42;--surface-header-rgb:37 35 42;
+  --surface-tint-rgb:53 68 83;--surface-warm-rgb:59 53 65;--surface-chat-rgb:37 35 42;
+  --calendar-ribbon-rgb:213 197 221;
+  --border-default:#574e5d;--border-control:#a08daa;--border-strong:#a08daa;--focus-ring:#d5c5dd;
+  --vintage-glass:rgb(120 145 172 / .23);--vintage-glass-edge:rgb(226 219 237 / .17);
+  --vintage-disc:#3d3742;--vintage-disc-ink:#eee8df;--vintage-disc-selected:#5e4868;
+  --vintage-due:#443a49;--vintage-due-ink:#d5c5dd;--vintage-nav:rgb(79 94 111 / .53);
+  --action-primary:#5e4868;--action-primary-hover:#70577c;--action-primary-ink:#f9f7f1;
+  --home-log-surface:#5e4868;--home-log-hover:#70577c;--home-log-ink:#f9f7f1;
+  --log-accent-surface:#5e4868;--log-accent-hover:#70577c;--log-accent-ink:#f9f7f1;
+  --state-info:#bdcfe2;--surface-info:#354453;--surface-success:#344139;--surface-warning:#473e2e;
+  --colorway-widget-ivory:48 44 52;--colorway-widget-tint:79 94 111;
+  --colorway-widget-ink:#eee8df;--colorway-widget-muted:#cbc1cf;
+  --colorway-widget-edge:173 185 202;--colorway-widget-rail-thumb:189 207 226;
+  --colorway-nav-material:linear-gradient(180deg,rgb(79 94 111 / .34),rgb(48 44 52 / .42));
+  --colorway-nav-text:#cbc1cf;--colorway-nav-accent:#d5c5dd;--colorway-log-disc:#5e4868;
+  --colorway-date-shell-material:linear-gradient(180deg,rgb(120 145 172 / .15),rgb(79 94 111 / .26));
+  --colorway-date-shell-selected:rgb(61 55 66 / .96);
+  --colorway-date-disc-ink:#cbc1cf;--colorway-date-selected-shadow:rgb(94 72 104 / .2);
+}
+.appearance-option-grid.colorway-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.appearance-option-grid.colorway-options button { grid-template-columns:1fr; }
+.appearance-option-grid.colorway-options button small { grid-column:1; }
+.appearance-colorway-preview { display:flex;gap:4px;margin-bottom:4px;--swatch-canvas:#f2f3f5;--swatch-card:#fcfcfd;--swatch-tint:#ccd4df;--swatch-accent:#5f3e54;--swatch-soft:#e8e4ec; }
+.appearance-colorway-preview[data-colorway="oat-plum"] { --swatch-canvas:#f1eee6;--swatch-card:#faf8f3;--swatch-tint:#bdcfe2;--swatch-accent:#47394b;--swatch-soft:#e6e1e9; }
+.appearance-colorway-preview i { width:18px;height:18px;border-radius:50%;background:var(--swatch-canvas); }
+.appearance-colorway-preview i:nth-child(2) { background:var(--swatch-card); }
+.appearance-colorway-preview i:nth-child(3) { background:var(--swatch-tint); }
+.appearance-colorway-preview i:nth-child(4) { background:var(--swatch-accent); }
+.appearance-colorway-preview i:nth-child(5) { background:var(--swatch-soft); }
 html[data-design-theme="vintage"] body { background:var(--surface-canvas); }
 html[data-design-theme="vintage"] :is(input,textarea,[contenteditable="true"],.user-content,button,select) { font-family:var(--font-ui); }
 /* Heading roles stay shared across Web and bundled React; metrics retain --font-editorial. */
@@ -83,14 +151,23 @@ html[data-design-theme="vintage"][data-theme][data-mode] :is(.editor-card,.provi
 }
 html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid button { background:var(--surface-soft);box-shadow:none; }
 html[data-design-theme="vintage"][data-theme][data-mode] .appearance-option-grid button.active { background:var(--surface-accent-soft);color:var(--accent-primary);box-shadow:inset 0 0 0 1px rgb(var(--accent-rgb) / .32); }
-html[data-design-theme="vintage"] :is(.appearance-mode-preview.light i,.appearance-mode-preview.system i:first-child) { background:#f2f3f5; }
-html[data-design-theme="vintage"] :is(.appearance-mode-preview.dark i,.appearance-mode-preview.system i:last-child) { background:#202124; }
+html[data-design-theme="vintage"] :is(.appearance-mode-preview.light i,.appearance-mode-preview.system i:first-child) { background:var(--colorway-preview-light,#f2f3f5); }
+html[data-design-theme="vintage"] :is(.appearance-mode-preview.dark i,.appearance-mode-preview.system i:last-child) { background:var(--colorway-preview-dark,#202124); }
 html[data-design-theme="vintage"] .sidebar :is(.main-nav,.sidebar-bottom) .vintage-reicon { width:16px;height:16px; }
 html[data-design-theme="vintage"] .space-drawer section a .vintage-reicon { width:26px;height:26px; }
 
 /* A sheet owns one continuous surface; its chrome and nested editor do not add cards. */
 html[data-design-theme="vintage"][data-theme][data-mode] .form-sheet-panel {
   background:var(--surface-card);backdrop-filter:none;-webkit-backdrop-filter:none;
+}
+/* A few selected chips carry Mist Blue; writing surfaces and larger rows stay neutral. */
+html[data-design-theme="vintage"][data-theme][data-mode][data-vintage-colorway="oat-plum"] .form-sheet-panel {
+  --form-selection-surface:color-mix(in srgb,var(--surface-tint) 60%,var(--surface-card));
+}
+html[data-design-theme="vintage"][data-theme][data-mode][data-vintage-colorway="oat-plum"] .form-sheet-panel :is(
+  .choice-capsules > button[aria-pressed="true"],.input-selected-tags > button
+) {
+  background-color:var(--form-selection-surface);color:var(--text-primary);
 }
 html[data-design-theme="vintage"][data-theme][data-mode] :is(.form-sheet-header,.form-sheet-body,.form-sheet-footer),
 html[data-design-theme="vintage"][data-theme][data-mode] .form-sheet-body > .editor-card {

@@ -51,7 +51,7 @@
 - **数据与接口**：`ui_preferences` 保存界面及相关偏好；认证位于 `src/lib/supabase/`；偏好 API 位于 `src/app/api/preferences/`。备份入口 `/api/data-backup/export`，表白名单与格式以 [data-backup.ts](../src/lib/data-backup.ts) 为准。
 - **边界**：页面/API/AI/MCP 复用业务服务与 Repository；生产为 Supabase Auth + Postgres RLS，SQLite 为本地后备。请求身份和缓存必须按账户隔离；Secret 只在服务端加密处理。沿用全局组件、主题与交互，不为局部调整引入新体系。
 - **公共纯函数**：客户端与本地 React 的错误消息解析统一走 [response-error.ts](../src/lib/response-error.ts)，保留 HTTP 状态及业务 code；[request-diagnostics.ts](../src/lib/request-diagnostics.ts) 与 Native `NativeDiagnostics.swift` 在共用边界记录模块操作、失败步骤和安全诊断码，不依赖 Next、不自动重试请求，也不输出正文或查询参数，见 [错误诊断](LOCAL_ERROR_DIAGNOSTICS.md)。服务端列表参数复用 [api.ts](../src/lib/api.ts) 的 `optionalLimit` / `optionalEnum`，由路由显式保留数量上限、空白处理和业务枚举。日期平移复用 `time.ts` 的 `shiftDate`。
-- **共享外观**：Web 与本地版统一使用 Vintage。首次绘制和运行时都应用 [Vintage 语义色、字体与表面](../src/app/vintage-theme.css)，首页任务汇总同时呈现到期提醒。独立 [Due 卡组件](../src/components/due-reminders-view.tsx) 和 [Classic 插画图标](../src/components/icons.tsx) 保留备用。两端共用 [AppearanceSettings](../src/components/appearance-settings.tsx)，支持语言、字体与浅色／深色／跟随系统。本地只写设备存储，Web 沿用外观偏好 API。历史数据库迁移保留，当前偏好 API 只处理语言、字体与显示模式。本地初始语言与英文字体为英语／August，旧字体键 `ibm` 对应 August。
+- **共享外观**：Web 与本地版统一使用 Vintage。首次绘制和运行时都应用 [Vintage 语义色、字体与表面](../src/app/vintage-theme.css)，首页任务汇总同时呈现到期提醒。独立 [Due 卡组件](../src/components/due-reminders-view.tsx) 和 [Classic 插画图标](../src/components/icons.tsx) 保留备用。两端共用 [AppearanceSettings](../src/components/appearance-settings.tsx)，支持语言、字体与浅色／深色／跟随系统。Vintage 下的 Mauve & Ivory／Oat & Plum 配色通过共享语义变量切换，含日历、底栏和 Widget Stack 材质色；配色只写设备存储，并在首次绘制恢复，Web 云端偏好读取保留本机配色。本地其余外观只写设备存储，Web 沿用外观偏好 API。历史数据库迁移保留，当前偏好 API 只处理语言、字体与显示模式。本地初始语言与英文字体为英语／August，旧字体键 `ibm` 对应 August。
 - **共享设置**：[SettingsDirectory](../src/app/settings/settings-directory.tsx) 由 Web 注入链接、本地注入导航，统一设置目录；[SettingsWorkspace](../src/local-trackers/settings-workspace.tsx) 复用外观、生活日、日历解读、AI 和导出卡片。生活日/日历规则经 [在线配置白名单](../src/lib/settings-configuration-request.ts) 与账户绑定 Bridge 保存，不缓存或进入 outbox，服务端 `settingsConfigurationProtocol:1` 就绪后启用。原生健康/日历/通知仅读取状态与来源，不开启业务同步；通知规则、云端完整备份与旧 Memory 仍通过 Web 管理。详见 [Settings 阶段](SETTINGS_LOCAL_SHARED.md)。
 - **标题字体**：Web 与本地 React 共用 [fonts.css](../src/app/fonts.css) 的固定仓耳雅月体与 [Vintage 标题规则](../src/app/vintage-theme.css)，不加入字体备选或偏好 schema。`--font-heading` 保留所选英文字体，雅月体仅承担中文字符；中文界面页面标题为 28–36px、正常字距和原生字重。正文／控件仍用华新体，数值展示保留原有字体角色。
 - **操作反馈**：Web 与本地 React 均挂载 [ErrorFeedbackProvider](../src/components/error-feedback.tsx) 和 [ActionToastViewport](../src/components/action-toast.tsx)。提交/页面错误通过 `ErrorNotice` 显示常驻顶部条幅，向上滑动或关闭可收起，来源卸载/错误清除时移除；同文案合并收起，具体字段校验可用 `inline`。成功胶囊在保存成功后触发，本地保存明确标为“已保存到本机”；同步冲突仍保留专用处理面板。组件内候选加载、字段校验等局部提示保留现场语境，尚未全部迁移。
@@ -68,6 +68,8 @@
 
 - **完成事项汇总**：Home 按完成日期读取普通 Tasks 与 Reminder occurrence，复用 Timeline 中的护理、家务、订阅付款和用药事实。`home-completions.ts` 按来源身份去重。普通任务可取消勾选，完成日期可更正，Tracker 提醒显示为已处理。Web 与本地快照共享 DTO，兼容旧快照。
 
+- **首页叠放**：[PersonalWidgetStack](../src/components/personal-widget-stack.tsx) 固定在 Tasks 下方，以单体雾面亚克力表面及内部 Spring 吸附统一纵向分页、当前位置、实例编辑与 Pointer 拖拽／键盘排序；[注册表](../src/components/widgets/widget-registry.ts) 分别接入 Tracker、Days、Cat Care 和 Training Summary 的卡片、配置与业务动作。同类可有多个独立实例，默认使用已有 Poo／Shower；账户隔离设备偏好保存实例、选项、顺序、当前实例；材质仅跟随现有 Vintage 浅／深色外观，无独立配色选项，读取旧配置时忽略历史 material 字段，迁移原 Tracker Stack 偏好且保留旧键。Web 复用既有 API；[本地适配](../src/local-trackers/personal-widget-stack.tsx) 使用账户绑定在线读取及已有模块快照，Tracker 继续走共享 session 与独立队列，护理完成只走既有在线业务接口。记录复用 TrackerEntryEditor 居中 Modal。Greeting、Calendar、固定 Tasks 与 Timeline 保持现有实现；Days 只作为自主添加组件展示，原模块与数据服务保留。
+
 - **共享界面与只读 Host**：[HomePageView](../src/components/home-page-view.tsx)、[HomeCalendarTimeline](../src/components/home-calendar-timeline.tsx)、[DueRemindersView](../src/components/due-reminders-view.tsx) 同时供 Web 和本地 React 使用；Web 包装注入 Next 导航、Log 和规则编辑器。本地 [HomeWorkspace](../src/local-trackers/home-workspace.tsx) 使用账户隔离快照，表单复用在线业务请求，跨模块链接由 [本地路由](../src/local-trackers/routes.tsx) 转入已迁移模块。
 - **安全读取边界**：Host 只使用 `/api/native/home-readonly/{day|month|due}/{date|month|current}`；服务显式跳过订阅自动补账和药物提醒校准，Repository 进一步限制为审计过的读取方法。旧 Home GET 有补账副作用，不能作为只读回退。只读接口独立于 Tracker 同步协议及迁移；当前支持最近七天和访问过的日期缓存，缺失日期明确提示，非全量历史离线。
 - **职责与入口**：[page.tsx](../src/app/page.tsx)、[home-calendar-timeline.tsx](../src/app/home-calendar-timeline.tsx)、[home-day 服务](../src/lib/services/home-day.ts)、[timeline 服务](../src/lib/services/timeline.ts)。
@@ -77,10 +79,13 @@
 
 ## Days
 
-- **职责与入口**：[Days](../src/app/days/)、[日期计算](../src/lib/important-dates.ts)、[服务](../src/lib/services/important-dates.ts)；`important_dates`，`/api/important-dates` 及 `/:id`。保存用完整 PUT，日期与提醒时间独立，年度事件保留原始日期，2 月 29 日在平年按 2 月 28 日计算。剩余／累计天数按 EvaOrbit 自然日计算，不使用生活日偏移。
-- **共享与本地**：[DaysWorkspace](../src/local-trackers/days-workspace.tsx) 复用 Web 页面与 FormSheet；账户绑定 `business.request` 在线保存，访问过的列表复用既有账户缓存离线读取，不增加 outbox。Home 只读聚合置顶及未来 30 天的重要日子，不生成 Task 或真实发生记录；旧 Home 快照缺少该字段时兼容为空。
-- **提醒与数据**：`important_date` 来源只接 Bark／Web Push，不进入 Due 待办、EventKit 或 Native 本地通知。Postgres trigger 与 SQLite 事务维护唯一提醒投影，改期／归档／删除取消旧排程；既有 Cron 调用受 service_role 限制的年度校准函数，无需打开 App。已过的首次提醒时间跳过；不因改标题／置顶重复发送。分类颜色由 `important_date_categories` 按账户和分类共享，保存日子与选色在同一事务完成；顶部卡片优先手动置顶，否则取最近日子，下方完整列表按日期排列。纳入备份 v21，旧备份兼容为空，未注册新的 MCP 资源。
-- **发布边界**：先应用 `202611260001_important_dates.sql` 与 `202611260002_important_date_categories.sql`，再发布 Web/API，最后按原链路更新本地 IPA。Host 与本地路由只新增 `/days` 深链白名单，不改变 bridge 方法、权限、framework、entitlement 或签名链。农历、人物／猫咪生日关联与小组件后置。
+- **农历**：[共享换算](../src/lib/lunar-calendar.ts) 与固定 1901—2100 年历法数据供 Web、本地、Home 和 Widget 共用；原始公历锚点与农历年／月／日／闰月独立保存，支持无同名闰月时普通月回退或跳过，小月三十按二十九。Postgres 同数据函数与原提醒 trigger 维护排程，旧客户端省略历法字段保留既有农历。详见 [Days 规则与功能差距](DAYS.md)。
+
+- **职责与入口**：[Days](../src/app/days/)、[日期计算](../src/lib/important-dates.ts)、[服务](../src/lib/services/important-dates.ts)；`important_dates`，`/api/important-dates` 及 `/:id`。保存用完整 PUT，日期与提醒时间独立，年／月／周重复保留原始日期；公历缺日取月底且不漂移，农历月重复包含闰月、三十遇小月取二十九，每周固定自然日星期。剩余／累计天数按 EvaOrbit 自然日计算，不使用生活日偏移。
+- **主题卡片**：背景元数据与压缩照片分列保存，列表不携带图片字节；账户绑定 JSON 背景接口按版本读取。材质、纯色、渐变与照片沿用 Vintage，首页和表单共用拖动/缩放裁切设置；展开预览完整显示图片，文字位于照片外侧。图片新上传压缩至 100 KB 以下；事件级展示方向与起始日计数在 Days、Home 与内部 Widget 共用，不改变排序和提醒。
+- **共享与本地**：[DaysWorkspace](../src/local-trackers/days-workspace.tsx) 复用 Web 页面与 FormSheet；账户绑定 `business.request` 在线保存，访问过的列表复用既有账户缓存离线读取，不增加 outbox。Home 历史快照保留重要日子聚合；当前 Days Widget 按实例读取完整模块列表并复用日期计算，不生成 Task 或真实发生记录；旧 Home 快照缺少该字段时兼容为空。
+- **提醒与数据**：`important_date` 来源只接 Bark／Web Push，不进入 Due 待办、EventKit 或 Native 本地通知。Postgres trigger 与 SQLite 事务维护唯一提醒投影，改期／归档／删除取消旧排程；既有 Cron 调用受 service_role 限制的年度校准函数，无需打开 App。已过的首次提醒时间跳过；不因改标题／置顶重复发送。分类颜色由 `important_date_categories` 按账户和分类共享，表单在分类选择器中独立保存颜色，旧 API 仍支持随日子原子改色；顶部卡片优先手动置顶，否则取最近日子，下方完整列表按日期排列。纳入备份 v24，旧备份兼容为空。MCP 通过 `important_date` 与只读 `important_date_category` 接入现有通用工具，复用历法校验和提醒保存事务；筛选、派生天数、分类配色和 PATCH 契约见 [Days](DAYS.md#mcp)。
+- **发布边界**：先应用 `202611260001_important_dates.sql`、`202611260002_important_date_categories.sql`、`202611270001_important_dates_lunar.sql` 、`202611270002_important_dates_mcp.sql`、`202611270003_important_date_backgrounds.sql` 与 `202611270004_important_date_repeats.sql`，再发布 Web/API，最后按原链路更新本地 IPA。Host 与本地路由只新增 `/days` 深链白名单，不改变 bridge 方法、权限、framework、entitlement 或签名链。农历实现与后续功能对照见 [Days 规则](DAYS.md)；人物／猫咪生日关联与系统小组件后置。
 
 ## Food
 

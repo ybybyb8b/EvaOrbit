@@ -43,6 +43,7 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   const initialPath=useLocalInitialPath("/trackers");
   const requestedUrl=new URL(initialPath,"https://local.invalid");
   const requestedTracker=useRef(Number(requestedUrl.pathname.split("/")[2])||null);
+  const requestedLocalTracker=useRef(requestedUrl.searchParams.get("local"));
   const requestedEntry=useRef(Number(requestedUrl.searchParams.get("entry"))||null);
   const {english}=useLocale();
   const request=useBusinessRequest();
@@ -54,7 +55,7 @@ export function TrackerWorkspace({ account, platform }: { account: LocalAccount;
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [ready, setReady] = useState(false), [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null), [create, setCreate] = useState(false), [capture, setCapture] = useState(false);
-  useEffect(()=>{if(!requestedTracker.current)return;const row=state.records.find(row=>row.resourceType==="tracker"&&row.serverId===requestedTracker.current);if(row){setSelectedId(row.id);requestedTracker.current=null;}},[state.records]);
+  useEffect(()=>{if(!requestedTracker.current&&!requestedLocalTracker.current)return;const row=state.records.find(row=>row.resourceType==="tracker"&&(requestedLocalTracker.current?row.id===requestedLocalTracker.current:row.serverId===requestedTracker.current));if(row){setSelectedId(row.id);requestedTracker.current=null;requestedLocalTracker.current=null;}},[state.records]);
   const [editing, setEditing] = useState<LocalTrackerRecord | undefined>(), [deleting, setDeleting] = useState<LocalTrackerRecord | null>(null);
   useEffect(()=>{
     if(!requestedEntry.current||!selectedId)return;

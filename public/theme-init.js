@@ -2,6 +2,7 @@
   try {
     const modes = new Set(["system", "light", "dark"]);
     const preferredMode = localStorage.getItem("evaorbit.appearanceMode");
+    const colorway = localStorage.getItem("evaorbit.vintageColorway") === "oat-plum" ? "oat-plum" : "mauve-ivory";
     const preferredLanguage = localStorage.getItem("evaorbit.uiLanguage");
     const preferredChineseFont = localStorage.getItem("evaorbit.chineseFont");
     const preferredEnglishFont = localStorage.getItem("evaorbit.englishFont");
@@ -14,11 +15,13 @@
     root.dataset.mode = mode;
     root.dataset.designTheme = "vintage";
     root.dataset.theme = "vintage";
+    root.dataset.vintageColorway = colorway;
     root.dataset.locale = language;
     root.lang = language;
     root.dataset.chineseFont = ["canger", "lxgw", "alimama", "ibm"].includes(preferredChineseFont) ? preferredChineseFont : "canger";
     root.dataset.englishFont = ["zen", "ibm", "polyamine", "cormorant"].includes(preferredEnglishFont) ? preferredEnglishFont : preferredEnglishFont === null && localBaseline ? "ibm" : "zen";
     root.style.colorScheme = mode;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", mode === "dark" ? "#202124" : "#f2f3f5");
+    const oat = colorway === "oat-plum";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", mode === "dark" ? oat ? "#25232a" : "#202124" : oat ? "#f1eee6" : "#f2f3f5");
   } catch {}
 })();

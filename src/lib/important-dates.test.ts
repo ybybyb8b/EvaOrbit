@@ -50,7 +50,7 @@ test("important dates validate boundaries and round-trip storage without inventi
   assert.equal(input.title,"Anniversary");assert.equal(input.reminderTime,null);
   const item=importantDateFromRow({...importantDateToRow(input),id:1,created_at:"created",updated_at:"updated"});
   assert.deepEqual(item,{...input,id:1,createdAt:"created",updatedAt:"updated"});
-  for(const patch of [{date:"2026-02-29"},{date:"2026-04-31"},{date:"0000-01-01"},{date:"2026-01-01T00:00:00Z"},{title:" "},{pinned:"yes"},{recurrence:"monthly"},{reminderTime:"24:00"},{reminderDaysBefore:1.5},{reminderDaysBefore:367},{user_id:"another"}]) assert.throws(()=>parseImportantDate({...draft(),...patch}),JSON.stringify(patch));
+  for(const patch of [{date:"2026-02-29"},{date:"2026-04-31"},{date:"0000-01-01"},{date:"2026-01-01T00:00:00Z"},{title:" "},{pinned:"yes"},{recurrence:"daily"},{reminderTime:"24:00"},{reminderDaysBefore:1.5},{reminderDaysBefore:367},{user_id:"another"}]) assert.throws(()=>parseImportantDate({...draft(),...patch}),JSON.stringify(patch));
   const items=[{...item,id:1,date:"2026-11-30"},{...item,id:2,date:"2026-01-01",recurrence:"none" as const},{...item,id:3,date:"2026-12-01",pinned:true}];
   assert.deepEqual(sortImportantDates(items,"2026-11-26").map(item=>item.id),[3,1,2]);
   assert.ok(cacheReadPolicy("/api/important-dates"));

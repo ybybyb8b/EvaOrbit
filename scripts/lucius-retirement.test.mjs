@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import path from "node:path";
+import os from "node:os";
+import {applyEmptyLuciusFixture} from "./empty-lucius-fixture.mjs";
 import { PGlite } from "@electric-sql/pglite";
 import { BACKUP_TABLES, emptyBackupResources, parseBackupDocument } from "../src/lib/data-backup.ts";
 import { workspaceKinds, validateWorkspaceSnapshot } from "../src/lib/workspace-readonly.ts";
@@ -20,6 +23,7 @@ test("retired Lucius cannot be routed, downloaded, written or restored by curren
 
 test("retirement requires a backup guard and preserves unrelated rows and permissions", async () => {
   const db = new PGlite();
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),"eo-empty-lucius-"));
   try {
     await db.exec(`
       create table migration_import_ledger(resource text constraint migration_import_ledger_resource_check check(resource in ('memo','chronicle','lucius_diary')));
@@ -42,8 +46,18 @@ test("retirement requires a backup guard and preserves unrelated rows and permis
     const migration = fs.readFileSync("supabase/migrations/202611250001_retire_lucius.sql", "utf8");
     await assert.rejects(db.exec(migration), /requires a verified backup/);
     await db.exec("rollback");
-    await db.query("select set_config('evaorbit.lucius_backup_sha256',$1,false)", ["a".repeat(64)]);
-    await db.exec(migration);
+    const options={run:async(query,parameters=[])=>parameters.length?(await db.query(query,parameters)).rows:(await db.exec(query)).at(-1)?.rows??[],source:migration,directory,databaseUrl:"postgresql://fixture:fixture@127.0.0.1:54322/postgres",environment:{CI:"true",TRACKER_ISOLATED_SUPABASE:"1"}};
+    await assert.rejects(()=>applyEmptyLuciusFixture({...options,databaseUrl:"postgresql://example.com/postgres"}),/Hosted targets/);
+    await assert.rejects(()=>applyEmptyLuciusFixture({...options,environment:{CI:"false",TRACKER_ISOLATED_SUPABASE:"1"}}),/Disposable CI/);
+    await db.exec("insert into lucius_posts values(99)");
+    await assert.rejects(()=>applyEmptyLuciusFixture(options),/must be empty/);
+    assert.equal((await db.query("select count(*)::integer as n from lucius_posts")).rows[0].n,1);
+    await db.exec("delete from lucius_posts");
+    await assert.rejects(()=>applyEmptyLuciusFixture({...options,source:"begin;select 1/0;commit;"}),/division by zero/);
+    assert.equal((await db.query("select current_setting('evaorbit.lucius_backup_sha256') as marker")).rows[0].marker,"");
+    await applyEmptyLuciusFixture(options);
+    assert.equal((await db.query("select current_setting('evaorbit.lucius_backup_sha256') as marker")).rows[0].marker,"");
+    assert.match(fs.readFileSync(path.join(directory,"empty-lucius-fixture.sql"),"utf8"),/0 rows/);
     assert.deepEqual((await db.query("select resource from migration_import_ledger order by resource")).rows, [{ resource: "chronicle" }, { resource: "memo" }]);
     assert.deepEqual((await db.query("select home_module_order from ui_preferences")).rows[0].home_module_order, ["memo", "chronicle"]);
     assert.deepEqual((await db.query("select policy,revision from agent_connections order by revision")).rows, [
@@ -53,5 +67,5 @@ test("retirement requires a backup guard and preserves unrelated rows and permis
     assert.equal((await db.query("select count(*)::int as count from agent_access_history")).rows[0].count, 1);
     assert.equal((await db.query("select count(*)::int as count from notification_deliveries")).rows[0].count, 1);
     assert.equal((await db.query("select count(*)::int as count from pg_tables where schemaname='public' and tablename like 'lucius_%'")).rows[0].count, 0);
-  } finally { await db.close(); }
+  } finally { await db.close(); fs.rmSync(directory,{recursive:true,force:true}); }
 });

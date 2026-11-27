@@ -30,7 +30,8 @@ export function LocaleController({ children, localOnly = false, defaults }: { ch
       .then(async response => { if (!response.ok) throw new Error("Preferences unavailable"); return response.json(); })
       .then(value => {
         if (!value || !alive || revision.current !== expectedRevision) return;
-        const next = normalizeAppearancePreferences(value);
+        // Colorways are device preferences, shared by Web and the local shell.
+        const next = normalizeAppearancePreferences({ ...value, vintageColorway: local.vintageColorway });
         setState(next);
         try { applyAppearancePreferences(next); } catch { /* Cloud preferences remain usable without browser persistence. */ }
       }).catch(() => { if (alive && revision.current === expectedRevision) setLoadFailed(true); });

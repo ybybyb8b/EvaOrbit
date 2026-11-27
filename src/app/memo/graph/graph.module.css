@@ -1,17 +1,17 @@
 .page {
-  --graph-glint:#fffdf9;
-  --graph-ground:#e4dbe0;
-  --graph-contact:#4e344719;
-  --graph-rim:#fffaf4c9;
-  --graph-control:linear-gradient(155deg,#fffdf9e6,#eee4ebcc);
+  --graph-glint:var(--surface-raised);
+  --graph-ground:var(--surface-accent-soft);
+  --graph-contact:rgb(var(--shadow-rgb) / .098);
+  --graph-rim:rgb(var(--surface-raised-rgb) / .79);
+  --graph-control:linear-gradient(155deg,rgb(var(--surface-raised-rgb) / .9),rgb(var(--surface-card-rgb) / .8));
   width:min(900px,calc(100% - 44px));
 }
 :global(html[data-mode="dark"]) .page {
-  --graph-glint:#50434a;
-  --graph-ground:#382c36;
-  --graph-contact:#0e080f50;
-  --graph-rim:#ead7e126;
-  --graph-control:linear-gradient(155deg,#5a4954e6,#3e313dcc);
+  --graph-glint:var(--surface-raised);
+  --graph-ground:var(--surface-card);
+  --graph-contact:rgb(var(--shadow-rgb) / .31);
+  --graph-rim:var(--vintage-glass-edge);
+  --graph-control:linear-gradient(155deg,rgb(var(--surface-raised-rgb) / .9),rgb(var(--surface-card-rgb) / .8));
 }
 :global(html[data-design-theme="vintage"][data-mode="dark"] .main-content):has(.page) {
   background:var(--surface-canvas);

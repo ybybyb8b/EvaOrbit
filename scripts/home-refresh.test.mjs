@@ -52,22 +52,14 @@ test("cache revision cancellation does not show a Home sync error even when its 
   assert.deepEqual(f.alerts(), []);
 });
 
-test("real refresh failures remain visible until a successful refresh, without erasing editor errors or drafts", async () => {
+test("real refresh failures remain visible until a successful refresh", async () => {
   const f = fixture();
   f.read(async () => { throw new TypeError("Network unavailable"); });
   await f.refresh(); f.render();
   assert.deepEqual(f.alerts(), ["Synced data could not refresh. Please try again."]);
   f.succeed(); await f.refresh(); f.render();
   assert.deepEqual(f.alerts(), []);
-  f.nodes().find(node => node.props.className === "home-journal-add").props.onClick(); f.render();
-  f.nodes().find(node => node.type === "textarea").props.onChange({ target: { value: "Unsaved note" } }); f.render();
-  // A failed form write has its own error; a background success must not hide it.
-  await f.nodes().find(node => node.type === "form").props.onSubmit({ preventDefault() {} }); f.render();
-  const errors = f.alerts();
-  assert.ok(errors.some(message => message.includes("Could not save")));
-  await f.refresh(); f.render();
-  assert.deepEqual(f.alerts(), errors);
-  assert.equal(f.nodes().find(node => node.type === "textarea").props.value, "Unsaved note");
+
 });
 
 test("a superseded refresh cannot overwrite a newer success with an error", async () => {

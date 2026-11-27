@@ -1,6 +1,4 @@
 "use client";
-import { Disclosure } from "./disclosure";
-import { HomeImportantDates } from "./home-important-dates";
 import {HomeTasksSummary} from "@/components/home-tasks-summary";
 import type {DueReminder} from "@/lib/types";
 import {useBusinessRequest} from "@/components/business-request-context";
@@ -8,14 +6,12 @@ import { ErrorNotice } from "@/components/error-notice";
 import { PageLoading } from "@/components/page-loading";
 
 import type { ComponentType, ReactNode } from "react";
-import { FormEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { Add, ArrowDown5, ArrowLeft2, ArrowRight2, CheckCircle, Edit2, ForkKnife, MoonSleep, Note, Trash2 } from "reicon-react";
-import { ReiconSymbol } from "@/components/reicon-symbol";
-import { FormSheet, scrollFormSheetField } from "@/components/form-sheet";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { ArrowDown5, ArrowLeft2, ArrowRight2 } from "reicon-react";
+import { FormSheet } from "@/components/form-sheet";
 
 import { calendarCategoryLabel, matchingCalendarRule, type CalendarRule } from "@/lib/calendar-interpretation";
 import type { HomeDayOverview } from "@/lib/home-day";
-import { homeActivityLabel, homeActivitySentence, homeDurationLabel as durationLabel } from "@/lib/home-day";
 import type { UiLanguage } from "@/lib/locale";
 import { playNativeHaptic } from "@/lib/native-haptics";
 import { EVAORBIT_TIME_ZONE, dateInEvaOrbit, dateRange, shiftDate } from "@/lib/time";
@@ -23,12 +19,7 @@ import { periodDayForDate } from "@/lib/timeline";
 import { buildCalendarTimelineEvents, calendarTimelineRangeLabel, timelineDurationLabel } from "@/lib/calendar-timeline";
 import { TimelineAssociationSheet } from "./timeline-association-sheet";
 import { HomeDayTimeline, type TimelineEntryView } from "./home-day-timeline";
-import { journalEmotions, journalMoodLabel } from "@/lib/journal-emotions";
-import { journalDraftChanged, journalPreviewEntries } from "@/lib/journal-draft";
-import type { DailyJournalEmotion } from "@/lib/types";
-import type { FoodLog, CalendarEvent, DailyJournalEnergy, DailyJournalMood, DailyJournalEntry, TimelineEvent, TimelineMonthSummary } from "@/lib/types";
-import { buildDailySleepSummary } from "@/lib/sleep";
-import { SleepSummary, SleepOverviewPreview } from "@/components/sleep-summary";
+import type { FoodLog, CalendarEvent, TimelineEvent, TimelineMonthSummary } from "@/lib/types";
 
 import { homeCacheChanged, readHomeSnapshot as cachedRead, saveHomeSnapshot as cachedSave } from "@/lib/home-cache";
 import capsuleStyles from "@/app/home-calendar-timeline.module.css";
@@ -40,21 +31,6 @@ const sourceMeta: Record<TimelineEvent["sourceType"], { en: string; zh: string }
 const mealLabels: Record<string, { en: string; zh: string }> = { breakfast: { en: "Breakfast", zh: "早餐" }, lunch: { en: "Lunch", zh: "午餐" }, dinner: { en: "Dinner", zh: "晚餐" }, snack: { en: "Snack", zh: "加餐" }, late_night: { en: "Late night", zh: "夜宵" } };
 const trainingLabels: Record<string, { en: string; zh: string }> = { cardio: { en: "Cardio", zh: "有氧训练" }, strength: { en: "Strength", zh: "无氧训练" }, mixed: { en: "Mixed training", zh: "混合训练" } };
 const flowLabels: Record<string, { en: string; zh: string }> = { none: { en: "No flow", zh: "无经量" }, unspecified: { en: "Flow not specified", zh: "经量未指定" }, light: { en: "Light", zh: "少量" }, medium: { en: "Medium", zh: "中等" }, heavy: { en: "Heavy", zh: "大量" } };
-const energyOptions: Array<{ value: DailyJournalEnergy; en: string; zh: string }> = [
-  { value: 1, en: "Tired", zh: "疲惫" }, { value: 2, en: "Okay", zh: "一般" }, { value: 3, en: "Energetic", zh: "充沛" },
-];
-
-function JournalState({ entry, english }: { entry: DailyJournalEntry; english: boolean }) {
-  const mood = journalMoodLabel(entry);
-  const energy = energyOptions.find((option) => option.value === entry.energyLevel);
-  if (!mood && !energy) return null;
-  return <span className="home-journal-state">{mood && <span><span aria-hidden="true">{mood.emoji}</span>{english ? mood.en : mood.zh}</span>}{energy && <span>{english ? `Energy: ${energy.en}` : `精力${energy.zh}`}</span>}</span>;
-}
-
-function FullDiaryStatus({ english, compact = false }: { english: boolean; compact?: boolean }) {
-  return <span className={`home-journal-full-diary${compact ? " home-journal-full-diary--compact" : ""}`} title={english ? "Full diary written for this day" : "今日有完整日记"}><CheckCircle size={compact ? 15 : 17} weight="Outline" aria-hidden="true" />{compact ? english ? "Full diary" : "完整日记" : english ? "Full diary written" : "完整日记已写"}</span>;
-}
-
 function shiftMonth(month: string, offset: number) { const [year, value] = month.split("-").map(Number); return new Date(Date.UTC(year, value - 1 + offset, 1, 12)).toISOString().slice(0, 7); }
 
 function startOfWeek(date: string) { const value = new Date(`${date}T12:00:00Z`); return shiftDate(date, -((value.getUTCDay() + 6) % 7)); }
@@ -80,8 +56,8 @@ function detailFor(item: TimelineEvent, english: boolean) {
 export type HomeLinkProps = {href:string;className?:string;children?:ReactNode};
 const PlainLink = (props:HomeLinkProps) => <a {...props}/>;
 const EmptySlot = () => null;
-export type HomeTimelineProps = { initialDay:HomeDayOverview;dueItems?:DueReminder[];initialSummary:TimelineMonthSummary;language:UiLanguage;cacheScope:string;readOnly?:boolean;LinkComponent?:ComponentType<HomeLinkProps>;RuleEditor?:typeof import("./calendar-rule-sheet").CalendarRuleSheet;LogScope?:typeof import("./bottom-log").BottomLogScope;dataSource?:{read:typeof cachedRead;save:typeof cachedSave} };
-export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:initialDueItems, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource }:HomeTimelineProps) {
+export type HomeTimelineProps = { initialDay:HomeDayOverview;dueItems?:DueReminder[];initialSummary:TimelineMonthSummary;language:UiLanguage;cacheScope:string;readOnly?:boolean;LinkComponent?:ComponentType<HomeLinkProps>;RuleEditor?:typeof import("./calendar-rule-sheet").CalendarRuleSheet;LogScope?:typeof import("./bottom-log").BottomLogScope;widgetStack?:ReactNode;dataSource?:{read:typeof cachedRead;save:typeof cachedSave} };
+export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:initialDueItems, language, cacheScope, readOnly=false, LinkComponent=PlainLink, RuleEditor, LogScope, dataSource, widgetStack }:HomeTimelineProps) {
   const businessFetch=useBusinessRequest();
   const Link=LinkComponent, CalendarRuleSheet=RuleEditor ?? EmptySlot, BottomLogScope=LogScope ?? EmptySlot;
   const readHomeSnapshot=dataSource?.read ?? cachedRead,saveHomeSnapshot=dataSource?.save ?? cachedSave;
@@ -95,28 +71,12 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
   const dueRefresh=useRef<AbortController|null>(null);
   const [loadingDate, setLoadingDate] = useState<string | null>(null), [loadingMonth, setLoadingMonth] = useState(false), [error, setError] = useState("");
   const [refreshFailed, setRefreshFailed] = useState(false);
-  const [journalContent, setJournalContent] = useState(""), [journalMood, setJournalMood] = useState<DailyJournalMood | null>(null), [editingJournalId, setEditingJournalId] = useState<number | null>(null), [savingJournal, setSavingJournal] = useState(false);
-  const [journalSheetOpen, setJournalSheetOpen] = useState(false);
-  const [journalHistoryOpen, setJournalHistoryOpen] = useState(false);
-  const [journalEnergy, setJournalEnergy] = useState<DailyJournalEnergy | null>(null);
-  const [journalEmotion, setJournalEmotion] = useState<DailyJournalEmotion | null>(null);
-  const [journalFullDiary, setJournalFullDiary] = useState(false);
-  const [journalDeleteId, setJournalDeleteId] = useState<number | null>(null);
-  const journalInput = useRef<HTMLTextAreaElement | null>(null);
-  const journalConfirm = useRef<HTMLButtonElement | null>(null);
-  const [activitySheetOpen, setActivitySheetOpen] = useState(false);
-  const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const [calendarDetail, setCalendarDetail] = useState<TimelineEvent | null>(null);
   const [mealDetail, setMealDetail] = useState<TimelineEvent | null>(null);
   const [associationDetail, setAssociationDetail] = useState<TimelineEvent["association"] | null>(null);
   const [ruleEditor, setRuleEditor] = useState<{ rule?: CalendarRule } | null>(null);
   const dayRequest = useRef<AbortController | null>(null), monthRequest = useRef<AbortController | null>(null), day = days[selected], events = day?.events ?? [];
   const backgroundMonthRequest = useRef<AbortController | null>(null), nativeRefreshRequest = useRef<AbortController | null>(null);
-  const sleepSummary = day ? day.sleepSummary ?? buildDailySleepSummary(day.date, [], day.sleep) : null;
-  const activitySentence = day ? homeActivitySentence(day.activities, english, selected === today) : null;
-  const journalDirty = journalDraftChanged({ content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }, day?.journal.find(entry => entry.id === editingJournalId));
-  const draftMood = journalMoodLabel({ emotion: journalEmotion, moodScore: journalMood });
-  const draftEnergy = energyOptions.find(option => option.value === journalEnergy);
   const detailRule = calendarDetail && day ? matchingCalendarRule(calendarDetail.title, day.calendarInterpretation, true) : null;
   const detailCategory = day?.calendarInterpretation.categories.find(category => category.id === detailRule?.categoryId);
   const [year, monthNumber] = month.split("-").map(Number), leading = (new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay() + 6) % 7, dayCount = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate(), selectedWeekStart = startOfWeek(selected);
@@ -204,7 +164,7 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
 
   async function loadDay(date: string, force = date === today && date !== initialDay.date) {
     setRefreshFailed(false);
-    setSelected(date); setError(""); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false);
+    setSelected(date); setError("");
     dayRequest.current?.abort(); const controller = new AbortController(); dayRequest.current = controller; setLoadingDate(date);
     try { const show = (result: HomeDayOverview) => setDays(current => ({ ...current, [date]: result })); const result = await readHomeSnapshot<HomeDayOverview>(cacheScope, `/api/home-day?date=${date}`, controller.signal, show, force); if (!controller.signal.aborted) show(result); }
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this day" : "无法读取这一天"); }
@@ -244,27 +204,6 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
     catch (reason) { if ((reason as Error).name !== "AbortError") setError(english ? "Could not load this month" : "无法读取这个月份"); }
     finally { if (monthRequest.current === controller) setLoadingMonth(false); }
   }
-  async function saveJournal(event: FormEvent) {
-    event.preventDefault(); if (readOnly || !journalContent.trim() || journalHistoryOpen || journalDeleteId !== null || savingJournal) return; setSavingJournal(true); setError("");
-    try { const response = await businessFetch(editingJournalId ? `/api/daily-journal/${editingJournalId}` : "/api/daily-journal", { method: editingJournalId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(!editingJournalId && { date: selected }), content: journalContent, moodScore: journalMood, emotion: journalEmotion, energyLevel: journalEnergy, hasFullDiary: journalFullDiary }) }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); }
-    catch { setError(english ? "Could not save. Your note is still here; please try again." : "保存失败，内容仍保留在这里，请重试。"); } finally { setSavingJournal(false); }
-  }
-  async function removeJournal(id: number) {
-    if (readOnly) return;
-    setError(""); setSavingJournal(true); try { const response = await businessFetch(`/api/daily-journal/${id}`, { method: "DELETE" }); if (!response.ok) throw new Error(); closeJournalSheet(); await refreshSelectedDate(); } catch { setError(english ? "Could not delete. Please try again." : "删除失败，请重试。"); } finally { setSavingJournal(false); }
-  }
-  function applyJournalEdit(entry: DailyJournalEntry | null) {
-    setJournalHistoryOpen(false);
-    setEditingJournalId(entry?.id ?? null); setJournalContent(entry?.content ?? ""); setJournalMood(entry?.moodScore ?? null); setJournalEmotion(entry?.emotion ?? null); setJournalEnergy(entry?.energyLevel ?? null); setJournalFullDiary(entry?.hasFullDiary ?? false); setError("");
-    if (journalSheetOpen && !readOnly) window.requestAnimationFrame(() => { const input = journalInput.current; if (input) { input.focus({ preventScroll: true }); scrollFormSheetField(input.closest(".form-sheet-body"), input); } });
-  }
-  function requestJournalDelete(id: number) {
-    if (readOnly || savingJournal) return;
-    setJournalDeleteId(id);
-    window.requestAnimationFrame(() => { const button = journalConfirm.current; if (button) { button.focus({ preventScroll: true }); scrollFormSheetField(button.closest(".form-sheet-body"), button); } });
-  }
-  function openJournalSheet(entry: DailyJournalEntry | null = null, showHistory = false) { applyJournalEdit(entry); setJournalDeleteId(null); setJournalHistoryOpen(showHistory); setJournalSheetOpen(true); }
-  function closeJournalSheet() { setJournalSheetOpen(false); setJournalHistoryOpen(false); setJournalDeleteId(null); setEditingJournalId(null); setJournalContent(""); setJournalMood(null); setJournalEmotion(null); setJournalEnergy(null); setJournalFullDiary(false); }
   function selectCalendarDate(date: string) { setMonth(date.slice(0, 7)); playNativeHaptic("selection"); void loadDay(date); }
   function returnToToday() { const todayMonth = today.slice(0, 7); if (month !== todayMonth) void changeMonth(todayMonth); else { playNativeHaptic("selection"); void loadDay(today); } }
   function moveCalendar(offset: number) { if (calendarExpanded) void changeMonth(shiftMonth(month, offset)); else selectCalendarDate(shiftDate(selected, offset * 7)); }
@@ -311,22 +250,11 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
     <header className="home-selected-date-heading"><h2>{selected === today ? english ? "Today" : "今天" : selectedLabel}</h2></header>
     {(error || refreshFailed) && <ErrorNotice role="alert">{error || (english ? "Synced data could not refresh. Please try again." : "同步数据刷新失败，请重试。")}</ErrorNotice>}
     {!day ? <PageLoading title="这一天" englishTitle="day" inline /> : <>
-      <div className="home-day-grid">
+      <div className="home-day-grid home-day-grid--compact">
         <HomeTasksSummary key={selected} tasks={day.tasks} completedItems={day.completedItems} reminders={dueItems??[]} remindersAvailable={dueItems!==undefined} date={selected} readOnly={readOnly} english={english} LinkComponent={Link} onChanged={completedOn=>void refreshTasks(completedOn)}/>
-        <article className="home-day-pane home-sleep-pane"><button type="button" className="home-pane-open" onClick={() => setSleepSheetOpen(true)} aria-label={english ? "View sleep records" : "查看睡眠记录"}><header><MoonSleep size={19} weight="Outline" aria-hidden="true" /><h3>{english ? "Sleep" : "睡眠"}</h3></header>{sleepSummary && (sleepSummary.actual || sleepSummary.window) ? <><SleepOverviewPreview summary={sleepSummary} timeline={day?.sleep} english={english} />{!sleepSummary.actual && <small>{english ? "Calendar record" : "日历记录"} · {timeLabel(sleepSummary.window!.startAt)}–{timeLabel(sleepSummary.window!.endAt)}</small>}</> : <p className="home-pane-empty">{english ? "No sleep record ending this day" : "没有在这一天结束的睡眠记录"}</p>}</button></article>
-        <article className="home-day-pane"><header><ForkKnife size={19} weight="Outline" aria-hidden="true" /><h3><Link href={`/food?date=${selected}`}>{english ? "Meals" : "一日三餐"}</Link></h3></header>{day.meals.length ? <ul className="home-pane-list home-meal-list">{day.meals.map((meal, index) => <li key={`${meal.mealType}-${index}`}><Link href={`/food?date=${selected}&mealType=${encodeURIComponent(meal.mealType)}`}><span>{english ? mealLabels[meal.mealType]?.en ?? "Meal" : mealLabels[meal.mealType]?.zh ?? "饮食"}</span><strong>{meal.detail || meal.title}</strong></Link></li>)}</ul> : <p className="home-pane-empty">{english ? "No meals recorded" : "还没有饮食记录"}</p>}</article>
-        <article className="home-day-pane home-journal-pane">
-          <header><Note size={19} weight="Outline" aria-hidden="true" /><h3>{english ? "Day notes" : "今日一记"}</h3>{day.journal.some(entry => entry.hasFullDiary) && <FullDiaryStatus english={english} compact />}<button type="button" className="home-journal-add" disabled={readOnly} aria-label={english ? "Add a day note" : "新增短记"} aria-haspopup="dialog" onClick={() => openJournalSheet()}><Add size={19} weight="Outline" aria-hidden="true" /></button></header>
-          {day.journal.length ? <div className="home-journal-preview-list">{journalPreviewEntries(day.journal).map(entry => <button key={entry.id} type="button" className="home-journal-preview-entry" aria-label={`${english ? "Edit note" : "编辑短记"}：${entry.content}`} aria-haspopup="dialog" onClick={() => openJournalSheet(entry)}><span className="home-journal-preview">{entry.content}</span><JournalState entry={entry} english={english} /></button>)}</div> : <p className="home-pane-empty">{english ? "Write whenever something comes to mind" : "想到什么，就记一点"}</p>}
-          {day.journal.length > 3 && <button type="button" className="home-journal-view-all" aria-haspopup="dialog" onClick={() => openJournalSheet(null, true)}>{english ? `View all ${day.journal.length} notes from this day` : `查看当天全部 ${day.journal.length} 条`}</button>}
-        </article>
       </div>
-{activitySentence && <button type="button" className="home-time-summary" onClick={() => setActivitySheetOpen(true)} aria-label={`${activitySentence} ${english ? "View recorded time" : "查看已记录时段"}`}><span className="home-time-summary-copy"><span className="home-time-summary-label">{selected === today ? english ? "Recorded today" : "今天已记录" : english ? "Recorded this day" : "这一天已记录"}</span><span className="home-time-summary-values">{day.activities.filter(activity => activity.durationMinutes > 0).map(activity => {
-  const label = homeActivityLabel(activity, english);
-  return <span key={activity.category} className="home-time-summary-part" title={label}><span className={activity.icon ? "home-time-summary-icon" : undefined}>{activity.icon ? <ReiconSymbol name={activity.icon} size={20} /> : label}</span><strong>{durationLabel(activity.durationMinutes, english)}</strong></span>;
-})}</span></span></button>}
+      {widgetStack}
       <section className="home-day-timeline" aria-busy={loadingDate === selected}>
-        <HomeImportantDates items={day.importantDates??[]} date={selected} Link={Link}/>
         <header className="home-day-heading"><h2>{english ? "Timeline" : "时间轴"}</h2></header>
         {periodContext && <div className="home-period-context"><strong>{english ? "Period" : "经期"}</strong><span>{english ? `Day ${periodContext.day}` : `第 ${periodContext.day} 天`}</span>{periodFlow && typeof periodFlow.metadata.flow === "string" && flowLabels[periodFlow.metadata.flow] && <span>{english ? flowLabels[periodFlow.metadata.flow].en : flowLabels[periodFlow.metadata.flow].zh}</span>}{periodDose && <span>{english ? `${periodDose.title} recorded` : `已记录 ${periodDose.title}`}</span>}</div>}
         {events.length ? <HomeDayTimeline key={selected} date={selected} events={events} english={english} timeLabel={timeLabel} titleFor={item => titleFor(item, english)} renderEntry={renderTimelineEntry} /> : <p className="home-today-empty">{english ? "No timeline records on this day" : "这一天还没有时间轴记录"}</p>}
@@ -335,12 +263,6 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
     <BottomLogScope selectedDate={selected} />
     {associationDetail && <TimelineAssociationSheet association={associationDetail} english={english} LinkComponent={Link} onClose={() => setAssociationDetail(null)} onCalendar={() => { const calendar = associationDetail.calendar; const range = dateRange(dateInEvaOrbit(new Date(calendar.startAt))); setCalendarDetail(buildCalendarTimelineEvents([calendar], range)[0]); setAssociationDetail(null); }} />}
     {mealDetail && <FormSheet title={titleFor(mealDetail, english)} onClose={() => setMealDetail(null)}><div className="home-time-detail"><p className="user-content">{mealDetail.detail}</p><p>{timeLabel(mealDetail.occurredAt)}–{timeLabel(mealDetail.endAt!)} · {english ? "Time from Calendar" : "时间来自日历"}</p><p className="home-time-context">{english ? "Food and Calendar describe one meal. The original Food time is preserved." : "饮食内容和日历时段已合并为同一顿饭，原饮食时间保留。"}</p><Link className="button secondary" href={mealDetail.href}>{english ? "Edit Food record" : "编辑饮食记录"}</Link>{Boolean(mealDetail.metadata.calendarEvent) && <button type="button" className="button secondary" onClick={() => { setCalendarDetail(mealDetail.metadata.calendarEvent as TimelineEvent); setMealDetail(null); }}>{english ? "View Calendar event" : "查看日历事项"}</button>}</div></FormSheet>}
-    {sleepSheetOpen && day && <FormSheet title={english ? "Sleep records" : "睡眠记录"} onClose={() => setSleepSheetOpen(false)}><div className="home-time-detail"><p>{selectedLabel}</p>{sleepSummary && <SleepSummary summary={sleepSummary} timeline={day.sleep} english={english} />}<p className="home-time-context">{english ? "Calendar / 3×3 records describe sleep windows. Edit windows in 3×3 or Apple Calendar; manage measured sleep in Apple Health." : "Calendar / 3×3 记录表示睡眠窗口。请在 3×3 或 Apple Calendar 修改窗口，在 Apple Health 管理实际睡眠。"}</p>{day.sleep ? day.sleep.records.filter(record => sleepSummary?.actual && sleepSummary.window?.startAt === record.startAt && sleepSummary.window.endAt === record.endAt).map((record) => <section key={record.id}><header><h3>{sleepSummary?.window?.startAt === record.startAt && sleepSummary.window.endAt === record.endAt ? english ? "Main sleep window" : "主要睡眠窗口" : english ? "Calendar record · no device measurement" : "日历记录 · 无设备测量"}</h3><span>{durationLabel(record.durationMinutes, english)}</span></header><p>{new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(record.startAt))} — {new Intl.DateTimeFormat(english ? "en" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: EVAORBIT_TIME_ZONE }).format(new Date(record.endAt))}</p>{record.notes && <p className="user-content home-sleep-notes">{record.notes}</p>}</section>) : <p className="home-pane-empty">{english ? "No timeline sleep windows" : "没有时间线睡眠窗口"}</p>}</div></FormSheet>}
-    {activitySheetOpen && day && <FormSheet title={english ? "Recorded time" : "已记录的时间"} onClose={() => setActivitySheetOpen(false)}>
-      <div className="home-time-detail"><p>{selectedLabel}</p><p className="home-time-context">{english ? "Based on synced Calendar records, not a complete account of the day. Times below are limited to this date; categories may overlap." : "来自同步的 Calendar 记录，不代表全天的完整使用情况。以下时段仅计入所选日期，不同活动可能重叠。"}</p>
-        {day.activities.filter((activity) => activity.durationMinutes > 0).map((activity) => <section key={activity.category}><header><h3>{homeActivityLabel(activity, english)}</h3><span>{durationLabel(activity.durationMinutes, english)}</span></header><ul>{day.activityRecords.filter((record) => record.category === activity.category).map((record) => <li key={record.id}><div><time>{timeLabel(record.startAt)} {english ? "to" : "至"} {timeLabel(record.endAt)}</time><span>{durationLabel(record.durationMinutes, english)}</span></div>{record.notes && <p>{record.notes}</p>}</li>)}</ul></section>)}
-      </div>
-    </FormSheet>}
     {calendarDetail && !ruleEditor && <FormSheet title={english ? "Calendar event" : "日历事项"} onClose={() => setCalendarDetail(null)}>
       <div className="home-calendar-detail">
         <h3 className="user-content">{calendarDetail.title}</h3>
@@ -355,36 +277,5 @@ export function HomeCalendarTimeline({ initialDay, initialSummary, dueItems:init
       </div>
     </FormSheet>}
 {!readOnly && ruleEditor && calendarDetail && day && <CalendarRuleSheet settings={day.calendarInterpretation} initialTitle={calendarDetail.title} rule={ruleEditor.rule} records={[calendarDetail, ...day.events.filter(event => event.sourceType === "calendar" && event.sourceId !== calendarDetail.sourceId)].map(event => ({ id: Number(event.sourceId), title: event.title, startAt: String(event.metadata.startAt), endAt: String(event.metadata.endAt), isAllDay: Boolean(event.metadata.isAllDay), notes: String(event.metadata.notes ?? ""), location: String(event.metadata.location ?? ""), timezone: typeof event.metadata.timezone === "string" ? event.metadata.timezone : null, status: event.metadata.status as CalendarEvent["status"], createdAt: "", updatedAt: "" }))} onClose={() => setRuleEditor(null)} onSaved={() => refreshSelectedDate(true)} />}
-    {journalSheetOpen && day && <FormSheet title={readOnly ? english ? "View day note" : "查看短记" : journalHistoryOpen ? english ? "Saved day notes" : "当天日记" : editingJournalId !== null ? english ? "Edit note" : "编辑短记" : english ? "Add note" : "新增短记"} onClose={closeJournalSheet} formId={journalHistoryOpen ? undefined : "home-journal-form"} submitLabel={readOnly || journalHistoryOpen ? undefined : editingJournalId !== null ? english ? "Save changes" : "保存修改" : english ? "Add note" : "记下"} busy={savingJournal} dirty={journalDirty} submitDisabled={journalDeleteId !== null || !journalContent.trim() || (editingJournalId !== null && !journalDirty)}>
-      <div className="home-journal-sheet">
-        <time className="home-journal-date" dateTime={selected}>{selected.slice(0, 4)} · {selectedLabel}</time>
-        {error && <ErrorNotice role="alert">{error}</ErrorNotice>}
-        {journalDeleteId !== null && <div className="home-journal-confirm" role="group" aria-label={english ? "Confirm deletion" : "确认删除"}>
-          <p role="alert">{english ? "Delete this note? This cannot be undone." : "删除这条记录？删除后无法恢复。"}{journalDirty && (english ? " Unsaved edits will also be lost." : "尚未保存的修改也会丢弃。")}</p>
-          <div><button ref={journalConfirm} className="button secondary" type="button" onClick={() => { setJournalDeleteId(null); window.requestAnimationFrame(() => journalInput.current?.focus({ preventScroll: true })); }}>{english ? "Keep editing" : "继续编辑"}</button><button className="button secondary" type="button" onClick={() => { setJournalDeleteId(null); void removeJournal(journalDeleteId); }}>{english ? "Delete note" : "删除记录"}</button></div>
-        </div>}
-        {journalHistoryOpen ? <div className="home-journal-entries">
-          {day.journal.map(entry => <button key={entry.id} type="button" className="home-journal-entry home-journal-preview-entry" aria-label={`${english ? "Edit note" : "编辑短记"}：${entry.content}`} onClick={() => applyJournalEdit(entry)}>
-            <span>
-              <span className="home-journal-preview">{entry.content}</span><JournalState entry={entry} english={english} />{entry.hasFullDiary && <FullDiaryStatus english={english} />}
-            </span>
-            <Edit2 size={18} weight="Outline" aria-hidden="true" />
-          </button>)}
-          {!day.journal.length && <p className="home-pane-empty">{english ? "No notes for this day" : "这一天还没有短记"}</p>}
-        </div> : <form id="home-journal-form" className="home-journal-form" onSubmit={saveJournal} inert={journalDeleteId !== null}><fieldset disabled={readOnly} className="home-journal-readonly-fields">
-          <label className="field"><span>{english ? "Your note" : "内容"}</span><textarea ref={journalInput} required rows={5} value={journalContent} onChange={(event) => setJournalContent(event.target.value)} placeholder={english ? "Write whenever something comes to mind…" : "想到什么，就记一点……"} maxLength={10_000} disabled={readOnly || savingJournal} /></label>
-          <div className="home-journal-optional">
-            <Disclosure className="home-journal-disclosure" title={english ? "Mood" : "心情"} trailing={draftMood ? `${draftMood.emoji} ${english ? draftMood.en : draftMood.zh}` : english ? "Optional" : "可选"}>
-              <fieldset className="home-mood-field" disabled={readOnly || savingJournal}><legend className="sr-only">{english ? "Mood (optional)" : "心情（可选）"}</legend>{journalMood !== null && !journalEmotion && <p className="home-journal-legacy-mood">{english ? "Previous mood: " : "原心情："}{english ? draftMood?.en : draftMood?.zh}<button type="button" onClick={() => setJournalMood(null)}>{english ? "Clear" : "清除"}</button></p>}<div className="home-mood-picker">{journalEmotions.map((option) => <button type="button" key={option.value} className={journalEmotion === option.value ? "selected" : ""} aria-pressed={journalEmotion === option.value} onClick={() => { setJournalMood(null); setJournalEmotion((current) => current === option.value ? null : option.value); }}><span className="home-mood-emoji" aria-hidden="true">{option.emoji}</span><span>{english ? option.en : option.zh}</span></button>)}</div></fieldset>
-            </Disclosure>
-            <Disclosure className="home-journal-disclosure" title={english ? "Energy" : "精力"} trailing={draftEnergy ? english ? draftEnergy.en : draftEnergy.zh : english ? "Optional" : "可选"}>
-              <fieldset className="home-mood-field" disabled={readOnly || savingJournal}><legend className="sr-only">{english ? "Energy (optional)" : "精力（可选）"}</legend><div className="home-energy-picker">{energyOptions.map((option) => <button type="button" key={option.value} className={journalEnergy === option.value ? "selected" : ""} aria-pressed={journalEnergy === option.value} onClick={() => setJournalEnergy((current) => current === option.value ? null : option.value)}>{english ? option.en : option.zh}</button>)}</div></fieldset>
-            </Disclosure>
-          </div>
-          <label className="home-journal-full-diary-field" title={english ? "Your full diary can be written elsewhere. This does not create a Chronicle." : "完整日记可以写在别处，不会自动生成纪事。"}><input type="checkbox" checked={journalFullDiary} onChange={(event) => setJournalFullDiary(event.target.checked)} disabled={readOnly || savingJournal} /><span>{english ? "Full diary written for this day" : selected === today ? "今日有完整日记" : "这一天有完整日记"}</span></label>
-          {editingJournalId !== null && <button className="button secondary" type="button" disabled={readOnly || savingJournal} onClick={() => requestJournalDelete(editingJournalId)}><Trash2 size={18} weight="Outline" aria-hidden="true" />{english ? "Delete note" : "删除这条短记"}</button>}
-        </fieldset></form>}
-      </div>
-    </FormSheet>}
   </section>;
 }

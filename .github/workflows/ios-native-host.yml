@@ -3,10 +3,6 @@ name: iOS Native Host
 on:
   workflow_dispatch:
     inputs:
-      local_trackers:
-        description: Build the isolated Local-first Tracker PoC
-        type: boolean
-        default: false
       subscription_poc:
         description: Include the experimental SIWC panel (local Host / Parlor test branch only)
         type: boolean
@@ -30,6 +26,7 @@ permissions:
 
 jobs:
   build:
+    needs: tracker-isolation
     # Use the standard Intel pool to avoid the macOS arm64 capacity queue.
     runs-on: macos-15-intel
     timeout-minutes: ${{ inputs.run_native_tests && 75 || 30 }}
@@ -40,11 +37,11 @@ jobs:
       - name: Validate subscription PoC isolation
         env:
           SUBSCRIPTION_POC: ${{ inputs.subscription_poc }}
-          LOCAL_TRACKERS: ${{ inputs.local_trackers }}
+          LOCAL_TRACKERS: "true"
         run: |
           if [[ "$SUBSCRIPTION_POC" == "true" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$LOCAL_TRACKERS" != "true" || "$GITHUB_REF" != "refs/heads/codex/parlor-native-test" ]]; then
-              echo 'SIWC PoC requires manual dispatch on codex/parlor-native-test with local_trackers=true.' >&2
+              echo 'SIWC PoC requires manual dispatch on codex/parlor-native-test for the local Native Host.' >&2
               exit 1
             fi
           fi
@@ -167,9 +164,9 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            EVAORBIT_LOCAL_TRACKERS="${{ inputs.local_trackers && 'YES' || 'NO' }}" \
-            PRODUCT_BUNDLE_IDENTIFIER="${{ inputs.local_trackers && 'com.evaorbit.nativehost.trackerspoc' || 'com.evaorbit.nativehost' }}" \
-            EVAORBIT_URL_SCHEME="${{ inputs.local_trackers && 'evaorbit-trackers-poc' || 'evaorbit' }}" \
+            EVAORBIT_LOCAL_TRACKERS=YES \
+            PRODUCT_BUNDLE_IDENTIFIER="com.evaorbit.nativehost.trackerspoc" \
+            EVAORBIT_URL_SCHEME="evaorbit-trackers-poc" \
             EVAORBIT_DISPLAY_NAME="EvaOrbit" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             "${poc_args[@]}" \
@@ -198,8 +195,6 @@ jobs:
 
   tracker-isolation:
     name: Isolated Supabase Tracker integration
-    needs: build
-    if: ${{ inputs.local_trackers }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -209,6 +204,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Verify isolated migration and packaging guards
+        run: node --test scripts/lucius-retirement.test.mjs scripts/ci-workflows.test.mjs scripts/ios-subscription-poc.test.mjs
       - uses: supabase/setup-cli@v3.0.1
         with:
           version: 2.121.0

@@ -19,7 +19,7 @@ import type { TrackerEntry, TrackerField } from "@/lib/types";
 function localDateTime(initialDate?: string) { const date = new Date(); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return `${initialDate ?? date.toISOString().slice(0, 10)}T${date.toISOString().slice(11, 16)}`; }
 function entryLocalTime(entry: Pick<TrackerEntry, "occurredAt">) { const date = new Date(entry.occurredAt); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); return date.toISOString().slice(0,16); }
 
-export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false }: { readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
+export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onClose, onSaved, saveRecord, readOnly = false, centered = false }: { centered?: boolean; readOnly?: boolean; trackerId: number; fields: TrackerField[]; initialDate?: string; entry?: Pick<TrackerEntry, "occurredAt" | "values" | "note"> & { id: number | string }; onClose: () => void; onSaved: () => Promise<void> | void; saveRecord?: (input: { occurredAt: string; values: Record<string, unknown>; note: string }) => Promise<void> }) {
   const previewOnly=useFormPreview();
   const { english } = useLocale();
   const [occurredAt, setOccurredAt] = useState(() => entry ? entryLocalTime(entry) : localDateTime(initialDate));
@@ -57,7 +57,7 @@ export function TrackerEntryEditor({ trackerId, fields, initialDate, entry, onCl
     <label className="field"><span>{english?"Note":"备注"}</span><textarea rows={3} maxLength={5000} value={note} onChange={(event) => setNote(event.target.value)} placeholder={english?"Optional":"选填"} /></label>
     {error && <ErrorNotice>{error}</ErrorNotice>}
   </>;
-  return <FormSheet className="tracker-entry-sheet" title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form field-focus-surface" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
+  return <FormSheet className={`tracker-entry-sheet${centered ? " centered-modal" : ""}`} title={readOnly?(english?"View record":"查看记录"):entry?(english?"Edit record":"编辑记录"):(english?"Add details":"添加详情")} onClose={onClose} formId="tracker-entry-form" submitLabel={readOnly?undefined:english?"Save record":"保存记录"} busy={working} submitDisabled={previewOnly}><form id="tracker-entry-form" className="editor-card tracker-entry-form field-focus-surface" onSubmit={submit}>{previewOnly&&<FormPreviewNotice/>}
 {readOnly ? <fieldset disabled className="tracker-entry-readonly"><p className="field-hint">只读验收，不会保存或上传。</p>{content}</fieldset> : content}
   </form></FormSheet>;
 }

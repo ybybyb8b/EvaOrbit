@@ -64,3 +64,17 @@ test("IPA packaging defaults to device-only and requires an opted-in Simulator r
   assert.match(workflow, /name: Isolated Supabase Tracker integration/);
   assert.doesNotMatch(workflow, /continue-on-error/);
 });
+
+
+test("all IPA triggers use the local Native Host and validate the disposable stack first",()=>{
+ const workflow=load(readWorkflow("ios-native-host"));
+ assert.equal(workflow.on.workflow_dispatch.inputs.local_trackers,undefined);
+ assert.equal(workflow.jobs.build.needs,"tracker-isolation");
+ assert.equal(workflow.jobs["tracker-isolation"].if,undefined);
+ assert.equal(workflow.jobs["tracker-isolation"].needs,undefined);
+ const device=workflow.jobs.build.steps.find(step=>step.name==="Build ad-hoc signed device app");
+ assert.match(device.run,/EVAORBIT_LOCAL_TRACKERS=YES/);
+ assert.match(device.run,/PRODUCT_BUNDLE_IDENTIFIER="com\.evaorbit\.nativehost\.trackerspoc"/);
+ assert.match(device.run,/EVAORBIT_URL_SCHEME="evaorbit-trackers-poc"/);
+ assert.equal(workflow.jobs.build.steps.find(step=>step.name==="Validate subscription PoC isolation").env.LOCAL_TRACKERS,"true");
+});

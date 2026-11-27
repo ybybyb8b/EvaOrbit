@@ -1,3 +1,4 @@
+import {LocalPersonalWidgetStack} from "./personal-widget-stack";
 import {registerLocalRefresh} from "./refresh";
 import {LocalRouteLink} from "./routes";
 import {useOnlineBusiness,onlineBusinessChanged} from "./online-business";
@@ -85,6 +86,6 @@ export function HomeWorkspace({account,platform}:{account:LocalAccount;platform:
     <LocalDownloadStatus module="Home" capturedAt={initial?.day.capturedAt} busy={loading} error={error} refresh={()=>window.dispatchEvent(new Event("online"))}/>
     {error&&<ErrorNotice>{error}</ErrorNotice>}
     </div>
-    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} dueItems={initial.due?.data as DueReminder[]|undefined} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} language={language} readOnly={!onlineBusiness} LogScope={BottomLogScope} LinkComponent={LocalRouteLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<LocalHomeLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect to download Home for offline access.":"联网下载首页后即可离线查看。"}</p></div>}
+    {initial?<ReiconAssetContext.Provider value={assets}><HomePageView language={language}><HomeCalendarTimeline key={account.accountId+":"+initial.day.key} dueItems={initial.due?.data as DueReminder[]|undefined} initialDay={initial.day.data as HomeDayOverview} initialSummary={initial.month.data as TimelineMonthSummary} cacheScope={account.accountId} widgetStack={<LocalPersonalWidgetStack account={account} platform={platform}/>} language={language} readOnly={!onlineBusiness} LogScope={BottomLogScope} LinkComponent={LocalRouteLink} dataSource={dataSource}/></HomePageView></ReiconAssetContext.Provider>:loading?<LocalHomeLoading/>:<div className="empty-state"><h2>{english?"Home is not downloaded yet":"尚未下载首页"}</h2><p>{english?"Connect to download Home for offline access.":"联网下载首页后即可离线查看。"}</p></div>}
   </div>;
 }

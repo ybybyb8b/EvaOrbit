@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {lunarMonths,lunarToSolar} from "./lunar-calendar.ts";
+import {parseImportantDate} from "./important-dates-validation.ts";
 import { PGlite } from "@electric-sql/pglite";
-import { importantDateReminderAt } from "./important-dates.ts";
+import { importantDateReminderAt,importantDateToRow,nextImportantDate } from "./important-dates.ts";
 
 test("Postgres important dates keep reminder projection atomic, deduplicated and owner-scoped", async () => {
   const db = new PGlite();
@@ -18,9 +20,33 @@ test("Postgres important dates keep reminder projection atomic, deduplicated and
       set test.uid='00000000-0000-0000-0000-000000000001'; set test.oauth='no';`);
     await db.exec(readFileSync(new URL("../../supabase/migrations/202611260001_important_dates.sql", import.meta.url),"utf8"));
     await db.exec(readFileSync(new URL("../../supabase/migrations/202611260002_important_date_categories.sql", import.meta.url),"utf8"));
+    await db.exec(readFileSync(new URL("../../supabase/migrations/202611270001_important_dates_lunar.sql", import.meta.url),"utf8"));
+    await db.exec(readFileSync(new URL("../../supabase/migrations/202611270002_important_dates_mcp.sql", import.meta.url),"utf8"));
+    await db.exec(readFileSync(new URL("../../supabase/migrations/202611270003_important_date_backgrounds.sql", import.meta.url),"utf8"));
+    const legacyPhoto="data:image/png;base64,"+Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),Buffer.alloc(110000)]).toString("base64");
+    const legacyId=(await db.query<{id:number}>("insert into important_dates(title,date,background,background_image) values('Legacy photo','2016-05-28',$1::jsonb,$2) returning id",[JSON.stringify({kind:"photo",x:50,y:50,shade:.3}),legacyPhoto])).rows[0].id;
+    await db.exec(readFileSync(new URL("../../supabase/migrations/202611270004_important_date_repeats.sql", import.meta.url),"utf8"));
+    await db.query("update important_dates set title='Legacy retained' where id=$1",[legacyId]);
+    await assert.rejects(()=>db.query("insert into important_dates(title,date,background,background_image) values('Too big','2016-05-28',$1::jsonb,$2)",[JSON.stringify({kind:"photo",x:50,y:50,shade:.3}),legacyPhoto]),/100 KB/);
     await db.exec("set role authenticated");
+    for(const recurrence of ["weekly","monthly"] as const){
+      for(const date of ["2024-01-31","2025-02-28","2026-11-27"])for(const today of ["2025-02-01","2025-03-01","2026-12-01","9999-12-31"]){
+        const result=(await db.query<{next:string|null}>("select important_date_next_occurrence($1::date,$2,'solar',null,'regular',$3::date)::text as next",[date,recurrence,today])).rows[0].next;
+        assert.equal(result,nextImportantDate({date,recurrence},today));
+      }
+    }
+    const lunarMonthly={date:"2025-02-27",recurrence:"monthly" as const,calendar:"lunar" as const,lunar:{year:2025,month:1,day:30,leap:false}};
+    for(const today of ["2025-03-01","2025-07-25","2025-08-22","2026-02-01","2101-02-01"]){const result=(await db.query<{next:string|null}>("select important_date_next_occurrence($1::date,'monthly','lunar',$2::jsonb,'skip',$3::date)::text as next",[lunarMonthly.date,JSON.stringify(lunarMonthly.lunar),today])).rows[0].next;assert.equal(result,nextImportantDate(lunarMonthly,today));}
     const input={title:"Colored date",date:"2096-01-01",recurrence:"none",category:"Life",note:"",pinned:false,archived:false,reminder_time:null,reminder_days_before:0};
     const save=async(id:number|null,color?:string|null)=> (await db.query<{saved:{id:number;category_color:string|null}}>("select save_important_date($1,$2::jsonb) as saved",[id,JSON.stringify({...input,...(color!==undefined?{category_color:color}:{})})])).rows[0].saved;
+    const image="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=";
+    const photo=await db.query<{saved:{id:number;background_image_version:string;background_image?:string;count_mode:string;display_mode:string}}>("select save_important_date(null,$1::jsonb) as saved",[JSON.stringify({...input,background:{kind:"photo",x:50,y:35,shade:.35,zoom:1.5},background_image:image,count_mode:"ordinal",display_mode:"elapsed"})]);
+    assert.equal(photo.rows[0].saved.count_mode,"ordinal");assert.equal(photo.rows[0].saved.display_mode,"elapsed");assert.equal(photo.rows[0].saved.background_image,undefined);assert.equal(photo.rows[0].saved.background_image_version.length,32);
+    await save(photo.rows[0].saved.id);
+    assert.equal((await db.query<{count_mode:string}>("select count_mode from important_dates where id=$1",[photo.rows[0].saved.id])).rows[0].count_mode,"ordinal");
+    await assert.rejects(()=>db.query("select save_important_date(null,$1::jsonb)",[JSON.stringify({...input,background:{kind:"photo",x:50,y:50,shade:.3}})]),/photo/);
+    await db.query("select save_important_date_category($1,$2)",["Photo tests","#75846F"]);
+    assert.equal((await db.query("select name from important_date_categories where name='Photo tests'")).rows.length,1);
     const first=await save(null,"#75846F"),second=await save(null);
     assert.equal(second.category_color,"#75846F");
     await save(first.id,"#718597");
@@ -56,10 +82,60 @@ test("Postgres important dates keep reminder projection atomic, deduplicated and
     await db.exec("set test.uid='00000000-0000-0000-0000-000000000001'; set test.oauth='yes'");
     assert.equal((await db.query("select * from important_dates")).rows.length,0);
     await assert.rejects(()=>db.exec("select refresh_important_date_reminders()"),/permission denied/);
+    assert.equal((await db.query("select * from important_date_categories")).rows.length,0);
+    await assert.rejects(()=>save(null,"#897181"),/row-level security/);
+    await db.exec("set evaorbit.agent_bridge_verified='yes'");
+    assert.ok((await db.query("select * from important_dates")).rows.length>0);
+    assert.ok((await db.query("select * from important_date_categories")).rows.length>0);
+    const throughBridge=await save(null,"#897181");
+    await db.query("delete from important_dates where id=$1",[throughBridge.id]);
+    await db.exec("set test.uid='00000000-0000-0000-0000-000000000002'");
+    assert.equal((await db.query("select * from important_dates")).rows.length,0);
+    assert.equal((await db.query("select * from important_date_categories")).rows.length,0);
+    await assert.rejects(()=>save(id,"#897181"),/not found/);
+    await assert.rejects(()=>db.exec("insert into important_date_categories(user_id,name,color) values('00000000-0000-0000-0000-000000000001','Foreign','#897181')"),/row-level security/);
+    await db.exec("set test.uid='00000000-0000-0000-0000-000000000001'; set evaorbit.agent_bridge_verified='no'");
+    assert.equal((await db.query("select * from important_dates")).rows.length,0);
+
     await db.exec("set test.oauth='no'");
     await db.query("delete from important_dates where id=$1",[id]);
     await db.exec("reset role");
     assert.equal((await reminder()).is_active,false);
     assert.equal((await reminder()).status,"cancelled");
+    // Every SQL month boundary and month length agrees with the offline/Web calendar.
+    const boundaries=Array.from({length:200},(_,i)=>1901+i).flatMap(year=>lunarMonths(year).map(month=>({year,month:month.month,leap:month.leap,days:month.days,start:month.date,end:lunarToSolar({year,month:month.month,leap:month.leap,day:month.days})})));
+    const mismatches=await db.query("select x from jsonb_array_elements($1::jsonb) x where important_date_lunar_solar((x->>'year')::int,(x->>'month')::int,1,(x->>'leap')::boolean)::text<>x->>'start' or important_date_lunar_solar((x->>'year')::int,(x->>'month')::int,(x->>'days')::int,(x->>'leap')::boolean)::text<>x->>'end'",[JSON.stringify(boundaries)]);
+    assert.equal(mismatches.rows.length,0);
+    const today=(await db.query<{today:string}>("select (now() at time zone 'Asia/Shanghai')::date::text as today")).rows[0].today;
+    const lunar=parseImportantDate({title:"Lunar birthday",calendar:"lunar",lunar:{year:2025,month:6,day:1,leap:true},recurrence:"yearly",reminderTime:"09:30",reminderDaysBefore:1});
+    await db.exec("set role authenticated");
+    const saveLunar=async(id:number|null,input:Record<string,unknown>)=>(await db.query<{saved:Record<string,unknown>}>("select save_important_date($1,$2::jsonb) as saved",[id,JSON.stringify(input)])).rows[0].saved;
+    const lunarRow=await saveLunar(null,importantDateToRow(lunar)),lunarId=Number(lunarRow.id);
+    assert.equal(lunarRow.date,"2025-07-25");assert.equal(lunarRow.calendar_type,"lunar");
+    const legacy=importantDateToRow({...lunar,calendar:undefined});
+    assert.equal((await saveLunar(lunarId,legacy)).calendar_type,"lunar");
+    await assert.rejects(()=>saveLunar(lunarId,{...legacy,date:"2025-07-26"}),/inconsistent lunar date/);
+    await assert.rejects(()=>saveLunar(lunarId,{...importantDateToRow(lunar),lunar_date:{year:2026,month:6,day:1,leap:true}}),/lunar date/);
+    for(const policy of ["regular","skip"] as const){
+      const changed={...lunar,lunarLeapPolicy:policy};await saveLunar(lunarId,importantDateToRow(changed));
+      const next=(await db.query<{next:string}>("select important_date_next_occurrence(date,recurrence,calendar_type,lunar_date,lunar_leap_policy,$2::date)::text as next from important_dates where id=$1",[lunarId,today])).rows[0].next;
+      assert.equal(next,nextImportantDate(changed,today));
+      await db.exec("reset role");
+      const projection=(await db.query<{next_due_at:Date}>("select next_due_at from reminders where source_type='important_date' and source_id=$1",[lunarId])).rows[0];
+      assert.equal(projection.next_due_at.toISOString(),importantDateReminderAt(changed,today));
+      await db.exec("set role authenticated");
+    }
+    await db.query("update important_dates set archived=true where id=$1",[lunarId]);await db.exec("reset role");
+    assert.equal((await db.query<{is_active:boolean}>("select is_active from reminders where source_id=$1",[lunarId])).rows[0].is_active,false);
+
+    for(const recurrence of ["weekly","monthly"]){
+      const repeated=(await db.query<{saved:{id:number}}>("select save_important_date(null,$1::jsonb) as saved",[JSON.stringify({...input,recurrence,reminder_time:"09:30",display_mode:"elapsed",count_mode:"ordinal"})])).rows[0].saved;
+      const projection=(await db.query<{id:number;next_due_at:Date}>("select id,next_due_at from reminders where source_type='important_date' and source_id=$1",[repeated.id])).rows[0];
+      await db.query("update reminders set next_due_at='1990-01-01',status='sent' where id=$1",[projection.id]);
+      await db.exec("select refresh_important_date_reminders()");
+      const refreshed=(await db.query<{id:number;next_due_at:Date;status:string}>("select id,next_due_at,status from reminders where source_type='important_date' and source_id=$1",[repeated.id])).rows;
+      assert.equal(refreshed.length,1);assert.equal(refreshed[0].id,projection.id);assert.equal(refreshed[0].status,"scheduled");assert.equal(refreshed[0].next_due_at.toISOString(),projection.next_due_at.toISOString());
+      await db.query("update reminders set status='sent' where id=$1",[projection.id]);await db.exec("select refresh_important_date_reminders()");assert.equal((await db.query<{status:string}>("select status from reminders where id=$1",[projection.id])).rows[0].status,"sent");
+    }
   } finally { await db.close(); }
 });
